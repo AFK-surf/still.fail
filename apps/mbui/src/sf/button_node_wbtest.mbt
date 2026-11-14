@@ -39,7 +39,7 @@ fn button_case(
     @ui.set_view_app(fn(root) {
       root.box(fn(col) {
         col.width(Is(Some(300.0))).height(Is(Some(200.0))).lines_up(Is(if start { Some(Start) } else { None })) |> ignore
-        col.show(fn() { there.get() }, fn(at) {
+        col.show(at_once=true, fn() { there.get() }, fn(at) {
           // (what it is shown in as wide as the column and lining it up as the column does: the button laid out as
           // in the column itself)
           at.width_share(Is(1.0)).lines_up(Is(if start { Some(Start) } else { None })) |> ignore
@@ -81,10 +81,10 @@ test "the button as a node at rest, its words its width or as wide as a column, 
     let (tone, across, start) = k
     let old = button_drawn(button_case(@signals.signal("Join"), @signals.signal(false), false, tone~, across~, start~))
     let new = button_drawn(button_case(@signals.signal("Join"), @signals.signal(false), true, tone~, across~, start~))
-    seen.push("old \{old.0} \{old.1[:1]}, node \{new.0} \{new.1[:1]}")
+    seen.push("old \{Repr(old.0)} \{Repr(old.1[:1])}, node \{Repr(new.0)} \{Repr(new.1[:1])}")
     drawn_near(old, new) && new.0.iter().all(fn(r) { r.3 == button_height() })
   })
-  assert_eq(same, Array::make(cases.length(), true), msg="\{seen}")
+  assert_eq(same, Array::make(cases.length(), true), msg="\{Repr(seen)}")
 }
 
 ///|
@@ -220,7 +220,7 @@ test "the button as a node, its words longer and shorter again: its ground and i
   }
   let (old, new) = (seen(false), seen(true))
   let same = Array::makei(old.length(), fn(k) { drawn_near(old[k].0, new[k].0) && pieces_near(old[k].1, new[k].1) })
-  assert_eq(same, Array::make(old.length(), true), msg="old \{old}\nnode \{new}")
+  assert_eq(same, Array::make(old.length(), true), msg="old \{Repr(old)}\nnode \{Repr(new)}")
 }
 
 ///|
@@ -237,7 +237,7 @@ test "the button as a node set to work and back: its spinner's room opening and 
   assert_eq(
     (same, spun[0], spun[1], spun[2], spun[4], spun[8]),
     (Array::make(old.length(), true), false, false, true, true, false),
-    msg="old \{old}\nnode \{new}",
+    msg="old \{Repr(old)}\nnode \{Repr(new)}",
   )
 }
 
@@ -268,10 +268,10 @@ fn button_answers(
 
 ///|
 test "the button as a node, the pointer come onto it and gone: its ground's colour as the old one's, on the way and at the end" {
-  let on = fn(t : @ui.Tester, x, y) { t.move(x, y) }
-  let off = fn(t : @ui.Tester, _x, _y) { t.move(390.0, 290.0) }
+  let on = fn(t : @ui.Tester, x, y) { t.move_to(x, y) }
+  let off = fn(t : @ui.Tester, _x, _y) { t.move_to(390.0, 290.0) }
   let (old, new) = (button_answers(false, on, off), button_answers(true, on, off))
-  assert_eq((new == old, new[0] != new[3]), (true, true), msg="old \{old}\nnode \{new}")
+  assert_eq((new == old, new[0] != new[3]), (true, true), msg="old \{Repr(old)}\nnode \{Repr(new)}")
 }
 
 ///|
@@ -279,5 +279,33 @@ test "the button as a node pressed and let go: its ground's colour as the old on
   let on = fn(t : @ui.Tester, x, y) { t.press_at(x, y) }
   let off = fn(t : @ui.Tester, x, y) { t.release(x, y) }
   let (old, new) = (button_answers(false, on, off), button_answers(true, on, off))
-  assert_eq((new == old, new[0] != new[3]), (true, true), msg="old \{old}\nnode \{new}")
+  assert_eq((new == old, new[0] != new[3]), (true, true), msg="old \{Repr(old)}\nnode \{Repr(new)}")
+}
+
+///|
+test "a button with an icon at work: the spinner in the icon's place, never the two side by side" {
+  let busy = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = @ui.Tester::new(fn(_) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(col) {
+      col.width(Is(Some(300.0))).height(Is(Some(200.0))).lines_up(Is(Some(Start))) |> ignore
+      button_node(col, fn() { "刷新" }, fn() {  }, icon="refresh", busy=fn() { busy.get() }) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let words_at = fn() { t.drawn_glyphs()[0].0 }
+  let rest = words_at()
+  busy.set(true)
+  t.frame()
+  t.run_for(past_button_ms)
+  let working = words_at()
+  // (the words where they were, give or take the icon's ink against the spinner's whole square: before, an icon's
+  // room and a spinner's both before them)
+  assert_true((working - rest).abs() < button_icon / 2.0, msg="words at \{rest} at rest, \{working} at work")
+  busy.set(false)
+  t.frame()
+  t.run_for(past_button_ms)
+  assert_eq(words_at(), rest)
 }

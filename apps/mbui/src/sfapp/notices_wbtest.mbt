@@ -87,6 +87,7 @@ fn notify_core(
   notify? : @signals.Signal[Json] = @signals.signal({ "on": true, "asked": true, "push": true, "show": [] }),
   show? : Array[Json] = [],
   env? : Array[(String, String)] = [],
+  answered? : @signals.Signal[Bool] = @signals.signal(true),
 ) -> @ui.Tester {
   new_run()
   use_system(sys)
@@ -98,14 +99,16 @@ fn notify_core(
         "notify" =>
           if params.contains("workspace") {
             { value: Some({ "show": Json::array(show) }), error: None, version: show.length() }
-          } else {
+          } else if answered.get() {
             { value: Some(notify.get()), error: None, version: 1 }
+          } else {
+            { value: None, error: None, version: -1 }
           }
         _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "notice.claim" => done(Ok({ "show": true }))
         "link.parse" => done(Ok({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "s-c2" }))
@@ -243,6 +246,30 @@ test "put away where the app goes on (a desktop's tray, minimized), its notices 
 }
 
 ///|
+/// How lit the message whose words `words` are is as one gone to: the accent's ground drawn under all of them (a row's
+/// band, a notice's pill), as a share of that ground's opacity; 0 where none is.
+fn lit_over(t : @ui.Tester, words : String) -> Double {
+  let ground = @sf.theme().p.accent_bg
+  guard t.rect_of(words) is Some((wx, wy, ww, wh)) else { return 0.0 }
+  let mut most = 0.0
+  for r in t.drawn_rect_corners() {
+    let (x, y, w, h, c, _) = r
+    if c >> 8 == ground >> 8 &&
+      (c & 0xFFL) != 0L &&
+      x <= wx + 0.5 &&
+      x + w >= wx + ww - 0.5 &&
+      y <= wy + 0.5 &&
+      y + h >= wy + wh - 0.5 {
+      let k = (c & 0xFFL).to_double() / (ground & 0xFFL).to_double()
+      if k > most {
+        most = k
+      }
+    }
+  }
+  most
+}
+
+///|
 test "a message gone to flashes, in and out as the Android app's, nothing of it after" {
   let calls : Array[Made] = []
   let sys = fake_system()
@@ -256,11 +283,11 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
   if held > t.time() {
     t.run_for(held - t.time())
   }
-  assert_eq(@sfpages.flashing_now.val.0, "ts2")
-  assert_true(@sfpages.flashing_now.val.1 > 0.99)
+  // (its message's words, 好的，我来处理。, on the accent's ground, whole)
+  assert_true(lit_over(t, "好的，我来处理。") > 0.99)
   t.run_for(flash_ms)
   t.draw()
-  assert_eq(@sfpages.flashing_now.val.1, 0.0)
+  assert_eq(lit_over(t, "好的，我来处理。"), 0.0)
   t.assert_idle()
 }
 
@@ -285,6 +312,20 @@ test "a message gone to is lit whole as a band: across the list from edge to edg
 }
 
 ///|
+test "a notice gone to lights its own pill, round, never a band across the list behind it" {
+  // (opened at still.fail's notice, its flash held at its peak)
+  let t = screen("chat-flash-notice", @ui.move_most_ms)
+  assert_eq(@sfpages.flashing_now.val, ("ts1", 1.0))
+  let ground = @sf.theme().p.accent_bg
+  let lit = t.drawn_rect_corners().filter(fn(r) { r.4 >> 8 == ground >> 8 && (r.4 & 0xFFL) != 0L })
+  assert_eq(lit.length(), 1)
+  let (x, _, w, h, _, corners) = lit[0]
+  // the pill's, in from the list's sides, as round as it (its ends whole half circles)
+  assert_true(x > 1.0 && w < 388.0 && h > 0.0)
+  assert_true(corners.0 >= h / 2.0 - 0.5, msg="\{Repr(corners)} for \{h}")
+}
+
+///|
 test "with motion reduced, a message gone to is lit whole for its flash's time, then not: no fade" {
   let calls : Array[Made] = []
   let sys = fake_system()
@@ -292,9 +333,10 @@ test "with motion reduced, a message gone to is lit whole for its flash's time, 
   sys.opened.set("/o/ws1/st1/s-c2?message=2\n2")
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfpages.flashing_now.val, ("ts2", 1.0))
+  assert_eq(lit_over(t, "好的，我来处理。"), 1.0)
   t.run_for(flash_ms)
-  assert_eq(@sfpages.flashing_now.val.1, 0.0)
+  t.draw()
+  assert_eq(lit_over(t, "好的，我来处理。"), 0.0)
 }
 
 ///|
@@ -323,6 +365,101 @@ test "the system told what it allows; asked once when it never was, with notific
   assert_eq(sys.asks, 1)
   // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
 }
+
+///|
+test "a browser's word, never answered (\"default\"): told as it is though asked; its prompt put away, told so again and no toast; Android's \"ask\" refused, denied" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  sys.permission = "default"
+  let t = notify_core(calls, sys, notify=@signals.signal({ "on": true, "asked": true, "push": true, "show": [] }))
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), 1)
+  assert_eq(told[0].params, { "state": "default" })
+  // (asked already: not asked again as the app starts)
+  assert_eq(sys.asks, 0)
+  // asked from settings' switch, the prompt put away: it can be asked again, no toast of the system's settings
+  let toast = app.toast.get().words
+  notice_state.from_switch = true
+  sys.answer.set(Some(false))
+  t.frame()
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), 2)
+  assert_eq(told[1].params, { "state": "default" })
+  assert_eq(app.toast.get().words, toast)
+  // Android's: "ask" right after a refusal is refused, and a toast says where to allow them
+  sys.permission = "ask"
+  notice_state.from_switch = true
+  sys.answer.set(Some(false))
+  t.frame()
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), 3)
+  assert_eq(told[2].params, { "state": "denied" })
+  assert_eq(app.toast.get().words, "在系统设置里允许 still.fail 发通知")
+}
+
+///|
+test "a browser's word through the host (@ui's): \"default\" told as it is; asked and the prompt put away, still \"default\"; refused on Android, denied" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let t = notify_core(calls, sys, notify=@signals.signal({ "on": true, "asked": true, "push": true, "show": [] }))
+  // (the Tester's own host from here: what the system it plays says, as a device's would)
+  notice_host.val = host_notices()
+  t.set_notice_permission("default")
+  t.set_notice_reply(Some(false))
+  t.app_state(false, false)
+  t.app_state(true, true)
+  let told = named(calls, "notify.permission")
+  assert_eq(told[told.length() - 1].params, { "state": "default" })
+  let toast = app.toast.get().words
+  let n = told.length()
+  notice_state.from_switch = (notice_host.val.ask)()
+  assert_true(notice_state.from_switch)
+  t.frame()
+  t.frame()
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), n + 1)
+  assert_eq(told[n].params, { "state": "default" })
+  assert_eq(app.toast.get().words, toast)
+  assert_eq(@ui.notice_permission(), "default")
+  // Android's never asked, refused: denied, the toast saying where
+  t.set_notice_permission("ask")
+  notice_state.from_switch = (notice_host.val.ask)()
+  t.frame()
+  t.frame()
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), n + 2)
+  assert_eq(told[n + 1].params, { "state": "denied" })
+  assert_eq(app.toast.get().words, "在系统设置里允许 still.fail 发通知")
+}
+
+///|
+test "what the system allows told at the moment the core's notify is answered, and as the app is shown again, no frame waited for" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let answered = @signals.signal(false)
+  let t = notify_core(calls, sys, answered~)
+  t.run_for(notify_late_ms)
+  // (not answered: nothing told, nothing registered)
+  assert_eq(named(calls, "notify.permission").length(), 0)
+  // answered between frames: told then, before any frame after it, so the same among the core's messages at any rate
+  // of frames
+  answered.set(true)
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), 1)
+  assert_true(told[0].params.stringify().contains("\"granted\""))
+  // hidden: not told; shown again: told again, once
+  t.app_state(false, false)
+  t.run_for(notify_late_ms)
+  assert_eq(named(calls, "notify.permission").length(), 1)
+  t.app_state(true, true)
+  assert_eq(named(calls, "notify.permission").length(), 2)
+  t.run_for(notify_late_ms)
+  assert_eq(named(calls, "notify.permission").length(), 2)
+}
+
+///|
+/// How long the core's `notify` is not answered in the test above, and how long the app is behind.
+let notify_late_ms : Double = 500.0
 
 ///|
 test "pushes: none registered without a token, taken off while off; a token registered" {

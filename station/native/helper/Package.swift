@@ -23,5 +23,7 @@ let package = Package(
         .unsafeFlags(["-Xfrontend", "-checked-async-objc-bridging=on"]),
       ]
     ),
+    // `swift test` here: what of SystemAudio needs no capture (its packets, their times, silence, the encoder).
+    .testTarget(name: "StillfailHelperTests", dependencies: ["StillfailHelper"], swiftSettings: [.swiftLanguageMode(.v5)]),
   ]
 )

@@ -8,12 +8,13 @@
 ///|
 /// What a page's bar on the tape shows (pane_page's: @sf.PageBar's, its title the one the bar shows), compared by
 /// what it shows: back's words (none: no back), the title, what the page is of, what it is for.
+#derive(Eq)
 priv struct PaneBarSaid {
   back : String?
   title : String
   small : String
   about : String
-} derive(Eq)
+}
 
 ///|
 /// The bar in `parent`, as `said` says it as it changes (none: nothing in it), back done by `back` as it is pressed; the
@@ -42,10 +43,6 @@ fn pane_bar_node(
       None => { back: None, title: "", small: "", about: "" }
     }
   }
-  let room = fn(row : @view.View, w : () -> Double) {
-    // (as wide as it is, whatever is beside it: an old view's w=Fixed, never given way)
-    row.box(fn(r) { r.width(By(fn() { Some(w()) })).shrink(Is(0.0)) |> ignore }) |> ignore
-  }
   parent.box(fn(bar) {
     bar
     .row(Is(true))
@@ -57,14 +54,7 @@ fn pane_bar_node(
     |> ignore
     // (its rooms at its ends, what is in it 16 apart and not from them; back in the panel's top left corner concentric
     // with it)
-    room(bar, fn() {
-      if now().back is Some(_) {
-        @sf.tape_bar_start_of(corners(), @ui.tree_corner_roots_now(), bar_in)
-      } else {
-        // (its title on the panel's words' line, as a chat's on the tape: wide.bar_pl)
-        @sf.panel_words - chat_bar_title_in
-      }
-    })
+    bar_room_node(bar, fn() { tape_bar_start_room(corners(), now().back is Some(_)) })
     bar.box(fn(inner) {
       bar_fills(inner.row(Is(true)).lines_up(Is(Some(Middle)))) |> ignore
       // (16 between back and the title, none where there is no back: chat_bar_inner's gap)
@@ -120,16 +110,44 @@ fn pane_bar_node(
     // (clear of the panel's top right corner; its last action there by its own height (pane_bar's); where the mark
     // saying what it is for may end it (the title cut short before it), by the mark's own height, concentric with the
     // corner as an action's there is: tape_bar_end's `side`)
-    room(bar, fn() {
+    bar_room_node(bar, fn() {
       if actions() is Some((_, side, _)) {
-        @sf.tape_bar_end_of(corners(), @ui.tree_corner_roots_now(), bar_in, side=@sf.pane_bar_actions_side(side))
+        tape_bar_end_room(corners(), side=@sf.pane_bar_actions_side(side))
       } else if now().about != "" {
-        @sf.tape_bar_end_of(corners(), @ui.tree_corner_roots_now(), bar_in, side=@ui.Space::px(S5))
+        tape_bar_end_room(corners(), side=@ui.Space::px(S5))
       } else {
-        @sf.tape_bar_end_of(corners(), @ui.tree_corner_roots_now(), bar_in)
+        tape_bar_end_room(corners())
       }
     })
   })
+}
+
+///|
+/// A room `w` wide at an end of a bar's row `row`, as wide as it is whatever is beside it (an old view's w=Fixed, never
+/// given way): where the bar keeps clear of what is at its end (tape_bar_start_room, tape_bar_end_room).
+fn bar_room_node(row : @view.View, w : () -> Double) -> Unit {
+  row.box(fn(r) { r.width(By(fn() { Some(w()) })).shrink(Is(0.0)) |> ignore }) |> ignore
+}
+
+///|
+/// How far a bar of the page's panel on the tape keeps in from the panel's start, its corners `corners` as they are
+/// told it: with `back` before its title, that round button in the panel's top left corner concentric with it; without,
+/// its title on the panel's words' line (as a chat's on the tape: wide.bar_pl). A page's bar's (pane_bar_node) and a
+/// chat's (chat_bar_wide_node) alike.
+fn tape_bar_start_room(corners : FixedArray[@ui.CornerOf], back : Bool) -> Double {
+  if back {
+    @sf.tape_bar_start_of(corners, @ui.tree_corner_roots_now(), bar_in)
+  } else {
+    @sf.panel_words - chat_bar_title_in
+  }
+}
+
+///|
+/// How far a bar of the page's panel on the tape keeps in from the panel's end, its corners `corners` as they are told
+/// it: what ends it (`side` high: a round button's where none is said) concentric with the panel's top right corner, or
+/// clear of it (@sf.tape_bar_end_of). A page's bar's (pane_bar_node) and a chat's (chat_bar_wide_node) alike.
+fn tape_bar_end_room(corners : FixedArray[@ui.CornerOf], side? : Double = @sf.bar_key_side) -> Double {
+  @sf.tape_bar_end_of(corners, @ui.tree_corner_roots_now(), bar_in, side~)
 }
 
 ///|

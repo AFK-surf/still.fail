@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/system_properties.h>
 #include <unistd.h>
@@ -244,9 +245,17 @@ static void engine_log(void *ctx, int level, const char *text, size_t len) {
 
 // The core's thread, attached to the VM before Hermes runs there (engine.h `thread`): Hermes answers String's
 // normalize, Intl and the rest in Java, through fbjni, which takes the thread's JNIEnv as it is.
+//
+// Named, and put ahead of the app's own background threads (the shell's, the VM's, each at nice 0) and behind the two
+// the frame is drawn by (the UI's and RenderThread, -10 while the app is in front): what the screen waits for is
+// answered here. It ran at nice 0, as a thread made with no word of it does (read on an Android 15 emulator, beta
+// 8471: `Thread-6`), where Apple's host says user-initiated (apple_core.mm). -4 is Android's THREAD_PRIORITY_DISPLAY.
+// What it gains on a phone is not measured: an emulator's cores are all alike and idle.
 static void engine_thread(void *ctx) {
   (void)ctx;
   core_env();
+  pthread_setname_np(pthread_self(), "stillfail-core");
+  if (setpriority(PRIO_PROCESS, (id_t)gettid(), -4) != 0) CORE_LOG("core: its thread stays at the default priority: %s", strerror(errno));
 }
 
 // A call only the app answers at once (engine.h `app_sync`: `text.collate`, the order people read names in), its
@@ -534,8 +543,8 @@ static long long stat_count(const char *json, const char *key) {
 
 static void *probe_loop(void *unused) {
   (void)unused;
-  static const char *keys[] = {"tap.views", "tap.video", "tap.direct.video", "tap.audio", "tap.direct.audio", "tap.acks",
-                               "istream.read", "istream.write"};
+  static const char *keys[] = {"tap.views", "tap.video", "tap.direct.video", "tap.audio", "tap.direct.audio",
+                               "tap.audio.undecoded", "tap.audio.resumed", "tap.acks", "istream.read", "istream.write"};
   enum { N = sizeof keys / sizeof keys[0] };
   long long was[N] = {0};
   for (;;) {

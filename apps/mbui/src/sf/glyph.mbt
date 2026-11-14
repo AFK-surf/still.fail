@@ -8,6 +8,7 @@
 ///|
 /// What the glyph draws (the core's `glyph` of the chats' list): stations online, those not (`connecting` of them on
 /// their way), failing, working; asleep while the core reaches nothing at all.
+#derive(Eq)
 pub(all) struct GlyphCounts {
   online : Int
   dim : Int
@@ -15,7 +16,7 @@ pub(all) struct GlyphCounts {
   working : Int
   asleep : Bool
   connecting : Int
-} derive(Eq)
+}
 
 // All in the web's 24-unit box.
 
@@ -249,15 +250,17 @@ fn glyph_drawn(
 /// `tint` (failing ones' dots in `red`): its eyes blinking on the resident clock's steps while a station works, a link
 /// on its way breathing over it (View::cycle_resident: drawn anew only at each step, nothing built again); still with
 /// motion reduced. Its node.
+#callsite(autofill(loc))
 pub fn station_glyph_node(
   parent : @view.View,
   g : () -> GlyphCounts,
   size : Double,
   tint : () -> Int64,
   red : () -> Int64,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let made : Ref[@view.View?] = Ref(None)
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     made.val = Some(v)
     let eye = fn() {
       let counts = g()
@@ -391,7 +394,7 @@ fn glyph_icon_of(g : GlyphCounts) -> String {
       shape(ellipse_path(x, 12.0, 1.1, 1.25), 5, 0.0)
     }
   }
-  out.to_string().trim_end(chars=" ").to_string()
+  out.to_string().trim_end(chars=" ").to_owned()
 }
 
 ///|

@@ -11,6 +11,7 @@ import type { Owner } from "./core/routing.ts";
 import { Notices, type Changed } from "./notices.ts";
 import * as prefs from "./prefs.ts";
 import type { Topic } from "./protocol.ts";
+import * as refs from "./refs.ts";
 import type { Value } from "./store.ts";
 import { arr as arrU, get as getU, isObject, parseJson } from "./util.ts";
 
@@ -100,8 +101,16 @@ export class Attention implements Owner {
   attended(topic: Topic, value: Value | undefined): Value | undefined {
     if (topic.topic !== "chat" || value === undefined || !("ok" in value)) return value;
     const station = topic.station as string;
-    const { due, value: attended } = this.attend.chat(station, typeof topic.session === "string" ? topic.session : null, value.ok);
     const core = this.#core;
+    const thread = get(value.ok, "thread");
+    const id = get(thread, "id");
+    const read = typeof id === "number" ? core.stations.readPosition(station, id) : null;
+    // A cached optimistic read can outlive its interrupted request. Use the same position the sidebar sees so that
+    // opening the chat asks the station to read it again, rather than leaving an unread mark with no unread line.
+    const input = isObject(value.ok) && isObject(thread) && read !== null && typeof thread.read === "number" && read < thread.read
+      ? { ...value.ok, thread: { ...thread, read } }
+      : value.ok;
+    const { due, value: attended } = this.attend.chat(station, typeof topic.session === "string" ? topic.session : null, input);
     for (const d of due) {
       core.runner.fork(
         Effect.catch(core.stations.read(station, d.read.thread, d.read.seq, null), () => Effect.sync(() => this.attend.failed(station, d))),
@@ -137,7 +146,10 @@ export class Attention implements Owner {
         case "focus":
           return Effect.sync(() => {
             const chat = c.focus.chat;
-            if (chat && chat.session !== null && chat.session !== "" && !chat.session.startsWith("new:")) prefs.chatOpened(core.data, chat.station, chat.session);
+            if (chat && chat.session !== null && chat.session !== "" && !chat.session.startsWith("new:")) {
+              prefs.chatOpened(core.data, chat.station, chat.session);
+              refs.opened(core.data, chat.station, chat.session);
+            }
             if (c.focus.newChat !== null && c.focus.newChat !== "") prefs.newChatOpened(core.data, c.focus.newChat);
             attend.focus(at[0], c.focus);
             // (what was typed written now, not a moment after its last change: the app leaving a chat or the front may

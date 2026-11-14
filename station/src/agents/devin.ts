@@ -76,23 +76,86 @@ export function rulesFolder(home: string, key: string, instructions: string, ski
 /// The thinking levels Devin's models are offered at (the last part of a variant's name: swe-2-high).
 export const LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 
-/// A model and level as Devin names the variant: `swe-2` at `high` is swe-2-high (it takes a family alone at its
-/// default level).
-export const variant = (model: string, effort: string | undefined) => (effort !== undefined && LEVELS.includes(effort) ? `${model}-${effort}` : model);
+export function splitDevinFusion(id: string): { lead: string; effort?: string; side: string } | null {
+  const s = id.trim().toLowerCase();
+  if (!s.startsWith("fusion-")) return null;
+  const at = s.indexOf("-sidekick-", 7);
+  if (at < 0) return null;
+  const rawLead = s.slice(7, at);
+  const side = s.slice(at + 10);
+  if (rawLead === "" || side === "") return null;
+  const effort = LEVELS.find((l) => rawLead.endsWith(`-${l}`) && rawLead.length > l.length + 1);
+  const lead = effort !== undefined ? rawLead.slice(0, -effort.length - 1) : rawLead;
+  return { lead, ...(effort !== undefined ? { effort } : {}), side };
+}
+
+export function devinFusionBase(id: string): { model: string; effort?: string } {
+  const split = splitDevinFusion(id);
+  return split !== null
+    ? { model: `fusion-${split.lead}-sidekick-${split.side}`, ...(split.effort !== undefined ? { effort: split.effort } : {}) }
+    : { model: id };
+}
+
+/// A model and level as Devin names the variant: `swe-2` at `high` is swe-2-high; a normalized Fusion pair
+/// `fusion-claude-opus-5-5-sidekick-swe-2-medium` at `high` is `fusion-claude-opus-5-5-high-sidekick-swe-2-medium`.
+export function variant(model: string, effort: string | undefined): string {
+  const split = splitDevinFusion(model);
+  if (split !== null) {
+    const lvl = effort !== undefined && LEVELS.includes(effort) ? effort : (split.effort ?? "high");
+    return `fusion-${split.lead}-${lvl}-sidekick-${split.side}`;
+  }
+  return effort !== undefined && LEVELS.includes(effort) ? `${model}-${effort}` : model;
+}
+
+export type DevinFusion = { leads: Record<string, number[]>; sides: string[] };
+
+export function expandDevinFusion(fusion: DevinFusion | undefined): string[] {
+  if (!fusion) return [];
+  const out: string[] = [];
+  for (const [rawLead, idxs] of Object.entries(fusion.leads)) {
+    const lead = splitDevinFusion(`fusion-${rawLead}-sidekick-x`)?.lead ?? rawLead;
+    for (const i of idxs) {
+      const side = fusion.sides[i];
+      if (typeof side === "string" && side !== "") {
+        const m = `fusion-${lead}-sidekick-${side}`;
+        if (!out.includes(m)) out.push(m);
+      }
+    }
+  }
+  return out;
+}
 
 /// The models `devin models list --format json` lists, as the station offers them: each family a model at its thinking
 /// levels (swe-2: medium, high, max), the name most of its variants are a level of. Not its variants of another kind
-/// (glm-5-2-1m, claude-opus-4-6-thinking), the faster or prioritised ones (-fast, -priority, -lightning: billed apart),
-/// nor Fusion's pairs of a model and a sidekick (fusion-gpt-6-sol-low-sidekick-gpt-5-6-luna-high: hundreds, each at
-/// two levels, not a model at one).
-export function devinCatalog(listed: Json): { models: string[]; efforts: Record<string, string[]> } {
+/// (glm-5-2-1m, claude-opus-4-6-thinking) or the faster or prioritised ones (-fast, -priority, -lightning: billed apart).
+/// Fusion's pairs of a lead model and a sidekick (`fusion-<lead>-<effort>-sidekick-<side>`) are normalized to base lead
+/// models (`fusion.leads`), with the lead model's thinking effort controlled by the standard `effort` / `thought_level`.
+export function devinCatalog(listed: Json): { models: string[]; efforts: Record<string, string[]>; fusion: DevinFusion | null } {
   const models: string[] = [];
   const efforts: Record<string, string[]> = {};
+  const sides: string[] = [];
+  const leads: Record<string, number[]> = {};
   for (const family of Array.isArray(listed?.families) ? listed.families : []) {
     const seen: { model: string; level: string | undefined }[] = [];
     for (const v of Array.isArray(family?.variants) ? family.variants : []) {
       const uid = typeof v?.model_uid === "string" ? v.model_uid : "";
-      if (uid === "" || /-(fast|priority|lightning)$/.test(uid) || uid.includes("-sidekick-")) continue;
+      if (uid === "" || /-(fast|priority|lightning)$/.test(uid)) continue;
+      if (uid.startsWith("fusion-") && uid.includes("-sidekick-")) {
+        if (!/-(fast|priority|lightning)-sidekick-/.test(uid)) {
+          const split = splitDevinFusion(uid);
+          if (split !== null) {
+            let idx = sides.indexOf(split.side);
+            if (idx < 0) {
+              idx = sides.length;
+              sides.push(split.side);
+            }
+            const list = (leads[split.lead] ??= []);
+            if (!list.includes(idx)) list.push(idx);
+          }
+        }
+        continue;
+      }
+      if (uid.includes("-sidekick-")) continue;
       const level = LEVELS.find((l) => uid.endsWith(`-${l}`));
       seen.push({ model: level === undefined ? uid : uid.slice(0, -level.length - 1), level });
     }
@@ -103,7 +166,7 @@ export function devinCatalog(listed: Json): { models: string[]; efforts: Record<
     const levels = LEVELS.filter((l) => seen.some((s) => s.model === model && s.level === l));
     if (levels.length > 0) efforts[model] = levels;
   }
-  return { models, efforts };
+  return { models, efforts, fusion: sides.length > 0 ? { leads, sides } : null };
 }
 
 /// What failed a turn, from what Devin said of it.
@@ -184,18 +247,20 @@ export class DevinDriver extends AcpDriver<DevinSession> {
   }
 }
 
+type TurnUsage = { run: string; calls: number; lastCall: string; context: number; window: number };
+
 export class DevinSession extends AcpSession {
   protected readonly steersByPrompt = true;
   /// The `model` config option's values (a family's variant each): what another model between turns is set to.
   private families: string[] = [];
-  /// The turn's counts so far (each model call's, as usage_update says them once and again), the context its last call
-  /// had and the model's window.
-  private usage: { calls: number; counts: ReturnType<typeof callOf>; context: number; window: number } | null = null;
-  private lastCall = "";
+  /// The running turn's call count and last call seen (each call's counts are said twice, the second time as its
+  /// agent's), and the context and window its latest call reported.
+  private usage: TurnUsage | null = null;
 
   constructor(driver: DevinDriver, events: Events, options: OpenOptions) {
     super(driver, events, new KeptTranscript("devin", join(devinHome(options.profile.home), SESSIONS)));
-    this.model = options.model ?? profileModel(options.profile) ?? null;
+    const rawModel = options.model ?? profileModel(options.profile);
+    this.model = rawModel !== undefined ? devinFusionBase(rawModel).model : null;
   }
 
   protected classify(text: string) {
@@ -212,35 +277,55 @@ export class DevinSession extends AcpSession {
   }
 
   protected kept() {
-    return { families: this.families };
+    return { families: this.families, usage: this.usage };
   }
 
   protected taken(snapshot: Json) {
     this.families = Array.isArray(snapshot.families) ? snapshot.families : [];
+    const u = snapshot.usage;
+    this.usage = u && typeof u === "object" && typeof u.run === "string" && typeof u.calls === "number"
+      ? {
+          run: u.run,
+          calls: u.calls,
+          lastCall: typeof u.lastCall === "string" ? u.lastCall : "",
+          context: typeof u.context === "number" ? u.context : 0,
+          window: typeof u.window === "number" ? u.window : 0,
+        }
+      : null;
   }
 
-  /// Each call's counts are said twice (the second time as its agent's): counted once.
+  /// Each call's counts are said twice (the second time as its agent's): counted once, and written as it comes so a
+  /// long turn's spend and context are live and survive a handover or crash.
   protected updated(update: Json) {
     if (update?.sessionUpdate !== "usage_update") return;
     const counts = callOf(update);
     const said = JSON.stringify(counts);
-    if (said === this.lastCall) return;
-    this.lastCall = said;
-    const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-    const u = (this.usage ??= { calls: 0, counts: { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 }, context: 0, window: 0 });
+    const run = this.owner !== null ? this.owner.slice(this.owner.indexOf(":") + 1) : uuid();
+    const u = (this.usage ??= { run, calls: 0, lastCall: "", context: 0, window: 0 });
+    if (said === u.lastCall) return;
+    u.lastCall = said;
     u.calls += 1;
-    u.counts.inputTokens += counts.inputTokens;
-    u.counts.cacheReadTokens += counts.cacheReadTokens;
-    u.counts.outputTokens += counts.outputTokens;
+    const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
     if (n(update.used) > 0) u.context = n(update.used);
     if (n(update.size) > 0) u.window = n(update.size);
+    this.transcript?.keep(this.sessionId, {
+      type: "usage",
+      run: u.calls === 1 ? u.run : `${u.run}:${u.calls}`,
+      model: this.model,
+      usage: counts,
+      calls: 1,
+      context: u.context,
+      window: u.window,
+    });
   }
 
-  /// The turn's usage, into the transcript before its end.
-  protected ending(id: string) {
-    if (this.usage !== null) this.transcript?.keep(this.sessionId, { type: "usage", run: id.slice(id.indexOf(":") + 1), model: this.model, usage: this.usage.counts, calls: this.usage.calls, context: this.usage.context, window: this.usage.window });
+  protected ending() {
     this.usage = null;
-    this.lastCall = "";
+  }
+
+  protected override cutShort(said: string) {
+    this.usage = null;
+    super.cutShort(said);
   }
 
   /// Into the running turn, read at its next step: a prompt given while it runs, answered with the turn.
@@ -252,13 +337,21 @@ export class DevinSession extends AcpSession {
   /// config options), read from its next turn on. False for a model its options do not have.
   retune(options: OpenOptions) {
     if (this.turn.closed || this.turn.busy || this.sessionId === "") return false;
-    const model = options.model ?? profileModel(options.profile);
-    if (model === undefined) return false;
+    const rawModel = options.model ?? profileModel(options.profile);
+    if (rawModel === undefined) return false;
+    const split = splitDevinFusion(rawModel);
+    const model = split !== null ? `fusion-${split.lead}-sidekick-${split.side}` : rawModel;
     // The option of the model's family: its own name, or a variant of it at a level.
-    const family = this.families.find((v) => v === model || LEVELS.some((l) => v === `${model}-${l}`));
+    const family =
+      split !== null
+        ? this.families.find((v) => v === rawModel || v === model || LEVELS.some((l) => v === `fusion-${split.lead}-${l}-sidekick-${split.side}`))
+        : this.families.find((v) => v === model || LEVELS.some((l) => v === `${model}-${l}`));
     if (family === undefined) return false;
     this.send("session/set_config_option", { sessionId: this.sessionId, configId: "model", value: family });
-    if (options.effort !== undefined && LEVELS.includes(options.effort)) this.send("session/set_config_option", { sessionId: this.sessionId, configId: "thought_level", value: options.effort });
+    const effort = options.effort ?? split?.effort;
+    if (effort !== undefined && LEVELS.includes(effort)) {
+      this.send("session/set_config_option", { sessionId: this.sessionId, configId: "thought_level", value: effort });
+    }
     this.model = model;
     return true;
   }

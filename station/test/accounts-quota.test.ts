@@ -2,11 +2,16 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { devNull } from "node:os";
+import { delimiter, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { agyScopeForModel } from "../src/accounts/agy-quota.ts";
 import { claudeOAuthToken, RefreshLock } from "../src/accounts/oauth.ts";
 import { readClaudeCredentials } from "../src/agents/machine-logins.ts";
 import { URLS } from "../src/accounts/profiles.ts";
 import { at, checkQuota, claudeUsage, claudeWithRefresh, codexQuota, codexUsage, codexWindows, machineUsage, windowLabel } from "../src/accounts/quota.ts";
+import { AGY_FILE_TOKENS, SESSIONS, agyAccountFile, agyConversations, agyHome, agyKeychain, agyToken, geminiDir } from "../src/agents/agy.ts";
+import { platform } from "../src/platform/index.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { machine, provider, script, temp, until } from "./accounts-fakes.ts";
 
@@ -35,6 +40,129 @@ describe("allowances and renewing", { concurrency: true }, () => {
     extra = null;
     assert.equal("extraUsage" in (await claudeUsage(p.base, "t", "zh")), false, "not said: not known");
     await p.close();
+  });
+
+  test("a model's own week under a Claude subscription's is read apart from the account's windows", async () => {
+    // As Anthropic answered on 2026-11-09 (the fields this reads).
+    const week = { utilization: 10, resets_at: "2026-11-16T11:59:59.936566+00:00" };
+    const limits = [
+      { kind: "weekly_all", group: "weekly", percent: 10, resets_at: week.resets_at, scope: null, is_active: true },
+      { kind: "weekly_scoped", group: "weekly", percent: 8, resets_at: "2026-11-16T11:59:59.936748+00:00", scope: { model: { id: null, display_name: "Fable" }, surface: null }, is_active: false },
+      { kind: "weekly_scoped", group: "weekly", percent: 40, resets_at: null, scope: { model: { id: null, display_name: "Opus" }, surface: null } },
+      { kind: "session_scoped", group: "session", percent: 1, resets_at: null, scope: { model: { id: null, display_name: "Fable" }, surface: null } },
+    ];
+    const p = await provider(() => ({ status: 200, body: { five_hour: null, seven_day: week, seven_day_opus: { utilization: 40, resets_at: null }, limits } }));
+    const quota = await claudeUsage(p.base, "t", "zh");
+    const resetsAt = Date.parse("2026-11-16T11:59:59.936Z");
+    assert.deepEqual(quota.windows, [
+      { label: "每周", usedPercent: 10, resetsAt, minutes: 10080 },
+      { label: "每周 · Opus", usedPercent: 40, resetsAt: null, minutes: 10080 },
+    ]);
+    assert.deepEqual(quota.scoped, [{ label: "每周 · Fable", usedPercent: 8, resetsAt, minutes: 10080, scope: "Fable" }], "Opus's said once, by its field; a group not known left out");
+    // A login of the machine's that is no profile yet is offered by the account's own windows alone.
+    const m = machine(); // (its `security` finds no keychain item: the login is the file's)
+    mkdirSync(join(m.home, ".claude"));
+    writeFileSync(join(m.home, ".claude", ".credentials.json"), JSON.stringify(credentials(Date.now() + 3_600_000)));
+    const offered = await machineUsage("claude", m.env, { ...URLS, anthropic: p.base }, "zh");
+    assert.deepEqual([offered!.windows.length, "scoped" in offered!], [2, false]);
+    await p.close();
+    const none = await provider(() => ({ status: 200, body: { seven_day: week, limits: [limits[0]] } }));
+    assert.equal("scoped" in (await claudeUsage(none.base, "t", "zh")), false);
+    await none.close();
+  });
+
+  test("an Antigravity CLI Google sign-in's allowance is read via `agy -p /usage` in its profile files", async () => {
+    const home = temp("agy-quota");
+    const dump = join(home, "dump");
+    const fakePath = `${fileURLToPath(new URL("./fake", import.meta.url))}${delimiter}${process.env.PATH ?? ""}`;
+    const tokenPath = agyToken(home);
+    mkdirSync(join(home, "agy", ".gemini", "antigravity-cli"), { recursive: true });
+    writeFileSync(
+      tokenPath,
+      JSON.stringify({
+        token: { access_token: "ya29.ok", token_type: "Bearer", refresh_token: "1//refresh" },
+        auth_method: "oauth",
+        id_token_email: "me@gmail.com",
+      }),
+    );
+    const profile = hubConfig({ profiles: [{ id: "ag", home, runtime: "agy", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
+    const env = { PATH: fakePath, FAKE_DUMP: dump, GEMINI_API_KEY: "machine-key" };
+    const urls = { ...URLS, agyQuota: "https://aicode.example.test" };
+    const q = await checkQuota(profile, env, undefined, urls, "zh");
+    assert.equal(q.state, "ok");
+    assert.deepEqual(q.windows, [
+      { label: "每周 · Gemini", usedPercent: 25, resetsAt: Date.parse("2026-11-19T09:14:38Z"), minutes: 10080, scope: "gemini" },
+      { label: "5 小时 · Gemini", usedPercent: 10, resetsAt: Date.parse("2026-11-12T14:14:38Z"), minutes: 300, scope: "gemini" },
+      { label: "每周 · Claude / GPT", usedPercent: 60, resetsAt: Date.parse("2026-11-19T09:14:38Z"), minutes: 10080, scope: "3p" },
+      { label: "5 小时 · Claude / GPT", usedPercent: 100, resetsAt: Date.parse("2026-11-12T14:14:38Z"), minutes: 300, scope: "3p" },
+    ]);
+    const ran = JSON.parse(readFileSync(dump, "utf8").trim().split("\n")[0]!);
+    assert.deepEqual(ran.args, ["--log-file", devNull, "-p", "/usage", "--output-format", "json"]);
+    assert.equal(ran.home, agyHome(home));
+    assert.equal(ran.geminiDir, geminiDir(home));
+    assert.equal(ran.cloudCodeUrl, "https://aicode.example.test");
+    assert.equal(ran.key, null, "scrubs inherited GEMINI_API_KEY");
+    assert.equal(ran.updates, "1");
+
+    // macOS: `agy` is kept to the profile's file (`AGY_FILE_TOKENS`, HOME its agy/), never the login keychain's one
+    // item. A profile whose file `agy` had moved into that item takes it back when the item is its noted account; an
+    // unsigned profile (even with `agy/sessions` linked by `linkTranscripts` and a cancelled `agy` home) and one whose
+    // item is another account's spawn nothing.
+    const keyringHome = temp("agy-quota-keyring");
+    const keyringDump = join(keyringHome, "dump");
+    mkdirSync(agyConversations(keyringHome), { recursive: true });
+    writeFileSync(join(agyConversations(keyringHome), "conv.db"), "db");
+    writeFileSync(agyAccountFile(keyringHome), JSON.stringify({ email: "me@gmail.com" }));
+    const kept = JSON.stringify({ token: { access_token: "ya29.kept" }, auth_method: "consumer", id_token_email: "me@gmail.com" });
+    const keyringProfile = hubConfig({ profiles: [{ id: "ag-k", home: keyringHome, runtime: "agy", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
+    const hadKeychain = platform.hasKeychain;
+    const read = agyKeychain.read;
+    platform.hasKeychain = true;
+    agyKeychain.read = async () => `go-keyring-base64:${Buffer.from(kept).toString("base64")}`;
+    try {
+      const kq = await checkQuota(keyringProfile, { HOME: temp("agy-real-home"), PATH: fakePath, FAKE_DUMP: keyringDump }, undefined, URLS, "zh");
+      assert.equal(kq.state, "ok");
+      const kran = JSON.parse(readFileSync(keyringDump, "utf8").trim().split("\n")[0]!);
+      assert.deepEqual([kran.home, kran.geminiDir, kran.fileTokens], [agyHome(keyringHome), geminiDir(keyringHome), AGY_FILE_TOKENS.SSH_CLIENT]);
+      assert.equal(readFileSync(agyToken(keyringHome), "utf8"), kept);
+
+      const otherHome = temp("agy-quota-other");
+      const otherDump = join(otherHome, "dump");
+      mkdirSync(agyHome(otherHome), { recursive: true });
+      writeFileSync(agyAccountFile(otherHome), JSON.stringify({ email: "other@gmail.com" }));
+      const otherProfile = hubConfig({ profiles: [{ id: "ag-o", home: otherHome, runtime: "agy", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
+      const oq = await checkQuota(otherProfile, { PATH: fakePath, FAKE_DUMP: otherDump }, undefined, URLS, "zh");
+      assert.deepEqual([oq.state, oq.detail], ["unavailable", "登录已过期或失效"]);
+      assert.equal(existsSync(otherDump), false, "another account's item is not taken");
+
+      const unsignedHome = temp("agy-quota-unsigned");
+      const unsignedDump = join(unsignedHome, "dump");
+      mkdirSync(join(agyHome(unsignedHome), SESSIONS), { recursive: true });
+      mkdirSync(join(unsignedHome, "agy", ".gemini", "antigravity-cli"), { recursive: true });
+      const unsignedProfile = hubConfig({ profiles: [{ id: "ag-u", home: unsignedHome, runtime: "agy", access: { kind: "subscription" } }] }, "/x").profiles[0]!;
+      const uq = await checkQuota(unsignedProfile, { PATH: fakePath, FAKE_DUMP: unsignedDump }, undefined, URLS, "zh");
+      assert.deepEqual([uq.state, uq.signedOut, uq.detail], ["unavailable", undefined, "登录已过期或失效"]);
+      assert.equal(existsSync(unsignedDump), false, "unsigned profile does not spawn agy");
+    } finally {
+      platform.hasKeychain = hadKeychain;
+      agyKeychain.read = read;
+    }
+
+    // Expired sign-in prompting interactive OAuth marks signedOut without hanging 60s.
+    const sq = await checkQuota(profile, { PATH: fakePath, FAKE_AGY_SIGNED_OUT: "1" }, undefined, URLS, "zh");
+    assert.deepEqual([sq.state, sq.signedOut, sq.detail], ["unavailable", true, "登录已过期或失效"]);
+
+    // Network failure (including whole-word EOF, but not substrings like `typeof`) marks unanswered so previous quota stands.
+    const nq = await checkQuota(profile, { PATH: fakePath, FAKE_AGY_USAGE_ERROR: "dial tcp 127.0.0.1:1: connect: connection refused" }, undefined, URLS, "zh");
+    assert.deepEqual([nq.state, nq.unanswered, nq.detail], ["unavailable", true, "无法连接服务商，请检查此 station 的网络或代理"]);
+    const eofQ = await checkQuota(profile, { PATH: fakePath, FAKE_AGY_USAGE_ERROR: "Post https://cloudcode-pa.googleapis.com: unexpected EOF" }, undefined, URLS, "zh");
+    assert.equal(eofQ.unanswered, true);
+    const blockedQ = await checkQuota(profile, { PATH: fakePath, FAKE_AGY_USAGE_ERROR: "Your account has been suspended (typeof check)" }, undefined, URLS, "zh");
+    assert.deepEqual([blockedQ.state, blockedQ.unanswered], ["blocked", undefined]);
+
+    assert.equal(agyScopeForModel("google/gemini-3.1-pro"), "gemini");
+    assert.equal(agyScopeForModel("us.google.gemma-3-27b"), "gemini");
+    assert.equal(agyScopeForModel("anthropic/claude-opus-4-6"), "3p");
   });
 
   test("a codex login's allowance is read with its auth.json's tokens", async () => {
@@ -74,10 +202,15 @@ describe("allowances and renewing", { concurrency: true }, () => {
     assert.equal((await ask(revoked, "en")).detail, "ChatGPT sign-in is no longer valid. Sign in again.");
     const network = await ask("failed to fetch codex rate limits: error sending request: connection refused");
     assert.deepEqual([network.state, network.signedOut, network.detail], ["unavailable", undefined, "无法连接服务商，请检查此 station 的网络或代理"]);
+    // Not reached, or the provider in trouble itself: no answer about the allowance (the one read before stands a
+    // while: Accounts). What it says of the account is an answer.
+    assert.deepEqual([q.unanswered, network.unanswered], [undefined, true]);
     const busy = await ask("failed to fetch codex rate limits: GET /usage failed: 503 Service Unavailable; body=private");
     assert.deepEqual([busy.state, busy.signedOut, busy.detail], ["unavailable", undefined, "ChatGPT 暂时无法提供额度信息（HTTP 503）"]);
+    assert.equal(busy.unanswered, true);
     const blocked = await ask("failed to fetch codex rate limits: GET /usage failed: 403 Forbidden; account has been suspended");
     assert.deepEqual([blocked.state, blocked.detail], ["blocked", "ChatGPT 账号已被停用"]);
+    assert.equal(blocked.unanswered, undefined);
     const other = await ask("internal error: private diagnostics 401");
     assert.deepEqual([other.state, other.signedOut, other.detail], ["unavailable", undefined, "暂时无法查询 ChatGPT 额度，请稍后重试"]);
   });
@@ -90,6 +223,17 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
     const quota = await machineUsage("codex", { CODEX_HOME: dir }, { ...URLS, chatgpt: p.base }, "zh");
     assert.deepEqual([quota!.state, quota!.detail], ["unavailable", "无法连接服务商，请检查此 station 的网络或代理"]);
+    assert.equal(quota!.unanswered, true);
+  });
+
+  test("a provider in trouble itself gives no answer about the allowance; what it says of the account is one", async () => {
+    const said: Record<number, boolean | undefined> = {};
+    for (const status of [500, 503, 429, 401, 403, 404]) {
+      const p = await provider(() => ({ status, body: {} }));
+      said[status] = (await claudeUsage(p.base, "t", "zh")).unanswered;
+      await p.close();
+    }
+    assert.deepEqual(said, { 500: true, 503: true, 429: true, 401: undefined, 403: undefined, 404: undefined });
   });
 
   test("codex credits and resets are independent of windows and preserve unknowns", () => {
@@ -224,7 +368,7 @@ describe("allowances and renewing", { concurrency: true }, () => {
     const owner = await RefreshLock.acquire(path);
     rmdirSync(path);
     mkdirSync(path);
-    owner.release();
+    await owner.release();
     assert.ok(existsSync(path));
   });
 

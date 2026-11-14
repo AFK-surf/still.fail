@@ -29,7 +29,7 @@ priv struct ProfileOpen {
 ///|
 /// The fields of a profile's models' panel, by their key (made as first drawn).
 // kept across runs: made as a panel first shows one; profile_page_reset empties it
-let profile_fields : Map[String, @ui.Field] = {}
+let profile_fields : Map[String, @ui.Field] = Map([])
 
 ///|
 fn profile_page_reset() -> Unit {
@@ -69,9 +69,17 @@ pub fn profile_node(
 ) -> Unit {
   let s = fn() { @settings.station_of(core, here(), address) }
   let o = fn() { field(s(), "overview") }
-  // (0 read the first time, 1 its profile there, 2 none of that id)
+  // (shown in a pane by a press that asked what it reads (sfbase's show_answered): what it asked let go once this first
+  // build has read it)
+  @sfbase.shown_read(@sfbase.profile_shown_at(address, id))
+  // (0 read the first time, 1 its profile there, 2 none of that id; the account it is, its own ask, answered too: the
+  // page opens whole, its stations' block with it. Opened from a list, it opens once both are answered and never shows
+  // this: a link straight to it may)
   let found = fn() {
-    if !(o() is Some(Object(_))) {
+    // (both read every time, so both are asked at once whichever comes first; its press waits for both before it
+    // opens it: sfbase's account_open.mbt)
+    let account = @settings.profile_read(core, here(), address, id).value
+    if !(o() is Some(Object(_))) || account is None {
       0
     } else if items(o(), "profiles").iter().any(fn(p) { text(Some(p), "id") == id }) {
       1
@@ -80,7 +88,7 @@ pub fn profile_node(
     }
   }
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-  v.pick(found, fn(p, what) {
+  v.pick(at_once=true, found, fn(p, what) {
     match what {
       1 => profile_found_node(p, core, here, s, address, id, on_back, frame, said, width, tips, stint)
       2 =>
@@ -148,17 +156,8 @@ fn profile_found_node(
       None => None
     }
   }
-  // its row of the workspace's list: the account it is, on whichever stations have it
-  let entry = fn() -> Json? {
-    let list = items((core.topic)("profiles", { "scope": str(here().workspace) }).get().value, "items")
-    match
-      list.search_by(fn(e) {
-        items(Some(e), "members").iter().any(fn(m) { text(Some(m), "station") == address && text(Some(m), "profileId") == id })
-      }) {
-      Some(i) => Some(list[i])
-      None => None
-    }
-  }
+  // the account it is, on whichever stations have it: its own topic (`profile`), never the workspace's list
+  let entry = fn() -> Json? { @settings.profile_of(core, here(), address, id) }
   let open = profile_open()
   @sf.page_node(
     v,
@@ -176,10 +175,9 @@ fn profile_found_node(
       ["sign-in", "trouble", "quota", "usage", "used-by", "stations", "models", "run", "share", "workspaces", "account", "env"]
     },
     fn(b, key) {
-      @motion.reveal_node(b, fn() { profile_keys(core, here, o, p, entry).contains(key) }, lazy=true, fn(r) {
+      b.show(at_once=true, fn() { profile_keys(core, here, o, p, entry).contains(key) }, fn(r) {
         profile_block_node(r, core, here, address, id, s, o, p, entry, open, stint, tips, key)
       })
-      |> ignore
     },
   )
 }
@@ -189,6 +187,13 @@ fn profile_found_node(
 /// Whether the profile `p` is another station's copy of it (shared to this one).
 fn profile_copy(p : Json?) -> Bool {
   text(field(p, "share"), "role") == "user"
+}
+
+///|
+/// Whether a copy of another station's profile is one its station pauses (`share.pausable`, said since 2026-11-11; a
+/// station from before refuses `enabled` on a copy).
+fn profile_pausable(p : Json?) -> Bool {
+  profile_copy(p) && flag(field(p, "share"), "pausable") && has(p, "enabled")
 }
 
 ///|
@@ -355,7 +360,7 @@ fn profile_head_node(
   @sf.own_head_node(
     h,
     fn(m, _) {
-      m.pick(fn() { (text(p(), "runtime"), text(field(p(), "access"), "kind"), text(p(), "providerMark")) }, fn(l, k) {
+      m.pick(at_once=true, fn() { (text(p(), "runtime"), text(field(p(), "access"), "kind"), text(p(), "providerMark")) }, fn(l, k) {
         @sf.provider_logo_node(l, k.0, k.1, pf_mark_glyph, k.2) |> ignore
       })
     },
@@ -379,9 +384,9 @@ fn profile_head_node(
 fn profile_state_node(st : @view.View, core : Core, address : String, id : String, p : () -> Json?, tips : @sf.TipLayer?) -> Unit {
   let on = [("station", address), ("id", id)]
   let checking = fn() { is_doing(core, ["profile.check"], on) }
-  st.show(fn() { text(p(), "checkTone") != "green" }, fn(x) {
+  st.show(at_once=true, fn() { text(p(), "checkTone") != "green" }, fn(x) {
     // (its tone as the check has it now: the pill made again in it)
-    x.pick(fn() { pill_tone(text(p(), "checkTone")) }, fn(y, tone) { @sf.pill_node(y, fn() { text(p(), "checkText") }, tone~) |> ignore })
+    x.pick(at_once=true, fn() { pill_tone(text(p(), "checkTone")) }, fn(y, tone) { @sf.pill_node(y, fn() { text(p(), "checkText") }, tone~) |> ignore })
   })
   st.box(fn(b) {
     @sf.style_node(b, fn() { pf_state })
@@ -408,7 +413,7 @@ fn profile_state_node(st : @view.View, core : Core, address : String, id : Strin
       tips?,
     )
     |> ignore
-    b.show(checking, fn(x) { @sf.spinner_node(x, size=pf_spin) |> ignore })
+    b.show(at_once=true, checking, fn(x) { @sf.spinner_node(x, size=pf_spin) |> ignore })
   })
   |> ignore
 }
@@ -439,8 +444,7 @@ fn runtime_tags_node(t : @view.View, p : () -> Json?) -> Unit {
   t.box(fn(r) {
     @sf.style_node(r, fn() { pf_tags })
     r.each(tags, fn(x) { x.0 }, fn(tag, x) {
-      @sf.style_node(tag, fn() { pf_tag })
-      @sf.words_node(tag, fn() { x.get().1 }, fn() { pf_tag_words }) |> ignore
+      @sf.tag_node(tag, fn() { x.get().1 })
     })
   })
   |> ignore
@@ -463,10 +467,10 @@ fn runtime_tag(r : String) -> String {
 }
 
 ///|
-/// Its ⋯ in node `a` (but for a copy of another station's): pressed, its menu beside it (profile_menu), lined up at its
-/// end.
+/// Its ⋯ in node `a` (a copy of another station's: only where its station says it pauses it, `share.pausable`; one from
+/// before refuses that): pressed, its menu beside it (profile_menu), lined up at its end.
 fn profile_more_node(a : @view.View, core : Core, here : () -> Here, address : String, p : () -> Json?) -> Unit {
-  a.show(fn() { !profile_copy(p()) }, fn(m) {
+  a.show(at_once=true, fn() { !profile_copy(p()) || profile_pausable(p()) }, fn(m) {
     // (beside itself, as it is pressed)
     @sf.icon_action_opens_node(m, "more", fn() { @sf.t("common.more") }, fn(at) {
       let (x, y, w, h) = at.placed_window_now()
@@ -478,13 +482,16 @@ fn profile_more_node(a : @view.View, core : Core, here : () -> Here, address : S
 
 ///|
 /// Its menu, beside what opened it (`from`): renaming it (but the machine's own), turning a key's off or on, deleting
-/// it (the machine's own login: stopping it, the login stays the machine's), asked first.
+/// it (the machine's own login: stopping it, the login stays the machine's), asked first. A copy of another station's
+/// is edited there: here only whether this station uses it (停用, 启用: `profile.put` `enabled`, kept by its station as
+/// the copy is refreshed).
 fn profile_menu(core : Core, here : Here, address : String, p : Json?, from : @sf.Beside) -> Unit {
   let id = text(p, "id")
   let machine = flag(p, "machine")
+  let copy = profile_copy(p)
   let access = field(p, "access")
   let keyed = ["api-provider", "anthropic-api", "opencode-go"].contains(text(access, "kind")) && !flag(access, "login")
-  let can_disable = keyed && has(p, "enabled")
+  let can_disable = (keyed && has(p, "enabled")) || profile_pausable(p)
   let item = if machine { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.profiles.delete") }
   let remove = fn() {
     let (title, words) = if machine {
@@ -509,7 +516,7 @@ fn profile_menu(core : Core, here : Here, address : String, p : Json?, from : @s
     })
   }
   let items : Array[@sf.MenuItem?] = []
-  if !machine {
+  if !machine && !copy {
     items.push(Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { profile_rename(core, address, p) })))
   }
   if can_disable {
@@ -526,13 +533,16 @@ fn profile_menu(core : Core, here : Here, address : String, p : Json?, from : @s
     }
     items.push(Some(@sf.menu_item_of(label, icon="power", disabled=is_doing(core, ["profile.put"], [("station", address), ("id", id)]), fn() {
       if enabled {
-        confirm(@sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]), @sf.t("web-pages.profiles.disableKeyBody"), label, danger=true, change)
+        let words = @sf.t(if copy { "web-pages.profiles.disableCopyBody" } else { "web-pages.profiles.disableKeyBody" })
+        confirm(@sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]), words, label, danger=true, change)
       } else {
         change()
       }
     })))
   }
-  items.push(Some(@sf.menu_item_of(item, icon="trash", danger=true, remove)))
+  if !copy {
+    items.push(Some(@sf.menu_item_of(item, icon="trash", danger=true, remove)))
+  }
   @sf.menu(items, from~, along=End)
 }
 
@@ -560,7 +570,7 @@ fn profile_sign_in_node(
   let needed = fn() { text(field(p(), "check"), "state") == "login" || signing_in(p()) }
   let command = fn() { text(p(), "loginCommand") }
   @sf.page_card_node(b, footed=true, fn(k) {
-    k.pick(fn() { signing_in(p()) }, fn(q, active) {
+    k.pick(at_once=true, fn() { signing_in(p()) }, fn(q, active) {
       q.gap(Is(pf_card_gap)) |> ignore
       if !active {
         @sf.card_lines_node(
@@ -597,13 +607,13 @@ fn profile_sign_in_node(
           // (the way to sign in on the machine at the foot's end, in the card's corner concentric with it: where its
           // words are long (English) it stood just short of the corner, its ground under the hand off the corner's)
           f.box(fn(sp) { sp.grow(Is(1.0)) |> ignore }) |> ignore
-          f.show(fn() { command() != "" }, fn(x) {
+          f.show(at_once=true, fn() { command() != "" }, fn(x) {
             @sf.button_node(
               x,
               // (the short words, the phone's: beside 登录 on a card's foot they fit a phone, the long ones ran past its
               // edge)
               fn() { if open.command.get() { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.login.manualShort") } },
-              fn() { open.command.set(!@signals.untracked(fn() { open.command.get() })) },
+              fn() { open.command.set(!open.command.untracked()) },
               tone=Ghost,
             )
             |> ignore
@@ -655,8 +665,8 @@ fn profile_sign_in_node(
 /// OpenCode, Kimi, Cursor's page alone: copied as it is opened, `copied` saying so); while it is checked or added, said
 /// so. `send`: a code pasted back sent, then `sent` (its field emptied); `sending` while it is. Where its job says the
 /// station has a browser of its own (`browser`), the same page there (`in_station`: the station's name, whether it is
-/// being opened, and what opens it given what it is called), seldom used: in a ⋯ after the page's button (sf/align.mbt:
-/// what is used least goes into the row's ⋯).
+/// being opened, and what opens it given what it is called) is a button beside the page's button; copying the link
+/// stays in the ⋯ after them.
 pub fn login_steps_node(
   v : @view.View,
   core : Core,
@@ -679,8 +689,37 @@ pub fn login_steps_node(
       _ => 5
     }
   }
-  // in a ⋯ after the page's button: its address copied (for a browser elsewhere), and where the station has one, the
-  // same page in the station's browser (回到 … while its tab is open)
+  // beside the page's button where the station has a browser of its own (回到 … while its tab is open); in the ⋯ after
+  // them, its address copied (for a browser elsewhere)
+  let station_browser = fn(r : @view.View) {
+    match in_station {
+      Some((name, busy, go)) =>
+        r.show(at_once=true, fn() { flag(job(), "browser") }, fn(x) {
+          @sf.button_node(
+            x,
+            fn() {
+              @sf.t(
+                if text(job(), "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" },
+                args=[("station", name())],
+              )
+            },
+            fn() {
+              let j = @signals.untracked(job)
+              let label = @sf.t(
+                if text(j, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" },
+                args=[("station", @signals.untracked(name))],
+              )
+              let claude = @signals.untracked(provider) == "Claude" && text(j, "screen") == ""
+              @settings.confirm_claude_auth(claude, fn() { go(label) })
+            },
+            tone=Plain,
+            busy~,
+          )
+          |> ignore
+        })
+      None => ()
+    }
+  }
   let page_more = fn(r : @view.View) {
     // (beside the box that holds it, as it is pressed)
     r.box(fn(k) {
@@ -688,16 +727,6 @@ pub fn login_steps_node(
         let j = @signals.untracked(job)
         let link = text(j, "url")
         let items = [Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { @sfbase.copy_out(link, said=@sf.t("common.link.copied")) }))]
-        match in_station {
-          Some((name, busy, go)) if flag(j, "browser") => {
-            let label = @sf.t(if text(j, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, args=[
-              ("station", @signals.untracked(name)),
-            ])
-            let claude = @signals.untracked(provider) == "Claude" && text(j, "screen") == ""
-            items.push(Some(@sf.menu_item_of(label, disabled=@signals.untracked(busy), fn() { @settings.confirm_claude_auth(claude, fn() { go(label) }) })))
-          }
-          _ => ()
-        }
         let (x, y, w, h) = k.placed_window_now()
         @sf.menu(items, from=At(x, y, w, h))
       })
@@ -713,7 +742,7 @@ pub fn login_steps_node(
     })
     |> ignore
   }
-  v.pick(step, fn(q, k) {
+  v.pick(at_once=true, step, fn(q, k) {
     q.gap(Is(pf_card_gap)) |> ignore
     match k {
       1 => {
@@ -729,11 +758,13 @@ pub fn login_steps_node(
           |> ignore
           st.box(fn(r) {
             @sf.style_node(r, fn() { pf_step_buttons })
+            r.width_share(Is(1.0)).wraps(Is(Some(pf_step_buttons_gap))) |> ignore
             @sf.button_node(r, fn() { @sf.t("web-pages.profiles.openAuth") }, fn() {
               let link = @signals.untracked(url)
               @settings.confirm_claude_auth(@signals.untracked(provider) == "Claude", fn() { (core.open_link)(link) })
             }, tone=Primary, icon="external")
             |> ignore
+            station_browser(r)
             page_more(r)
           })
           |> ignore
@@ -780,7 +811,7 @@ pub fn login_steps_node(
         let filled = fn() { provider() == "OpenCode" || provider() == "Kimi" || code() == "" }
         q.box(fn(d) {
           @sf.style_node(d, fn() { pf_device })
-          d.show(fn() { code() != "" }, fn(x) {
+          d.show(at_once=true, fn() { code() != "" }, fn(x) {
             x.box(fn(c) {
               @sf.style_node(c, fn() { pf_device_code })
               c.box(fn(w) {
@@ -795,6 +826,7 @@ pub fn login_steps_node(
           })
           d.box(fn(r) {
             @sf.style_node(r, fn() { pf_step_buttons })
+            r.width_share(Is(1.0)).wraps(Is(Some(pf_step_buttons_gap))) |> ignore
             @sf.button_node(
               r,
               fn() {
@@ -822,6 +854,7 @@ pub fn login_steps_node(
               icon="external",
             )
             |> ignore
+            station_browser(r)
             page_more(r)
           })
           |> ignore
@@ -880,7 +913,7 @@ fn profile_trouble_node(
       },
       bad=fn() { failed_of(core, ["profile.check", "profile.quota"], on).unwrap_or("") },
     )
-    k.show(fn() { action() == "command" }, fn(x) {
+    k.show(at_once=true, fn() { action() == "command" }, fn(x) {
       @sf.copy_command_node(x, fn() { text(p(), "loginCommand") }, copy=@sf.t("common.copy"), copied=@sf.t("common.copied"))
     })
     @sf.card_foot_node(k, fn(f) {
@@ -902,7 +935,7 @@ fn profile_trouble_node(
         card_words=true,
       )
       |> ignore
-      f.show(fn() { action() == "key" || action() == "env" }, fn(x) {
+      f.show(at_once=true, fn() { action() == "key" || action() == "env" }, fn(x) {
         @sf.button_node(x, fn() { @sf.t("android-settings.profile.recheck") }, check, tone=Ghost, busy=checking, disabled=fn() { !online() })
         |> ignore
       })
@@ -911,12 +944,6 @@ fn profile_trouble_node(
 }
 
 // ── its allowance and what it spent ─────────────────────────────────────
-
-///|
-/// A row that says how something stands, going nowhere (said_row's: its title, a note under it), in node `g`.
-fn said_row_node(g : @view.View, title : () -> String, note? : () -> String = fn() { "" }) -> Unit {
-  @sf.link_row_node(g, title, fn() {  }, note~, goes=false)
-}
 
 ///|
 /// What is left of its allowance (QuotaSection) in node `b`: each window as a dial, when it was read under them, reading
@@ -957,8 +984,8 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
             2
           }
         }
-        g.show(fn() { what() == 0 }, fn(x) { said_row_node(x, fn() { @sf.t("web-main.quota.unchecked") }) })
-        g.show(fn() { what() == 1 }, fn(x) {
+        g.show(at_once=true, fn() { what() == 0 }, fn(x) { said_row_node(x, fn() { @sf.t("web-main.quota.unchecked") }) })
+        g.show(at_once=true, fn() { what() == 1 }, fn(x) {
           said_row_node(x, fn() {
             match opt_text(quota(), "detail") {
               Some(d) => d
@@ -966,10 +993,10 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
             }
           })
         })
-        g.show(fn() { what() == 2 }, fn(x) {
+        g.show(at_once=true, fn() { what() == 2 }, fn(x) {
           @sf.block_node(x, fn(bl) {
-            @sf.dials_node(bl, fn() { quota_dials_of(windows()) })
-            bl.show(fn() { text(field(field(quota(), "time"), "checkedAt"), "ago") != "" }, fn(w) {
+            @sf.dials_node(bl, fn() { quota_dials_of(windows()) }, lines=2)
+            bl.show(at_once=true, fn() { text(field(field(quota(), "time"), "checkedAt"), "ago") != "" }, fn(w) {
               @sf.words_node(w, fn() {
                 @sf.t("android-settings.quota.checkedAt", args=[("ago", text(field(field(quota(), "time"), "checkedAt"), "ago"))])
               }, fn() { @sf.caption })
@@ -977,29 +1004,44 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
             })
           })
         })
-        g.show(fn() { credits() != "" }, fn(x) {
+        g.show(at_once=true, fn() { credits() != "" }, fn(x) {
           @sf.link_row_node(x, fn() { @sf.t("android-settings.quota.credits") }, fn() {  }, value=credits, goes=false)
         })
-        g.show(fn() { has(quota(), "resetCount") }, fn(x) {
+        // Each kind of reset it holds, a row each: how many are left at its end, where they are seen at once (the user,
+        // 2026-11-10), what one gives back and till when under its name; the row pressed asks first, then uses one.
+        g.each(fn() { items(quota(), "resets") }, fn(r) { text(Some(r), "kind") }, fn(x, rs) {
+          let rv = fn() { Some(rs.get()) }
           let busy = fn() { is_doing(core, ["profile.resetQuota"], on) }
-          let left = fn() { count(quota(), "resetCount") }
-          x.pick(fn() { (left() > 0, left() > 0 && !busy()) }, fn(r, k) {
+          let usable = fn() { count(rv(), "left") > 0 && flag(rv(), "usable") }
+          // (lit only when one can be used now: one usable only at a limit says why under it, unpressed)
+          x.pick(at_once=true, fn() { (usable(), usable() && !busy()) }, fn(r, k) {
             let (lit, goes) = k
             @sf.link_row_node(
               r,
-              fn() { @sf.t("android-settings.quota.resets") },
+              fn() { text(rv(), "title") },
               fn() {
+                let one = @signals.untracked(rv)
+                let name = text(@signals.untracked(p), "name")
+                let body = match opt_text(one, "refills") {
+                  Some(refills) =>
+                    @sf.t("web-pages.profiles.resetKindBody", args=[("name", name), ("kind", text(one, "title")), ("refills", refills)])
+                  None => @sf.t("web-pages.profiles.resetBody", args=[("name", name), ("n", count(one, "left").to_string())])
+                }
+                let asked = match opt_text(one, "id") {
+                  Some(kind) => obj([("station", str(address)), ("id", str(id)), ("reset", str(kind))])
+                  None => params()
+                }
                 confirm(
                   @sf.t("web-pages.profiles.resetConfirm"),
-                  @sf.t("web-pages.profiles.resetBody", args=[("name", text(@signals.untracked(p), "name")), ("n", @signals.untracked(left).to_string())]),
+                  body,
                   @sf.t("web-pages.profiles.resetAction"),
                   fn() {
-                    @settings.act(core, @sf.t("web-pages.profiles.resetAction"), "profile.resetQuota", params(), done=@sf.t("web-pages.profiles.quotaReset"))
+                    @settings.act(core, @sf.t("web-pages.profiles.resetAction"), "profile.resetQuota", asked, done=@sf.t("web-pages.profiles.quotaReset"))
                   },
                 )
               },
-              note=fn() { text(quota(), "resetText") },
-              value=fn() { @sf.t("web-pages.profiles.reset") },
+              note=fn() { reset_note(rv()) },
+              value=fn() { text(rv(), "leftText") },
               value_lit=lit,
               chevron=false,
               goes~,
@@ -1010,6 +1052,12 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
       })
     },
   )
+}
+
+///|
+/// Under a kind of reset's name: what one gives back, and when they end or why none can be used now.
+fn reset_note(r : Json?) -> String {
+  [opt_text(r, "refills").unwrap_or(""), text(r, "text")].filter(fn(w) { w != "" }).join(" · ")
 }
 
 ///|
@@ -1040,8 +1088,7 @@ fn profile_usage_node(
       None => None
     }
   }
-  // (read after the page is made: its section opens on its way, pushing what is under it down as it goes, not at once)
-  @motion.reveal_node(b, fn() { usage() is Some(_) }, lazy=true, fn(u) {
+  b.show(at_once=true, fn() { usage() is Some(_) }, fn(u) {
     @sf.section_node(
       u,
       fn() {
@@ -1058,7 +1105,7 @@ fn profile_usage_node(
         }, icon="chart")
       },
       fn(sec) {
-        sec.pick(fn() { item() is Some(_) }, fn(x, has) {
+        sec.pick(at_once=true, fn() { item() is Some(_) }, fn(x, has) {
           if has {
             @sf.figures_node(x, fn() {
               let it = item()
@@ -1082,7 +1129,6 @@ fn profile_usage_node(
       },
     )
   })
-  |> ignore
 }
 
 // ── who uses it, where it is ────────────────────────────────────────────
@@ -1144,7 +1190,7 @@ fn profile_stations_node(b : @view.View, core : Core, here_station : String, ent
             (text(state(), "text"), pill_tone(text(state(), "tone")))
           }
         }
-        r.pick(fn() { !current && pid() != "" }, fn(x, opens) {
+        r.pick(at_once=true, fn() { !current && pid() != "" }, fn(x, opens) {
           @sf.link_row_node(
             x,
             fn() { text(mv(), "stationName") },
@@ -1157,7 +1203,7 @@ fn profile_stations_node(b : @view.View, core : Core, here_station : String, ent
             chevron_room=true,
             title_after=fn(a) { @sf.pill_node(a, fn() { @sf.t("web-pages.connect.current") }) |> ignore },
             title_after_shown=fn() { current },
-            tail=fn(t) { t.pick(fn() { pill().1 }, fn(y, tone) { @sf.pill_node(y, fn() { pill().0 }, tone~) |> ignore }) },
+            tail=fn(t) { t.pick(at_once=true, fn() { pill().1 }, fn(y, tone) { @sf.pill_node(y, fn() { pill().0 }, tone~) |> ignore }) },
             tail_shown=fn() { pill().0 != "" },
           )
         })
@@ -1173,11 +1219,11 @@ fn profile_stations_node(b : @view.View, core : Core, here_station : String, ent
 /// in a dialog of their own (profile_models_panel). A provider that answers the automatic decisions alone: the models
 /// its probe found.
 fn profile_models_node(b : @view.View, core : Core, here : () -> Here, address : String, id : String, p : () -> Json?) -> Unit {
-  b.pick(fn() { flag(p(), "decisionOnly") }, fn(x, only) {
+  b.pick(at_once=true, fn() { flag(p(), "decisionOnly") }, fn(x, only) {
     if only {
       @sf.section_node(x, fn() { @sf.t("web-pages.profiles.decisionModels") }, fn(sec) {
         @sf.loose_node(sec, fn(l) {
-          l.show(fn() { strings(p(), "decisionModels").length() > 0 }, fn(c) {
+          l.show(at_once=true, fn() { strings(p(), "decisionModels").length() > 0 }, fn(c) {
             c.box(fn(chips) {
               @sf.style_node(chips, fn() { pf_chips })
               chips.wraps(Is(Some(0.0))) |> ignore
@@ -1188,7 +1234,7 @@ fn profile_models_node(b : @view.View, core : Core, here : () -> Here, address :
             })
             |> ignore
           })
-          l.show(fn() { text(p(), "decisionText") != "" }, fn(w) { @sf.words_node(w, fn() { text(p(), "decisionText") }, fn() { pf_muted }) |> ignore })
+          l.show(at_once=true, fn() { text(p(), "decisionText") != "" }, fn(w) { @sf.words_node(w, fn() { text(p(), "decisionText") }, fn() { pf_muted }) |> ignore })
         })
       })
     } else {
@@ -1203,6 +1249,20 @@ fn profile_models_node(b : @view.View, core : Core, here : () -> Here, address :
               g,
               fn() { @sf.t("web-main.model.allModels") },
               fn() {
+                let fusion : @signals.Signal[Json?] = @signals.signal(None)
+                let fusion_lead : Ref[String] = Ref("")
+                let p0 = @signals.untracked(p)
+                if text(p0, "runtime") == "devin" && text(field(p0, "share"), "role") != "user" {
+                  (core.call)(
+                    "profile.fusion",
+                    obj([("station", str(address)), ("id", str(id))]),
+                    fn(r) {
+                      if r is Ok(v) && field(Some(v), "fusion") is (Some(Object(_)) as f) {
+                        fusion.set(f)
+                      }
+                    },
+                  )
+                }
                 @sf.panel(
                   @sf.t("web-pages.profiles.models"),
                   fn(c, _) {
@@ -1212,7 +1272,7 @@ fn profile_models_node(b : @view.View, core : Core, here : () -> Here, address :
                       Some(i) => Some(listed[i])
                       None => @signals.untracked(p)
                     }
-                    profile_models_panel(c, core, address, now)
+                    profile_models_panel(c, core, address, now, fusion.get(), fusion_lead)
                   },
                   // (a dialog of its own, not beside its row: 2026-11-02 用户「用弹窗」)
                   from=Unanchored,
@@ -1239,7 +1299,7 @@ fn profile_run_node(b : @view.View, core : Core, address : String, id : String, 
   }
   @sf.section_node(b, fn() { @sf.t("web-pages.profiles.run") }, fn(sec) {
     @sf.group_node(sec, fn(g) {
-      g.show(fn() { profile_fast(p()) }, fn(r) {
+      g.show(at_once=true, fn() { profile_fast(p()) }, fn(r) {
         @sf.switch_row_node(
           r,
           fn() { @sf.t("web-pages.profiles.fast") },
@@ -1251,7 +1311,7 @@ fn profile_run_node(b : @view.View, core : Core, address : String, id : String, 
           busy~,
         )
       })
-      g.show(fn() { profile_background(p()) }, fn(r) {
+      g.show(at_once=true, fn() { profile_background(p()) }, fn(r) {
         @sf.switch_row_node(
           r,
           fn() { @sf.t("web-pages.profiles.background") },
@@ -1264,7 +1324,7 @@ fn profile_run_node(b : @view.View, core : Core, address : String, id : String, 
         )
       })
     })
-    sec.show(fn() { failed_of(core, ["profile.put"], on) is Some(_) }, fn(n) {
+    sec.show(at_once=true, fn() { failed_of(core, ["profile.put"], on) is Some(_) }, fn(n) {
       @sf.page_note_node(n, fn() { failed_of(core, ["profile.put"], on).unwrap_or("") }, bad=fn() { true })
     })
   })
@@ -1274,8 +1334,8 @@ fn profile_run_node(b : @view.View, core : Core, address : String, id : String, 
 
 ///|
 /// Sharing it with the workspace's other stations (ShareSection) in node `b`: a switch (turned on, asked first what the
-/// others do with it); once on, where a subscription is signed in (moved from here to another) and which stations may
-/// use it, a row each. A copy of another station's says whose it is, its page a tap away.
+/// others do with it); the station it is on (moved from here to another, shared or not); once on, which stations may
+/// use it. A copy of another station's says whose it is, its page a tap away.
 fn profile_share_node(
   b : @view.View,
   core : Core,
@@ -1292,7 +1352,7 @@ fn profile_share_node(
     let all = stations()
     match all.search_by(fn(x) { text(Some(x), "id") == sid }) {
       Some(i) => text(Some(all[i]), "name")
-      None => sid.view(end_offset=@cmp.minimum(8, sid.length())).to_string()
+      None => sid.clamped_view(end=@cmp.minimum(8, sid.length())).to_owned()
     }
   }
   let subscription = fn() { text(field(p(), "access"), "kind") == "subscription" }
@@ -1310,7 +1370,7 @@ fn profile_share_node(
   @sf.section_node(b, fn() { @sf.t("web-pages.profiles.share.title") }, fn(sec) {
     @sf.group_node(sec, fn(g) {
       // a copy of another station's: whose it is, its page a tap away
-      g.show(user, fn(x) {
+      g.show(at_once=true, user, fn(x) {
         let lender = fn() -> Json? {
           let host = text(share(), "host")
           let members = items(entry(), "members")
@@ -1319,7 +1379,7 @@ fn profile_share_node(
             None => None
           }
         }
-        x.pick(fn() { lender() is Some(_) }, fn(r, goes) {
+        x.pick(at_once=true, fn() { lender() is Some(_) }, fn(r, goes) {
           @sf.link_row_node(
             r,
             fn() { @sf.t("web-pages.profiles.share.copy", args=[("station", name_of(text(share(), "host")))]) },
@@ -1341,7 +1401,7 @@ fn profile_share_node(
           )
         })
       })
-      g.show(fn() { !user() }, fn(x) {
+      g.show(at_once=true, fn() { !user() }, fn(x) {
         @sf.switch_row_node(
           x,
           fn() { @sf.t("web-pages.profiles.share.switch") },
@@ -1388,13 +1448,18 @@ fn profile_share_node(
           busy=sharing,
         )
       })
-      // where a shared subscription is signed in, moved to another
+      // which station it is on, moved to another: any of the station's own but the machine's login (shared or not, a
+      // subscription or a key). A shared subscription's always says it, as before any could move (the others use it:
+      // where its sign-in is kept is theirs to know); another's only while a station is up to take it
       let targets = fn() { stations().filter(fn(x) { text(Some(x), "id") != sid() }) }
-      g.show(fn() { !user() && shared() && subscription() && !flag(p(), "machine") }, fn(x) {
-        x.pick(fn() { !moving() && targets().length() > 0 }, fn(r, goes) {
+      let movable = fn() {
+        !user() && !flag(p(), "machine") && ((shared() && subscription()) || targets().iter().any(fn(x) { flag(Some(x), "online") }))
+      }
+      g.show(at_once=true, movable, fn(x) {
+        x.pick(at_once=true, fn() { !moving() && targets().length() > 0 }, fn(r, goes) {
           @sf.link_row_node(
             r,
-            fn() { @sf.t("web-pages.profiles.share.signedIn") },
+            fn() { @sf.t("web-pages.profiles.share.where") },
             fn() { move_dialog(core, @signals.untracked(s), @signals.untracked(p), @signals.untracked(targets)) },
             value=fn() { text(s(), "name") },
             goes~,
@@ -1403,8 +1468,8 @@ fn profile_share_node(
         })
       })
       // which stations may use it
-      g.show(fn() { !user() && shared() }, fn(x) {
-        x.pick(fn() { !sharing() }, fn(r, goes) {
+      g.show(at_once=true, fn() { !user() && shared() }, fn(x) {
+        x.pick(at_once=true, fn() { !sharing() }, fn(r, goes) {
           @sf.link_row_node(
             r,
             fn() { @sf.t("web-pages.profiles.share.stations") },
@@ -1438,14 +1503,16 @@ fn profile_share_node(
 }
 
 ///|
-/// Where a shared subscription is signed in, moved to another station (`profile.move`): the others, a row each, picked
-/// in a panel (one away, said so and not picked).
+/// The station an account is on, moved to another (`profile.move`): the others, a row each, picked in a panel (one
+/// away, said so and not picked). A shared one leaves this station a borrowed copy; one not shared is on the other
+/// alone after, its page here gone: back to the list at once, as a deleted one's is, its answer said there.
 fn move_dialog(core : Core, s : Json?, p : Json?, targets : Array[Json]) -> Unit {
   let address = text(s, "station")
   let id = text(p, "id")
+  let shared = field(p, "share") is Some(Object(_))
   open_dialog(
-    @sf.t("web-pages.profiles.share.moveTitle"),
-    description=@sf.t("web-pages.profiles.share.moveLead", args=[("station", text(s, "name"))]),
+    @sf.t("web-pages.profiles.share.moveTo"),
+    description=@sf.t(if shared { "web-pages.profiles.share.moveShared" } else { "web-pages.profiles.share.moveOwn" }, args=[("station", text(s, "name"))]),
     fn(c, shut) {
       @sf.group(c, fn() {
         for x in targets {
@@ -1461,6 +1528,9 @@ fn move_dialog(core : Core, s : Json?, p : Json?, targets : Array[Json]) -> Unit
             lead=fn() { @sf.status_dot(c, if online { "online" } else { "offline" }) },
             on_press=fn() {
               shut()
+              if !shared {
+                (core.pop)()
+              }
               @settings.act(
                 core,
                 @sf.t("web-pages.profiles.share.move"),
@@ -1479,9 +1549,11 @@ fn move_dialog(core : Core, s : Json?, p : Json?, targets : Array[Json]) -> Unit
 
 ///|
 /// Which stations may use a share (PickStations), ticked in a panel: every one (those to come too), or those ticked;
-/// the one that has it always.
+/// the one that has it always. Those listed are the workspace's, not every one the share reaches where its station is
+/// in several: they are said as what it was chosen among (`among`), so that only theirs change and a choice made in
+/// another workspace stands (share/index.ts shareProfile).
 fn pick_stations(core : Core, address : String, id : String, stations : Array[Json], own : String, allowed : Array[String]?) -> Unit {
-  let ticked : Map[String, Bool] = {}
+  let ticked : Map[String, Bool] = Map([])
   for x in stations {
     let xid = text(Some(x), "id")
     ticked[xid] = match allowed {
@@ -1528,6 +1600,7 @@ fn pick_stations(core : Core, address : String, id : String, stations : Array[Js
           }
           params.push(("allow", Json::array(allow)))
         }
+        params.push(("among", Json::array(stations.map(fn(x) { str(text(Some(x), "id")) }))))
         @settings.act(core, @sf.t("web-pages.profiles.share.stations"), "profile.share", obj(params))
       }) |> ignore
     },
@@ -1548,7 +1621,7 @@ fn profile_workspaces_node(b : @view.View, core : Core, address : String, id : S
     }
   }
   let busy = fn() { is_doing(core, ["profile.put"], [("station", address), ("id", id)]) }
-  b.show(fn() { joined().length() > 0 }, fn(x) {
+  b.show(at_once=true, fn() { joined().length() > 0 }, fn(x) {
     @sf.section_node(x, fn() { @sf.t("web-pages.profiles.workspaces.title") }, note=fn() { @sf.t("web-pages.profiles.workspaces.lead") }, fn(sec) {
       @sf.group_node(sec, fn(g) {
         g.each(joined, fn(w) { text(Some(w), "workspace") }, fn(r, w) {
@@ -1559,7 +1632,7 @@ fn profile_workspaces_node(b : @view.View, core : Core, address : String, id : S
           let icon = fn() { text(wv(), "icon") }
           let on = fn() { strings(p(), "workspaces").contains(ws) }
           // With no mark of its own, the name is enough (a bare initial reads as another word: 「个 个人」).
-          r.pick(fn() { @sf.has_station_mark(emoji(), icon()) }, fn(y, marked) {
+          r.pick(at_once=true, fn() { @sf.has_station_mark(emoji(), icon()) }, fn(y, marked) {
             @sf.switch_row_node(
               y,
               name,
@@ -1611,7 +1684,7 @@ fn profile_account_node(b : @view.View, core : Core, address : String, id : Stri
   let command = fn() { text(p(), "loginCommand") }
   @sf.section_node(b, fn() { @sf.t("web-pages.profiles.account") }, fn(sec) {
     @sf.group_node(sec, fn(g) {
-      g.show(machine, fn(x) {
+      g.show(at_once=true, machine, fn(x) {
         let runtime = fn() { @settings.runtime_label(text(p(), "runtime")) }
         said_row_node(
           x,
@@ -1625,8 +1698,8 @@ fn profile_account_node(b : @view.View, core : Core, address : String, id : Stri
           note=fn() { @sf.t("web-pages.profiles.machineLoginAbout", args=[("runtime", runtime())]) },
         )
       })
-      g.show(fn() { !machine() && keyed() }, fn(x) {
-        x.pick(fn() { !saving() }, fn(r, goes) {
+      g.show(at_once=true, fn() { !machine() && keyed() }, fn(x) {
+        x.pick(at_once=true, fn() { !saving() }, fn(r, goes) {
           @sf.link_row_node(
             r,
             fn() {
@@ -1648,8 +1721,8 @@ fn profile_account_node(b : @view.View, core : Core, address : String, id : Stri
           )
         })
       })
-      g.show(fn() { !machine() && keyed() && has(access(), "endpoint") }, fn(x) {
-        x.pick(fn() { !saving() }, fn(r, goes) {
+      g.show(at_once=true, fn() { !machine() && keyed() && has(access(), "endpoint") }, fn(x) {
+        x.pick(at_once=true, fn() { !saving() }, fn(r, goes) {
           @sf.link_row_node(
             r,
             fn() { @sf.t("common.provider.endpoint") },
@@ -1675,8 +1748,8 @@ fn profile_account_node(b : @view.View, core : Core, address : String, id : Stri
         })
       })
       // signed in and well: signing in again, or by hand on the machine (OpenCode's has no command to run)
-      g.show(fn() { !machine() && !keyed() }, fn(x) {
-        x.pick(fn() { !starting() }, fn(r, goes) {
+      g.show(at_once=true, fn() { !machine() && !keyed() }, fn(x) {
+        x.pick(at_once=true, fn() { !starting() }, fn(r, goes) {
           @sf.link_row_node(
             r,
             fn() { @sf.t("web-pages.signIn.again") },
@@ -1688,7 +1761,7 @@ fn profile_account_node(b : @view.View, core : Core, address : String, id : Stri
           )
         })
       })
-      g.show(fn() { !machine() && !keyed() && command() != "" }, fn(x) {
+      g.show(at_once=true, fn() { !machine() && !keyed() && command() != "" }, fn(x) {
         @sf.link_row_node(
           x,
           fn() { @sf.t("web-pages.profiles.manual") },
@@ -1764,7 +1837,7 @@ fn profile_env_node(b : @view.View, core : Core, address : String, id : String, 
       @sf.link_row_node(
         g,
         fn() { if open.env.get() { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.env.edit") } },
-        fn() { open.env.set(!@signals.untracked(fn() { open.env.get() })) },
+        fn() { open.env.set(!open.env.untracked()) },
         chevron=false,
         tail=fn(t) { doing_mark_node(t, busy, fn() { failed_of(core, ["profile.put"], on) }, tips?) },
       )
@@ -1813,12 +1886,12 @@ fn env_editor_node(k : @view.View, core : Core, address : String, id : String, p
       })
       |> ignore
       @sf.button_node(r, fn() { @sf.t("common.delete") }, fn() {
-        rows.set(@signals.untracked(fn() { rows.get() }).filter(fn(x) { !physical_equal(x, row) }))
+        rows.set(rows.untracked().filter(fn(x) { !physical_equal(x, row) }))
       }, tone=Ghost)
       |> ignore
     })
     @sf.button_node(t, fn() { @sf.t("web-pages.profiles.envAdd") }, fn() {
-      rows.set(@signals.untracked(fn() { rows.get() }) + [row_of("", "", "")])
+      rows.set(rows.untracked() + [row_of("", "", "")])
     }, tone=Ghost, icon="plus")
     |> ignore
   })
@@ -1826,8 +1899,8 @@ fn env_editor_node(k : @view.View, core : Core, address : String, id : String, p
   @sf.card_foot_node(k, at_end=true, fn(f) {
     @sf.button_node(f, fn() { @sf.t("common.save") }, fn() {
       // what changed: a name gone or renamed null, a secret left blank kept as it is
-      let now = @signals.untracked(fn() { rows.get() })
-      let patch : Map[String, Json] = {}
+      let now = rows.untracked()
+      let patch : Map[String, Json] = Map([])
       let kept = now.map(fn(r) { r.key.text().trim(chars=" \t\n").to_owned() })
       for e in env {
         if !kept.contains(text(Some(e), "key")) {
@@ -1866,7 +1939,7 @@ fn env_editor_node(k : @view.View, core : Core, address : String, id : String, p
 /// a box before it, ticked while it is starred (`pick.like`, as the model control's are: 2026-11-02 用户「这里改成也能
 /// 点勾」), its id under the pointer; one named by hand that its provider does not list taken off by its ×; one more
 /// named by hand over them, where it can be. (In the panel profile_models_node opens: a presenter's, an old view.)
-fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
+fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?, fusion : Json?, fusion_lead : Ref[String]) -> Unit {
   let id = text(p, "id")
   let key = address + "/" + id
   let added = strings(p, "added")
@@ -1879,18 +1952,38 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
   let liked = fn(m : String) {
     options.iter().any(fn(o) { flag(Some(o), "liked") && (text(Some(o), "model") == m || strings(Some(o), "ids").contains(m)) })
   }
-  let series = items(p, "series")
+  let fusion_uids : Map[String, Bool] = Map([])
+  if fusion is Some(Object(_)) {
+    let sides = items(fusion, "sides")
+    for lead in items(fusion, "leads") {
+      let lv = Some(lead)
+      let lead_id = text(lv, "id")
+      for idx_json in items(lv, "sides") {
+        if idx_json is Number(idx, ..) && sides.get(idx.to_int()) is Some(side) {
+          fusion_uids["fusion-" + lead_id + "-sidekick-" + text(Some(side), "id")] = true
+        }
+      }
+    }
+  }
+  let shown_series : Array[(String, Array[String])] = []
+  for s in items(p, "series") {
+    let sv = Some(s)
+    let models = strings(sv, "models").filter(fn(m) { !fusion_uids.contains(m) })
+    if !models.is_empty() {
+      shown_series.push((text(sv, "name"), models))
+    }
+  }
   // (one more named by hand over them, where it can be: under them it stood in the panel's corner)
   if flag(p, "canAddModel") {
     c.box(style=pf_models_add, fn() { add_model(c, core, address, id) }) |> ignore
   }
   @sf.panel_column(c, "profile-models/" + key, pf_models_most, pf_model_rows.then(pf_models_foot()), fn() {
-    for s in series {
-      let sv = Some(s)
-      if series.length() > 1 {
-        c.box(style=pf_series_room, fn() { c.text(text(sv, "name"), style=pf_series_words) |> ignore }) |> ignore
+    for entry in shown_series {
+      let (series_name, models) = entry
+      if shown_series.length() > 1 {
+        c.box(style=pf_series_room, fn() { c.text(series_name, style=pf_series_words) |> ignore }) |> ignore
       }
-      for m in strings(sv, "models") {
+      for m in models {
         let on = liked(m)
         let item = c.id("profile-model-item/" + key + "/" + m)
         c.box(style=pf_model_row.then(@sf.row_least_h()), id=item, taps=false, points=true, fn() {
@@ -1904,7 +1997,7 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
             (core.call)(
               "pick.like",
               obj([("station", str(address)), ("of", str("new")), ("model", str(m)), ("liked", Json::boolean(now == On))]),
-              fn(_) {  },
+              @sfbase.answer_unread,
             )
           }
           @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
@@ -1934,7 +2027,169 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
         @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m, side=Right, repeats=name(m) == m)
       }
     }
+    if fusion is Some(Object(_)) {
+      profile_fusion_section(c, core, address, id, key, p, fusion, fusion_lead, named, liked, busy)
+    }
   })
+}
+
+///|
+/// Devin's Fusion combinations (`lead + sidekick`), organized by lead model chip and sidekick checklist so pairs can be
+/// pinned to the main model list without scrolling through hundreds of flat variants.
+fn profile_fusion_section(
+  c : @ui.Ctx,
+  core : Core,
+  address : String,
+  id : String,
+  key : String,
+  p : Json?,
+  fusion : Json?,
+  fusion_lead : Ref[String],
+  named : Array[String],
+  liked : (String) -> Bool,
+  busy : Bool,
+) -> Unit {
+  let sides = items(fusion, "sides")
+  let leads = items(fusion, "leads")
+  guard !sides.is_empty() && !leads.is_empty() else { return }
+  let runtime = text(p, "runtime")
+  c.box(style=pf_fusion_head, fn() {
+    c.text(@sf.t("web-pages.profiles.fusionModels"), style=pf_series_words) |> ignore
+    c.text(@sf.t("web-pages.profiles.fusionHint"), style=pf_muted) |> ignore
+  })
+  |> ignore
+  let toggle_pair = fn(uid : String, want_on : Bool) {
+    let next_named = if want_on {
+      if named.contains(uid) { named } else { named + [uid] }
+    } else {
+      named.filter(fn(x) { x != uid })
+    }
+    @settings.act(
+      core,
+      @sf.t("web-pages.profiles.fusionModels"),
+      "profile.put",
+      obj([("station", str(address)), ("id", str(id)), ("input", obj([("models", Json::array(next_named.map(str)))]))]),
+    )
+    if want_on || liked(uid) {
+      (core.call)(
+        "pick.like",
+        obj([("station", str(address)), ("of", str("new")), ("model", str(uid)), ("liked", Json::boolean(want_on))]),
+        @sfbase.answer_unread,
+      )
+    }
+  }
+  let first_lead_id = text(Some(leads[0]), "id")
+  let picked_lead_id = if fusion_lead.val != "" && leads.iter().any(fn(l) { text(Some(l), "id") == fusion_lead.val }) {
+    fusion_lead.val
+  } else {
+    first_lead_id
+  }
+  let ticked : Array[(String, String, String)] = []
+  for lead in leads {
+    let lv = Some(lead)
+    let lead_id = text(lv, "id")
+    let lead_name = text(lv, "name")
+    let maker_id = text(field(lv, "maker"), "id")
+    for idx_json in items(lv, "sides") {
+      if idx_json is Number(idx, ..) && sides.get(idx.to_int()) is Some(side) {
+        let sv = Some(side)
+        let side_id = text(sv, "id")
+        let side_name = text(sv, "name")
+        let uid = "fusion-" + lead_id + "-sidekick-" + side_id
+        if named.contains(uid) {
+          ticked.push((uid, lead_name + " + " + side_name, maker_id))
+        }
+      }
+    }
+  }
+  for row in ticked {
+    let (uid, display, maker_id) = row
+    let item = c.id("profile-fusion-pinned/" + key + "/" + uid)
+    c.box(style=pf_model_row.then(@sf.row_least_h()), id=item, taps=false, points=true, fn() {
+      let now = @kit.checkbox(
+        c,
+        "profile-fusion-pinned-check/" + key + "/" + uid,
+        On,
+        disabled=busy,
+        label=display,
+      ).value
+      if now != On && !busy {
+        toggle_pair(uid, false)
+      }
+      @sf.maker_mark(c, maker_id, runtime, pf_chip_glyph) |> ignore
+      c.text(display, style=pf_model_words) |> ignore
+    })
+    |> ignore
+    @sf.tip(c, "profile-fusion-pinned/" + key + "/" + uid + "/tip", item, uid, side=Right)
+  }
+  c.box(style=pf_series_room, fn() { c.text(@sf.t("web-pages.profiles.fusionLead"), style=pf_series_words) |> ignore }) |> ignore
+  c.box(style=pf_fusion_leads, flow=true, line_gap=@ui.Space::px(S1_5), fn() {
+    for lead in leads {
+      let lv = Some(lead)
+      let lead_id = text(lv, "id")
+      let lead_name = text(lv, "name")
+      let maker_id = text(field(lv, "maker"), "id")
+      let active = lead_id == picked_lead_id
+      let chip_id = c.id("profile-fusion-lead/" + key + "/" + lead_id)
+      let b = c.box(
+        style=if active { pf_fusion_lead_on } else { pf_fusion_lead_chip },
+        id=chip_id,
+        fn() {
+          @sf.maker_mark(c, maker_id, runtime, 12.0) |> ignore
+          c.text(lead_name, style=if active { pf_fusion_lead_words_on } else { pf_fusion_lead_words }) |> ignore
+          if active {
+            @sf.icon(c, "check", size=12.0, color=@sf.theme().p.accent) |> ignore
+          }
+        },
+      )
+      c.semantics(b, Radio, id=chip_id, label=lead_name, check=if active { On } else { Off })
+      c.on_press(chip_id, fn() { fusion_lead.val = lead_id })
+    }
+  })
+  |> ignore
+  c.box(style=pf_series_room, fn() { c.text(@sf.t("web-pages.profiles.fusionSidekick"), style=pf_series_words) |> ignore }) |> ignore
+  let cur_lead = match leads.search_by(fn(l) { text(Some(l), "id") == picked_lead_id }) {
+    Some(i) => Some(leads[i])
+    None => Some(leads[0])
+  }
+  let lead_id = text(cur_lead, "id")
+  c.box(style=pf_fusion_leads, flow=true, line_gap=@ui.Space::px(S1_5), fn() {
+    for idx_json in items(cur_lead, "sides") {
+      if idx_json is Number(idx, ..) && sides.get(idx.to_int()) is Some(side) {
+        let sv = Some(side)
+        let side_id = text(sv, "id")
+        let side_name = text(sv, "name")
+        let side_maker_id = text(field(sv, "maker"), "id")
+        let uid = "fusion-" + lead_id + "-sidekick-" + side_id
+        let on = named.contains(uid)
+        let (name_part, eff_part) = match side_name.find(" · ") {
+          Some(at) => (side_name.exact_view(start=0, end=at).to_owned(), side_name.exact_view(start=at + 3).to_owned())
+          None => (side_name, "")
+        }
+        let item = c.id("profile-fusion-item/" + key + "/" + uid)
+        let b = c.box(
+          style=if on { pf_fusion_lead_on } else { pf_fusion_lead_chip },
+          id=item,
+          fn() {
+            @sf.maker_mark(c, side_maker_id, runtime, 12.0) |> ignore
+            c.text(name_part, style=if on { pf_fusion_lead_words_on } else { pf_fusion_lead_words }) |> ignore
+            if eff_part != "" {
+              c.text(eff_part, style=pf_series_words) |> ignore
+            }
+            if on {
+              @sf.icon(c, "check", size=12.0, color=@sf.theme().p.accent) |> ignore
+            }
+          },
+        )
+        c.semantics(b, Checkbox, id=item, label=side_name, check=if on { On } else { Off }, disabled=busy)
+        if !busy {
+          c.on_press(item, fn() { toggle_pair(uid, !on) })
+        }
+        @sf.tip(c, "profile-fusion-item/" + key + "/" + uid + "/tip", item, uid, side=Right)
+      }
+    }
+  })
+  |> ignore
 }
 
 ///|
@@ -2000,17 +2255,9 @@ let pf_check_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color
 let pf_state : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
-/// The runtimes' tags (runtimeTags: 4 apart, 8 after the name; a tag 18 high, 5 in, round 5, the hover's ground).
+/// The runtimes' tags (runtimeTags: 4 apart, 8 after the name; each the library's tag_node).
 // kept across runs: a value (no field of it changes)
 let pf_tags : @ui.Style = @ui.css("row gap=S1 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let pf_tag : @ui.Style = @ui.css("row h=S4_5 px=S1 gap=SPx align=ACenter radius=Base bg=Hover")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let pf_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Medium, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2026,9 +2273,13 @@ let pf_card_gap : Double = 14.0
 let pf_step : @ui.Style = @ui.css("w=Full gap=S2 align=AStart")
 
 ///|
-/// A step's page button, and the ⋯ after it of the other way of opening it (the station's browser).
+/// A step's page buttons (its own and, where the station has a browser, the station's) and the ⋯ after them (copying
+/// the link for a browser elsewhere): wrapped across lines on a narrow card or large words.
+let pf_step_buttons_gap : Double = 8.0
+
+///|
 // kept across runs: a value (no field of it changes)
-let pf_step_buttons : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+let pf_step_buttons : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2100,6 +2351,30 @@ let pf_series_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, c
 ///|
 // kept across runs: a value (no field of it changes)
 let pf_models_add : @ui.Style = @ui.css("w=Full pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_fusion_head : @ui.Style = @ui.css("w=Full px=S2_5 pt=S3 pb=S1 gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_fusion_leads : @ui.Style = @ui.css("row w=Full px=S2_5 pb=S1 gap=S1_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_fusion_lead_chip : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Full bg=Tint hovered{bg=TintStrong}")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_fusion_lead_on : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Full bg=TintStrong")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_fusion_lead_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_fusion_lead_words_on : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// The × of a model named by hand on its chip (a round button as high as its words' line).

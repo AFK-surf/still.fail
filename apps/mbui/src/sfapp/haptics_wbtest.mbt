@@ -42,9 +42,9 @@ test "the bottom bar: holding and moving between places is felt once per choice,
     t.run_for(bar_hold_ms - before_hold)
     t.frame()
     assert_eq(t.haptics(), [@ui.LongPress])
-    t.move(xs[1], y)
+    t.move_to(xs[1], y)
     assert_eq(t.haptics(), [@ui.LongPress, @ui.TextHandleMove])
-    t.move(xs[1] + 2.0, y)
+    t.move_to(xs[1] + 2.0, y)
     assert_eq(t.haptics(), [@ui.LongPress, @ui.TextHandleMove])
     t.release(xs[1], y)
     assert_true(app.nav.top() == Files)
@@ -74,7 +74,7 @@ test "the bottom bar: the 震动 setting turns holding and switching off and on"
   t.press_at(xs[0], y)
   t.run_for(bar_hold_ms)
   t.frame()
-  t.move(xs[1], y)
+  t.move_to(xs[1], y)
   t.release(xs[1], y)
   assert_true(app.nav.top() == Files)
   assert_eq(t.haptics().length(), before)
@@ -91,7 +91,7 @@ test "the bottom bar: the 震动 setting turns holding and switching off and on"
   let before = t.haptics().length()
   t.tap(xs[0], y)
   assert_true(app.nav.top() == Home)
-  assert_eq(t.haptics()[before:].to_array(), [@ui.TextHandleMove])
+  assert_eq(t.haptics()[before:].to_owned(), [@ui.TextHandleMove])
 }
 
 ///|

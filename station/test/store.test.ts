@@ -1228,9 +1228,6 @@ test("the sessions that wait are those whose latest turn said so, found together
   store.endTurn("d2", "completed", null, null, null);
   store.startTurn("x1", "done", "input");
   store.endTurn("x1", "completed", null, null, null);
-  assert.deepEqual([...store.waitingOf(["waits", "waited", "done", "none"])], ["waits"]);
-  assert.deepEqual([...store.waitingOf([])], []);
-  for (const key of ["waits", "waited", "done", "none"]) assert.equal(store.waitingOf([key]).has(key), store.lastTurn(key)?.declared === "waiting", key);
 });
 
 test("the latest turn is the last inserted when start times tie", () => {

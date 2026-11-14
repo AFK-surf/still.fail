@@ -2,6 +2,7 @@
 // its parent; offset includes that inset so the two panel edges stay panel_pad apart.
 
 ///|
+// kept across runs: put back by parts_reset, as a run begins (run_begin)
 let submenu_hover : Ref[String] = Ref("")
 
 ///|

@@ -4,20 +4,20 @@
 // time in words are the core's (its `chatJobs` view, `jobLog`); what is done goes through its calls.
 
 ///|
-/// What the jobs keep of their own: the job open in the popover ("" none), the one picked in the 任务 tab ("" the
-/// first), whether the tab shows its output (else what it said).
+/// What the jobs keep of their own: the job open in the popover ("" none: a signal, what the popover's nodes read,
+/// jobs_pop_node), the one picked in the 任务 tab ("" the first), whether the tab shows its output (else what it said).
 priv struct JobsOwn {
-  mut open : String
+  open : @signals.Signal[String]
   mut picked : String
   mut output : Bool
 }
 
 ///|
-let jobs_own : JobsOwn = { open: "", picked: "", output: false }
+let jobs_own : JobsOwn = { open: @signals.signal("", same=fn(a, b) { a == b }), picked: "", output: false }
 
 ///|
 fn jobs_reset() -> Unit {
-  jobs_own.open = ""
+  jobs_own.open.set("")
   jobs_own.picked = ""
   jobs_own.output = false
 }
@@ -31,7 +31,7 @@ pub fn pick_job(id : String) -> Unit {
 ///|
 /// The job opened in the popover (a screen's fixture).
 pub fn open_job_pop(id : String) -> Unit {
-  jobs_own.open = id
+  jobs_own.open.set(id)
 }
 
 ///|
@@ -156,7 +156,7 @@ fn job_row(
 /// the row's words (the 任务 tab's), else how long ago. None said: how a job says something.
 fn job_notices(c : @ui.Ctx, job : Json?, limit? : Int = 0, clock? : Bool = false) -> Unit {
   let all = items(job, "notices")
-  let notices = if limit > 0 && all.length() > limit { all[:limit].to_array() } else { all }
+  let notices = if limit > 0 && all.length() > limit { all[:limit].to_owned() } else { all }
   if notices.length() == 0 {
     c.rich(
       [
@@ -294,7 +294,7 @@ pub fn jobs_popover(
         for j in plain {
           let jv = Some(j)
           let id = text(jv, "id")
-          let open = jobs_own.open == id
+          let open = jobs_own.open.get() == id
           c.box(style=if open { jobs_fold_open } else { jobs_fold }, fn() {
             job_row(
               c,
@@ -305,7 +305,7 @@ pub fn jobs_popover(
               inset=true,
               grounded=open,
               on_press=fn() {
-                jobs_own.open = if open { "" } else { id }
+                jobs_own.open.set(if open { "" } else { id })
               },
             )
             if open {
@@ -516,19 +516,20 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
 }
 
 ///|
-/// A job's output (Output: its last 400 lines), in a terminal's colours where the core says them, following its end
-/// while it is scrolled there.
+/// A job's output (Output: its last 400 lines), in a terminal's colours as the core says them, following its end
+/// while it is scrolled there. (An old view's list, by the lines' places: built again each frame whatever came, each
+/// line's runs worked out once as it came, job_output_lines'.)
 fn job_output(c : @ui.Ctx, src : Source, station : String, id : String) -> Unit {
   let t = @sf.theme()
   c.box(style=job_output_box, fn() {
     match @sfbase.job_output_lines(src, station, id, job_output_lines, t.p.text, t.dark) {
-      Some([]) => c.text(@sf.t("web-main.jobs.noOutput"), style=job_output_none) |> ignore
-      Some(lines) =>
+      Some(o) if o.lines.is_empty() => c.text(@sf.t("web-main.jobs.noOutput"), style=job_output_none) |> ignore
+      Some(o) =>
         c.list(
           "jobs-tab/output/" + id,
-          lines.length(),
+          o.lines.length(),
           job_output_line,
-          fn(i) { c.rich(lines[i], style=job_output_words) |> ignore },
+          fn(i) { c.rich(o.lines[i].runs, style=job_output_words) |> ignore },
           stick_end=true,
         )
         |> ignore
@@ -590,15 +591,15 @@ let job_dot_room : @ui.Style = @ui.css("pt=S1_5")
 /// A job's row (jobRow): its dot and words 12 apart, 6 by 8 in (12 at its start); round as an option, the pointer's
 /// ground on it, the picked ground while picked; in the popover in by the panel's words (10), round with it.
 // kept across runs: a value (no field of it changes)
-let job_row_style : @ui.Style = @ui.css(
+let job_row_style : @ui.Style = @ui.css((
   #|row w=Full py=S1_5 pl=S3 pr=S2 gap=S3 align=AStart radius=Xl hovered{bg=Hover} selected{bg=Selected}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_row_inset : @ui.Style = @ui.css(
+let job_row_inset : @ui.Style = @ui.css((
   #|row w=Full py=S1_5 px=S2_5 gap=S3 align=AStart radius=Inner hovered{bg=Hover} selected{bg=Hover}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)

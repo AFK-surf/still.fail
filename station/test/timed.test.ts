@@ -68,7 +68,7 @@ test("every statement's time is put down, those of WAITED_MS or more by who aske
   assert.deepEqual([queried.ms, queried.calls], [1 + 2 * WAITED_MS, 3]);
   assert.deepEqual([...queried.by.keys()].map((k) => k.split(" < ")[0]), ["readEach"]);
   assert.equal(queried.by.values().next().value!.calls, 2);
-  assert.deepEqual(takeQueries(), { ms: 0, calls: 0, by: new Map() }, "taken: from nothing again");
+  assert.deepEqual(takeQueries(), { ms: 0, calls: 0, longest: 0, by: new Map() }, "taken: from nothing again");
   db.close();
 });
 

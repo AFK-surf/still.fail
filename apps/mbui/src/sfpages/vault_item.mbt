@@ -8,12 +8,12 @@
 ///|
 /// The field whose eye opened the item, shown as it opens ("" none), by item.
 // kept across runs: said by the fields' eyes; vault_item_reset empties it
-let vi_reveal : Map[String, String] = {}
+let vi_reveal : Map[String, String] = Map([])
 
 ///|
 /// The fields shown in the clear, by item and field.
 // kept across runs: said by the fields' eyes; vault_item_reset empties it
-let vi_shown : Map[String, Bool] = {}
+let vi_shown : Map[String, Bool] = Map([])
 
 ///|
 fn vault_item_reset() -> Unit {
@@ -70,6 +70,19 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
     }
   }
   let editing_busy = opening && vi_reveal.get(item) is None
+  // 编辑说明: opened first too (the rest of it is written as it was)
+  let about_pressed = fn() {
+    let write = fn(p : Json) {
+      match rv {
+        Some(r) => vault_about_dialog(core, ws, vault, r, p)
+        None => ()
+      }
+    }
+    match opened {
+      Some(p) => write(p)
+      None => open(write)
+    }
+  }
   let blocks = item_blocks(c, core, look, ws, key, item, vv, rv, uses, plain, opened, opening, open)
   // (each block by what it is and what it shows: its content opened or not, how it is used; one come or gone opens or
   // closes where it is, one showing another thing goes to its height, @sf.page's `keys`)
@@ -94,27 +107,34 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
             c.text(sub, style=pf_sub) |> ignore
           })
           |> ignore
+          // (说明 beside 编辑: its about written on its own)
+          @sf.button(c, @sf.t("web-pages.vault.aboutEdit"), key=key + "/about", tone=Ghost, icon="file-text", busy=editing_busy, on_press=about_pressed) |> ignore
           @sf.button(c, @sf.t("common.edit"), key=key + "/edit", tone=Ghost, icon="edit", busy=editing_busy, on_press=fn() {
             edit_pressed()
           }) |> ignore
         })
         |> ignore
       })
-    // (narrow: its name the large title, what it is and where under it, 编辑 at the title's end)
+    // (narrow: its name the large title, what it is and where under it, 说明 and 编辑 at the title's end)
     Narrow =>
       @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, keys~, lead=sub, actions=fn() {
         if editing_busy {
           @sf.spinner(c, size=pf_spin) |> ignore
         } else {
-          @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit"), on_press=edit_pressed) |> ignore
+          // (12 apart: each its 44 to be pressed in, overlapping neither)
+          c.box(style=vi_head_icons, fn() {
+            @sf.icon_button(c, "file-text", key=key + "/about", round=true, label=@sf.t("web-pages.vault.aboutEdit"), on_press=about_pressed) |> ignore
+            @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit"), on_press=edit_pressed) |> ignore
+          })
+          |> ignore
         }
       })
   }
 }
 
 ///|
-/// What an item's page holds (its item `rv`, in vault `vv`): a library not locked said so, its content (each field's
-/// eye where its value is), how agents may use it, when they used it (`uses`).
+/// What an item's page holds (its item `rv`, in vault `vv`): a library not locked said so, what it is for (its about,
+/// where it says), its content (each field's eye where its value is), how agents may use it, when they used it (`uses`).
 fn item_blocks(
   c : @ui.Ctx,
   core : Core,
@@ -156,6 +176,10 @@ fn item_blocks(
         |> ignore
       })
     })
+  }
+  // what it is for and how it is used, where it says (agents are shown it with its name; 说明 at the head writes it)
+  if text(rv, "about") != "" {
+    blocks.push(fn() { section(@sf.t("web-pages.vault.editor.about"), fn() { c.text(text(rv, "about"), style=vi_fact_value) |> ignore }) })
   }
   // its content: each field's eye where its value is, before it is opened as after
   blocks.push(fn() {
@@ -385,6 +409,11 @@ let vi_facts : @ui.Style = @ui.css("w=Full gap=S1")
 ///|
 // kept across runs: a value (no field of it changes)
 let vi_fact : @ui.Style = @ui.css("row w=Full gap=S3_5 align=AStart")
+
+///|
+/// 说明 and 编辑 at a narrow title's end.
+// kept across runs: a value (no field of it changes)
+let vi_head_icons : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 
 ///|
 /// Its terms' column at least (the web's 96).

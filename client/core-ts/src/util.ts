@@ -1,6 +1,8 @@
 // Bytes and text the core needs on every host (Node, a browser's worker, Hermes): UTF-8, base64, hex, SHA-256, and
 // JSON as the Rust core reads and writes it (objects' keys in order, as serde_json without preserve_order keeps them).
 
+import { walked } from "./work.ts";
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -10,6 +12,33 @@ export function utf8(text: string): Uint8Array {
 
 export function fromUtf8(bytes: Uint8Array): string {
   return decoder.decode(bytes);
+}
+
+/// The day a moment falls on where the clock is `offsetMin` east of UTC, in days since 1970.
+export function localDay(ms: number, offsetMin: number): number {
+  return Math.floor((ms + offsetMin * 60_000) / 86_400_000);
+}
+
+export function remEuclid(a: number, b: number): number {
+  return ((a % b) + b) % b;
+}
+
+/// A local time's parts: [year, month 1–12, day, weekday 0 = Sunday, hour, minute].
+export function local(ms: number, offsetMin: number): [number, number, number, number, number, number] {
+  const at = ms + offsetMin * 60_000;
+  const days = Math.floor(at / 86_400_000);
+  const inDay = Math.trunc(Math.trunc(at - days * 86_400_000) / 60_000);
+  const z = days + 719_468;
+  const era = Math.floor(z / 146_097);
+  const doe = z - era * 146_097;
+  const yoe = Math.trunc((doe - Math.trunc(doe / 1460) + Math.trunc(doe / 36_524) - Math.trunc(doe / 146_096)) / 365);
+  const doy = doe - (365 * yoe + Math.trunc(yoe / 4) - Math.trunc(yoe / 100));
+  const mp = Math.trunc((5 * doy + 2) / 153);
+  const d = doy - Math.trunc((153 * mp + 2) / 5) + 1;
+  const m = mp < 10 ? mp + 3 : mp - 9;
+  const y = yoe + era * 400 + (m <= 2 ? 1 : 0);
+  const weekday = remEuclid(days + 4, 7);
+  return [y, m, d, weekday, Math.trunc(inDay / 60), inDay % 60];
 }
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -159,6 +188,7 @@ export function isObject(v: unknown): v is JsonObject {
 export function equal(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+  walked.equaled++;
   if (Array.isArray(a)) {
     if (!Array.isArray(b) || a.length !== b.length) return false;
     for (let i = 0; i < a.length; i++) if (!equal(a[i], b[i])) return false;
@@ -203,6 +233,11 @@ export function compareKeys(a: string, b: string): number {
 
 /// What went out of the store as it is (output.ts): never changed after, so it is shared and not shaped again.
 export const shaped = new WeakSet<object>();
+
+/// Of those, the struct one was shaped as where a view shaped it once for every topic that sends it (views.ts
+/// `asShaped`): a topic whose shape has another struct there (a station's overview, `Overview`, on its page as
+/// `StationOverview`) is sent it as its own shape says (conform.ts `reshaped`), not as it was shaped.
+export const shapedAs = new WeakMap<object, string>();
 
 /// Whether what is shared is frozen where it is shared (「谁能改什么」): what the store keeps,
 /// what a view makes and what goes out. On in the core's tests (node --test, or STILLFAIL_CHECK_SHARED=1) and in the

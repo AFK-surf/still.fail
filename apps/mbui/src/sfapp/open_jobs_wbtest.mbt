@@ -26,7 +26,7 @@ fn open_jobs_tester(long : Json, calls? : Array[(String, Json)] = []) -> @ui.Tes
 ///|
 /// The ripples over the row of `words` (its last drawn) as a finger goes down on it and slowly on up the list, 6 a move
 /// (past the slop at the second), each move drawn as it comes; with where the words are then.
-fn scrolled_from(words : String) -> Array[(Int, Double)] raise {
+fn scrolled_from(words : String) -> Array[(Int, Double)] {
   let t = open_jobs_tester(@sffixture.long_screens_view())
   let (x, y) = t.find_last(words).unwrap()
   let seen = []
@@ -62,6 +62,25 @@ test "what is left up long, a row tapped: its chat, the service's page over it" 
   match app.nav.top() {
     Service(station, id) => assert_eq((station, id), ("ws1/st1", "j-web"))
     _ => fail("no service's page")
+  }
+}
+
+///|
+test "what is left up long, a task run here for another station's chat: that chat, on its own station" {
+  // (Studio running a task for a chat of another station: its row opened Studio's chat by that one's id, a chat Studio
+  // has not, and the page waited for good; 2026-11-12)
+  let job = match @sffixture.long_job() {
+    Object(m) => m.copy()
+    _ => {}
+  }
+  job["service"] = Json::boolean(false)
+  job["chat"] = { "id": "s-elsewhere", "title": "修登录", "archived": false, "station": "ws1/st2" }
+  job["whereText"] = Json::string("Studio · 修登录 · 来自 Willow")
+  let t = open_jobs_tester({ "groups": [{ "key": "jobs", "head": "长时间运行的后台任务 · 1", "jobs": [Json::object(job)] }], "lit": false, "ids": [] })
+  t.tap_text("Studio · 修登录 · 来自 Willow · 3 小时")
+  match app.nav.top() {
+    Chat(r) => assert_eq((r.station, r.session, r.title), ("ws1/st2", "s-elsewhere", "修登录"))
+    _ => fail("no chat")
   }
 }
 
@@ -110,4 +129,42 @@ test "what is left up long, a long name and where it is: cut short on their line
   // (no glyph of its words past where its stop begins)
   let past = t.glyph_clips().filter(fn(g) { g.0.1 > 40.0 && g.0.1 < 200.0 && g.0.2 > sx && g.0.0 < sx + sw && g.0.0 > 40.0 })
   assert_eq(past.length(), 0)
+}
+
+///|
+test "what is left up long is waited for by the first page: there with the list, not slid in under it" {
+  new_run()
+  let client = @core.Client::new(fn(_) { () })
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      if name != "longJobs" {
+        return (base.topic_read)(name, params)
+      }
+      let sub = client.follow_topic(name, params~)
+      { value: sub.value, error: sub.error, version: sub.version }
+    },
+    waits: fn(name, params) {
+      if name == "longJobs" {
+        client.follow_topic(name, params~).waiting
+      } else {
+        (base.waits)(name, params)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.frame()
+  t.run_for(@sf.local_ms)
+  // (the list answered, what is under it not yet: the page not shown)
+  assert_true(!words_seen(t, "整理发布清单"))
+  guard client.peek_topic("longJobs", params={ "scope": "ws1" }) is Some(sub) else { fail("no longJobs reader") }
+  client.receive_json({ "id": Json::number(sub.id.to_double()), "value": @sffixture.long_screens_view() })
+  t.draw()
+  let row = "Willow · 整理发布清单 · 3 小时"
+  assert_true(words_seen(t, row), msg="shown with the list")
+  let (_, y0) = t.drawn_of(row).unwrap()
+  t.run_for(@ui.move_most_ms)
+  let (_, y1) = t.drawn_of(row).unwrap()
+  assert_true((y1 - y0).abs() < 0.5, msg="moved from \{y0} to \{y1}")
 }

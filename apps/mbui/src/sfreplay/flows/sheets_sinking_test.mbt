@@ -5,16 +5,16 @@
 
 ///|
 test "51-sheets-sinking" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("sheets-sinking"), seed~)
     f.see("端到端测试")
     f.tap("=Dev")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     // its scrim tapped: it sinks, only drawn; the bar's 文件 tapped under it as it goes
     f.tap_at(195.0, 120.0)
     f.tap("icon:folder")
     f.see("=文件")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.gone("切换 workspace")
     f.tap("icon:chats")
     f.run_for(@ui.move_most_ms)
@@ -22,7 +22,7 @@ test "51-sheets-sinking" {
     f.run_for(@ui.move_most_ms)
     f.see("发消息")
     f.tap("icon:info")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     // its scrim tapped, and the composer tapped through it as it goes down: the words typed there, sent
     f.tap_at(195.0, 60.0)
     f.tap_at(120.0, -36.0)
@@ -30,7 +30,7 @@ test "51-sheets-sinking" {
     f.tap("icon:arrow-up")
     // the words flown to their bubble; the sheet sunk away after
     f.run_for(@sfapp.flight_ms)
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("穿过下去的面板 082939")
     f.gone("正在发送")
     // the test station's agent answers with a failure (no model there), its notice offering 上报: looked for, so the run

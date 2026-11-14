@@ -56,8 +56,11 @@ export interface IrohConnection {
 export interface IrohEndpoint {
   /// Its id (hex): the public half of its key.
   id(): string;
-  /// A connection offering `alpn` (and the `additional` ones, for a station from before a rename).
-  connect(addr: IrohAddr, alpn: Uint8Array, additional: Uint8Array[]): Effect.Effect<IrohConnection, HostError>;
+  /// A connection offering `alpn` (and the `additional` ones, for a station from before a rename). Once `givenUp`
+  /// succeeds (its caller stopped waiting) the host gives the handshake up, its connection closed: left going, a dial
+  /// retransmitted its Initial for the connection's whole idle timeout (station/native/mesh `dial`). It still answers,
+  /// failing, or with the connection when that came first.
+  connect(addr: IrohAddr, alpn: Uint8Array, additional: Uint8Array[], givenUp?: Effect.Effect<void>): Effect.Effect<IrohConnection, HostError>;
   /// The next connection another endpoint opened to this one, on one of the ALPNs it was bound to take (`alpns`), with
   /// the one agreed; null once the endpoint is closed. A host that takes none (the browser's) has no `accept`.
   accept?(): Effect.Effect<{ connection: IrohConnection; alpn: Uint8Array } | null>;
@@ -74,6 +77,9 @@ export interface IrohEndpoint {
   dhtSaid?(keep: boolean): { lines: { at: number; text: string }[]; dropped: number };
   /// Update forwarding entrances without closing any station connection.
   setRelayEntries?(entries: { entry: string; relay: string }[]): Effect.Effect<void, HostError>;
+  /// Whether its streams' `tap` decodes a view's Opus sound into the PCM the app plays now (the shell's, asked as each
+  /// view opens: client/shell ScreenTap, `tap.opus`), so the view may ask the station for Opus.
+  opus?(): boolean;
   close(): Effect.Effect<void>;
 }
 

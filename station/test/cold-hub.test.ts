@@ -71,14 +71,14 @@ test("archiving a session compresses owned history and restores it before resumi
   assert.ok(!existsSync(join(workspace, "uncommitted.txt")));
   assert.ok(existsSync(workspaceArchive(dirname(workspace))));
   assert.ok(existsSync(join(dirname(workspace), "cold")));
-  assert.ok(r.hub.cold.isCold(key));
+  assert.ok(await r.hub.cold.isCold(key));
   await r.accept(reply(m, "9999.9", "<@UBOT> continue", { addressed: true }));
   await r.hub.actor(r.session(key)).warm();
   assert.ok(existsSync(transcript), "new input restores runtime history before opening the agent");
   assert.equal(readFileSync(join(workspace, "uncommitted.txt"), "utf8"), "keep this");
   assert.ok(!existsSync(workspaceArchive(dirname(workspace))));
   assert.ok(!existsSync(join(dirname(workspace), "cold")));
-  assert.ok(!r.hub.cold.isCold(key));
+  assert.ok(!(await r.hub.cold.isCold(key)));
   await r.close();
 });
 
@@ -289,7 +289,7 @@ test("a session archived long enough keeps only its history and the files sent i
   assert.equal(readFileSync(join(workspace, "uploads", "shot.png"), "utf8"), "a picture", "the files sent in its chat are on the disk again");
   assert.ok(!existsSync(join(gitdir, "locked")), "its worktrees are let go");
   assert.ok(existsSync(packed(transcript)), "its history stays");
-  assert.ok(r.hub.cold.isCold(key));
+  assert.ok(await r.hub.cold.isCold(key));
   // Nothing left to do the next time.
   assert.equal(await r.hub.cold.holdsMore!(key), false);
   // Brought back, it goes on in its history, with the files of its chat.

@@ -1,13 +1,21 @@
 name: mbui TestFlight (manual)
 # Its environment `ios-testflight` is held to main by a deployment rule (no tags; a second person's approval where set).
-# Variables: IOS_TEAM_ID, IOS_APP_GROUP, IOS_RELEASE_REVIEWED (true only once the release is reviewed). Secrets:
+# Variables: IOS_TEAM_ID, IOS_APP_GROUP, IOS_RELEASE_REVIEWED (true only once the release is reviewed). monoid uses
+# MONOID_IOS_APP_GROUP, MONOID_IOS_RELEASE_REVIEWED and MONOID_IOS_{APP,SHARE}_PROFILE_B64.
+# Secrets:
 # IOS_DISTRIBUTION_P12_B64 and _PASSWORD, IOS_SIGNING_SHA1, IOS_APP_PROFILE_B64, IOS_SHARE_PROFILE_B64, ASC_KEY_ID,
 # ASC_ISSUER_ID, ASC_PRIVATE_KEY_B64: credentials made for CI alone.
 # The build number in the run's name: the next dispatch takes one above every number any run was given, failed ones too.
-run-name: mbui TestFlight ${{ inputs.version }} (${{ inputs.build }})
+run-name: ${{ inputs.product || 'both' }} TestFlight ${{ inputs.version }} (${{ inputs.build }})
 on:
   workflow_dispatch:
     inputs:
+      product:
+        description: Apps to release (both uses the same SHA, version and build number)
+        default: both
+        required: true
+        type: choice
+        options: [both, stillfail, monoid]
       sha:
         description: Full main SHA captured by this manual dispatch (tested and released unchanged)
         required: true
@@ -29,22 +37,29 @@ on:
         description: Upload whatever this run's tests say (they still run, and fail the run)
         default: false
         type: boolean
-# All versions of this app share one upload lock. Other uploaders must coordinate manually.
-concurrency:
-  group: mbui-testflight-6818750243
-  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
   guard:
-    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    if: github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      products: ${{ steps.products.outputs.products }}
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
+      - run: bash scripts/testflight-products-test.sh
+      - id: products
+        name: Select app identities
+        env:
+          RELEASE_PRODUCT: ${{ inputs.product || 'both' }}
+        run: |
+          products=$(bash scripts/testflight-products.sh "$RELEASE_PRODUCT")
+          echo "products=$products" >> "$GITHUB_OUTPUT"
       - run: bash apps/mbui/scripts/testflight-guard-test.sh
+      - run: bash apps/mbui/scripts/testflight-product-test.sh
       - run: bash apps/mbui/scripts/testflight-sign-test.sh
       - run: bash scripts/testflight-distribute-test.sh
       - run: bash apps/mbui/scripts/testflight-guard.sh checkout
@@ -54,11 +69,21 @@ jobs:
           RELEASE_BUILD: ${{ inputs.build }}
   tests:
     needs: guard
+    permissions: { contents: read, actions: read }
     uses: ./.github/workflows/mbui-check.yml
-  # Built and signed beside the tests (needs the guard alone), uploaded only once every tests job passed
-  # (scripts/testflight-tests.sh, at the root: it waits on GitHub, which has no event to wait for, and mbui's detlint keeps fixed waits out of its scripts): waiting for them before building made a release ~10.5 min (build 25, 2026-11-02).
+  # Queued tests can outlast the release's ten minutes. Start its build and signing only after the tests finish.
+  # The explicit skip_tests choice still permits uploading after failed tests.
   release:
-    needs: guard
+    needs: [guard, tests]
+    if: ${{ !cancelled() && needs.guard.result == 'success' && (inputs.skip_tests || needs.tests.result == 'success') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        product: ${{ fromJSON(needs.guard.outputs.products) }}
+    # Each app keeps its own upload lock, including when a single-app run overlaps a both-app run.
+    concurrency:
+      group: mbui-testflight-${{ matrix.product == 'monoid' && 'monoid' || '6818750243' }}
+      cancel-in-progress: false
     runs-on: xcode-27
     timeout-minutes: 10
     # Configure required reviewers, prevent self-review, and main-only deployment rules.
@@ -66,7 +91,7 @@ jobs:
     environment: ios-testflight
     permissions:
       contents: read
-      actions: read
+      actions: write
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       # mbc's units and the core's bytecode as main's newest iOS build (preview.yml) kept them: without, all ~510 units were
@@ -76,6 +101,7 @@ jobs:
       RELEASE_SHA: ${{ inputs.sha }}
       RELEASE_VERSION: ${{ inputs.version }}
       RELEASE_BUILD: ${{ inputs.build }}
+      RELEASE_PRODUCT: ${{ matrix.product }}
       RELEASE_SKIP_TESTS: ${{ inputs.skip_tests }}
     steps:
       - uses: actions/checkout@v5
@@ -105,6 +131,7 @@ jobs:
           case "$v" in 2[0-6].*|27.0*) echo "::error::iOS SDK $v: an iPhone Duo letterboxes an app built before 27.1"; exit 1 ;; esac
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/mbui-moonbit
+      - run: bash apps/mbui/scripts/ios-product-test.sh
       - run: bash apps/mbui/scripts/moon-mtimes.sh
       - name: Device build dependencies
         run: |
@@ -113,12 +140,12 @@ jobs:
       - name: Validate identity and profiles, build, sign, validate and upload
         env:
           IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
-          IOS_APP_GROUP: ${{ vars.IOS_APP_GROUP }}
-          IOS_RELEASE_REVIEWED: ${{ vars.IOS_RELEASE_REVIEWED }}
+          IOS_APP_GROUP: ${{ vars[matrix.product == 'monoid' && 'MONOID_IOS_APP_GROUP' || 'IOS_APP_GROUP'] }}
+          IOS_RELEASE_REVIEWED: ${{ vars[matrix.product == 'monoid' && 'MONOID_IOS_RELEASE_REVIEWED' || 'IOS_RELEASE_REVIEWED'] }}
           IOS_DISTRIBUTION_P12_B64: ${{ secrets.IOS_DISTRIBUTION_P12_B64 }}
           IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
-          IOS_APP_PROFILE_B64: ${{ secrets.IOS_APP_PROFILE_B64 }}
-          IOS_SHARE_PROFILE_B64: ${{ secrets.IOS_SHARE_PROFILE_B64 }}
+          IOS_APP_PROFILE_B64: ${{ secrets[matrix.product == 'monoid' && 'MONOID_IOS_APP_PROFILE_B64' || 'IOS_APP_PROFILE_B64'] }}
+          IOS_SHARE_PROFILE_B64: ${{ secrets[matrix.product == 'monoid' && 'MONOID_IOS_SHARE_PROFILE_B64' || 'IOS_SHARE_PROFILE_B64'] }}
           IOS_SIGNING_SHA1: ${{ secrets.IOS_SIGNING_SHA1 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -129,6 +156,13 @@ jobs:
         run: |
           bash apps/mbui/scripts/testflight.sh
           [ "$(cat "$RUNNER_TEMP/mbui-testflight-uploaded")" = "$RELEASE_SHA" ] || { echo 'Missing upload completion receipt' >&2; exit 1; }
+      # Each successful upload starts its distribution, even if the other app fails or is still building.
+      # Apple's processing runs apart from this job, leaving the upload standing if distribution fails.
+      - name: Distribute the uploaded app
+        run: gh workflow run mbui-testflight-distribute.yml --repo "$GITHUB_REPOSITORY" --ref main -f product="$RELEASE_PRODUCT" -f version="$RELEASE_VERSION" -f build="$RELEASE_BUILD" -f external="$RELEASE_EXTERNAL" -f round=1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_EXTERNAL: ${{ inputs.external }}
       - name: Clean temporary signing material (also on failure/cancellation)
         if: always()
         shell: bash
@@ -138,18 +172,3 @@ jobs:
             security delete-keychain "$dir/signing.keychain-db" >/dev/null 2>&1 || true
             rm -rf "$dir"
           done
-  # The build uploaded: mbui-testflight-distribute.yml waits for Apple to process it and adds it to its groups, apart from
-  # this run, so what fails there leaves the upload standing.
-  distribute:
-    needs: release
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      actions: write
-    steps:
-      - run: gh workflow run mbui-testflight-distribute.yml --repo "$GITHUB_REPOSITORY" --ref main -f version="$RELEASE_VERSION" -f build="$RELEASE_BUILD" -f external="$RELEASE_EXTERNAL" -f round=1
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ inputs.version }}
-          RELEASE_BUILD: ${{ inputs.build }}
-          RELEASE_EXTERNAL: ${{ inputs.external }}

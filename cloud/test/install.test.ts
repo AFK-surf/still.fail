@@ -411,6 +411,32 @@ test("a station updating itself installs only the release its signed words name,
   }
 });
 
+test("a station hands its installer the release's raw tar a delta made: checked by its hash, unpacked and handed on, nothing downloaded", () => {
+  const m = machine();
+  const data = join(m.home, ".stillfail");
+  try {
+    mkdirSync(join(data, "mesh"), { recursive: true });
+    writeFileSync(join(data, "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    const own = bundledInstallScript("zh").replace("set -eu\n", 'set -eu\necho "its own installer: $STILLFAIL_INSTALLER_HANDED $STILLFAIL_RELEASE_SHA256" >> "$HOME/said"\n');
+    const release = join(m.root, "release", "stillfail");
+    writeFileSync(join(release, "bin", "install.zh.sh"), own);
+    // The tar itself (station/src/updates/release.ts: what a delta makes), under the name a handed archive has.
+    execFileSync("tar", ["-cf", join(m.root, "release.tar"), "-C", join(m.root, "release"), "stillfail"]);
+    const sha = sha256Of(join(m.root, "release.tar"));
+    const handed = mkdtempSync(join(tmpdir(), "stillfail-handed."));
+    writeFileSync(join(handed, "stillfail.tar.gz"), readFileSync(join(m.root, "release.tar")));
+    const told = { STILLFAIL_ORIGIN: "https://releases.test", STILLFAIL_INSTALL_LANG: "zh", STILLFAIL_RELEASE_SHA256: sha, STILLFAIL_ARCHIVE: join(handed, "stillfail.tar.gz") };
+    const done = m.run([], told, bundledInstallScript("zh"));
+    assert.equal(done.status, 0, done.out);
+    assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "new\n");
+    assert.match(done.said, new RegExp(`its own installer: 1 ${sha}`), "handed on with the same hash");
+    assert.doesNotMatch(done.said, /^curl /m, "nothing downloaded");
+    assert.ok(!existsSync(handed), "taken, its directory removed");
+  } finally {
+    m.done();
+  }
+});
+
 test("a station updating itself runs on the Node its signed words name, the machine's own only when it is that one", () => {
   const m = machine();
   const data = join(m.home, ".stillfail");

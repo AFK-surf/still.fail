@@ -4,6 +4,8 @@
 //   on-connect   what `connect` sets `state` to once it reached the phone (default "device")
 //   dialed       each line a phone answered over a dialled connection
 //   grant-says   what `shell pm grant …` says (default nothing: granted)
+//   tcp-port     adbd's plain port as getprop says it (default none); `tcpip <port>` sets it unless `tcp-kept` is "no"
+//   boot         the phone's boot id (default "boot-1")
 // `connect <host:port>` dials it, says "CNXN" and waits for a line back, as a real adb's handshake reaches adbd;
 // `pair <host:port> <code>` dials it with "PAIR <code>", and once a line came back says "PEER" and ends (as a real adb's
 // pairing writes its peer info and exits as soon as it read the phone's); it says it paired if the code is 123456.
@@ -45,6 +47,11 @@ if (args[0] === "-s" && args[2] === "get-state") {
     process.exit(1);
   }
   process.stdout.write(state + "\n");
+} else if (args[0] === "-s" && args[2] === "shell" && args[3]?.includes("getprop service.adb.tcp.port")) {
+  process.stdout.write(`${read("boot") ?? "boot-1"}\n${read("tcp-port") ?? ""}\n`);
+} else if (args[0] === "-s" && args[2] === "tcpip") {
+  if (read("tcp-kept") !== "no") fs.writeFileSync(file("tcp-port"), args[3]);
+  process.stdout.write(`restarting in TCP mode port: ${args[3]}\n`);
 } else if (args[0] === "-s" && args[2] === "shell") {
   const says = read("grant-says");
   if (says) process.stdout.write(says + "\n");

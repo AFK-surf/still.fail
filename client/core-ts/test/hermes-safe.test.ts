@@ -36,6 +36,19 @@ test("the core asks whether a value is a Blob only where there may be none (isBl
   assert.deepEqual(found, []);
 });
 
+// Nor a static of URL the stand-in for Hermes (hosts/hermes-globals.ts) has not: Hermes has no URL (2026-11-11: no
+// URL.canParse there, the workspace's 连接方式 listed no way at all).
+test("the core calls only the statics of URL that Hermes's stand-in has", () => {
+  const made = new Set([...readFileSync(join(SRC, "hosts/hermes-globals.ts"), "utf8").matchAll(/^\s+static (\w+)\(/gm)].map((m) => m[1]));
+  const found = files(SRC).flatMap((path) =>
+    readFileSync(path, "utf8").split("\n").flatMap((line, i) =>
+      line.trim().startsWith("//") ? [] : [...line.matchAll(/\bURL\.(\w+)\b/g)].filter((m) => !made.has(m[1])).map(() => `${path.slice(SRC.length)}:${i + 1}: ${line.trim()}`),
+    ),
+  );
+  assert.ok(made.has("canParse"));
+  assert.deepEqual(found, []);
+});
+
 test("case is converted without Java: ASCII and Latin-1 letters, the rest as it is, the length kept", () => {
   const java = (s: string) => {
     if (!/^[\x00-\x7f]*$/.test(s)) throw new Error("Java");

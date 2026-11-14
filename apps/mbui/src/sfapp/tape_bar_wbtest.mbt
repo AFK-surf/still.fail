@@ -296,7 +296,7 @@ fn tape_bar_back(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
   let backs = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "记忆" && !s.hidden })
   guard backs is [b] else { fail("back read out \{backs.length()} times") }
   let (x, y, w, h) = b.rect
-  assert_true(x >= p.x && x + w < p.x + 80.0 && y >= p.y && y + h <= p.y + 60.0, msg="back at \{b.rect}")
+  assert_true(x >= p.x && x + w < p.x + 80.0 && y >= p.y && y + h <= p.y + 60.0, msg="back at \{Repr(b.rect)}")
   b.rect
 }
 
@@ -453,7 +453,7 @@ test "on the tape 关于 made once scrolled: what it holds goes under nothing of
 }
 
 ///|
-/// `base` with the station Willow (ws1/st1) named `name` in what the core says of the stations, as that is set ("" as
+/// `base` with the station Willow (ws1/st1) named `name` in what the core says of the stations and of it, as that is set ("" as
 /// it is): told as it changes, as the core tells it.
 fn station_named(base : Source, name : @signals.Signal[String]) -> Source {
   {
@@ -480,6 +480,12 @@ fn station_named(base : Source, name : @signals.Signal[String]) -> Source {
               ),
             ),
           }
+        // (its own page's, whole, as its archiving's title says it)
+        ("station", Some(Object(m))) if n != "" && m.get("station") == Some(Json::string("ws1/st1")) => {
+          let m2 = m.copy()
+          m2["name"] = Json::string(n)
+          { ..r, value: Some(Json::object(m2)) }
+        }
         _ => r
       }
     },

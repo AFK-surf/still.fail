@@ -77,3 +77,46 @@ test("a rules file the tool itself wrote is not told again; after a compaction e
   assert.equal(told({ trigger: "manual" }, "s4", undefined, "PostCompact"), "");
   assert.match(told({ tool_name: "Bash", tool_input: { command: "ls wt/apps/x" } }, "s4"), /HERON[\s\S]*MERLIN/);
 });
+
+test("what one call tells stays under what Claude Code takes whole; the rest follows on the next tools, in order, all of it", () => {
+  // As this repository's are: a root file near a call's room, one below it longer than a call, one below that short.
+  const big = join(workspace, "big");
+  mkdirSync(join(big, ".git"), { recursive: true });
+  mkdirSync(join(big, "app", "lib"), { recursive: true });
+  const paragraphs = (name: string, n: number) => Array.from({ length: n }, (_, i) => `- ${name} rule ${i}: ${"words of it ".repeat(20)}`).join("\n") + "\n";
+  const rootRules = `# Root\n\n${paragraphs("ROOT", 32)}`;
+  const appRules = `# App\n\n${paragraphs("APP", 52)}`;
+  const libRules = "# Lib\n\n- LIB rule, the only one.\n";
+  assert.ok(rootRules.length > 8_000 && rootRules.length < 8_700 && appRules.length > 13_000);
+  writeFileSync(join(big, "AGENTS.md"), rootRules);
+  writeFileSync(join(big, "app", "AGENTS.md"), appRules);
+  writeFileSync(join(big, "app", "lib", "AGENTS.md"), libRules);
+
+  const calls: string[] = [told({ tool_name: "Bash", tool_input: { command: "ls big/app/lib" } }, "s6")];
+  // The tools after it touch nothing of the repository: what waits is told all the same.
+  for (let i = 0; i < 8; i++) calls.push(told({ tool_name: "Bash", tool_input: { command: "ls notes/" } }, "s6"));
+  const spoke = calls.filter((c) => c !== "");
+  assert.equal(spoke.length, 3);
+  assert.deepEqual(calls.slice(3), ["", "", "", "", "", ""]);
+  for (const call of spoke) assert.ok(call.length <= 10_000, `a call told ${call.length} characters`);
+  assert.match(spoke[0]!, /^Contents of \S+big\/AGENTS\.md \([^)]*\):\n\n# Root/);
+  assert.doesNotMatch(spoke[0]!, /APP rule/);
+  assert.match(spoke[1]!, /app\/AGENTS\.md \([^)]*\), lines 1 to \d+ of 54:\n\n# App[\s\S]*\[more of this file follows after your next tool call\]$/);
+  assert.match(spoke[2]!, /app\/AGENTS\.md \([^)]*\), lines \d+ to 54, the last of it:\n\n- APP rule[\s\S]*---[\s\S]*lib\/AGENTS\.md \([^)]*\):\n\n# Lib/);
+  // Every rule of every file reached the session once, whole, in the files' order.
+  const body = spoke.join("\n").split("\n").filter((l) => /^- (ROOT|APP|LIB) rule/.test(l));
+  assert.deepEqual(body, [rootRules, appRules, libRules].flatMap((t) => t.split("\n").filter((l) => l.startsWith("- "))));
+
+  // A file changed while part of it waits is told from its start; one the tool itself rewrote waits no more.
+  assert.match(told({ tool_name: "Bash", tool_input: { command: "ls big/app" } }, "s7"), /# Root/);
+  assert.match(told({ tool_name: "Bash", tool_input: { command: "ls notes/" } }, "s7"), /lines 1 to \d+ of 54/);
+  const later = new Date(Date.now() + 30_000);
+  writeFileSync(join(big, "app", "AGENTS.md"), `# App again\n\n${paragraphs("APP", 52)}`);
+  utimesSync(join(big, "app", "AGENTS.md"), later, later);
+  assert.match(told({ tool_name: "Bash", tool_input: { command: "ls notes/" } }, "s7"), /lines 1 to \d+ of 54:\n\n# App again/);
+  const edited = new Date(Date.now() + 60_000);
+  writeFileSync(join(big, "app", "AGENTS.md"), `# App rewritten\n\n${paragraphs("APP", 52)}`);
+  utimesSync(join(big, "app", "AGENTS.md"), edited, edited);
+  assert.equal(told({ tool_name: "Edit", tool_input: { file_path: join(big, "app", "AGENTS.md") } }, "s7"), "");
+  assert.equal(told({ tool_name: "Bash", tool_input: { command: "ls notes/" } }, "s7"), "");
+});

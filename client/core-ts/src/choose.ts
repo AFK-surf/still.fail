@@ -9,15 +9,17 @@ import { CoreError } from "./error.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as ops from "./ops.ts";
+import * as present from "./present.ts";
 import type { Owner } from "./core/routing.ts";
 import { topicKey, type Topic } from "./protocol.ts";
 import * as model from "./shapes/model.ts";
 import { Marks } from "./reactive.ts";
 import type { Store, Value } from "./store.ts";
 import { arr as arrU, equal, get as getU, isObject } from "./util.ts";
-import { borrowable, effortDefault, models, quotaLine, servingIn, sourced } from "./views/models.ts";
+import { borrowable, effortDefault, lends, models, quotaLine, servingIn, sourced, subsetEfforts } from "./views/models.ts";
 import { profileServes } from "./views/profile-scope.ts";
 import { pendingKeyMade } from "./views/local.ts";
+import { work } from "./work.ts";
 import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -26,9 +28,17 @@ const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 
 const TABLE = "choice";
-/// How many of the models used most a model control's panel keeps nearest what opened it.
+/// How many of the combinations used most a model control's panel keeps nearest what opened it.
 const NEAR = 4;
-const FIELDS = ["runtime", "model", "effort", "profile", "fast", "context"];
+const FIELDS = ["runtime", "model", "effort", "profile", "profiles", "fast", "context"];
+/// How a model runs, apart from who runs it: what is set by hand in a control's panel (`Choose`'s `#hand`).
+const HOW = ["runtime", "effort", "fast", "context"];
+
+const normProfiles = (v: unknown): string[] | null => {
+  if (!Array.isArray(v)) return null;
+  const ids = [...new Set(v.filter((x): x is string => typeof x === "string" && x !== ""))];
+  return ids.length > 0 ? ids : null;
+};
 
 /// The most context picked (views/models.ts `contextSteps`), as a client says it: tokens, as a number or its digits;
 /// anything else (null, "") the model's whole window.
@@ -60,80 +70,262 @@ const stationId = (address: string) => address.slice(address.lastIndexOf("/") + 
 const address = (scope: string, id: string) => `${scope}/${id}`;
 const text = (v: J): string | null => (typeof v === "string" && v !== "" ? v : null);
 
+/// What preset `p` binds a new chat to (the user, 2026-11-13: what a preset names, its chats run with, and the page does
+/// not change it; to run otherwise is to edit the preset or open the chat with none): the model's configuration it
+/// names (null: any), and the ids of the stations its chats may start on (null: any up, `autoStation` too).
+function presetBinds(p: J): { model: J | null; stations: string[] | null } {
+  const pm = get(p, "model");
+  const model = isObject(pm) && text(get(pm, "model")) !== null ? pm : null;
+  const one = text(get(p, "station"));
+  const some = arr(get(p, "stations")).filter((x): x is string => typeof x === "string" && x !== "").map(stationId);
+  return { model, stations: one !== null ? [stationId(one)] : some.length > 0 ? some : null };
+}
+
+/// A station's choice `base` as a preset's model configuration `pm` makes it: all of it the preset's, what the
+/// preset leaves out the model's own (its first runtime where the one kept does not run it, its default effort).
+function boundChoice(pm: J, base: J): J {
+  return {
+    ...base,
+    model: pm.model,
+    runtime: text(get(pm, "runtime")) ?? (get(base, "model") === pm.model ? get(base, "runtime") : ""),
+    effort: text(get(pm, "effort")) ?? "",
+    fast: typeof get(pm, "fast") === "boolean" ? pm.fast : null,
+    context: get(pm, "context") ?? null,
+    profile: text(get(pm, "profile")) ?? "",
+    profiles: get(pm, "profiles") ?? null,
+  };
+}
+
 /// A model's whole window as a model control offers it: 完整 · 1M (just 完整 where its window is not known).
 const wholeWindow = (option: J): string =>
   typeof get(option, "contextWindow") === "number" ? t("core-logic.choose.context.whole_of", { window: format.compactNumber(option.contextWindow) }) : t("core-logic.choose.context.whole");
 
 function optionOf(options: J[], m: string | null): J {
   if (m === null || m === "") return undefined;
-  return options.find((o) => o.model === m) ?? options.find((o) => arr(o.ids).some((i) => i === m));
+  const direct = options.find((o) => o.model === m) ?? options.find((o) => arr(o.ids).some((i) => i === m));
+  if (direct !== undefined) return direct;
+  const k = model.key(m);
+  const byKey = options.find((o) => typeof o.model === "string" && model.key(o.model) === k);
+  if (byKey !== undefined) return byKey;
+  const fusion = model.splitDevinFusion(k);
+  const sides = fusion !== null ? model.devinFusionSidesFor(fusion.lead) : null;
+  if (fusion === null || sides === null || !sides.includes(fusion.side)) return undefined;
+  const lead = options.find((o) => typeof o.model === "string" && model.key(o.model) === fusion.lead && arr(o.runtimes).includes("devin"));
+  if (lead === undefined) return undefined;
+  return {
+    ...lead,
+    model: k,
+    name: model.name(k),
+    ids: [k],
+    runtimes: ["devin"],
+    efforts: { devin: arr(get(lead.efforts, "devin")) },
+    contexts: { devin: arr(get(lead.contexts, "devin")) },
+    accounts: { devin: arr(get(lead.accounts, "devin")) },
+  };
+}
+
+/// Legacy Antigravity ACP tiered model IDs (`gemini-4-carbon-high`, `claude-opus-5-5-medium`, `gpt-oss-120b-medium`)
+/// and legacy Devin Fusion effort-baked IDs (`fusion-gpt-6-sol-max-sidekick-swe-2-medium`) matched against a
+/// normalized station's options when the tiered ID itself is no longer listed.
+function matchTiered(options: J[], m: string | null): { entry: J; effort: string; runtime: "agy" | "devin" } | null {
+  if (m === null || m === "") return null;
+  if (options.some((o) => o.model === m || arr(o.ids).some((i) => i === m))) return null;
+  const split = model.splitAgyTier(m);
+  if (split !== null) {
+    const entry = optionOf(options, split.model) ?? options.find((o) => typeof o.model === "string" && model.same(o.model, split.model));
+    if (entry !== undefined && arr(entry.runtimes).includes("agy")) return { entry, effort: split.effort, runtime: "agy" };
+  }
+  const fusion = model.splitDevinFusion(m);
+  if (fusion !== null && fusion.leadEffort !== null) {
+    const entry = optionOf(options, fusion.model);
+    if (entry !== undefined && arr(entry.runtimes).includes("devin")) return { entry, effort: fusion.leadEffort, runtime: "devin" };
+  }
+  return null;
+}
+
+function normalizeTieredValue(options: J[], value: J): void {
+  if ((value.runtime !== "agy" && value.runtime !== "devin") || typeof value.model !== "string") return;
+  const tiered = matchTiered(options, value.model);
+  if (tiered === null || tiered.runtime !== value.runtime) return;
+  value.model = tiered.entry.model;
+  if (value.effort === null) {
+    const levels = arr(get(get(tiered.entry, "efforts"), tiered.runtime));
+    if (levels.includes(tiered.effort)) value.effort = tiered.effort;
+  }
 }
 
 /// The runtimes a chat can be set to Fast on (Codex on an OpenAI subscription, Claude Code on an Anthropic key: the
 /// station's takesFast); the accounts that take it say so with their overview's `fast`.
 const fastRuntime = (runtime: unknown): boolean => runtime === "codex" || runtime === "claude";
 
-/// A choice as the station has it now.
-export type Resolved = { entry: J; runtime: string | null; effort: string | null; fast: boolean | null; context: number | null; profile: string | null; efforts: J[]; contexts: number[]; accounts: J[] };
+function choiceAccounts(choice: J): { asked: string[]; multi: boolean } {
+  if (isObject(choice) && "profiles" in choice) {
+    const ps = normProfiles(choice.profiles);
+    if (ps !== null) return { asked: ps, multi: true };
+    if (choice.profiles === null && text(get(choice, "profile")) === null) return { asked: [], multi: false };
+  }
+  const p = text(get(choice, "profile"));
+  return { asked: p !== null ? [p] : [], multi: false };
+}
 
-export function resolve(options: J[], choice: J): Resolved {
-  const entry = optionOf(options, typeof get(choice, "model") === "string" ? choice.model : null) ?? options[0];
+function resolveAccounts(accounts: J[], asked: string[], multi: boolean): { profile: string | null; profiles: string[] | null; dropped: boolean } {
+  if (asked.length === 0) return { profile: null, profiles: null, dropped: false };
+  const matched = accounts.map((a) => a.id).filter((id): id is string => typeof id === "string" && asked.includes(id));
+  if (matched.length === 0) return { profile: null, profiles: null, dropped: true };
+  if (multi && accounts.length > 1 && matched.length === accounts.length) return { profile: null, profiles: null, dropped: false };
+  if (matched.length === 1) return { profile: matched[0]!, profiles: null, dropped: false };
+  return { profile: null, profiles: matched, dropped: false };
+}
+
+/// A choice as the station has it now.
+export type Resolved = { entry: J; runtime: string | null; effort: string | null; fast: boolean | null; context: number | null; profile: string | null; profiles: string[] | null; efforts: J[]; contexts: number[]; accounts: J[] };
+
+export function resolve(options: J[], choice: J, subsets = true): Resolved {
+  const rawModel = typeof get(choice, "model") === "string" ? choice.model : null;
+  const rawRt = get(choice, "runtime");
+  const tiered = rawRt === "agy" || rawRt === "devin" || rawRt === undefined || rawRt === "" || rawRt === null ? matchTiered(options, rawModel) : null;
+  const useTiered = tiered !== null && (rawRt === tiered.runtime || rawRt === undefined || rawRt === "" || rawRt === null);
+  const entry = (useTiered ? tiered.entry : optionOf(options, rawModel)) ?? options[0];
   const runtimes = entry !== undefined ? arr(entry.runtimes) : [];
   const rt = runtimes.find((r) => equal(r, get(choice, "runtime"))) ?? runtimes[0];
   const runtime = typeof rt === "string" ? rt : null;
   const at = (field: string) => (entry !== undefined && runtime !== null ? arr(get(get(entry, field), runtime)) : []);
   let efforts = at("efforts");
   const accounts = at("accounts");
-  const p = text(get(choice, "profile"));
-  const profile = p !== null && accounts.some((a) => a.id === p) ? p : null;
-  const levels = profile !== null ? get(accounts.find((a) => a.id === profile), "efforts") : undefined;
-  if (Array.isArray(levels)) efforts = levels;
-  const e = text(get(choice, "effort"));
+  const { asked, multi } = choiceAccounts(choice);
+  let { profile, profiles } = resolveAccounts(accounts, asked, multi);
+  if (!subsets && profiles !== null) {
+    profile = profiles[0] ?? null;
+    profiles = null;
+  }
+  if (profile !== null) {
+    const levels = get(accounts.find((a) => a.id === profile), "efforts");
+    if (Array.isArray(levels)) efforts = levels;
+  } else if (profiles !== null && runtime !== null) {
+    const subset = accounts.filter((a) => profiles.includes(a.id));
+    if (subset.length > 0) efforts = subsetEfforts(subset, runtime);
+  }
+  const e = text(get(choice, "effort")) ?? (useTiered && runtime === tiered.runtime ? tiered.effort : null);
   const effort = e !== null && efforts.some((x) => x === e) ? e : null;
   const fast = typeof get(choice, "fast") === "boolean" && fastRuntime(runtime) ? choice.fast : null;
   const contexts = at("contexts").filter((n): n is number => typeof n === "number");
   const c = contextOf(get(choice, "context"));
   const context = c !== null && contexts.includes(c) ? c : null;
-  return { entry: entry === undefined ? null : entry, runtime, effort, fast, context, profile, efforts, contexts, accounts };
+  return { entry: entry === undefined ? null : entry, runtime, effort, fast, context, profile, profiles, efforts, contexts, accounts };
 }
 
 function picked(r: Resolved): J {
-  return { model: r.entry !== null ? r.entry.model : null, runtime: r.runtime ?? "claude", effort: r.effort, fast: r.fast, context: r.context, profile: r.profile };
+  return {
+    model: r.entry !== null ? r.entry.model : null,
+    runtime: r.runtime ?? "claude",
+    effort: r.effort,
+    fast: r.fast,
+    context: r.context,
+    profile: r.profile,
+    ...(r.profiles !== null ? { profiles: r.profiles } : {}),
+  };
+}
+
+/// The account a control on `value` names (PickAccount; none where it names none) and what it is made of: the one it is
+/// kept to (`kept`, its id, or `keptProfiles` when kept to several), its window running low (`low`). It is the one kept
+/// to, as `option` (the model it runs, its accounts) has it, else the one it is on now (`current`, a chat's); `quiet`,
+/// a new chat's, which names the station's pick only where it runs low, and no account's allowance.
+function named(value: J, option: J, current: J, quiet: boolean): { kept: string | null; keptProfiles: string[] | null; low: J; account: J } {
+  const rawProfiles = normProfiles(get(value, "profiles"));
+  const kept = text(get(value, "profile")) ?? (rawProfiles !== null && rawProfiles.length === 1 ? rawProfiles[0]! : null);
+  const keptProfiles = kept === null && rawProfiles !== null && rawProfiles.length > 1 ? rawProfiles : null;
+  const offered = option !== undefined && option !== null ? arr(get(get(option, "accounts"), typeof value.runtime === "string" ? value.runtime : "")) : [];
+  if (keptProfiles !== null) {
+    const subset = offered.filter((a) => keptProfiles.includes(a.id));
+    const shown = current !== null && keptProfiles.includes(current.id) ? current : null;
+    const levels = subset.map((a) => get(quotaLine(get(a, "quota")), "level") ?? null);
+    const low = shown !== null ? (get(quotaLine(get(shown, "quota")), "level") ?? null) : levels.length > 0 && levels.every((l) => l !== null) ? levels[0] : null;
+    const txt =
+      shown !== null && typeof shown.name === "string" && shown.name !== ""
+        ? t("core-logic.choose.account.count_on", { n: keptProfiles.length, name: shown.name })
+        : t("core-logic.choose.account.count", { n: keptProfiles.length });
+    return { kept: null, keptProfiles, low, account: { text: txt, auto: false, level: low, profile: quiet ? null : shown } };
+  }
+  let shown: J = null;
+  if (kept !== null) shown = offered.find((a) => a.id === kept) ?? null;
+  if (shown === null) shown = current;
+  const low = shown !== null ? (get(quotaLine(get(shown, "quota")), "level") ?? null) : null;
+  if (quiet && kept === null && low === null) return { kept, keptProfiles: null, low, account: null };
+  const txt =
+    kept !== null
+      ? shown !== null
+        ? typeof shown.name === "string"
+          ? shown.name
+          : kept
+        : kept
+      : shown !== null
+        ? t("core-logic.choose.account.auto_on", { name: typeof shown.name === "string" ? shown.name : "" })
+        : t("core-logic.choose.account.auto");
+  return { kept, keptProfiles: null, low, account: { text: txt, auto: kept === null, level: low, profile: quiet ? null : shown } };
+}
+
+/// Whether what a new chat or a chat runs on now (`value`) runs Fast: as it is set, else as its account does (the one
+/// kept to, else the one it is on, `current`), as the station's overview says.
+function runsFast(overview: J, value: J, current: J): boolean {
+  if (!fastRuntime(value.runtime)) return false;
+  if (typeof value.fast === "boolean") return value.fast;
+  const vProfiles = normProfiles(get(value, "profiles"));
+  const vCurrent = typeof get(current, "id") === "string" && (vProfiles === null || vProfiles.includes(current.id)) ? current.id : null;
+  const id = text(get(value, "profile")) ?? vCurrent ?? (vProfiles !== null ? (vProfiles[0] ?? null) : null);
+  return arr(get(overview, "profiles")).some((p) => id !== null && p.id === id && p.fast === true);
 }
 
 const comboFast = (v: J): boolean | null => fastRuntime(get(v, "runtime")) && typeof get(v, "fast") === "boolean" ? v.fast : null;
 
-/// Usage stays bounded on the device; ties favour the most recently started chat.
+/// Whether `a` and `b` are the same combination used here (`ws:<scope>:frequent`): the same model, runtime, how hard it
+/// thinks, how fast and how much context (none, an entry kept before context was: its model's whole window).
+export function sameCombo(a: J, b: J): boolean {
+  return ["model", "runtime", "effort"].every((f) => text(get(a, f)) === text(get(b, f))) && comboFast(a) === comboFast(b) && contextOf(get(a, "context")) === contextOf(get(b, "context"));
+}
+
+/// A combination used here, kept by what it is (sameCombo). Usage stays bounded on the device; ties favour the most
+/// recently started chat.
 export function recordCombo(history: J[], choice: J, now: number): J[] {
-  const same = (v: J) => ["model", "runtime", "effort"].every((f) => text(get(v, f)) === text(get(choice, f))) && comboFast(v) === comboFast(choice);
+  const same = (v: J) => sameCombo(v, choice);
   const found = history.find(same);
   const count = (typeof get(found, "count") === "number" ? found.count : 0) + 1;
   const out = history.filter((v) => !same(v));
-  out.push({ model: get(choice, "model") ?? null, runtime: get(choice, "runtime") ?? null, effort: text(get(choice, "effort")), fast: comboFast(choice), count, last: now });
+  out.push({ model: get(choice, "model") ?? null, runtime: get(choice, "runtime") ?? null, effort: text(get(choice, "effort")), fast: comboFast(choice), context: contextOf(get(choice, "context")), count, last: now });
   out.sort((a, b) => (typeof b.last === "number" ? b.last : 0) - (typeof a.last === "number" ? a.last : 0));
   return out.slice(0, 64);
 }
 
-/// Only exact, still runnable combinations are offered: never silently change a remembered depth or runtime.
-export function frequentCombos(history: J[], options: J[], current: Resolved): J[] {
+/// The combinations used most here (a configuration each: model, runtime, how hard it thinks, how fast, how much
+/// context; the same model run two ways is two), the most first, then the most recently used, at most `NEAR`. Only
+/// exact, still runnable ones are offered: never silently change a remembered depth, runtime or context; one only
+/// another station has (borrowable) is left out. `fixed`: the runtime the control cannot leave, only its own offered
+/// and none said by it. `selected`: `current` is exactly it.
+export function frequentCombos(history: J[], options: J[], current: Resolved, fixed: string | null = null, showRuntime = false): J[] {
   const sorted = [...history].sort(
     (a, b) => (typeof b.count === "number" ? b.count : -1) - (typeof a.count === "number" ? a.count : -1) || (typeof b.last === "number" ? b.last : 0) - (typeof a.last === "number" ? a.last : 0),
   );
   const seen = new Set<string>();
   const out: J[] = [];
   for (const v of sorted) {
-    if (out.length >= 4) break;
-    const entry = optionOf(options, typeof get(v, "model") === "string" ? v.model : null);
-    if (entry === undefined) continue;
+    if (out.length >= NEAR) break;
+    const rawModel = typeof get(v, "model") === "string" ? v.model : null;
     const runtime = get(v, "runtime");
+    const tiered = runtime === "agy" || runtime === "devin" ? matchTiered(options, rawModel) : null;
+    const useTiered = tiered !== null && tiered.runtime === runtime;
+    const entry = useTiered ? tiered.entry : optionOf(options, rawModel);
+    if (entry === undefined || entry.availability === "borrowable") continue;
     if (typeof runtime !== "string" || !arr(entry.runtimes).some((r) => r === runtime)) continue;
-    const effort = text(get(v, "effort"));
+    if (fixed !== null && runtime !== fixed) continue;
+    const effort =
+      text(get(v, "effort")) ??
+      (useTiered && arr(get(get(entry, "efforts"), runtime)).includes(tiered.effort) ? tiered.effort : null);
     const fast = comboFast(v);
-    const r = resolve(options, { model: entry.model, runtime, effort, fast, profile: current.profile });
-    if (r.effort !== effort) continue;
+    const context = contextOf(get(v, "context"));
+    const r = resolve(options, { model: entry.model, runtime, effort, fast, context, profile: current.profile, profiles: current.profiles });
+    if (r.effort !== effort || r.context !== context) continue;
     const m = typeof entry.model === "string" ? entry.model : null;
     if (m === null) continue;
-    const key = JSON.stringify([m, runtime, effort, fast]);
+    const key = JSON.stringify([m, runtime, effort, fast, context]);
     if (seen.has(key)) continue;
     seen.add(key);
     // (the effort as the picker says it; none, the runtime's own)
@@ -144,8 +336,12 @@ export function frequentCombos(history: J[], options: J[], current: Resolved): J
     const speedText = fast === null ? null : fast ? "Fast" : t("core-logic.choose.speed.standard");
     const baseLabel = runtimeText === null ? `${name} · ${effortText}` : `${name} · ${runtimeText} · ${effortText}`;
     const label = speedText === null ? baseLabel : `${baseLabel} · ${speedText}`;
-    const selected = current.entry !== null && current.entry.model === m && current.runtime === runtime && current.effort === effort && current.fast === fast;
-    out.push({ model: m, runtime, effort, fast, ...(speedText === null ? {} : { speedText }), label, name, ...(runtimeText === null ? {} : { runtimeText }), effortText, selected });
+    // how it runs in words, after its name: the runtime where it can be another or the station runs several (its short
+    // name, format.runtimeShort), the effort, the speed, the context
+    const runtimeShown = arr(entry.runtimes).length > 1 || (showRuntime && fixed === null);
+    const parts = [fixed === null && runtimeShown ? format.runtimeShort(runtime) : null, effortText, speedText, context === null ? null : format.compactNumber(context)].filter((x): x is string => x !== null);
+    const selected = current.entry !== null && current.entry.model === m && current.runtime === runtime && current.effort === effort && current.fast === fast && current.context === context;
+    out.push({ model: m, runtime, effort, fast, context, ...(speedText === null ? {} : { speedText }), label, text: parts.join(" · "), name, ...(runtimeText === null ? {} : { runtimeText }), effortText, selected });
   }
   return out;
 }
@@ -164,6 +360,15 @@ export class Choose implements Owner {
   readonly #chosen = new Marks();
   readonly #drafts = new Map<string, Record<string, J>>();
   readonly #adding = new Map<string, J>();
+  /// What was set by hand in a control's panel since it opened (a `pick.save` of how it runs with no model: how hard
+  /// it thinks, its runtime, how fast, how much context), by its topic's key: what a model never run here would run
+  /// with picked in that panel next (`#pick`'s `usual`). One that has run here is picked as it last ran whatever was
+  /// set since: a model used most is the model with how it runs (the user, 2026-11-10: 「常用模型按理说是包括思考深度
+  /// 的，这样随便切会让常用模型的配置失效」, of every model picked taking what was set by hand).
+  readonly #hand = new Map<string, Record<string, J>>();
+  /// What `#hand` held before the last save asked of the station, put back if that fails (`unsaved`).
+  readonly #handWas = new Map<string, Record<string, J> | null>();
+  readonly #saving = new Map<string, number>();
   /// The key each scope's next new chat is to be made under (`next`), until one is made under it.
   readonly #next = new Map<string, string>();
 
@@ -177,6 +382,8 @@ export class Choose implements Owner {
 
   stop(topic: Topic): void {
     this.#drafts.delete(topicKey(topic));
+    this.#hand.delete(topicKey(topic));
+    this.#handWas.delete(topicKey(topic));
   }
 
   compute(topic: Topic): Value | undefined {
@@ -201,13 +408,51 @@ export class Choose implements Owner {
   }
 
   #choice(scope: string, id: string): J {
-    return this.#record(`ws:${scope}:station:${id}`) ?? this.#record(`station:${id}`) ?? {};
+    const kept = this.#record(`ws:${scope}:station:${id}`) ?? this.#record(`station:${id}`) ?? {};
+    const pm = this.#bound(scope)?.model;
+    return pm !== null && pm !== undefined ? boundChoice(pm, kept) : kept;
+  }
+
+  /// What the preset picked for the scope's new chats binds them to (`presetBinds`), with its name; none for none. Every
+  /// choice made reads this, so it reads the picked one's station's presets alone, as that station said them last (not
+  /// the scope's stations: `topic-work`'s pick, with three times the stations).
+  #bound(scope: string): { name: string; model: J | null; stations: string[] | null } | undefined {
+    const kept = this.#record(`ws:${scope}:preset`);
+    if (!isObject(kept) || typeof kept.id !== "string" || kept.id === "" || typeof kept.station !== "string") return undefined;
+    const p = arr(get(this.#env.store.get({ topic: "presets", station: kept.station }), "presets")).find((x) => get(x, "id") === kept.id);
+    return p === undefined ? undefined : { name: text(get(p, "name")) ?? "", ...presetBinds(p) };
+  }
+
+  /// Whether a new chat of `scope` may start on station `id` as the preset picked binds it.
+  allows(scope: string, id: string): boolean {
+    const stations = this.#bound(scope)?.stations;
+    return stations === null || stations === undefined || stations.includes(id);
+  }
+
+  /// Whether station `addr` runs the model a preset binds (`pm`; and its runtime, where it names one), as the station's
+  /// overview lists its models: a preset's chats run with what it names on any station they start on (the user,
+  /// 2026-11-14: 「我一个 argon 的预设，切到其它 station，模型不是 argon，这他妈对吗？」), so a station that does not run
+  /// it is neither offered nor started on, never one the station's own first model stands in for.
+  #runsBound(addr: string, pm: J): boolean {
+    const entry = optionOf(this.#onStation(addr)[0], text(get(pm, "model")));
+    if (entry === undefined) return false;
+    const rt = text(get(pm, "runtime"));
+    return rt === null || arr(entry.runtimes).includes(rt);
   }
 
   #keepChoice(scope: string, id: string, choice: J, key = `ws:${scope}:station:${id}`): void {
     const kept: J = {};
     for (const f of FIELDS) {
-      kept[f] = f === "fast" ? (typeof get(choice, f) === "boolean" ? choice[f] : null) : f === "context" ? contextOf(get(choice, f)) : typeof get(choice, f) === "string" ? choice[f] : "";
+      kept[f] =
+        f === "fast"
+          ? (typeof get(choice, f) === "boolean" ? choice[f] : null)
+          : f === "context"
+            ? contextOf(get(choice, f))
+            : f === "profiles"
+              ? normProfiles(get(choice, f))
+              : typeof get(choice, f) === "string"
+                ? choice[f]
+                : "";
     }
     this.#env.data.put(TABLE, key, kept, false);
   }
@@ -226,7 +471,7 @@ export class Choose implements Owner {
     this.#env.data.put(TABLE, `ws:${scope}:last`, id, false);
   }
 
-  /// The scope's stations up now; an error (null: not known yet; a string: why it failed).
+  /// The scope's stations up now, each its row (StationRow); an error (null: not known yet; a string: why it failed).
   #online(scope: string): [J[], boolean] | { error: string | null } {
     const v = this.#env.store.value({ topic: "stations", scope });
     if (v === undefined) return { error: null };
@@ -257,16 +502,23 @@ export class Choose implements Owner {
     // to another station up would start the chat where they did not choose. Only one never picked, or no longer the
     // workspace's, gives way to the first up.
     const held = this.#held(scope);
-    const station = structuredClone(held ?? online[0]);
+    const station = held ?? online[0];
     view.down = held !== undefined && held.online !== true;
     view.stations = view.down ? [...online, station] : online;
     if (station === undefined) return view;
     const id = typeof station.id === "string" ? station.id : "";
     const name = typeof station.name === "string" ? station.name : "";
-    const options = arr(station.models);
-    const r = resolve(options, this.#choice(scope, id));
+    const addr = typeof station.station === "string" ? station.station : "";
+    // The stations are held as a list has them (StationRow; the page is sent what it names them by, NewChatStation);
+    // what it runs is worked out from the one it starts on alone: its page's overview, the models it serves this
+    // workspace (not every station's, by the minute).
+    const page: J = this.#env.store.get({ topic: "station", scope, station: addr });
+    const overview = isObject(get(page, "overview")) ? page.overview : null;
+    const raw: J = this.#env.store.get({ topic: "overview", station: addr });
+    const served = servingIn(raw, scope, station.joined === true);
+    const options = overview !== null ? models(served, this.#env.now()) : [];
+    const r = resolve(options, this.#choice(scope, id), raw !== undefined ? get(raw, "accountSubsets") === true : overview === null || get(overview, "accountSubsets") === true);
     view.frequent = frequentCombos(arr(this.#record(`ws:${scope}:frequent`)), options, r);
-    const overview = isObject(station.overview) ? station.overview : null;
     // A station this workspace joined runs its chats on the profiles open to it: with some, but
     // none open, one is turned on rather than added.
     const joined = station.joined === true;
@@ -274,9 +526,9 @@ export class Choose implements Owner {
     const profiles = overview !== null ? arr(servingIn(overview, scope, joined).profiles) : all;
     view.waiting = overview === null;
     // No profile of its own, but another station of the workspace has models it could borrow: its model control
-    // offers them (borrowed before the chat is made) rather than only adding a profile.
-    const lends = overview !== null && profiles.length === 0 && !joined
-      && borrowable(this.#env.store.get({ topic: "stations", scope }), typeof station.station === "string" ? station.station : "", [], null, this.#env.now()).length > 0;
+    // offers them (borrowed before the chat is made) rather than only adding a profile. Only whether one does: each
+    // other station up's overview walked for a profile it would lend, none of their models made (lends).
+    const lends = overview !== null && profiles.length === 0 && !joined && this.#lends(scope, addr);
     const disabled = all.some((p) => get(p, "enabled") === false && profileServes(p, scope, joined));
     view.blocked = overview !== null && profiles.length === 0 ? (lends ? null : disabled ? "disabled" : joined && all.length > 0 ? "shared" : "profile") : overview !== null && options.length === 0 ? "models" : null;
     // This workspace's name: as it is held, else as an account's `/v1/me` lists it.
@@ -303,18 +555,44 @@ export class Choose implements Owner {
     view.profile = r.profile;
     view.efforts = r.efforts;
     view.accounts = r.accounts;
-    const addr = typeof station.station === "string" ? station.station : "";
-    const pick = this.#pick({ topic: "pick", station: addr, of: "new" }, addr, "new");
-    view.pick = pick !== undefined && "ok" in pick ? pick.ok : null;
+    // Its model control as the page draws it closed (none while its profiles are read: the page shows it in its
+    // bones); its panel is the `pick` topic, asked as it opens.
+    // Its control runs on the station's models of every profile it has enabled (`#onStation`, as `pick` of `new` has
+    // always made them), the page on those serving this workspace (`servingIn`): the same list, made once, unless a
+    // profile enabled there does not serve it (its `serves` false; or, on a station from before `serves`, one this
+    // workspace joined whose profile's `workspaces` do not name it); then the control's are made apart, as before.
+    const servesAll = arr(get(served, "profiles")).length === arr(get(raw, "profiles")).filter((p) => get(p, "enabled") !== false).length;
+    view.pick = overview !== null ? this.#face(addr, servesAll ? options : models(raw, this.#env.now())) : null;
     // The workspace's presets, every station's up now (each as it was read last), to pick from where the page's
-    // control opens; the one picked whichever station it is of.
+    // control opens (its menu: each by its name and station's); the one picked whichever station it is of. Held with
+    // the page, which has each station's read as it shows: the menu finds them read, never waits on a station.
     const listed = this.#workspacePresets(online);
-    view.presets = listed.map(({ p, station: at, stationName }) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", dirs: arr(get(p, "dirs")).length, station: at, stationName, marks: this.#marks(p, at) }));
+    view.presets = listed.map(({ p, station: at, stationName }) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", station: at, stationName }));
     const picked = this.#picked(scope, listed);
     view.preset = picked === undefined ? "" : (text(get(picked.p, "id")) ?? "");
     view.presetStation = picked?.station ?? "";
     view.presetName = picked === undefined ? "" : (text(get(picked.p, "name")) ?? "");
     view.presetMarks = picked === undefined ? [] : this.#marks(picked.p, picked.station);
+    // What it binds the page to: its model control shows the preset's and does not open; its stations are those it names.
+    const binds = picked === undefined ? null : presetBinds(picked.p);
+    view.presetModel = binds !== null && binds.model !== null;
+    view.presetStations = binds !== null && binds.stations !== null;
+    if (binds !== null && binds.stations !== null) {
+      const named = binds.stations;
+      view.stations = arr(view.stations).filter((s) => s === station || named.includes(typeof s.id === "string" ? s.id : ""));
+    }
+    if (binds !== null && binds.model !== null) {
+      const pm = binds.model;
+      view.stations = arr(view.stations).filter((s) => s === station || (typeof s.station === "string" && this.#runsBound(s.station, pm)));
+      if (overview !== null && !this.#runsBound(addr, pm)) {
+        // its control shows the preset's model as it names it, never the station's own first one in its place
+        const m = String(pm.model);
+        // (`model` stays the station's: the page asks only whether there is one)
+        const runtime = text(get(pm, "runtime")) ?? view.runtime;
+        view.pick = { value: { model: m, runtime, effort: text(get(pm, "effort")) }, valueOption: { name: model.name(m), maker: present.maker(m), runtimes: [] }, efforts: [] };
+        if (view.problem === null) view.problem = t("core-logic.choose.problem.preset_model_missing", { name, preset: text(get(picked!.p, "name")) ?? "", model: model.name(m) });
+      }
+    }
     view.station = station;
     return view;
   }
@@ -322,7 +600,37 @@ export class Choose implements Owner {
   #onStation(addr: string): [J[], Resolved] {
     const overview = this.#env.store.get({ topic: "overview", station: addr });
     const options = models(overview, this.#env.now());
-    return [options, resolve(options, this.#choice(ofAddress(addr), stationId(addr)))];
+    const subsets = overview === undefined || get(overview, "accountSubsets") === true;
+    return [options, resolve(options, this.#choice(ofAddress(addr), stationId(addr)), subsets)];
+  }
+
+  /// A new chat's model control as its page draws it closed (NewChatPick), on `station` of `options` (its models as
+  /// `#onStation` makes them: of every profile enabled there): what it runs on now and how
+  /// (the model's name, maker and runtimes; whether it says how hard it thinks, Fast; the account kept to), worked out
+  /// of that station alone, as `#pick` works out the same of it (`#now`'s, `named`, `runsFast`). Its panel is the `pick`
+  /// topic, asked as it opens: every option annotated, the workspace's other stations' models after them, made for
+  /// the panel, never for the page. None while the station's overview is not read (`pick`'s none).
+  #face(station: string, options: J[]): J {
+    const overview = this.#env.store.get({ topic: "overview", station });
+    if (overview === undefined) return null;
+    const r = resolve(options, this.#choice(ofAddress(station), stationId(station)), get(overview, "accountSubsets") === true);
+    const value = picked(r);
+    const multiRuntime = new Set(options.flatMap((o) => arr(o.runtimes))).size > 1;
+    return {
+      value,
+      valueOption: r.entry,
+      efforts: r.efforts,
+      account: named(value, r.entry, null, true).account,
+      fastText: runsFast(overview, value, null) ? "Fast" : null,
+      ...(multiRuntime ? { showRuntime: true } : {}),
+    };
+  }
+
+  /// Whether another station of `scope` up now would lend station `here` a model (views/models.ts `lends`): a yes or no
+  /// of the scope's stations' rows and the overviews of those up, as they are kept, none of their models made.
+  #lends(scope: string, here: string): boolean {
+    const v = this.#env.store.value({ topic: "stations", scope });
+    return lends(v !== undefined && "ok" in v ? v.ok : [], here, (station) => this.#env.store.get({ topic: "overview", station }));
   }
 
   /// The presets of the scope's stations `online` (their addresses' `presets` topics), as each station said them last,
@@ -374,14 +682,78 @@ export class Choose implements Owner {
   /// `newChat.pick`: the station a scope's new chat starts on, and what it runs there.
   pickNew(scope: string, params: J): void {
     const station = text(get(params, "station"));
+    // (what the preset picked binds is not changed here: the page offers no other, and one asked for is refused saying
+    // how to have it)
+    const bound = typeof get(params, "preset") === "string" ? undefined : this.#bound(scope);
+    if (bound !== undefined && bound.model !== null && FIELDS.some((f) => get(params, f) !== undefined)) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_model", { name: bound.name }));
+    }
+    if (bound !== undefined && bound.stations !== null && station !== null && !bound.stations.includes(station)) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_station", { name: bound.name }));
+    }
+    if (bound !== undefined && bound.model !== null && station !== null && !this.#runsBound(address(scope, station), bound.model)) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_model_station", { name: bound.name, model: model.name(String(bound.model.model)) }));
+    }
     if (station !== null) this.#keepStation(scope, station);
     // the preset, whichever station it is of (`presetStation`, its address; "" for none)
     const preset = get(params, "preset");
-    if (typeof preset === "string") this.#env.data.put(TABLE, `ws:${scope}:preset`, { id: preset, station: text(get(params, "presetStation")) ?? "" }, false);
+    if (typeof preset === "string") {
+      const presetStation = text(get(params, "presetStation")) ?? "";
+      this.#env.data.put(TABLE, `ws:${scope}:preset`, { id: preset, station: presetStation }, false);
+      if (preset !== "" && station === null && !FIELDS.some((f) => get(params, f) !== undefined)) {
+        const found = this.#online(scope);
+        const online = Array.isArray(found) ? found[0] : [];
+        const picked = this.#picked(scope, this.#workspacePresets(online));
+        if (picked !== undefined) {
+          const p = picked.p;
+          const pm = presetBinds(p).model;
+          const runs = (s: J) => pm === null || (typeof s.station === "string" && this.#runsBound(s.station, pm));
+          // the least busy of `pool` that runs the model it binds (none: the page says the one it is on does not)
+          const pickBest = (pool: J[]): string | null => {
+            const list = pool.filter(runs);
+            if (list.length === 0) return null;
+            const sorted = [...list].sort((a, b) => {
+              const ra = typeof get(get(get(a, "overview"), "counts"), "running") === "number" ? a.overview.counts.running : 0;
+              const rb = typeof get(get(get(b, "overview"), "counts"), "running") === "number" ? b.overview.counts.running : 0;
+              return ra - rb;
+            });
+            const best = sorted[0];
+            return best !== undefined && typeof best.id === "string" ? best.id : null;
+          };
+          let targetStationId: string | null = null;
+          const singleStation = text(get(p, "station"));
+          const subsetStations = Array.isArray(get(p, "stations"))
+            ? get(p, "stations").filter((x: unknown): x is string => typeof x === "string" && x !== "")
+            : [];
+          if (singleStation !== null) {
+            const match = online.find((s) => s.id === singleStation || s.station === singleStation);
+            targetStationId = match !== undefined && typeof match.id === "string" ? match.id : stationId(singleStation);
+          } else if (subsetStations.length > 0) {
+            const pool = online.filter((s) => subsetStations.includes(s.id) || subsetStations.includes(s.station));
+            targetStationId = pickBest(pool);
+          } else if (get(p, "autoStation") === true) {
+            targetStationId = pickBest(online);
+          } else if (pm !== null) {
+            // any station: the one it is on where that runs its model, else the least busy that does
+            const on = this.#held(scope) ?? online[0];
+            if (on !== undefined && !runs(on)) targetStationId = pickBest(online);
+          }
+          if (targetStationId !== null && targetStationId !== "") {
+            this.#keepStation(scope, targetStationId);
+          }
+        }
+      }
+    }
     if (FIELDS.some((f) => get(params, f) !== undefined)) {
       const id = station ?? this.#shown(scope);
-      const [options, now] = this.#onStation(address(scope, id));
-      const next: J = { runtime: now.runtime, model: now.entry !== null ? now.entry.model : null, effort: now.effort, fast: now.fast, context: now.context, profile: now.profile };
+      const addr = address(scope, id);
+      const ps = normProfiles(get(params, "profiles"));
+      if (ps !== null && ps.length > 1) {
+        const ov = this.#env.store.get({ topic: "overview", station: addr });
+        if (ov !== undefined && get(ov, "accountSubsets") !== true) throw CoreError.invalid(t("core-logic.choose.error.station_account_subsets"));
+      }
+      const [options, now] = this.#onStation(addr);
+      const next: J = { runtime: now.runtime, model: now.entry !== null ? now.entry.model : null, effort: now.effort, fast: now.fast, context: now.context, profile: now.profile, profiles: now.profiles };
       const m = text(get(params, "model"));
       if (m !== null) {
         const runs = arr(get(optionOf(options, m), "runtimes"));
@@ -395,8 +767,14 @@ export class Choose implements Owner {
       if (rt !== null) {
         if (next.runtime !== rt) next.effort = null;
         next.runtime = rt;
+        if (rt !== "devin" && m === null && typeof next.model === "string") {
+          const f = model.splitDevinFusion(next.model);
+          if (f !== null) next.model = f.lead;
+        }
       }
-      for (const field of ["effort", "profile", "fast", "context"]) if (get(params, field) !== undefined) next[field] = params[field];
+      if (get(params, "profiles") !== undefined && get(params, "profile") === undefined) next.profile = "";
+      if (get(params, "profile") !== undefined && get(params, "profiles") === undefined) next.profiles = null;
+      for (const field of ["effort", "profile", "profiles", "fast", "context"]) if (get(params, field) !== undefined) next[field] = params[field];
       this.#keepChoice(scope, id, next);
     }
     this.#changed();
@@ -409,11 +787,19 @@ export class Choose implements Owner {
     const ask: J = { runtime: r.runtime, model: r.entry.model ?? null };
     if (r.effort !== null) ask.effort = r.effort;
     if (r.profile !== null) ask.profile = r.profile;
+    else if (r.profiles !== null && r.profiles.length > 1) ask.profiles = r.profiles;
     if (r.fast !== null) ask.fast = r.fast;
     if (r.context !== null) ask.context = r.context;
     // The preset picked: by its id where it is this station's, else all of it as its station said it (its folders
-    // that station's).
+    // that station's), with what it binds for the station to hold the chat to.
     const scope = ofAddress(station);
+    const bound = this.#bound(scope);
+    if (bound !== undefined && bound.stations !== null && !bound.stations.includes(stationId(station))) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_station", { name: bound.name }));
+    }
+    if (bound !== undefined && bound.model !== null && !this.#runsBound(station, bound.model)) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_model_station", { name: bound.name, model: model.name(String(bound.model.model)) }));
+    }
     const online = (() => {
       const v = this.#env.store.value({ topic: "stations", scope });
       return v !== undefined && "ok" in v ? arr(v.ok) : [];
@@ -430,7 +816,14 @@ export class Choose implements Owner {
           if (at !== station) dir.elsewhere = text(get(d, "stationName")) ?? names.get(at) ?? at;
           return dir;
         });
-        ask.presetCopy = { id: get(picked.p, "id"), name: get(picked.p, "name"), dirs, instructions: get(picked.p, "instructions") ?? "" };
+        ask.presetCopy = {
+          id: get(picked.p, "id"),
+          name: get(picked.p, "name"),
+          dirs,
+          instructions: get(picked.p, "instructions") ?? "",
+          ...(bound?.model ? { model: bound.model } : {}),
+          ...(bound?.stations ? { stations: bound.stations } : {}),
+        };
       }
     }
     this.#keepStation(ofAddress(station), stationId(station));
@@ -494,8 +887,14 @@ export class Choose implements Owner {
       case "connectNew": {
         const ov = overview();
         if (ov === undefined) return undefined;
+        if (o.form === "preset") {
+          const [options, base] = this.#onStation(station);
+          const saved = this.#adding.get(`${station}\u0001preset`);
+          const r = saved !== undefined ? resolve(options, saved, get(ov, "accountSubsets") === true) : base;
+          return [options, saved !== undefined ? picked(r) : { ...picked(r), model: null }, null, false, true, 0];
+        }
         const options = models(ov, now);
-        const r = resolve(options, this.#adding.get(`${station}\u0001${o.form}`) ?? {});
+        const r = resolve(options, this.#adding.get(`${station}\u0001${o.form}`) ?? {}, get(ov, "accountSubsets") === true);
         return [options, picked(r), null, false, false, 0];
       }
       case "connect": {
@@ -507,21 +906,39 @@ export class Choose implements Owner {
         // (a station from before keeps a connect on the runtime it was made with)
         const switchable = get(ov, "connectRuntimeChange") === true;
         const options = models(ov, now).filter((m) => switchable || arr(m.runtimes).some((r) => equal(r, get(bind, "runtime"))));
-        return [options, { model: text(get(bind, "model")), runtime: get(bind, "runtime") ?? null, effort: text(get(bind, "effort")), profile: text(get(bind, "profile")) }, null, !switchable, false, 0];
+        const bProfiles = normProfiles(get(bind, "profiles"));
+        const bProfile = bProfiles !== null && bProfiles.length === 1 ? bProfiles[0]! : text(get(bind, "profile"));
+        const bMulti = bProfile === null && bProfiles !== null && bProfiles.length > 1 ? bProfiles : null;
+        const value: J = { model: text(get(bind, "model")), runtime: get(bind, "runtime") ?? null, effort: text(get(bind, "effort")), profile: bProfile, ...(bMulti !== null ? { profiles: bMulti } : {}) };
+        normalizeTieredValue(options, value);
+        return [options, value, null, !switchable, false, 0];
       }
       case "session": {
         const agent = this.#env.agent(station, o.key);
         if (agent === null || agent === undefined) return undefined;
         const s = agent.session;
+        const sProfiles = normProfiles(get(s, "profiles"));
         const pinned = get(s, "profilePinned") === true;
-        const value = { model: text(get(s, "model")), runtime: get(s, "runtime") ?? null, effort: text(get(s, "effort")), fast: get(s, "fast") ?? null, context: contextOf(get(s, "context")), profile: pinned ? text(get(s, "profile")) : null };
+        const sProfile = pinned ? text(get(s, "profile")) : sProfiles !== null && sProfiles.length === 1 ? sProfiles[0]! : null;
+        const sMulti = sProfile === null && sProfiles !== null && sProfiles.length > 1 ? sProfiles : null;
+        const value: J = {
+          model: text(get(s, "model")),
+          runtime: get(s, "runtime") ?? null,
+          effort: text(get(s, "effort")),
+          fast: get(s, "fast") ?? null,
+          context: contextOf(get(s, "context")),
+          profile: sProfile,
+          ...(sMulti !== null ? { profiles: sMulti } : {}),
+        };
         const current = isObject(agent.account) ? agent.account : null;
         const ov = overview();
         const switchable = get(ov, "sessionRuntimeChange") === true;
         const scope = ofAddress(station);
         const stationView = arr(this.#env.store.get({ topic: "stations", scope })).find((s) => s.id === stationId(station));
         const available = servingIn(ov, scope, get(stationView, "joined") === true);
-        return [switchable ? models(available, now) : arr(agent.choices), value, current, !switchable, false, arr(agent.profiles).length];
+        const list = switchable ? models(available, now) : arr(agent.choices);
+        normalizeTieredValue(list, value);
+        return [list, value, current, !switchable, false, arr(agent.profiles).length];
       }
     }
   }
@@ -529,7 +946,8 @@ export class Choose implements Owner {
   /// What a station's own options are, said where their accounts are, and the models the workspace's other stations
   /// could lend it after them (of `runtime` alone where it cannot change).
   #withWorkspace(station: string, own: J[], runtime: string | null): J[] {
-    const stations = this.#env.store.get({ topic: "stations", scope: ofAddress(station) });
+    // (every station's models: the core's own whole list, views.ts `stationsWhole`)
+    const stations = this.#env.store.get({ topic: "stationsWhole", scope: ofAddress(station) });
     const overview = this.#env.store.get({ topic: "overview", station });
     return [...sourced(own, overview, stations), ...borrowable(stations, station, own, runtime, this.#env.now())];
   }
@@ -566,83 +984,110 @@ export class Choose implements Owner {
     if (now === undefined) return undefined;
     const [own, value, current, fixed, quiet, runnable] = now;
     const options = this.#withWorkspace(station, own, fixed && typeof value.runtime === "string" ? value.runtime : null);
+    const isPreset = o.kind === "connectNew" && o.form === "preset";
     const draft = this.#drafts.get(topicKey(topic)) ?? {};
     const pickedOf = (field: string) => text(field in draft ? draft[field] : get(value, field));
-    const m = pickedOf("model");
+    const rawM = pickedOf("model") ?? (isPreset ? (text(get(this.#onStation(station)[1].entry, "model")) ?? text(get(options[0], "model"))) : null);
     const runtime = pickedOf("runtime");
-    const profileDrafted = pickedOf("profile");
+    const rawFusion = rawM !== null ? model.splitDevinFusion(rawM) : null;
+    const m = rawFusion !== null && runtime !== null && runtime !== "devin" ? rawFusion.lead : rawM;
+    const nonePicked = "profiles" in draft && Array.isArray(draft.profiles) && normProfiles(draft.profiles) === null;
+    const draftedAccounts = (): { asked: string[]; multi: boolean } => {
+      if ("profiles" in draft) {
+        const ps = normProfiles(draft.profiles);
+        return ps !== null ? { asked: ps, multi: true } : { asked: [], multi: false };
+      }
+      if ("profile" in draft) {
+        const p = text(draft.profile);
+        return p !== null ? { asked: [p], multi: false } : { asked: [], multi: false };
+      }
+      return choiceAccounts(value);
+    };
+    const { asked, multi } = draftedAccounts();
     const option = optionOf(options, m);
     const valueOption = optionOf(options, typeof value.model === "string" ? value.model : null);
+    const fusionSplit = m !== null ? model.splitDevinFusion(m) : null;
+    const leadOption = fusionSplit !== null ? optionOf(options, fusionSplit.lead) : option;
     const runtimes = option !== undefined ? arr(option.runtimes) : [];
+    const leadRuntimes = leadOption !== undefined ? arr(leadOption.runtimes) : runtimes;
+    const panelOption =
+      option !== undefined
+        ? options.some((o) => o.model === option.model)
+          ? (option.model ?? null)
+          : (fusionSplit?.lead ?? option.model ?? null)
+        : null;
     const on = fixed ? value.runtime : (runtimes.find((r) => r === runtime) ?? runtimes[0] ?? value.runtime);
     const onName = typeof on === "string" ? on : "";
-    const accounts = option !== undefined ? arr(get(get(option, "accounts"), onName)) : [];
+    const rawAccounts = option !== undefined ? arr(get(get(option, "accounts"), onName)) : [];
+    const accounts = rawAccounts.map((a) => {
+      const isCurrent = current !== null && on === value.runtime && a.id === current.id;
+      if (isCurrent) return a.current === true ? a : { ...a, current: true };
+      if (a.current !== undefined) {
+        const copy = { ...a };
+        delete copy.current;
+        return copy;
+      }
+      return a;
+    });
     let efforts: J[] = option !== undefined ? arr(get(get(option, "efforts"), onName)) : fixed || o.kind === "session" ? format.efforts(onName) : [];
     const account = (id: string | null) => (id === null ? undefined : accounts.find((a) => a.id === id));
-    const profile = account(profileDrafted)?.id ?? null;
-    const levels = profile !== null ? get(accounts.find((a) => a.id === profile), "efforts") : undefined;
-    if (Array.isArray(levels)) efforts = levels;
-    const dropped = profileDrafted !== null && profile === null;
+    const { profile, profiles, dropped } = resolveAccounts(accounts, asked, multi);
+    if (profile !== null) {
+      const levels = get(accounts.find((a) => a.id === profile), "efforts");
+      if (Array.isArray(levels)) efforts = levels;
+    } else if (profiles !== null && onName !== "") {
+      const subset = accounts.filter((a) => profiles.includes(a.id));
+      if (subset.length > 0) efforts = subsetEfforts(subset, onName);
+    }
     const e = pickedOf("effort");
     const effort = e !== null && efforts.some((x) => x === e) ? e : null;
     // How much less context than its whole window it can be kept to: a new chat's and a chat's (a connect's sessions
     // are made by the station, as it is set).
-    const contexts: number[] = option !== undefined && (o.kind === "new" || o.kind === "session")
+    const contexts: number[] = option !== undefined && (o.kind === "new" || o.kind === "session" || isPreset)
       ? arr(get(get(option, "contexts"), onName)).filter((n): n is number => typeof n === "number")
       : [];
     const cPicked = contextOf("context" in draft ? draft.context : get(value, "context"));
     const context = cPicked !== null && contexts.includes(cPicked) ? cPicked : null;
     const nextModel = option !== undefined && (valueOption === undefined || valueOption.model !== option.model) ? option.model : (value.model ?? null);
     const overview = this.#env.store.get({ topic: "overview", station });
+    const allowedIds: string[] | null = profiles ?? (profile !== null ? [profile] : null);
     const fastAvailable =
       fastRuntime(onName) &&
-      (o.kind === "new" || o.kind === "session") &&
-      arr(get(overview, "profiles")).some((p) => typeof p.fast === "boolean" && (profile === null || p.id === profile) && accounts.some((a) => a.id === p.id));
+      (o.kind === "new" || o.kind === "session" || isPreset) &&
+      arr(get(overview, "profiles")).some((p) => typeof p.fast === "boolean" && (allowedIds === null || allowedIds.includes(p.id)) && accounts.some((a) => a.id === p.id));
     // How fast it runs where none is picked: its account's own (the one drafted, else the one it is on), said as what
     // it is rather than as 跟随订阅 (2026-11-02 用户「谁知道订阅是什么，应该直接显示具体值」).
-    const planFastOf = profile ?? (typeof get(current, "id") === "string" ? current.id : null);
+    const currentInPool = typeof get(current, "id") === "string" && (allowedIds === null || allowedIds.includes(current.id)) ? current.id : null;
+    const planFastOf = profile ?? currentInPool ?? (profiles !== null ? (profiles[0] ?? null) : null);
     const fastPlan = arr(get(overview, "profiles")).some((p) => planFastOf !== null && p.id === planFastOf && p.fast === true);
     const fastRaw = "fast" in draft ? draft.fast : get(value, "fast");
     const fast = typeof fastRaw === "boolean" && fastRuntime(onName) ? fastRaw : null;
     const speedText = (f: boolean | null) => (f === true ? "Fast" : f === false ? t("core-logic.choose.speed.standard") : t("core-logic.choose.speed.plan"));
-    const next = { model: nextModel, runtime: on ?? null, effort, profile, fast, context };
-    const changed = FIELDS.some((f) => !equal((next as J)[f], value[f] ?? null));
-    const kept = text(get(value, "profile"));
-    let shown: J = null;
-    if (kept !== null && valueOption !== undefined) shown = arr(get(get(valueOption, "accounts"), typeof value.runtime === "string" ? value.runtime : "")).find((a) => a.id === kept) ?? null;
-    if (shown === null) shown = current;
-    const effectiveFast =
-      fastRuntime(value.runtime) &&
-      (o.kind === "new" || o.kind === "session") &&
-      (typeof value.fast === "boolean"
-        ? value.fast
-        : (() => {
-            const id = kept ?? (typeof get(current, "id") === "string" ? current.id : null);
-            return arr(get(overview, "profiles")).some((p) => id !== null && p.id === id && p.fast === true);
-          })());
-    const low = shown !== null ? (get(quotaLine(get(shown, "quota")), "level") ?? null) : null;
-    const names = !quiet || kept !== null || low !== null;
-    let accountView: J = null;
-    if (names) {
-      const txt =
-        kept !== null
-          ? shown !== null
-            ? typeof shown.name === "string"
-              ? shown.name
-              : kept
-            : kept
-          : shown !== null
-            ? t("core-logic.choose.account.auto_on", { name: typeof shown.name === "string" ? shown.name : "" })
-            : t("core-logic.choose.account.auto");
-      accountView = { text: txt, auto: kept === null, level: low, profile: quiet ? null : shown };
-    }
+    const next = { model: nextModel, runtime: on ?? null, effort, profile, ...(profiles !== null ? { profiles } : {}), fast, context };
+    const changed = !nonePicked && FIELDS.some((f) => !equal((next as J)[f] ?? null, value[f] ?? null));
+    const { kept, keptProfiles, low, account: accountView } = named(value, valueOption, current, quiet);
+    const effectiveFast = (o.kind === "new" || o.kind === "session" || isPreset) && value.model !== null && runsFast(overview, value, current);
     const drafted = account(profile);
-    const who = drafted !== undefined && typeof drafted.name === "string" ? drafted.name.split("@")[0] : t("core-logic.choose.account");
-    const whoLevel = dropped ? "amber" : profile === null && kept === null ? low : null;
+    const who = nonePicked
+      ? t("core-logic.choose.account.none")
+      : drafted !== undefined && typeof drafted.name === "string"
+        ? drafted.name.split("@")[0]
+        : profiles !== null
+          ? t("core-logic.choose.account.count", { n: profiles.length })
+          : t("core-logic.choose.account.all");
+    const subsetLevels = profiles !== null ? accounts.filter((a) => profiles.includes(a.id)).map((a) => get(quotaLine(get(a, "quota")), "level") ?? null) : [];
+    const subsetLow = subsetLevels.length > 0 && subsetLevels.every((l) => l !== null) ? subsetLevels[0] : null;
+    const whoLevel = nonePicked || dropped ? "amber" : profile === null && profiles === null && kept === null && keptProfiles === null ? low : profiles !== null ? subsetLow : null;
     const currentName = typeof get(current, "name") === "string" ? current.name : "";
-    const autoNote = current !== null && kept === null && on === value.runtime ? t("core-logic.choose.account.now", { name: currentName }) : t("core-logic.choose.account.auto_note");
-    // A chat's account picked again now (`pick.repick`), beside 自动: when another could take it.
-    const repick = current !== null && runnable > 1 && on === value.runtime ? t("core-logic.choose.account.repick") : null;
+    const autoNote = nonePicked
+      ? t("core-logic.choose.account.pick_one")
+      : profiles !== null
+        ? t("core-logic.choose.account.subset_note")
+        : current !== null && profile === null && kept === null && keptProfiles === null && on === value.runtime
+          ? t("core-logic.choose.account.now", { name: currentName })
+          : t("core-logic.choose.account.auto_note");
+    // A chat's account picked again now (`pick.repick`), beside 全选: when at least two checked accounts can take it.
+    const repick = !nonePicked && current !== null && profile === null && Math.max(runnable, accounts.length) > 1 && on === value.runtime ? t("core-logic.choose.account.repick") : null;
     const optionName = option !== undefined && typeof option.name === "string" ? option.name : null;
     const nameOf = (x: string | null): string | null => {
       if (x === null) return null;
@@ -651,94 +1096,180 @@ export class Choose implements Owner {
       return found !== undefined && typeof found.name === "string" ? found.name : x;
     };
     const accountText = (id: string | null) => (id === null ? t("core-logic.choose.account.auto") : (account(id)?.name ?? id));
-    const onCurrent = current !== null && accounts.some((a) => equal(a.id, current.id));
-    const movesOff = profile === null && kept === null && m !== null && current !== null && !onCurrent;
+    const onCurrent = !nonePicked && current !== null && accounts.some((a) => equal(a.id, current.id)) && (profiles === null || profiles.includes(current.id));
+    const movesOff = !nonePicked && profile === null && kept === null && m !== null && current !== null && !onCurrent;
     const modelName = nameOf(m);
     const effortText = effort ?? t("core-logic.choose.default_effort");
-    const chosenText = accountText(profile);
+    const chosenText = nonePicked ? t("core-logic.choose.account.none") : profile !== null ? accountText(profile) : profiles !== null ? t("core-logic.choose.account.count", { n: profiles.length }) : t("core-logic.choose.account.auto");
     const was = [
       nameOf(typeof value.model === "string" ? value.model : null) ?? t("core-logic.format.default_model"),
       text(get(value, "effort")) ?? t("core-logic.choose.default_effort"),
-      kept !== null ? currentName : t("core-logic.choose.account.auto_on", { name: currentName }),
+      kept !== null
+        ? currentName
+        : keptProfiles !== null
+          ? currentName !== ""
+            ? t("core-logic.choose.account.count_on", { n: keptProfiles.length, name: currentName })
+            : t("core-logic.choose.account.count", { n: keptProfiles.length })
+          : t("core-logic.choose.account.auto_on", { name: currentName }),
     ];
     const becomes = [
       modelName ?? t("core-logic.format.default_model"),
       effortText,
       profile !== null
         ? chosenText
-        : movesOff
-          ? t("core-logic.choose.account.auto_switch")
-          : onCurrent
-            ? t("core-logic.choose.account.auto_on", { name: currentName })
-            : t("core-logic.choose.account.auto"),
+        : profiles !== null
+          ? onCurrent && currentName !== ""
+            ? t("core-logic.choose.account.count_on", { n: profiles.length, name: currentName })
+            : chosenText
+          : movesOff
+            ? t("core-logic.choose.account.auto_switch")
+            : onCurrent
+              ? t("core-logic.choose.account.auto_on", { name: currentName })
+              : t("core-logic.choose.account.auto"),
     ];
     if (fastAvailable) {
       was.push(speedText(typeof value.fast === "boolean" ? value.fast : null));
       becomes.push(speedText(fast));
     }
+    const droppedAccount = asked.length > 1 ? t("core-logic.choose.account.count", { n: asked.length }) : accountText(asked[0] ?? null);
     const force = dropped
-      ? t("core-logic.choose.force.dropped", { account: accountText(profileDrafted), model: modelName ?? "" })
+      ? t("core-logic.choose.force.dropped", { account: droppedAccount, model: modelName ?? "" })
       : movesOff
         ? t("core-logic.choose.force.moves_off", { account: currentName, model: modelName ?? "" })
         : null;
     const borrow = option !== undefined && option.availability === "borrowable" ? this.#borrowView(station, option) : null;
     // Each model as it would run picked in the panel (`usual`: what it last ran with here, the one picked as it is
-    // drafted now) and how often new chats here started on it (`uses`); the few used most, nearest what opened the
-    // panel (`near`): a chat's or a new chat's, of the station's own models.
+    // drafted now).
     const scope = ofAddress(station);
     const history = arr(this.#record(`ws:${scope}:frequent`));
-    const likedKeys = this.#liked(scope, station);
-    const uses = new Map<string, number>();
-    for (const h of history) {
-      const found = optionOf(options, text(get(h, "model")));
-      if (found !== undefined) uses.set(found.model, (uses.get(found.model) ?? 0) + (typeof h.count === "number" ? h.count : 1));
+    const rawLikedKeys = this.#liked(scope, station);
+    const optionKeys = new Set(options.map((opt: J) => model.key(String(opt.model ?? ""))));
+    const agyOptionKeys = new Set(options.filter((opt: J) => arr(opt.runtimes).includes("agy")).map((opt: J) => model.key(String(opt.model ?? ""))));
+    const likedKeys: string[] = [];
+    for (const k of rawLikedKeys) {
+      const split = !optionKeys.has(k) ? model.splitAgyTier(k) : null;
+      const nk = split !== null && agyOptionKeys.has(model.key(split.model)) ? model.key(split.model) : k;
+      if (!likedKeys.includes(nk)) likedKeys.push(nk);
     }
+    const hand = this.#hand.get(topicKey(topic));
+    // What a model never run here takes of what was set by hand in the panel: a runtime among those it runs on, how
+    // hard it thinks among that runtime's levels, how fast and how much context where that runtime has them; none,
+    // nothing of it.
+    const byHand = (opt: J): J => {
+      if (hand === undefined) return undefined;
+      const rts = arr(opt.runtimes);
+      const rt = !fixed && rts.some((r) => r === hand.runtime) ? hand.runtime : null;
+      const at = fixed ? value.runtime : (rt ?? rts[0]);
+      const has = (field: string) => (typeof at === "string" ? arr(get(get(opt, field), at)) : []);
+      const e = text(hand.effort);
+      const c = contextOf(hand.context);
+      const took = {
+        runtime: rt,
+        effort: e !== null && has("efforts").some((x) => x === e) ? e : null,
+        fast: typeof hand.fast === "boolean" && fastRuntime(at) ? hand.fast : null,
+        context: c !== null && (o.kind === "new" || o.kind === "session" || isPreset) && has("contexts").some((n) => n === c) ? c : null,
+      };
+      return took.runtime === null && took.effort === null && took.fast === null && took.context === null ? undefined : took;
+    };
+    const multiRuntime = !fixed && new Set(options.flatMap((opt: J) => arr(opt.runtimes))).size > 1;
+    work.annotated += options.length;
     const annotated = options.map((opt: J) => {
       const id = typeof opt.model === "string" ? opt.model : "";
-      const ran = id === m ? { runtime: on ?? null, effort, fast, context } : this.#usual(scope, id, history);
+      const ran = id === m || id === panelOption ? { runtime: on ?? null, effort, fast, context } : (this.#usual(scope, id, history) ?? byHand(opt));
       const r = ran === undefined ? null : resolve(options, { model: id, runtime: fixed ? value.runtime : ran.runtime, effort: ran.effort, fast: ran.fast, context: ran.context });
+      const rts = arr(opt.runtimes);
       const parts: string[] = [];
       if (r !== null) {
-        if (!fixed && arr(opt.runtimes).length > 1 && r.runtime !== null) parts.push(format.runtimeLabel(r.runtime));
+        if (!fixed && rts.length > 1 && r.runtime !== null) {
+          const other = rts.find((x) => x !== r.runtime);
+          parts.push(rts.length === 2 && typeof other === "string" ? `${format.runtimeShort(r.runtime)} / ${format.runtimeShort(other)}` : `${format.runtimeShort(r.runtime)} +${rts.length - 1}`);
+        } else if (multiRuntime && r.runtime !== null) {
+          parts.push(format.runtimeShort(r.runtime));
+        }
         if (r.effort !== null) parts.push(format.effortLabel(r.effort));
         if (r.fast === true) parts.push("Fast");
-        if (r.context !== null && (o.kind === "new" || o.kind === "session")) parts.push(format.compactNumber(r.context));
+        if (r.context !== null && (o.kind === "new" || o.kind === "session" || isPreset)) parts.push(format.compactNumber(r.context));
+      } else if (!fixed && rts.length > 1) {
+        parts.push(rts.map((rt) => format.runtimeShort(String(rt))).join(" · "));
+      } else if (multiRuntime && rts.length === 1) {
+        parts.push(format.runtimeShort(String(rts[0])));
       }
-      const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast, context: o.kind === "new" || o.kind === "session" ? r.context : null };
-      return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, uses: uses.get(id) ?? 0, liked: likedKeys.includes(model.key(id)) };
+      const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast, context: o.kind === "new" || o.kind === "session" || isPreset ? r.context : null };
+      return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, liked: likedKeys.includes(model.key(id)) };
     });
-    // The starred, in the order they were starred, every one of them: what the person keeps at hand stays put however
-    // often it is used. Those used most leave them out (not twice); then every model, by its maker (`makers`).
+    // Two things, apart (the user, 2026-11-10: 「收藏跟常用不一样」「常用包括了思考深度和速度还有上下文长度」「是一种
+    // 配置」): the configurations new chats here started on most (`combos`: a model with how it runs, the same model
+    // run two ways two of them, starred or not), a chat's or a new chat's, of its runtime alone where that is fixed;
+    // and the starred models (`liked`), in the order they were starred, every one of them, one of those used most or
+    // not. Then every model, by its maker (`makers`).
+    const draftNow: Resolved = { entry: value.model !== null || "model" in draft ? (option ?? null) : null, runtime: typeof on === "string" ? on : null, effort, fast, context, profile, profiles, efforts, contexts, accounts };
+    const combos = o.kind === "new" || o.kind === "session" || isPreset
+      ? frequentCombos(history, options, draftNow, fixed && typeof value.runtime === "string" ? value.runtime : null, multiRuntime).map((c: J) => ({
+          model: c.model,
+          runtime: c.runtime,
+          effort: c.effort,
+          fast: c.fast,
+          context: c.context,
+          name: c.name,
+          text: c.text,
+          selected: c.selected,
+        }))
+      : [];
     const liked = likedKeys.flatMap((k) => {
       const found = annotated.find((x: J) => model.key(x.model) === k);
       return found !== undefined ? [found.model] : [];
     });
-    const near = o.kind === "new" || o.kind === "session"
-      ? annotated.filter((x: J) => x.uses > 0 && x.availability !== "borrowable" && !liked.includes(x.model)).sort((a: J, b: J) => b.uses - a.uses).slice(0, NEAR).map((x: J) => x.model)
-      : [];
     const makers = this.#makers(annotated);
+    const baseLead =
+      fusionSplit !== null
+        ? fusionSplit.lead
+        : option !== undefined && typeof option.model === "string"
+          ? model.key(option.model)
+          : null;
+    const canDevin = onName === "devin" || (!fixed && leadRuntimes.includes("devin"));
+    const availSides = canDevin && baseLead !== null ? (model.devinFusionSidesFor(baseLead) ?? []) : [];
+    const leadModelId =
+      leadOption !== undefined && typeof leadOption.model === "string" ? leadOption.model : (baseLead ?? "");
+    const sidekicks =
+      availSides.length > 0 && baseLead !== null
+        ? [
+            { id: "", text: t("core-logic.choose.sidekick.none"), model: leadModelId, maker: null },
+            ...availSides.map((s) => {
+              const mk = format.makerOf(s);
+              return {
+                id: s,
+                text: model.sidekickName(s),
+                model: `fusion-${baseLead}-sidekick-${s}`,
+                maker: mk !== null ? { id: mk[0], name: mk[1] } : null,
+              };
+            }),
+          ]
+        : [];
+    const sidekickNow = fusionSplit !== null && onName === "devin" ? fusionSplit.side : "";
     let saveText = changed ? t("core-logic.choose.save", { model: modelName ?? t("core-logic.format.default_model"), effort: effortText, account: chosenText }) : t("core-logic.choose.save.unchanged");
     if (changed && fastAvailable) saveText = `${saveText} · ${speedText(fast)}`;
     return {
       ok: {
         fastAvailable,
         effortDefault: (() => {
-          const level = effortDefault(overview, onName, option !== undefined ? (option.model ?? null) : null, profile);
+          const level = effortDefault(overview, onName, option !== undefined ? (option.model ?? null) : null, allowedIds);
           return level !== null && efforts.some((x) => x === level) ? level : null;
         })(),
         fastPlan,
         fastText: effectiveFast ? "Fast" : null,
         options: annotated,
-        near,
+        combos,
         liked,
         makers,
         runtimeFixed: fixed,
+        ...(multiRuntime ? { showRuntime: true } : {}),
         value,
         valueOption: valueOption ?? null,
         account: accountView,
-        draft: { model: m, runtime: on ?? null, effort, profile, fast, context },
-        option: option !== undefined ? (option.model ?? null) : null,
-        runtimes: !fixed && runtimes.length > 1 ? runtimes : [],
+        draft: { model: m, runtime: on ?? null, effort, profile, ...(nonePicked ? { profiles: [] } : profiles !== null ? { profiles } : {}), fast, context },
+        option: panelOption,
+        runtimes: !fixed && leadRuntimes.length > 1 ? leadRuntimes : [],
+        ...(sidekicks.length > 0 ? { sidekicks, sidekickNow } : {}),
         efforts,
         // The most context it can be kept to, each said ("" its whole window, first), and the one picked.
         contexts: contexts.length === 0 ? [] : [{ id: "", text: wholeWindow(option) }, ...contexts.map((n) => ({ id: String(n), text: format.compactNumber(n) }))],
@@ -756,8 +1287,8 @@ export class Choose implements Owner {
         modelText: modelName ?? t("core-logic.choose.pick_model"),
         maker: option !== undefined ? (option.maker ?? null) : null,
         accountText: chosenText,
-        accountNote: profile === null ? t("core-logic.choose.account.auto_note") : t("core-logic.choose.account.fixed"),
-        accountWarn: dropped || movesOff,
+        accountNote: nonePicked ? t("core-logic.choose.account.pick_one") : profile !== null ? t("core-logic.choose.account.fixed") : profiles !== null ? t("core-logic.choose.account.subset_note") : t("core-logic.choose.account.auto_note"),
+        accountWarn: nonePicked || dropped || movesOff,
         saveText,
         next,
         borrow,
@@ -787,8 +1318,8 @@ export class Choose implements Owner {
     const kept = this.#record(`ws:${scope}:liked`);
     if (kept !== undefined) return arr(kept).filter((k): k is string => typeof k === "string");
     const out: string[] = [];
-    // (the control's own station's overview first, then the workspace's others as `stations` has them)
-    const overviews = [station !== null ? this.#env.store.get({ topic: "overview", station }) : undefined, ...arr(this.#env.store.get({ topic: "stations", scope })).map((s) => get(s, "overview"))];
+    // (the control's own station's overview first, then the workspace's others as `stationsWhole` has them)
+    const overviews = [station !== null ? this.#env.store.get({ topic: "overview", station }) : undefined, ...arr(this.#env.store.get({ topic: "stationsWhole", scope })).map((s) => get(s, "overview"))];
     for (const ov of overviews) {
       for (const p of arr(get(ov, "profiles"))) {
         // (a station of before `named`: what it ran was what was ticked on)
@@ -800,26 +1331,68 @@ export class Choose implements Owner {
   }
 
   /// `pick.like`: model `model` starred (`liked`) or not in the workspace of the control's station: listed in every
-  /// model control's panel there after those used most.
+  /// model control's panel there, after the combinations used most.
   like(station: string, m: string, liked: boolean): void {
     if (m === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "model" }));
     const scope = ofAddress(station);
     const key = model.key(m);
-    const now = this.#liked(scope, station).filter((k) => k !== key);
+    const now = this.#liked(scope, station).filter((k) => {
+      if (model.key(k) === key) return false;
+      const split = model.splitAgyTier(k);
+      return split === null || model.key(split.model) !== key;
+    });
     if (liked) now.push(key);
     this.#env.data.put(TABLE, `ws:${scope}:liked`, now, false);
     this.#changed();
   }
 
-  /// `pick.set`: picks in a control's panel. `open`: from what it runs on now again; `clear`: starts over too.
+  /// `pick.forget`: the combination `choice` (its model, runtime, effort, fast, context) no longer among those used most
+  /// in the workspace of the control's station (the user, 2026-11-10: 「常用模型应该是一种特定配置，并且可以删掉，跟模型
+  /// 没有关系」): its entry taken out, nothing else (how the model last ran, the starred, stay); a new chat on it later
+  /// counts it again from one.
+  forget(station: string, choice: J): void {
+    if (text(get(choice, "model")) === null) throw CoreError.invalid(t("core-misc.params.missing", { field: "model" }));
+    const key = `ws:${ofAddress(station)}:frequent`;
+    const history = arr(this.#record(key));
+    const overview = this.#env.store.get({ topic: "overview", station });
+    const opts = overview !== undefined ? models(overview, this.#env.now()) : [];
+    const normEntry = (v: J): J => {
+      const rt = get(v, "runtime");
+      if ((rt !== "agy" && rt !== "devin") || typeof get(v, "model") !== "string") return v;
+      const tiered = matchTiered(opts, v.model);
+      if (tiered === null || tiered.runtime !== rt) return v;
+      const eff = text(get(v, "effort")) ?? (arr(get(get(tiered.entry, "efforts"), rt)).includes(tiered.effort) ? tiered.effort : null);
+      return { ...v, model: tiered.entry.model, effort: eff };
+    };
+    const left = history.filter((v) => !sameCombo(v, choice) && !sameCombo(normEntry(v), choice));
+    if (left.length === history.length) return;
+    this.#env.data.put(TABLE, key, left, false);
+    this.#changed();
+  }
+
+  /// `pick.set`: picks in a control's panel. `open`: from what it runs on now again (`open: false` drops an incomplete
+  /// zero-account draft back to the saved accounts); `clear`: starts over too.
   set(station: string, oName: string, params: J): void {
     const o = of(oName);
     const key = topicKey({ topic: "pick", station, of: oName });
     if (get(params, "clear") === true && o.kind === "connectNew") this.#adding.delete(`${station}\u0001${o.form}`);
-    if (get(params, "open") === true || get(params, "clear") === true) this.#drafts.delete(key);
+    if (get(params, "open") === true || get(params, "clear") === true) {
+      this.#drafts.delete(key);
+      this.#hand.delete(key);
+      this.#handWas.delete(key);
+    } else if (get(params, "open") === false || (get(params, "model") !== undefined && get(params, "profiles") === undefined && get(params, "profile") === undefined)) {
+      const cur = this.#drafts.get(key);
+      if (cur !== undefined && Array.isArray(cur.profiles) && normProfiles(cur.profiles) === null) {
+        delete cur.profiles;
+        delete cur.profile;
+        if (Object.keys(cur).length === 0) this.#drafts.delete(key);
+      }
+    }
     const fields = FIELDS.filter((f) => get(params, f) !== undefined);
     if (fields.length > 0) {
       const draft = this.#drafts.get(key) ?? {};
+      if (get(params, "profiles") !== undefined && get(params, "profile") === undefined) delete draft.profile;
+      if (get(params, "profile") !== undefined && get(params, "profiles") === undefined) delete draft.profiles;
       for (const f of fields) draft[f] = params[f];
       this.#drafts.set(key, draft);
     }
@@ -828,11 +1401,21 @@ export class Choose implements Owner {
 
   /// What model `model` last ran with here (`ws:<scope>:usual:<model>`, kept as it is saved and as a new chat starts on
   /// it), else as the newest new chat on it started; none, never used here.
-  #usual(scope: string, model: string, history: J[]): J {
-    const kept = this.#record(`ws:${scope}:usual:${model}`);
+  #usual(scope: string, m: string, history: J[]): J {
+    const kept = this.#record(`ws:${scope}:usual:${m}`);
     if (isObject(kept)) return kept;
     let newest: J;
-    for (const h of history) if (get(h, "model") === model && (newest === undefined || (h.last ?? 0) > (newest.last ?? 0))) newest = h;
+    for (const h of history) {
+      const hm = get(h, "model");
+      const hrt = get(h, "runtime");
+      const agySplit = hrt === "agy" && typeof hm === "string" && hm !== m ? model.splitAgyTier(hm) : null;
+      const fusionSplit = hrt === "devin" && typeof hm === "string" && hm !== m ? model.splitDevinFusion(hm) : null;
+      const splitModel = agySplit !== null ? agySplit.model : fusionSplit !== null && fusionSplit.leadEffort !== null ? fusionSplit.model : null;
+      const splitEffort = agySplit !== null ? agySplit.effort : (fusionSplit?.leadEffort ?? null);
+      if ((hm === m || splitModel === m) && (newest === undefined || (h.last ?? 0) > (newest.last ?? 0))) {
+        newest = splitEffort !== null && text(get(h, "effort")) === null ? { ...h, effort: splitEffort } : h;
+      }
+    }
     return newest === undefined ? undefined : { runtime: newest.runtime ?? null, effort: text(newest.effort), fast: comboFast(newest), context: null };
   }
 
@@ -846,26 +1429,65 @@ export class Choose implements Owner {
   /// picked first.
   save(station: string, oName: string, params: J = {}): Saved {
     const o = of(oName);
-    if (FIELDS.some((f) => get(params, f) !== undefined)) this.set(station, oName, Object.fromEntries(FIELDS.filter((f) => get(params, f) !== undefined).map((f) => [f, params[f]])));
+    const key = topicKey({ topic: "pick", station, of: oName });
+    if (FIELDS.some((f) => get(params, f) !== undefined)) {
+      if (get(params, "profiles") === undefined && get(params, "profile") === undefined) {
+        const cur = this.#drafts.get(key);
+        if (cur !== undefined && Array.isArray(cur.profiles) && normProfiles(cur.profiles) === null) {
+          delete cur.profiles;
+          delete cur.profile;
+          if (Object.keys(cur).length === 0) this.#drafts.delete(key);
+        }
+      }
+      this.set(station, oName, Object.fromEntries(FIELDS.filter((f) => get(params, f) !== undefined).map((f) => [f, params[f]])));
+    }
     const topic: Topic = { topic: "pick", station, of: oName };
     const view = this.#pick(topic, station, oName);
     if (view === undefined) throw CoreError.invalid(t("core-logic.choose.error.no_options_yet"));
     if ("err" in view) throw view.err;
     const v = view.ok as J;
+    if (Array.isArray(get(v.draft, "profiles")) && v.draft.profiles.length === 0) {
+      return { done: { saved: false } };
+    }
     const next = v.next;
+    const overview = this.#env.store.get({ topic: "overview", station });
+    if (Array.isArray(next.profiles) && next.profiles.length > 1 && overview !== undefined && get(overview, "accountSubsets") !== true) {
+      this.unsaved(station, oName);
+      throw CoreError.invalid(t("core-logic.choose.error.station_account_subsets"));
+    }
     // Not run here till its account is borrowed (`pick.borrow`).
     if (v.borrow !== null && v.borrow !== undefined) throw CoreError.invalid(t("core-logic.choose.borrow.first"));
-    if (v.changed !== true || v.option === null) {
-      this.#drafts.delete(topicKey(topic));
+    // How it runs set with no model: set by hand in the panel, kept for the model picked in it next (`#hand`); set
+    // to what it already was, still set.
+    const set = get(params, "model") === undefined ? HOW.filter((f) => get(params, f) !== undefined) : [];
+    if (set.length > 0) {
+      const was = this.#hand.get(key);
+      this.#handWas.set(key, was ?? null);
+      this.#hand.set(key, { ...was, ...Object.fromEntries(set.map((f) => [f, params[f]])) });
+    } else {
+      this.#handWas.delete(key);
+    }
+    const inFlight = (this.#saving.get(key) ?? 0) > 0;
+    if ((!inFlight && v.changed !== true) || v.option === null) {
+      this.#drafts.delete(key);
       this.#env.store.invalidate(topic);
       return { done: { saved: false } };
     }
     const textOf = (field: string) => (typeof next[field] === "string" ? next[field] : "");
-    if (o.kind === "new" || o.kind === "session") this.#keepUsual(ofAddress(station), next);
+    if (o.kind === "new" || o.kind === "session" || (o.kind === "connectNew" && o.form === "preset")) this.#keepUsual(ofAddress(station), next);
     let saved: Saved;
     switch (o.kind) {
       case "new":
-        this.pickNew(ofAddress(station), { station: stationId(station), model: next.model, runtime: next.runtime, effort: textOf("effort"), profile: textOf("profile"), fast: next.fast, context: next.context });
+        this.pickNew(ofAddress(station), {
+          station: stationId(station),
+          model: next.model,
+          runtime: next.runtime,
+          effort: textOf("effort"),
+          profile: textOf("profile"),
+          profiles: next.profiles ?? null,
+          fast: next.fast,
+          context: next.context,
+        });
         saved = { done: { saved: true } };
         break;
       case "connectNew":
@@ -874,6 +1496,7 @@ export class Choose implements Owner {
         break;
       case "session": {
         const params: J = { station, key: o.key, model: next.model, effort: next.effort, profile: next.profile };
+        if (Array.isArray(next.profiles) && next.profiles.length > 1) params.profiles = next.profiles;
         if (next.runtime !== v.value.runtime) params.runtime = next.runtime;
         if (v.fastAvailable === true) params.fast = next.fast;
         if (arr(v.contexts).length > 0) params.context = next.context;
@@ -884,6 +1507,7 @@ export class Choose implements Owner {
       }
       case "connect": {
         const bind: J = { model: next.model, effort: textOf("effort"), profile: next.profile };
+        if (Array.isArray(next.profiles) && next.profiles.length > 1) bind.profiles = next.profiles;
         if (next.runtime !== v.value.runtime) bind.runtime = next.runtime;
         const op = ops.request("connect.put", { station, id: o.id, input: { bind } });
         if (op === null) throw CoreError.invalid("connect.put");
@@ -893,15 +1517,32 @@ export class Choose implements Owner {
     }
     // (one asked of the station: what was picked shown until it is answered, the panel open as it is; dropped if it
     // fails, `unsaved`)
-    if ("done" in saved) this.#drafts.delete(topicKey(topic));
+    if ("done" in saved) this.#drafts.delete(key);
+    else this.#saving.set(key, (this.#saving.get(key) ?? 0) + 1);
     this.#changed();
     return saved;
   }
 
   /// A pick asked of the station that failed: the panel back to what it runs on.
   unsaved(station: string, oName: string): void {
-    this.#drafts.delete(topicKey({ topic: "pick", station, of: oName }));
+    const key = topicKey({ topic: "pick", station, of: oName });
+    if ((this.#saving.get(key) ?? 0) > 1) return;
+    this.#drafts.delete(key);
+    // (what was set by hand as it was before what failed)
+    const was = this.#handWas.get(key);
+    if (was !== undefined) {
+      if (was === null) this.#hand.delete(key);
+      else this.#hand.set(key, was);
+      this.#handWas.delete(key);
+    }
     this.#changed();
+  }
+
+  settled(station: string, oName: string): void {
+    const key = topicKey({ topic: "pick", station, of: oName });
+    const n = (this.#saving.get(key) ?? 0) - 1;
+    if (n > 0) this.#saving.set(key, n);
+    else this.#saving.delete(key);
   }
 
   /// `pick.repick`: a chat's account given back to the station and picked again now, as a new chat's would be (the
@@ -915,14 +1556,31 @@ export class Choose implements Owner {
     if ("err" in view) throw view.err;
     const v = view.ok as J;
     if (o.kind !== "session" || v.repick === null) throw CoreError.invalid(t("core-logic.choose.repick.none"));
-    const op = ops.request("session.settings", { station, key: o.key, profile: null, repick: true });
+    const subset = normProfiles(get(v.draft, "profiles"));
+    const overview = this.#env.store.get({ topic: "overview", station });
+    if (subset !== null && subset.length > 1 && overview !== undefined && get(overview, "accountSubsets") !== true) {
+      throw CoreError.invalid(t("core-logic.choose.error.station_account_subsets"));
+    }
+    const repickParams: J =
+      subset !== null && subset.length > 1
+        ? { station, key: o.key, profiles: subset, repick: true }
+        : { station, key: o.key, profile: null, repick: true };
+    const op = ops.request("session.settings", repickParams);
     if (op === null) throw CoreError.invalid("session.settings");
     const agent = this.#env.agent(station, o.key);
     const was = get(get(agent, "account"), "id");
-    const names = new Map(arr(get(agent, "profiles")).map((p) => [p.id, typeof p.name === "string" ? p.name : p.id]));
+    const names = new Map(
+      [...arr(get(agent, "profiles")), ...arr(v.accounts)].map((p) => [p.id, typeof p.name === "string" ? p.name : p.id]),
+    );
     const draft = this.#drafts.get(topicKey(topic));
-    if (draft !== undefined && "profile" in draft) {
-      delete draft.profile;
+    if (draft !== undefined && subset === null) {
+      if (v.value.profile === null && get(v.value, "profiles") === undefined) {
+        delete draft.profile;
+        delete draft.profiles;
+      } else {
+        draft.profile = null;
+        draft.profiles = null;
+      }
       this.#changed();
     }
     const said = (answer: J): J => {

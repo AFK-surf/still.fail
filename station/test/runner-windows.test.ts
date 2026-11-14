@@ -58,7 +58,7 @@ test("lines in order; a station that lets go and comes back reads on where it ac
   writeFileSync(go, "");
   await until(() => existsSync(said));
   assert.equal(existingRunners(data).length, 1, "the runner outlives the connection");
-  assert.equal(findRunner(data, "t1")?.runner, info.runner, "found again without opening its pipe");
+  assert.equal((await findRunner(data, "t1"))?.runner, info.runner, "found again without opening its pipe");
   const second: string[] = [];
   const b = new RunnerConnection(info, (stream, text) => void second.push(`${stream}:${text.replace(/\r$/, "")}`));
   await until(() => second.includes("out:line6"));
@@ -116,7 +116,7 @@ test("runners run from a copy beside the data, which the desktop installer's swe
     // electron-builder's NSIS installer before it replaces the app (allowOnlyOneInstallerInstance.nsh, KILL_PROCESS).
     powershell(`Get-CimInstance -ClassName Win32_Process | ? {$_.Path -and $_.Path.StartsWith('${release}', 'CurrentCultureIgnoreCase')} | % { Stop-Process -Id $_.ProcessId }`);
     assert.ok(alive(info.runner) && alive(info.pid), "runner and agent outlive the sweep");
-    assert.equal(findRunner(data, "c1")?.runner, info.runner, "a station after the update finds it");
+    assert.equal((await findRunner(data, "c1"))?.runner, info.runner, "a station after the update finds it");
 
     // Another release's copy no runner runs from goes; the one running stays.
     const stale = join(bin, "stillfail-runner-0123456789abcdef.exe");

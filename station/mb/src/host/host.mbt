@@ -22,12 +22,19 @@ extern "C" fn now_ffi() -> Int64 = "sfh_now"
 extern "C" fn shell_sync_ffi(op : Bytes, json : Bytes) -> Bytes = "sfh_shell_sync"
 
 ///|
+#borrow(op, json, bytes)
+extern "C" fn shell_call_ffi(id : Int64, op : Bytes, json : Bytes, bytes : Bytes, has : Int) = "sfh_shell_call"
+
+///|
 /// What the program is given: its stdin's lines, the shell, its stdout.
 pub struct Host {
   rt : @effect.Runtime
   lines : @effect.Queue[String]
   /// Stdin's bytes, made lines.
   priv input : @wire.Lines
+  /// The shell's calls not answered yet, by their ids.
+  priv waiting : Map[Int64, @effect.Deferred[(Json, Bytes?)]]
+  priv mut next : Int64
 }
 
 ///|
@@ -47,6 +54,31 @@ pub fn Host::shell_sync(self : Host, op : String, args : Json) -> Json raise @wi
   ignore(self)
   let out = shell_sync_ffi(cstr(op), @utf8.encode(args.stringify()))
   @wire.answered(@utf8.decode_lossy(out))
+}
+
+///|
+/// Asks the shell what it answers later (its network, its sockets: client/shell's `run`), with `bytes` where the call
+/// carries them; its JSON and the bytes its answer carries. Other fibers go on meanwhile. `called` is told the call's
+/// id as it is asked: what gives up a call the shell lets be given up (`fetch.cancel`: a fetch, a dial).
+pub async fn Host::shell(
+  self : Host,
+  op : String,
+  args : Json,
+  bytes? : Bytes,
+  called? : (Int64) -> Unit,
+) -> (Json, Bytes?) {
+  self.next += 1L
+  let id = self.next
+  if called is Some(f) {
+    f(id)
+  }
+  let done = @effect.Deferred::new()
+  self.waiting[id] = done
+  match bytes {
+    Some(b) => shell_call_ffi(id, cstr(op), @utf8.encode(args.stringify()), b, 1)
+    None => shell_call_ffi(id, cstr(op), @utf8.encode(args.stringify()), b"", 0)
+  }
+  done.wait()
 }
 
 ///|
@@ -76,8 +108,18 @@ fn Host::dispatch(self : Host, e : Bytes) -> Unit {
   match @wire.Event::read(e) {
     Input(data) => for line in self.input.push(data) { ignore(self.lines.try_offer(line)) }
     End => self.lines.shutdown()
-    // (no call of the shell's that answers later is asked yet)
-    Answer(_) | Other => ()
+    Answer(id, answer, carried) =>
+      match self.waiting.get(id) {
+        Some(done) => {
+          self.waiting.remove(id)
+          match answer {
+            Ok(json) => ignore(done.succeed((json, carried)))
+            Err(e) => ignore(done.fail(e))
+          }
+        }
+        None => ()
+      }
+    Other => ()
   }
 }
 
@@ -103,6 +145,8 @@ pub fn run(shell_dir? : String, main : async (Host) -> Unit) -> Int {
     rt,
     lines: @effect.Queue::unbounded(),
     input: @wire.Lines::new(),
+    waiting: Map([]),
+    next: 0L,
   }
   let fiber = rt.fork(() => main(host), name="main")
   while true {

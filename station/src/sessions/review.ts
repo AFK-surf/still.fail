@@ -72,7 +72,9 @@ export async function review(hub: Hub, key: string): Promise<void> {
       } catch {}
     }
   };
-  const standing = (): [number, number][] => hub.store.sessionThreads(key).map((t) => [t.thread.id, hub.store.lastEntry(t.thread.id)]);
+  // The recent threads (store `recentSessionThreads`): what the agent is told of, and what the auto-archive looks at.
+  const threads = hub.store.recentSessionThreads(key).threads;
+  const standing = (): [number, number][] => threads.map((t) => [t.thread.id, hub.store.lastEntry(t.thread.id)]);
   if (candidates.length === 0) {
     const error = "配置的模型在现有 Profile 中暂不可用";
     record({ purpose: "archive", version: 3, model: rule.model ?? "", accepted: false, elapsedMs: 0, error });
@@ -86,7 +88,7 @@ export async function review(hub: Hub, key: string): Promise<void> {
   try {
     // The chat as it is now: each thread this agent closes, its latest messages while they fit.
     const conversations: Json[] = [];
-    for (const thread of hub.store.sessionThreads(key)) {
+    for (const thread of threads) {
       const id = thread.thread.id;
       const version = hub.store.lastEntry(id);
       const messages = hub.latestMessages ? await hub.latestMessages(id, ARCHIVE_REVIEW_MESSAGES + 1) : hub.store.messagesBefore(id, null, ARCHIVE_REVIEW_MESSAGES + 1);
@@ -173,7 +175,7 @@ export function undecided(hub: Hub): string[] {
     const ws = policyWs(hub, s);
     let policy = policies.get(ws);
     if (policy === undefined) policies.set(ws, (policy = store.archivePolicy(ws)?.change.id ?? 0));
-    const threads = store.sessionThreads(s.key).map((t) => t.thread.id);
+    const threads = store.recentSessionThreads(s.key).threads.map((t) => t.thread.id);
     const decided = store.lastDecision(s.key);
     // Under another policy than now, it is asked again, the recommended ones too.
     const samePolicy = (decided?.policyAt ?? 0) === policy;

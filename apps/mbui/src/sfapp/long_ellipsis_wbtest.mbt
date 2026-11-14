@@ -3,9 +3,9 @@
 ///|
 fn whole_long_words(t : @ui.Tester, fragment : String) -> Unit raise {
   let lines = t.lines_of(fragment)
-  assert_true(lines.length() > 1, msg="\{fragment}: \{lines}")
-  assert_true(lines.iter().all(fn(s) { !s.has_suffix("…") }), msg="\{fragment}: \{lines}")
-  assert_true(lines.last().unwrap_or("").contains("wide"), msg="\{fragment}: \{lines}")
+  assert_true(lines.length() > 1, msg="\{fragment}: \{Repr(lines)}")
+  assert_true(lines.iter().all(fn(s) { !s.has_suffix("…") }), msg="\{fragment}: \{Repr(lines)}")
+  assert_true(lines.last().unwrap_or("").contains("wide"), msg="\{fragment}: \{Repr(lines)}")
 }
 
 ///|
@@ -32,24 +32,24 @@ test "a long station name can be read at the top of its sheet" {
 test "a transfer's long name remains a compact one-line summary" {
   let t = screen_in("files-transfers", corner_windows[1], "zh", said=true)
   let lines = t.lines_of("演示录屏.mp4 — 后面")
-  assert_eq(lines.length(), 1, msg="\{lines}")
-  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
+  assert_eq(lines.length(), 1, msg="\{Repr(lines)}")
+  assert_true(lines[0].has_suffix("…"), msg="\{Repr(lines)}")
 }
 
 ///|
 test "a station card's long name remains a one-line summary" {
   let t = screen_in("settings-stations", corner_windows[0], "zh", said=true)
   let lines = t.lines_of("Willow — 后面")
-  assert_eq(lines.length(), 1, msg="\{lines}")
-  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
+  assert_eq(lines.length(), 1, msg="\{Repr(lines)}")
+  assert_true(lines[0].has_suffix("…"), msg="\{Repr(lines)}")
 }
 
 ///|
 test "a long selected model remains a one-line setting" {
   let t = screen_in("settings-run", corner_windows[1], "zh", said=true)
   let lines = t.lines_of("Opus 5.5 — 后面")
-  assert_eq(lines.length(), 1, msg="\{lines}")
-  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
+  assert_eq(lines.length(), 1, msg="\{Repr(lines)}")
+  assert_true(lines[0].has_suffix("…"), msg="\{Repr(lines)}")
 }
 
 ///|
@@ -62,8 +62,8 @@ test "a long connect owner can be read" {
 test "a long station name fits the account section heading" {
   let t = screen_in("settings-profiles", corner_windows[1], "zh", said=true)
   let lines = t.lines_of("已在 Willow — 后面")
-  assert_true(lines.length() > 1, msg="\{lines}")
-  assert_true(lines.last().unwrap_or("").contains("上登录"), msg="\{lines}")
+  assert_true(lines.length() > 1, msg="\{Repr(lines)}")
+  assert_true(lines.last().unwrap_or("").contains("上登录"), msg="\{Repr(lines)}")
 }
 
 ///|
@@ -76,8 +76,8 @@ test "a long destination can be read in the history" {
 test "a connect in a profile keeps its long name as a one-line summary" {
   let t = screen_in("settings-profile", corner_windows[1], "zh", said=true)
   let lines = t.lines_of("星火助手 — 后面")
-  assert_eq(lines.length(), 1, msg="\{lines}")
-  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
+  assert_eq(lines.length(), 1, msg="\{Repr(lines)}")
+  assert_true(lines[0].has_suffix("…"), msg="\{Repr(lines)}")
 }
 
 ///|
@@ -86,7 +86,7 @@ test "a long profile check keeps its refresh button beside it" {
     let t = screen_in("settings-profile", corner_windows[1], "zh", said=long)
     let (x, y, w, h) = t.rect_of("订阅有效").unwrap()
     let (bx, by, _, bh) = t.get(Button, label="重新检查").rect
-    assert_true(bx >= x + w - 0.5 && by < y + h && by + bh > y, msg="long=\{long}: \{(x, y, w, h)}, \{(bx, by, bh)}")
+    assert_true(bx >= x + w - 0.5 && by < y + h && by + bh > y, msg="long=\{long}: \{Repr((x, y, w, h))}, \{Repr((bx, by, bh))}")
   }
 }
 
@@ -97,10 +97,10 @@ test "a long chat and activity time both have room on their row" {
   t.scroll_all_to_end() |> ignore
   let chat = t.lines_of("Slack 里问的报销流程 — 后面")
   let time = t.lines_of("昨天 — 后面")
-  assert_eq(chat.length(), 1, msg="\{chat}")
-  assert_eq(time.length(), 1, msg="\{time}")
-  assert_true(chat[0].starts_with("Slack") && chat[0].has_suffix("…"), msg="\{chat}")
-  assert_true(time[0].starts_with("昨天") && time[0].has_suffix("…"), msg="\{time}")
+  assert_eq(chat.length(), 1, msg="\{Repr(chat)}")
+  assert_eq(time.length(), 1, msg="\{Repr(time)}")
+  assert_true(chat[0].has_prefix("Slack") && chat[0].has_suffix("…"), msg="\{Repr(chat)}")
+  assert_true(time[0].has_prefix("昨天") && time[0].has_suffix("…"), msg="\{Repr(time)}")
 }
 
 ///|

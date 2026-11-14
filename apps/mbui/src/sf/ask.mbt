@@ -1,6 +1,6 @@
 // A card that asks (sf/align.mbt, 要人拍板的卡片): its title the question, the one line the answer turns on, its
 // buttons in its foot corners; one alone in the middle of what it is over (a player's), all of it in its middle and its
-// buttons across its foot. An agent's ask in a chat (settings' vault_ask, phone_ask; sfbase's adb_link_card) and
+// buttons across its foot. An agent's ask in a chat (settings' vault_ask, phone_ask) and
 // what a player asks over its picture (player.mbt: 无法播放, 播放结束) alike; on the night (on_night: a player's, a
 // stage's) in the night's words and buttons.
 //
@@ -31,12 +31,7 @@ pub let ask_foot : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 /// Between the foot's lines, where its buttons go on to a second: 8, more where a press's room is taller than a button
 /// and the one under it (a finger's 44 round a button of 34).
 pub fn ask_foot_lines() -> Double {
-  let more = @ui.room_least() - button_height()
-  if more > 8.0 {
-    more
-  } else {
-    8.0
-  }
+  8.0
 }
 
 ///|
@@ -74,7 +69,7 @@ pub fn ask_history_trigger(c : @ui.Ctx, key : String, words : Array[@ui.Run], st
     c.box(style=ask_history_mark.then(@ui.style(h=Fixed(line))), fn() {
       let (text, muted) = (theme().p.text, theme().p.muted)
       let mark = icon(c, "chevron-right", size=12.0, color=mix(text, lit.target(), muted))
-      c.ink_by(mark, fn() { mix(text, lit.get(), muted) })
+      c.ink_by(mark, fn() { mix(text, lit.get(c), muted) })
     })
     |> ignore
   })

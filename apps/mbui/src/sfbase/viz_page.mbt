@@ -25,6 +25,8 @@ pub(all) struct VizFrame {
   mut height : Int
   /// the height it last said, and how many times running it grew a little to it (viz_runaway)
   mut said_height : Int
+  /// the height it was last shown at as it said one (`height`, with `shown`), told to what binds it (a node: viz_node)
+  said : @signals.Signal[Int]
   mut grown : Int
   mut shown : Bool
   mut dark : Bool
@@ -113,6 +115,7 @@ pub fn viz_said(f : VizFrame, hears : VizHears, words : String) -> Unit {
             }
             f.height = tall
             f.shown = true
+            f.said.set(tall)
           }
           _ => ()
         }
@@ -136,7 +139,7 @@ pub fn viz_said(f : VizFrame, hears : VizHears, words : String) -> Unit {
         Some(String(p)) => {
           let words = p.trim().to_owned()
           if words != "" {
-            let cut = if words.length() > 4000 { words.view(end_offset=4000).to_owned() } else { words }
+            let cut = if words.length() > 4000 { words.clamped_view(end=4000).to_owned() } else { words }
             let took = match hears.follow_up {
               Some(f) => f(cut)
               None => false
@@ -164,53 +167,11 @@ pub fn viz_frame(
   ground? : Int64 = @sf.theme().p.bg,
 ) -> Unit {
   let dark = @sf.theme().dark
-  if !viz_left_chats.is_empty() {
-    viz_shown_again(key)
-  }
-  let owner = c.id("viz/owner/" + key)
-  let f = match viz_frame_for(key, owner) {
-    Some(f) => f
-    None => {
-      let page = !viz_is_fragment(html)
-      let doc = if page { viz_page_document(html) } else { viz_document(html, state, dark, ground, scroll=fill) }
-      let cell : Ref[VizFrame?] = Ref(None)
-      let view = @ui.NativeView::page(doc, said=fn(w) {
-        match cell.val {
-          Some(f) => viz_said(f, hears, w)
-          None => ()
-        }
-      })
-      // in a list, an upright drag on the page moves the list; a page of its own keeps them
-      if !fill {
-        view.touch(@ui.Touch::VerticalOut)
-      }
-      let f : VizFrame = {
-        view,
-        owner: None,
-        html,
-        page,
-        height: viz_heights.get(html).unwrap_or(0),
-        said_height: 0,
-        grown: 0,
-        shown: false,
-        dark,
-        font_scale: @ui.font_scale(),
-        ground,
-        faces: viz_faces_key(),
-        reveal: Some(@motion.Anim::new(0.0)),
-      }
-      cell.val = Some(f)
-      if viz_frames.contains(key) {
-        match viz_extra_frames.get(key) {
-          Some(extras) => extras.push(f)
-          None => viz_extra_frames[key] = [f]
-        }
-      } else {
-        viz_frames[key] = f
-      }
-      f
-    }
-  }
+  // (by the page it is drawn in, not by an id of where it is built: a chat's row is scoped by its index, and older
+  // messages come in before it as its chat is read back, which made the page again, loaded anew, the one before kept
+  // hidden; outside a page, by where it is built)
+  let owner = if c.page_owner() != 0 { c.page_owner() } else { c.id("viz/owner/" + key) }
+  let f = viz_frame_of(key, html, state, hears, owner, fill~, ground~)
   if f.owner != Some(owner) {
     f.owner = Some(owner)
     c.on_page_release("viz/owner/" + key, fn() {
@@ -220,26 +181,8 @@ pub fn viz_frame(
     })
   }
   // the theme told only when it changes (a page told it as it loads draws again: a chart redrawn)
-  if f.dark != dark || f.ground != ground || f.font_scale != @ui.font_scale() || f.faces != viz_faces_key() {
-    f.dark = dark
-    f.font_scale = @ui.font_scale()
-    f.ground = ground
-    f.faces = viz_faces_key()
-    let scheme = if dark { "dark" } else { "light" }
-    let g = viz_css_color(ground)
-    c.tell("viz/theme/" + key + "/" + owner.to_string(), fn() {
-      f.view.script(
-        "postMessage({vizMessage:true,type:\"theme\",tokens:" +
-        viz_tokens_json(dark) +
-        ",scheme:\"" +
-        scheme +
-        "\",sheets:" +
-        Json::array(viz_sheets().map(fn(h) { Json::string(h) })).stringify().replace_all(old="<", new="\\u003c") +
-        "},\"*\");var g=document.getElementById(\"mbui-ground\");if(g)g.textContent=\":root:root{background:" +
-        g +
-        "}\"",
-      )
-    })
+  if viz_theme_news(f, dark, ground) {
+    c.tell("viz/theme/" + key + "/" + owner.to_string(), fn() { viz_theme_tell(f, dark, ground) })
   }
   // a whole page (or a fragment that never says its height) is shown once it has loaded
   if f.view.state() == 1 && (f.page || f.height == 0) {
@@ -285,10 +228,10 @@ pub fn viz_frame(
     if tall.target() != said {
       match c.row_way() {
         Some(way) => on_row_way(c, tall, said, way)
-        None => tall.animate(said, @motion.move(over=(said - tall.get()).abs()))
+        None => tall.animate(c, said, @motion.moved(over=(said - tall.get(c)).abs()))
       }
     }
-    let h = tall.get()
+    let h = tall.get(c)
     // till it has drawn itself, its place as while its file came (the line's grey, breathing, its corners the
     // placeholder's, the view's hole cut to them): not an empty gap (the user, 2026-10-29)
     let waiting = !f.shown || !f.view.host_done()
@@ -323,6 +266,102 @@ pub fn viz_frame(
 }
 
 ///|
+/// The frame of `html` drawn as `key` by `owner` (viz_frame's, and a node's: viz_node): the one it has, else one no
+/// other has now (a chat's kept as it was left: the same view, not loaded again), else one made, a view of its own for
+/// each copy drawn at once.
+pub fn viz_frame_of(
+  key : String,
+  html : String,
+  state : Json?,
+  hears : VizHears,
+  owner : Int,
+  fill? : Bool = false,
+  ground? : Int64 = @sf.theme().p.bg,
+) -> VizFrame {
+  let dark = @sf.theme().dark
+  if !viz_left_chats.is_empty() {
+    viz_shown_again(key)
+  }
+  match viz_frame_for(key, owner) {
+    Some(f) => f
+    None => {
+      let page = !viz_is_fragment(html)
+      let doc = if page { viz_page_document(html) } else { viz_document(html, state, dark, ground, scroll=fill) }
+      let cell : Ref[VizFrame?] = Ref(None)
+      let view = @ui.NativeView::page(doc, said=fn(w) {
+        match cell.val {
+          Some(f) => viz_said(f, hears, w)
+          None => ()
+        }
+      })
+      // in a list, an upright drag on the page moves the list; a page of its own keeps them
+      if !fill {
+        view.touch(@ui.Touch::VerticalOut)
+      }
+      let f : VizFrame = {
+        view,
+        owner: None,
+        html,
+        page,
+        height: viz_heights.get(html).unwrap_or(0),
+        said_height: 0,
+        said: @signals.signal(0, same=fn(a, b) { a == b }),
+        grown: 0,
+        shown: false,
+        dark,
+        font_scale: @ui.font_scale(),
+        ground,
+        faces: viz_faces_key(),
+        reveal: Some(@motion.Anim::new(0.0)),
+      }
+      cell.val = Some(f)
+      if viz_frames.contains(key) {
+        match viz_extra_frames.get(key) {
+          Some(extras) => extras.push(f)
+          None => viz_extra_frames[key] = [f]
+        }
+      } else {
+        viz_frames[key] = f
+      }
+      f
+    }
+  }
+}
+
+///|
+/// Whether the theme `f` was told is not the one now (`dark`, its `ground`, the size and faces of words): taken as told
+/// where it is not, to be told by viz_theme_tell.
+pub fn viz_theme_news(f : VizFrame, dark : Bool, ground : Int64) -> Bool {
+  if f.dark != dark || f.ground != ground || f.font_scale != @ui.font_scale() || f.faces != viz_faces_key() {
+    f.dark = dark
+    f.font_scale = @ui.font_scale()
+    f.ground = ground
+    f.faces = viz_faces_key()
+    true
+  } else {
+    false
+  }
+}
+
+///|
+/// The theme told to `f`'s page (`dark`, its `ground`): its tokens and sheets, its ground.
+pub fn viz_theme_tell(f : VizFrame, dark : Bool, ground : Int64) -> Unit {
+  let scheme = if dark { "dark" } else { "light" }
+  let g = viz_css_color(ground)
+  f.view.script(
+    "postMessage({vizMessage:true,type:\"theme\",tokens:" +
+    viz_tokens_json(dark) +
+    ",scheme:\"" +
+    scheme +
+    "\",sheets:" +
+    Json::array(viz_sheets().map(fn(h) { Json::string(h) })).stringify().replace_all(old="<", new="\\u003c") +
+    "},\"*\");var g=document.getElementById(\"mbui-ground\");if(g)g.textContent=\":root:root{background:" +
+    g +
+    "}\"",
+  )
+}
+
+///|
 /// A page come in once it has drawn itself, as a message's image once decoded (sfpages image_reveal, the web's
 /// msgImageReveal; the user, 2026-10-29: inline html 的渲染显示要参考图片的展示逻辑): what it waited under (`waited`,
 /// `w` by `h`) brushed off from its top, an edge half its height deep going down it over 1100 ms (the ease out), and
@@ -337,9 +376,9 @@ fn viz_reveal(c : @ui.Ctx, f : VizFrame, w : Double, h : Double, waited : (Doubl
     return
   }
   if a.target() == 0.0 {
-    a.animate(1.0, @motion.tween(viz_reveal_ms, ease=Linear))
+    a.animate(c, 1.0, @motion.tween(viz_reveal_ms, ease=Linear))
   }
-  let p = a.get()
+  let p = a.get(c)
   if p >= 1.0 {
     f.reveal = None
     return
@@ -512,7 +551,7 @@ pub fn viz_follow_up(station : String, session : String) -> (String) -> Bool {
 ///|
 /// Words a visualization asked to send, by the draft key of the chat whose composer they go into: taken by it.
 // kept across runs: put back by viz_pages_reset (sfbase's reset)
-pub let followed_into : Map[String, String] = {}
+pub let followed_into : Map[String, String] = Map([])
 
 ///|
 /// The visualization a message of chat `session` on `station` places, kept by session `key`, drawn there; the ways
@@ -655,7 +694,7 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
     Some(Ok((html, state))) => {
       // (while this one is open, built again or not)
       let native = @sf.native_over_up(v.name, alive=fn() {
-        match @signals.untracked(fn() { viz_full.get() }) {
+        match viz_full.untracked() {
           Some(now) => physical_equal(now, v)
           None => false
         }

@@ -32,7 +32,7 @@ fn ref_menu(
       // layer's that may take it then, not the menu's. Else the field's
       let at_then = @sfbase.refs_at(w.key)
       let before_then = match at_then {
-        Some((start, _)) if start < w.field.text().length() => w.field.text().view(end_offset=start + 1).to_string()
+        Some((start, _)) if start < w.field.text().length() => w.field.text().clamped_view(end=start + 1).to_owned()
         _ => ""
       }
       // (and what was after the caret then: the range the menu's choice is for ends where that begins)
@@ -40,7 +40,7 @@ fn ref_menu(
         let t = w.field.text()
         let k = w.field.selection().1
         if k >= 0 && k <= t.length() {
-          t.view(start_offset=k).to_string()
+          t.clamped_view(start=k).to_owned()
         } else {
           ""
         }

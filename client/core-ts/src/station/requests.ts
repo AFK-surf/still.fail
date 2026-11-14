@@ -10,7 +10,8 @@ import type { Host, Pull, Unzstd } from "../host.ts";
 import { current, t } from "../i18n.ts";
 import { encode } from "../ops.ts";
 import { stationWhat } from "../status.ts";
-import { Kind, route, type Span, type SpanContext } from "../trace.ts";
+import { route } from "../route.ts";
+import { Kind, type Span, type SpanContext } from "../trace.ts";
 import { fromBase64, get, hex, isObject, parseJson, toJsonBytes } from "../util.ts";
 import type { StationAddr } from "./addr.ts";
 import { concat, readAll, replyHeader, type RequestHead, type ScreenAsk, type StationWire, type WireReply, type WireSocket } from "./wire.ts";
@@ -19,7 +20,7 @@ import { BUILD_HEADER, ownBuild, stationTooOld } from "./oldest.ts";
 
 export const IDEMPOTENCY_KEY = "idempotency-key";
 /// A request that only reads though it is no GET (POST /changed/<list>, what is held in its body): asked again on
-/// another way as a GET is (mesh.ts `mayRepeat`).
+/// another way as a GET is (mesh-wire.ts `mayRepeat`).
 export const READS = "stillfail-reads";
 export const IDEMPOTENT = "stillfail-idempotent";
 export const LANG_HEADER = "stillfail-lang";
@@ -27,6 +28,9 @@ export const EVENT_STREAM = "text/event-stream";
 /// An events stream's answer when the station told first what came after the `since` it was asked (station/src/api/
 /// events.ts RESUMED): nothing is read again.
 export const RESUMED = "stillfail-resumed";
+/// With RESUMED, where the station's log was as the stream joined (api/events.ts HEAD): what it tells up to it is told
+/// again, what came while the device was not on it; after it, as it happens.
+export const HEAD = "stillfail-head";
 /// A stream's answer when it follows the sessions at work itself (api/events.ts FOLLOWS): `running`.
 export const FOLLOWS = "stillfail-follows";
 /// What every request asks its answer compressed as (`accept-encoding`), but a preview's (its page reads what the service
@@ -171,7 +175,8 @@ export class Requests {
     span.set("stillfail.station", station.station);
     if (bodySize > 0) span.set("http.request.body.size", bodySize);
     const h: [string, string][] = [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]];
-    if (ownBuild() !== "") h.push([BUILD_HEADER, ownBuild()]);
+    // (a host that says none, a test's, a scripted run's: an unnumbered build, held to no floor)
+    h.push([BUILD_HEADER, ownBuild() || "0.1.0"]);
     if (!path.startsWith("/preview/")) h.push(["stillfail-runtimes", RUNTIMES.join(",")]);
     if (!path.startsWith("/preview/") && !headers.some(([k]) => k.toLowerCase() === "accept-encoding")) h.push(["accept-encoding", ZSTD]);
     // A write carries a key of its own: a station that keeps writes to once does it once however often it arrives.
@@ -197,11 +202,24 @@ export class Requests {
         const status = this.#status(station);
         const waiting = quiet ? null : status.begin({ station: station.toString() }, stationWhat(method, path), false);
         const [span, head] = this.#head(station, method, path, headers, body.length, ctx);
+        // When its body was all gone and its answer's head came, in ms from the start: a slow request says which
+        // part was slow (a 470 KB picture's station had it in 0.7 s, its answer came 9 s later, 2026-11-09).
+        const host = this.#core.host;
+        const began = host.monotonicMs();
+        let all = false;
+        const gone = wrote && ((n: number) => {
+          if (!all && n >= body.length) {
+            all = true;
+            span.set("stillfail.wrote_ms", Math.round(host.monotonicMs() - began));
+          }
+          wrote(n);
+        });
         const result = yield* Effect.result(
           Effect.gen({ self: this }, function* () {
-            const reply = yield* within(this.wire.request(station, head, body, wrote), idleMs);
+            const reply = yield* within(this.wire.request(station, head, body, gone), idleMs);
+            span.set("stillfail.head_ms", Math.round(host.monotonicMs() - began));
             answered(span, reply);
-            const tooOld = stationTooOld(reply.headers);
+            const tooOld = stationTooOld(reply.headers, path);
             if (tooOld !== null) return yield* Effect.fail(tooOld);
             onHead?.(reply.status, reply.headers);
             // What came over the link is counted (and said in the span); what it says, decompressed.
@@ -285,7 +303,7 @@ export class Requests {
       const reply = opened.success;
       answered(span, reply);
       span.end();
-      const tooOld = stationTooOld(reply.headers);
+      const tooOld = stationTooOld(reply.headers, path);
       if (tooOld !== null) return yield* Effect.fail(tooOld);
       if (reply.status < 200 || reply.status >= 300) {
         const bytes = yield* Effect.orElseSucceed(readAll(yield* plain(this.#core.host, reply)), () => empty);
@@ -391,8 +409,9 @@ export class Requests {
             const kind = replyHeader(reply, "content-type") ?? "";
             const length = Number(replyHeader(reply, "content-length")?.trim());
             const total = Number.isInteger(length) && length >= 0 ? length : null;
-            // (its size not said, every 64 KB too: a chat's picture is a few hundred KB, and 256 KB showed 0 B until it came)
-            const step = total === null ? 64 * 1024 : Math.max(Math.floor(total / 100), 64 * 1024);
+            // (every hundredth, else every 64 KB, a small one's every twentieth: a chat's thumbnail is 11-13 KB, and
+            // every 64 KB showed 0% until it came; its size not said, every 64 KB: 256 KB showed 0 B until it came)
+            const step = total === null ? 64 * 1024 : Math.max(Math.floor(total / 100), Math.min(64 * 1024, Math.ceil(total / 20)));
             progress(0, total);
             let loaded = 0;
             let told = 0;
@@ -568,7 +587,7 @@ export class Requests {
       const span = this.#core.tracer.span(`SOCKET ${route(full)}`, Kind.Client, ctx);
       span.set("url.path", route(full));
       span.set("stillfail.stream", true);
-      const head: RequestHead = { method: "GET", path: full, headers: [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]] };
+      const head: RequestHead = { method: "GET", path: full, headers: [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()], [BUILD_HEADER, ownBuild() || "0.1.0"]] };
       const opening = this.wire.socket ? this.wire.socket(station, head) : Effect.fail(new CoreError("unsupported", t("station.core.previewNoSocket")));
       const opened = yield* Effect.result(
         Effect.raceFirst(
@@ -604,7 +623,7 @@ export class Requests {
       const span = this.#core.tracer.span(`SCREEN ${route(full)}`, Kind.Client, ctx);
       span.set("url.path", route(full));
       span.set("stillfail.stream", true);
-      const head: RequestHead = { method: "POST", path: full, headers: [["traceparent", span.context.traceparent()], [LANG_HEADER, current()]] };
+      const head: RequestHead = { method: "POST", path: full, headers: [["traceparent", span.context.traceparent()], [LANG_HEADER, current()], [BUILD_HEADER, ownBuild() || "0.1.0"]] };
       const opening = this.wire.screen ? this.wire.screen(station, head, ask) : Effect.fail(new CoreError("unsupported", t("core-misc.screen.noWire")));
       const opened = yield* Effect.result(
         Effect.raceFirst(

@@ -2,7 +2,8 @@
 // text's held link): one menu for both, the presenters' (@sf.menu: a sheet with a finger short of Large, else a small
 // panel at the pointer). A link: open it, copy it; a file: quote or download it, a picture also copied (read whole, onto the
 // clipboard as a PNG).
-// What a choice does is done in the frame after it, by the list that offered it (menus_frame).
+// What a choice does is done in the frame after it, by the list that offered it (menus_frame); a picture's copy on a
+// chat's page made as nodes by that page (menus_image_node).
 
 ///|
 /// What a menu's choice left to do: a link to open, words to copy, a picture to copy.
@@ -62,6 +63,22 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
     from=@sf.at_point(x, y),
     fn() { menu_doing.open.set(href) },
     fn() { menu_doing.copy.set(href) },
+  )
+}
+
+///|
+/// A file a message names by its path (`path`, its agent `agent`'s on `station`) held or right clicked: 在侧边打开
+/// where it is offered (beside_offered: a side panel for the chat, a file, a kind that opens there); else nothing.
+fn path_held(c : @ui.Ctx, src : Source, station : String, agent : String, path : String) -> Unit {
+  if path.has_suffix("/") || !@sfbase.beside_offered(path, stored_name(path)) {
+    return
+  }
+  pk.taken_at = c.press().frame
+  let (x, y, _) = c.pointer()
+  @sf.menu_held(c, "link") |> ignore
+  @sf.menu(
+    [Some(@sf.menu_item_of(@sf.t("web-main.preview.openBeside"), fn() { open_named(src, station, agent, path, beside=true) }, icon="panel-open"))],
+    from=@sf.at_point(x, y),
   )
 }
 
@@ -133,6 +150,36 @@ fn menus_frame(c : @ui.Ctx) -> Unit {
       @ui.PixelsComing => ()
     }
   }
+}
+
+///|
+/// What a menu's 复制图片 left (`image`), done on a page made as nodes, in `v`: the picture read whole while it is
+/// read (tree_image_pixels, as menus_frame reads it for an old view's list), then put on the clipboard as a PNG, or let
+/// go where it cannot be read.
+fn menus_image_node(v : @view.View) -> Unit {
+  v.pick(fn() { menu_doing.image.get() }, fn(r, src) {
+    guard src != "" else { return }
+    let read = @ui.tree_image_pixels(r, src, image_copy_px)
+    let state = fn() {
+      match read() {
+        None => 0
+        Some(@ui.PixelsRead(_, _, _)) => 1
+        Some(_) => 2
+      }
+    }
+    r.reacts(state, fn(s) {
+      guard s != 0 else { return }
+      let png = match @signals.untracked(read) {
+        Some(@ui.PixelsRead(w, h, rgba)) => Some(@pixels.png(w, h, unpremultiplied(rgba)))
+        _ => None
+      }
+      menu_doing.image.set("")
+      match png {
+        Some(p) => @ui.clipboard_set_png(p)
+        None => ()
+      }
+    })
+  })
 }
 
 ///|

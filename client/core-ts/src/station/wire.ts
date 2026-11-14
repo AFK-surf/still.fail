@@ -1,18 +1,23 @@
 // How requests reach a station, and a preview socket's framing (station/wire.rs), as Effects. The mesh wire (mesh
-// links) is in mesh.ts; tests' stations answer over the host's fetch (`HostWire` below).
+// links) is in mesh-wire.ts; tests' stations answer over the host's fetch (`HostWire` below).
 import { Effect, Scope } from "effect";
 import { CoreError, asCoreError } from "../error.ts";
 import type { Host, Pull } from "../host.ts";
 import { t } from "../i18n.ts";
+import type { LinkNet, RequestHead, SocketOut } from "../mesh.ts";
 import type { StationAddr } from "./addr.ts";
 
-/// A request's head as it goes to a station: `path` includes `/admin/api`.
-export type RequestHead = { method: string; path: string; headers: [string, string][] };
+/// A request's head as it goes to a station, how a link to one runs and the client's half of a socket stream: the
+/// mesh's own (mesh.ts), said here for what asks a station.
+export type { LinkNet, RequestHead, SocketOut };
 
 /// A station's answer: status, headers, and the body as it arrives (open while the request's scope is); how it came
 /// (`relay`, `direct`), when known.
 /// `via`: relay or direct, on a mesh link; `relay`: the relay's host, through one.
-export type WireReply = { status: number; headers: [string, string][]; body: Pull<Uint8Array>; via: string | null; relay?: string | null };
+/// `ended`: why the station ended the connection it came on, as it said in closing it (its reason, station/src/mesh/
+/// serve.ts: `lock_unconfirmed`, `credential_revoked`…); null while the connection is open or it went otherwise (a
+/// timeout, the network). None on a wire with no connection of its own.
+export type WireReply = { status: number; headers: [string, string][]; body: Pull<Uint8Array>; via: string | null; relay?: string | null; ended?: () => string | null };
 
 export function replyHeader(reply: { headers: [string, string][] }, name: string): string | undefined {
   return reply.headers.find(([k]) => k.toLowerCase() === name.toLowerCase())?.[1];
@@ -40,27 +45,6 @@ export function readAll(body: Pull<Uint8Array>, each?: (chunk: Uint8Array) => vo
     }
     return concat(parts);
   });
-}
-
-/// How a link to a station runs (mesh.ts `Link.net`).
-export type LinkNet = {
-  path: string | null;
-  relay: string | null;
-  rttMs: number | null;
-  measured: { measuring: boolean; relays: [string, number | null][]; moved: string | null } | null;
-  today: [number, number] | null;
-  rxBytes: number;
-  txBytes: number;
-  /// Packets sent and lost on the way in use (`path` its id) since it opened.
-  packets: { path: string; sent: number; lost: number } | null;
-  /// Where the station said it is on its LAN (`ip:port`); none from a station that said none.
-  lan?: string[];
-};
-
-/// The client's half of a socket stream.
-export interface SocketOut {
-  write(bytes: Uint8Array): Effect.Effect<void, CoreError>;
-  finish(): void;
 }
 
 /// A socket stream as it opened: the station's reply (101 once the service took it), and where the client's frames go;
@@ -106,7 +90,9 @@ export interface StationWire {
 /// browser is laid out for it while the view drives it.
 /// `quality`: the 画质 chosen (none: 自动): the most the station lets its bit rate go to (a station before it lets it be).
 /// `fps`: the 帧率 chosen (none: 自动): the most frames a second the station sends (a station before it lets it be).
-export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; audio?: "pcm_s16le"; quality?: ScreenQuality; fps?: ScreenFps; fit?: { width: number; height: number; scale: number }; gamut?: "p3"; client?: string; app?: string; self?: string; taken?: boolean };
+/// `audio`: the computer's sound; `opus` with it: as Opus where the station's source encodes it (a station before it,
+/// and one whose source encodes none, sends PCM).
+export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; audio?: "pcm_s16le"; opus?: true; quality?: ScreenQuality; fps?: ScreenFps; fit?: { width: number; height: number; scale: number }; gamut?: "p3"; client?: string; app?: string; self?: string; taken?: boolean };
 export type ScreenQuality = "smooth" | "hd" | "original";
 export const SCREEN_FPS = [120, 90, 60, 30, 15] as const;
 export type ScreenFps = (typeof SCREEN_FPS)[number];

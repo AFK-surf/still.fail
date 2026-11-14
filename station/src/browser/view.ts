@@ -12,6 +12,7 @@
 // having frames pile up. Of two waiting, the newer is given and the older let go.
 import { type Clip, type Frame, type FrameConfig, type LoginField, type LoginFill, type PasskeyAnswer, type PasskeyAsk, type ScreenInput, type ScreenVideo, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
+import { randomUUID } from "node:crypto";
 import { sizeOf } from "../sessions/image-size.ts";
 
 /// The page's viewport in CSS pixels, as Page.getLayoutMetrics says it (what the screencast's frames show); null when
@@ -205,20 +206,21 @@ export const fillScript = (username: string | undefined, password: string | unde
 
 /// The binding a tab's passkey sign-ins call while a person driving it signs them from their own device.
 export const PASSKEY_BINDING = "__stillfailPasskey";
+const passkeyBinding = (owner: string): string => `${PASSKEY_BINDING}_${owner.replaceAll("-", "")}`;
 /// What takes a page's passkey sign-in (navigator.credentials.get with `publicKey`) to the person driving it, run in a
 /// page's top document before its own scripts (and each one it opens while watched): the ask said through the binding
-/// as `{"id", "rpId", "challenge", "allow", "userVerification"}` (base64url), `{"id", "gone": true}` as the page gives it
-/// up (its signal), and answered by the station with `__stillfailPasskeyDone(id, answer)`: a credential made as the
+/// as `{"owner", "id", "rpId", "challenge", "allow", "userVerification"}` (base64url), `{"id", "gone": true}` as the page gives it
+/// up (its signal), and answered by the station with `__stillfailPasskeyReply(owner, id, answer)`: a credential made as the
 /// browser makes it, or the error the browser would give. The platform is said to have an authenticator, so that sites
 /// offer passkeys. Anything else (a password asked, a passkey made) goes to the browser as before.
-export const PASSKEY_HOOK = `(() => {
+export const passkeyHook = (owner: string): string => `(() => {
   if (window !== window.top || !navigator.credentials) return;
-  // (watched again after a view let it go: on again)
-  if (window.__stillfailPasskeyHook) return window.__stillfailPasskeyOff(false);
-  window.__stillfailPasskeyHook = true;
-  // Off while no view watches (the binding's function stays as it is unbound): a sign-in is the browser's then.
-  let off = false;
-  Object.defineProperty(window, "__stillfailPasskeyOff", { value: (v) => { off = v; } });
+  const owner = ${JSON.stringify(owner)};
+  if (window.__stillfailPasskeyWatch) return window.__stillfailPasskeyWatch(owner, true);
+  // A page kept across a station update may still have the old, unowned hook. Its get falls through while off.
+  if (window.__stillfailPasskeyOff) window.__stillfailPasskeyOff(true);
+  const owners = new Set();
+  let active = null;
   const creds = navigator.credentials;
   const get = creds.get.bind(creds);
   const bytes = (v) => v instanceof ArrayBuffer ? new Uint8Array(v) : ArrayBuffer.isView(v) ? new Uint8Array(v.buffer, v.byteOffset, v.byteLength) : null;
@@ -226,8 +228,25 @@ export const PASSKEY_HOOK = `(() => {
   const buf = (s) => { const t = atob(s.replace(/-/g, "+").replace(/_/g, "/")); const u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
   const waiting = new Map();
   let next = 0;
-  const said = (v) => { try { window.${PASSKEY_BINDING}(JSON.stringify(v)); return true; } catch { return false; } };
-  Object.defineProperty(window, "__stillfailPasskeyDone", { value: (id, a) => {
+  const said = (v) => { try { window[${JSON.stringify(PASSKEY_BINDING)} + "_" + active.replaceAll("-", "")](JSON.stringify({ ...v, owner: active })); return true; } catch { return false; } };
+  // New and old screen streams overlap on a resize. Only the active owner answers; an old stream ending cannot
+  // switch off its replacement or reject a request it handed over. Pending requests follow the active stream.
+  Object.defineProperty(window, "__stillfailPasskeyWatch", { value: (id, on) => {
+    if (on ? owners.has(id) : !owners.has(id)) return;
+    if (on) owners.add(id); else owners.delete(id);
+    const nextOwner = [...owners].at(-1) || null;
+    if (nextOwner === active) return;
+    for (const id of waiting.keys()) said({ id, gone: true });
+    active = nextOwner;
+    if (active !== null) { for (const w of waiting.values()) said(w.ask); }
+    else {
+      for (const w of waiting.values()) w.no(new DOMException("The operation either timed out or was not allowed.", "NotAllowedError"));
+      waiting.clear();
+    }
+  } });
+  window.__stillfailPasskeyWatch(owner, true);
+  Object.defineProperty(window, "__stillfailPasskeyReply", { value: (owner, id, a) => {
+    if (owner !== active) return;
     const w = waiting.get(id);
     if (!w) return;
     waiting.delete(id);
@@ -244,14 +263,14 @@ export const PASSKEY_HOOK = `(() => {
   } });
   creds.get = function (options) {
     const pk = options && options.publicKey;
-    if (off || !pk || !bytes(pk.challenge)) return get(options);
+    if (active === null || !pk || !bytes(pk.challenge)) return get(options);
     const id = String(++next);
     const allow = Array.isArray(pk.allowCredentials) ? pk.allowCredentials.map((c) => b64(c && c.id)).filter((x) => x) : [];
     const ask = { id, rpId: typeof pk.rpId === "string" && pk.rpId !== "" ? pk.rpId : location.hostname, challenge: b64(pk.challenge), allow, userVerification: pk.userVerification || "preferred" };
     return new Promise((yes, no) => {
       const signal = options.signal;
       if (signal && signal.aborted) return no(signal.reason !== undefined ? signal.reason : new DOMException("The operation was aborted.", "AbortError"));
-      waiting.set(id, { yes, no, options });
+      waiting.set(id, { yes, no, options, ask });
       if (signal) signal.addEventListener("abort", () => {
         if (!waiting.delete(id)) return;
         said({ id, gone: true });
@@ -317,6 +336,7 @@ export type ViewParts = {
 };
 
 export class TabView implements ScreenView {
+  watchChild?: (heard: (screenId: string) => void) => () => void;
   readonly #p: ViewParts;
   #received: Cast[] = [];
   #delivered: number[] = [];
@@ -327,6 +347,7 @@ export class TabView implements ScreenView {
   #asked: { id: string; origin: string; clientData: string } | null = null;
   /// Who hears the passkey sign-ins (watchPasskey), told as the one asked is answered.
   #passkeyHeard: ((ask: PasskeyAsk | null) => void) | null = null;
+  #passkeyOwner = "";
   #keyframe = false;
   #last: { data: Uint8Array; config: FrameConfig } | null = null;
   #config: FrameConfig | null = null;
@@ -534,18 +555,26 @@ export class TabView implements ScreenView {
   /// one asked goes. Until the returned function, which answers what is still asked as the browser would with none.
   watchPasskey(heard: (ask: PasskeyAsk | null) => void): () => void {
     const { cdp, session, targetId } = this.#p;
+    const owner = randomUUID();
+    // Each viewer owns its binding as well as its subscription: page requests go to just that viewer, and an old
+    // session removes only its own name on cleanup.
+    const binding = passkeyBinding(owner);
+    const hook = passkeyHook(owner);
+    this.#passkeyOwner = owner;
     let on = true;
     let script: string | null = null;
     this.#passkeyHeard = heard;
+    const pending = new Map<string, object>();
     const unlisten = cdp.on((e) => {
-      if (!on || e.method !== "Runtime.bindingCalled" || e.sessionId !== session || e.params?.name !== PASSKEY_BINDING) return;
+      if (!on || e.method !== "Runtime.bindingCalled" || e.sessionId !== session || e.params?.name !== binding) return;
       let said: any = null;
       try {
         said = JSON.parse(String(e.params.payload));
       } catch {}
-      if (typeof said?.id !== "string" || said.id === "" || said.id.length > 32) return;
+      if (said?.owner !== owner || typeof said?.id !== "string" || said.id === "" || said.id.length > 32) return;
       const id: string = said.id;
       if (said.gone === true) {
+        pending.delete(id);
         if (this.#asked?.id === id) {
           this.#asked = null;
           heard(null);
@@ -556,8 +585,11 @@ export class TabView implements ScreenView {
       const allow: unknown[] = Array.isArray(said.allow) ? said.allow.slice(0, 64) : [];
       if (typeof said.rpId !== "string" || !b64(said.challenge) || !allow.every(b64)) return;
       const userVerification = ["required", "preferred", "discouraged"].includes(said.userVerification) ? said.userVerification : "preferred";
+      const request = {};
+      pending.set(id, request);
       void this.#url(targetId).then((url) => {
-        if (!on) return;
+        if (!on || pending.get(id) !== request) return;
+        pending.delete(id);
         let origin = "";
         try {
           const u = new URL(url);
@@ -584,18 +616,20 @@ export class TabView implements ScreenView {
     const undo = () => {
       if (this.#passkeyHeard === heard) this.#passkeyHeard = null;
       if (this.#ended) return;
-      if (this.#asked !== null) void this.#answer({ id: this.#asked.id, error: "NotAllowedError" });
       this.#asked = null;
-      // (Chrome keeps the binding's function as it is unbound: the hook told, or a sign-in after would wait on nobody)
-      void cdp.send("Runtime.evaluate", { expression: "window.__stillfailPasskeyOff && window.__stillfailPasskeyOff(true)" }, session).catch(() => {});
-      void cdp.send("Runtime.removeBinding", { name: PASSKEY_BINDING }, session).catch(() => {});
+      // The page transfers pending requests to another viewer, or refuses them if nobody is left.
+      void cdp.send("Runtime.evaluate", { expression: `window.__stillfailPasskeyWatch && window.__stillfailPasskeyWatch(${JSON.stringify(owner)}, false)` }, session).catch(() => {});
+      void cdp.send("Runtime.removeBinding", { name: binding }, session).catch(() => {});
       if (script !== null) void cdp.send("Page.removeScriptToEvaluateOnNewDocument", { identifier: script }, session).catch(() => {});
     };
     void (async () => {
       try {
-        await cdp.send("Runtime.addBinding", { name: PASSKEY_BINDING }, session);
-        script = (await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: PASSKEY_HOOK }, session))?.identifier ?? null;
-        await cdp.send("Runtime.evaluate", { expression: PASSKEY_HOOK }, session);
+        await cdp.send("Runtime.addBinding", { name: binding }, session);
+        // With Runtime disabled Chrome installs the binding in the current document but not the next one.
+        // Keep it enabled on this view's session so the new-document hook can reach the binding after navigation.
+        await cdp.send("Runtime.enable", {}, session);
+        script = (await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: hook }, session))?.identifier ?? null;
+        await cdp.send("Runtime.evaluate", { expression: hook }, session);
         if (!on) undo();
       } catch {}
     })();
@@ -631,7 +665,7 @@ export class TabView implements ScreenView {
 
   /// The page's hook told how its ask `a.id` went.
   async #answer(a: { id: string } & Record<string, unknown>): Promise<void> {
-    await this.#p.cdp.send("Runtime.evaluate", { expression: `window.__stillfailPasskeyDone && window.__stillfailPasskeyDone(${JSON.stringify(a.id)}, ${JSON.stringify(a)})` }, this.#p.session).catch(() => {});
+    await this.#p.cdp.send("Runtime.evaluate", { expression: `window.__stillfailPasskeyReply && window.__stillfailPasskeyReply(${JSON.stringify(this.#passkeyOwner)}, ${JSON.stringify(a.id)}, ${JSON.stringify(a)})` }, this.#p.session).catch(() => {});
   }
 
   /// The address of tab `targetId` as the browser has it now ("" for none).

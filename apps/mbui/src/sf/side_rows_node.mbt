@@ -4,15 +4,6 @@
 // old views' are), as they are now.
 
 ///|
-/// `a` where it says one, else `b` (a side's room said for it alone, else for its axis, else for all).
-fn[T] either(a : T?, b : T?) -> T? {
-  match a {
-    Some(_) => a
-    None => b
-  }
-}
-
-///|
 /// Node `v`'s ground as nav_ground_by has it: the pointer's ground in and out (lit_node), the selected one's (`lit`, the
 /// selected grey by default) while `on()`, each over nav_fade from the moment it changes.
 pub fn nav_ground_node(v : @view.View, on : () -> Bool, lit? : Int64) -> Unit {
@@ -40,6 +31,7 @@ pub fn nav_ground_node(v : @view.View, on : () -> Bool, lit? : Int64) -> Unit {
 /// list's rows but the band's, its height and its words' room the theme's band's, its corner a sidebar row's; its ground
 /// as nav_ground_by has it, the selected one's while `on()`; pressed, `press`; read out a link named `label()`. What it
 /// holds `body` makes. `at`: where its list stands (its words' room: band_pad_in).
+#callsite(autofill(loc))
 pub fn band_row_node(
   parent : @view.View,
   on : () -> Bool,
@@ -47,8 +39,9 @@ pub fn band_row_node(
   press : () -> Unit,
   at : ListAt,
   body : (@view.View) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(r) {
+  @headless.button(made_for=loc, parent, label, fn(_) { press() }, fn(r, _) {
     r
     .row(Is(true))
     .grow(Is(1.0))
@@ -62,9 +55,6 @@ pub fn band_row_node(
     }))
     |> ignore
     nav_ground_node(r, on)
-    presses_node(r, press)
-    // (an action, not a place: a button, as the old band's box with an id is)
-    r.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
     body(r)
   })
   |> ignore
@@ -72,8 +62,9 @@ pub fn band_row_node(
 
 ///|
 /// A row's words in a sidebar as a node (nav_words'): a list's title's look, cut short where the row has not the room.
-pub fn nav_words_node(parent : @view.View, words : () -> String) -> Unit {
-  parent.box(fn(w) {
+#callsite(autofill(loc))
+pub fn nav_words_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(w) {
     w.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
     words_node(w, words, fn() { theme().chat_list.title.then(nav_cut) }) |> ignore
   })
@@ -92,6 +83,7 @@ let nav_cut : @ui.TextStyle = @ui.text_style(w=Cut)
 /// unknown one), its progress in the mark's place, the two marks faded between each other over a control's ease (dur_ms)
 /// without moving the key. Read out a button named `label()`, unable to be pressed while busy; `why()` its tip where it
 /// says one (in `tips`); pressed while not busy, `press`.
+#callsite(autofill(loc))
 pub fn update_key_node(
   parent : @view.View,
   tips : TipLayer,
@@ -103,10 +95,11 @@ pub fn update_key_node(
   coming : () -> Double??,
   press : () -> Unit,
   offered? : () -> Bool = fn() { false },
+  loc~ : SourceLoc,
 ) -> Unit {
   // (its tip on what holds it: said while busy too, the key taking no press then, as the pointer rests on it)
-  parent.box(fn(o) {
-    o.box(fn(k) {
+  parent.box(made_for=loc, fn(o) {
+    @headless.button(o, label, fn(_) { press() }, disabled=busy, fn(k, b) {
       let progress = EdgeWay::new(if @signals.untracked(coming) is Some(_) { 1.0 } else { 0.0 })
       k.reacts(fn() { coming() is Some(_) }, fn(on) { progress.go(k, if on { 1.0 } else { 0.0 }, dur_ms) })
       k
@@ -114,28 +107,25 @@ pub fn update_key_node(
       .height(Is(Some(side)))
       // (round as its ground is while there is one, as an old view's key's hovered{} look: at rest none, nothing
       // standing in a corner)
-      .radius(By(fn() { if lit_node(k) && !busy() { side / 2.0 } else { 0.0 } }))
+      .radius(By(fn() { if lit_node(k) && !b.disabled() { side / 2.0 } else { 0.0 } }))
       // (its mark in its middle both ways, as update_key_box's: a box lays what it holds down from its top)
       .lines_up(Is(Some(Middle)))
       .lies_along(Is(Middle))
-      .ground(By(fn() { if lit_node(k) && !busy() { @ui.tree_theme().color(Hover) } else { 0L } }))
-      .says(By(fn() { Some(@view.said(Button, label=label())) }))
+      .ground(By(fn() { if lit_node(k) && !b.disabled() { @ui.tree_theme().color(Hover) } else { 0L } }))
       |> ignore
       // (pressed while it is not busy: a press's ripple on it, its press then; read out unable to be pressed while busy)
-      let able = fn() { !busy() }
-      k.presses(By(able)).focusable(By(able)).on_press(fn() { if able() { press() } }) |> ignore
       let rippled = press_look(k, Is(side / 2.0), fn() { false })
       let on_it = fn(d : @view.Drag) { k.finger_target(d.wx, d.wy) }
       k.gesture(
         @ui.touch_slop(),
-        press=fn(d) { if able() { (rippled.down)(d) } },
+        press=fn(d) { if !b.disabled() { (rippled.down)(d) } },
         tap=fn(d) {
           (rippled.tapped)(d)
-          if on_it(d) && able() {
-            press()
+          if on_it(d) {
+            b.press()
           }
         },
-        drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && able() { press() } },
+        drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { b.press() } },
       )
       |> ignore
       k.box(fn(m) {
@@ -172,10 +162,17 @@ pub fn update_key_node(
 /// What comes as a node (coming_mark's): in an icon's place `size` across, a ring where the icons draw their circles,
 /// the accent from its top as far round as `coming()` says (eased to it over progress_ms; None, a quarter turning), a
 /// short arrow down in it, in `color()`.
-fn coming_node(parent : @view.View, coming : () -> Double?, size : Double, color : () -> Int64) -> Unit {
+#callsite(autofill(loc))
+fn coming_node(
+  parent : @view.View,
+  coming : () -> Double?,
+  size : Double,
+  color : () -> Int64,
+  loc~ : SourceLoc,
+) -> Unit {
   let stroke = size * icon_stroke / 24.0
   let ring = size * coming_ring / 24.0 + stroke
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     b.width(Is(Some(size))).height(Is(Some(size))).lines_up(Is(Some(Middle))) |> ignore
     b.box(fn(r) {
       r.width(Is(Some(size))).height(Is(Some(size))).padding(Is(((size - ring) / 2.0, (size - ring) / 2.0, 0.0, 0.0))) |> ignore
@@ -221,7 +218,8 @@ fn coming_node(parent : @view.View, coming : () -> Double?, size : Double, color
 /// An update being put in place as a node (updating_mark's): in a ring an arrow up standing a while, then off up through
 /// its top as the next comes up from its bottom, eased in and out, once every updating_rise_ms, seen in a round window
 /// inside the ring; `size` across, in `color()`, moved by the clock as each frame is drawn.
-fn updating_node(parent : @view.View, size : Double, color : () -> Int64) -> Unit {
+#callsite(autofill(loc))
+fn updating_node(parent : @view.View, size : Double, color : () -> Int64, loc~ : SourceLoc) -> Unit {
   let pi = 3.141592653589793
   let k = size / 24.0
   let stroke = 1.75 * k
@@ -237,7 +235,7 @@ fn updating_node(parent : @view.View, size : Double, color : () -> Int64) -> Uni
     ]
   }
   let top = wmid - length / 2.0
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     b
     .width(Is(Some(size)))
     .height(Is(Some(size)))

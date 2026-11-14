@@ -1,0 +1,10 @@
+// Made by client/core-ts/test/real-size-app.test.ts (REAL_SIZE_WRITE=1): what the core sends `stationPart updates` whole on a
+// workspace of real size.
+///|
+fn init {
+  let asked =
+    #|{"topic":"stationPart","scope":"ws","station":"ws/maple","part":"updates"}
+  let value =
+    #|[{"id":"station","name":"Station","installed":true,"latest":"0.1.7020","newer":true,"downgrade":false,"channel":"beta","auto":true,"idleOnly":true,"updatable":true,"repairable":false,"state":"idle","checkedAt":0,"shownText":"0.1.7018","tipText":"","updatingText":"正在更新","failedText":"更新失败"},{"id":"claude","name":"Claude Code","installed":true,"latest":"2.4.14","newer":true,"downgrade":false,"updatable":true,"repairable":false,"state":"idle","checkedAt":0,"shownText":"2.4.12","tipText":"","updatingText":"正在更新","failedText":"更新失败"},{"id":"codex","name":"Codex","installed":true,"latest":"0.98.0","newer":false,"downgrade":false,"updatable":true,"repairable":false,"state":"idle","checkedAt":0,"shownText":"0.98.0","tipText":"已是最新","updatingText":"正在更新","failedText":"更新失败"},{"id":"dsh","name":"DeepSeek Harness","installed":true,"latest":"1.3.2","newer":false,"downgrade":false,"updatable":true,"repairable":false,"state":"idle","checkedAt":0,"shownText":"1.3.2","tipText":"已是最新","updatingText":"正在更新","failedText":"更新失败"},{"id":"grok","name":"Grok Build","installed":true,"latest":"0.8.0","newer":true,"downgrade":false,"updatable":true,"repairable":false,"state":"idle","checkedAt":0,"shownText":"0.7.1","tipText":"","updatingText":"正在更新","failedText":"更新失败"},{"id":"cursor","name":"Cursor","installed":false,"latest":"2026.11.03","newer":false,"downgrade":false,"updatable":true,"repairable":false,"state":"idle","checkedAt":0,"shownText":"未安装","tipText":"","updatingText":"正在安装","failedText":"安装失败"},{"id":"devin","name":"Devin","installed":true,"latest":"1.12.0","newer":false,"downgrade":false,"updatable":true,"repairable":false,"state":"idle","checkedAt":0,"shownText":"1.12.0","tipText":"已是最新","updatingText":"正在更新","failedText":"更新失败"}]
+  put(asked, value)
+}

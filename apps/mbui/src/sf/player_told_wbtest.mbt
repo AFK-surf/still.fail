@@ -34,7 +34,7 @@ fn speeds_dismissed(how : (@ui.Tester) -> Unit, narrow? : Bool = false) -> Array
   t.draw()
   seen.push(speeds_open())
   assert_eq(backs, [], msg="not left the frame after")
-  assert_true(shown, msg="its speeds shown: \{seen}")
+  assert_true(shown, msg="its speeds shown: \{Repr(seen)}")
   seen
 }
 
@@ -66,7 +66,8 @@ test "a desktop's speeds dismissed by a press beside them: closed as it goes dow
 /// second press, with the speeds closed by the first: the player's own Escape where they are gone by then).
 fn speed_again_then_escape(frames : Bool, narrow? : Bool = false) -> (Array[Bool], Int, Int) raise {
   let backs : Array[Int] = []
-  let t = player_tester(narrow, "a.mp4", [], [], backs)
+  // (hosted under the player's keymap, as the app hosts it: a desktop's Escape its action, player.escape)
+  let t = player_tester(narrow, "a.mp4", [], [], backs, keyed=true)
   if !narrow {
     t.host_says_finger(Some(false))
   }
@@ -92,11 +93,11 @@ fn speed_again_then_escape(frames : Bool, narrow? : Bool = false) -> (Array[Bool
 
 ///|
 test "a desktop's speed pressed again with its speeds open, then Escape at once: closed as it is let go, and stays closed, a frame between or none; that Escape the player's own, leaving it" {
-  // (the speeds closed by the press, the Escape after it is the second thing done: the player's way back, as the frame
-  // after it is built)
+  // (the speeds closed by the press, the Escape after it is the second thing done: the player's way back, at the key's
+  // moment, its action's)
   assert_eq(
     (speed_again_then_escape(false), speed_again_then_escape(true)),
-    (([false, false, false], 0, 1), ([false, false, false], 0, 1)),
+    (([false, false, false], 1, 1), ([false, false, false], 1, 1)),
   )
 }
 

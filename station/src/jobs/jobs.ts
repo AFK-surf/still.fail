@@ -13,7 +13,6 @@ import {
   type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync,
   statSync, watch, writeFileSync,
 } from "node:fs";
-import { availableParallelism } from "node:os";
 import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { startEnv } from "../ops/agent-env.ts";
@@ -21,15 +20,14 @@ import { log } from "../ops/log.ts";
 import { niced } from "../ops/nice.ts";
 import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
-import { inSandbox, keyPart, sandboxed, stopSandbox } from "../agents/sandbox.ts";
+import { type Sandbox, type SandboxPlace, sandboxCommand } from "../agents/sandbox.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 import {
-  Busy, type BusyCause, type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, cpusFor,
-  overstaying, pick, place, served,
+  type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, overstaying, pick, place,
+  served,
 } from "./admit.ts";
-import type { Ticks } from "../read/host.ts";
 
 export { outputAt, tail };
 
@@ -141,13 +139,11 @@ export type Notify = (session: string, text: string) => void;
 /// service), when the station is in a workspace.
 export type Link = (session: string, job: string) => string | null;
 
-/// What the queue (jobs/admit.ts) measures of the machine: its CPUs, their ticks, what the system says of its memory,
-/// and how long its input has been idle (ms; none where it is not read: no person is seen at it).
-export type Machine = { cpus(): number; ticks(): Ticks | null; pressure(): Promise<Pressure | null>; inputIdle?(): Promise<number | null> };
+/// What the queue (jobs/admit.ts) measures of the machine: what the system says of its memory, and how long its input
+/// has been idle (ms; none where it is not read: no person is seen at it).
+export type Machine = { pressure(): Promise<Pressure | null>; inputIdle?(): Promise<number | null> };
 
 export const liveMachine: Machine = {
-  cpus: () => availableParallelism(),
-  ticks: () => platform.host.cpuTicks(),
   pressure: () => platform.memoryPressure(),
   inputIdle: () => platform.inputIdleMs(),
 };
@@ -260,6 +256,14 @@ export function named(job: Pick<JobRow, "id" | "name" | "port">): string {
   return job.port !== null ? `Service "${job.name}" (${job.id}, port ${job.port})` : `Job "${job.name}" (${job.id})`;
 }
 
+/// What a job a chat had running on a station retired is told as, started again (or not) as the chat moved here, or
+/// back on that station as its move did not go through (replica/retire.ts): the words of a restart's (`relaunch`), the
+/// move in place of the restart. `job` is its record here once it was started, else what it was named by there.
+export function movedSaid(why: string, job: Pick<JobRow, "name" | "port"> & { id?: string | null }, error: string | null): string {
+  const what = typeof job.id === "string" && job.id !== "" ? named({ id: job.id, name: job.name, port: job.port }) : job.port !== null ? `Service "${job.name}" (port ${job.port})` : `Job "${job.name}"`;
+  return error === null ? `${why}; ${what} was started again.` : `${why}; ${what} could not be started again: ${error}`;
+}
+
 /// How long a service that ended waits before it starts again: none after a steady run, else 1 s doubling with each
 /// quick end, 60 s at most.
 export function restartPause(restarts: number, ranMs: number): number {
@@ -275,6 +279,8 @@ export class Jobs {
   private link: Link;
   /// Where `stillfail-job notify` posts (the MCP endpoint's /jobs/notify).
   private notifyUrl = "";
+  /// This station's sandboxes, by name (config.json's, sessions/agents.ts): where a sandbox's task runs.
+  private sandboxes: (name: string) => Sandbox | null = () => null;
   private running = new Map<string, Running>();
   /// Shutting down: jobs go on without the station and stay recorded as running, to be taken up by the next one.
   private closing = false;
@@ -286,13 +292,10 @@ export class Jobs {
   /// What waits for an exit file to appear, by job id; the watch on jobs/exit that tells them.
   private exitHeard = new Map<string, () => void>();
   private exitWatch: FSWatcher | null = null;
-  /// The queue (jobs/admit.ts): what it measures, the CPUs as it saw them, what the system last said of its memory, when
-  /// its last task started and when each session's did, and why the first waiting waits.
+  /// The queue (jobs/admit.ts): what it measures, what the system last said of its memory, when each session's task
+  /// last started, and why the first waiting waits.
   private machine: Machine;
-  private busy = new Busy();
   private pressure: Pressure | null = null;
-  private lastStart: number | null = null;
-  private lastStarted: string | null = null;
   private lastOf = new Map<string, number>();
   private why: Why | null = null;
   /// The queue looks at the machine (every LOOK_MS) while a task waits, on the jobs' clock.
@@ -307,6 +310,11 @@ export class Jobs {
   private readingPerson = false;
   /// The claims whose agents were told they had held the screen long while others waited (job, pid, since).
   private toldLong = new Set<string>();
+
+  /// Where this station's sandboxes are found (sessions/agents.ts).
+  setSandboxes(find: (name: string) => Sandbox | null): void {
+    this.sandboxes = find;
+  }
 
   constructor(options: JobsOptions) {
     this.store = options.store;
@@ -372,19 +380,30 @@ export class Jobs {
     }
   }
 
+  /// A word of the jobs' for a session's agent from outside them (its chat moved here with jobs started again,
+  /// replica/retire.ts `movedSaid`): told as a job's end is, which wakes it.
+  say(session: string, text: string): void {
+    try {
+      this.notify(session, text);
+    } catch (error) {
+      log.warn("jobs", "job notice not given", { session, error: (error as Error).message });
+    }
+  }
+
   /// Starts a job for `session`: `command` run by sh in `cwd`; a web service when it has a port. `checked`: its caller
   /// looked at `cwd` already (ops/places.ts), which is not looked at again here (in a folder macOS protects, that would
   /// hold the station's thread).
-  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, checked = false, size: string | null = null): JobRow {
-    return this.startId(session, name, command, cwd, port, watch, null, checked, null, size);
+  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, checked = false): JobRow {
+    return this.startId(session, name, command, cwd, port, watch, null, checked);
   }
 
   /// A remote task supplies a stable id. Its caller serializes starts; an existing record is never spawned again.
   /// `queue`: it waits in the station's queue (jobs/admit.ts) when there is no room for it now; `screen`: it uses the
-  /// screen, one such at a time. `size`: it runs in a sandbox of its own of that size (agents/sandbox.ts).
+  /// screen, one such at a time. `sandbox`: a sandbox's task, run in the chat's sandbox there (agents/sandbox.ts),
+  /// never queued here: it takes nothing of this machine's.
   startId(
     session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, id: string | null, checked = false,
-    queue: { screen: boolean; small?: boolean } | null = null, size: string | null = null,
+    queue: { screen: boolean; small?: boolean } | null = null, sandbox: SandboxPlace | null = null,
   ): JobRow {
     if (id !== null) {
       const job = this.store.getJob(id);
@@ -399,9 +418,7 @@ export class Jobs {
     if (!isDir) throw new Error(`no such directory: ${cwd}`);
     if (port !== null && port < 1024) throw new Error("a service's port is 1024 or above");
     if (watch && port !== null) throw new Error("a watch is a job, not a web service: give it no port");
-    if (size !== null && (port !== null || queue !== null || !sandboxed(this.data))) {
-      throw new Error("only a job this station runs in a sandbox has a size: not a service, not another station's task, and only while the station runs jobs in sandboxes");
-    }
+    if (sandbox !== null && (port !== null || queue !== null)) throw new Error("a sandbox's task is neither a service nor queued here");
     if (this.store.runningJobsAtLeast(session, MAX_RUNNING)) {
       throw new Error(`this session runs ${MAX_RUNNING} jobs already; stop some first`);
     }
@@ -430,7 +447,7 @@ export class Jobs {
       watch,
       ...(queue !== null ? { queued: true, screen: queue.screen } : {}),
       ...(queue?.small === true ? { small: true } : {}),
-      ...(size !== null ? { size } : {}),
+      ...(sandbox !== null ? { sandbox } : {}),
     };
     this.store.insertJob(job);
     if (queue !== null) {
@@ -467,33 +484,24 @@ export class Jobs {
   /// What the queue would start now, and why the first waiting waits else (kept for `queueOf`).
   private chosen(pressure: Pressure | null): ReturnType<typeof pick> {
     const { waiting, running } = this.line();
-    // (the last started, while it runs: how busy since it started; one that ended holds nothing back)
-    const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
-    const chosen = pick(waiting, running, { busy: this.busy.share(ramp), pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
+    const chosen = pick(waiting, running, { pressure, person: this.person }, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
     this.why = chosen !== null && "wait" in chosen ? chosen.wait : null;
     return chosen;
   }
 
-  /// A task of the queue starts: noted as the last, and what it is told of the CPUs free.
+  /// A task of the queue starts: noted as its session's last. A small one is told to use one CPU; any other is told
+  /// nothing of the CPUs (jobs/admit.ts), however many run beside it.
   private admitted(job: JobRow): Record<string, string> {
-    const alone = this.line().running.length === 0;
-    const now = this.queueNow();
-    if (!job.small) {
-      this.lastStart = now;
-      this.lastStarted = job.id;
-    }
-    this.lastOf.set(job.sessionKey, now);
-    if (job.small) return { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" };
-    return cpusFor(startEnv(), this.machine.cpus(), this.busy.share(), alone);
+    this.lastOf.set(job.sessionKey, this.queueNow());
+    return job.small ? { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" } : {};
   }
 
-  /// While a task waits: every LOOK_MS the CPUs noted, the memory asked for, the next started if there is room.
+  /// While a task waits: every LOOK_MS the memory asked for, the next started if there is room.
   private watchQueue(): void {
     if (this.looking || this.closing) return;
     this.looking = true;
     const waiting = () => !this.closing && this.line().waiting.length > 0;
     const look = Effect.promise(async () => {
-      this.busy.note(this.queueNow(), this.machine.ticks());
       try {
         this.pressure = await this.machine.pressure();
       } catch {
@@ -503,8 +511,7 @@ export class Jobs {
       this.startNext();
     });
     void this.run(
-      Effect.sync(() => this.busy.note(this.queueNow(), this.machine.ticks())).pipe(
-        Effect.andThen(Effect.sleep(LOOK_MS)),
+      Effect.sleep(LOOK_MS).pipe(
         Effect.andThen(Effect.andThen(look, Effect.sync(waiting)).pipe(Effect.repeat({ schedule: Schedule.spaced(LOOK_MS), until: (more) => !more }))),
         Effect.ensuring(Effect.sync(() => {
           this.looking = false;
@@ -516,7 +523,13 @@ export class Jobs {
     ).catch(() => undefined);
   }
 
-  /// Starts what the queue picks now. A small task has its own slot and does not have to wait for a build's ramp.
+  /// What the station's memory watch (jobs/memory.ts) read of the memory on its own look: what the queue goes by as a
+  /// task asks to start, the queue looking at it itself only while one waits.
+  memorySeen(pressure: Pressure | null): void {
+    this.pressure = pressure;
+  }
+
+  /// Starts what the queue picks now. A small task has its own slot beside the rest.
   /// Then the screen given out to the commands that ask for it, if no task has it now.
   private startNext(): void {
     if (this.closing) return;
@@ -579,9 +592,10 @@ export class Jobs {
     if (this.line().waiting.length > 0) this.watchQueue();
   }
 
-  /// A waiting task's place in line (1: the next), what blocks it, and the queue's measurements; null for one not
-  /// waiting. If it could start but another is ahead, `why` is null. Waiting for the screen, who has it (screenHolder).
-  queueOf(id: string): { place: number; why: Why | null; cause?: BusyCause; holder?: string; decision: { cpuBusy: ReturnType<Busy["sample"]>; memoryPressure: Pressure | null } } | null {
+  /// A waiting task's place in line (1: the next), what blocks it, and what the queue measured (the memory's pressure);
+  /// null for one not waiting. If it could start but another is ahead, `why` is null. Waiting for the screen, who has
+  /// it (screenHolder).
+  queueOf(id: string): { place: number; why: Why | null; holder?: string; decision: { memoryPressure: Pressure | null } } | null {
     const job = this.store.getJob(id);
     if (!job || job.state !== "running" || job.queued !== true) return null;
     const { waiting, running } = this.line();
@@ -589,13 +603,10 @@ export class Jobs {
     if (task === undefined) return null;
     const p = place(waiting.filter((w) => !!w.small === !!task.small), id, (s) => this.lastOf.get(s) ?? null);
     if (p === null) return null;
-    const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
-    const cpuBusy = this.busy.sample(ramp);
-    const selected = pick([task], running, { busy: cpuBusy?.share ?? null, pressure: this.pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
+    const selected = pick([task], running, { pressure: this.pressure, person: this.person }, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
     const why = selected !== null && "wait" in selected ? selected.wait : null;
-    const cause = selected !== null && "wait" in selected ? selected.cause : undefined;
     const holder = why === "screen" ? this.screenHolder(id) : null;
-    return { place: p, why, ...(cause !== undefined ? { cause } : {}), ...(holder !== null ? { holder } : {}), decision: { cpuBusy, memoryPressure: this.pressure } };
+    return { place: p, why, ...(holder !== null ? { holder } : {}), decision: { memoryPressure: this.pressure } };
   }
 
   /// Who has the screen, for one waiting for it (not `except`, a job of its own): the task's name, the chat it is
@@ -718,12 +729,14 @@ export class Jobs {
     // appending (its handle may only append). Lower than the station (ops/nice.ts): nice runs the shell in its own
     // process, the pid the same.
     const shell: [string, string[]] = [platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]];
-    // In its session's sandbox when the station runs things there (agents/sandbox.ts), but a service (its port is
-    // served here) or another station's task (its files are mirrored here, jobs/remote.ts). Its command runs there
-    // through the bridge, which the shell here runs in its place: its output comes back to the log here, its exit code
-    // to the exit file here.
-    const placed = job.port === null && !queues(job) ? inSandbox(this.data, keyPart(job.sessionKey), "/bin/sh", ["-c", job.command], job.cwd, { size: job.size, lostFile: this.lostFile(job.id) }) : null;
-    if (placed !== null) shell[1][3] = [placed.program, ...placed.args].map(quoted).join(" ");
+    // A sandbox's task (agents/sandbox.ts): its command runs there through the bridge, which the shell here runs
+    // in its place: its output comes back to the log here, its exit code to the exit file here.
+    if (job.sandbox !== undefined) {
+      const sandbox = this.sandboxes(job.sandbox.sandbox);
+      if (sandbox === null) throw new Error(`no sandbox ${job.sandbox.sandbox} in this station's config.json any more`);
+      const door = Number(new URL(this.notifyUrl || "http://127.0.0.1:0").port);
+      shell[1][3] = sandboxCommand(this.data, sandbox, job.sandbox, job.command, job.cwd, door > 0 ? [door] : [], this.lostFile(job.id));
+    }
     // Where `stillfail-job screen` asks for the screen: this machine's, which a sandbox's commands do not have (and
     // their processes are not this machine's to look at).
     else if (this.notifyUrl !== "") env.STILLFAIL_JOB_SCREEN = this.notifyUrl.replace(/\/notify$/, "/screen");
@@ -854,9 +867,6 @@ export class Jobs {
       }
       this.store.jobEnded(id, "exited", code);
       this.tell(job, `${named(job)} ended with ${said}.${last}`);
-      // A sandbox of its own size: stopped now that it ended (refused while another of the session's jobs of that
-      // size still runs there).
-      if (job.size !== undefined) void stopSandbox(this.data, keyPart(job.sessionKey), job.size);
       return;
     }
     // A service is kept up: at once after a steady run, else after a pause that grows with each quick end.
@@ -916,7 +926,7 @@ export class Jobs {
       // and this one does not follow (it started out of its workspace, so took nothing up): its group is ended too.
       const entry = job.pgid !== null ? this.leftBehind(job.pgid) : null;
       if (entry) {
-        if (stillOurs(entry)) {
+        if (await stillOurs(entry)) {
           log.warn("jobs", "ending a job an earlier station left running", { job: job.id, pgid: entry.pgid });
           await this.timed(endGroup(entry.pgid, STOP_GRACE_MS));
         }
@@ -946,9 +956,10 @@ export class Jobs {
   /// Stops every job and service that runs or waits to start again, `why` written at the end of each one's log: the
   /// station left its workspace, and does no work outside one; or it starts already out of it, and what an earlier
   /// station left running (it ended before it could stop them) is ended. Agents are not told (no turn runs meanwhile,
-  /// and telling them once it is back would wake them all); a job's state and log say it when one looks.
-  async stopAll(why: string): Promise<void> {
-    for (const job of this.store.jobsUp()) {
+  /// and telling them once it is back would wake them all); a job's state and log say it when one looks. `only`: those
+  /// of some sessions alone (a station retired from one workspace stops that one's chats' jobs: replica/retire.ts).
+  async stopAll(why: string, only: (job: JobRow) => boolean = () => true): Promise<void> {
+    for (const job of this.store.jobsUp().filter(only)) {
       log.warn("jobs", "stopping a job", { job: job.id, why });
       try {
         await this.stop(job.id);
@@ -981,8 +992,10 @@ export class Jobs {
   /// After a start of the station: what still runs is followed again; what ended meanwhile is told as ended; what was
   /// running and is gone without a word (the machine restarted, or an older station ended it) runs again, and its agent
   /// is told; a service waiting to start again starts. Groups of jobs no longer running are ended.
-  relaunch(): void {
+  async relaunch(): Promise<void> {
     const recorded = new Map<number, ProcessRow>(this.store.listProcesses().filter((p) => p.runtime === "job").map((p) => [p.pgid, p]));
+    // Each group asked after together, none waited on (stillOurs starts a process).
+    const ours = new Set((await Promise.all([...recorded.values()].map(async (p) => (await stillOurs(p)) ? [p.pgid] : []))).flat());
     const followed = new Set<number>();
     const jobs = this.store.jobsUp();
     for (const job of jobs.filter((j) => j.state === "running")) {
@@ -990,7 +1003,7 @@ export class Jobs {
       if (job.queued === true) continue;
       const entry = job.pgid !== null ? recorded.get(job.pgid) : undefined;
       if (entry) {
-        if (stillOurs(entry)) {
+        if (ours.has(entry.pgid)) {
           log.info("jobs", "job went on through the restart; following it again", { job: job.id, pgid: entry.pgid });
           this.follow(job, entry.pgid);
           followed.add(entry.pgid);
@@ -1034,7 +1047,7 @@ export class Jobs {
     }
     for (const [pgid, entry] of recorded) {
       if (followed.has(pgid)) continue;
-      if (stillOurs(entry)) {
+      if (ours.has(pgid)) {
         log.warn("jobs", "ending the group of a job no longer running", { pgid, label: entry.label });
         void this.timed(endGroup(pgid, STOP_GRACE_MS));
       }

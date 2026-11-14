@@ -1,7 +1,7 @@
 // An agent's execution history as the clients show it: what actually ran, put together here so every
 // client draws the same thing. Messages in and out, state marks and the agent's own words are boundaries; the tool
 // calls and thinking between two boundaries fold into one group, named by its latest call (shapes: HistoryView).
-import { args, doing, epochMs, importantCall, kindOf, type Known, tasksOf, told, toolName } from "./activity.ts";
+import { agentsOf, args, doing, epochMs, importantCall, kindOf, type Known, tasksOf, told, toolName } from "./activity.ts";
 import * as format from "./format.ts";
 import * as brand from "./brand.ts";
 import { t } from "./i18n.ts";
@@ -9,7 +9,8 @@ import { lineOf, markdown, type MdStore } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
 import { isStationAuthor } from "./titles.ts";
-import { closeCut } from "./tool-step.ts";
+import { sentFrom } from "./sent-from.ts";
+import { cleanCommand, cleanPath, closeCut, isOpaqueId, summaryCommand } from "./tool-step.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -53,26 +54,209 @@ function line(text: string, max: number): string {
   return Array.from(text.split("\n")[0] ?? "").slice(0, max).join("");
 }
 
-export function hint(text: string): string {
+function jsExecCommand(text: string): string | null {
+  const m = /(?:"cmd"|cmd|"command"|command)\s*:\s*("(?:[^"\\]|\\.)*")/.exec(text);
+  if (!m?.[1]) return null;
+  try {
+    const parsed = JSON.parse(m[1]);
+    return typeof parsed === "string" && parsed.trim() !== "" ? summaryCommand(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function hint(text: string, tool = ""): string {
+  const name = toolName(tool);
+  if (name.endsWith(" on Web")) {
+    const a = args(text);
+    const q = typeof a?.query === "string" && a.query ? a.query : name.slice(0, -7).replace(/^["']|["']$/g, "");
+    return line(q, 160);
+  }
   const a = args(text);
-  if (!a) return line(text, 160);
-  const key = ["command", "cmd", "file_path", "path", "pattern", "url", "query", "description", "prompt"].find((k) => a[k] !== undefined && a[k] !== null);
-  const value = key !== undefined ? a[key] : undefined;
-  const s = typeof value === "string" ? value : Array.isArray(value) ? value.map((p) => (typeof p === "string" ? p : "")).join(" ") : "";
-  return line(s, 160);
+  if (!a) {
+    const jsCmd = name === "exec" ? jsExecCommand(text) : null;
+    if (jsCmd) return line(jsCmd, 160);
+    return line(text, 160);
+  }
+  const kind = kindOf(tool, a);
+  const keys =
+    kind === "search"
+      ? [
+          "pattern",
+          "Pattern",
+          "query",
+          "Query",
+          "queries",
+          "path",
+          "Path",
+          "target_directory",
+          "DirectoryPath",
+          "SearchDirectory",
+          "SearchPath",
+          "file_path",
+          "target_file",
+          "url",
+          "description",
+          "toolSummary",
+          "summary",
+          "prompt",
+          "Prompt",
+          "message",
+          "Message",
+          "text",
+          "reason",
+          "title",
+          "Role",
+          "to",
+          "Recipient",
+          "recipient",
+        ]
+      : [
+          "command",
+          "cmd",
+          "CommandLine",
+          "file_path",
+          "target_file",
+          "path",
+          "Path",
+          "target_directory",
+          "DirectoryPath",
+          "SearchDirectory",
+          "SearchPath",
+          "pattern",
+          "Pattern",
+          "url",
+          "query",
+          "Query",
+          "queries",
+          "description",
+          "toolSummary",
+          "summary",
+          "prompt",
+          "Prompt",
+          "message",
+          "Message",
+          "text",
+          "reason",
+          "title",
+          "Role",
+          "to",
+          "Recipient",
+          "recipient",
+        ];
+  const ID_HINT_KEYS = new Set(["to", "Recipient", "recipient", "agent_id", "agentId", "conversationId"]);
+  const key = keys.find((k) => {
+    const v = a[k];
+    if (v === undefined || v === null || v === "") return false;
+    if (ID_HINT_KEYS.has(k) && typeof v === "string" && isOpaqueId(v)) return false;
+    return true;
+  });
+  const fallbackKey = key === undefined
+    ? Object.keys(a).find((k) => k !== "toolSummary" && !k.startsWith("_") && typeof a[k] === "string" && a[k].trim() !== "" && !isOpaqueId(a[k]))
+    : undefined;
+  const activeKey = key ?? fallbackKey;
+  const value = activeKey !== undefined ? a[activeKey] : undefined;
+  const raw = typeof value === "string" ? value : Array.isArray(value) ? value.map((p) => (typeof p === "string" ? p : "")).join(" ") : "";
+  const isCmd = activeKey === "command" || activeKey === "cmd" || activeKey === "CommandLine";
+  const isPath =
+    activeKey === "file_path" ||
+    activeKey === "target_file" ||
+    activeKey === "path" ||
+    activeKey === "Path" ||
+    activeKey === "target_directory" ||
+    activeKey === "DirectoryPath" ||
+    activeKey === "SearchDirectory" ||
+    activeKey === "SearchPath";
+  const cleaned = isCmd ? summaryCommand(raw) : isPath ? cleanPath(raw) : raw;
+  if (cleaned !== "") return line(cleaned, 160);
+  if (tool.startsWith("File ")) return line(cleanPath(tool.slice(5).trim()), 160);
+  if (kind === "command" && !["Bash", "bash", "run_command", "run_terminal_command", "exec", "exec_command", "shell", "local_shell"].includes(toolName(tool))) {
+    return line(summaryCommand(toolName(tool)), 160);
+  }
+  return "";
 }
 
 function describe(text: string): string | null {
-  const d = args(text)?.description;
-  if (typeof d !== "string" || d.trim() === "") return null;
+  const a = args(text);
+  const d = typeof a?.description === "string"
+    ? a.description
+    : typeof a?.toolSummary === "string"
+    ? a.toolSummary
+    : typeof a?.summary === "string"
+    ? a.summary
+    : null;
+  if (d === null || d.trim() === "") return null;
   return line(d.trim(), 160);
 }
 
-function fileOf(text: string): string | null {
+function fileOf(text: string, tool = ""): string | null {
+  const a = args(text);
+  if (a) {
+    for (const k of ["file_path", "target_file", "path", "Path", "notebook_path"]) {
+      if (typeof a[k] === "string" && a[k] !== "") return cleanPath(a[k]);
+    }
+  }
+  if (tool.startsWith("File ")) {
+    const p = tool.slice(5).trim();
+    if (p !== "") return cleanPath(p);
+  }
+  return null;
+}
+
+function lineRangeOf(text: string): [number, number] | null {
   const a = args(text);
   if (!a) return null;
-  for (const k of ["file_path", "path", "notebook_path"]) if (a[k] !== undefined) return typeof a[k] === "string" ? a[k] : null;
+  const start = typeof a.StartLine === "number" ? a.StartLine : typeof a.start_line === "number" ? a.start_line : undefined;
+  const end = typeof a.EndLine === "number" ? a.EndLine : typeof a.end_line === "number" ? a.end_line : undefined;
+  if (start !== undefined && end !== undefined && end >= start) {
+    return [start, end];
+  }
+  if (typeof a.offset === "number" && typeof a.limit === "number" && a.limit > 0) {
+    const from = Math.max(1, a.offset);
+    return [from, from + a.limit - 1];
+  }
+  if (typeof a.limit === "number" && a.limit > 0 && a.offset === undefined && start === undefined) {
+    return [1, a.limit];
+  }
   return null;
+}
+
+function stepName(tool: string, text: string): string {
+  const name = toolName(tool);
+  if (name.endsWith(" on Web")) return "WebSearch";
+  const a = args(text);
+  if (name === "edit" || name === "edit_file" || name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_replace") return "Edit";
+  if (name === "write" || name === "write_file" || name === "write_to_file") return "Write";
+  if (name === "read" || name === "read_file" || name === "view_file_outline" || name === "view_code_item" || name === "read_image" || name === "view_image") return "Read";
+  if (name.startsWith("File ")) {
+    if (a && (a.Target !== undefined || a.Replacement !== undefined || a.old_string !== undefined || a.new_string !== undefined)) return "Edit";
+    if (a && (a.Content !== undefined || a.content !== undefined)) return "Write";
+    return "Read";
+  }
+  if (name === "bash" || name === "run_command" || name === "run_terminal_command" || name === "exec_command" || name === "shell" || name === "local_shell" || name === "write_stdin" || name === "wait" || name === "job_output") return "Bash";
+  if (name === "grep" || name === "grep_search") return "Grep";
+  if (name === "glob" || name === "find_by_name" || name === "find_file_by_name" || name === "list_dir" || name === "LS") return "Glob";
+  if (name === "web_search" || name === "search_web" || name === "read_url_content" || name === "web__run") return "WebSearch";
+  if (name === "web_fetch") return "WebFetch";
+  if (name === "search_tool") return "ToolSearch";
+  if (name === "subagent" || name === "spawn_agent" || name === "invoke_subagent" || name === "define_subagent" || name === "manage_subagents" || name === "swarm" || name === "send_message" || name === "SendMessage" || name === "followup_task" || name === "list_agents" || name === "wait_agent") return "Agent";
+  if (kindOf(tool, a) === "command" && (a?.CommandLine !== undefined || /^(?:cd|git|pnpm|npm|node|cargo|python3?|sh|bash|zsh|rg|ls|cat|mkdir|rm|cp|mv|curl|gh)\b/.test(name))) {
+    return "Bash";
+  }
+  return name;
+}
+
+const THOUGHT_BOILERPLATE_LINE =
+  /^(?:I'm thinking(?: through how to approach this)?\.?|I am thinking(?: through how to approach this)?\.?|Let's think(?:\s+through\s+this|\s+about\s+this)?\.?|Thinking(?:\s+process)?(?:\.{3}|…|:)?|Thought\s+process:?|Process:?|Reasoning:?|(?:\d+\.\s*)?(?:\*\*)?(?:Analyze the Request|Analysis|Summary|Plan|Context|Goal|Steps|Next Steps|Approach|Findings|Observations):(?:\*\*)?|`?\d{4}-\d{2}-\d{2}T[\d:.]+Z`?[),.;:]*)$/i;
+
+function cleanThoughtText(raw: string): string {
+  const lines = raw.split(/\r?\n/);
+  let i = 0;
+  while (i < lines.length && (lines[i]!.trim() === "" || THOUGHT_BOILERPLATE_LINE.test(lines[i]!.trim()))) {
+    i++;
+  }
+  const rest = lines.slice(i).join("\n").trim();
+  return rest;
 }
 
 /// A message a prompt carried; `station`: a notice of the station's own (via="station"; "ember" before), not a person's; `agent`: an
@@ -323,26 +507,94 @@ function mentions(text: string, cx: Context): string {
   return present.mentions(text, bots.concat(cx.slackNames ?? []), cx.members);
 }
 
-type Step = { call: number; result: number | null };
+type Step = { call: number; result: number | null; unwrapped?: boolean; firstEntry?: number; scriptCount?: number; scriptTools?: string };
 type Item =
   | { kind: "received"; i: number }
   | { kind: "text"; i: number }
   | { kind: "post"; step: number }
-  | { kind: "mark"; mark: string; seconds: number | null; what: string | null }
+  | { kind: "mark"; mark: string; seconds: number | null; what: string | null; why: string | null }
   | { kind: "group"; rows: Row[] };
 /// A group's thinking and calls, in the order they came: a thought by its timeline index, a call by its step.
 type Row = { thought: number } | { step: number };
 
+/// Whether a transcript entry begins an item whatever stands before it: a prompt, the agent's own words, a message it
+/// posts, a state it ends its turn with. A thought or any other call goes on with the group before it, a result with
+/// its call.
+export function beginsItem(e: J): boolean {
+  const kind = typeof e?.kind === "string" ? e.kind : "";
+  if (kind === "tool_result" || kind === "thinking") return false;
+  if (kind !== "tool_call") return true;
+  if (e.subagent === true) return false;
+  const name = toolName(typeof e.tool === "string" ? e.tool : "");
+  const a = args(typeof e.text === "string" ? e.text : "");
+  return (name === "chat_post" && typeof a?.text === "string") || (name === "chat_state" && typeof a?.kind === "string");
+}
+
+/// How many of a page's first entries go on with an item begun before it (a group's calls and thoughts, a call's
+/// result): all of them where none begins one.
+export function carriedOver(timeline: readonly J[]): number {
+  const at = timeline.findIndex(beginsItem);
+  return at < 0 ? timeline.length : at;
+}
+
 export function presentHistory(live: J, cx: Context): J {
-  const timeline: J[] = (Array.isArray(live?.timeline) ? live.timeline : []).map(worded);
-  const base = typeof live?.first === "number" ? live.first : 0;
+  const held: J[] = Array.isArray(live?.timeline) ? live.timeline : [];
+  const from = typeof live?.first === "number" ? live.first : 0;
+  // A page's first entries that go on with an item begun on the page before are left to that page: an item is shown
+  // whole, and is the same item (its key, what it counts) however many pages are loaded. Shown in part, a group cut by
+  // a page became another item as the page before came (its key its first loaded entry), and what was read jumped.
+  const carried = from > 0 ? carriedOver(held) : 0;
+  const timeline: J[] = (carried > 0 ? held.slice(carried) : held).map(worded);
+  const base = from + carried;
   const s = (e: J, k: string): string => (typeof e?.[k] === "string" ? e[k] : "");
   const flag = (e: J, k: string): boolean => e?.[k] === true;
 
   const items: [Item, number, number][] = [];
   const { steps, stepAt } = pair(timeline);
-  const known: Known = { stations: cx.stations, tasks: tasksOf(timeline) };
+  const known: Known = { stations: cx.stations, tasks: tasksOf(timeline), agents: agentsOf(timeline, cx.threads) };
   let grouping = false;
+  let groupSteps = 0;
+  let groupPhase: "explore" | "act" | null = null;
+  let groupHasAct = false;
+  const isReadOnlyCommand = (tool: string, text: string): boolean => {
+    const name = toolName(tool);
+    if (name === "manage_task" || name === "sleep" || name === "get_output" || name === "command_status" || name === "wait" || name === "job_output") return true;
+    const a = args(text);
+    if (name === "write_stdin") return typeof a?.chars !== "string" || a.chars === "";
+    const raw =
+      typeof a?.command === "string"
+        ? a.command
+        : typeof a?.cmd === "string"
+          ? a.cmd
+          : typeof a?.CommandLine === "string"
+            ? a.CommandLine
+            : Array.isArray(a?.command)
+              ? a.command.filter((p): p is string => typeof p === "string").join(" ")
+              : Array.isArray(a?.cmd)
+                ? a.cmd.filter((p): p is string => typeof p === "string").join(" ")
+                : name;
+    const cmd = summaryCommand(raw);
+    if (!cmd) return false;
+    if (/^(?:rg|grep|egrep|fgrep|find|ls|cat|head|tail|wc|sed\s+-n|awk|stat|file|which|type|pwd|echo|ps|lsof)\b/.test(cmd)) return true;
+    if (/^git\s+(?:status|log|diff|show|grep|ls-files|ls-tree|branch|rev-parse|remote|tag|blame)\b/.test(cmd)) return true;
+    if (/^gh\s+(?:pr\s+(?:view|checks|list|diff|status)|issue\s+(?:view|list)|run\s+(?:view|list))\b/.test(cmd)) return true;
+    if (/^(?:node|python3?)\s+.*(?:-[ec])\b/.test(cmd) && !/(?:writeFileSync|appendFileSync|rmSync|unlinkSync|\.write\()/.test(raw)) return true;
+    return false;
+  };
+  const phaseOf = (tool: string, text: string): "explore" | "act" | null => {
+    const name = toolName(tool);
+    if (name === "station_task") {
+      const act = args(text)?.action;
+      return act === "prepare" || act === "start" ? "act" : "explore";
+    }
+    if (name === "job_start") return "act";
+    if (name === "job_list" || name === "job_log" || name === "station_list" || name === "device_list" || name === "adb_devices" || name === "screen") return "explore";
+    const k = kindOf(tool, text);
+    if (k === "read" || k === "search" || k === "web" || k === "thread") return "explore";
+    if (k === "command") return isReadOnlyCommand(tool, text) ? "explore" : "act";
+    if (k === "edit" || k === "agent") return "act";
+    return null;
+  };
   const cover = (i: number) => {
     const last = items[items.length - 1];
     if (last) last[2] = i;
@@ -353,6 +605,10 @@ export function presentHistory(live: J, cx: Context): J {
       cover(i);
     } else if (kind === "tool_call") {
       const step = stepAt.get(i)!;
+      if (steps[step].unwrapped) {
+        cover(i);
+        return;
+      }
       const a = args(s(e, "text"));
       const arg = (k: string) => (typeof a?.[k] === "string" ? (a[k] as string) : null);
       const sub = flag(e, "subagent");
@@ -360,26 +616,75 @@ export function presentHistory(live: J, cx: Context): J {
       if (name === "chat_post" && arg("text") !== null && !sub) {
         items.push([{ kind: "post", step }, i, i]);
         grouping = false;
+        groupSteps = 0;
+        groupPhase = null;
+        groupHasAct = false;
       } else if (name === "chat_state" && arg("kind") !== null && !sub) {
         const sec = a?.seconds;
         const what = arg("for")?.trim() || null;
-        items.push([{ kind: "mark", mark: arg("kind") ?? "", seconds: typeof sec === "number" ? Math.trunc(Math.max(sec, 0)) : null, what }, i, i]);
+        const why = (arg("done") ?? arg("need"))?.trim() || null;
+        items.push([{ kind: "mark", mark: arg("kind") ?? "", seconds: typeof sec === "number" ? Math.trunc(Math.max(sec, 0)) : null, what, why }, i, i]);
         grouping = false;
+        groupSteps = 0;
+        groupPhase = null;
+        groupHasAct = false;
       } else {
+        const nextPhase = phaseOf(s(e, "tool"), s(e, "text"));
+        if (grouping && groupSteps >= 8) {
+          const last = items[items.length - 1];
+          const prevRows = last[0].kind === "group" ? last[0].rows : [];
+          const hasTrailingThought = prevRows.length > 0 && "thought" in prevRows[prevRows.length - 1];
+          const exploreToAct = !groupHasAct && groupPhase === "explore" && nextPhase === "act";
+          const shouldSplit =
+            (hasTrailingThought && (exploreToAct || groupSteps >= 28)) ||
+            (exploreToAct && groupSteps >= 14) ||
+            groupSteps >= 48;
+          if (shouldSplit) {
+            const carriedThoughts: Row[] = [];
+            while (prevRows.length > 0 && "thought" in prevRows[prevRows.length - 1]) {
+              carriedThoughts.unshift(prevRows.pop()!);
+            }
+            if (carriedThoughts.length > 0) {
+              const firstThought = (carriedThoughts[0] as { thought: number }).thought;
+              last[2] = Math.max(last[1], firstThought - 1);
+              items.push([{ kind: "group", rows: carriedThoughts }, firstThought, i]);
+            } else {
+              items.push([{ kind: "group", rows: [] }, i, i]);
+            }
+            groupSteps = 0;
+            groupPhase = null;
+            groupHasAct = false;
+          }
+        }
         if (!grouping) {
           items.push([{ kind: "group", rows: [] }, i, i]);
           grouping = true;
+          groupSteps = 0;
+          groupPhase = null;
+          groupHasAct = false;
         }
         const last = items[items.length - 1];
         if (last[0].kind === "group") {
           last[0].rows.push({ step });
           last[2] = i;
+          groupSteps++;
+          if (nextPhase !== null) {
+            groupPhase = nextPhase;
+            if (nextPhase === "act") groupHasAct = true;
+          }
         }
       }
     } else if (kind === "thinking") {
+      if (cleanThoughtText(s(e, "text")) === "") {
+        cover(i);
+        return;
+      }
       if (!grouping) {
         items.push([{ kind: "group", rows: [] }, i, i]);
         grouping = true;
+        groupSteps = 0;
+        groupPhase = null;
+        groupHasAct = false;
       }
       const last = items[items.length - 1];
       if (last[0].kind === "group") {
@@ -388,11 +693,36 @@ export function presentHistory(live: J, cx: Context): J {
       }
     } else {
       grouping = false;
+      groupSteps = 0;
+      groupPhase = null;
+      groupHasAct = false;
       items.push([kind === "user" ? { kind: "received", i } : { kind: "text", i }, i, i]);
     }
   });
 
-  const failedOf = (step: Step) => step.result !== null && timeline[step.result]?.ok === false;
+  const isFailedResult = (rIdx: number | null) =>
+    rIdx !== null && (timeline[rIdx]?.ok === false || /^Failed to call [\w.-]+:/.test(s(timeline[rIdx], "text")));
+  const failedOf = (step: Step) => isFailedResult(step.result);
+  for (let idx = items.length - 1; idx >= 0; idx--) {
+    const [cur, cFirst, cLast] = items[idx];
+    if (cur.kind !== "text" || flag(timeline[cur.i], "subagent")) continue;
+    const said = s(timeline[cur.i], "text").trim();
+    if (!said) continue;
+    const matchPost = (other: [Item, number, number] | undefined): boolean => {
+      if (!other || other[0].kind !== "post") return false;
+      const st = steps[other[0].step];
+      if (failedOf(st)) return false;
+      const a = args(s(timeline[st.call], "text"));
+      return typeof a?.text === "string" && a.text.trim() === said;
+    };
+    if (matchPost(items[idx + 1])) {
+      items[idx + 1][1] = Math.min(items[idx + 1][1], cFirst);
+      items.splice(idx, 1);
+    } else if (matchPost(items[idx - 1])) {
+      items[idx - 1][2] = Math.max(items[idx - 1][2], cLast);
+      items.splice(idx, 1);
+    }
+  }
   const place = (address: string | null, message: string | null = null) => (address === null ? null : format.place(cx.threads, address, cx.offsetMin, cx.workspaces, message));
   const shown = items.map(([item, first, last]) => {
     let v: J;
@@ -426,6 +756,13 @@ export function presentHistory(live: J, cx: Context): J {
             if (notice?.kind === "event") return [];
             if (notice?.kind === "said") return [{ key: `${m.ts}.${k}`, from: { name: notice.name, slackUser: null, bound: false }, text: notice.said, place: null, notice: "job" }];
             if (m.station) return [{ key: `${m.ts}.${k}`, from: { name: brand.name(), slackUser: null, bound: false }, text: m.text, place: null, notice: "stillfail" }];
+            // Another chat's agent's letter (session_send) goes by that chat's name, without the heading, as the chat's
+            // page shows it: its station names it only by a session of its own ("another agent" from another station).
+            const sent = m.agent ? sentFrom(m.text) : null;
+            if (sent !== null) {
+              const said = mentions(sent[2], cx);
+              return [{ key: m.ts, from: { name: sent[0], slackUser: null, bound: false }, text: said, place: place(m.thread, m.slack ? m.ts : null), md: markdown(said, cx.md) }];
+            }
             let from: J;
             if (m.slack) {
               const bound = cx.slackUsers.includes(m.user);
@@ -453,8 +790,9 @@ export function presentHistory(live: J, cx: Context): J {
         const text = (k: string): string | null => (typeof a[k] === "string" ? a[k] : null);
         const kind = text("kind");
         const said = mentions(text("text") ?? "", cx);
-        v = { kind: "post", text: said, md: markdown(said, cx.md), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
-        const ends = endsOf(kind);
+        const isFailed = failedOf(steps[item.step]);
+        v = { kind: "post", text: said, md: markdown(said, cx.md), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: isFailed };
+        const ends = isFailed ? null : endsOf(kind);
         if (ends !== null && ends !== "waiting") v.ends = ends;
         break;
       }
@@ -499,18 +837,19 @@ export function presentHistory(live: J, cx: Context): J {
           v = { kind: "mark", text, wait: since !== null ? { since, until, seconds: item.seconds, what: item.what } : null, ends: "waiting" };
         } else {
           const m = item.mark;
+          const baseText =
+            m === "final" || m === "all_done"
+              ? t("core-logic.history.mark.final")
+              : m === "need_human"
+                ? t("core-logic.history.mark.human")
+                : m === "block" || m === "need_help"
+                  ? t("core-logic.history.mark.block")
+                  : m === "need_decision"
+                    ? t("core-logic.history.mark.decision")
+                    : t("core-logic.history.mark.other", { mark: m });
           v = {
             kind: "mark",
-            text:
-              m === "final" || m === "all_done"
-                ? t("core-logic.history.mark.final")
-                : m === "need_human"
-                  ? t("core-logic.history.mark.human")
-                  : m === "block" || m === "need_help"
-                    ? t("core-logic.history.mark.block")
-                    : m === "need_decision"
-                      ? t("core-logic.history.mark.decision")
-                      : t("core-logic.history.mark.other", { mark: m }),
+            text: item.why !== null ? `${baseText}：${line(item.why, 200)}` : baseText,
           };
           const ends = endsOf(m);
           if (ends !== null) v.ends = ends;
@@ -560,15 +899,19 @@ export function presentHistory(live: J, cx: Context): J {
   const phase = pushedNow.phase;
   const { usage, usageLine } = usageOf(live?.usage);
   const loaded = flag(live, "loaded");
+  // Why its first read failed (it is read again), and how the page before stands: being read, or why it was not.
+  const failed = typeof live?.failed === "string" && live.failed !== "" ? live.failed : null;
+  const older = live?.older === "reading" || live?.older === "failed" ? live.older : null;
   let edge: string;
   let empty: boolean;
   if (!loaded && shown.length === 0) [edge, empty] = [t("core-logic.history.edge.loading"), true];
   else if (shown.length === 0 && liveSteps.length === 0 && phase === null && base === 0) {
     const why = flag(live, "offline") ? "core-logic.history.edge.offline" : cx.started ? "core-logic.history.edge.missing" : "core-logic.history.edge.not_started";
     [edge, empty] = [t(why), true];
-  } else if (base > 0) [edge, empty] = [t("core-logic.history.edge.earlier"), false];
+  } else if (base > 0 && older === "failed") [edge, empty] = [t("core-logic.history.edge.earlier_failed", { why: String(live.olderFailed ?? "") }), false];
+  else if (base > 0) [edge, empty] = [t("core-logic.history.edge.earlier"), false];
   else [edge, empty] = [t("core-logic.history.edge.start"), false];
-  return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0 };
+  return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0, ...(failed !== null && !loaded && shown.length === 0 ? { failed } : {}), ...(base > 0 && older !== null ? { older } : {}) };
 }
 
 /// What a session's calls used (views/brief.ts `usageNow`), as its history shows it: label and value rows, and in a
@@ -643,12 +986,13 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
   const thinking = rows.flatMap((r) => ("thought" in r ? [r.thought] : []));
   const text = (i: number): string => (typeof timeline[i]?.text === "string" ? timeline[i].text : "");
   const tool = (i: number): string => (typeof timeline[i]?.tool === "string" ? timeline[i].tool : "");
-  const failedOf = (st: Step) => st.result !== null && timeline[st.result]?.ok === false;
+  const failedOf = (st: Step) =>
+    st.result !== null && (timeline[st.result]?.ok === false || /^Failed to call [\w.-]+:/.test(text(st.result)));
   const counts: [string, string[], number][] = [];
   for (const m of members) {
     const call = steps[m].call;
-    const kind = kindOf(tool(call));
-    const file = kind === "read" || kind === "edit" ? fileOf(text(call)) : null;
+    const kind = steps[m].scriptCount !== undefined && steps[m].scriptCount! >= 2 ? "other" : kindOf(tool(call), text(call));
+    const file = kind === "read" || kind === "edit" ? fileOf(text(call), tool(call)) : null;
     let at = counts.findIndex(([k]) => k === kind);
     if (at < 0) {
       counts.push([kind, [], 0]);
@@ -658,56 +1002,293 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
       if (!counts[at][1].includes(file)) counts[at][1].push(file);
     } else counts[at][2]++;
   }
-  let title = counts.map(([k, files, n]) => did(k, files.length === 0 ? n : files.length)).join(t("core-logic.history.did.sep"));
-  const chars = Array.from(title);
-  if (chars.length > 0) title = chars[0].toUpperCase() + chars.slice(1).join("");
+  const countOf = ([, files, n]: [string, string[], number]) => (files.length === 0 ? n : files.length);
+  const ordered = counts.slice().sort((a, b) => {
+    if ((a[0] === "other") !== (b[0] === "other")) return a[0] === "other" ? 1 : -1;
+    return countOf(b) - countOf(a);
+  });
+  const fileBrief = (files: string[]): string => {
+    const names = Array.from(new Set(files.map((f) => f.split("/").pop() || f))).filter(Boolean);
+    if (names.length === 0) return "";
+    if (names.length === 1) return `（${names[0]}）`;
+    if (names.length === 2) return `（${names[0]}、${names[1]}）`;
+    return `（${names[0]}、${names[1]} 等）`;
+  };
+  const formatTitle = (list: [string, string[], number][]) => {
+    const joined = list.map(([k, files, n]) => did(k, files.length === 0 ? n : files.length)).join(t("core-logic.history.did.sep"));
+    const chars = Array.from(joined);
+    return chars.length > 0 ? chars[0].toUpperCase() + chars.slice(1).join("") : "";
+  };
+  const formatSummary = (list: [string, string[], number][]) => {
+    const joined = list
+      .map(([k, files, n]) => {
+        const baseText = did(k, files.length === 0 ? n : files.length).replace("读取 thread ", "读取对话 ");
+        return (k === "read" || k === "edit") && files.length > 0 ? `${baseText}${fileBrief(files)}` : baseText;
+      })
+      .join(t("core-logic.history.did.sep"));
+    const chars = Array.from(joined);
+    return chars.length > 0 ? chars[0].toUpperCase() + chars.slice(1).join("") : "";
+  };
+  const title = formatTitle(ordered);
+  const knownCounts = ordered.filter(([k]) => k !== "other");
   const failed = members.filter((m) => failedOf(steps[m])).length;
   const pending = members.filter((m) => steps[m].result === null).length;
   // a thought's words, read as Markdown, and their first line without its marks
   const thought = (i: number) => {
-    const md = markdown(text(i), store);
-    return { md, first: lineOf(md, text(i)) };
+    const raw = text(i);
+    const cleaned = cleanThoughtText(raw) || raw;
+    const md = markdown(cleaned, store);
+    const first = lineOf(md, cleaned);
+    return { text: cleaned, md, first };
   };
   let summary: string;
   const lastMember = members[members.length - 1];
   if (lastMember === undefined) {
     summary = t("core-logic.history.thinking", { text: thinking.length > 0 ? Array.from(thought(thinking[0]).first).slice(0, 80).join("") : "" });
+  } else if (pending === 0 && members.length > 1 && knownCounts.length > 0) {
+    summary = t("core-logic.history.steps", { doing: formatSummary(knownCounts), n: members.length });
   } else {
     const call = steps[lastMember].call;
     // Said as the chat's activity says the call while it runs (activity.ts doing).
     const now = doing(tool(call), text(call), known);
     summary = members.length === 1 ? now : t("core-logic.history.steps", { doing: now, n: members.length });
   }
+  const stepTookMs = (st: Step): number | null => {
+    const call = timeline[st.call];
+    if (st.firstEntry === undefined && typeof call?.callId === "string" && call.callId.includes("#")) return null;
+    const result = st.result !== null ? timeline[st.result] : null;
+    const b = result && typeof result.at === "string" ? epochMs(result.at) : null;
+    const a = typeof call?.at === "string" ? epochMs(call.at) : null;
+    if (b !== null && a !== null && b - a >= 50) return b - a;
+    if (result && typeof result.text === "string") {
+      const mTime = /^Created At:\s*(\S+)\r?\nCompleted At:\s*(\S+)/.exec(result.text);
+      if (mTime) {
+        const t0 = epochMs(mTime[1] ?? "");
+        const t1 = epochMs(mTime[2] ?? "");
+        if (t0 !== null && t1 !== null && t1 - t0 >= 50) return t1 - t0;
+      }
+    }
+    return null;
+  };
   const step = (m: number) => {
     const st = steps[m];
     const call = timeline[st.call];
     const result = st.result !== null ? timeline[st.result] : null;
     const isFailed = failedOf(st);
-    const b = result && typeof result.at === "string" ? epochMs(result.at) : null;
-    const a = typeof call?.at === "string" ? epochMs(call.at) : null;
-    const took = b !== null && a !== null && b - a >= 0 ? b - a : null;
+    const took = stepTookMs(st);
     const meta = result === null ? t("core-logic.history.step.running") : isFailed ? t("core-logic.history.step.failed") : took !== null ? format.duration(took) : "";
+    const callText = text(st.call);
+    const callTool = tool(st.call);
+    const name = stepName(callTool, callText);
+    let said = told(callTool, callText, known) ?? describe(callText);
+    let stepHint = hint(callText, callTool);
+    if (said === null && st.scriptCount !== undefined) {
+      if (st.scriptCount >= 2) {
+        said = `执行脚本（含 ${st.scriptCount} 项调用）`;
+        if (st.scriptTools) stepHint = st.scriptTools;
+      } else {
+        said = "执行脚本";
+      }
+    }
+    if (said === null && (name === "Read" || name === "Edit" || name === "Write")) {
+      const file = fileOf(callText, callTool);
+      if (file !== null) {
+        const slash = file.lastIndexOf("/");
+        const baseName = slash >= 0 ? file.slice(slash + 1) : file;
+        const dirName = slash > 0 ? file.slice(0, slash) : "";
+        const range = name === "Read" ? lineRangeOf(callText) : null;
+        said = range !== null ? `${baseName} · ${range[0]}–${range[1]} 行` : baseName;
+        stepHint = dirName;
+      }
+    }
+    let enrichedCall = callText;
+    if (known.agents && known.agents.size > 0) {
+      const a = args(callText);
+      if (a) {
+        const rawTarget = [a.to, a.recipient, a.Recipient, a.agent_id, a.agentId, a.conversationId, a.chat].find(
+          (v): v is string => typeof v === "string" && v.trim() !== "",
+        )?.trim();
+        if (rawTarget) {
+          const direct = known.agents.get(rawTarget);
+          const session = rawTarget.includes("/chats/") ? rawTarget.slice(rawTarget.indexOf("/chats/") + 7) : rawTarget;
+          const mapped = direct ?? known.agents.get(session);
+          if (mapped && a._target === undefined) {
+            try {
+              const parsed = JSON.parse(callText);
+              if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                enrichedCall = JSON.stringify({ ...parsed, _target: mapped, _targetId: rawTarget });
+              }
+            } catch {
+              // keep callText if cut short
+            }
+          }
+        }
+      }
+    }
+    const firstCall = st.firstEntry ?? st.call;
     return {
-      said: describe(text(st.call)) ?? told(tool(st.call), text(st.call), known),
-      name: toolName(tool(st.call)),
-      hint: hint(text(st.call)),
+      said,
+      name,
+      hint: stepHint,
       meta,
       failed: isFailed,
-      call: text(st.call),
+      call: enrichedCall,
       result: result === null ? null : (result.text ?? ""),
-      entries: st.result !== null ? [base + st.call, base + st.result] : [base + st.call],
+      entries: st.result !== null ? [base + firstCall, base + st.result] : [base + firstCall],
       brief: call?.brief === true || result?.brief === true,
     };
   };
+  const isCompletedReadOf = (m: number): string | null => {
+    const st = steps[m];
+    if (st.result === null || failedOf(st)) return null;
+    const callText = text(st.call);
+    const callTool = tool(st.call);
+    if (stepName(callTool, callText) !== "Read" || describe(callText) !== null) return null;
+    return fileOf(callText, callTool);
+  };
+  const coalescedRead = (run: number[], file: string) => {
+    const firstSt = steps[run[0]];
+    const slash = file.lastIndexOf("/");
+    const baseName = slash >= 0 ? file.slice(slash + 1) : file;
+    const dirName = slash > 0 ? file.slice(0, slash) : "";
+    const ranges = run.map((m) => lineRangeOf(text(steps[m].call))).filter((r): r is [number, number] => r !== null);
+    let rangeText = `共 ${run.length} 次`;
+    let minStart: number | undefined;
+    let maxEnd: number | undefined;
+    if (ranges.length > 0) {
+      minStart = Math.min(...ranges.map((r) => r[0]));
+      maxEnd = Math.max(...ranges.map((r) => r[1]));
+      rangeText = `${minStart}–${maxEnd} 行（共 ${run.length} 段）`;
+    }
+    let totalTook = 0;
+    for (const m of run) {
+      const ms = stepTookMs(steps[m]);
+      if (ms !== null) totalTook += ms;
+    }
+    const mergedCall = minStart !== undefined && maxEnd !== undefined
+      ? JSON.stringify({ Path: file, StartLine: minStart, EndLine: maxEnd })
+      : text(firstSt.call);
+    const mergedResult = run.map((m) => {
+      const r = steps[m].result !== null ? timeline[steps[m].result!] : null;
+      return typeof r?.text === "string" ? r.text : "";
+    }).filter((s) => s !== "").join("\n");
+    const entries: number[] = [];
+    for (const m of run) {
+      entries.push(base + steps[m].call);
+      if (steps[m].result !== null) entries.push(base + steps[m].result!);
+    }
+    const isBrief = run.some((m) => timeline[steps[m].call]?.brief === true || (steps[m].result !== null && timeline[steps[m].result!]?.brief === true));
+    return {
+      said: `${baseName} · ${rangeText}`,
+      name: "Read",
+      hint: dirName,
+      meta: totalTook >= 50 ? format.duration(totalTook) : "",
+      failed: false,
+      call: mergedCall,
+      result: mergedResult,
+      entries: [entries[0], entries[entries.length - 1]],
+      brief: isBrief,
+    };
+  };
+  const isCompletedEditOf = (m: number): string | null => {
+    const st = steps[m];
+    if (st.result === null || failedOf(st)) return null;
+    const callText = text(st.call);
+    const callTool = tool(st.call);
+    if (stepName(callTool, callText) !== "Edit" || describe(callText) !== null) return null;
+    return fileOf(callText, callTool);
+  };
+  const coalescedEdit = (run: number[], file: string) => {
+    const firstSt = steps[run[0]];
+    const slash = file.lastIndexOf("/");
+    const baseName = slash >= 0 ? file.slice(slash + 1) : file;
+    const dirName = slash > 0 ? file.slice(0, slash) : "";
+    const edits: { old_string: string; new_string: string }[] = [];
+    for (const m of run) {
+      const a = args(text(steps[m].call));
+      if (!a) continue;
+      if (Array.isArray(a.edits)) {
+        for (const e of a.edits) {
+          if (e && typeof e === "object") {
+            const oldS = typeof e.old_string === "string" ? e.old_string : typeof e.Target === "string" ? e.Target : "";
+            const newS = typeof e.new_string === "string" ? e.new_string : typeof e.Replacement === "string" ? e.Replacement : "";
+            edits.push({ old_string: oldS, new_string: newS });
+          }
+        }
+      } else {
+        const oldS = typeof a.old_string === "string" ? a.old_string : typeof a.Target === "string" ? a.Target : undefined;
+        const newS = typeof a.new_string === "string" ? a.new_string : typeof a.Replacement === "string" ? a.Replacement : undefined;
+        if (oldS !== undefined && newS !== undefined) edits.push({ old_string: oldS, new_string: newS });
+      }
+    }
+    let totalTook = 0;
+    for (const m of run) {
+      const ms = stepTookMs(steps[m]);
+      if (ms !== null) totalTook += ms;
+    }
+    const mergedCall = edits.length > 0 ? JSON.stringify({ file_path: file, edits }) : text(firstSt.call);
+    const mergedResult = run.map((m) => {
+      const r = steps[m].result !== null ? timeline[steps[m].result!] : null;
+      return typeof r?.text === "string" ? r.text : "";
+    }).filter((s) => s !== "").join("\n");
+    const entries: number[] = [];
+    for (const m of run) {
+      entries.push(base + steps[m].call);
+      if (steps[m].result !== null) entries.push(base + steps[m].result!);
+    }
+    const isBrief = run.some((m) => timeline[steps[m].call]?.brief === true || (steps[m].result !== null && timeline[steps[m].result!]?.brief === true));
+    return {
+      said: `${baseName} · ${run.length} 处修改`,
+      name: "Edit",
+      hint: dirName,
+      meta: totalTook >= 50 ? format.duration(totalTook) : "",
+      failed: false,
+      call: mergedCall,
+      result: mergedResult,
+      entries: [entries[0], entries[entries.length - 1]],
+      brief: isBrief,
+    };
+  };
+  const outRows: J[] = [];
+  for (let idx = 0; idx < rows.length; idx++) {
+    const r = rows[idx];
+    if ("thought" in r) {
+      outRows.push({ kind: "thought", content: { ...thought(r.thought), entries: [base + r.thought], brief: timeline[r.thought]?.brief === true } });
+    } else {
+      const readFile = isCompletedReadOf(r.step);
+      if (readFile !== null) {
+        const run = [r.step];
+        while (idx + 1 < rows.length && "step" in rows[idx + 1] && isCompletedReadOf((rows[idx + 1] as { step: number }).step) === readFile) {
+          idx++;
+          run.push((rows[idx] as { step: number }).step);
+        }
+        if (run.length > 1) {
+          outRows.push({ kind: "step", content: coalescedRead(run, readFile) });
+          continue;
+        }
+      }
+      const editFile = isCompletedEditOf(r.step);
+      if (editFile !== null) {
+        const run = [r.step];
+        while (idx + 1 < rows.length && "step" in rows[idx + 1] && isCompletedEditOf((rows[idx + 1] as { step: number }).step) === editFile) {
+          idx++;
+          run.push((rows[idx] as { step: number }).step);
+        }
+        if (run.length > 1) {
+          outRows.push({ kind: "step", content: coalescedEdit(run, editFile) });
+          continue;
+        }
+      }
+      outRows.push({ kind: "step", content: step(r.step) });
+    }
+  }
   return {
     kind: "group",
     summary,
     title,
     failures: failed,
     pending,
-    rows: rows.map((r) => ("thought" in r
-      ? { kind: "thought", content: { text: text(r.thought), ...thought(r.thought), entries: [base + r.thought], brief: timeline[r.thought]?.brief === true } }
-      : { kind: "step", content: step(r.step) })),
+    rows: outRows,
   };
 }
 
@@ -741,6 +1322,44 @@ function pair(timeline: J[]): { steps: Step[]; stepAt: Map<number, number> } {
       if (step !== undefined) steps[step].result = i;
     }
   });
+  for (let idx = 0; idx < steps.length; idx++) {
+    const st = steps[idx];
+    const e = timeline[st.call];
+    const cid = typeof e?.callId === "string" ? e.callId : "";
+    if (!cid || cid.includes("#") || toolName(typeof e?.tool === "string" ? e.tool : "") !== "exec") continue;
+    const callText = typeof e?.text === "string" ? e.text : "";
+    if (args(callText) !== null) continue;
+    const prefix = `${cid}#`;
+    const innerSteps: number[] = [];
+    for (let j = idx + 1; j < steps.length; j++) {
+      const ie = timeline[steps[j].call];
+      if (typeof ie?.callId === "string" && ie.callId.startsWith(prefix)) innerSteps.push(j);
+      else break;
+    }
+    const isLoop = /\b(?:for|while)\s*\(|\.\s*(?:map|forEach)\s*\(/.test(callText);
+    const allPostOrMark = innerSteps.length > 0 && innerSteps.every((j) => beginsItem(timeline[steps[j].call]));
+    if ((innerSteps.length === 1 && !isLoop) || allPostOrMark) {
+      st.unwrapped = true;
+      const target = steps[innerSteps[innerSteps.length - 1]];
+      target.result = st.result;
+      target.firstEntry = st.call;
+    } else if (innerSteps.length >= 2) {
+      st.scriptCount = innerSteps.length;
+      const names = Array.from(
+        new Set(
+          innerSteps.map((j) =>
+            stepName(
+              typeof timeline[steps[j].call]?.tool === "string" ? timeline[steps[j].call].tool : "",
+              typeof timeline[steps[j].call]?.text === "string" ? timeline[steps[j].call].text : "",
+            ),
+          ),
+        ),
+      );
+      st.scriptTools = names.join("、");
+    } else {
+      st.scriptCount = 0;
+    }
+  }
   return { steps, stepAt };
 }
 
@@ -785,10 +1404,10 @@ export function activity(live: J, stations?: ReadonlyMap<string, string>): J {
   });
   let call: [string, string, boolean] | null = null;
   let replying = false;
-  const known: Known = { stations, tasks: tasksOf(timeline) };
+  const known: Known = { stations, tasks: tasksOf(timeline), agents: agentsOf(timeline) };
   for (const st of pair(timeline).steps) {
     const e = timeline[st.call];
-    if (st.call < turn || st.result !== null || e?.subagent === true) continue;
+    if (st.unwrapped || st.call < turn || st.result !== null || e?.subagent === true) continue;
     const name = toolName(s(e, "tool"));
     if (name === "chat_post") replying = true;
     else if (name !== "chat_state") {

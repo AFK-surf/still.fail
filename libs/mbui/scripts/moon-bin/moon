@@ -1,0 +1,25 @@
+#!/bin/bash
+# The development entry point: diagnostics retain their locations and messages, not rendered source and padding.
+set -e
+: "${MBUI_REAL_MOON:?Source scripts/env.sh to select the MoonBit toolchain}"
+args=("$@")
+skip=0
+for ((i=0; i<${#args[@]}; i++)); do
+  if [ "$skip" = 1 ]; then skip=0; continue; fi
+  case "${args[i]}" in
+    -C|--target-dir|-Z|--unstable-feature) skip=1 ;;
+    -*) ;;
+    build|check|test|run)
+      # Only compiler options count: arguments following -- belong to the program being run.
+      for ((j=i+1; j<${#args[@]}; j++)); do
+        case "${args[j]}" in
+          --) break ;;
+          --output-json|--json|--no-render|--help|-h) exec "$MBUI_REAL_MOON" "$@" ;;
+        esac
+      done
+      exec "$MBUI_REAL_MOON" "${args[@]:0:i+1}" --no-render "${args[@]:i+1}"
+      ;;
+    *) break ;;
+  esac
+done
+exec "$MBUI_REAL_MOON" "$@"

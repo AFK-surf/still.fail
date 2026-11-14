@@ -7,16 +7,17 @@ import {
   "mbui/signals",
   "mbui/hostapi",
   "mbui/kit",
+  "mbui/headless",
   "mbui/view",
   "mbui/motion",
   "moonbitlang/core/math",
-  "moonbitlang/core/json",
   "mbui/dmath",
   "mbui/zip",
+  "mbui/text",
 }
 
 import {
-  "mbui/pixels", "moonbitlang/core/env", "moonbitlang/core/encoding/utf8", "stillfail/sfkept" } for "wbtest"
+  "mbui/pixels", "moonbitlang/core/env", "moonbitlang/core/encoding/utf8", "stillfail/sfkept", "mbui/halt", "moonbitlang/core/json" } for "wbtest"
 
 import { "stillfail/sfkept" } for "test"
 

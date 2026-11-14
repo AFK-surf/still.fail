@@ -13,9 +13,9 @@ test "a picture picked as one's own: made a square face_picture_px across whatev
     let (w, h) = side
     let url = face_picture(w, h, FixedArray::make(w * h * 4, b'\xFF'))
     let head = "data:image/jpeg;base64,"
-    assert_true(url.has_prefix(head), msg="\{side}")
+    assert_true(url.has_prefix(head), msg="\{Repr(side)}")
     let jpeg = @codec.from_base64(url.unsafe_substring(start=head.length(), end=url.length()))
-    assert_eq(@pixels.image_size(jpeg), Some((face_picture_px, face_picture_px)), msg="\{side}")
+    assert_eq(@pixels.image_size(jpeg), Some((face_picture_px, face_picture_px)), msg="\{Repr(side)}")
   }
 }
 

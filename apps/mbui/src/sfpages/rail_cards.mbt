@@ -7,8 +7,15 @@
 
 ///|
 /// Place `place`'s card of the workspace `ws` says (chats, usage) as nodes in `parent`, as its core says it now: its
-/// line, its figures side by side, the last 7 days as bars, its lines, 分享卡片 where the core offers it.
-pub fn rail_card_node(parent : @view.View, src : Source, ws : () -> Workspace?, place : String) -> Unit {
+/// line, its figures side by side, the last 7 days as bars, its lines, 分享卡片 where the core offers it. A figure the
+/// core says opens a place (`go`: 对话's, the chats it counts) is pressed for it: `go` given that place.
+pub fn rail_card_node(
+  parent : @view.View,
+  src : Source,
+  ws : () -> Workspace?,
+  place : String,
+  go? : (String) -> Unit = fn(_) {  },
+) -> Unit {
   let card = fn() {
     match ws() {
       Some(w) => src.topic("railCard", { "scope": Json::string(w.id), "place": Json::string(place) }).get().value
@@ -19,9 +26,36 @@ pub fn rail_card_node(parent : @view.View, src : Source, ws : () -> Workspace?, 
     @sf.style_node(b, fn() { rc_box })
     @sf.words_node(b, fn() { text(card(), "head") }, fn() { rc_head }) |> ignore
     b.show(fn() { items(card(), "stats").length() > 0 }, fn(row) {
-      @sf.style_node(row, fn() { rc_stats })
+      @sf.style_node(row, fn() {
+        if items(card(), "stats").iter().any(fn(s) { text(Some(s), "go") != "" }) {
+          rc_stats_go
+        } else {
+          rc_stats
+        }
+      })
       row.each(fn() { items(card(), "stats") }, fn(s) { text(Some(s), "label") }, fn(st, s) {
-        @sf.style_node(st, fn() { rc_stat }, in_row=true)
+        let to = fn() { text(Some(s.get()), "go") }
+        @sf.style_node(st, fn() { if to() == "" { rc_stat } else { rc_stat_go } }, in_row=true)
+        st
+        .presses(By(fn() { to() != "" }))
+        .focusable(By(fn() { to() != "" }))
+        .says(By(fn() {
+          if to() == "" {
+            None
+          } else {
+            Some(@view.said(Button, label=text(Some(s.get()), "label") + " " + text(Some(s.get()), "value")))
+          }
+        }))
+        .on_press(fn() {
+          let p = @signals.untracked(to)
+          if p != "" {
+            go(p)
+          }
+        })
+        // (its ground the hover's as the hand is on it)
+        .ground(By(fn() { if to() != "" && @sf.lit_node(st) { @sf.theme().p.hover } else { 0L } }))
+        .radius(By(fn() { if to() == "" { 0.0 } else { rc_stat_corner() } }))
+        |> ignore
         @sf.words_node(st, fn() { text(Some(s.get()), "value") }, fn() { rc_value.then(toned(text(Some(s.get()), "tone"))) })
         |> ignore
         @sf.words_node(st, fn() { text(Some(s.get()), "label") }, fn() { rc_label }) |> ignore
@@ -53,8 +87,9 @@ pub fn rail_card_node(parent : @view.View, src : Source, ws : () -> Workspace?, 
           None => ()
         }
       })
-      // (its ground the hover's as the hand is on it: rc_share's hovered)
+      // (its ground the hover's as the hand is on it: rc_share's hovered; its corner concentric with the card's)
       .ground(By(fn() { if @sf.lit_node(k) { @sf.theme().p.hover } else { @sf.alpha(@sf.theme().p.text, 0.05) } }))
+      .radius(By(fn() { rc_stat_corner() }))
       |> ignore
       @sf.icon_node(k, "share", 16.0, By(fn() { @sf.theme().p.text })) |> ignore
       @sf.words_node(k, label, fn() { rc_share_words }) |> ignore
@@ -110,8 +145,36 @@ let rc_head : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg,
 let rc_stats : @ui.Style = @ui.css("row w=Full gap=S3")
 
 ///|
+/// The same of figures that are pressed, 20 apart: a pressed one's ground (rc_stat_go) reaches 10 past its words.
+// kept across runs: a value (no field of it changes)
+let rc_stats_go : @ui.Style = @ui.css("row w=Full gap=S5")
+
+///|
 // kept across runs: a value (no field of it changes)
 let rc_stat : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
+
+///|
+/// A figure that opens the chats it counts: its ground out past its words to the card's padding, 10 all round (the
+/// figures 20 apart: the grounds of two side by side meet, never overlap), its words where they were; its corner
+/// rc_stat_corner's.
+// kept across runs: a value (no field of it changes)
+let rc_stat_go : @ui.Style = rc_stat.then(@ui.css("p=S2_5")).then(
+  @ui.style(mx=@sf.room_of(-rc_stat_out), my=@sf.room_of(-rc_stat_out)),
+)
+
+///|
+/// A pressed figure's corner: concentric with the card's (a small panel's, @sf.r_menu) at its padding, where its ground
+/// lies (as 分享卡片's, rc_share), where the theme's ranges let it be; else its own (Md).
+fn rc_stat_corner() -> Double {
+  let t = @ui.tree_theme()
+  @ui.CornerOf::Follow(@ui.CornerOf::Own(@sf.r_menu), @sf.panel_pad, t.corner(Md)).radius(
+    @ui.tree_corner_roots_now(),
+  )
+}
+
+///|
+/// How far a pressed figure's ground reaches past its words: its padding (p=S2_5), its words left where they were.
+let rc_stat_out : Double = hover_words_in
 
 ///|
 /// A figure's value, large as a title, over what it is of.
@@ -197,7 +260,7 @@ let rc_day_today : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold,
 /// its edges), 36 high, a small panel's row: a capsule concentric with its corners there (6 and 18, 24; login_card's lc_open);
 /// on the words' colour at 5%, the hover's as the hand is on it (rail_card_node).
 // kept across runs: a value (no field of it changes)
-let rc_share : @ui.Style = @ui.css("row w=Full h=S9 mt=S1 px=S3 gap=S1_5 radius=Inner align=ACenter justify=JCenter").then(
+let rc_share : @ui.Style = @ui.css("row w=Full h=S9 mt=S1 px=S3 gap=S1_5 align=ACenter justify=JCenter").then(
   @ui.style(mx=@sf.room_of(-hover_words_in), mb=@sf.room_of(-hover_words_in)),
 )
 

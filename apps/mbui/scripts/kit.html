@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>still.fail 组件</title>
+<!-- The component library's page (scripts/kit-web.sh): mbui's web host drawing src/sfstories on a canvas. The files
+     the app carries (tools/assets) are given to it as globalThis.__mbassets, as web/src/mbui/core.ts gives the app's:
+     Inter and the sources it shows before it starts, the rest as each comes, the page drawn again then. -->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #F5F5F7; }
+  @media (prefers-color-scheme: dark) { html, body { background: #161618; } }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+  #ime { position: fixed; left: 0; top: 0; width: 2px; height: 20px; opacity: 0; padding: 0; border: 0;
+         resize: none; overflow: hidden; font-size: 16px; caret-color: transparent; color: transparent;
+         background: transparent; outline: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<textarea id="ime" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>
+<script>
+  const assets = (globalThis.__mbassets = {});
+  const carried = (name) => fetch(`assets/${name}`).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)
+    .then((b) => { if (b) assets[name] = new Uint8Array(b); });
+  const load = (src) => new Promise((ok, no) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = ok; s.onerror = no;
+    document.body.appendChild(s);
+  });
+  (async () => {
+    const first = Promise.all([carried("inter.woff2"), carried("sources.txt")]);
+    await load("host.js");
+    await first;
+    await load("app.js");
+    for (const name of ["jetbrains_mono.ttf", "math_glyphs.gz"])
+      carried(name).then(() => globalThis.MBHost?.requestFrame?.());
+  })();
+</script>
+</body>
+</html>

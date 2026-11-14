@@ -13,7 +13,7 @@ test "a short paste after multiple downloads keeps the rows steady" {
 
 ///|
 fn replay_paste_short() -> Unit raise {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("paste-short"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)

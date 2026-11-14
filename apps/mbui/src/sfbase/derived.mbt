@@ -10,56 +10,26 @@
 // a part kept as it was drawn, a computed of it): one nothing follows is let go as another is made.
 
 ///|
-/// Computeds kept by a key each (a chat's view by its chat, a folder's entries by its folder): each a computed made of
-/// the getter its first read gave (given what it made last, none the first time), read as a computed is (worked out
-/// again only as what it read changed), let go of (Computed::dispose) once nothing follows it, as another is made.
+/// Computeds kept by a key each (a chat's view by its chat, a folder's entries by its folder) and by the source read:
+/// each a computed made of the getter its first read from that source gave (given what it made last, none the first
+/// time), read as a computed is (worked out again only as what it read changed), let go of (Computed::dispose) once
+/// nothing follows it, as another is made. By the source too: a page's source ends with the page, and a history opened
+/// again read the one before it, ended, so it waited in its bones for ever.
 pub struct Kept[T] {
-  priv kept : Map[String, KeptOne[T]]
-  /// listed with what a new one made goes over (kept_lists), once it keeps anything
-  priv mut listed : Bool
-}
-
-///|
-struct KeptOne[T] {
-  value : @signals.Computed[T]
+  priv kept : SourceKept[T]
 }
 
 ///|
 pub fn[T] Kept::new() -> Kept[T] {
-  { kept: {}, listed: false }
+  { kept: { kept: {}, listed: false } }
 }
 
 ///|
-/// What `getter` makes for `key` (given what it made last): worked out the first time, and again only once what it
-/// read changed since; what reads it told only where that comes out otherwise than before, by `same` where given (else
-/// as signals compare).
-pub fn[T] Kept::read(self : Kept[T], key : String, getter : (T?) -> T, same? : (T, T) -> Bool) -> T {
-  let one = match self.kept.get(key) {
-    Some(k) => k
-    None => {
-      // (a new one: those nothing follows let go first, once there are twice as many kept as the last time that was done,
-      // so making n costs O(n) in all; where no getter is working one out, whose own is not followed yet)
-      if kept_working.val == 0 && kept_count.made >= 2 * kept_count.left &&
-        kept_count.made >= kept_sweep_least {
-        for l in kept_lists {
-          (l.sweep)()
-        }
-        kept_count.left = kept_count.made
-      }
-      let k = { value: @signals.computed(getter, same?) }
-      self.kept[key] = k
-      kept_count.made += 1
-      if !self.listed {
-        self.listed = true
-        kept_lists.push({ sweep: fn() { self.sweep() }, clear: fn() { self.clear() } })
-      }
-      k
-    }
-  }
-  kept_working.val += 1
-  let v = one.value.get()
-  kept_working.val -= 1
-  v
+/// What `getter` makes for `key` from `src` (given what it made last): worked out the first time, and again only once
+/// what it read changed since; what reads it told only where that comes out otherwise than before, by `same` where
+/// given (else as signals compare).
+pub fn[T] Kept::read(self : Kept[T], src : Source, key : String, getter : (T?) -> T, same? : (T, T) -> Bool) -> T {
+  self.kept.read(src, key, getter, same?)
 }
 
 ///|
@@ -86,54 +56,7 @@ let kept_working : Ref[Int] = Ref(0)
 ///|
 /// What was made last for `key`, if it is kept: not worked out again, nothing it reads asked for.
 pub fn[T] Kept::peek(self : Kept[T], key : String) -> T? {
-  match self.kept.get(key) {
-    Some(k) => k.value.peek()
-    None => None
-  }
-}
-
-///|
-/// Let go of a key now. A value still followed by something else keeps its dependencies until that reader lets go.
-fn[T] Kept::forget(self : Kept[T], key : String) -> Unit {
-  match self.kept.get(key) {
-    Some(k) => {
-      if !k.value.watched() {
-        k.value.dispose()
-      }
-      self.kept.remove(key) |> ignore
-      kept_count.made -= 1
-    }
-    None => ()
-  }
-}
-
-///|
-/// Those nothing follows let go: what the frames' watch read as the window was last built, or as this one is, is
-/// followed by it till it reads anew without it (mbui/signals' Watch::read); a part kept as it was drawn, which reads it
-/// no more each frame, holds it (mbui's Ctx::kept_part); a computed that read it, as long as it is itself kept.
-fn[T] Kept::sweep(self : Kept[T]) -> Unit {
-  let gone = []
-  for key, k in self.kept {
-    if !k.value.watched() {
-      gone.push(key)
-    }
-  }
-  for key in gone {
-    match self.kept.get(key) {
-      Some(k) => k.value.dispose()
-      None => ()
-    }
-    self.kept.remove(key) |> ignore
-    kept_count.made -= 1
-  }
-}
-
-///|
-fn[T] Kept::clear(self : Kept[T]) -> Unit {
-  for _, k in self.kept {
-    k.value.dispose()
-  }
-  self.kept.clear()
+  self.kept.peek(key)
 }
 
 ///|
@@ -198,7 +121,8 @@ fn[T] SourceKept::read(self : SourceKept[T], source : Source, key : String, gett
       found
     }
     None => {
-      // (as Kept::read's: those nothing follows let go once there are twice as many as were left the last time)
+      // (those nothing follows let go once there are twice as many as were left the last time, so making n costs O(n) in
+      // all; where no getter is working one out, whose own is not followed yet)
       if kept_working.val == 0 && kept_count.made >= 2 * kept_count.left &&
         kept_count.made >= kept_sweep_least {
         for l in kept_lists {
@@ -278,7 +202,9 @@ fn[T] SourceKept::forget(self : SourceKept[T], key : String) -> Unit {
 }
 
 ///|
-/// Those nothing follows let go (as Kept::sweep).
+/// Those nothing follows let go: what the frames' watch read as the window was last built, or as this one is, is
+/// followed by it till it reads anew without it (mbui/signals' Watch::read); a part kept as it was drawn, which reads it
+/// no more each frame, holds it (mbui's Ctx::kept_part); a computed that read it, as long as it is itself kept.
 fn[T] SourceKept::sweep(self : SourceKept[T]) -> Unit {
   let gone : Array[(String, SourceKeptOne[T])] = []
   for key, entries in self.kept {
@@ -416,7 +342,7 @@ pub fn[T] made_again(
     let index = match by.val {
       Some(m) => m
       None => {
-        let m : Map[String, (Json, T)] = {}
+        let m : Map[String, (Json, T)] = Map([])
         for p in was {
           m[key(p.0)] = p
         }

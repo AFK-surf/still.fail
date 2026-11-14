@@ -33,7 +33,7 @@ fn emit_said(t : @ui.Tester) -> String {
   let em = emits_of(emit_chat)
   let rd = reading_of(emit_chat)
   let tu = turns_of(emit_chat)
-  "at \{t.time()} shown \{rd.shown} was_shown \{rd.was_shown} stepped_at \{tu.stepped_at} current \{em.current is Some(_)} queue \{em.queue.length()} copied \{em.copied} asks \{tu.asks.length()} wanted \{t.wanted_after()} (\{t.wanted_why()})"
+  "at \{t.time()} shown \{rd.shown} was_shown \{rd.was_shown} stepped_at \{tu.stepped_at} current \{em.current is Some(_)} queue \{em.queue.length()} copied \{em.copied} asked \{Repr(tu.asked)} wanted \{t.wanted_after()} (\{t.wanted_why()})"
 }
 
 ///|
@@ -52,7 +52,7 @@ fn emit_typed(t : @ui.Tester, words : String) -> String {
     }
     match at {
       Some((x, y)) => t.tap(x, y)
-      None => return "no field: \{t.words().map(fn(w) { w.0 })}"
+      None => return "no field: \{Repr(t.words().map(fn(w) { w.0 }))}"
     }
     ignore(host_frames_till(t, t.time() + 500.0))
   }
@@ -180,7 +180,7 @@ test "the avatar going home draws its movement without laying out the chat again
   let until = t.time() + Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() / 4.0
   ignore(host_frames_till(t, until))
   guard em.current is Some(turn) && turn.pose == Return else {
-    fail("the avatar is not on its way home: \{em.current.map(fn(c) { c.pose })}")
+    fail("the avatar is not on its way home: \{Repr(em.current.map(fn(c) { c.pose }))}")
   }
   // Compare whole and retained frames above; inspect the next frame itself, without the comparison's rebuild.
   t.check_looks(false)
@@ -189,7 +189,7 @@ test "the avatar going home draws its movement without laying out the chat again
     t.frame_at(t.next_frame_time())
     let perf = t.frame_perf()
     assert_true(em.trace.0 > before, msg="the avatar did not move")
-    assert_true(perf.painted, msg="its move laid out the chat again: \{t.built_why()}; \{perf}")
+    assert_true(perf.painted, msg="its move laid out the chat again: \{t.built_why()}; \{Repr(perf)}")
   }
   emit_restore()
 }

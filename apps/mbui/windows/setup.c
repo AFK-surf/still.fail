@@ -4,6 +4,9 @@
 // NsisUpdater: `--updated /S --force-run`), so an installed desktop app's 更新 puts this app in its place, and what this
 // app's own updater runs (the host's update_install). What it carries: the app's files and their words (setup.env:
 // APP_NAME, APP_ID, EXE, DIR, VERSION), packed after the program (`--pack`, LZMS by Windows' own Compression API).
+// Its raw form (`--raw`) is the same program carrying the same files stored as they are (MAGIC_RAW): what an app's
+// delta update makes from the installed files (the host's win_update.h, update_delta.h), as small a change from them
+// as can be, and installs as this one does.
 //
 //   setup.exe [/S] [--updated] [--force-run] [/D=<dir>]   installs (/S: no window; --force-run: the app opened after,
 //                                                          as it is anyway without /S)
@@ -11,6 +14,9 @@
 //                                                          a copy of itself in the temporary folder, `--uninstall-from
 //                                                          <dir> [--after <pid>]`, once this one has ended
 //   setup.exe --pack OUT ENV FILE…                         (the build's) this program with ENV and FILEs packed after it
+//   setup.exe --raw OUT                                    (the release's) this installer again, what it carries stored:
+//                                                          the same program, the same files in the same order, nothing
+//                                                          else (no time, no path): the same bytes each time
 //
 // Installing: into %LOCALAPPDATA%\Programs\<DIR> (where the desktop app's installer put it, the one its uninstall
 // entry names if it says another), the app there first ended (its windows asked to close, then ended: the desktop app's
@@ -55,7 +61,13 @@
 #pragma comment(linker, "/SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup")
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
-static const char MAGIC[8] = {'M', 'B', 'S', 'E', 'T', 'U', 'P', '1'};
+static const char MAGIC[8] = {'M', 'B', 'S', 'E', 'T', 'U', 'P', '1'};      // what it carries packed (LZMS)
+static const char MAGIC_RAW[8] = {'M', 'B', 'S', 'E', 'T', 'U', 'P', '0'};  // stored, as they are (--raw)
+
+// whether 8 bytes are a payload's mark: 1 packed, 2 stored, 0 neither
+static int payload_mark(const unsigned char *b) {
+  return !memcmp(b, MAGIC, 8) ? 1 : !memcmp(b, MAGIC_RAW, 8) ? 2 : 0;
+}
 // System.AppUserModel.ID
 static const PROPERTYKEY app_id_key = {{0x9F4C2855, 0x9F79, 0x4B39, {0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}}, 5};
 
@@ -142,30 +154,32 @@ static int write_all(const wchar_t *path, const void *b, size_t n) {
 }
 
 // The payload after this program: MAGIC, its count, then each: its name's length (u16) and name (UTF-16), its size and
-// its packed size (u64 each), its packed bytes; at the program's very end the payload's offset (u64) and MAGIC.
+// its packed size (u64 each), its packed bytes; at the program's very end the payload's offset (u64) and MAGIC. A raw
+// installer's is the same with MAGIC_RAW at both ends, each file's packed size its size and its bytes as they are.
 // *stub: where the program itself ends (what an uninstaller copies). 1 when read.
 static int payload_read(size_t *stub) {
   wchar_t self[MAX_PATH * 2];
   GetModuleFileNameW(NULL, self, MAX_PATH * 2);
   size_t n = 0;
   unsigned char *b = read_all(self, &n);
-  if (!b || n < 16 || memcmp(b + n - 8, MAGIC, 8) != 0) {
+  int kind = b && n >= 16 ? payload_mark(b + n - 8) : 0;
+  if (!kind) {
     free(b);
     return 0;
   }
   uint64_t at;
   memcpy(&at, b + n - 16, 8);
   *stub = (size_t)at;
-  if (at + 12 > n || memcmp(b + at, MAGIC, 8) != 0) {
+  if (at > n - 16 || n - 16 - at < 12 || payload_mark(b + at) != kind) {
     free(b);
     return 0;
   }
-  size_t p = (size_t)at + 8;
+  size_t p = (size_t)at + 8, end = n - 16;
   uint32_t count;
   memcpy(&count, b + p, 4);
   p += 4;
   DECOMPRESSOR_HANDLE d = NULL;
-  if (!CreateDecompressor(COMPRESS_ALGORITHM_LZMS, NULL, &d)) {
+  if (kind == 1 && !CreateDecompressor(COMPRESS_ALGORITHM_LZMS, NULL, &d)) {
     free(b);
     return 0;
   }
@@ -174,9 +188,13 @@ static int payload_read(size_t *stub) {
   for (uint32_t i = 0; ok && i < count; i++) {
     uint16_t nl;
     uint64_t size, packed;
+    if (end - p < 2) {
+      ok = 0;
+      break;
+    }
     memcpy(&nl, b + p, 2);
     p += 2;
-    if (nl >= MAX_PATH) {
+    if (nl >= MAX_PATH || end - p < (size_t)nl * 2 + 16) {
       ok = 0;
       break;
     }
@@ -186,14 +204,23 @@ static int payload_read(size_t *stub) {
     memcpy(&size, b + p, 8);
     memcpy(&packed, b + p + 8, 8);
     p += 16;
+    if (packed > end - p || (kind == 2 && packed != size)) {
+      ok = 0;
+      break;
+    }
     entries[i].data = (unsigned char *)malloc(size ? (size_t)size : 1);
     SIZE_T got = 0;
-    ok = entries[i].data && (size == 0 || (Decompress(d, b + p, (SIZE_T)packed, entries[i].data, (SIZE_T)size, &got) && got == size));
+    if (kind == 2) {
+      if (entries[i].data && size) memcpy(entries[i].data, b + p, (size_t)size);
+      ok = entries[i].data != NULL;
+    } else {
+      ok = entries[i].data && (size == 0 || (Decompress(d, b + p, (SIZE_T)packed, entries[i].data, (SIZE_T)size, &got) && got == size));
+    }
     entries[i].size = (size_t)size;
     p += (size_t)packed;
     nentries++;
   }
-  CloseDecompressor(d);
+  if (d) CloseDecompressor(d);
   free(b);
   for (int i = 0; i < nentries; i++)
     if (!wcscmp(entries[i].name, L"setup.env")) {
@@ -211,8 +238,8 @@ static int pack(int argc, wchar_t **argv) {
   size_t sn = 0;
   unsigned char *me = read_all(self, &sn);
   if (!me) return 1;
-  // (this program as built, not one with a payload already)
-  if (sn >= 16 && !memcmp(me + sn - 8, MAGIC, 8)) memcpy(&sn, me + sn - 16, 8);
+  // (this program as built, not one with a payload already, packed or stored)
+  if (sn >= 16 && payload_mark(me + sn - 8)) memcpy(&sn, me + sn - 16, 8);
   HANDLE out = CreateFileW(argv[2], GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
   if (out == INVALID_HANDLE_VALUE) return 1;
   DWORD k;
@@ -254,6 +281,62 @@ static int pack(int argc, wchar_t **argv) {
   WriteFile(out, &at, 8, &k, NULL);
   WriteFile(out, MAGIC, 8, &k, NULL);
   CloseHandle(out);
+  return 0;
+}
+
+// --raw OUT: this installer written again with what it carries stored (MAGIC_RAW): the same program, the same files in
+// the same order, each its size as its packed size and its bytes as they are; nothing of the time or of where it is
+static int raw(const wchar_t *to) {
+  size_t stub = 0, sn = 0;
+  if (!payload_read(&stub)) {
+    say(L"this installer is damaged");
+    return 1;
+  }
+  wchar_t self[MAX_PATH * 2];
+  GetModuleFileNameW(NULL, self, MAX_PATH * 2);
+  unsigned char *me = read_all(self, &sn);
+  if (!me || stub > sn) return 1;
+  HANDLE out = CreateFileW(to, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (out == INVALID_HANDLE_VALUE) {
+    free(me);
+    return 1;
+  }
+  int ok = 1;
+  // (whole, in pieces a WriteFile takes)
+#define PUT(p, len)                                                                                   \
+  do {                                                                                                \
+    const unsigned char *at_ = (const unsigned char *)(p);                                            \
+    for (size_t left_ = (len); ok && left_ > 0;) {                                                    \
+      DWORD k_ = 0;                                                                                   \
+      ok = WriteFile(out, at_, (DWORD)(left_ > (1u << 30) ? (1u << 30) : left_), &k_, NULL) && k_ > 0; \
+      at_ += k_, left_ -= k_;                                                                         \
+    }                                                                                                 \
+  } while (0)
+  PUT(me, stub);
+  free(me);
+  uint64_t at = stub;
+  uint32_t count = (uint32_t)nentries;
+  PUT(MAGIC_RAW, 8);
+  PUT(&count, 4);
+  for (int i = 0; i < nentries; i++) {
+    uint16_t nl = (uint16_t)wcslen(entries[i].name);
+    uint64_t size = entries[i].size;
+    PUT(&nl, 2);
+    PUT(entries[i].name, (size_t)nl * 2);
+    PUT(&size, 8);
+    PUT(&size, 8);
+    PUT(entries[i].data, entries[i].size);
+  }
+  PUT(&at, 8);
+  PUT(MAGIC_RAW, 8);
+#undef PUT
+  CloseHandle(out);
+  if (!ok) {
+    say(L"%ls not written (%lu)", to, GetLastError());
+    DeleteFileW(to);
+    return 1;
+  }
+  say(L"%ls: %d files stored", to, nentries);
   return 0;
 }
 
@@ -559,7 +642,7 @@ static int install(int silent, int run_after, const wchar_t *dir_given) {
   _snwprintf(uninstaller, MAX_PATH * 2, L"%ls\\Uninstall %ls.exe", next, app_name);
   size_t sn = 0, stub = 0;
   unsigned char *me = read_all(self, &sn);
-  if (me && sn >= 16 && !memcmp(me + sn - 8, MAGIC, 8)) memcpy(&stub, me + sn - 16, 8);
+  if (me && sn >= 16 && payload_mark(me + sn - 8)) memcpy(&stub, me + sn - 16, 8);
   if (me) write_all(uninstaller, me, stub ? stub : sn);
   free(me);
   int swapped = 0;
@@ -754,6 +837,7 @@ int wmain(int argc, wchar_t **argv) {
     freopen_s(&f, "CONOUT$", "w", stdout);
   }
   if (argc >= 2 && !wcscmp(argv[1], L"--pack")) return pack(argc, argv);
+  if (argc >= 3 && !wcscmp(argv[1], L"--raw")) return raw(argv[2]);
   int silent = 0, run_after = 0, remove = 0;
   const wchar_t *dir_given = NULL, *from = NULL;
   DWORD after = 0;

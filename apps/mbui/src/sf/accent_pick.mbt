@@ -10,6 +10,7 @@
 /// every hue's accent, its knob the one's; not chosen, a ＋ in an outline, which takes the hue it had last
 /// (custom_hue_kept). `choose` told the key a person chooses (a press's, a step's or a drag's along the hues; the
 /// caller says it chosen then: `chosen` follows it).
+#callsite(autofill(loc))
 pub fn accent_pick_node(
   parent : @view.View,
   names : () -> Array[String],
@@ -17,6 +18,7 @@ pub fn accent_pick_node(
   hue : () -> String,
   chosen : () -> String,
   choose : (String) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
   let own = fn() { custom_hue(chosen()) }
   // (the hue 自定义 takes as it is pressed: the one it has while it is chosen)
@@ -58,14 +60,14 @@ pub fn accent_pick_node(
     })
     |> ignore
   }
-  parent.box(fn(col) {
+  parent.box(made_for=loc, fn(col) {
     // (narrow, a section's own: in from the page's edge as far as its heading's words, as its note is)
     let start = if look_node(col) is Narrow { accent_narrow_in } else { 0.0 }
     col.gap(Is(accent_column_gap)).padding(Is((start, 0.0, 0.0, 0.0))) |> ignore
     col.box(fn(row) {
       row
       .row(Is(true))
-      .gap(By(fn() { @ui.room_least() - dot_side(theme()) }))
+      .gap(Is(8.0))
       .lines_up(Is(Some(Middle)))
       .says(Is(Some(@view.said(RadioGroup))))
       |> ignore
@@ -99,11 +101,18 @@ pub fn accent_pick_node(
 /// card's ground, its middle running from half the slider's thumb room in to as far from the end. A drag along it, an
 /// arrow with the keyboard's focus on it, a screen reader's step (View::on_step) each `step_to` a hue (0 to 355, 5
 /// apart), read out as `label`'s slider.
-fn hue_slider_node(parent : @view.View, now : () -> Int, label : () -> String, step_to : (Int) -> Unit) -> Unit {
+#callsite(autofill(loc))
+fn hue_slider_node(
+  parent : @view.View,
+  now : () -> Int,
+  label : () -> String,
+  step_to : (Int) -> Unit,
+  loc~ : SourceLoc,
+) -> Unit {
   let n = (accents.length() + 1).to_double()
   let wide = fn() {
     let side = dot_side(theme())
-    n * side + (n - 1.0) * (@ui.room_least() - side)
+    n * side + (n - 1.0) * 8.0
   }
   let at = fn() { hue_clamp(now().to_double() / custom_hue_most, 0.0, 1.0) }
   let to_hue = fn(h : Double) {
@@ -115,7 +124,7 @@ fn hue_slider_node(parent : @view.View, now : () -> Int, label : () -> String, s
       step_to(h)
     }
   }
-  parent.box(fn(s) {
+  parent.box(made_for=loc, fn(s) {
     s
     .width(By(fn() { Some(wide()) }))
     .height(Is(Some(hue_slider_h)))

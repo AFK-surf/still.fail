@@ -1,7 +1,7 @@
 // A command's output as a terminal shows it (src/terminal.ts).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { terminal } from "../src/terminal.ts";
+import { terminal, terminalLines } from "../src/terminal.ts";
 
 const E = "\u001b";
 
@@ -55,4 +55,17 @@ test("other sequences and control characters are dropped", () => {
   // Cut off at the end.
   assert.deepEqual(terminal(`done${E}[38;5`), { text: "done" });
   assert.deepEqual(terminal(`done${E}`), { text: "done" });
+});
+
+test("a line at a time: each line its runs, a plain one one run, an empty one none, a style going on past its end", () => {
+  assert.deepEqual(terminalLines(`${E}[31ma\nb${E}[0m c\n\nplain\n`), [
+    [{ text: "a", fg: "1" }],
+    [{ text: "b", fg: "1" }, { text: " c" }],
+    [],
+    [{ text: "plain" }],
+    [],
+  ]);
+  assert.deepEqual(terminalLines(""), []);
+  // (\r written over in place, as terminal() does)
+  assert.deepEqual(terminalLines("40%\r100%"), [[{ text: "100%" }]]);
 });

@@ -445,18 +445,11 @@ async fn Histories::hits(self : Histories) -> (Array[Json], Bool, Int) {
       }
       self.check_visible(key)
     }
-    let thread = self.db.all(
-      "SELECT t.id, t.surface, t.title, t.auto_title FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC",
+    // Its newest still.fail chat alone (sources.ts: sessionThreads of the surface, the first).
+    let thread_row = self.db.all(
+      "SELECT t.id, t.surface, t.title, t.auto_title FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? AND t.surface = 'ember' ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT 1",
       [key],
-    ).search_by(t => field(t, "surface") == Json::string("ember"))
-    let threads = self.db.all(
-      "SELECT t.id, t.surface, t.title, t.auto_title FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC",
-      [key],
-    )
-    let thread_row = match thread {
-      Some(n) => threads.get(n)
-      None => None
-    }
+    ).get(0)
     let given = match thread_row {
       Some(t) => {
         let pick = (k : String) => match field(t, k) {

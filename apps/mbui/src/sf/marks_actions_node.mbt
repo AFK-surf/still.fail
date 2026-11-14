@@ -7,6 +7,7 @@
 /// whether something is drawn to keep and nothing is being made (`ready`: 下载 and 添加到对话 able); whether the marked
 /// picture is being made; whether there is a chat's draft to put it in; and their words: 取消's, 下载's (read out, its
 /// tip), 添加到对话's, and what that one says while it is made.
+#derive(Eq, Debug)
 pub(all) struct MarksActionsSaid {
   error : String
   ready : Bool
@@ -16,7 +17,7 @@ pub(all) struct MarksActionsSaid {
   download : String
   put : String
   making : String
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// The red of why making the marked picture failed (marks_actions's).
@@ -50,6 +51,7 @@ let marks_put_faint : Double = 0.4
 /// 添加到对话 (its send icon and words in white on its ground, 32 high, 12 in either side, 5 between, round as
 /// `corner`, faint and taking no press but where it is `ready`; its words what it says while made while `busy`). Each
 /// pressed (its press let go on it): `cancel`, `download`, `put`, at that moment. The row's node.
+#callsite(autofill(loc))
 pub fn marks_actions_node(
   parent : @view.View,
   said : () -> MarksActionsSaid,
@@ -59,15 +61,16 @@ pub fn marks_actions_node(
   download : () -> Unit,
   put : () -> Unit,
   tip? : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
   // (its words in the meta's size, a line as marks_actions's are: a size alone said, its line the theme's text_line
   // times it, Ctx::text's; not the meta's own line)
   let meta = fn(weight : Int) -> @view.WordsLook {
     let th = @ui.tree_theme()
     let (size, _) = th.text_size(Meta)
-    { size, weight, line: th.text_line * size, wrap: false, tracking: @view.letters_own, balance: false }
+    { size, weight, line: th.text_line * size, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
   }
-  parent.box(fn(row) {
+  parent.box(made_for=loc, fn(row) {
     row.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(marks_actions_apart)) |> ignore
     // why it failed, where it did
     row.show(fn() { said().error != "" }, fn(e) {
@@ -87,17 +90,13 @@ pub fn marks_actions_node(
       |> ignore
     })
     // 取消
-    row.box(fn(b) {
+    @headless.button(row, fn() { said().cancel }, fn(_) { cancel() }, fn(b, _) {
       b
       .height(Is(Some(tool_side)))
       .padding(Is((@ui.Space::px(S2_5), 0.0, @ui.Space::px(S2_5), 0.0)))
       .radius(corner)
       .row(Is(true))
       .lines_up(Is(Some(Middle)))
-      .presses(Is(true))
-      .focusable(Is(true))
-      .says(By(fn() { Some(@view.said(Button, label=said().cancel)) }))
-      .on_press(cancel)
       |> ignore
       b.box(fn(w) {
         w.words(By(fn() { said().cancel })).words_look(By(fn() { meta(400) })).ink(By(fn() { ink().muted })) |> ignore
@@ -123,59 +122,61 @@ pub fn marks_actions_node(
     // 添加到对话, where there is a draft to put it in
     row.show(fn() { said().can_put }, fn(room) {
       room.padding(Is((@ui.Space::px(S1), 0.0, 0.0, 0.0))) |> ignore
-      room.box(fn(b) {
-        b
-        .row(Is(true))
-        .lines_up(Is(Some(Middle)))
-        .height(Is(Some(tool_side)))
-        .padding(Is((@ui.Space::px(S3), 0.0, @ui.Space::px(S3), 0.0)))
-        .gap(Is(@ui.Space::px(S1_25)))
-        .radius(corner)
-        .ground(Is(marks_put_ground))
-        .alpha(By(fn() { if said().ready { 1.0 } else { marks_put_faint } }))
-        .presses(By(fn() { said().ready }))
-        .focusable(By(fn() { said().ready }))
-        .says(By(fn() {
+      @headless.button(
+        room,
+        fn() {
           let s = said()
-          Some(@view.said(Button, label=if s.busy { s.making } else { s.put }))
-        }))
-        .on_press(fn() {
-          if @signals.untracked(fn() { said().ready }) {
-            put()
+          if s.busy {
+            s.making
+          } else {
+            s.put
           }
-        })
-        |> ignore
-        b.box(fn(i) {
-          i
-          .width(Is(Some(marks_put_icon)))
-          .height(Is(Some(marks_put_icon)))
-          .shapes(Is(
-            match icon_numbers("send") {
-              Some(d) => icon_shapes(d, marks_put_icon / 24.0, 0x000000FFL)
-              None => []
-            },
-          ))
-          .drawn_as(Is("/icon/send/"))
-          .tint(Is(0xFFFFFFFFL))
+        },
+        fn(_) { put() },
+        disabled=fn() { !said().ready },
+        fn(b, _) {
+          b
+          .row(Is(true))
+          .lines_up(Is(Some(Middle)))
+          .height(Is(Some(tool_side)))
+          .padding(Is((@ui.Space::px(S3), 0.0, @ui.Space::px(S3), 0.0)))
+          .gap(Is(@ui.Space::px(S1_25)))
+          .radius(corner)
+          .ground(Is(marks_put_ground))
+          .alpha(By(fn() { if said().ready { 1.0 } else { marks_put_faint } }))
           |> ignore
-        })
-        |> ignore
-        b.box(fn(w) {
-          w
-          .words(By(fn() {
-            let s = said()
-            if s.busy {
-              s.making
-            } else {
-              s.put
-            }
-          }))
-          .words_look(By(fn() { meta(600) }))
-          .ink(Is(0xFFFFFFFFL))
+          b.box(fn(i) {
+            i
+            .width(Is(Some(marks_put_icon)))
+            .height(Is(Some(marks_put_icon)))
+            .shapes(Is(
+              match icon_numbers("send") {
+                Some(d) => icon_shapes(d, marks_put_icon / 24.0, 0x000000FFL)
+                None => []
+              },
+            ))
+            .drawn_as(Is("/icon/send/"))
+            .tint(Is(0xFFFFFFFFL))
+            |> ignore
+          })
           |> ignore
-        })
-        |> ignore
-      })
+          b.box(fn(w) {
+            w
+            .words(By(fn() {
+              let s = said()
+              if s.busy {
+                s.making
+              } else {
+                s.put
+              }
+            }))
+            .words_look(By(fn() { meta(600) }))
+            .ink(Is(0xFFFFFFFFL))
+            |> ignore
+          })
+          |> ignore
+        },
+      )
       |> ignore
     })
   })

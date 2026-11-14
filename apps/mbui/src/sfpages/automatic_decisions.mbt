@@ -70,7 +70,7 @@ pub fn completion_node(
   let topic = fn() { @settings.stations_of(core, here()) }
   // (the stations' drafts the page's own, as the old frame kept them by station: each opened as its rows first come,
   // kept while the station goes offline and comes back, all dropped as the page is let go)
-  let forms : Map[String, String] = {}
+  let forms : Map[String, String] = Map([])
   let form_of = fn(station : String) -> String {
     match forms.get(station) {
       Some(f) => f
@@ -161,7 +161,8 @@ pub fn completion_node(
               None => None
             }
           }
-          let view = fn() { field(field(s(), "overview"), "automaticDecisions") }
+          // (its rule, that part of its overview alone, asked by its own section)
+          let view = fn() { @settings.station_part(core, here(), station, "automaticDecisions") }
           @sf.section_node(b, fn() { text(s(), "name") }, fn(sec) {
             sec.pick(
               fn() {
@@ -169,7 +170,7 @@ pub fn completion_node(
                   ""
                 } else if !flag(s(), "online") {
                   "web-pages.automaticDecisions.offlineNote"
-                } else if !(field(s(), "overview") is Some(Object(_))) {
+                } else if !(field(s(), "overview") is Some(Object(_))) || view() is None {
                   "common.connecting"
                 } else {
                   "web-pages.automaticDecisions.upgrade"
@@ -378,7 +379,7 @@ fn form_rows_node(
 /// Where what someone set going shows how it is (doing_mark's) as nodes: a spinner while it is under way, a small red
 /// mark while it failed a moment ago, why said under the pointer (in `tips`, where given). `size`: its spinner's and its mark's
 /// (doing_mark's: 12 beside a row's words, inline; 14 otherwise).
-fn doing_mark_node(
+pub fn doing_mark_node(
   v : @view.View,
   running : () -> Bool,
   failed : () -> String?,
@@ -610,7 +611,7 @@ fn policy_body_node(v : @view.View, core : Core, station : String, policy : () -
 /// of the window's tree (open_dialog_nodes), made once as it opens: what they show follows the draft as it changes.
 fn policy_dialog(core : Core, station : String, form : String, policy : Json?, id : String, key : String, ov : Json?) -> Unit {
   let edit = fn(input : Array[(String, Json)]) {
-    (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]), fn(_) {  })
+    (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]), @sfbase.answer_unread)
   }
   let save = fn() {
     @settings.act(
@@ -623,7 +624,7 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
   }
   let draft = fn() { (core.topic)("policyForm", { "station": str(station), "form": str(form) }).get().value }
   let serial = (desk_dialogs.val + 1).to_string()
-  let filled : Map[String, Bool] = {}
+  let filled : Map[String, Bool] = Map([])
   // a field's words put in once, as the dialog opens; then what is typed is the draft's
   let words_of = fn(part : String, value : String) -> @ui.Field {
     let f = field_of("policy/" + serial + "/" + part)
@@ -695,7 +696,7 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
       wide=true,
       fn(v, _) {
         let f = words_of("policy", text(@signals.untracked(draft), "policy"))
-        let area = @sf.textarea_node(v, f, rows=8)
+        let area = @sf.textarea_node(v, f, rows=8, label=@sf.t("web-pages.archivePolicy.title"))
         on_typed(area, f, fn(words) {
           if @signals.untracked(draft) is Some(Object(_)) {
             edit([("policy", str(words))])
@@ -725,14 +726,14 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
       v.show(has, fn(p) {
         @sf.field_node(p, fn() { @sf.t("web-pages.archivePolicy.name") }, fn(b) {
           let f = words_of("name", text(@signals.untracked(o), "name"))
-          let line = @sf.input_node(b, f)
+          let line = @sf.input_node(b, f, label=@sf.t("web-pages.archivePolicy.name"))
           on_typed(line, f, fn(n) { edit([("option", str(okey())), ("name", str(n))]) })
         })
       })
       v.show(has, fn(p) {
         @sf.field_node(p, fn() { @sf.t("web-pages.archivePolicy.rubric") }, fn(b) {
           let f = words_of("rubric", text(@signals.untracked(o), "rubric"))
-          let area = @sf.textarea_node(b, f, rows=3)
+          let area = @sf.textarea_node(b, f, rows=3, label=@sf.t("web-pages.archivePolicy.rubric"))
           on_typed(area, f, fn(r) { edit([("option", str(okey())), ("rubric", str(r))]) })
         })
       })

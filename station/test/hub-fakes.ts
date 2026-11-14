@@ -261,9 +261,25 @@ export class FakeDriver implements AgentDriver {
   detach() {}
 }
 
-/// Lets queued actor tasks and what they started run.
+/// Lets queued actor tasks and what they started run: `rounds` turns of the loop with no file request out. The station
+/// reads off its main thread (a turn's end waits for its transcript's last lines, sessions/live.ts `turnEnded`), and how
+/// many turns the disk takes to answer is the machine's: counted alone, a test went on before the turn was over where
+/// the disk was slow (hub.test.ts, a session continued from the machine's, on a CI runner, 2026-11-11). A request out
+/// is waited for, however long, and the turns counted again after it.
 export async function settle(rounds = 100) {
-  for (let i = 0; i < rounds; i++) await new Promise((r) => setImmediate(r));
+  for (let quiet = 0; quiet < rounds; ) {
+    await new Promise((r) => setImmediate(r));
+    quiet = process.getActiveResourcesInfo().some((r) => r === "FSReqPromise" || r === "FSReqCallback") ? 0 : quiet + 1;
+  }
+}
+
+/// What `what` gives, where it gives it by the time all that was set going is done (`settle`): one that has not by
+/// then never will by itself, and the test fails saying `why` rather than wait for it for good.
+export async function given<A>(what: Promise<A>, why: string): Promise<A> {
+  const not = Symbol();
+  const got = await Promise.race([what, settle().then(() => not)]);
+  if (got === not) throw new Error(`not by the time all was done: ${why}`);
+  return got as A;
 }
 
 export const message = (over: Partial<InboundMessage> = {}): InboundMessage => {
@@ -373,6 +389,7 @@ export class Rig {
       internal: o.internal === false ? null : new InternalChat(),
       link: o.link ? (key) => `https://ember.test/o/${this.hub?.wsOf(key) ?? this.place.workspace}/${this.place.station}/${key.replaceAll(":", "%3A")}` : undefined,
       workspaces: this.workspaces ? () => this.workspaces! : undefined,
+      station: () => this.place.station,
       runners: () => o.runners ?? [],
       cold: o.cold,
       clock: this.clock,
@@ -382,6 +399,9 @@ export class Rig {
         void work.then(() => this.background.delete(work), () => this.background.delete(work));
       },
     });
+    // Its sessions' processes are fakes that load no skills and are told no memory: a hub's tests open them at once
+    // (tests of the skills and the memory read them themselves: hub-parts, multi-workspace-agents, instructions).
+    hub.skillsLinker = async () => "";
     const cc = new CcIndexPreparation();
     hub.prepareCcSessions = async (sessions) => {
       for (const session of sessions) while (!cc.step(this.store.db, session).done) {}
@@ -427,6 +447,16 @@ export class Rig {
   /// entries (store/schema.ts LETTERS), as messages.
   letters(thread: number) {
     return (this.store.db.prepare("SELECT * FROM letters WHERE thread = ? ORDER BY n").all(thread) as Record<string, unknown>[]).map(letterMessage);
+  }
+  /// Once what the sessions were asked has run: their queues' tasks, the files those read and write off the main thread
+  /// (a session's instructions, its skills) and the transcripts read as turns end.
+  async quiet(): Promise<void> {
+    do {
+      await settle();
+      await this.hub.live.idle();
+      await Promise.all([...this.hub.actors.values()].map((a) => a.flushed()));
+      await settle();
+    } while (![...this.hub.actors.values()].every((a) => a.settled()));
   }
   async close() {
     await this.hub.shutdown();

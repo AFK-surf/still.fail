@@ -1,4 +1,5 @@
-// The sign-in codes sent to an email (login.ts), through Cloudflare Email Service: the send_email binding EMAIL
+// The sign-in codes sent to an email (login.ts), and the word to someone added to a workspace (api.ts, `sendAdded`),
+// through Cloudflare Email Service: the send_email binding EMAIL
 // (wrangler.jsonc), from EMAIL_FROM, whose domain is onboarded in the dashboard (Email Service › Email Sending).
 import { escape } from "./page";
 import { cloudProduct, tr, type Lang } from "./i18n.ts";
@@ -27,4 +28,29 @@ export async function sendCode(env: Env, lang: Lang, to: string, code: string, d
     more.map((line, i) => `<p${i === more.length - 1 ? ' style="color:#777"' : ""}>${escape(line)}</p>`).join("") +
     "</div>";
   await env.EMAIL!.send({ from: { email: env.EMAIL_FROM!, name: cloudProduct().name }, to, subject: tr(lang, "cloud.mail.code.subject"), text: [lead, code, ...more].join("\n\n"), html });
+}
+
+/**
+ * Tells `to` that `inviter` added them to `workspace` (Directory `addMembers`), in `lang`: in it already (`joined`, an
+ * account of that email signed in before), or once they first sign in with it. A link to this cloud's app, no token:
+ * the email itself is what lets them in. The product's name is the cloud's (`tr`, client/i18n/brand.ts).
+ */
+export async function sendAdded(env: Env, lang: Lang, to: string, joined: boolean, inviter: string, workspace: string): Promise<void> {
+  const args = { inviter, workspace, email: to };
+  const lead = tr(lang, joined ? "cloud.mail.added.joined" : "cloud.mail.added.signIn", args);
+  const open = tr(lang, "cloud.mail.added.open");
+  const notYou = tr(lang, "cloud.mail.added.notYou");
+  const link = env.PUBLIC_ORIGIN;
+  // still.fail's own page look (page.ts): its text colour, a pill of the primary colour for the one thing to do.
+  const html =
+    `<div style="font:16px/1.7 system-ui;color:#24272b"><p>${escape(lead)}</p>` +
+    `<p style="margin:20px 0"><a href="${escape(link)}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:#24272b;color:#fff;font-weight:600;text-decoration:none">${escape(open)}</a></p>` +
+    `<p style="color:#777">${escape(notYou)}</p></div>`;
+  await env.EMAIL!.send({
+    from: { email: env.EMAIL_FROM!, name: cloudProduct().name },
+    to,
+    subject: tr(lang, "cloud.mail.added.subject", args),
+    text: [lead, `${open}: ${link}`, notYou].join("\n\n"),
+    html,
+  });
 }

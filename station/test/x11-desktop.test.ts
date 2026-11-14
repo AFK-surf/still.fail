@@ -64,7 +64,7 @@ test("an X11 desktop over the screen wire carries a decodable frame and drives p
     conn = await device.connect({ id: station.id(), ...(ips ? { ips } : {}) }, ALPN);
     const theirs = (await accepting)!;
     stream = await conn.openBi();
-    await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "en" }, screen: { maxWidth: 640, maxHeight: 400, codecs: ["jpeg"], control: true } });
+    await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "en", "stillfail-build": "0.1.0" }, screen: { maxWidth: 640, maxHeight: 400, codecs: ["jpeg"], control: true } });
     const incoming = (await theirs.acceptBi())!;
     const request = new Reader(incoming);
     const head = await request.line();

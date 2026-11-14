@@ -52,8 +52,9 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   // 详情 open to begin with: what runs it, its station, where its transcript is
   assert_true(t.find("Willow") is Some(_))
   assert_true(t.query(Button, label="复制路径") is Some(_))
+  // (folded on a Move, as what a column lets go)
   t.click(Button, label="详情")
-  t.frame()
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="复制路径") is None)
   // its own steps there, then left out
   let steps = t.find("读了 src/ui/list.mbt 等 2 个文件，跑了测试")
@@ -107,14 +108,14 @@ test "wide: a quota running out beside an agent's history's control is whole how
   t.run_for(@ui.move_most_ms)
   let figure = fn() { t.words().filter(fn(w) { w.0 == "23%" && w.5 > 0.5 }) }
   let wide = figure()
-  assert_true(wide.length() == 1, msg="\{wide}")
+  assert_true(wide.length() == 1, msg="\{Repr(wide)}")
   let whole = wide[0].3
   // the panel from as narrow as it is beside the chat (360) to wider: its figure as wide as it is everywhere
   for w = 1100.0; w <= 1600.0; w = w + 20.0 {
     t.resize(w, 800.0)
     t.frame()
     let now = figure()
-    assert_true(now.length() == 1 && now[0].3 >= whole - 0.5, msg="\{w}: \{now} (whole: \{whole})")
+    assert_true(now.length() == 1 && now[0].3 >= whole - 0.5, msg="\{w}: \{Repr(now)} (whole: \{whole})")
   }
 }
 
@@ -126,7 +127,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -184,7 +185,7 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -279,6 +280,26 @@ test "wide: the side panel slides in from the pane's right edge over 280 ms and 
 }
 
 ///|
+test "wide: in a window wide enough for the chat's rows to keep their width as the panel slides in, the page is at rest again as the slide ends, whichever frames are drawn (24 a second: one just short of its end)" {
+  new_run()
+  let src = fixture("chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=2400.0, h=1000.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  // (every frame on the slide's way and after it the one built whole: the Tester's own check of each, frame_watch.mbt)
+  t.click(Button, label="打开侧栏")
+  t.run_for(@ui.move_most_ms)
+  let (end, _) = t.find("只看收发").unwrap()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.find("只看收发").map(fn(at) { at.0 }), Some(end))
+  // and out again
+  t.click(Button, label="收起侧栏")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("只看收发") is None)
+}
+
+///|
 test "wide: an agent's history asked as a page (a link's ?history=…&entry=…) is its chat with the history beside it (ChatPage.tsx history)" {
   new_run()
   let src = fixture("chat")
@@ -331,7 +352,30 @@ test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its
   assert_true(t.find("发起") is None)
   // the way to it in Slack is what is done with it: its "…"'s
   assert_true(t.find("在 Slack 中打开") is None)
+  // (its info closed first: what is behind a popover the tree puts up over the window is pressed once it is gone, as a
+  // press outside it closes it)
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
   t.click(Button, label="更多")
   t.run_for(@ui.move_most_ms)
+  open_share(t)
   assert_true(t.find("在 Slack 中打开") is Some(_))
+}
+
+///|
+/// Chat `r`'s tabs as its view has them now.
+fn side_now(r : ChatRef) -> (Array[String], String) {
+  match link_src.val {
+    Some(src) => @sfdesk.side_now(src, r)
+    None => ([], "")
+  }
+}
+
+///|
+/// Chat `r`'s tabs changed by the core, the panel told first whether any will be open (sfdesk's side_change).
+fn side_change(r : ChatRef, action : String, tab : String?) -> Unit {
+  match link_src.val {
+    Some(src) => @sfdesk.side_change(src, r, action, tab)
+    None => ()
+  }
 }

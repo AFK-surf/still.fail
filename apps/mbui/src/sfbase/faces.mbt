@@ -11,6 +11,8 @@
 ///|
 /// What of a chosen face is here: being asked for, being fetched, its files whole (each with the weight it is for),
 /// or why not.
+// Asking and Fetching are states matched only by `_`: a face neither whole nor failed
+#warnings("-unused_constructor")
 priv enum FaceHad {
   Asking
   Fetching
@@ -262,7 +264,7 @@ fn face_files(
           Some(b) if @zip.sha256(b) == sha => {
             // kept unzipped from now on
             if flag(Some(v), "zipped") {
-              (src.call_bytes)("fonts.keep", Json::object({ "sha256": ToJson::to_json(sha) }), b, fn(_) {  })
+              (src.call_bytes)("fonts.keep", Json::object({ "sha256": ToJson::to_json(sha) }), b, answer_unread)
             }
             got.push((Held(b), weight))
             face_files(src, id, files, at + 1, got, fetched, had)
@@ -383,14 +385,14 @@ pub fn share_face_whole(src : Source, drawing : Int) -> Unit {
   // (the carried one given first: asked for later, it would not be given over the whole one)
   ignore(share_face_given())
   let files = share_face_whole_files(drawing)
-  let got : Map[Int, Bytes] = Map::new()
+  let got : Map[Int, Bytes] = Map([])
   for f in files {
     let (file, weight) = f
     looks_file(src, file, fn(gz) {
       match @zip.gunzip(gz) {
         Some(b) => {
           got[weight] = b
-          if got.size() == files.length() && share_face_whole_asked.val != drawing {
+          if got.length() == files.length() && share_face_whole_asked.val != drawing {
             share_face_whole_asked.val = drawing
             @ui.face_clear(share_face)
             for w in files {

@@ -4,10 +4,11 @@ import {
   "stillfail/rules/lock",
   "stillfail/rules/vault",
   "stillfail/rules/history",
+  "stillfail/rules/fork",
 }
 
 options(
   link: {
-    "js": { "exports": [ "canonical_of", "entry_text_of", "lower_role", "fold_js", "admit_js", "genesis_js", "apply_js", "signer_js", "admit_one_js", "fold_held_js", "cert_ok_js", "vault_ok_js", "item_ok_js", "browser_listing_ok_js", "signer_of_js", "vault_supersedes_js", "item_supersedes_js", "person_fold_js", "admit_person_js" ], "format": "esm" },
+    "js": { "exports": [ "canonical_of", "entry_text_of", "lower_role", "fold_js", "admit_js", "genesis_js", "apply_js", "signer_js", "admit_one_js", "fold_held_js", "cert_ok_js", "vault_ok_js", "item_ok_js", "browser_listing_ok_js", "signer_of_js", "vault_supersedes_js", "item_supersedes_js", "person_fold_js", "admit_person_js", "tie_of_js", "fork_before_js", "lock_chain_js", "person_chain_js", "roster_js", "state4_js", "roster_moved_js", "state4_moved_js", "ws_tag_js", "body_hash_js", "body_refusal_js" ], "format": "esm" },
   },
 )

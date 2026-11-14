@@ -18,7 +18,7 @@ let nav_untaken : Ref[Bool] = { val: false }
 let native_workspace_anchor : Ref[Int] = { val: 0 }
 
 ///|
-let native_sidebar_items : Map[Int, @hostapi.NavItem] = {}
+let native_sidebar_items : Map[Int, @hostapi.NavItem] = Map([])
 
 ///|
 let floating_bar : Ref[@hostapi.NavBar?] = { val: None }
@@ -40,7 +40,7 @@ fn native_workspace(c : @ui.Ctx, src : Source, w : Workspace, node : Int, id : I
     floating_installed.val = true
     @ui.on_after_layout(native_workspace_placed)
   }
-  let others = field(src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value, "others") is Some(String(_))
+  let others = field(field(field(src.topic("workspaceMarks", @sfbase.marks_asked()).get().value, "workspaces"), w.id), "others") is Some(String(_))
   native_sidebar_items[id] = {
     id: "workspace-switch", title: w.name, icon: ws_badge(w),
     dot: others || @sfpages.invitations_waiting(src).length() > 0, prominent: true, menu: [],
@@ -53,7 +53,7 @@ fn native_workspace_placed(c : @ui.Ctx) -> Unit {
   let floating : Array[@hostapi.NavFloating] = []
   let blocked = @sf.presenter_visible()
   let semantics = c.semantics_tree()
-  if !bar.bare && !switcher_open() && (!wide.tape || wide.tape_at.get() == Side) {
+  if !bar.bare && !switcher_open() && (!wide.tape.get() || wide.tape_at.get() == Side) {
     // Semantic anchors also survive a sidebar drawn from its kept part.
     for s in semantics {
       if !s.hidden || blocked {
@@ -87,16 +87,16 @@ fn native_workspace_placed(c : @ui.Ctx) -> Unit {
 let nav_page : Array[(@hostapi.NavItem, () -> Unit)] = []
 
 ///|
-let nav_page_was : Map[String, () -> Unit] = {}
+let nav_page_was : Map[String, () -> Unit] = Map([])
 
 ///|
 /// What each row of a page's action's menu does (bar_action rows), by the row's id, for what is chosen between frames.
-let nav_rows_was : Map[String, () -> Unit] = {}
+let nav_rows_was : Map[String, () -> Unit] = Map([])
 
 ///|
 /// What is up over the whole window handed the bars the frame before (@sf.native_over_act), by id, for what is chosen
 /// between frames.
-let nav_over_was : Map[String, () -> Unit] = {}
+let nav_over_was : Map[String, () -> Unit] = Map([])
 
 ///|
 /// The page of the stack being drawn now (frame.mbt's nav_flat), None outside one.
@@ -106,6 +106,19 @@ let drawn_page : Ref[Page?] = { val: None }
 /// Whether the page on top was drawn this frame: not while the one it came over is still shown in its place, its
 /// coming held for what it shows (Nav::comes_when).
 let top_drawn : Ref[Bool] = { val: false }
+
+///|
+/// The page's actions taken as page `page`'s: those handed for another let go, as a frame does as the page on top
+/// changes (nav_frame), or as what was chosen in the bars brought another (rail_native_taps), and as a page made as
+/// nodes hands its own on coming on top, between frames (chat_page.mbt's chat_bar_handed_node).
+fn nav_page_for(page : Page) -> Unit {
+  if nav_page_of.val != Some(page) {
+    nav_page.clear()
+    bar_chat_carried.clear()
+    bar_chat_of.val = None
+    nav_page_of.val = Some(page)
+  }
+}
 
 ///|
 /// The page's actions the frame before, as handed (nav_page), for a frame the page on top is not drawn in.
@@ -350,6 +363,20 @@ fn bar_anchor(id : Int, side : @ui.Side, along : @ui.Along) -> (Int, @ui.Side, @
 }
 
 ///|
+/// bar_anchor's for a popover of nodes (chat_pops_node's, chat_page_nodes on): the mark where it was chosen; where the
+/// page has its own, beside its own button (`own`, a node: as it is drawn) on `side`, lined up `along` it; none where
+/// that is not made.
+fn bar_anchor_node(own : @view.View?, side : @ui.Side, along : @ui.Along) -> (@sf.Anchor, @ui.Side, @ui.Along)? {
+  if @sf.native_on() && native_mark.val != 0 {
+    return Some(if @sf.native_side() { (Of(native_mark.val), Left, Start) } else { (Of(native_mark.val), Bottom, End) })
+  }
+  match own {
+    Some(v) if v.alive() => Some((Node(v), side, along))
+    _ => None
+  }
+}
+
+///|
 /// What opens from one of the page's actions as a menu of the page's (a station's screens): as bar_anchor's. A menu goes
 /// under what opened it, so beside the column down the side it opens from the point left of the item, ending there,
 /// not under the item and over the column (the user, 2026-11-04); `id` where the page has its own.
@@ -359,6 +386,21 @@ fn bar_menu_from(c : @ui.Ctx, id : Int) -> (@sf.Beside, @ui.Along) {
   }
   if @sf.native_side() {
     let (x, y, _) = native_mark_at(c)
+    (@sf.at_point(x - @sf.panel_offset, y), End)
+  } else {
+    (Of(native_mark.val), End)
+  }
+}
+
+///|
+/// bar_menu_from's for a page made as nodes, in node `v`: where it has no item of the system's bars chosen yet, beside
+/// the page's node.
+fn bar_menu_from_node(v : @view.View) -> (@sf.Beside, @ui.Along) {
+  if !@sf.native_on() || native_mark.val == 0 {
+    return (Node(v), End)
+  }
+  if @sf.native_side() {
+    let (x, y, _) = native_mark_in(v.window())
     (@sf.at_point(x - @sf.panel_offset, y), End)
   } else {
     (Of(native_mark.val), End)
@@ -378,7 +420,7 @@ fn native_turned(c : @ui.Ctx, was : FixedArray[Double]) -> Bool {
 ///|
 /// The colour 0xRRGGBBAA as `rrggbbaa`, opaque, for an icon the host draws (ws_badge).
 fn hex_of(k : Int64) -> String {
-  (k >> 8 & 0xFFFFFFL).to_string(radix=16).pad_start(6, '0') + "ff"
+  ((k >> 8) & 0xFFFFFFL).to_string(radix=16).pad_start(6, '0') + "ff"
 }
 
 ///|
@@ -421,13 +463,7 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   // (the column as the window is now, turned or not, before anything is laid out beside it)
   native_side_now()
   // (the page's actions as they were while the same page is shown: one built again hands them again)
-  let page = app.nav.top()
-  if nav_page_of.val != Some(page) {
-    nav_page.clear()
-    bar_chat_carried.clear()
-    bar_chat_of.val = None
-    nav_page_of.val = Some(page)
-  }
+  nav_page_for(app.nav.top())
   top_drawn.val = false
   body()
   // (what is up over the whole window as it said it, built again this frame or its part kept; gone once it is not)
@@ -509,7 +545,7 @@ fn rail_left() -> Double {
 /// Whether the sidebar's ground runs the window's height (its top and foot under the system's bars, what is in it
 /// clear of them): open beside the system's tabs, off the tape, as the system's own sidebars do.
 fn side_full_height(bar : Bool) -> Bool {
-  @sf.native_on() && !bar && !wide.tape
+  @sf.native_on() && !bar && !wide.tape.get()
 }
 
 ///|
@@ -544,11 +580,17 @@ fn rail_native_marks(c : @ui.Ctx) -> Unit {
 ///|
 /// Where the mark is: at the item last chosen, else where the column has the bell (its x, y and height).
 fn native_mark_at(c : @ui.Ctx) -> (Double, Double, Double) {
+  native_mark_in(c.window_size())
+}
+
+///|
+/// native_mark_at's, in a window of `size` (its width, its height).
+fn native_mark_in(size : (Double, Double)) -> (Double, Double, Double) {
   let at = @hostapi.nav_tapped_at
   if at[2] > 0.0 {
     (at[0], at[1], at[3])
   } else {
-    let (ww, wh) = c.window_size()
+    let (ww, wh) = size
     (dmax(0.0, ww - @sf.native_clear() - 1.0), dmax(0.0, wh - native_bell_up), 40.0)
   }
 }
@@ -634,7 +676,7 @@ fn tab_of_place(lit : String) -> String {
 ///|
 /// What each tab showed as it was left (its stack's pages), by its workspace and its id (tab_kept_key); kept while the app
 /// runs.
-let tabs_kept : Map[String, Array[Page]] = {}
+let tabs_kept : Map[String, Array[Page]] = Map([])
 
 ///|
 /// The key of tab `tab` of workspace `ws` in tabs_kept: each workspace's tabs keep their own (a chat of one never shown
@@ -672,14 +714,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   // (another page come to by what was chosen, mid-frame: the actions the one left handed in frames before not its; the
   // one come to hands its own as it is drawn after this: nav_frame)
-  defer {
-    if nav_page_of.val != Some(app.nav.top()) {
-      nav_page.clear()
-      bar_chat_carried.clear()
-      bar_chat_of.val = None
-      nav_page_of.val = Some(app.nav.top())
-    }
-  }
+  defer nav_page_for(app.nav.top())
   for id in taps {
     // (anything else chosen in the bars closes 待处理's panel, as a tap off a popover of the system's does)
     if id != "act/attention" && id != "lead/attention" {
@@ -704,14 +739,14 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if id == "workspace-switch" {
       @sfpages.open_workspaces(src, Of(native_workspace_anchor.val), compact=true)
     } else if id == "sidebar/search" {
-      switcher_toggle(c)
+      switcher_toggle(fn() { c.blur() })
     } else if id.has_prefix("sidebar/filter/") {
-      match id.substring(start=15) {
+      match id[15:].to_owned() {
         "all" => rail_go(c, src, w, "chats")
         f => rail_go(c, src, w, f)
       }
     } else if id.has_prefix("ws/") {
-      let ws = id.substring(start=3)
+      let ws = id[3:].to_owned()
       if ws != w.id {
         // The frame still holds `w`: switching here would let land restore its chat into the new workspace.
         // Change after this build, so the next frame resolves the workspace before it lands on a page.
@@ -720,9 +755,9 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if id == "new" {
       new_chat()
     } else if id.has_prefix("list/") {
-      rail_go(c, src, w, id.substring(start=5))
+      rail_go(c, src, w, id[5:].to_owned())
     } else if id.has_prefix("place/") {
-      let place = id.substring(start=6)
+      let place = id[6:].to_owned()
       match tabs_kept.get(tab_kept_key(w.id, id)) {
         // (its stack as it was left: the chat open in it, the list it showed)
         Some(pages) if pages.length() > 0 => {
@@ -741,12 +776,14 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         None => ()
       }
     } else if id.has_prefix("page/") {
+      // (what the page's action does is told once the frame's builds are over, as a press's handler does it, never as
+      // this builds: its "…" opens a menu, or waits for the core to (sfbase press_wait.mbt))
       match nav_page_was.get(id) {
-        Some(act) => act()
+        Some(act) => c.tell(id, act)
         // (a row of an action's menu: bar_action rows)
         None =>
           match nav_rows_was.get(id) {
-            Some(act) => act()
+            Some(act) => c.tell(id, act)
             None => ()
           }
       }
@@ -819,7 +856,6 @@ fn nav_hold(src : Source) -> Unit {
 fn rail_native_reset() -> Unit {
   native_workspace_anchor.val = 0
   column_short.set(false)
-  @sf.native_bars_reset()
   nav_want.val = None
   nav_held.val = fn() { None }
   nav_untaken.val = false

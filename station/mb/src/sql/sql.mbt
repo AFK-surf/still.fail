@@ -16,6 +16,27 @@ pub fn Db::attach(host : @host.Host, path : String, wait~ : Int) -> Db raise @wi
 }
 
 ///|
+/// A database of this program's own at `path` (made where it is not, `:memory:` one in memory), waited for `wait` ms
+/// when it is busy.
+pub fn Db::create(host : @host.Host, path : String, wait~ : Int) -> Db raise @wire.ShellError {
+  let opened = host.shell_sync("sql.attach", {
+    "path": Json::string(path),
+    "wait": Json::number(wait.to_double()),
+    "create": true,
+  })
+  guard opened is { "id": id, .. } else { raise @wire.ShellError("the shell gave no database") }
+  { host, id }
+}
+
+///|
+/// The connection let go.
+pub fn Db::close(self : Db) -> Unit {
+  ignore(self.host.shell_sync("sql.close", { "id": self.id })) catch {
+    _ => ()
+  }
+}
+
+///|
 /// Statements with no rows (BEGIN, COMMIT, PRAGMA …).
 pub fn Db::exec(self : Db, sql : String) -> Unit raise @wire.ShellError {
   ignore(self.host.shell_sync("sql.exec", { "id": self.id, "sql": Json::string(sql) }))

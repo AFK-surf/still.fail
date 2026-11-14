@@ -211,8 +211,7 @@ export class Pacer {
     const rtt = this.rtt();
     if (rtt === null) return this.#out.length < START_UNACKED;
     const now = this.#now();
-    const oldest = this.#out[0]!;
-    const may = this.#out.length < MAX_UNACKED && now - oldest.at - (this.#stalled() - oldest.stall) <= rtt + queueMs(rtt);
+    const may = this.#out.length < MAX_UNACKED && this.#waited(now) <= rtt + queueMs(rtt);
     if (!may) {
       // A frame held back: the link carries less than the frames (an acknowledgement late alone, a screen still or
       // changing little, holds nothing back and lowers nothing).
@@ -221,6 +220,21 @@ export class Pacer {
       this.#queuing(now);
     }
     return may;
+  }
+
+  /// Whether the frames on the way wait in front of the link: the oldest not acknowledged waited longer than the round
+  /// trip and the queue a view lets build. Asks nothing of the pace, as `may` does: what else goes on the view's stream
+  /// (its sound) is left out while it holds, so that the pictures go first.
+  backlogged(): boolean {
+    if (this.#out.length <= 1) return false;
+    const rtt = this.rtt();
+    return rtt !== null && this.#waited(this.#now()) > rtt + queueMs(rtt);
+  }
+
+  /// How long the oldest frame not acknowledged has waited, the station's own loop standing still left out.
+  #waited(now: number): number {
+    const oldest = this.#out[0]!;
+    return now - oldest.at - (this.#stalled() - oldest.stall);
   }
 
   /// The bit rate to ask of the source, or null while its own is not known.

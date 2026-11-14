@@ -1,6 +1,7 @@
 // A history step's call and what came back, read by what they are (src/tool-step.ts, `history.tool`).
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { agentsOf, told } from "../src/activity.ts";
 import { toolCall, toolResult } from "../src/tool-step.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { t } from "../src/i18n.ts";
@@ -46,6 +47,63 @@ test("what_came_back_is_read_by_what_it_is", () => {
   assert.deepEqual(toolResult("x", "{}", "plain words", false, t), [{ kind: "output", text: "plain words" }]);
 });
 
+test("agy_file_and_command_steps_render_diff_code_and_clean_terminal_output", () => {
+  const ws = "/Users/zuozijian/.stillfail/sessions/chat/c-4282c9a37cb40bab469a3b91c261af05/workspace/stillfail";
+  const editCall = JSON.stringify({
+    Path: `${ws}/station/src/mesh/screens.ts`,
+    Target: "const a = 1;\nconst b = 2;",
+    Replacement: "const a = 1;\nconst b = 3;",
+  });
+  assert.deepEqual(toolCall(`File ${ws}/station/src/mesh/screens.ts`, editCall, true, t), [
+    { kind: "path", path: "station/src/mesh/screens.ts" },
+    { kind: "diff", rows: [[" ", "const a = 1;"], ["-", "const b = 2;"], ["+", "const b = 3;"]] },
+  ]);
+  assert.deepEqual(
+    toolResult(
+      `File ${ws}/station/src/mesh/screens.ts`,
+      editCall,
+      `Created At: 2026-11-13T04:00:00+08:00\nCompleted At: 2026-11-13T04:00:01+08:00\n\nMade 1 replacement in ${ws}/station/src/mesh/screens.ts`,
+      false,
+      t,
+    ),
+    [],
+  );
+  assert.deepEqual(toolResult("Edit", editCall, "The file has been updated.", false, t), []);
+
+  const readCall = JSON.stringify({ Path: `${ws}/station/src/url.ts`, StartLine: 1, EndLine: 2 });
+  assert.deepEqual(toolCall("read_file", readCall, true, t), [
+    { kind: "path", path: "station/src/url.ts", extra: "第 1 行起，2 行" },
+  ]);
+  assert.deepEqual(
+    toolResult(
+      "read_file",
+      readCall,
+      "Created At: 2026-11-13T04:00:00+08:00\nCompleted At: 2026-11-13T04:00:00+08:00\nShowing lines 1-2 of 10\n1: export const a = 1;\n2: export const b = 2;",
+      false,
+      t,
+    ),
+    [{ kind: "code", text: "export const a = 1;\nexport const b = 2;", lang: "ts" }],
+  );
+
+  const cmdCall = JSON.stringify({ CommandLine: `cd ${ws} && git status --short`, toolSummary: "Git status check", WaitMsBeforeAsync: 5000 });
+  assert.deepEqual(toolCall("run_command", cmdCall, true, t), [
+    { kind: "code", text: "git status --short", lang: "sh" },
+  ]);
+  assert.deepEqual(
+    toolResult(
+      "run_command",
+      cmdCall,
+      "Created At: 2026-11-13T04:00:00+08:00\nCompleted At: 2026-11-13T04:00:02+08:00\nCommand exited with code 0\nCommand output:\nM station/src/url.ts",
+      false,
+      t,
+    ),
+    [
+      { kind: "facts", items: [{ key: "退出码 0", plain: true }] },
+      { kind: "output", text: "M station/src/url.ts" },
+    ],
+  );
+});
+
 test("a_client_asks_the_core_what_a_step_is", async () => {
   assert.deepEqual(parseCall("history.tool", { name: "Bash", call: "{}" }), { kind: "historyTool", name: "Bash", call: "{}", result: null, failed: false, said: false });
   const { host, core } = await cloudCore();
@@ -56,5 +114,69 @@ test("a_client_asks_the_core_what_a_step_is", async () => {
   assert.equal(ok.call[0].kind, "markdown");
   assert.ok(Array.isArray(ok.call[0].md), "its Markdown read as everywhere");
   assert.deepEqual(ok.result, [{ kind: "output", text: "done" }]);
+
+  const sendCall = JSON.stringify({
+    to: "a036720bc24844903",
+    message: "All 4 review findings are valid (`src/sf/markdown.mbt`). Please fix all 4.",
+    summary: "Tell verifier all 4 findings are valid, ask to fix all",
+  });
+  const sendRes = JSON.stringify({
+    type: "message_sent",
+    recipient: "a036720bc24844903",
+    recipient_kind: "agent",
+  });
+  call(core, ui, 2, "history.tool", { name: "SendMessage", call: sendCall, result: sendRes, said: true });
+  await host.settle();
+  const sendOk = (answers(host.takeEmitted(), 2) as J).ok;
+  assert.equal(sendOk.call[0].kind, "markdown");
+  assert.equal(sendOk.call[0].target, "verifier");
+  assert.equal(sendOk.call[0].targetId, "a036720bc24844903");
+  assert.equal(sendOk.call[0].summary, "Tell verifier all 4 findings are valid, ask to fix all");
+  assert.ok(Array.isArray(sendOk.call[0].md), "dispatch message parsed as Markdown");
+  assert.deepEqual(sendOk.result, [
+    {
+      kind: "fields",
+      rows: [
+        { key: "type", value: "message_sent", form: "short" },
+        { key: "recipient", value: "verifier", form: "short" },
+        { key: "recipient_kind", value: "agent", form: "short" },
+      ],
+    },
+  ]);
+
+  const customCall = JSON.stringify({
+    id: "req_1",
+    summary: "Short natural language summary",
+    reason: "A longer explanation with `inline_code` that should render as a full-width Markdown block.",
+  });
+  call(core, ui, 3, "history.tool", { name: "custom_tool", call: customCall, result: null, said: false });
+  await host.settle();
+  const customOk = (answers(host.takeEmitted(), 3) as J).ok;
+  assert.equal(customOk.call[0].kind, "fields");
+  assert.equal(customOk.call[0].rows[0].form, "short");
+  assert.equal(customOk.call[0].rows[0].prose, undefined);
+  assert.equal(customOk.call[0].rows[1].form, "short");
+  assert.equal(customOk.call[0].rows[1].prose, true);
+  assert.equal(customOk.call[0].rows[2].form, "long");
+  assert.ok(Array.isArray(customOk.call[0].rows[2].md), "long field row carries parsed Markdown tree");
+
+  const agents = agentsOf([
+    {
+      kind: "tool_call",
+      callId: "call_1",
+      tool: "Agent",
+      text: JSON.stringify({ description: "Verify 4 findings on markdown.mbt", subagent_type: "research", prompt: "check" }),
+    },
+    {
+      kind: "tool_result",
+      callId: "call_1",
+      text: "Done.\nagentId: a036720bc24844903 (for SendMessage to continue this agent)",
+    },
+  ]);
+  assert.equal(agents.get("a036720bc24844903"), "Verify 4 findings on markdown.mbt");
+  assert.equal(
+    told("SendMessage", JSON.stringify({ to: "a036720bc24844903", message: "Please fix all 4." }), { agents }),
+    "向子 agent (Verify 4 findings on markdown.mbt) 发送消息：Please fix all 4.",
+  );
   core.close();
 });

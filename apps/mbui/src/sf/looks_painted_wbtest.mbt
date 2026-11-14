@@ -47,11 +47,11 @@ test "a button the pointer comes onto: its ground eases to the hover's as each f
   }
   let rest = ground()
   // (the pointer come onto it: built for that, its ground told to go to the hover's)
-  t.move(x, y)
+  t.move_to(x, y)
   let (built, grounds) = painted_until(t, t.time() + dur_ms, ground)
   // (it eases, through colours between, to the one under the hand)
-  assert_true(grounds.length() > 3 && !grounds.contains(rest), msg="\{grounds}")
-  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
+  assert_true(grounds.length() > 3 && !grounds.contains(rest), msg="\{Repr(grounds)}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{Repr(built)}")
 }
 
 ///|
@@ -62,7 +62,7 @@ test "a dialog with another come over it: dimmed over itself as each frame is pa
     fn(c) {
       // (as the presenters tell it: by its cause, the one over it opened)
       if covered.get() && veil.target() != 1.0 {
-        veil.animate(1.0, @motion.tween(confirm_ground_ms, ease=Out))
+        veil.animate(c, 1.0, @motion.tween(confirm_ground_ms, ease=Out))
       }
       dialog(c, "d", true, "标题", fn() { c.text("内容") |> ignore }, veil~) |> ignore
     },
@@ -74,7 +74,7 @@ test "a dialog with another come over it: dimmed over itself as each frame is pa
   // (in, to its way in's end: no motion of its own left; its fade and its move set off the frame after it was first
   // built, as an old view's motion is)
   let in_rest = t.rest_of("dialog/")
-  assert_true(in_rest > t.time(), msg="\{t.moving()}")
+  assert_true(in_rest > t.time(), msg="\{Repr(t.moving())}")
   t.run_for(in_rest - t.time())
   let before = t.drawn_rects()
   // what is drawn that was not before, seen through: its veil, as dark as it has come (not what else is drawn anew
@@ -90,8 +90,8 @@ test "a dialog with another come over it: dimmed over itself as each frame is pa
   let darker = one && Array::makei(veils.length(), fn(k) { k == 0 || (veils[k - 1][0] & 0xFFL) < (veils[k][0] & 0xFFL) })
   .iter()
   .all(fn(b) { b })
-  assert_true(veils.length() > 3 && darker, msg="\{veils}")
-  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
+  assert_true(veils.length() > 3 && darker, msg="\{Repr(veils)}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{Repr(built)}")
 }
 
 ///|
@@ -124,20 +124,20 @@ test "words to press the pointer comes onto (忽略): their ink mixed from the q
   t.check_looks(false)
   t.draw()
   let (text, muted) = (theme().p.text, theme().p.muted)
-  assert_true(glyph_inks(t).length() > 0 && glyph_inks(t).iter().all(fn(g) { g == ink_drawn(muted) }), msg="\{glyph_inks(t)}")
+  assert_true(glyph_inks(t).length() > 0 && glyph_inks(t).iter().all(fn(g) { g == ink_drawn(muted) }), msg="\{Repr(glyph_inks(t))}")
   let (x, y) = match t.rect_of("忽略") {
     Some(r) => (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
     None => fail("no 忽略")
   }
-  t.move(x, y)
+  t.move_to(x, y)
   // each frame: how far it is lit, and whether every glyph is drawn in the mix of the two inks that far (as one ink
   // mixed, whole: nothing under it showing through)
   let (built, seen) = painted_until(t, t.time() + dur_ms, fn() {
-    let k = lit.val.unwrap().get()
+    let k = lit.val.unwrap().get(t.ctx())
     (k, glyph_inks(t).iter().all(fn(g) { g == ink_drawn(mix(text, k, muted)) }))
   })
-  assert_true(seen.iter().all(fn(s) { s.1 }), msg="\{seen} \{glyph_inks(t)}")
+  assert_true(seen.iter().all(fn(s) { s.1 }), msg="\{Repr(seen)} \{Repr(glyph_inks(t))}")
   // (part way: inks between the two, more than a few)
-  assert_true(seen.filter(fn(s) { s.0 > 0.0 && s.0 < 1.0 }).length() > 3, msg="\{seen}")
-  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
+  assert_true(seen.filter(fn(s) { s.0 > 0.0 && s.0 < 1.0 }).length() > 3, msg="\{Repr(seen)}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{Repr(built)}")
 }

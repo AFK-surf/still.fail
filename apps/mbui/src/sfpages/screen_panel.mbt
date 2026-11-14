@@ -1,9 +1,11 @@
 // What the screen's bar has beside 只看/控制, as the web's: how the view goes (a signal
 // mark and how long it has been seen, under the title on a phone, a chip of the viewer's bar with keyboard and mouse;
-// pressed, its figures under the round trip, 复制诊断) and 控制中心 (a round button, or one of the bar's tools), what can be done
-// with the view: 画质 (how large a picture is asked for), 缩放 (the screen's own display scale, where its station changes it: Windows), 组合键 (the keys a phone has none of, or its own
-// system would keep: ⌘Tab, Alt+Tab, the Windows key…), sending files, 全屏 and 断开. Each opens through the library's
-// presenters: a sheet from a phone's foot, a small panel beside its button with keyboard and mouse.
+// pressed, its figures under the round trip, 复制诊断), 控制中心 (a round button, or one of the bar's tools), what can be
+// done with the view and how its picture is asked (screen_center_node.mbt: 全屏, pasting, sending files, the sound, the
+// trackpad; 画质, 帧率, 缩放, 分辨率; 连接, 断开), and 按键 by the keyboard: 组合键 (the keys a phone has none of, or its own
+// system would keep: ⌘Tab, Alt+Tab, the Windows key…), F1–F12 and the keys the keys row has not. Each opens through the
+// library's presenters: a sheet from a phone's foot, a small panel beside its button with keyboard and mouse; what this
+// page opened is one at a time, its own (screen_panel_toggle).
 
 ///|
 /// A key sent with modifiers (mod_alt, mod_ctrl, mod_meta, mod_shift), as the screen's system names it: its name, its
@@ -50,10 +52,10 @@ fn combos_for(os : String) -> Array[Combo] {
 /// The system the screen's station runs on, in words (its host's `os`, the workspace's stations' view); "" until known.
 fn screen_os(src : Source, station : String) -> String {
   let scope = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
-  match src.topic("stations", { "scope": Json::string(scope) }).get().value {
+  match @sfbase.station_rows(src, scope).value {
     Some(Array(list)) =>
       for s in list {
         if text(Some(s), "station") == station {
@@ -188,106 +190,172 @@ fn screen_panel_side() -> @ui.Side {
 }
 
 ///|
-fn net_panel_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
-  let open = fn() { @sf.panel("", fn(c, _) { net_panel(c, s, u) }, from~, side=screen_panel_side(), w=net_panel_w, focus=false) }
-  if @sf.native_on() && !u.in_tab {
-    screen_native_panel(u, "stats", open)
-  } else {
+/// Three bars (signal_bars') as nodes in `parent`, as the round trip's `level` is now.
+fn signal_bars_node(parent : @view.View, level : () -> String) -> Unit {
+  parent.box(fn(row) {
+    @sf.style_node(row, fn() { bars_row }, in_row=true)
+    for i, bar in [bar_low, bar_mid, bar_high] {
+      row.box(fn(b) {
+        @sf.style_node(b, fn() {
+          let ink = level_color(level(), Muted)
+          bar.then(@ui.style(bg=if i < bars_lit(level()) { ink } else { A(ink, O25) }))
+        }, in_row=true)
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The view's figures beside what opened them (`from`): from 控制中心's 连接 (`stepped`), a step further in from it, its
+/// panel's; else this page's panel of its own (screen_panel_toggle).
+fn net_panel_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor, stepped? : Bool = false) -> Unit {
+  let open = fn() { @sf.panel_nodes("", fn(v, _) { net_node(v, s, u) }, from~, side=screen_panel_side(), w=net_panel_w, focus=false) }
+  if stepped {
     open()
+  } else {
+    screen_panel_toggle(u, "stats", open)
   }
 }
 
 ///|
-fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  let net = screen_net(s)
-  let rtt = field(net, "rtt")
-  let level = text(rtt, "level")
-  let st = s.state
-  let latency = field(st, "latency")
-  let video = field(st, "video")
-  let ms = fn(key : String) {
-    match field(latency, key) {
-      Some(Number(v, ..)) => "\{v.to_int()} ms"
-      _ => "—"
-    }
+/// The view's figures in `v` (the web's netPanel), as nodes: the round trip over them, then the frames', the link's and
+/// the picture's, and 复制诊断; each as it is now (the state, the link, and the seconds counted: screen_count).
+fn net_node(v : @view.View, s : ScreenSess, u : ScreenUi) -> Unit {
+  let st = fn() {
+    s.said.get() |> ignore
+    s.state
   }
+  let net = fn() { screen_net(s) }
+  // (its figures counted each second as the view's seconds seen are, screen_count)
+  let counted = fn() { u.seen.get() |> ignore }
   let or_dash = fn(w : String) { if w == "" { "—" } else { w } }
-  let w = number(st, "width").to_int()
-  let h = number(st, "height").to_int()
-  let picture = if w > 0 && h > 0 { "\{w}×\{h}" } else { "—" }
-  let encoder = match field(video, "hardware") {
-    Some(True) => @sf.t("web-pages.screen.stat.hardware")
-    Some(False) => @sf.t("web-pages.screen.stat.software")
-    _ => "—"
-  }
-  let loss = match field(net, "loss") {
-    Some(Object(_)) as f => (text(f, "text"), text(f, "level"))
-    _ => ("0%", "")
-  }
-  let os = screen_os(s.src, s.station)
-  c.box(style=net_panel_box, fn() {
-    c.box(style=net_head_box, fn() {
-      signal_bars(c, level)
-      let words = @sf.t("web-pages.screen.stat.rttHead").replace_all(old="{rtt}", new=or_dash(text(rtt, "text")))
-      c.text(words, style=net_head_words) |> ignore
+  let copied = @signals.signal(false, same=fn(a, b) { a == b })
+  let due : Ref[() -> Unit] = Ref(fn() {  })
+  v.box(fn(b) {
+    @sf.style_node(b, fn() { net_panel_box })
+    b.box(fn(head) {
+      @sf.style_node(head, fn() { net_head_box })
+      signal_bars_node(head, fn() { text(field(net(), "rtt"), "level") })
+      @sf.words_node(head, fn() {
+        @sf.t("web-pages.screen.stat.rttHead").replace_all(old="{rtt}", new=or_dash(text(field(net(), "rtt"), "text")))
+      }, fn() { net_head_words })
+      |> ignore
     })
     |> ignore
-    let group = fn(rows : () -> Unit) {
-      c.box(style=net_group_box, fn() { c.box(style=net_rows, rows) |> ignore }) |> ignore
-    }
-    let row = fn(name : String, value : String, level : String) {
-      c.box(style=net_row_box, fn() {
-        c.box(style=net_row_name, fn() { c.text(@sf.t(name), style=net_name_words) |> ignore }) |> ignore
-        c.text(value, style=net_value_words.then(@ui.text_style(color=level_color(level, Fg)))) |> ignore
+    let group = fn(rows : Array[(String, () -> String, () -> String)]) {
+      b.box(fn(g) {
+        @sf.style_node(g, fn() { net_group_box })
+        g.box(fn(col) {
+          @sf.style_node(col, fn() { net_rows })
+          for r in rows {
+            let (name, value, level) = r
+            col.box(fn(row) {
+              @sf.style_node(row, fn() { net_row_box })
+              row.box(fn(n) {
+                @sf.style_node(n, fn() { net_row_name }, in_row=true)
+                @sf.words_node(n, fn() { @sf.t(name) }, fn() { net_name_words }) |> ignore
+              })
+              |> ignore
+              @sf.words_node(row, value, fn() { net_value_words.then(@ui.text_style(color=level_color(level(), Fg))) })
+              |> ignore
+            })
+            |> ignore
+          }
+        })
+        |> ignore
       })
       |> ignore
     }
-    group(fn() {
-      row("web-pages.screen.stat.frameLatency", ms("frame"), "")
-      row("web-pages.screen.stat.beforeSent", ms("before"), "")
-      row(
+    let ms = fn(key : String) {
+      fn() {
+        match field(field(st(), "latency"), key) {
+          Some(Number(n, ..)) => "\{n.to_int()} ms"
+          _ => "—"
+        }
+      }
+    }
+    let plain = fn() { "" }
+    let loss = fn() {
+      match field(net(), "loss") {
+        Some(Object(_)) as f => (text(f, "text"), text(f, "level"))
+        _ => ("0%", "")
+      }
+    }
+    group([
+      ("web-pages.screen.stat.frameLatency", ms("frame"), plain),
+      ("web-pages.screen.stat.beforeSent", ms("before"), plain),
+      (
         "web-pages.screen.stat.fps",
-        match u.fps {
-          Some(f) => "\{f.round().to_int()}"
-          None => "—"
+        fn() {
+          counted()
+          match u.fps {
+            Some(f) => "\{f.round().to_int()}"
+            None => "—"
+          }
         },
-        "",
-      )
-      row(
+        plain,
+      ),
+      (
         "web-pages.screen.stat.bitrate",
-        match u.bps {
-          Some(b) => bitrate_words(b)
-          None => "—"
+        fn() {
+          counted()
+          match u.bps {
+            Some(b) => bitrate_words(b)
+            None => "—"
+          }
         },
-        "",
-      )
-      row("web-pages.screen.stat.loss", loss.0, loss.1)
-    })
-    group(fn() {
-      row("web-pages.screen.stat.path", or_dash(text(net, "path")), "")
-      row("web-pages.screen.stat.system", or_dash(os), "")
-    })
-    group(fn() {
-      row("web-pages.screen.stat.picture", picture, "")
-      row("web-pages.screen.stat.codec", codec_words(text(st, "codec")), "")
-      row("web-pages.screen.stat.capture", or_dash(text(video, "capture")), "")
-      row("web-pages.screen.stat.encoder", encoder, "")
-    })
+        plain,
+      ),
+      ("web-pages.screen.stat.loss", fn() { loss().0 }, fn() { loss().1 }),
+    ])
+    group([
+      ("web-pages.screen.stat.path", fn() { or_dash(text(net(), "path")) }, plain),
+      ("web-pages.screen.stat.system", fn() { or_dash(screen_os(s.src, s.station)) }, plain),
+    ])
+    group([
+      (
+        "web-pages.screen.stat.picture",
+        fn() {
+          let w = number(st(), "width").to_int()
+          let h = number(st(), "height").to_int()
+          if w > 0 && h > 0 { "\{w}×\{h}" } else { "—" }
+        },
+        plain,
+      ),
+      ("web-pages.screen.stat.codec", fn() { codec_words(text(st(), "codec")) }, plain),
+      ("web-pages.screen.stat.capture", fn() { or_dash(text(field(st(), "video"), "capture")) }, plain),
+      (
+        "web-pages.screen.stat.encoder",
+        fn() {
+          match field(field(st(), "video"), "hardware") {
+            Some(True) => @sf.t("web-pages.screen.stat.hardware")
+            Some(False) => @sf.t("web-pages.screen.stat.software")
+            _ => "—"
+          }
+        },
+        plain,
+      ),
+    ])
     // everything above as figures (no screen, no names), for a report; 已复制 for a moment after
-    let copied = u.diag_copies > 0 &&
-      !@kit.after(c, "screen-diag/\{u.diag_copies}", true, diag_said_ms, later=true)
-    c.box(style=@ui.style(w=Full, align=ACenter), fn() {
-      @sf.panel_button(
-        c,
-        "screen-diag",
-        @sf.t(if copied { "web-pages.screen.stat.copied" } else { "web-pages.screen.stat.copy" }),
-        tone=Quiet,
-        on_press=fn() {
-          @ui.clipboard_set(diagnosis(s, u, net, os).stringify(), label="still.fail")
-          u.diag_copies += 1
+    b.box(fn(at) {
+      @sf.style_node(at, fn() { net_diag_place })
+      @sf.panel_button_node(
+        at,
+        fn() { @sf.t(if copied.get() { "web-pages.screen.stat.copied" } else { "web-pages.screen.stat.copy" }) },
+        fn() {
+          let n = @signals.untracked(net)
+          @ui.clipboard_set(diagnosis(s, u, n, screen_os(s.src, s.station)).stringify(), label="still.fail")
+          copied.set(true)
+          (due.val)()
+          due.val = at.at_moment(at.cause_at() + diag_said_ms, fn() { copied.set(false) })
         },
-      ) |> ignore
-    }) |> ignore
+        tone=Quiet,
+      )
+      |> ignore
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -376,7 +444,52 @@ fn center_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, id : Int, close : () -
     debug_apps_open(s, u, from)
     return
   }
-  @sf.panel_nodes(@sf.t("web-pages.screen.panel"), fn(v, done) { center_node(c, v, s, u, from, close, done) }, from~, focus=false)
+  screen_panel_toggle(u, "center", fn() {
+    @sf.panel_nodes(@sf.t("web-pages.screen.panel"), fn(v, done) { center_node(c, v, s, u, from, close, done) }, from~, side=screen_panel_side(), focus=false)
+  })
+}
+
+// ── 按键 ─────────────────────────────────────────────────────────────────
+
+///|
+/// 按键 (the combos, then F1–F12 and the keys the keys row has not) beside what opened it (`from`), or with keyboard and
+/// mouse (`combos_only`: its keyboard has the rest) 组合键 alone; this page's panel of its own (screen_panel_toggle).
+fn keys_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor, combos_only? : Bool = false) -> Unit {
+  let title = @sf.t(if combos_only { "web-pages.screen.combos" } else { "web-pages.screen.keysPanel" })
+  screen_panel_toggle(u, "keys", fn() {
+    @sf.panel_nodes(title, fn(v, _) { keys_node(v, s, u, combos_only) }, from~, side=screen_panel_side(), focus=false)
+  })
+}
+
+///|
+/// 按键 as a round button (the foot's, the rail's, the folded tools', in the trackpad's place before it): pressed, its
+/// panel beside it; on while it is open. Only while driving a screen that is no simulator's (its device's buttons are
+/// beside its picture).
+fn keys_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  if s.simulator() {
+    return
+  }
+  let key = "screen-keys"
+  let id = c.id(key)
+  round_button(c, key, "keycap", @sf.t("web-pages.screen.keysPanel"), on=screen_panel_on(u, "keys"), on_press=fn() {
+    keys_open(s, u, Of(id))
+  })
+  // (a fixture's, asked as it is built)
+  if u.asked_panel == "keys" {
+    u.asked_panel = ""
+    keys_open(s, u, Of(id))
+  }
+}
+
+///|
+/// 组合键 in the viewer's bar while driving (with keyboard and mouse: its keyboard has the rest): pressed, the combos
+/// under it.
+fn combos_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let key = "screen-combos"
+  let id = c.id(key)
+  @sf.viewer_tool(c, key, "keycap", @sf.t("web-pages.screen.combos"), @sf.page_viewer_ink(), on_press=fn() {
+    keys_open(s, u, Of(id), combos_only=true)
+  })
 }
 
 ///|
@@ -421,6 +534,7 @@ fn full_now(u : ScreenUi) -> Bool {
 /// 全屏 asked for, or let go of: on a phone the screen alone, turned sideways, its tools folded into one button; with
 /// keyboard and mouse the window made to fill the screen, the bar kept (as the web's page in its browser's full screen).
 fn full_asked(c : @ui.Ctx, u : ScreenUi) -> Unit {
+  screen_panels_close(u)
   if @sf.soft_keyboard() {
     u.full.set(!u.full.get())
   } else {
@@ -475,8 +589,68 @@ fn fps_note(fps : Int) -> String {
 /// A choice kept on this device (`prefs.set` `name`: `v`, null for the default), `value` naming it.
 fn prefs_set(c : @ui.Ctx, s : ScreenSess, name : String, value : String, v : Json) -> Unit {
   c.tell("screen-prefs/" + s.view + "/" + name + "/" + value, fn() {
-    let p : Map[String, Json] = {}
+    let p : Map[String, Json] = Map([])
     p[name] = v
     (s.src.call)("prefs.set", Json::object(p), screen_act(c, @sf.t("web-pages.screen.panel")))
   })
 }
+
+// ── 页面切换与网址导航 ───────────────────────────────────────────────────
+
+///|
+/// Switches the viewer from `s` to another screen `next` on the same station: in place on the stack, in its standalone
+/// window if popped out, or beside the chat when shown in a side-panel tab.
+fn switch_screen_to(s : ScreenSess, u : ScreenUi, next : String, title : String, until_gone : Bool) -> Unit {
+  screen_panels_close(u)
+  if next == "" || next == s.screen {
+    return
+  }
+  let next_at : ScreenAt = { station: s.station, screen: next, title, until_gone }
+  match @sfbase.lone_page.val {
+    Some(Screen(prev)) => {
+      screen_left(s.src, prev.station, prev.screen)
+      @sfbase.lone_page.val = Some(Screen({ ..next_at, until_gone: false }))
+    }
+    _ =>
+      if !u.in_tab && @sfbase.app.nav.top() is Screen(_) {
+        @sfbase.open_in_place(Screen(next_at))
+      } else {
+        @sfbase.open_page(Screen(next_at))
+      }
+  }
+}
+
+///|
+/// Asks for a URL, bare domain, or pasted text containing an `https://` link and navigates the current browser tab to it
+/// (`screen.openUrl`).
+fn go_url_asked(c : @ui.Ctx, s : ScreenSess, from : @sf.Anchor) -> Unit {
+  let site = text(s.state, "site")
+  @sf.ask(
+    @sf.t("web-pages.screen.goUrl"),
+    @sf.t("web-pages.screen.goUrlAction"),
+    fn(url) {
+      let p : Map[String, Json] = {
+        "station": Json::string(s.station),
+        "screen": Json::string(s.screen),
+        "url": Json::string(url),
+      }
+      (s.src.call)("screen.openUrl", Json::object(p), screen_act(c, @sf.t("web-pages.screen.goUrlWhat")))
+    },
+    placeholder=if site != "" { site } else { "mail.proton.me" },
+    hint=@sf.t("web-pages.screen.urlHint"),
+    from~,
+  )
+}
+
+///|
+/// Reloads the current browser tab (`screen.reload`).
+fn reload_asked(c : @ui.Ctx, s : ScreenSess) -> Unit {
+  c.tell("screen-reload/" + s.view + "/\{s.said.untracked()}", fn() {
+    let p : Map[String, Json] = {
+      "station": Json::string(s.station),
+      "screen": Json::string(s.screen),
+    }
+    (s.src.call)("screen.reload", Json::object(p), screen_act(c, @sf.t("web-pages.screen.reloadWhat")))
+  })
+}
+

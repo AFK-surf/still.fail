@@ -320,15 +320,16 @@ fn fdrag_when(ready : () -> Bool, go : () -> Unit) -> Unit {
   }
   fdrag.later.retain(fn(w) { !w.0.val })
   let done = Ref(false)
-  // (owned by nothing: what waits is no part of what reads now)
-  let owner = @signals.set_owner(None)
+  // (owned by nothing: what waits is no part of what reads now, let go only by `stop`. Made so as it is made where
+  // nothing reads and no owner is set: a drop from outside is handed on as the frame begins, outside its reading (ui's
+  // take_messages), a row let go in the press's handler. One made as a frame is read would be that frame's, and is a
+  // fault: @signals.effect_in_watch)
   let stop = @signals.effect(fn() {
     if !done.val && ready() {
       done.val = true
       @signals.untracked(go)
     }
   })
-  @signals.set_owner(owner) |> ignore
   if done.val {
     stop()
   } else {
@@ -341,7 +342,7 @@ fn fdrag_when(ready : () -> Bool, go : () -> Unit) -> Unit {
 /// filled, as Finder merges), then each file up into its folder.
 fn fdrag_put_up(src : Source, into : DriveAt, files : Array[@hostapi.Picked]) -> Unit {
   let root = into.root.unwrap_or("")
-  let folders = files.filter(fn(f) { f.name.has_suffix("/") }).map(fn(f) { f.name.view(end_offset=f.name.length() - 1).to_string() })
+  let folders = files.filter(fn(f) { f.name.has_suffix("/") }).map(fn(f) { f.name.exact_view(end=f.name.length() - 1).to_owned() })
   let up = files.filter(fn(f) { !f.name.has_suffix("/") })
   let send = fn() {
     for f in up {
@@ -387,7 +388,7 @@ fn fdrag_drop(c : @ui.Ctx, item : Dragged, t : FTarget, mods : Int) -> Unit {
       favorite_add(src, t.ws, { station: item.station, root: item.abs, path: "", name: item.name })
     }
     Some(into) => {
-      let move = fdrag_effect(item, into.station, mods) == "move"
+      let moves = fdrag_effect(item, into.station, mods) == "move"
       let anywhere = match dv_stations(src, t.ws).0 {
         Some(l) =>
           match l.iter().find_first(fn(s) { s.station == into.station }) {
@@ -396,7 +397,7 @@ fn fdrag_drop(c : @ui.Ctx, item : Dragged, t : FTarget, mods : Int) -> Unit {
           }
         None => false
       }
-      fdrag_transfer(c, src, item, into, move, t.name, anywhere)
+      fdrag_transfer(c, src, item, into, moves, t.name, anywhere)
     }
   }
 }
@@ -411,7 +412,7 @@ fn fdrag_transfer(
   src : Source,
   item : Dragged,
   into : DriveAt,
-  move : Bool,
+  moves : Bool,
   into_name : String,
   anywhere : Bool,
 ) -> Unit {
@@ -422,7 +423,7 @@ fn fdrag_transfer(
     return
   }
   fdrag_when(fn() { !(drive_folder(src, into.station, into_root, into.path) is (None, None)) }, fn() {
-    fdrag_send(c, src, item, into, move, into_name, anywhere)
+    fdrag_send(c, src, item, into, moves, into_name, anywhere)
   })
 }
 
@@ -433,7 +434,7 @@ fn fdrag_send(
   src : Source,
   item : Dragged,
   into : DriveAt,
-  move : Bool,
+  moves : Bool,
   into_name : String,
   anywhere : Bool,
 ) -> Unit {
@@ -443,11 +444,11 @@ fn fdrag_send(
     // (one that cannot be read: no names there to ask about)
     _ => []
   }
-  let what = @sf.t(if move { "web-pages.drive.moveWhat" } else { "web-pages.files.copyWhat" })
+  let what = @sf.t(if moves { "web-pages.drive.moveWhat" } else { "web-pages.files.copyWhat" })
   let into_json : Json = { "station": Json::string(into.station), "root": Json::string(into_root), "path": Json::string(into.path) }
   // the stations' copy (or move), the answer about a name there said
   let transfer = fn(answer : String?) {
-    let conflicts : Map[String, Json] = {}
+    let conflicts : Map[String, Json] = Map([])
     match answer {
       Some(a) => conflicts[item.name] = Json::string(a)
       None => ()
@@ -462,7 +463,7 @@ fn fdrag_send(
           "names": [Json::string(item.name)],
         },
         "to": into_json,
-        "move": Json::boolean(move),
+        "move": Json::boolean(moves),
         "conflicts": Json::object(conflicts),
       },
       act_done(c, what),
@@ -511,7 +512,7 @@ fn fdrag_send(
     if answer == Some("skip") {
       return
     }
-    if move && item.station == into.station {
+    if moves && item.station == into.station {
       (src.call)(
         "drive.moves",
         {
@@ -835,9 +836,9 @@ let fdrag_ghost_place : @ui.Style = @ui.css("w=Full h=Full align=AStart")
 ///|
 /// The picture carried: a chip on the raised ground, its shadow under it.
 // kept across runs: a value (no field of it changes)
-let fdrag_ghost_chip : @ui.Style = @ui.css(
+let fdrag_ghost_chip : @ui.Style = @ui.css((
   #|row h=S8 px=S3 gap=S2 align=ACenter radius=Lg bg=Raised shadow=Lg opacity=O90
-)
+))
 
 ///|
 /// What a drop over it would land in: ringed in the accent on its wash.

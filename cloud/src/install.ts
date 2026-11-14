@@ -52,6 +52,13 @@ export const RELEASE_FILE = /^(stillfail-station-(darwin-arm64|linux-x64|linux-a
 export const BETA_RELEASE_FILE = /^beta\/stillfail-station-((darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|win32-x64\.zip)$/;
 
 /**
+ * The station's releases kept each under a name of its own (scripts/release-deltas.ts: the release before is what a
+ * delta is made from, and the names above are put over each release), by channel, build and sha256; and the deltas to
+ * each from the builds before it, which station.json and station-beta.json offer (station/src/updates/release.ts).
+ */
+export const STATION_ARCHIVE = /^station\/archive\/(stable|beta)\/[0-9]+-[0-9a-f]{64}-((darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|win32-x64\.zip|(darwin-arm64|linux-x64|linux-arm64|win32-x64)\.from-[0-9]+-[0-9a-f]{16}\.delta)$/;
+
+/**
  * The Node a release runs on (its NODE_VERSION file says the version), kept apart from it, once per version (scripts/node-dist.sh):
  * the installer gets it when the machine has none of that version yet, with its sha256 to check it by.
  */
@@ -87,6 +94,10 @@ const APP_FILES: [RegExp, string][] = [
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
   // Its signature (scripts/release-sign.ts), which the app checks before installing it (scripts/release-sign.ts).
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
+  // Their deltas from the builds before (scripts/release-deltas.ts; the feeds below offer them), and the Windows
+  // installer's raw form, what later releases' deltas are made from.
+  [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-(arm64-mac\.zip|x64-win\.exe)\.from-[0-9]+\.delta$/, "application/octet-stream"],
+  [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.raw\.zst$/, "application/zstd"],
   // It is mbui's (apps/mbui) in the Electron app's place (scripts/release.sh desktop-win): its own updater's feeds,
   // stable and beta (an AppRelease naming the installer above, its signed words in it), as the Mac's.
   [/^win\/(beta\/)?latest\.json$/, "application/json"],
@@ -97,6 +108,7 @@ const APP_FILES: [RegExp, string][] = [
   [/^android\/latest\.json$/, "application/json"],
   // monoid's (release.sh --product monoid), in its own bucket: monoid(-beta)-<n>.apk.
   [/^android\/(stillfail|stillfail-beta|monoid|monoid-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  [/^android\/(stillfail|stillfail-beta|monoid|monoid-beta)-[0-9]+\.apk\.from-[0-9]+\.delta$/, "application/octet-stream"],
   // still.fail mbui (apps/mbui: the Android app in mbui, fail.still.mbui, a test app of its own; apps/mbui/scripts/beta.sh):
   // its feed and the builds it names.
   [/^android\/mbui\/latest\.json$/, "application/json"],
@@ -108,11 +120,14 @@ const APP_FILES: [RegExp, string][] = [
   // and core.hbc, zipped)
   [/^win\/mbui\/latest\.json$/, "application/json"],
   [/^win\/stillfail-mbui-[0-9]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
+  [/^win\/stillfail-mbui-[0-9]+-x64-win\.exe\.from-[0-9]+\.delta$/, "application/octet-stream"],
+  [/^win\/stillfail-mbui-[0-9]+-x64-win\.exe\.raw\.zst$/, "application/zstd"],
   [/^win\/stillfail-mbui-[0-9]+-x64-win\.zip$/, "application/zip"],
   // and its Linux app (apps/mbui/scripts/beta.sh linux: the program with its engine, shell and core.hbc, and its installer),
   // each machine's builds a feed of their own (x64's linux/mbui, arm64's linux-arm64/mbui)
   [/^linux(-arm64)?\/mbui\/latest\.json$/, "application/json"],
   [/^linux\/stillfail-mbui-[0-9]+-(x64|arm64)-linux\.tar\.gz$/, "application/gzip"],
+  [/^linux\/stillfail-mbui-[0-9]+-(x64|arm64)-linux\.tar\.gz\.from-[0-9]+\.delta$/, "application/octet-stream"],
   // The faces the apps offer beside the system's (scripts/fonts.py): a page's stylesheet and its woff2
   // slices, the Android app's gzipped files; each version in a folder of its own, never changed.
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/font\.css$/, "text/css; charset=utf-8"],
@@ -138,13 +153,14 @@ const APP_FILES: [RegExp, string][] = [
  * upstreamRelease); never an app's feed or build, which would update its apps to another product's.
  */
 export function sharedRelease(file: string): boolean {
-  return RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file) || NODE_FILE.test(file) || /^station(-beta)?\.json$|^(fonts|natives|relay)\//.test(file);
+  return RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file) || STATION_ARCHIVE.test(file) || NODE_FILE.test(file) || /^station(-beta)?\.json$|^(fonts|natives|relay)\//.test(file);
 }
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
 export function releaseType(file: string): string | null {
   const archive = file.endsWith(".zip") ? "application/zip" : "application/gzip";
   if (RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file)) return archive;
+  if (STATION_ARCHIVE.test(file)) return file.endsWith(".delta") ? "application/octet-stream" : archive;
   if (NODE_FILE.test(file)) return file.endsWith(".sha256") ? "text/plain; charset=utf-8" : archive;
   return APP_FILES.find(([name]) => name.test(file))?.[1] ?? null;
 }
@@ -155,14 +171,17 @@ export function releaseType(file: string): string | null {
 // in ($names, $(commands)) given as arguments.
 const script = (say: (key: string, args?: Record<string, string>) => string) => `#!/bin/sh
 # Installs the still.fail station on this machine and joins it to a workspace in still.fail cloud:
-#   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token> [<lock>]
+#   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token> [<lock>] [rig:<person>]
 # <lock>: the workspace lock's hash the station pins (a locked workspace's command gives it).
+# rig:<person>: the machine joins as a rig (a station that only runs tasks), its person's own lock's hash pinned (a rig's command gives it).
 # STILLFAIL_CHANNEL=beta gets the test channel's release (stable: the usual one); this copy defaults to __CHANNEL__.
 # The token comes from 「添加 station」 in still.fail. Running it again updates it and keeps its data (~/.stillfail).
 set -eu
 origin="__ORIGIN__"
 token="\${1:-}"
 lock="\${2:-}"
+rig="\${3:-}"
+case "$lock" in rig:*) rig="$lock" lock="" ;; esac
 # The product its cloud is (client/i18n/brand.ts): another product's station has a data directory, a command and a
 # service of its own beside still.fail's on the same machine (monoid's: ~/.monoid, \`monoid\`, build.monoid.station).
 product=stillfail reverse=fail.still
@@ -226,7 +245,8 @@ case "$channel" in
 esac
 step download
 sha256_of() { { shasum -a 256 "$1" 2>/dev/null || sha256sum "$1"; } | cut -d' ' -f1; }
-# Handed a release already downloaded (by the installer of the release before, below): taken, its directory removed.
+# Handed a release already downloaded (by the installer of the release before, below, or by the station, which made it
+# from a delta: station/src/updates/release.ts): taken, its directory removed.
 case "\${STILLFAIL_ARCHIVE:-}" in
   */stillfail-handed.*/stillfail.tar.gz)
     mv "$STILLFAIL_ARCHIVE" "$tmp/stillfail.tar.gz"
@@ -239,7 +259,10 @@ if [ -n "\${STILLFAIL_RELEASE_SHA256:-}" ] && [ "$(sha256_of "$tmp/stillfail.tar
   echo "${say("cloud.install.release.mismatch")}" >&2
   exit 1
 fi
-tar -xzf "$tmp/stillfail.tar.gz" -C "$tmp"
+# Gzipped or not (tar finds out as it reads): what a station made from a delta is the tar itself, under the same name,
+# and STILLFAIL_RELEASE_SHA256 then that tar's. Only an installer from this one on is handed one: the station that made
+# it runs the installer it carries, which hands it on to the new release's own, with the same hash.
+tar -xf "$tmp/stillfail.tar.gz" -C "$tmp"
 # The release checked so is installed by its own installer (bin/install.<lang>.sh in it, scripts/installers.ts): what
 # it does from here (its service, its handover) is the new release's, as the cloud's newest installer did it before.
 lang="\${STILLFAIL_INSTALL_LANG:-__LANG__}"
@@ -497,7 +520,7 @@ ln -sf "$app/bin/stillfail" "$HOME/.local/bin/$product"
 
 if [ -n "$token" ]; then
   echo "${say("cloud.install.join")}"
-  "$app/bin/stillfail" station enroll "$origin" "$token" --stay \${lock:+--lock "$lock"}
+  "$app/bin/stillfail" station enroll "$origin" "$token" --stay \${lock:+--lock "$lock"} \${rig:+--rig "\${rig#rig:}"}
 fi
 
 if [ -n "$handed" ]; then

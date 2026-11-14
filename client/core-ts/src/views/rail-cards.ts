@@ -5,7 +5,6 @@
 // wants a look coloured), lines of what it is made of (the models that spent most), the last 7 days as bars where it
 // has them, and 分享卡片 where there is something to share.
 import { t } from "../i18n.ts";
-import * as present from "../present.ts";
 import { arr as arrU, get as getU } from "../util.ts";
 import { localDay } from "./usage.ts";
 
@@ -20,14 +19,20 @@ const num = (v: unknown): number => (typeof v === "number" ? v : 0);
 type Tone = "red" | "amber";
 const toned = (tone: Tone | null) => (tone === null ? {} : { tone });
 
-/// A figure: its value, what it is of.
-const stat = (value: string | number, label: string, tone: Tone | null = null) => ({ value: String(value), label, ...toned(tone) });
+/// A figure: its value, what it is of; `go`, the rail's place pressing it opens (the chats it counts).
+const stat = (value: string | number, label: string, tone: Tone | null = null, go: string | null = null) => ({
+  value: String(value),
+  label,
+  ...toned(tone),
+  ...(go === null ? {} : { go }),
+});
 
-/// The 对话 place's: how many chats are at work (its line), how many wait for the viewer, went wrong, have something
+/// The 对话 place's: how many chats are at work (its line: `running`, the list's rows whose `state` is `run`, as views.ts
+/// counts them), how many wait for the viewer, went wrong, have something
 /// unread (the viewer's marks: views/marks.ts), and how many were archived today (`archived`, when each was, on a
-/// clock `offset` minutes east of UTC; `now`).
-export function chatsCard(rows: J[], mark: J, archived: number[], now: number, offset: number): J {
-  const running = rows.filter((r) => present.rowState(arr(get(r, "agents"))) === "run").length;
+/// clock `offset` minutes east of UTC; `now`). Each figure opens the chats it counts (2026-11-10 用户「这里面不能点击跳转，光告诉我有几个
+/// 没用啊」): the first three 待处理, which lists them, those archived the archive.
+export function chatsCard(running: number, mark: J, archived: number[], now: number, offset: number): J {
   const wait = num(get(mark, "wait"));
   const alert = num(get(mark, "alert"));
   const today = localDay(now, offset);
@@ -35,10 +40,10 @@ export function chatsCard(rows: J[], mark: J, archived: number[], now: number, o
   return {
     head: running > 0 ? t("core-logic.rail.chats.head", { n: running }) : t("core-logic.rail.chats.none"),
     stats: [
-      stat(wait, t("core-logic.rail.chats.wait"), wait > 0 ? "amber" : null),
-      stat(alert, t("core-logic.rail.chats.alert"), alert > 0 ? "red" : null),
-      stat(num(get(mark, "unread")), t("core-logic.rail.chats.unread")),
-      stat(done, t("core-logic.rail.chats.archived")),
+      stat(wait, t("core-logic.rail.chats.wait"), wait > 0 ? "amber" : null, "attention"),
+      stat(alert, t("core-logic.rail.chats.alert"), alert > 0 ? "red" : null, "attention"),
+      stat(num(get(mark, "unread")), t("core-logic.rail.chats.unread"), null, "attention"),
+      stat(done, t("core-logic.rail.chats.archived"), null, "archive"),
     ],
     rows: [],
   };

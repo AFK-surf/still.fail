@@ -5,16 +5,17 @@
 /// a millisecond or so).
 export const WAITED_MS = 20;
 
-/// The time waited since it was last asked: all of it and how many waits, and those of WAITED_MS or more by who made
-/// them.
-export type Waits = { ms: number; calls: number; by: Map<string, { ms: number; calls: number }> };
+/// The time waited since it was last asked: all of it and how many waits, the longest one, and those of WAITED_MS or more
+/// by who made them.
+export type Waits = { ms: number; calls: number; longest: number; by: Map<string, { ms: number; calls: number }> };
 
-export const noWaits = (): Waits => ({ ms: 0, calls: 0, by: new Map() });
+export const noWaits = (): Waits => ({ ms: 0, calls: 0, longest: 0, by: new Map() });
 
 /// A wait of `ms` put down; `who` made it, asked only for one of WAITED_MS or more (it takes a stack).
 export function waited(waits: Waits, ms: number, who: () => string): void {
   waits.ms += ms;
   waits.calls++;
+  waits.longest = Math.max(waits.longest, ms);
   if (ms < WAITED_MS) return;
   const key = who();
   const was = waits.by.get(key) ?? { ms: 0, calls: 0 };

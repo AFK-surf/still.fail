@@ -40,12 +40,12 @@ export const MODS = { alt: 1, ctrl: 2, meta: 4, shift: 8 } as const;
 export const COMPUTER = {
   name: "computer",
   description:
-    "Operate one of this station's screens yourself (the `screen` tool lists them: desktop, browser:<tab>, simulator:<udid>, an iOS Simulator booted here, touched where you click): take a screenshot, click, move, drag, scroll, type text, press keys. Coordinates are pixels of the latest screenshot of that screen (each result says its size and how it maps to the screen). Every action returns a fresh screenshot unless screenshot=false. On the desktop prefer an app's accessibility tree: action=tree with app (no app: the apps running) gives its window as text, an element a line with its ref (e12); then click, type, set (replace a field's value with text; on Windows type by ref is refused, as it needs the focus: use set) or scroll with ref act on that element without the pointer or the focus (also behind other windows, and while a person drives the screen), and key with app sends keys to that app; each answers with the app's tree again. A big window: tree with skeleton=true first, then tree with ref for one part. Use screenshots for what has no tree (a canvas, a game, a picture). For web pages prefer the browser's DevTools (the `browser` tool: Playwright/chrome-devtools-mcp read the page itself); use this for native apps and what DevTools cannot reach. While a person is controlling the screen your input by coordinates is refused, with the device they hold it from: wait, or ask them in the chat. When you are stuck (a sign-in, a captcha, a permission), give the person the screen's link from the `screen` tool with chat_post kind=need_human.",
+    "Operate one of this station's screens yourself (the `screen` tool lists them: desktop, browser:<tab>, simulator:<udid>): take a screenshot, click, move, drag, scroll, type text, press keys, in pixels of the latest screenshot of that screen. On the desktop prefer an app's accessibility tree (action=tree with app; no app: the apps running): each element is a line with its ref (e12), which click, type, set and scroll act on without the pointer or the focus, also while a person drives the screen. Use screenshots for what has no tree (a canvas, a game, a picture). For web pages prefer the browser's DevTools (the `browser` tool). While a person is controlling the screen your input by coordinates is refused: wait, or ask them in the chat. Skill stillfail-browser says more.",
   inputSchema: {
     type: "object",
     properties: {
       action: { type: "string", enum: ["screenshot", "tree", "click", "move", "drag", "scroll", "type", "set", "key", "wait"], description: "What to do (default screenshot)" },
-      screen: { type: "string", description: "The screen's id from the `screen` tool: desktop, browser:<targetId>, simulator:<udid>" },
+      screen: { type: "string", description: "The screen's id from the `screen` tool" },
       x: { type: "number", description: "click, move, scroll: the point, in screenshot pixels from the left" },
       y: { type: "number", description: "click, move, scroll: the point, in screenshot pixels from the top" },
       button: { type: "string", enum: ["left", "right", "middle"], description: "click, drag: the mouse button (default left)" },
@@ -54,7 +54,7 @@ export const COMPUTER = {
       to: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2, description: "drag: [x, y] where it is released" },
       dx: { type: "number", description: "scroll: pixels to the right (negative: left)" },
       dy: { type: "number", description: "scroll: pixels down (negative: up)" },
-      text: { type: "string", description: "type: the text, as if typed (a newline presses Enter); set: the element's new value" },
+      text: { type: "string", description: "type: the text, as if typed (a newline presses Enter); set: the element's new value (on Windows type by ref is refused, as it needs the focus: use set)" },
       key: { type: "string", description: "key: a key or a combination, e.g. Enter, Escape, Tab, ArrowDown, PageDown, F5, a, ctrl+shift+t, cmd+c and cmd+Left on a Mac (on Windows cmd is the Windows key: ctrl+c there)" },
       mods: { type: "array", items: { type: "string", enum: ["cmd", "ctrl", "alt", "shift"] }, description: "key: modifiers held besides those in key" },
       ms: { type: "number", description: "wait: how long (ms, at most 30000) before the screenshot" },

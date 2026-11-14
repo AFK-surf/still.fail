@@ -30,43 +30,16 @@ test "a chat tapped: what is shared goes to its composer and the chat opens; 新
     Chat(r) => assert_eq(r.session, "s-c4")
     _ => fail("not the chat")
   }
+  // (what the sheet shows kept as it was while it sinks away, let go of once it has gone)
+  assert_true(share_in.shared.get() is Some(_))
+  sheet_rested(t, "sf-present")
+  t.frame()
   assert_true(share_in.shared.get() is None)
   let n = share_tester("share-in-stations")
   // (the station chosen on the new chat's page, as any new chat's: not listed here)
   n.tap_text("新建对话")
   assert_true(app.nav.top() is NewChat)
   nav_rested(n)
-}
-
-///|
-test "a shared link in a draft: a card with its site, sent as words after what is written" {
-  let d : Draft = {
-    key: "ws1/st1:s-c4",
-    text: @signals.signal(""),
-    put_text: @signals.signal(None),
-    field: @ui.Field::new(),
-    quotes: @sf.LiveArray::from([]),
-    comments: @sf.LiveMap::from({}),
-    files: @sf.LiveArray::from([]),
-    error: @signals.signal(None),
-    loaded: @signals.signal(true),
-    kept: @signals.signal(""),
-    changed_at: 0.0,
-    warm_n: 1,
-    focus: 0,
-    id: "",
-    sig: None,
-  }
-  fill_draft(d, {
-    "text": "帮我下这个",
-    "quotes": [],
-    "files": [],
-    "links": [{ "url": "https://www.youtube.com/watch?v=x", "title": "列表滑动", "site": "youtube.com" }],
-  })
-  assert_eq(d.files.length(), 1)
-  assert_eq(up_files(d).length(), 0)
-  assert_eq(with_link_words("帮我下这个", d), "帮我下这个\n列表滑动\nhttps://www.youtube.com/watch?v=x")
-  assert_true(draft_view(d).get("links") is Some(_))
 }
 
 ///|

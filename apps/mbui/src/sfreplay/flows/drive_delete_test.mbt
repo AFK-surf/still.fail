@@ -5,13 +5,13 @@
 
 ///|
 test "20-drive-delete" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-delete"), seed~)
     // The renamed photo is the starting state when this flow runs on its own.
     f.before("drive-photo 082940 renamed")
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-082940")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.hold("照片-082940.jpg", @ui.long_press_ms)
     f.run_for(@kit.presence_in_ms)
     f.see("复制路径")

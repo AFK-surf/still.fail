@@ -37,7 +37,11 @@ let tip_out_scale : Double = 0.97
 /// how far from what it is beside; `at_pointer`: beside the pointer as it moves along the control, its middle level with
 /// it (a tall thin thing's: an edge, usePointerTip), not the control's middle. `within`: shown by the pointer within
 /// `anchor` as it is placed (View::pointer_within), where it is no control and takes no press (a bar's name, what is
-/// pressed there the bar's), not by its being pointed at.
+/// pressed there the bar's), not by its being pointed at. `repeats`: it says words the control shows itself (a file's
+/// name on its card), whole: shown only where they show cut short there as it would show (View::words_cut_now: any words
+/// in `anchor`, as the old tip's Ctx::shows_cut), none where they show whole; once shown, it goes as any does, not as
+/// they come to show whole. `shortcut`: the action that does what the control does, its keys said after the words
+/// (tip's: shortcut_keys, as the app says them; none while no keyboard is at hand).
 pub fn tip_node(
   tips : TipLayer,
   anchor : @view.View,
@@ -48,7 +52,12 @@ pub fn tip_node(
   gap? : Double = tip_gap,
   at_pointer? : Bool = false,
   within? : Bool = false,
+  repeats? : Bool = false,
+  shortcut? : String = "",
 ) -> TipHand {
+  if within {
+    anchor.points(Is(true)) |> ignore
+  }
   let open : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
   // (a finger held on its control: Held while it is down, Lifted a while once it is let go, till then or the next
   // press, wherever it lands; Free otherwise)
@@ -79,7 +88,7 @@ pub fn tip_node(
     })
     |> ignore
     holder.show(fn() { open.get() }, leave=@kit.pop_out_ms, fn(t) {
-      tip_look_node(t, anchor_id, side, label, fade, gap, at_pointer, owner)
+      tip_look_node(t, anchor_id, side, label, shortcut, fade, gap, at_pointer, owner)
     })
     true
   }
@@ -91,7 +100,11 @@ pub fn tip_node(
     rest.val = None
   }
   let set_open = fn(on : Bool) {
-    if on == @signals.untracked(fn() { open.get() }) {
+    if on == open.untracked() {
+      return
+    }
+    // (saying what its control shows whole: not shown where that shows whole as it would show, at this moment)
+    if on && repeats && !anchor.words_cut_now() {
       return
     }
     let at = anchor.cause_at()
@@ -115,7 +128,7 @@ pub fn tip_node(
   // whether it takes input at all, whether there is anything to say)
   let state = fn() {
     (
-      @ui.pointing() is Mouse && (if within { anchor.pointer_within() } else { anchor.pointed() }),
+      @ui.pointing() is Mouse && (if within { anchor.pointed_in() } else { anchor.pointed() }),
       anchor.pressed(),
       anchor.focus_shown(),
       anchor.takes_input(),
@@ -128,7 +141,7 @@ pub fn tip_node(
     let (over, pressed, focused, takes, says, held) = s
     let (was_over, was_focused, was_held) = before.val
     before.val = (over, focused, held)
-    if made.val && @signals.untracked(fn() { open.get() }) && takes && says &&
+    if made.val && open.untracked() && takes && says &&
       (held != Free || (!pressed && !shut.val)) &&
       ((over && !was_over) || (focused && !was_focused) || (held != Free && was_held == Free)) {
       @kit.tip_claim(owner)
@@ -155,9 +168,9 @@ pub fn tip_node(
     }
     if !says || !takes || shut.val || (!over && !focused) {
       set_open(false)
-    } else if focused || @signals.untracked(fn() { open.get() }) {
+    } else if focused || open.untracked() {
       set_open(true)
-    } else if skip && at - tips.went_at <= @kit.tooltip_skip_ms {
+    } else if skip && at < tips.went_at + @kit.tooltip_skip_ms {
       // (another of the layer's went a moment ago: at once)
       set_open(true)
     } else {
@@ -180,7 +193,7 @@ pub fn tip_node(
   }
   // (let go by a finger that held it open: shown on a while, gone at the next press wherever it lands, or then)
   anchor.reacts(fn() { anchor.window_downs() }, fn(_) {
-    if @signals.untracked(fn() { hand.get() }) == Lifted {
+    if hand.untracked() == Lifted {
       (lifted_end.val)()
       hand.set(Free)
     }
@@ -190,7 +203,7 @@ pub fn tip_node(
   // after its control took it, so the one after that); a press held, dragged or called off shuts it not)
   let opened_at = Ref(0)
   anchor.reacts(fn() { anchor.window_taps() }, fn(n) {
-    if @signals.untracked(fn() { hand.get() }) == Opened && n > opened_at.val + 1 {
+    if hand.untracked() == Opened && n > opened_at.val + 1 {
       hand.set(Free)
     }
   })
@@ -218,9 +231,9 @@ pub fn tip_node(
       opened_at.val = if tapped { now } else { now - 1 }
       hand.set(Opened)
     },
-    opened: fn() { @signals.untracked(fn() { hand.get() }) == Opened },
+    opened: fn() { hand.untracked() == Opened },
     lift: fn() {
-      if @signals.untracked(fn() { hand.get() }) == Held {
+      if hand.untracked() == Held {
         hand.set(Lifted)
         lifted_end.val = anchor.at_moment(anchor.cause_at() + @kit.tooltip_lifted_ms, fn() { hand.set(Free) })
       }
@@ -231,12 +244,13 @@ pub fn tip_node(
 ///|
 /// How a finger holds a tip open (tip_node): not at all, held down on its control, let go of it a moment ago, tapped open
 /// (till the next tap).
+#derive(Eq)
 enum TipHeld {
   Free
   Held
   Lifted
   Opened
-} derive(Eq)
+}
 
 ///|
 /// What a control tells its tip of a finger (tip_node's): held on it long enough (`hold`: shown at once, as long as it
@@ -259,7 +273,7 @@ pub struct TipHand {
 /// one before had it at the moment it was turned (`from`, worked out of that one as of then: the same however far it had
 /// got), to `to` over `ms` from `start` as `ease` has it; while it goes (`moving`, till the moment it ends: the clock
 /// read no longer than that), the moment it ends its own, let go as another way is set out.
-struct TipFade {
+priv struct TipFade {
   mut from : Double
   mut to : Double
   mut start : Double
@@ -320,17 +334,21 @@ fn TipFade::shown(self : TipFade, t : @view.View) -> Double {
 }
 
 ///|
-/// A tip's node `t` as tip_look draws it (tip_box, tip_words), beside `anchor` on `side`, saying `label`: its look and
-/// its words set as the window's theme says, as that changes; in and out as `fade` says.
+/// A tip's node `t` as tip_look draws it (tip_box, tip_words), beside `anchor` on `side`, saying `label`, then the keys of
+/// action `shortcut` where there are any as it is shown (tip_line, tip_quiet): its look and its words set as the window's
+/// theme says, as that changes; in and out as `fade` says.
+#callsite(autofill(loc))
 fn tip_look_node(
   t : @view.View,
   anchor : @view.NodeId,
   side : @view.Side,
   label : () -> String,
+  shortcut : String,
   fade : TipFade,
   gap : Double,
   at_pointer : Bool,
   owner : @kit.TipOwner,
+  loc~ : SourceLoc,
 ) -> Unit {
   let theme = fn() { @ui.tree_theme() }
   let px = @ui.Space::px(S2_5)
@@ -371,14 +389,38 @@ fn tip_look_node(
   .says(By(fn() { Some(@view.said(Tooltip, label=label())) }))
   .hides(By(fn() { !@kit.tip_owns(owner) }))
   |> ignore
-  t.box(fn(w) {
+  let words_look = fn(wrap : Bool) -> @view.WordsLook {
+    let (size, line) = theme().text_size(Meta)
+    { size, weight: 400, line, wrap, tracking: @view.letters_own, balance: false, max_lines: 0 }
+  }
+  // (whether it says keys, as it is shown: a keyboard come or gone while it shows, so the next time it is)
+  let keys = @signals.untracked(fn() { shortcut_keys(shortcut) })
+  t.box(made_for=loc, fn(w) {
+    if keys != "" {
+      // (its words, then its keys at 60% (tip_line, tip_quiet), the two of them fading in after its ground)
+      style_node(w, fn() { tip_line })
+      w.box(fn(l) {
+        l.words(By(fn() { label() })).words_look(By(fn() { words_look(true) })).ink(By(fn() { theme().color(OnPrimary) }))
+        |> ignore
+      })
+      |> ignore
+      w.box(fn(q) {
+        q.alpha(Is(tip_keys_seen)) |> ignore
+        q.box(fn(k) {
+          k
+          .words(By(fn() { shortcut_keys(shortcut) }))
+          .words_look(By(fn() { words_look(false) }))
+          .ink(By(fn() { theme().color(OnPrimary) }))
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    } else {
+      w.words(By(fn() { label() })).words_look(By(fn() { words_look(true) })).ink(By(fn() { theme().color(OnPrimary) }))
+      |> ignore
+    }
     w
-    .words(By(fn() { label() }))
-    .words_look(By(fn() {
-      let (size, line) = theme().text_size(Meta)
-      { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }
-    }))
-    .ink(By(fn() { theme().color(OnPrimary) }))
     .alpha(By(fn() {
       // (of its ground's: what of the words shows over as much of the ground as there is)
       let a = fade.shown(t)
@@ -394,6 +436,10 @@ fn tip_look_node(
   })
   |> ignore
 }
+
+///|
+/// How far a tip's keys are seen (tip_quiet's).
+let tip_keys_seen : Double = 0.6
 
 ///|
 /// How far a tip is from its control (kit's tooltip `offset`), and how wide it may grow (tip_max).

@@ -3,11 +3,19 @@
  * left that theory's lemmas searching past their minute. The adversary holds the network and any device it takes.
  *
  * What is modelled:
- *   - a device begins a lock of its own, and a device on it, given a new device's code face to face, signs it in;
+ *   - a device begins a lock of its own, and a device on it, given a new device's code face to face, signs it in,
+ *     with the key that device signs workspaces' locks with (the code is of both); a device on a lock says its own
+ *     again;
  *   - a member's device, one the workspace's lock has, says which lock is its person's;
- *   - a station goes along a bound lock's chain, taking a key only as a key it has on that lock signed it.
+ *   - a station goes along a bound lock's chain, taking a key only as a key it has on that lock signed it; the key a
+ *     device signs workspaces' locks with is taken of the same entry (as a device of the person's putting it in a
+ *     workspace's lock takes it: the same check).
  * What is not: that the device binding is its person's own (proved in rules/src/role, `binds`), a device taken off a lock,
- * the cryptography itself (perfect here).
+ * the cryptography itself (perfect here). Nor the kinds a device on a lock signs beside its devices (2026-11-13,
+ * rules/src/lock/person.mbt): a web device (`web`, `web.remove`: an id that signs nothing, so no lemma here, all of
+ * them about keys a station takes along the chain, is about it) and a workspace's commitment (`ws`). Unproved, then:
+ * that a web device a station lets in is one a device on the lock put on (the same check of the signer as a key's),
+ * and that a body a keeper takes is the one its signer committed to.
  *
  * tamarin-prover --prove rules/protocol/person.spthy   (CI: .github/workflows/rules.yml `protocol`)
  */
@@ -22,11 +30,11 @@ rule Member_Device:
   --[ Honest(pk(~d)) ]->
     [ !Signer(~d), !Member(~st, pk(~d)), Out(pk(~d)), Out(~st) ]
 
-// A new device makes its key and shows the code of it.
+// A new device makes its key and the key it signs workspaces' locks with, and shows the code of both.
 rule Device_Made:
-    [ Fr(~k) ]
-  --[ Made(pk(~k)), Honest(pk(~k)) ]->
-    [ !Signer(~k), !Shown(h(pk(~k))), Out(pk(~k)) ]
+    [ Fr(~k), Fr(~w) ]
+  --[ Made(pk(~k), pk(~w)), Honest(pk(~k)) ]->
+    [ !Signer(~k), !Shown(h(<pk(~k), pk(~w)>)), Out(pk(~k)), Out(pk(~w)) ]
 
 // A device begins a lock of its own: the lock goes by its first key.
 rule Person_Begin:
@@ -34,11 +42,17 @@ rule Person_Begin:
   --[ Begun(pk(~k)) ]->
     [ !OnPerson(pk(~k), ~k) ]
 
-// A device on a lock, given the code face to face, signs a key in.
+// A device on a lock, given the code face to face, signs a key in, and the key it signs workspaces' locks with.
 rule Person_Approve:
-    [ !OnPerson(root, ~a), In(pkNew), !Shown(h(pkNew)) ]
-  --[ Approved(root, pk(~a), pkNew) ]->
-    [ Out(<'pdevice', root, pkNew, pk(~a), sign(<'pdevice', root, pkNew>, ~a)>) ]
+    [ !OnPerson(root, ~a), In(<pkNew, wk>), !Shown(h(<pkNew, wk>)) ]
+  --[ Approved(root, pk(~a), pkNew, wk) ]->
+    [ Out(<'pdevice', root, pkNew, wk, pk(~a), sign(<'pdevice', root, pkNew, wk>, ~a)>) ]
+
+// A device on a lock says the key it signs workspaces' locks with again (another than its entry said, or none there).
+rule Person_Says_Again:
+    [ !OnPerson(root, ~a), Fr(~w) ]
+  --[ Said(root, pk(~a), pk(~w)) ]->
+    [ Out(pk(~w)), Out(<'pdevice', root, pk(~a), pk(~w), pk(~a), sign(<'pdevice', root, pk(~a), pk(~w)>, ~a)>) ]
 
 // A member's device says which lock is its person's.
 rule Bind:
@@ -52,10 +66,11 @@ rule Station_Binds:
   --[ Bound(st, root, pk(d)) ]->
     [ !PersonOn(st, root, root) ]
 
-// A station goes along a bound lock's chain: a key it has on it signed the next in.
+// A station goes along a bound lock's chain: a key it has on it signed the next in, and what that one signs
+// workspaces' locks with.
 rule Station_Takes:
-    [ !PersonOn(st, root, pk(s)), In(<'pdevice', root, pkNew, pk(s), sign(<'pdevice', root, pkNew>, s)>) ]
-  --[ Takes(st, root, pkNew, pk(s)) ]->
+    [ !PersonOn(st, root, pk(s)), In(<'pdevice', root, pkNew, wk, pk(s), sign(<'pdevice', root, pkNew, wk>, s)>) ]
+  --[ Takes(st, root, pkNew, pk(s)), Signs(st, root, pkNew, wk, pk(s)) ]->
     [ !PersonOn(st, root, pkNew) ]
 
 // The adversary takes a device.
@@ -74,13 +89,23 @@ lemma bound_as_its_device_said:
   "All st root d #i. Bound(st, root, d) @ i & (Ex #h. Honest(d) @ h) ==>
       (Ex #j. Binds(d, root) @ j & j < i) | (Ex #r. Reveal(d) @ r & r < i)"
 
-// A key taken along a bound lock's chain as a device's own key signed it is one that device approved, or it was taken.
+// A key taken along a bound lock's chain as a device's own key signed it is one that device approved (or its own, said
+// again), or it was taken.
 lemma each_key_as_its_signer_approved:
   "All st root pk by #i. Takes(st, root, pk, by) @ i & (Ex #h. Honest(by) @ h) ==>
-      (Ex #j. Approved(root, by, pk) @ j & j < i) | (Ex #r. Reveal(by) @ r & r < i)"
+      (Ex wk #j. Approved(root, by, pk, wk) @ j & j < i) | (Ex wk #j. Said(root, by, wk) @ j & j < i & pk = by) |
+      (Ex #r. Reveal(by) @ r & r < i)"
 
-// A key approved onto a lock is a device's that showed its code: no one in the middle swaps in their own.
+// The key a device is taken to sign workspaces' locks with is the one the device that signed its entry approved it
+// with (or said of itself), or that device was taken: no one puts a signer of their own under a device of the lock.
+lemma signer_as_its_approver_said:
+  "All st root pk wk by #i. Signs(st, root, pk, wk, by) @ i & (Ex #h. Honest(by) @ h) ==>
+      (Ex #j. Approved(root, by, pk, wk) @ j & j < i) | (Ex #j. Said(root, by, wk) @ j & j < i & pk = by) |
+      (Ex #r. Reveal(by) @ r & r < i)"
+
+// A key approved onto a lock, and the key it signs workspaces' locks with, are a device's that showed the code of
+// both: no one in the middle swaps in their own of either.
 lemma approved_only_as_shown:
-  "All root a pk #i. Approved(root, a, pk) @ i ==> Ex #j. Made(pk) @ j & j < i"
+  "All root a pk wk #i. Approved(root, a, pk, wk) @ i ==> Ex #j. Made(pk, wk) @ j & j < i"
 
 end

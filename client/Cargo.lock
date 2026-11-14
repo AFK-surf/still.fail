@@ -1643,7 +1643,7 @@ dependencies = [
 [[package]]
 name = "iroh"
 version = "1.0.3"
-source = "git+https://github.com/zzj3720/iroh?rev=fddee95da13c92e0ff700d64fc47f474b4d2a62c#fddee95da13c92e0ff700d64fc47f474b4d2a62c"
+source = "git+https://github.com/zzj3720/iroh?rev=cbb88bc4d070a4de6999799aada2b5f3dc5680f4#cbb88bc4d070a4de6999799aada2b5f3dc5680f4"
 dependencies = [
  "backon",
  "blake3",
@@ -1798,7 +1798,7 @@ dependencies = [
 [[package]]
 name = "iroh-relay"
 version = "1.3.0"
-source = "git+https://github.com/zzj3720/iroh?rev=fddee95da13c92e0ff700d64fc47f474b4d2a62c#fddee95da13c92e0ff700d64fc47f474b4d2a62c"
+source = "git+https://github.com/zzj3720/iroh?rev=cbb88bc4d070a4de6999799aada2b5f3dc5680f4#cbb88bc4d070a4de6999799aada2b5f3dc5680f4"
 dependencies = [
  "blake3",
  "bytes",
@@ -2521,7 +2521,7 @@ dependencies = [
 [[package]]
 name = "noq-proto"
 version = "1.3.0"
-source = "git+https://github.com/zzj3720/noq?rev=d578f818ad7580c49691f26d5ccf8cc3afcc026a#d578f818ad7580c49691f26d5ccf8cc3afcc026a"
+source = "git+https://github.com/zzj3720/noq?rev=76344e6eab7ae651ce524e4f329a2f283f69d7ab#76344e6eab7ae651ce524e4f329a2f283f69d7ab"
 dependencies = [
  "aes-gcm",
  "bytes",
@@ -2758,6 +2758,12 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
+
+[[package]]
+name = "opus-rs"
+version = "0.1.42"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bafbcaf2ed381cdf68ced4ed8d16517de90ffd7424e36f0b9e45d67fbe30b1f9"
 
 [[package]]
 name = "papaya"
@@ -3777,8 +3783,10 @@ dependencies = [
 name = "stillfail-shell"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "embedded-io-async",
  "futures",
+ "getrandom 0.3.4",
  "hex",
  "iroh",
  "iroh-mainline-address-lookup",
@@ -3787,13 +3795,16 @@ dependencies = [
  "libc",
  "libcrux-ecdsa",
  "libcrux-ed25519",
+ "n0-future",
  "n0-mainline",
  "noq-proto",
+ "opus-rs",
  "reqwest",
  "rusqlite",
  "rustls",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "tokio-tungstenite",
  "webpki-roots 1.0.9",

@@ -2,7 +2,4 @@ import {
   "mbui/codec",
   "mbui/pixels",
   "mbui/ui",
-  "stillfail/sf",
-  "moonbitlang/core/math",
-  "mbui/dmath",
 }

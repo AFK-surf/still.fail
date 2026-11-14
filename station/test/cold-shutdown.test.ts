@@ -7,7 +7,7 @@ import { Rig } from "./hub-fakes.ts";
 test("disposing a session waits until its archive stops writing", async () => {
   const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
   let packs = 0;
-  const cold = { isCold: () => false, restore: () => {}, pack: async () => { packs++; started.resolve(); await release.promise; } };
+  const cold = { isCold: async () => false, restore: () => {}, pack: async () => { packs++; started.resolve(); await release.promise; } };
   const rig = new Rig({ cold });
   let closing: Promise<void> | undefined;
   try {
@@ -35,7 +35,7 @@ test("hub shutdown finishes archive file work before removing its directory", as
   const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>(), written = Promise.withResolvers<void>();
   let rig!: Rig;
   let began = false;
-  const cold = { isCold: () => false, restore: () => {}, pack: async () => {
+  const cold = { isCold: async () => false, restore: () => {}, pack: async () => {
     began = true; started.resolve(); await release.promise;
     try { mkdirSync(rig.dir, { recursive: true }); writeFileSync(join(rig.dir, "archive-writing"), "archive"); }
     finally { written.resolve(); }
@@ -67,7 +67,7 @@ test("hub shutdown finishes archive file work before removing its directory", as
 
 test("an archive that fails while closing does not make disposal fail", async () => {
   const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
-  const cold = { isCold: () => false, restore: () => {}, pack: async () => { started.resolve(); await release.promise; throw new Error("archive failed"); } };
+  const cold = { isCold: async () => false, restore: () => {}, pack: async () => { started.resolve(); await release.promise; throw new Error("archive failed"); } };
   const rig = new Rig({ cold });
   let closing: Promise<void> | undefined;
   try {

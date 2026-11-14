@@ -1,5 +1,7 @@
 // The console's 中继 page (`adminRelays`): how loaded still.fail's relays are, from what still.fail cloud worked out of
 // their counters (GET /v1/admin/relays, cloud/src/relay-load-view.ts): the numbers now, and a chart over a day or a week.
+// And a card of the same shape for still.fail cloud's Directory, of what it counts of itself (cloud/src/directory.ts
+// adminLoad): its calls an hour, all of them and by what they serve, the sockets still on it, its storage.
 import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import { arr as arrU, get as getU } from "../util.ts";
@@ -103,12 +105,55 @@ function relay(r: J, range: Range, now: number, offsetMin: number) {
   };
 }
 
+/** What the Directory's calls serve, in the order they are charted (cloud/src/directory.ts FAMILIES). */
+const FAMILIES = ["workspaces", "me", "signin", "sockets", "stations", "push", "beta", "broadcast", "admin", "other"];
+
+/** The Directory's card: its calls over the last day or week (an hour a point), and what it holds now. */
+function directory(d: J, range: Range, now: number, offsetMin: number) {
+  const calls = get(d, "calls");
+  const step = num(calls, "step") ?? 3600;
+  const hours = range === "day" ? 24 : 7 * 24;
+  const families = get(calls, "families");
+  const total = Math.max(0, ...FAMILIES.map((id) => values(families, id).length));
+  const sum = (v: (number | null)[]) => v.reduce<number>((n, x) => n + (x ?? 0), 0);
+  // Those with calls in what is shown, the most first: a chart each, as ten lines in one cannot be told apart.
+  const series = FAMILIES.map((id) => ({ id, label: t(`core-views.admin.directory.family.${id}`), values: values(families, id).slice(-hours) }))
+    .filter((f) => sum(f.values) > 0)
+    .sort((a, b) => sum(b.values) - sum(a.values));
+  const shown = Math.min(hours, total);
+  /** All of its calls in each hour: what the object carries. */
+  const all = Array.from({ length: shown }, (_, i) => sum(series.map((f) => f.values[i] ?? null)));
+  const lastHour = all.at(-1) ?? 0;
+  const chart = (id: string, label: string, v: (number | null)[]) => ({ id, label, peak: t("core-views.admin.relay.peak", { value: String(peak([v])) }), series: [{ id, label, values: v }] });
+  const start = (num(calls, "start") ?? now) + Math.max(0, total - hours) * step;
+  const devices = num(get(d, "held"), "devices") ?? 0, stations = num(get(d, "held"), "stations") ?? 0;
+  const at = num(d, "at");
+  return {
+    url: "directory",
+    name: t("core-views.admin.directory.name"),
+    state: at !== null && now - at <= FRESH ? "online" : "offline",
+    seen: at === null ? t("core-views.admin.relay.never") : t("core-views.admin.relay.seen", { when: format.relativeTime(at * 1000, now * 1000, offsetMin) }),
+    numbers: [
+      { label: t("core-views.admin.directory.calls"), value: String(lastHour) },
+      // Those from before their objects: none once every device and station has reconnected.
+      { label: t("core-views.admin.directory.held"), value: t("core-views.admin.directory.held_value", { devices, stations }), ...(devices + stations > 0 ? { tone: "amber" as const } : {}) },
+      { label: t("core-views.admin.directory.live"), value: t("core-views.admin.directory.live_value", { accounts: num(get(d, "live"), "accounts") ?? 0, stations: num(get(d, "live"), "stations") ?? 0 }) },
+      { label: t("core-views.admin.directory.waiting"), value: String(num(d, "waiting") ?? 0), ...((num(d, "waiting") ?? 0) > 0 ? { tone: "amber" as const } : {}) },
+      { label: t("core-views.admin.directory.storage"), value: format.bytes(num(d, "bytes") ?? 0) },
+    ],
+    charts: [chart("calls", t("core-views.admin.directory.chart"), all), ...series.map((f) => chart(f.id, f.label, f.values))],
+    ticks: ticks(start, step, shown, range, offsetMin),
+  };
+}
+
 /** The page, from what /v1/admin/relays answered; `now` in seconds. */
 export function relays(v: J, range: string | null, now: number, offsetMin: number) {
   const shown: Range = range === "week" ? "week" : "day";
+  const d = get(v, "directory");
   return {
     range: shown,
     ranges: RANGES.map((id) => ({ id, label: t(`core-views.admin.relay.range.${id}`) })),
-    relays: arr(get(v, "relays")).map((r) => relay(r, shown, now, offsetMin)),
+    // (a still.fail cloud from before says nothing of its Directory)
+    relays: [...arr(get(v, "relays")).map((r) => relay(r, shown, now, offsetMin)), ...(d !== null && typeof d === "object" ? [directory(d, shown, now, offsetMin)] : [])],
   };
 }

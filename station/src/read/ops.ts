@@ -25,9 +25,6 @@ export const ops: Record<string, ReadOp> = {
   sharedChats: (store, a) => sharedChatRows(store, a.viewer, a.sessions, a.threads),
   /// The chat list (or the rows some sessions and threads touch) as told to every stream that makes its sidebar of it.
   sharedOf: (store, a) => sharedOf(store, a.sessions, a.threads),
-  /// The same sidebar items (`chatRows`) for each of several viewers (one person's devices in two languages or
-  /// workspaces), in one read: what the first read in serves the others.
-  chatRowsOf: (store, a) => a.viewers.map((v: { viewer: any; lang: any }) => (setSpoken(v.lang), chatRows(store, v.viewer, a.sessions, a.threads))),
   entries: (store, a) => entries(store, a.viewer, a.thread, a.params),
   letters: (store, a) => letters(store, a.viewer, a.thread, a.params),
   ...usageOps,

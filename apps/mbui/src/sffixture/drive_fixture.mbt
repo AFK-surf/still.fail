@@ -78,7 +78,7 @@ pub fn fix_entry(name : String, dir : Bool, size : Int, time : String) -> Json {
 /// A made-up file's extension, lower case (what its kind is made up from).
 pub fn fix_ext(name : String) -> String {
   match name.rev_find(".") {
-    Some(i) if i > 0 => name.view(start_offset=i + 1).to_owned().to_lower()
+    Some(i) if i > 0 => name.exact_view(start=i + 1).to_owned().to_lower()
     _ => ""
   }
 }
@@ -100,7 +100,7 @@ pub fn fix_kind(name : String) -> String {
 
 ///|
 /// The fixture's folders as the pages left them: by root and path, their entries.
-pub let fix_folders : Map[String, Array[Json]] = {}
+pub let fix_folders : Map[String, Array[Json]] = Map([])
 
 ///|
 pub fn fix_folder(root : String, path : String) -> Array[Json] {
@@ -166,7 +166,7 @@ pub fn fix_folder_json(root : String, path : String) -> Json {
 
 ///|
 /// Where the made-up texts were left (drivePlace), by path.
-pub let fix_places : Map[String, Json] = {}
+pub let fix_places : Map[String, Json] = Map([])
 
 ///|
 /// The copies asked (`drive.transfer`), as the `driveTransfers` topic shows them, newest first: each copying, 38% on.
@@ -329,11 +329,7 @@ pub fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[J
         } else {
           [{ "name": "lin", "path": fix_home }, { "name": Json::string(dv_name(path)), "path": Json::string(path) }]
         },
-        "entries": [
-          { "name": "文档", "path": "/Users/lin/文档" },
-          { "name": "项目", "path": "/Users/lin/项目" },
-          { "name": "下载", "path": "/Users/lin/下载", "unreadable": true },
-        ],
+        "entries": fix_picker_folders(path),
         // (as a station offers them: its home, the home's own folders, its disks)
         "places": [
           { "name": "主目录", "path": fix_home },
@@ -346,6 +342,34 @@ pub fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[J
     }
     _ => None
   }
+}
+
+///|
+/// The folders `drive.folders` says are in `path`: the home's, 项目's (repositories among them: `git`), then any made
+/// there (`drive.mkdir`, first).
+fn fix_picker_folders(path : String) -> Json {
+  let made = match fix_folders.get(path + "\n") {
+    Some(a) => a.filter(fn(e) { flag(Some(e), "dir") }).map(fn(e) { Json::object({ "name": Json::string(text(Some(e), "name")), "path": Json::string(path + "/" + text(Some(e), "name")) }) })
+    None => []
+  }
+  let own : Array[Json] = if path == fix_home {
+    [
+      { "name": "文档", "path": "/Users/lin/文档" },
+      { "name": "项目", "path": "/Users/lin/项目" },
+      { "name": "下载", "path": "/Users/lin/下载", "unreadable": true },
+    ]
+  } else if path == "/Users/lin/项目" {
+    [
+      { "name": "still.fail", "path": "/Users/lin/项目/still.fail", "git": true },
+      { "name": "web-app", "path": "/Users/lin/项目/web-app", "git": true },
+      { "name": "素材", "path": "/Users/lin/项目/素材" },
+    ]
+  } else {
+    []
+  }
+  // (one there already, the home's as its files page has them, said once)
+  let named = own.map(fn(o) { text(Some(o), "name") })
+  Json::array(made.filter(fn(m) { !named.contains(text(Some(m), "name")) }) + own)
 }
 
 ///|

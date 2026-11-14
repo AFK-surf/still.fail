@@ -66,13 +66,15 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     const connect = async () => h.fetch("/v1/stations/connect", {
       headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-connect-v1:${h.origin}:${station.id}:${ts}`) },
     });
-    // A station's socket and what it was told; a ping's pong comes after everything sent before it.
+    // A station's socket and what it was told (h.heard: all of it has arrived).
     const listen = (socket: NonNullable<Awaited<ReturnType<typeof h.fetch>>["webSocket"]>) => {
       const frames: any[] = [];
-      let pong = () => {};
-      socket.addEventListener("message", (event) => (event.data === "pong" ? pong() : frames.push(JSON.parse(event.data as string))));
+      socket.addEventListener("message", (event) => void (event.data === "pong" || frames.push(JSON.parse(event.data as string))));
       socket.accept();
-      const told = () => new Promise<any[]>((resolve) => { pong = () => resolve(frames); socket.send("ping"); });
+      const told = async () => {
+        await h.heard(socket);
+        return frames;
+      };
       return told;
     };
     const presence = await connect();
@@ -192,6 +194,46 @@ test("an account over its requests a minute is told to wait (429), not that it i
     for (let i = 0; i < 130 && last.status === 200; i++) last = await alice("GET", "/v1/me");
     assert.equal(last.status, 429);
     assert.deepEqual(await last.json(), { error: "rate_limited" });
+  } finally {
+    await h.close();
+  }
+});
+
+test("the locks kept for the stations from before use up none of an account's requests a minute, and have a minute of their own", async () => {
+  // (the locks' end to end, 2026-11-10: what a person's devices signed was sent here too, not waited on, 44 requests
+  // of the account's 123 that minute, and the owner's next change, a member added, was refused, 429)
+  const h = await harness();
+  try {
+    const alice = h.as(await h.login("alice"));
+    const ws = (await (await alice("POST", "/v1/workspaces", { name: "Home" })).json() as any).id as string;
+    let lock = await alice("GET", "/v1/me/personal-lock");
+    for (let i = 0; i < 130 && lock.status === 200; i++) lock = await alice("GET", "/v1/me/personal-lock");
+    assert.equal(lock.status, 429);
+    assert.deepEqual([(await alice("GET", `/v1/workspaces/${ws}/lock`)).status, (await alice("GET", `/v1/workspaces/${ws}/devices`)).status], [429, 429], "the workspace's lock and its devices in the same minute");
+    assert.equal((await alice("GET", "/v1/me")).status, 200);
+    assert.equal((await alice("POST", `/v1/workspaces/${ws}/members`, { emails: ["bob@example.test"] })).status, 200);
+    // (and the account's own used up keeps no lock from being read)
+    const bob = h.as(await h.login("bob"));
+    let last = await bob("GET", "/v1/me");
+    for (let i = 0; i < 130 && last.status === 200; i++) last = await bob("GET", "/v1/me");
+    assert.equal(last.status, 429);
+    assert.equal((await bob("GET", "/v1/me/personal-lock")).status, 200);
+  } finally {
+    await h.close();
+  }
+});
+
+test("an account over its requests a minute still signs in a new device: its other devices' asking keeps no one out", async () => {
+  // (the locks' end to end, 2026-11-10: a person's devices reading their workspaces again as they changed used up the
+  // minute, and the next device's sign-in was refused, 429)
+  const h = await harness();
+  try {
+    const alice = h.as(await h.login("alice"));
+    let last = await alice("GET", "/v1/me");
+    for (let i = 0; i < 130 && last.status === 200; i++) last = await alice("GET", "/v1/me");
+    assert.equal(last.status, 429);
+    const another = await h.login("alice");
+    assert.ok(another.access_token);
   } finally {
     await h.close();
   }

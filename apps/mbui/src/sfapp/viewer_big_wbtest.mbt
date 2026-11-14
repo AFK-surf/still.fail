@@ -49,19 +49,19 @@ fn big_picture_told_of(w : Double, h : Double, native : Bool) -> Unit raise {
   t.draw()
   t.run_for(@ui.move_most_ms)
   let v = viewer.get().unwrap()
-  assert_true(v.shown_kind() == Some(KImage) && v.file.size > big_file && v.told_of(), msg="\{at}: told of, the old frame's")
-  assert_true(v.bytes.get() is None, msg="\{at}: not read before 下载")
+  assert_true(v.shown_kind() == Some(KImage) && v.file.size > big_file && v.told_of(), msg="\{Repr(at)}: told of, the old frame's")
+  assert_true(v.bytes.get() is None, msg="\{Repr(at)}: not read before 下载")
   // (下载 its told of's own, on the stage, whatever bars there are: those beside the system's hold none while it comes,
   // Viewer::coming)
-  assert_true(buttons_said(t).contains("下载"), msg="\{at}: 下载 offered: \{buttons_said(t)}")
-  assert_true(!big_offers(t, native, "标注图片", "over/mark"), msg="\{at}: 标注图片 not offered: \{buttons_said(t)} \{t.nav_said()}")
+  assert_true(buttons_said(t).contains("下载"), msg="\{Repr(at)}: 下载 offered: \{Repr(buttons_said(t))}")
+  assert_true(!big_offers(t, native, "标注图片", "over/mark"), msg="\{Repr(at)}: 标注图片 not offered: \{Repr(buttons_said(t))} \{t.nav_said()}")
   t.click(@ui.Role::Button, label="下载")
   t.run_for(@ui.move_most_ms)
-  assert_true(v.bytes.get() is Some(_), msg="\{at}: read whole once 下载 is pressed")
-  assert_true(v.told_of(), msg="\{at}: told of still")
-  assert_true(big_offers(t, native, "下载", "over/download"), msg="\{at}: 下载 offered still: \{buttons_said(t)} \{t.nav_said()}")
-  assert_true(!big_offers(t, native, "标注图片", "over/mark"), msg="\{at}: 标注图片 not offered, its picture not shown: \{buttons_said(t)} \{t.nav_said()}")
-  assert_true(!marking.on, msg="\{at}: not marking")
+  assert_true(v.bytes.get() is Some(_), msg="\{Repr(at)}: read whole once 下载 is pressed")
+  assert_true(v.told_of(), msg="\{Repr(at)}: told of still")
+  assert_true(big_offers(t, native, "下载", "over/download"), msg="\{Repr(at)}: 下载 offered still: \{Repr(buttons_said(t))} \{t.nav_said()}")
+  assert_true(!big_offers(t, native, "标注图片", "over/mark"), msg="\{Repr(at)}: 标注图片 not offered, its picture not shown: \{Repr(buttons_said(t))} \{t.nav_said()}")
+  assert_true(!marking.on, msg="\{Repr(at)}: not marking")
 }
 
 ///|
@@ -110,11 +110,11 @@ test "a picture too big to show, from a drive, 下载 pressed: the same viewer r
   t.draw()
   t.run_for(@ui.move_most_ms)
   let v = viewer.get().unwrap()
-  assert_true(buttons_said(t).contains("下载") && t.find("正在打开") is None, msg="told of, 下载: \{buttons_said(t)}")
+  assert_true(buttons_said(t).contains("下载") && t.find("正在打开") is None, msg="told of, 下载: \{Repr(buttons_said(t))}")
   t.click(@ui.Role::Button, label="下载")
   t.run_for(@ui.move_most_ms)
   assert_true(physical_equal(viewer.get().unwrap(), v) && v.asked && v.bytes.get() is None, msg="asked, reading")
-  assert_true(buttons_said(t).contains("正在读取") && !buttons_said(t).contains("下载"), msg="下载 at work: \{buttons_said(t)}")
+  assert_true(buttons_said(t).contains("正在读取") && !buttons_said(t).contains("下载"), msg="下载 at work: \{Repr(buttons_said(t))}")
   assert_true(!held.is_empty(), msg="its whole asked for")
   for done in held {
     done(Ok(({ "total": Json::number(1024.0) }, Bytes::make(1024, b'\x00'))))
@@ -163,7 +163,7 @@ test "a table too big to show, from a drive, 下载 pressed on it: its bar's 下
   } else {
     (shown[1], shown[0])
   }
-  assert_true(v.told_of() && !bar.disabled && !facts.disabled, msg="told of, both 下载 to press: \{shown}")
+  assert_true(v.told_of() && !bar.disabled && !facts.disabled, msg="told of, both 下载 to press: \{Repr(shown)}")
   // (the bar's, as it is now: the same node, shown)
   let bar_now = fn() { t.all(@ui.Role::Button, label="下载").filter(fn(s) { s.id == bar.id }) }
   let (x, y, w, h) = facts.rect
@@ -171,10 +171,10 @@ test "a table too big to show, from a drive, 下载 pressed on it: its bar's 下
   t.run_for(@ui.move_most_ms)
   assert_true(v.asked && v.bytes.get() is None, msg="asked, reading")
   let reading = bar_now()
-  assert_true(reading.length() == 1 && reading[0].disabled, msg="its bar's 下载 there, held off: \{reading}")
+  assert_true(reading.length() == 1 && reading[0].disabled, msg="its bar's 下载 there, held off: \{Repr(reading)}")
   assert_true(
     t.all(@ui.Role::Button, label="正在读取").length() == 1 && t.all(@ui.Role::Button, label="下载").length() == 1,
-    msg="its facts' 下载 at work, saying 正在读取: \{t.all(@ui.Role::Button, label="下载")}",
+    msg="its facts' 下载 at work, saying 正在读取: \{Repr(t.all(@ui.Role::Button, label="下载"))}",
   )
   for done in held {
     done(Ok(({ "total": Json::number(1024.0) }, Bytes::make(1024, b'a'))))
@@ -183,5 +183,5 @@ test "a table too big to show, from a drive, 下载 pressed on it: its bar's 下
   t.run_for(@ui.move_most_ms)
   let after = bar_now()
   assert_true(v.bytes.get() is Some(_), msg="read whole")
-  assert_true(after.length() == 1 && !after[0].disabled, msg="its bar's 下载 given back: \{after}")
+  assert_true(after.length() == 1 && !after[0].disabled, msg="its bar's 下载 given back: \{Repr(after)}")
 }

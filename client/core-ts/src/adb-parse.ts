@@ -8,6 +8,11 @@ export const MINUTES = 60;
 export const MAX_MINUTES = 8 * 60;
 
 export type Offer = { station: string; connect: number | null; pair: number | null; device: string; android: string; package: string; minutes: number };
+/// How long a phone's grant lasts (station/src/adb/grants.ts `Scope`).
+export type PhoneScope = "hour" | "idle" | "eight" | "chat";
+/// Until when one signed now holds at the latest (seconds from now): an idle one's ends sooner on its station.
+export const SCOPE_SECONDS: Record<PhoneScope, number> = { hour: 3600, idle: 30 * 86400, eight: 8 * 3600, chat: 30 * 86400 };
+
 export type AdbCall =
   | { kind: "share"; offer: Offer }
   | { kind: "stop" }
@@ -15,11 +20,10 @@ export type AdbCall =
   | { kind: "grant"; station?: string }
   /// The ports the app found for adbd, and what the phone is: lent with them to every station a grant wants it on.
   | { kind: "ports"; ports: Omit<Offer, "station" | "minutes"> }
-  /// A chat's request for this person's phone decided (`scope`: "hour" | "chat"; null refuses it), or a grant taken back.
-  | { kind: "decide"; station: string; request: string; scope: "hour" | "chat" | null }
+  /// A chat's request for this person's phone decided (`scope`: hour, idle (an hour unused), eight (hours) or chat; null
+  /// refuses it), or a grant taken back.
+  | { kind: "decide"; station: string; request: string; scope: PhoneScope | null }
   | { kind: "revoke"; station: string; request: string }
-  /// The person's 默认最长授权: the longest a chat's grant of their phone may last (every station told).
-  | { kind: "lasts"; lasts: "hour" | "chat" }
   /// The person's own lock: this device asks to join it, types the code shown on one on it, stops
   /// asking; a device taken off; the lock pinned here left, and one begun anew.
   /// (`sub`: whose: a device may be signed in to several accounts, each with a lock of its own.)
@@ -28,6 +32,7 @@ export type AdbCall =
   | { kind: "personalCode"; code: string }
   | { kind: "personalCancel" }
   | { kind: "personalRemove"; sub: string; key: string }
+  | { kind: "personalPendingDismiss"; sub: string; id: string }
   | { kind: "personalForget"; sub: string }
   | { kind: "personalRestart"; sub: string }
   /// The grants made before they were signed, signed now at one go (the person asked once).
@@ -62,11 +67,6 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       return { kind: "pair", code: text("code"), ...(text("station") !== "" ? { station: text("station") } : {}) };
     case "adb.grant":
       return { kind: "grant", ...(text("station") !== "" ? { station: text("station") } : {}) };
-    case "adb.setLasts": {
-      const l = get(params, "lasts");
-      if (l !== "hour" && l !== "chat") throw CoreError.invalid(t("core-misc.params.missing", { field: "lasts" }));
-      return { kind: "lasts", lasts: l };
-    }
     case "adb.on": {
       const on = get(params, "on");
       if (typeof on !== "boolean") throw CoreError.invalid(t("core-misc.params.missing", { field: "on" }));
@@ -82,6 +82,8 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       return { kind: "personalCancel" };
     case "adb.personalRemove":
       return { kind: "personalRemove", sub: text("sub"), key: text("key") };
+    case "adb.personalPendingDismiss":
+      return { kind: "personalPendingDismiss", sub: text("sub"), id: text("id") };
     case "adb.personalForget":
       return { kind: "personalForget", sub: text("sub") };
     case "adb.personalRestart":
@@ -102,7 +104,7 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       if (request === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "request" }));
       if (name === "adb.revoke") return { kind: "revoke", station, request };
       const s = get(params, "scope");
-      return { kind: "decide", station, request, scope: s === "hour" || s === "chat" ? s : null };
+      return { kind: "decide", station, request, scope: s === "hour" || s === "idle" || s === "eight" || s === "chat" ? s : null };
     }
     default:
       return null;

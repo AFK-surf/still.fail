@@ -19,7 +19,7 @@ fn open_changed() -> Unit {
 fn chat_open_tester(slow : Ref[Bool], waiting : Ref[Bool]) -> @ui.Tester {
   new_run()
   let base = fixture("chat")
-  let asked : Map[String, Bool] = {}
+  let asked : Map[String, Bool] = Map([])
   let key = fn(name : String, params : Map[String, Json]) { name + " " + Json::object(params).stringify() }
   let src : Source = {
     ..base,

@@ -5,12 +5,13 @@
 
 ///|
 /// `file` of a drive opened to be looked at; `near`: the others of its folder to step to (pictures: the folder's
-/// pictures, `file` among them, stepped through and swiped between as a chat's are).
-pub fn open_drive_file(file : DriveFile, near : Array[DriveFile]) -> Unit {
+/// pictures, `file` among them, stepped through and swiped between as a chat's are). `beside`: asked beside the page (a
+/// row's menu's 在侧边打开; a list's ⌘ press is a pick of more than one, never this), as open_preview's.
+pub fn open_drive_file(file : DriveFile, near : Array[DriveFile], beside? : Bool = false) -> Unit {
   open_preview(file.station, "", drive_attachment(file), drive=Some(file), steps=if near.length() > 1 {
     InFolder(near)
   } else {
     NoSteps
-  })
+  }, beside~)
 }
 

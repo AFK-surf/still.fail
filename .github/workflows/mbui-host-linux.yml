@@ -1,4 +1,4 @@
-# mbui (apps/mbui/mbui): the host's and the text's contracts on Linux ("What is compared, and
+# mbui (libs/mbui): the host's and the text's contracts on Linux ("What is compared, and
 # where"; scripts/host_contract.sh), as mbui-host-windows.yml has Windows': kitdemo built for the GTK 4 host
 # (src/host/linux_*, scripts/linux.sh), its controls page run in a window of Xvfb's (Mesa's llvmpipe draws it: no GPU)
 # with its scripted taps, its tape made a Tester's test and run here (every frame the same), then the committed tape's
@@ -7,41 +7,54 @@
 # run's own), a notification (shown, kept, clicked), an update (a newer build put in place and opened), and the web
 # views (WebKitGTK 6.0's): one placed where the app told it, on whole device pixels, and a site and a page speaking with
 # the app; a stream's JPEG frames and its H.264, each shown to its end (streamdemo); a PDF's pages read and drawn
-# (poppler's); a video played (GStreamer's). On GitHub's own Ubuntu (a public repository's: free); this machine's
-# station as the host says it; and the number on the app's icon as the docks are told it. When the Linux host changes.
+# (poppler's); a video played (GStreamer's); a folder and a file let go on the window, read. On GitHub's own Ubuntu
+# (a public repository's: free); the number on the app's icon as the docks are told it; and, of still.fail's app on
+# this host, this machine's station as its own native call says it (apps/mbui/src/host/linux_station.c). When the
+# Linux host changes.
 name: mbui-host-linux
 on:
   pull_request:
     paths: &paths
-      - "apps/mbui/mbui/src/ui/native.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/sitecheck.mbt"
-      - "apps/mbui/mbui/src/streamdemo/**"
-      - "apps/mbui/mbui/src/kitdemo/gallery/pdfcheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/imagecheck.mbt"
-      - "apps/mbui/mbui/src/ui/image.mbt"
-      - "apps/mbui/mbui/tools/chk/pictures.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/stationcheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/playcheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/badgecheck.mbt"
-      - "apps/mbui/mbui/src/host/linux*"
-      - "apps/mbui/mbui/src/host/mini_json.h"
-      - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/noticecheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/updatecheck.mbt"
-      - "apps/mbui/mbui/src/host/gles_render.h"
-      - "apps/mbui/mbui/src/host/corner_sl.h"
-      - "apps/mbui/mbui/src/host/done_watch.h"
-      - "apps/mbui/mbui/src/host/post.h"
-      - "apps/mbui/mbui/src/host/listen_api.h"
-      - "apps/mbui/mbui/src/ui/drive.mbt"
-      - "apps/mbui/mbui/scripts/done_runner.py"
-      - "apps/mbui/mbui/scripts/linux.sh"
-      - "apps/mbui/mbui/scripts/host_contract.sh"
-      - "apps/mbui/mbui/tools/chk/textrec.mbt"
-      - "apps/mbui/mbui/test/host/**"
-      - "apps/mbui/mbui/src/kitdemo/gallery/textcheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/textrec_linux_*"
+      - "libs/mbui/src/ui/native.mbt"
+      - "libs/mbui/src/kitdemo/gallery/viewcheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/sitecheck.mbt"
+      - "libs/mbui/src/streamdemo/**"
+      - "libs/mbui/src/kitdemo/gallery/pdfcheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/imagecheck.mbt"
+      - "libs/mbui/src/ui/image.mbt"
+      - "libs/mbui/tools/chk/pictures.mbt"
+      - "libs/mbui/src/kitdemo/gallery/playcheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/badgecheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/a11ycheck.mbt"
+      - "libs/mbui/src/ui/a11y.mbt"
+      - "libs/mbui/src/host/linux*"
+      - "libs/mbui/src/host/mini_json.h"
+      - "libs/mbui/src/host/app_calls.h"
+      - "apps/mbui/src/host/linux_station.c"
+      - "apps/mbui/src/host/station_install.h"
+      - "apps/mbui/src/host/station_calls.h"
+      - "apps/mbui/scripts/station_install_test.c"
+      - "apps/mbui/scripts/linux_station_test.*"
+      - "libs/mbui/src/kitdemo/gallery/linkcheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/noticecheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/updatecheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/postcheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/dropcheck.mbt"
+      - "libs/mbui/src/ui/drop.mbt"
+      - "libs/mbui/src/ui/messages.mbt"
+      - "libs/mbui/src/host/gles_render.h"
+      - "libs/mbui/src/host/corner_sl.h"
+      - "libs/mbui/src/host/done_watch.h"
+      - "libs/mbui/src/host/post.h"
+      - "libs/mbui/src/host/listen_api.h"
+      - "libs/mbui/src/ui/drive.mbt"
+      - "libs/mbui/scripts/done_runner.py"
+      - "libs/mbui/scripts/linux.sh"
+      - "libs/mbui/scripts/host_contract.sh"
+      - "libs/mbui/tools/chk/textrec.mbt"
+      - "libs/mbui/test/host/**"
+      - "libs/mbui/src/kitdemo/gallery/textcheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/textrec_linux_*"
       - ".github/workflows/mbui-host-linux.yml"
       - ".github/actions/apt/**"
   push:
@@ -55,7 +68,7 @@ jobs:
     timeout-minutes: 5
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
         shell: bash
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +84,12 @@ jobs:
             libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth fonts-noto-cjk fonts-noto-color-emoji
             fonts-dejavu-core dbus-daemon dbus-bin libwebkitgtk-6.0-4 libpoppler-glib8t64
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+      - name: "What the app hands this machine's station's installer: the token, the workspace lock's hash, nothing refused dropped (apps/mbui/src/host/station_install.h)"
+        working-directory: apps/mbui
+        run: |
+          mkdir -p out
+          cc -Wall -Werror -Isrc/host -I../../libs/mbui/src/host scripts/station_install_test.c -o out/station_install_test
+          out/station_install_test
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh linux build
@@ -88,8 +107,14 @@ jobs:
       - name: "The notifications' contract: one shown, kept, and clicked"
         if: success() || failure()
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux notices
+      # (the update's contract makes its delta with still.fail's scripts/delta.ts, MBUI_DELTA_TOOL, which needs the
+      # repository's Node)
+      - uses: actions/setup-node@v5
+        if: success() || failure()
+        with: { node-version-file: .node-version, package-manager-cache: false }
       - name: "The update's contract: another machine's build refused, this machine's put in place and opened"
         if: success() || failure()
+        env: { MBUI_DELTA_TOOL: "${{ github.workspace }}/scripts/delta.ts" }
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux update
       - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"
         if: success() || failure()
@@ -103,15 +128,28 @@ jobs:
       - name: "The PDFs' contract: a PDF's two pages read and drawn, the second turned as its /Rotate says"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux pdf
+      - name: "What is posted's contract: a message posted from outside the frames told between frames, not taken as one begins"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux posted
+      - name: "What is picked's contract: the system's picker's answer told between frames, not taken as one begins"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux picked
+      - name: "What is dropped's contract: a folder and a file let go on the window taken and read whole"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux dropped
       - name: "The pictures' contract over a new context: a picture told ready again and drawn again there"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux images
-      - name: "This machine's station's contract: one started by hand said and stopped, the service's said as running it"
+      - name: "still.fail's station on Linux (the app's own native call): one started by hand said and stopped, the service's said as running it"
         if: success() || failure()
-        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux station
+        working-directory: apps/mbui
+        run: bash scripts/linux_station_test.sh
       - name: "The dock's number's contract: said to the docks on the session bus, given to one that asks"
         if: success() || failure()
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux badge
+      - name: "The accessibility's contract: a button and a checkbox told GTK's accessibility, walked as AT-SPI walks them"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux a11y
       - name: "Streams: streamdemo's JPEG (gdk-pixbuf) said shown to its end (STREAM done)"
         if: success() || failure()
         run: |
@@ -132,7 +170,8 @@ jobs:
           grep -q 'STREAM start h264' out/host/stream-h264.log && grep -q 'STREAM done' out/host/stream-h264.log
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: host-linux
-          path: apps/mbui/mbui/out/host/
+          path: libs/mbui/out/host/
           if-no-files-found: ignore

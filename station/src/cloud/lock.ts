@@ -53,6 +53,9 @@ export type LockState = {
   /// The person's own lock each member bound themselves to (`person` entries): its genesis's hash.
   persons: Map<string, string>;
   disabled: boolean;
+  /// Where the chain went (`moved {root}`, its owner's): the genesis hash of the person log the workspace is said in
+  /// from then on (state4). Absent: it did not.
+  moved?: string;
 };
 
 export const ROLES: Role[] = ["viewer", "member", "admin", "owner"];
@@ -279,6 +282,40 @@ export function personFold(entries: unknown[], sub: string): Person {
   return out;
 }
 
+/// Why an entry given is off a log's active chain, as the rules say it (rules/src/lock/chain.mbt `Off`; `at` its place
+/// among those given): refused by the log's rules after its parent (`refusal` why); no parent among those that follow;
+/// beaten at its parent by the child chosen (`winner` its hash, by `step`); below a child not chosen (`under` its hash);
+/// the same entry again with another signature.
+export type Off = {
+  at: number;
+  why: "refused" | "no parent" | "beaten" | "below" | "again";
+  refusal?: string;
+  winner?: string;
+  step?: "weight" | "removal" | "tie" | "hash";
+  under?: string;
+};
+/// A log's active chain among entries given in any order, branching: their places on it from the genesis, its hashes,
+/// and why each other one is off it.
+export type Chain = { at: number[]; hashes: string[]; off: Off[] };
+
+function chainOf(out: any): Chain {
+  if ("error" in out) throw new Error(out.error);
+  return { at: out.at, hashes: out.hashes, off: out.off };
+}
+
+/// The workspace lock's active chain among `entries` from its genesis of hash `root`, by the fork choice with votes by
+/// role (rules/src/lock/chain.mbt `lock_chain`), entries taken before (`now` null, as lock.json's are folded). Throws
+/// why there is none.
+export function lockChain(entries: Entry[], root: string): Chain {
+  return chainOf(rules.lock_chain_js(entries, root, "roles", null, crypto));
+}
+
+/// A person log's active chain among `entries` from its genesis of hash `root` (rules/src/lock/chain.mbt
+/// `person_chain`), by the same rules as `personFold`. Throws why there is none.
+export function personChain(entries: unknown[], root: string): Chain {
+  return chainOf(rules.person_chain_js(entries, root, crypto));
+}
+
 /// The device a connection is by a person's own lock (`entries`, the chain it brought), and that member's role in the
 /// workspace's lock. Throws a LockRefusal why it may not connect.
 export function admitPerson(s: LockState, who: { sub: string; endpoint: string; base?: string; proof?: string }, entries: unknown[]): { device: string; role: Role; person: Person } {
@@ -286,6 +323,65 @@ export function admitPerson(s: LockState, who: { sub: string; endpoint: string; 
   if ("refusal" in out) throw new LockRefusal(out.refusal);
   return out;
 }
+
+/// A workspace said in its people's own logs (rules/src/lock/state4.mbt), once its chain moved there: `on` (the root's
+/// newest of `open` and `off` in force is an `open`), `off`, `not on` (neither in force here yet), `no root` (the root's
+/// log not among those given); `state` in the shape of a folded chain's, so that `admit` and `admitPerson` take it.
+/// `genesis`, `head` and `seq` are the root log's: no place in a workspace chain. `chains`: each person log's active
+/// chain, genesis first; `bodies`: the statements' bodies kept; `now`: this station's clock (web devices).
+export function state4(ws: string, root: string, chains: unknown[][], bodies: unknown[], now: number): { on: "on" | "off" | "not on" | "no root"; state: LockState } {
+  const out = rules.state4_js(ws, root, chains, bodies, now, crypto);
+  return { on: out.on, state: taken(out) };
+}
+
+/// `state4` of a workspace whose chain moved (`chain`, its active chain, the `moved` last), rooted in the log its `moved`
+/// names, with what the chain as it moved still says of those it named (rules/src/lock/state4.mbt `state4_moved`, the
+/// model's D6, 2026-11-14): its settings where the root's log says neither `open` nor `off`, its members until a
+/// removal names the `moved` entry's hash, their devices their logs have not said (each `by` "chain"). A chain that
+/// does not fold or did not move: `no root`.
+export function state4Moved(ws: string, chain: Entry[], chains: unknown[][], bodies: unknown[], now: number): { on: "on" | "off" | "not on" | "no root"; state: LockState } {
+  const out = rules.state4_moved_js(ws, chain, chains, bodies, now, crypto);
+  return { on: out.on, state: taken(out) };
+}
+
+/// `roster4` of a workspace whose chain moved, as `state4Moved` reads it: and `carried_keys`, the keys of the app
+/// devices the chain as it moved still says, each `{key, sub}`.
+export function roster4Moved(ws: string, chain: Entry[], chains: unknown[][], bodies: unknown[], without: string[] = []): ReturnType<typeof roster4> & { carried_keys: { key: string; sub: string }[] } {
+  const out = rules.roster_moved_js(ws, chain, chains, bodies, without, crypto);
+  if ("error" in out) throw new Error(out.error);
+  return out;
+}
+
+/// Workspace `ws`'s list as the rules work it out of the same (rules/src/lock/roster.mbt): what is in force (`in_force`,
+/// each `{entry, body}` hash), the entries of its tag whose body is not kept (`lacking`), and the rest `roster_js` says.
+/// `without`: bodies' hashes whose statements are left out of those in force once that is decided (whom a removal took
+/// out: the list as it would be without it).
+export function roster4(ws: string, root: string, chains: unknown[][], bodies: unknown[], without: string[] = []): { rooted: boolean; in_force: { entry: string; body: string }[]; lacking: string[]; members: { sub: string; lock: string; keys: string[] | null }[]; stations: string[] } {
+  const out = rules.roster_js(ws, root, chains, bodies, without, crypto);
+  if ("error" in out) throw new Error(out.error);
+  return out;
+}
+
+/// Workspace `ws`'s tag in the person log of genesis hash `genesis` (what its commitments there carry as `t`).
+export const wsTag = (ws: string, genesis: string): string => rules.ws_tag_js(ws, genesis, crypto);
+
+/// A statement's body's hash (what its commitment carries as `h`); null where it has none.
+export function bodyHash(body: unknown): string | null {
+  const h: string = rules.body_hash_js(body, crypto);
+  return h.startsWith("!") ? null : h;
+}
+
+/// Why a keeper of workspace `ws` does not take `body`, or null: `commits` every `ws` entry it keeps that commits to the
+/// body's hash, each with its log from the genesis to that entry (rules/src/lock/body.mbt `body_refusal`).
+export function bodyRefusal(ws: string, body: unknown, commits: { genesis: string; chain: Entry[] }[]): string | null {
+  return rules.body_refusal_js(ws, body, commits, crypto);
+}
+
+/// What changes whenever what a state says may have: a folded chain's head, or the word a state in force was made
+/// with (`stateWord`), whose root log's head does not move with the bodies or the other logs.
+const words = new WeakMap<LockState, string>();
+export const stateWord = (s: LockState): string => words.get(s) ?? s.head;
+export const sayWord = (s: LockState, word: string): void => void words.set(s, word);
 
 /// A refusal by the lock (the client asks to be confirmed), not a bad credential.
 export class LockRefusal extends Error {

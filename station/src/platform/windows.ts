@@ -1,7 +1,7 @@
 // Windows: no process groups or signals (a job's group is the job object of the `stillfail-runner --job` it runs
 // under), Git for Windows' sh for what agents write, `\` and drives in paths, links that take a privilege, PATHEXT and
 // .cmd shims, a scheduled task where Unix starts things in the background.
-import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { copyFileSync, existsSync, linkSync, lstatSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { cpus as cpuList, freemem, release, totalmem, uptime as osUptime, version as osVersion } from "node:os";
 import { delimiter, dirname, join, win32 } from "node:path";
@@ -200,14 +200,14 @@ function signalGroup(pgid: number) {
 }
 
 /// When `pid` started, as Windows records it (to the millisecond).
-function startTimeOf(pid: number): number | null {
+async function startTimeOf(pid: number): Promise<number | null> {
   if (!Number.isInteger(pid) || pid <= 0) return null;
   try {
-    const text = execFileSync(
+    const text = (await run(
       "powershell",
       ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction Stop).StartTime.ToUniversalTime().ToString('o')`],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], windowsHide: true },
-    ).trim();
+      { encoding: "utf8", windowsHide: true },
+    )).stdout.trim();
     const at = Date.parse(text);
     return Number.isNaN(at) ? null : at;
   } catch {
@@ -261,12 +261,14 @@ const sameFile = (a: string, b: string) => {
 /// What Node's os says (the same counters Task Manager reads): Windows has neither /proc nor sysctl.
 const host: Host = {
   cpuTicks: osCpuTicks,
-  memory: () => ({ totalBytes: totalmem(), usedBytes: Math.max(totalmem() - freemem(), 0), swapUsedBytes: null }),
-  cpuModel: () => trim(cpuList()[0]?.model ?? ""),
-  uptimeSec: () => Math.round(osUptime()),
-  // "Windows 11 Pro 10.0.26300", not os.type()'s "Windows_NT".
-  osName: () => `${osVersion()} ${release()}`,
-  ownRss: () => process.memoryUsage.rss(),
+  sample: async () => ({
+    memory: { totalBytes: totalmem(), usedBytes: Math.max(totalmem() - freemem(), 0), swapUsedBytes: null },
+    cpuModel: trim(cpuList()[0]?.model ?? ""),
+    uptimeSec: Math.round(osUptime()),
+    // "Windows 11 Pro 10.0.26300", not os.type()'s "Windows_NT".
+    osName: `${osVersion()} ${release()}`,
+    ownRss: process.memoryUsage.rss(),
+  }),
 };
 
 /// A PowerShell string of `s`.
@@ -353,6 +355,7 @@ export async function drives(isDir: (path: string) => Promise<boolean>): Promise
 export const windows: Platform = {
   os: "windows",
   buildOs: "win32",
+  clonesFiles: false,
 
   exe: (name) => `${name}.exe`,
   home: (env) => env.HOME ?? env.USERPROFILE,
@@ -475,12 +478,12 @@ export const windows: Platform = {
 
   host,
 
-  isLauncher(pid) {
+  async isLauncher(pid) {
     if (!Number.isInteger(pid) || pid <= 0) return false;
     try {
-      const name = execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction Stop).ProcessName`], {
-        encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], windowsHide: true,
-      }).trim();
+      const name = (await run("powershell", ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction Stop).ProcessName`], {
+        encoding: "utf8", windowsHide: true,
+      })).stdout.trim();
       return /^stillfail-station(-w)?$/i.test(name);
     } catch {
       return false;
@@ -507,6 +510,13 @@ export const windows: Platform = {
     program: "powershell",
     args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "$s = irm https://cli.devin.ai/install.ps1; iex ($s -replace '(?m)^\\s*&\\s*\\S+\\s+setup\\s*$', '')"],
   },
+  /// The Antigravity CLI's own installer on Windows, as antigravity.google/cli gives it.
+  agyInstall: {
+    program: "powershell",
+    args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "irm https://antigravity.google/cli/install.ps1 | iex"],
+  },
+  agyBuild: async () => (process.arch === "arm64" ? "windows_arm64" : process.arch === "x64" ? "windows_amd64" : null),
+  agyStaging: (env, _url) => (env.LOCALAPPDATA ? join(env.LOCALAPPDATA, "antigravity", "staging", "agy.exe") : null),
   installerExt: "ps1",
   startInstaller,
   /// Vite+'s command is a shim of its own (codex.cmd, codex.exe) beside vp.exe; npm's a .cmd in its global prefix,

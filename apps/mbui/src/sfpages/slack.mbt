@@ -19,7 +19,7 @@ priv struct SlackTokens {
 ///|
 /// The drafts open, by what holds them (a connect's page, a dialog).
 // kept across runs: opened by slack_tokens, let go by tokens_drop; slack_reset empties it
-let slack_token_forms : Map[String, SlackTokens] = {}
+let slack_token_forms : Map[String, SlackTokens] = Map([])
 
 ///|
 /// How many drafts were opened (each its own form).

@@ -59,12 +59,12 @@ fn open_invite(token : String) -> Unit {
 /// The token of an invitation's link (`<cloud>/invite#<token>`), or what was pasted when it is a token by itself
 /// .
 fn invitation_token(words : String) -> String? {
-  let t = words.trim(chars=" \n\t").to_string()
+  let t = words.trim(chars=" \n\t").to_owned()
   if t == "" {
     return None
   }
   let hash = match t.find("/invite#") {
-    Some(i) => t.view(start_offset=i + 8).to_string()
+    Some(i) => t.exact_view(start=i + 8).to_owned()
     None => ""
   }
   let token = if hash != "" {
@@ -74,7 +74,7 @@ fn invitation_token(words : String) -> String? {
   } else {
     t
   }
-  match token.trim(chars=" \n\t").to_string() {
+  match token.trim(chars=" \n\t").to_owned() {
     "" => None
     s => Some(s)
   }

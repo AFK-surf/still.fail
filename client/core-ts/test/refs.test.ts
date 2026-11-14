@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { Data } from "../src/data.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { draftAt, expand, KEPT, keep, link, mark, search, title } from "../src/refs.ts";
+import { draftAt, expand, KEPT, keep, link, mark, opened, OPENED_KEPT, openedIn, search, title } from "../src/refs.ts";
 import { Runner } from "../src/runtime.ts";
 import { FakeHost } from "../src/testing.ts";
 
@@ -57,6 +57,55 @@ test("a_search_finds_titles_first_then_what_else_a_chat_says", () => {
   // Written on `a`: every station's, `b`'s saying so.
   assert.deepEqual(search(chats, "", "a", "s2", 3).items.map((i: { id: string; otherStation?: boolean }) => [i.id, i.otherStation ?? false]), [["1", false], ["3", true], ["4", false]]);
   assert.deepEqual(ids(search(chats, "STUDIO", null, null, null)), ["1", "2", "3", "4"]);
+});
+
+test("a_search_lists_the_chats_opened_latest_first_then_the_rest_by_when_they_were_last_active", () => {
+  const item = (id: string, ti: string, at: number | undefined, more: Record<string, unknown> = {}) => ({ id, session: `s${id}`, title: ti, station: "w/a", stationName: "Studio", agents: [], last: { preview: "" }, lastActiveAt: at, ...more });
+  // The pinned first in the list, as the sidebar has them.
+  const chats = {
+    days: [
+      { items: [item("p", "置顶 登录", 1, { pinned: true })] },
+      { items: [item("1", "登录页", 5), item("2", "别的", 7, { last: { preview: "修登录" } }), item("3", "登录 旧的", 3), item("4", "无关", 9, { last: { preview: "登录不上" } }), item("5", "登录 无时", undefined), item("6", "登录 也无时", undefined)] },
+    ],
+  };
+  const ids = (v: { items: { id: string }[] }) => v.items.map((i) => i.id);
+  // Nothing opened: by when last active, the latest first, pinned or not; none known as 0, in the order they were.
+  assert.deepEqual(ids(search(chats, "", null, null, null)), ["4", "2", "1", "3", "p", "5", "6"]);
+  // Opened (by its id or its key), the latest first, then the rest so; one of another station is none of these.
+  const open: [string, string][] = [["w/a", "s3"], ["w/a", "p"], ["w/b", "1"], ["w/a", "6"]];
+  assert.deepEqual(ids(search(chats, "", null, null, null, open)), ["3", "p", "6", "4", "2", "1", "5"]);
+  assert.deepEqual(ids(search(chats, "", null, null, 2, open)), ["3", "p"]);
+  // Typed: those whose title has it, then those found in what else they say, each in that order.
+  assert.deepEqual(ids(search(chats, "登录", null, null, null, open)), ["3", "p", "6", "1", "5", "4", "2"]);
+  assert.deepEqual(ids(search(chats, "登录", null, null, null, [["w/a", "s2"]])), ["1", "3", "p", "5", "6", "2", "4"]);
+  // What was given is as it was.
+  assert.deepEqual(chats.days[1]!.items.map((i) => i.id), ["1", "2", "3", "4", "5", "6"]);
+});
+
+test("the_chats_opened_are_kept_each_once_the_latest_50_of_each_workspace", () => {
+  const d = data();
+  opened(d, "w1/a", "k1");
+  opened(d, "w1/b", "k2");
+  opened(d, "w2/a", "k3");
+  opened(d, "w1/a", "k1");
+  assert.deepEqual(openedIn(d, "w1"), [["w1/a", "k1"], ["w1/b", "k2"]]);
+  assert.deepEqual(openedIn(d, "w2"), [["w2/a", "k3"]]);
+  // Told again while it is the latest: nothing written.
+  const put = d.put.bind(d);
+  let writes = 0;
+  d.put = (...args: Parameters<typeof put>) => {
+    writes++;
+    put(...args);
+  };
+  opened(d, "w1/a", "k1");
+  assert.equal(writes, 0);
+  d.put = put;
+  for (let i = 0; i < OPENED_KEPT + 5; i++) opened(d, "w1/a", `n${i}`);
+  const kept = openedIn(d, "w1");
+  assert.equal(kept.length, OPENED_KEPT);
+  assert.deepEqual(kept[0], ["w1/a", `n${OPENED_KEPT + 4}`]);
+  assert.deepEqual(kept[OPENED_KEPT - 1], ["w1/a", "n5"]);
+  assert.equal(new Set(kept.map(([s, k]) => `${s} ${k}`)).size, OPENED_KEPT);
 });
 
 test("other_workspaces_chats_are_offered_only_for_what_is_typed_and_never_crowd_this_ones", async () => {

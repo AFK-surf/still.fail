@@ -6,7 +6,7 @@
 /// The chats of workspace `scope` in list `filter` (all, mine, watching) as the core's view says them, worked out once
 /// for each version of it; what went wrong reading it.
 pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, String?) {
-  let (read, topic) = chats_read.read(src, chats_shown(src, scope, filter))
+  let (read, topic) = chats_read.read(src, chats_params(scope, filter))
   let error = match topic.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None
@@ -15,23 +15,17 @@ pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, S
 }
 
 ///|
-/// How many of a list's rows are asked of the core at first (`limit`), and how many more each time it is scrolled near
-/// the last of them: the core sends the first ones and how many more it has, not the whole of a list of 1400.
-pub let chats_page : Int = 50
+/// List `filter` of workspace `scope` as it is asked of the core (chats_params): what a replay of a run from before the
+/// list's rows were what they draw reads a chat's whole row out of (sfreplay's source.mbt).
+pub fn chats_asked(scope : String, filter : String) -> Map[String, Json] {
+  chats_params(scope, filter)
+}
 
 ///|
-// kept across runs: let go of by reset (pages.mbt)
-/// How many of each list's rows are asked of the core now, by workspace and filter (chats_page until scrolled).
-let chat_limits : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
-
-///|
-// kept across runs: let go of by reset (pages.mbt)
-/// The limit each list was asked with before a page more, by workspace and filter, while the core has not answered
-/// the page more yet.
-let chat_limits_was : Map[String, Int] = {}
-
-///|
-/// The chats of workspace `scope` in list `filter` as they are asked of the core: as many of them as are asked now.
+/// The chats of workspace `scope` in list `filter` as they are asked of the core: the list alone. How many of its rows
+/// the core sends is no part of it: its window, told the core before it is asked (chats_told_before) and raised as it is
+/// scrolled near its foot (chats_grow), so that more of its rows come as the rows added, never the list whole again as
+/// another topic (a `limit` of 50 more each time was, 2026-11-11).
 fn chats_params(scope : String, filter : String) -> Map[String, Json] {
   let params : Map[String, Json] = {
     "scope": Json::string(scope),
@@ -43,27 +37,148 @@ fn chats_params(scope : String, filter : String) -> Map[String, Json] {
   if filter == "hidden" {
     params["hidden"] = Json::boolean(true)
   }
-  let limit = chat_limits.get(scope + "\u{1}" + filter).unwrap_or(chats_page)
-  params["limit"] = Json::number(limit.to_double())
   params
 }
 
 ///|
-/// The list `filter` of workspace `scope` as it is shown: as asked now once the core answered it, till then as it was
-/// asked before a page more (its rows staying, not its skeleton for the core's round trip), let go of as it comes.
-fn chats_shown(src : Source, scope : String, filter : String) -> Map[String, Json] {
-  let key = scope + "\u{1}" + filter
-  let now = chats_params(scope, filter)
-  guard chat_limits_was.get(key) is Some(was) else { return now }
-  let before = now.copy()
-  before["limit"] = Json::number(was.to_double())
-  let asked = src.topic("chats", now).get()
-  if asked.value is None && asked.error is None {
-    return before
+// kept across runs: put back as a run begins (reset), set by the app's tree as it is given its window (sfapp app_tree)
+/// How tall the app's window is, in its points (0 before its tree is laid out): what a chat list's first window is
+/// worked out of, wherever the list is first asked (place_reads, home_opens, frame_opens, a workspace switched to, its
+/// page), its own room not laid out yet there. A list's room is never taller than the window, so the rows the window
+/// holds are never fewer than the list shows; the sidebar's header and Home's bar (under 2 rows) go in the rounding.
+pub let window_tall : Ref[Double] = Ref(0.0)
+
+///|
+/// How many rows of a chat list `tall` points hold, the last in part (the library's row: @sf ChatList `row_h`).
+fn rows_held(tall : Double) -> Int {
+  (tall / @sf.theme().chat_list.row_h).ceil().to_int()
+}
+
+///|
+/// `n` rounded up to ten: a window resized a little asks the same.
+fn by_tens(n : Int) -> Int {
+  (n + 9) / 10 * 10
+}
+
+///|
+/// A chat list's first window in a window `tall` points high: the rows its room shows and a screen more below them,
+/// rounded up to ten (30 on 小屏's 390×844 with a finger's rows, 30 on a wide 1280×800 with a mouse's); 0 before it is
+/// laid out (the core sends its untold window then, 50).
+pub fn first_window(tall : Double) -> Int {
+  if tall <= 0.0 {
+    0
+  } else {
+    by_tens(2 * rows_held(tall))
   }
-  chat_limits_was.remove(key)
-  (src.leave)("chats", before, TopicLeave::Legacy)
-  now
+}
+
+///|
+/// The least height a row the core counts in a chat's window has, in points: a station's notice joined to the one before
+/// it (38 on 小屏's 390×844 with a finger's rows and on a wide 1280×800 with a mouse's; one alone 54 and 62; a message
+/// of a person's or an agent's joined to the one before 55 and 57, with its author's name 71 and 81), measured in the
+/// Tester. Rows the core does not count (a day's line, what an agent is at) only add to what is laid out above.
+/// chat_window_wbtest.mbt holds it.
+pub let chat_row_least : Double = 38.0
+
+///|
+/// A chat's first window in a window `tall` points high: as many of its last messages as fill it for sure, at the least
+/// height a row it counts has (chat_row_least), rounded up to ten (30 on 小屏's 390×844 and on a wide 1280×800): no
+/// more, a screen above what shows kept once the reader moves it off its end (chat_grow_rows). 0 before it is laid out
+/// (the core opens on its untold page then, 50 entries). Where the chat opens at something unread or where it was left,
+/// the core's window about that wins over the count.
+pub fn chat_first_window(tall : Double) -> Int {
+  if tall <= 0.0 {
+    0
+  } else {
+    by_tens((tall / chat_row_least).ceil().to_int())
+  }
+}
+
+///|
+/// How many of a chat's messages more its page asks for (`chat.older`'s `rows`) once the reader has moved it off its
+/// end and less than a screen of it is laid out above what shows, or while what it lays out does not fill its window,
+/// the core having more (chat_list.mbt chat_short_above): at least 760 points at chat_row_least, what a fling at its
+/// fastest goes in the frames the core's answer takes, a frame on a Mac (chat_window_wbtest.mbt measures it).
+pub let chat_grow_rows : Int = 20
+
+///|
+/// How many rows more a chat list scrolled near its foot is told: a screen of them, rounded up to ten, 20 at least.
+pub fn window_step(tall : Double) -> Int {
+  let n = by_tens(rows_held(tall))
+  if n < 20 {
+    20
+  } else {
+    n
+  }
+}
+
+///|
+// kept across runs: let go of by reset (chat_windows_reset), and of a list as it is asked again (chats_told_before)
+/// The window each list was last told it grows to while the core has not answered it yet, by its params
+/// (list_window_key): told once.
+let windows_asked : Map[String, Int] = Map([])
+
+///|
+/// How many rows list `filter` of workspace `scope` was last told its window grows to (windows_asked's; 0, none asked
+/// since it was asked anew): what tells a page more that comes from rows that arrive (the sidebar's RowsMotion).
+pub fn chats_window_asked(scope : String, filter : String) -> Int {
+  windows_asked.get(list_window_key(chats_params(scope, filter))).unwrap_or(0)
+}
+
+///|
+/// A chat list's key among windows_asked: its workspace and filter as asked.
+fn list_window_key(p : Map[String, Json]) -> String {
+  let on = fn(k : String) { if p.get(k) is Some(True) { "1" } else { "0" } }
+  text(Some(Json::object(p)), "scope") + "\u{1}" + on("mine") + on("watching") + on("hidden")
+}
+
+///|
+/// What the core is told before topic `name` (its JSON as asked, `topic`) is asked (@core.Client::tells_before, as each
+/// time it is asked): before a chat list, its first window (`chats.window`, first_window), so that its first answer is
+/// made of no more rows than the screen shows and a screen more. Its window grown before is not said: a list asked anew
+/// (let go of, a core started again) starts from what it shows; one the core still holds keeps what it showed (the
+/// core's window only grows while it holds it). Before a chat, how many of its last messages it opens on (`chat.window`,
+/// chat_first_window), grown from there by its page (`chat.older`).
+pub fn chats_told_before(name : String, topic : Json) -> Array[(String, Json)] {
+  if name == "chat" {
+    return chat_told_before(topic)
+  }
+  guard name == "chats" && topic is Object(t) else { return [] }
+  let params : Map[String, Json] = Map([])
+  for k in ["scope", "mine", "watching", "hidden"] {
+    match t.get(k) {
+      Some(v) => params[k] = v
+      None => ()
+    }
+  }
+  windows_asked.remove(list_window_key(params))
+  let rows = first_window(window_tall.val)
+  if rows <= 0 {
+    return []
+  }
+  params["rows"] = Json::number(rows.to_double())
+  [("chats.window", Json::object(params))]
+}
+
+///|
+/// What the core is told before chat `topic` is asked: how many of its last messages it opens on (`chat.window`), by
+/// the chat as the topic names it (its station, and its session or thread).
+fn chat_told_before(topic : Json) -> Array[(String, Json)] {
+  guard topic is Object(t) && t.get("station") is Some(String(_) as station) else { return [] }
+  let rows = chat_first_window(window_tall.val)
+  if rows <= 0 {
+    return []
+  }
+  let params : Map[String, Json] = { "station": station }
+  for k in ["session", "thread"] {
+    match t.get(k) {
+      Some(v) => params[k] = v
+      None => ()
+    }
+  }
+  guard params.length() > 1 else { return [] }
+  params["rows"] = Json::number(rows.to_double())
+  [("chat.window", Json::object(params))]
 }
 
 ///|
@@ -76,39 +191,69 @@ pub fn chats_more(src : Source, scope : String, filter : String) -> Int {
 }
 
 ///|
-/// A page more of list `filter`'s rows asked for, where `limit` is still how many are asked (asked once for it), the
-/// list as it was asked shown till the core answers it (chats_shown).
-pub fn chats_ask_more(src : Source, scope : String, filter : String, limit : Int) -> Unit {
-  let key = scope + "\u{1}" + filter
-  if chat_limits.get(key).unwrap_or(chats_page) == limit {
-    // (a page more asked again before the last came: the one shown still the first's)
-    if !chat_limits_was.contains(key) {
-      chat_limits_was[key] = limit
-    } else {
-      (src.leave)("chats", chats_params(scope, filter), TopicLeave::Legacy)
-    }
-    chat_limits[key] = limit + chats_page
+/// List `filter` of workspace `scope` told a window of `rows` (`chats.window`), where it holds fewer (`has`), the core
+/// has more (`more`) and it was not told as many already: what it shows grows by the rows added.
+fn chats_window_at_least(src : Source, scope : String, filter : String, rows : Int, has : Int, more : Int) -> Unit {
+  let params = chats_params(scope, filter)
+  let key = list_window_key(params)
+  if more <= 0 || rows <= has || rows <= windows_asked.get(key).unwrap_or(0) {
+    return
+  }
+  windows_asked[key] = rows
+  params["rows"] = Json::number(rows.to_double())
+  (src.call)("chats.window", Json::object(params), answer_unread)
+}
+
+///|
+/// How many rows a list's view holds (chats_of's).
+pub fn chats_held(view : ChatsView?) -> Int {
+  match view {
+    Some(v) => v.days.fold(init=0, fn(n, d) { n + d.items.length() })
+    None => 0
   }
 }
 
 ///|
-/// How many of list `filter`'s rows are asked now.
-pub fn chats_limit(scope : String, filter : String) -> Int {
-  chat_limits.get(scope + "\u{1}" + filter).unwrap_or(chats_page)
+/// List `filter` of workspace `scope`, holding `has` rows with `more` past them, scrolled near its foot: its window a
+/// step more (window_step) than the rows it holds, asked once for them.
+pub fn chats_grow(src : Source, scope : String, filter : String, has : Int, more : Int) -> Unit {
+  chats_window_at_least(src, scope, filter, has + window_step(window_tall.val), has, more)
 }
 
 ///|
-/// The chats' list of workspace `scope` as it is asked (all of its chats, its first rows: chats_params), for what is
-/// read of it beside its rows (its stations' trouble, its glyph).
+/// List `filter` of workspace `scope`, holding `has` rows with `more` past them, shown in a window `tall` points high:
+/// told the first window of that where it holds fewer (a window made taller).
+pub fn chats_window_for(src : Source, scope : String, filter : String, tall : Double, has : Int, more : Int) -> Unit {
+  chats_window_at_least(src, scope, filter, first_window(tall), has, more)
+}
+
+///|
+/// The chats' list of workspace `scope` as it is asked (all of its chats: chats_params), for what is read of it beside
+/// its rows (its stations' trouble, its glyph).
 pub fn chats_topic(src : Source, scope : String) -> Topic {
-  src.topic("chats", chats_shown(src, scope, "all")).get().snapshot()
+  src.topic("chats", chats_params(scope, "all")).get().snapshot()
 }
 
 ///|
-/// As at the start: each list asked a page of at first.
-pub fn chat_limits_reset() -> Unit {
-  chat_limits.clear()
-  chat_limits_was.clear()
+/// What workspace `ws`'s chats' list opens on as it is filtered (Home's, the wide frame's sidebar's: chats_of's), asked
+/// of `ask` (opens_answered's): answered once the core gave it or said why not.
+pub fn list_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
+  opens_answered(ask("chats", chats_params(ws, filter_of(src, ws))))
+}
+
+///|
+/// What is read of workspace `ws`'s chats beside the rows of a list (chats_topic's: all of its chats, its stations'
+/// trouble, its glyph), asked of `ask` as list_opens.
+pub fn chats_all_opens(_src : Source, ws : String, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
+  opens_answered(ask("chats", chats_params(ws, "all")))
+}
+
+///|
+/// As at the start: no list told a window to grow to.
+pub fn chat_windows_reset() -> Unit {
+  windows_asked.clear()
+  window_tall.val = 0.0
+  chats_read_last.val = []
 }
 
 ///|
@@ -133,11 +278,14 @@ let chats_read : Derived[ChatsRead] = Derived::new("chats", fn(v, was) {
     jsons,
     match was {
       Some(w) => w.read
-      None => []
+      // (a list asked anew (another of a workspace's lists, a workspace switched to): its rows as the list read before
+      // had them, the same JSON where the core's delta kept them, taken as they were made)
+      None => chats_read_last.val
     },
     chat_row_key,
     chat_item,
   )
+  chats_read_last.val = read
   // (each row's JSON to what was made of it, in the order the days hold them; as its station's state makes it)
   let stations = stations_said(v)
   let at = Ref(0)
@@ -152,6 +300,11 @@ let chats_read : Derived[ChatsRead] = Derived::new("chats", fn(v, was) {
   })
   { view, read }
 })
+
+///|
+// kept across runs: let go of by reset (chat_windows_reset)
+/// The rows chats_read made last, of whichever list: what a list asked anew is made from.
+let chats_read_last : Ref[Array[(Json, ChatItem)]] = Ref([])
 
 ///|
 /// A row's key in the list, as the core keys them (client/core-ts collections.ts: `station` and `id`).
@@ -206,7 +359,7 @@ pub fn open_listed(view : ChatsView) -> Unit {
       // #n: the n-th row (from 1)
       let nth = if words.has_prefix("#") {
         let mut k = 0
-        for ch in words.view(start_offset=1) {
+        for ch in words.exact_view(start=1) {
           let d = ch.to_int() - 48
           if d >= 0 && d <= 9 {
             k = k * 10 + d
@@ -244,11 +397,11 @@ pub fn open_listed(view : ChatsView) -> Unit {
 
 ///|
 /// The days as last shown, by list (held_order).
-pub let shown_days : Map[String, Array[ChatDay]] = {}
+pub let shown_days : Map[String, Array[ChatDay]] = Map([])
 
 ///|
 /// The days, by list, the order last shown was made from (held_order): while they are the same, so is it.
-let held_from : Map[String, Array[ChatDay]] = {}
+let held_from : Map[String, Array[ChatDay]] = Map([])
 
 ///|
 /// Whether `days` (the very array: a view's, read once a version) are not what list `key`'s order shown was last made
@@ -276,13 +429,13 @@ pub fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[Cha
   if !days_new(key, days) {
     return shown
   }
-  let fresh : Map[String, ChatItem] = {}
+  let fresh : Map[String, ChatItem] = Map([])
   for d in days {
     for item in d.items {
       fresh[row_name(item)] = item
     }
   }
-  let held : Map[String, Bool] = {}
+  let held : Map[String, Bool] = Map([])
   let out : Array[(String, Array[ChatItem])] = shown.map(fn(d) {
     let items : Array[ChatItem] = []
     for item in d.items {
@@ -340,7 +493,7 @@ pub fn viewer_moved(key : String, days : Array[ChatDay]) -> Bool {
   if !days_new(key, days) {
     return false
   }
-  let was : Map[String, ChatItem] = {}
+  let was : Map[String, ChatItem] = Map([])
   for d in shown_days.get(key).unwrap_or([]) {
     for item in d.items {
       was[row_name(item)] = item
@@ -445,11 +598,33 @@ pub fn seq_key(station : String, thread : Double, seq : Double) -> String {
 }
 
 ///|
+/// What is left up long in workspace `ws` as it is asked (the `longJobs` topic): one ask wherever it is read.
+pub fn long_jobs_asked(ws : String) -> Map[String, Json] {
+  { "scope": Json::string(ws) }
+}
+
+///|
 /// How many services are left up long in the workspace (the `longJobs` topic).
 pub fn long_jobs(src : Source, w : Workspace) -> Int {
-  items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups").fold(init=0, fn(n, g) {
+  items(src.topic("longJobs", long_jobs_asked(w.id)).get().value, "groups").fold(init=0, fn(n, g) {
     n + items(Some(g), "jobs").length()
   })
+}
+
+///|
+/// What is left up long in the workspace in view (the `longJobs` topic) held by node `v` from when it is made, asked
+/// with the chats' list it shows under (Home's) rather than once that list has come: Home opens on both (sfapp's
+/// home_opens).
+pub fn long_jobs_read(v : @view.View, src : Source, workspace : () -> Workspace?) -> Unit {
+  v.reacts(
+    fn() {
+      match workspace() {
+        Some(w) => src.topic("longJobs", long_jobs_asked(w.id)).get().value is Some(_)
+        None => false
+      }
+    },
+    fn(_) { () },
+  )
 }
 
 ///|
@@ -463,7 +638,7 @@ pub fn long_stop(station : String, job : Json?) -> (String, Json, Array[(String,
       if text(stop, "view") != "" {
         on.push(("view", text(stop, "view")))
       }
-      let m : Map[String, Json] = {}
+      let m : Map[String, Json] = Map([])
       for kv in on {
         m[kv.0] = Json::string(kv.1)
       }
@@ -488,7 +663,7 @@ pub fn long_jobs_lit(src : Source, w : Workspace) -> Bool {
 /// `longJobs` topic's `ids`).
 pub fn long_jobs_seen(src : Source, w : Workspace) -> Unit {
   let ids = field(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "ids").unwrap_or(Json::array([]))
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   m[w.id] = ids
-  (src.call)("prefs.set", Json::object({ "jobsSeen": Json::object(m) }), fn(_) {  })
+  (src.call)("prefs.set", Json::object({ "jobsSeen": Json::object(m) }), answer_unread)
 }

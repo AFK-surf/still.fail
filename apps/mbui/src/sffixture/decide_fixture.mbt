@@ -1,6 +1,7 @@
 // An execution history, an agent's card, jobs, for the app with no core (fixture.mbt; slice 8's screenshots).
 // MBUI_FIXTURE: "history" (an agent's steps, a few opened), "history-reading" (the
-// steps not read yet: their bones), "history-details", the chat
+// steps not read yet: their bones), "history-failed" (their first read failed: why, over the bones), "history-older"
+// (pages before them, being read), "history-older-failed" (their read failed: why, at its top), "history-details", the chat
 // with a sheet open over it: "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid" (an agent's card that knows
 // no figure of it, as a station from before tells none of an agent at rest), "chat-peek" (its station's card), "chat-jobs",
 // "chat-job"; "chat-letters-many" (their sheet, more chats written with than it holds at its share: its list
@@ -22,7 +23,7 @@
 /// Whether `mode` is one of this slice's.
 pub fn decide_mode(mode : String) -> Bool {
   [
-    "history", "history-reading", "history-details",
+    "history", "history-reading", "history-failed", "history-older", "history-older-failed", "history-details",
     "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "home-jobs-screens", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-things", "chat-things-side", "chat-info-pulls",
@@ -137,7 +138,7 @@ pub fn fix_context_actions(chat : Json) -> Json {
               let ao = am.copy()
               let session = match am.get("session") {
                 Some(Object(sm)) => sm.copy()
-                _ => Map::new()
+                _ => Map([])
               }
               session["canCompact"] = Json::boolean(true)
               session["canClear"] = Json::boolean(true)
@@ -236,7 +237,6 @@ pub fn fix_history() -> Json {
         "tasks": [],
         "messages": [
           {
-            "key": "m1",
             "from": { "name": "林", "bound": false },
             "text": "帮我把聊天页的列表做成虚拟列表，几千条消息也要滚得顺。",
           },
@@ -372,11 +372,39 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
         None
       }
     "history" if f.mode == "history-reading" => Some(None)
+    "history" if f.mode == "history-failed" =>
+      Some(
+        Some({
+          "items": [],
+          "live": [],
+          "usage": [],
+          "edge": "正在读取执行历史",
+          "empty": true,
+          "loaded": false,
+          "failed": "请求超时",
+        }),
+      )
+    "history" if f.mode == "history-older" || f.mode == "history-older-failed" =>
+      match fix_history() {
+        Object(m) => {
+          let m = m.copy()
+          m["more"] = Json::boolean(true)
+          if f.mode == "history-older-failed" {
+            m["older"] = Json::string("failed")
+            m["edge"] = Json::string("读取更早的执行历史失败：请求超时，稍后重试")
+          } else {
+            m["older"] = Json::string("reading")
+            m["edge"] = Json::string("正在读取更早的执行历史")
+          }
+          Some(Some(Json::object(m)))
+        }
+        j => Some(Some(j))
+      }
     "history" => Some(Some(fix_history()))
     "agentCard" if f.mode == "chat-agent-unsaid" =>
       Some(
         Some({
-          "work": "8 轮 · 共干了 1 小时 12 分",
+          "work": "共工作 1 小时 12 分",
           "latest": [
             { "key": "k1", "text": "读了 src/ui/list.mbt" },
             { "key": "k2", "text": "跑了列表的测试" },
@@ -388,7 +416,7 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
     "agentCard" =>
       Some(
         Some({
-          "work": "8 轮 · 共干了 1 小时 12 分",
+          "work": "共工作 1 小时 12 分",
           "cost": "$4.20",
           "cache": { "percent": 91, "text": "91%", "level": "ok" },
           "context": { "percent": 64, "text": "64%", "level": "ok" },
@@ -411,15 +439,14 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
     "jobLog" =>
       Some(
         Some({
-          "text": Json::string(
-            "✓ build (1m 12s)\n✓ unit tests (48s)\n✓ step 3: screenshots\n… waiting for deploy" + fix_job_more_text(),
-          ),
+          "lines": Json::array(fix_job_lines()),
           "said": "最后输出 · 3 分钟前",
           "last": "… waiting for deploy",
         }),
       )
     "longJobs" =>
-      if f.mode == "home-jobs-screens" {
+      // (待处理 beside the rail's bell lists them over its chats: the panel as it was reported, 2026-11-12)
+      if f.mode == "home-jobs-screens" || f.mode == "home-attention" {
         Some(Some(long_screens_view()))
       } else if f.mode == "home-jobs" {
         Some(
@@ -436,7 +463,7 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
           }),
         )
       } else {
-        None
+        Some(Some({ "groups": [], "lit": false, "ids": [] }))
       }
     _ => None
   }
@@ -717,9 +744,9 @@ pub fn fix_attention_marks() -> Json {
         "unread": 1,
         "tone": "alert",
         "items": [Json::object(wait), Json::object(failed), Json::object(unread)],
+        "others": "done",
       },
     },
-    "others": "done",
     "badge": 2,
     "badgeKinds": { "on": true, "wait": true, "failed": true, "done": true, "message": true, "services": true },
   }
@@ -813,11 +840,15 @@ pub fn fix_letters() -> Json {
 pub let fix_job_more : Ref[Int] = Ref(0)
 
 ///|
-/// The lines past the four, each on a line of its own after them.
-fn fix_job_more_text() -> String {
-  let out = StringBuilder::new()
-  for k in 1..=fix_job_more.val {
-    out.write_string("\ndeploy check \{k}")
+/// Its lines as the core's `jobLog` gives them, each its number (`n`, its own as more come) and its runs: the made-up
+/// four and those past them.
+fn fix_job_lines() -> Array[Json] {
+  let first = ["✓ build (1m 12s)", "✓ unit tests (48s)", "✓ step 3: screenshots", "… waiting for deploy"]
+  let out : Array[Json] = []
+  for k in 0..<(first.length() + fix_job_more.val) {
+    let words = if k < first.length() { first[k] } else { "deploy check \{k - first.length() + 1}" }
+    let runs : Json = [{ "text": Json::string(words) }]
+    out.push({ "n": Json::number(k.to_double()), "runs": runs })
   }
-  out.to_string()
+  out
 }

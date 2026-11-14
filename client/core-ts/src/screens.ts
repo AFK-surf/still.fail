@@ -20,7 +20,7 @@ import { t } from "./i18n.ts";
 import { relativeTime } from "./format.ts";
 import { encode } from "./ops.ts";
 import { unavailable } from "./permissions.ts";
-import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type ClipType, FrameReader, type Region, ackFrame, clipboardFrame, inputFrame, keyframeFrame, lookFrame } from "./screen-frames.ts";
+import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type ClipType, FrameReader, type Region, ackFrame, clipboardFrame, inputFrame, keyframeFrame, lookFrame, soundFrame } from "./screen-frames.ts";
 import { StationAddr } from "./station/addr.ts";
 import { SCREEN_FPS, type ScreenAsk, type ScreenFps, type ScreenQuality, type WireSocket } from "./station/wire.ts";
 import type { ClientId, RequestId } from "./protocol.ts";
@@ -54,9 +54,12 @@ const PASSKEY_MAX = 8192;
 
 export type ScreenCall =
   /// `ask.control` as asked; `auto` (none asked): control unless someone else drives it as it opens.
-  | { kind: "view"; station: string; screen: string; view: string; ask: ScreenAsk; auto: boolean }
+  /// `sound`: its sound on as it opens (false: muted on the page, as `screen.sound` says it).
+  | { kind: "view"; station: string; screen: string; view: string; ask: ScreenAsk; auto: boolean; sound: boolean }
   | { kind: "ack"; view: string; ts: number }
   | { kind: "keyframe"; view: string }
+  /// The view's sound on, or off (muted here: the station sends none till it is on again).
+  | { kind: "sound"; view: string; on: boolean }
   | { kind: "input"; view: string; input: J }
   | { kind: "control"; view: string; control: boolean }
   /// The size the view's pictures are asked to fit in from now on, and the 画质 and 帧率 asked (another chosen; none: 自动).
@@ -121,6 +124,7 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
         view: text(params, "view"),
         ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}), ...(get(params, "audio") === "pcm_s16le" && !peek ? { audio: "pcm_s16le" as const } : {}), ...(quality ? { quality } : {}), ...(fps ? { fps } : {}), ...(fit ? { fit } : {}), ...(p3 ? { gamut: "p3" as const } : {}) },
         auto: !peek && typeof control !== "boolean",
+        sound: get(params, "sound") !== false,
       };
     }
     case "screen.ack": {
@@ -130,6 +134,11 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
     }
     case "screen.keyframe":
       return { kind: "keyframe", view: text(params, "view") };
+    case "screen.sound": {
+      const on = get(params, "on");
+      if (typeof on !== "boolean") throw CoreError.invalid(t("core-misc.params.missing", { field: "on" }));
+      return { kind: "sound", view: text(params, "view"), on };
+    }
     case "screen.input":
       return { kind: "input", view: text(params, "view"), input: checkInput(get(params, "input")) };
     case "screen.clipboard": {
@@ -198,6 +207,17 @@ function resolutionOf(v: unknown): { width: number; height: number; modes: Size[
   return { width: v.width, height: v.height, modes: modes.map((m: Size) => ({ width: m.width, height: m.height })) };
 }
 
+/// A desktop's windows as its station said them, bounded: at most 60, each an id, its app's name and its title (200).
+function windowsSaid(v: unknown[]): J[] {
+  const out: J[] = [];
+  for (const w of v) {
+    if (out.length >= 60) break;
+    if (!isObject(w) || typeof w.id !== "number" || !Number.isInteger(w.id) || w.id <= 0) continue;
+    out.push({ id: w.id, app: typeof w.app === "string" ? w.app.slice(0, 200) : "", title: typeof w.title === "string" ? w.title.slice(0, 200) : "" });
+  }
+  return out;
+}
+
 export function checkInput(input: unknown): J {
   const bad = () => CoreError.invalid(t("core-misc.screen.badInput"));
   if (!isObject(input)) throw bad();
@@ -234,6 +254,12 @@ export function checkInput(input: unknown): J {
     case "text":
       if (typeof input.text !== "string" || input.text === "" || input.text.length > TEXT_MAX) throw bad();
       return { t: "text", text: input.text };
+    // One of a desktop's windows shown alone (one its state says in `windows`), or without `id` the whole display: the
+    // view's own, looking or driving.
+    case "window":
+      if (input.id === undefined || input.id === null) return { t: "window" };
+      if (!finite(input.id) || !Number.isInteger(input.id) || input.id <= 0) throw bad();
+      return { t: "window", id: input.id };
     // The display's scale, one of its steps (a screen whose state says `scale`).
     case "scale":
       if (!finite(input.percent) || !Number.isInteger(input.percent) || input.percent < 100 || input.percent > 500) throw bad();
@@ -276,7 +302,7 @@ export function checkInput(input: unknown): J {
 
 /// What the sync holds of a station's screens (station/sync.ts): its list as last said, or that it has none to say
 /// (a station from before screens).
-export type Held = { screens: J[]; outdated: boolean };
+export type Held = { screens: J[]; outdated: boolean; browser?: boolean };
 
 /// The viewer's role in the station's workspace allows driving its screens (a read-only member only sees).
 export function mayDrive(inner: Inner, station: string): boolean {
@@ -352,12 +378,20 @@ type Kind = "desktop" | "browser" | "simulator";
 const kindOf = (v: unknown): Kind => (v === "browser" || v === "simulator" ? v : "desktop");
 const kindWords = (kind: Kind, id: string) => t(id.startsWith("android:") ? "core-views.screen.kind.android" : `core-views.screen.kind.${kind}`);
 
-/// What a screen is, in words: its kind, its size, the chat that opened it, who is on it.
+/// What a screen is, in words: its kind, its size or site, the chat that opened it, who is on it (a tab asleep is the
+/// station's own: never said).
 function itemLine(item: J): string {
-  const parts = [kindWords(item.kind, item.id)];
-  if (item.width > 0 && item.height > 0) parts.push(`${item.width}×${item.height}`);
-  if (item.chat) parts.push(t("core-views.screen.openedBy", { title: item.chat.title }));
   const on = names(item.viewers);
+  if (item.userTab === true) {
+    const parts: string[] = [];
+    if (item.site) parts.push(item.site);
+    if (on.length > 0) parts.push(t("core-views.screen.on", { names: listed(on) }));
+    return parts.length > 0 ? parts.join(" · ") : kindWords(item.kind, item.id);
+  }
+  const parts = [kindWords(item.kind, item.id)];
+  if (item.site) parts.push(item.site);
+  else if (item.width > 0 && item.height > 0) parts.push(`${item.width}×${item.height}`);
+  if (item.chat) parts.push(t("core-views.screen.openedBy", { title: item.chat.title }));
   if (on.length > 0) parts.push(t("core-views.screen.on", { names: listed(on) }));
   return parts.join(" · ");
 }
@@ -369,16 +403,14 @@ function lacking(access: J): string | null {
   return missing.length > 0 ? unavailable(missing) : null;
 }
 
-/// The chat a session is in among the viewer's chats of the station (its `chatRows`): the session's own chat over one it
-/// only takes part in; null when the viewer has none with it (archived, another workspace's, not read yet).
+/// The chat a session is in among the viewer's chats of the station (its listed ones): the session's own chat over one it
+/// only takes part in (data.ts chatOfAgent); null when the viewer has none with it (archived, another workspace's, not
+/// read yet).
 export function chatOf(inner: Inner, station: string, session: string): { id: string; title: string; link: string } | null {
-  const rows = inner.data.shared({ topic: "chatRows", station });
-  if (!Array.isArray(rows)) return null;
-  const has = (row: J) => Array.isArray(get(row, "agents")) && (get(row, "agents") as J[]).some((a) => get(a, "key") === session);
-  const row = rows.find((r) => get(r, "session") === session) ?? rows.find(has);
-  const id = get(row, "id");
+  const row = inner.data.chatNamedOfAgent(station, session);
+  const id = row?.id;
   if (typeof id !== "string" || id === "") return null;
-  const title = typeof get(row, "title") === "string" && get(row, "title") !== "" ? (get(row, "title") as string) : t("core-views.screen.someChat");
+  const title = typeof row?.title === "string" && row.title !== "" ? row.title : t("core-views.screen.someChat");
   const addr = StationAddr.parse(station);
   return { id, title, link: `/w/${encode(addr.workspace)}/s/${encode(addr.station)}/chats/${encode(id)}` };
 }
@@ -406,14 +438,21 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
     const chat = typeof by === "string" && by !== "" ? chatOf(inner, station, by) : null;
     const controlledBy = names(get(s, "controlledBy"));
     const views = viewsOf(inner, get(s, "views"), control);
+    const site = typeof get(s, "site") === "string" && get(s, "site") !== "" ? (get(s, "site") as string) : null;
     const item = {
       id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy, ...(views.length > 0 ? { views } : {}), ...(get(s, "peek") === true ? { peek: true } : {}),
+      // A page a person opened in the station's persistent browser profile (`screen.openBrowser`), put to sleep while idle.
+      ...(get(s, "userTab") === true ? { userTab: true } : {}),
+      ...(get(s, "sleeping") === true ? { sleeping: true } : {}),
+      ...(site !== null ? { site } : {}),
       // An agent drives it now (its view among the screen's people, AGENT).
       ...(controlledBy.some((n) => n.startsWith(AGENT)) ? { agent: true } : {}),
       // Closed from here by a member who may drive it (a read-only one only looks).
       ...(get(s, "closable") === true && control ? { closable: true } : {}),
       // Its apps' logs and restart, for one who may drive it (a simulator's).
       ...(get(s, "debug") === true && control ? { debug: true } : {}),
+      // Takes an address (`screen.openUrl`): a browser tab or a simulator, for one who may drive it.
+      ...((get(s, "openUrl") === true || get(s, "debug") === true) && control ? { openUrl: true } : {}),
       // Where a file to install on it goes up to (`screen.install`).
       ...(typeof get(s, "install") === "string" && control ? { install: get(s, "install") } : {}),
       // It folds (an iPhone Duo): `screen.input` {t: "pose", name}.
@@ -433,7 +472,7 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
   });
   // The machine's own display (`desktop`) first: what a chat's screen button opens, at the head of every list of them.
   screens.sort((a, b) => Number(b.id === DESKTOP) - Number(a.id === DESKTOP));
-  return { screens, outdated: false, control, known: true };
+  return { screens, outdated: false, control, known: true, ...(held.browser === true ? { browser: true } : {}) };
 }
 
 /// What a link to one of a station's screens shows in a message (the `screenCard` topic): the screen as its station's
@@ -474,6 +513,7 @@ type Open = {
   screen: string;
   ack(ts: number): void;
   keyframe(): void;
+  sound(on: boolean): void;
   input(input: J): void;
   control(on: boolean): void;
   bounds(maxWidth: number, maxHeight: number, quality: ScreenQuality | null, fps: ScreenFps | null): void;
@@ -534,14 +574,17 @@ export function install(): void {
     const c = (call as Extract<import("./core/calls.ts").Call, { kind: "screen" }>).call;
     if (c.kind === "view") return view(inner, c, progress, at, ctx);
     const target = openIn(inner).get(key(at[0], c.view));
-    // A frame acknowledged, a key frame asked or a part looked at, after the view went: nothing to do.
-    if (!target) return c.kind === "ack" || c.kind === "keyframe" || c.kind === "look" ? Effect.succeed(null) : Effect.fail(new CoreError("not_found", t("core-misc.screen.closed")));
+    // A frame acknowledged, a key frame asked, its sound switched or a part looked at, after the view went: nothing to do.
+    if (!target) return c.kind === "ack" || c.kind === "keyframe" || c.kind === "sound" || c.kind === "look" ? Effect.succeed(null) : Effect.fail(new CoreError("not_found", t("core-misc.screen.closed")));
     switch (c.kind) {
       case "ack":
         target.ack(c.ts);
         break;
       case "keyframe":
         target.keyframe();
+        break;
+      case "sound":
+        target.sound(c.on);
         break;
       case "input":
         target.input(c.input);
@@ -581,6 +624,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     // Its display's scale as the stream last said (a Windows station's desktop, to a view that drives it).
     let displayScale: { percent: number; recommended: number; steps: number[] } | null = null;
     let displaySize: { width: number; height: number; modes: Size[] } | null = null;
+    let canOpenUrl: boolean | null = null;
     let driving: string[] | null = null;
     // Every view on it as the view's own stream says (else as the station's list does).
     let onViews: unknown = null;
@@ -594,6 +638,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     // The stream open now: where acks, key frames and input go (in order, one writer); null between streams.
     let out: Queue.Queue<Uint8Array> | null = null;
     let reopen: Deferred.Deferred<void> | null = null;
+    // Done as the station's list changes, while the view waits for a tab this device is opening to be listed.
+    let relisted: Deferred.Deferred<void> | null = null;
 
     const listedItem = (): J => {
       const held = inner.stations.screens(station);
@@ -603,7 +649,12 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       const item = listedItem();
       if (state.title === "" && typeof get(item, "title") === "string") state.title = get(item, "title");
       if (state.kind === undefined && typeof get(item, "kind") === "string") state.kind = get(item, "kind");
+      if (state.site === undefined && typeof get(item, "site") === "string" && get(item, "site") !== "") state.site = get(item, "site");
+      if (state.userTab === undefined && get(item, "userTab") === true) state.userTab = true;
       state.debug = get(item, "debug") === true && may;
+      const openUrl = state.control && (canOpenUrl ?? (get(item, "openUrl") === true || get(item, "debug") === true));
+      if (openUrl) state.openUrl = true;
+      else delete state.openUrl;
       state.install = may && typeof get(item, "install") === "string" ? get(item, "install") : "";
       state.poses = get(item, "poses") === true && may;
       state.panels = get(item, "panels") ?? [];
@@ -621,7 +672,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       const parts = [mode];
       if (!state.control && controllers.length > 0) parts.push(t("core-views.screen.driving", { names: listed(controllers) }));
       if (state.control) {
-        // Driving it: an agent's input waits while a person drives (station/src/tools/computer.ts); another person's not.
+        // Driving it: an agent's input waits while a person drives (station/src/tools/computer.ts); another person drives
+        // beside it only on a station from before one drove at a time (hub.ts `drive`).
         const agents = drivers.filter((n) => n.startsWith(AGENT)).map(personShown);
         const people = drivers.filter((n) => !n.startsWith(AGENT));
         if (agents.length > 0) parts.push(t("core-views.screen.paused", { names: listed(agents) }));
@@ -668,6 +720,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     type Look = { region: Region | null; maxWidth: number; maxHeight: number };
     const whole: Look = { region: null, maxWidth: 0, maxHeight: 0 };
     let looking: Look = whole;
+    // The view's sound as the page last said (`screen.sound`): off, each stream is told so as it opens.
+    let soundOn = c.sound;
     let asked = JSON.stringify(whole);
     const looks = yield* Queue.unbounded<void>();
     const ask = () => {
@@ -695,9 +749,15 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       screen: c.screen,
       ack: (ts) => write(ackFrame(ts)),
       keyframe: () => write(keyframeFrame()),
-      // Only while driving: what the view only looks at takes no input.
+      // Said to each stream as it opens too, while off.
+      sound: (on) => {
+        if (soundOn === on) return;
+        soundOn = on;
+        write(soundFrame(on));
+      },
+      // Only while driving: what the view only looks at takes no input (but which of a desktop's windows it shows).
       input: (input) => {
-        if (state.control) write(inputFrame(input));
+        if (state.control || input.t === "window") write(inputFrame(input));
       },
       clipboard: (type, data, paste) => {
         if (!state.control || out === null) return new CoreError("invalid_params", t("core-misc.screen.notDriving"));
@@ -729,7 +789,10 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
         bounds = next;
         if (reopen !== null) Deferred.doneUnsafe(reopen, Effect.void);
       },
-      listed: () => tell(),
+      listed: () => {
+        tell();
+        if (relisted !== null) Deferred.doneUnsafe(relisted, Effect.void);
+      },
     });
     yield* Effect.addFinalizer(() => Effect.sync(() => open.delete(name)));
 
@@ -742,6 +805,15 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       tell();
       return null;
     }
+    // A tab this device is opening (`screen.openBrowser` with its id): the view is there at once, connecting, while its
+    // station makes it; opened once the station lists it (gone, if it refused it).
+    for (;;) {
+      relisted = yield* Deferred.make<void>();
+      if (get(listedItem(), "opening") !== true) break;
+      tell();
+      yield* Deferred.await(relisted);
+    }
+    relisted = null;
     // A view is opened only of a screen the station listed: not listed as it was held, its
     // list is read again first.
     if (listedItem() === undefined) yield* Effect.ignore(inner.stations.readScreens(station), { log: "Unhandled", message: "screens read" });
@@ -788,6 +860,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
           // A new stream frames the whole screen: the part looked at, asked of it at once.
           asked = JSON.stringify(whole);
           ask();
+          if (!soundOn) write(soundFrame(false));
           yield* Effect.addFinalizer(() => Effect.sync(() => (out = out === queue ? null : out)));
           // Its writer goes with the stream (the attempt's scope).
           yield* Effect.forkScoped(Effect.ignore(Effect.forever(Effect.flatMap(Queue.take(queue), (bytes) => socket.send.write(bytes))), { log: "Unhandled", message: "screen input sent" }));
@@ -806,6 +879,11 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
           const tapped = socket.tap === undefined ? false : yield* socket.tap(at[1]);
           const reader = new FrameReader();
           let seen = false;
+          let pcm = false;
+          // The way to the station replaced (its pings went unanswered, a new link answered beside it: mesh.ts
+          // `#suspect`): opened again on the new one, this one kept meanwhile.
+          const wire = inner.stations.requests.wire;
+          if (wire.replaced) yield* Effect.forkScoped(Effect.andThen(wire.replaced(addr), Effect.sync(() => Deferred.doneUnsafe(again, Effect.void))));
           for (;;) {
             const next = yield* Effect.raceFirst(
               Effect.map(Effect.result(socket.reply.body.take), (r) => ({ r }) as const),
@@ -851,9 +929,12 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 }
                 if (!tapped) progress({ frame: { key: frame.video.key, ts: frame.video.ts } }, frame.video.data);
               } else if ("audioConfig" in frame) {
-                progress({ audioConfig: frame.audioConfig });
+                // PCM is said to the page as it is; Opus only what taps the view decodes (IrohEndpoint `opus`): here it
+                // plays none.
+                pcm = frame.audioConfig.codec === "pcm_s16le";
+                if (pcm) progress({ audioConfig: frame.audioConfig });
               } else if ("audio" in frame) {
-                progress({ audio: { ts: frame.audio.ts } }, frame.audio.data);
+                if (pcm && frame.audio.data.length === 3840) progress({ audio: { ts: frame.audio.ts } }, frame.audio.data);
               } else if ("clipboard" in frame) {
                 // A copy made on the screen, for the page to put on this device's clipboard (only while driving it).
                 if (!state.control) continue;
@@ -869,6 +950,10 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (typeof s.title === "string" && s.title !== "") state.title = s.title;
                 // How a simulator's picture is turned: its case is drawn turned with it.
                 if (s.turn === 0 || s.turn === 1 || s.turn === 2 || s.turn === 3) state.turn = s.turn;
+                // A desktop's windows (the viewer's tabs), and the one shown alone (none: the whole display).
+                if (Array.isArray(s.windows)) state.windows = windowsSaid(s.windows);
+                if (s.window === null) delete state.window;
+                else if (typeof s.window === "number" && Number.isInteger(s.window) && s.window > 0) state.window = s.window;
                 // The login field in focus, while driving it: this device's password manager may fill it (`fill`).
                 if (s.login === null) delete state.login;
                 else if (state.control && isObject(s.login) && typeof s.login.host === "string" && s.login.host !== "" && s.login.host.length <= 253 && (s.login.field === "username" || s.login.field === "password")) {
@@ -884,20 +969,54 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                     state.passkey = { id: p.id, host: p.host, rpId: p.rpId, clientData: p.clientData, allow, userVerification: typeof p.userVerification === "string" ? p.userVerification : "preferred" };
                   }
                 }
+                // What the machine does not let the station do (a Mac without the Accessibility grant): no input taken
+                // whatever a station from before it said, and not made to only look from elsewhere either (nothing taken
+                // it, its 控制 kept for when the grant is there).
+                const lacks = isObject(s.access) && s.access.control === false;
                 // Whether this view's input is taken, as the station says (a read-only member's is not).
-                if (typeof s.control === "boolean") state.control = s.control && control;
+                if (typeof s.control === "boolean") state.control = s.control && control && !lacks;
                 // Made to only look from elsewhere (`screen.watchOnly`): it stays so when the view opens again.
-                if (s.control === false && control) {
+                if (s.control === false && control && !lacks) {
                   wanted = false;
                   state.watchOnly = (state.watchOnly ?? 0) + 1;
-                  if (bounds.taken) {
-                    bounds = { ...bounds };
-                    delete bounds.taken;
+                  // Taken by another (a person's 接管, an agent asked to): who, the viewer's own other device unnamed.
+                  if (typeof s.takenBy === "string") {
+                    state.taken = (state.taken ?? 0) + 1;
+                    state.takenBy = mine.includes(s.takenBy.toLowerCase()) ? [] : [personShown(s.takenBy)];
                   }
+                }
+                // Its person's ask spent once a stream drives (or is refused): the view's own reopens after it ask as any.
+                if (typeof s.control === "boolean" && control && bounds.taken) {
+                  bounds = { ...bounds };
+                  delete bounds.taken;
+                }
+                // Taken from people's views as it opened (their own other devices aside): said once.
+                const from = s.control === true && control && !lacks ? othersOf(names(s.took), mine).map(personShown) : [];
+                if (from.length > 0) {
+                  state.took = (state.took ?? 0) + 1;
+                  state.tookFrom = from;
                 }
                 if (!state.control) {
                   delete state.login;
                   delete state.passkey;
+                }
+                if (typeof s.site === "string") {
+                  if (s.site !== "" && s.site.length <= 253) state.site = s.site;
+                  else delete state.site;
+                } else if (s.site === null) delete state.site;
+                // (its whole address, as a browser's bar shows it: the station says none longer than 2048)
+                if (typeof s.address === "string") {
+                  if (s.address !== "" && s.address.length <= 2048) state.address = s.address;
+                  else delete state.address;
+                }
+                if (typeof s.userTab === "boolean") {
+                  if (s.userTab) state.userTab = true;
+                  else delete state.userTab;
+                }
+                if (typeof s.openUrl === "boolean") canOpenUrl = s.openUrl;
+                if (state.control && typeof s.childScreen === "string" && s.childScreen !== "" && s.childScreen.length <= 200) {
+                  state.childOpened = (state.childOpened ?? 0) + 1;
+                  state.childScreen = s.childScreen;
                 }
                 const access = accessOf(s.access);
                 if (access) state.access = access;

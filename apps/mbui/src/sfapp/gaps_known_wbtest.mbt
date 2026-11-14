@@ -20,7 +20,9 @@
 /// other screens have; eight fewer in each with a diff's line as far in at its end as its mark at its start, and the
 /// way to allow banners as far in from both its ends, Medium's tape's panels measured where they stand; 56 fewer with
 /// the navigation bar's ends equally inset, including the newly swept 共享调试 grants pages; six fewer with the files'
-/// page starting in its list, the columns' rows no longer at the page's edge on those screens).
+/// page starting in its list, the columns' rows no longer at the page's edge on those screens; rule 5's one more in each
+/// with a request for the phone waiting swept, chat-phone-lacks on the tablet: its card and a login's above it short of
+/// the others' edge, as a request card stood on main, unswept).
 let gaps_known : Map[String, Int] = {
   "zh rule 1": 0,
   "zh rule 2": 0,
@@ -30,8 +32,8 @@ let gaps_known : Map[String, Int] = {
   "en rule 2": 0,
   "en rule 3": 0,
   "en rule 4": 10,
-  "zh rule 5": 0,
-  "en rule 5": 0,
+  "zh rule 5": 1,
+  "en rule 5": 1,
   "zh rule 6": 0,
   "en rule 6": 0,
   "zh rule 7": 0,
@@ -57,16 +59,16 @@ test "the spacing sweep counts row and heading alignment faults" {
 ///|
 /// What is off its bar in `lang`'s faults `gaps` (each `at: rule n: …`), None where each rule keeps to it.
 fn gaps_wrong(lang : String, gaps : Array[String]) -> String? {
-  let counts : Map[String, Int] = {}
+  let counts : Map[String, Int] = Map([])
   let off : Array[String] = []
   // Take the rule from each fault, so adding a rule to gap_faults cannot silently leave it out of this sweep.
   for f in gaps {
     match f.find(": rule ") {
       Some(start) => {
-        let rest = f.view(start_offset=start + 2).to_owned()
+        let rest = f.exact_view(start=start + 2).to_owned()
         match rest.find(": ") {
           Some(end) => {
-            let key = "\{lang} " + rest.view(end_offset=end).to_owned()
+            let key = "\{lang} " + rest.exact_view(end=end).to_owned()
             counts[key] = counts.get(key).unwrap_or(0) + 1
           }
           None => off.push("unrecognized spacing fault: \{f}")

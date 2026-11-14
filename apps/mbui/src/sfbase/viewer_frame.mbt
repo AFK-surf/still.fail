@@ -110,6 +110,7 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
       @sf.native_over_act("source", @sf.t(if v.source { "web-main.preview.rendered" } else { "web-main.preview.source" }), "code", fn() {
         v.set_source(!v.source)
       })
+      vf_native_share(v)
       if !downloading(v.download(src)) {
         @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() { v.ask_save(c) })
       }
@@ -118,10 +119,10 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   }
   let z = v.zoom
   if !z.fitted {
-    @sf.native_over_act("fit", @sf.t("web-main.preview.fitKey"), "shrink", fn() { z.reset() })
+    @sf.native_over_act("fit", @sf.t("web-main.preview.fitKey"), "shrink", fn() { z.reset(at=c.moment()) })
   } else if z.fit() < 1.0 {
     @sf.native_over_act("actual", @sf.t("web-main.preview.actualKey"), "expand", fn() {
-      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
+      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true, at=c.moment())
     })
   }
   match v.bytes.get() {
@@ -137,6 +138,7 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     }
     None => ()
   }
+  vf_native_share(v)
   vf_native_download(v, c, src, v.bytes.get() is Some(_) || (v.told_of() && !v.asked))
 }
 
@@ -171,6 +173,14 @@ fn vf_native_media(v : Viewer, c : @ui.Ctx, src : Source, width : Double) -> Uni
 }
 
 ///|
+/// 分享 among the actions in the system's bars, on a phone (shares_out), once it is here or told of (read whole first).
+fn vf_native_share(v : Viewer) -> Unit {
+  if shares_out() && (v.bytes.get() is Some(_) || (v.told_of() && !v.asked)) {
+    @sf.native_over_act("share", @sf.t("android-misc.drive.share"), "share", fn() { v.ask_share() })
+  }
+}
+
+///|
 /// Download among the actions in the system's bars, where there is something to keep (`there`) and it is not on its
 /// way already: into the photo album for a picture or a film on a phone, said so.
 fn vf_native_download(v : Viewer, c : @ui.Ctx, src : Source, there : Bool) -> Unit {
@@ -191,18 +201,28 @@ let vf_tabs_item : Double = 58.0
 
 ///|
 /// A chat's text or Markdown open in its preview, read in the desktop's reader (FilePreview.tsx hands it to the same
-/// Reader): what the preview read of it given to the reader (its place not kept: a chat's file is no drive's).
+/// Reader): what the preview read of it given to the reader (its place not kept: a chat's file is no drive's). In a tab
+/// beside a chat, the tab's reader (@sf.reader's `beside`: its tools the tab's, viewer_tab.mbt).
 pub fn vf_read(vw : Viewer, c : @ui.Ctx, src : Source, b : Bytes) -> Unit {
   let v = vw
   let file = @sf.blob_file(b, v.file.name, v.file.size, mime=v.mime, save=fn() { v.ask_save(c) })
   @sf.reader(
     c,
-    "chat\n" + v.id(),
+    v.read_key(),
     file,
     markdown=v.shown_kind() == Some(KMarkdown),
     back_label=v.desk_back(src),
     on_back=fn() { v.shut(c) },
+    beside=v.beside,
+    move_beside=if !v.beside && beside_offered(v.file.path, v.file.name) { Some(fn() { v.move_beside() }) } else { None },
   )
+}
+
+///|
+/// What its reader reads it as (@sf.reader's key): the whole window's, or a tab's beside a chat, each its own place in
+/// it and its own panels, the two open at once (全屏 from the tab).
+pub fn Viewer::read_key(self : Viewer) -> String {
+  (if self.beside { "beside\n" } else { "chat\n" }) + self.id()
 }
 
 ///|

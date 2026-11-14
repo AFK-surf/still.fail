@@ -7,6 +7,7 @@ import { hasLegacyLoginCards, installLegacyLoginCards } from "./legacy-login-car
 import { hasLegacyEdits, hasOldEditIndex, installLegacyEdits, legacyEditLatest, legacyEditsUseOldIndex, usesLegacyEdits } from "./legacy-edits-build.ts";
 import { repairWidgetSourceBeforeAdd, widgetSourceBeforeAddNeedsRepair } from "./widget-sources.ts";
 import { COMPACTED_FROM, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
+import { incrementalTotalsDecided } from "./usage-detail.ts";
 
 /// Bump on a change a station before it cannot open. 12 is the Rust station's, brought up on open (store.ts
 /// `#upgradeFrom12`); a database of another version is refused.
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   runtime TEXT NOT NULL,
   profile TEXT NOT NULL,
   profile_pinned INTEGER NOT NULL DEFAULT 0,
+  profiles TEXT,
   model TEXT,
   effort TEXT,
   fast INTEGER,
@@ -300,6 +302,28 @@ CREATE TABLE IF NOT EXISTS closed_cards (
   at INTEGER NOT NULL,
   PRIMARY KEY (thread, n)
 );
+-- What a person chose on a card with an option that closes it (closeCard): no message is sent and its agent is not
+-- woken, so the agent (session, the card's author) is told with what it is next handed (told_at). Kept after, for
+-- chat_history. ts: the card's post.
+CREATE TABLE IF NOT EXISTS card_choices (
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  session TEXT NOT NULL,
+  ts TEXT,
+  viewer TEXT NOT NULL,
+  option TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  told_at INTEGER,
+  PRIMARY KEY (thread, n)
+);
+CREATE INDEX IF NOT EXISTS card_choices_untold ON card_choices (session, at) WHERE told_at IS NULL;
+-- A chat moved here from a station retired (replica/retire.ts): what its agent is told of it, once, with what it is
+-- next handed (told_at), never woken for it.
+CREATE TABLE IF NOT EXISTS moved_notes (
+  session TEXT PRIMARY KEY,
+  text TEXT NOT NULL,
+  told_at INTEGER
+);
 -- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
 -- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same. The one record
 -- of it: a chat's usage and the usage page are both added up from here (usage/module.ts, read/usage.ts). calls: how
@@ -418,6 +442,18 @@ CREATE TABLE IF NOT EXISTS session_usage (
   session TEXT PRIMARY KEY,
   usage TEXT NOT NULL
 );
+-- The highest build each device a lock here names said as it asked (by its id in the lock; -1: none said) and when it
+-- was last seen, unix seconds (mesh/device-builds.ts): written only as the build rises or the day changes.
+CREATE TABLE IF NOT EXISTS device_builds (
+  id TEXT PRIMARY KEY,
+  build INTEGER NOT NULL,
+  at INTEGER NOT NULL
+);
+-- Since when the station keeps them (its first start with them), unix seconds: one row.
+CREATE TABLE IF NOT EXISTS device_builds_since (
+  one INTEGER PRIMARY KEY CHECK (one = 1),
+  at INTEGER NOT NULL
+);
 `;
 
 /// Each message as it reads now: its latest edit's words, files and quotes.
@@ -503,7 +539,7 @@ export function hasRuntimeOrderIndex(db: DatabaseSync): boolean {
 /// add_archive_columns: columns archiving came with, added to a database made before them. When they come, each
 /// session's first chat on the page is taken as its own, and chats of sessions archived then as archived with them.
 export function addArchiveColumns(db: DatabaseSync): void {
-  for (const [column, kind] of [["archived_by", "TEXT"], ["shown_at", "INTEGER"], ["cwd", "TEXT"], ["fast", "INTEGER"], ["afresh", "INTEGER"], ["context", "INTEGER"], ["context_before", "INTEGER"]]) {
+  for (const [column, kind] of [["archived_by", "TEXT"], ["shown_at", "INTEGER"], ["cwd", "TEXT"], ["fast", "INTEGER"], ["afresh", "INTEGER"], ["context", "INTEGER"], ["context_before", "INTEGER"], ["profiles", "TEXT"]]) {
     if (!has(db, "sessions", column!)) db.exec(`ALTER TABLE sessions ADD COLUMN ${column} ${kind}`);
   }
   // Came with waiting's limit, after the turns table.
@@ -681,7 +717,8 @@ export function addLeftColumn(db: DatabaseSync): void {
   if (!has(db, "thread_sessions", "left_at")) db.exec("ALTER TABLE thread_sessions ADD COLUMN left_at INTEGER");
 }
 
-/// The column a job's sandbox size came with (jobs.size, agents/sandbox.ts).
+/// The column a job's sandbox size came with (jobs.size); since sandboxes are station_task's targets, where a job runs in one, as JSON
+/// (agents/sandbox.ts `SandboxPlace`).
 export function addSizeColumn(db: DatabaseSync): void {
   if (!has(db, "jobs", "size")) db.exec("ALTER TABLE jobs ADD COLUMN size TEXT");
 }
@@ -765,6 +802,7 @@ export function addUsageTotals(db: DatabaseSync): void {
       db.exec(old ? "CREATE TABLE usage_totals_incremental (id INTEGER PRIMARY KEY CHECK (id = 1)); INSERT INTO usage_totals_incremental VALUES (1);" : USAGE_TOTALS_NORMAL);
     }
     db.exec("COMMIT");
+    incrementalTotalsDecided(db);
   } catch (e) {
     db.exec("ROLLBACK");
     throw e;

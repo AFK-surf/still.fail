@@ -87,7 +87,7 @@ pub(all) struct Wide {
   /// show; which of its panels is in use (kept while the frame is off the tape: a place with no sidebar, another
   /// layout; the sidebar at first); one asked over where no frame was being built (back); the chat shown last frame and
   /// the one whose side panel was open then (its panel opening brings it over)
-  mut tape : Bool
+  tape : @signals.Signal[Bool]
   tape_at : @signals.Signal[TapePane]
   tape_ask : @signals.Signal[TapePane?]
   tape_chat : @signals.Signal[String]
@@ -111,11 +111,12 @@ pub(all) struct Wide {
 ///|
 /// The panels on the tape (laid out Medium), from its start: the rail and the sidebar, the page, a chat's side panel
 /// while it is open.
+#derive(Eq, Debug)
 pub(all) enum TapePane {
   Side
   Page
   Panel
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub let wide : Wide = {
@@ -148,7 +149,7 @@ pub let wide : Wide = {
   attention_open: @signals.signal(false, same=fn(a, b) { a == b }),
   jobs_open: @signals.signal(false, same=fn(a, b) { a == b }),
   keys_open: @signals.signal(false, same=fn(a, b) { a == b }),
-  tape: false,
+  tape: @signals.signal(false, same=fn(a, b) { a == b }),
   tape_at: @signals.signal(Side, same=fn(a, b) { a == b }),
   tape_ask: @signals.signal(None, same=fn(a, b) { a == b }),
   tape_chat: @signals.signal("", same=fn(a, b) { a == b }),
@@ -212,6 +213,7 @@ fn wide_reset() -> Unit {
   wide.page_from = 0.0
   wide.landed.set("")
   wide.rail_menu.set(None)
+  rail_menu_drawn.val = None
   wide.rail_drag.set(None)
   attention_from.val = None
   workspace_add_from.val = None
@@ -220,7 +222,7 @@ fn wide_reset() -> Unit {
   wide.attention_open.set(false)
   wide.jobs_open.set(false)
   wide.keys_open.set(false)
-  wide.tape = false
+  wide.tape.set(false)
   wide.tape_at.set(Side)
   wide.tape_ask.set(None)
   wide.tape_chat.set("")
@@ -280,7 +282,7 @@ pub fn shown_in_page(p : Page) -> Bool {
 /// sidebar is never put away but by a press on the page beside it or what is chosen to be shown in the page
 /// (show_page; asked, 2026-10-24: it went away unasked).
 pub fn sidebar_toggle() -> Unit {
-  if !wide.tape {
+  if !wide.tape.get() {
     wide.folded.set(!wide.folded.get())
   }
 }
@@ -320,7 +322,7 @@ pub let page_beside_least : Double = 360.0
 /// the tape (laid out Medium: the sidebar always whole there, the page beside it brought over instead); or kept so for
 /// the page's room (page_beside_least).
 pub fn side_folded() -> Bool {
-  (wide.folded.get() && !wide.tape) || wide.crowded
+  (wide.folded.get() && !wide.tape.get()) || wide.crowded
 }
 
 ///|
@@ -426,7 +428,7 @@ fn dock_side_at(
     box: (inside + rail, top + f.mt, f.side_w, dock_h),
     block: (inside, top + f.mt, dock_w, dock_h),
     // (on the tape, open, a panel of its own: the ground it floats on; else where the move has its ground)
-    ground: if wide.tape && !bar { dock_ground(bar) } else { f.ground },
+    ground: if wide.tape.get() && !bar { dock_ground(bar) } else { f.ground },
     shadow: (f.blur, f.fall, @sf.alpha(@sf.theme().p.shadow, f.shade)),
     held_w: f.side_w,
     links,
@@ -600,7 +602,7 @@ fn side_list_at(at : SideAt) -> @sf.ListAt {
 /// Where the sidebar's lists stand as the frame draws its old views now: in the tape's side column while the frame is
 /// the tape (wide.tape: laid out Medium, with a sidebar to show), else in a side column beside the page.
 fn side_at() -> @sf.ListAt {
-  if wide.tape {
+  if wide.tape.get() {
     Tape
   } else {
     Side
@@ -612,7 +614,7 @@ fn side_at() -> @sf.ListAt {
 /// from the page) a panel's corners, the tape's sidebar's; on its way between, as round as its move has it; the closed
 /// bar its own; each in the window's the window's less its 6 from it where it follows it.
 fn dock_radius(bar : Bool, moving : Bool, f : FoldLook) -> @ui.Radius? {
-  if wide.tape && !bar {
+  if wide.tape.get() && !bar {
     Some(@sf.corners_radius(tape_pane_corners(Side, false)))
   } else if moving && @sf.native_card_corner() <= 0.0 {
     Some(@sf.radius_between(f.corner))
@@ -628,7 +630,7 @@ fn dock_radius(bar : Bool, moving : Bool, f : FoldLook) -> @ui.Radius? {
 /// ground it floats on (apart_ground), as the lists' bands on it are: one ground under all of it, whatever the theme's
 /// surface is on this system. The rail's marks are on discs of it (rail_hung).
 fn dock_ground(bar : Bool) -> Int64 {
-  if bar || wide.tape {
+  if bar || wide.tape.get() {
     apart_ground()
   } else {
     @sf.theme().p.sidebar
@@ -650,11 +652,13 @@ fn side_brand_h(bar : Bool, top : Double) -> Double {
   if bar {
     0.0
   // (followed: as the window's buttons come into the app's top row or leave it, what reads it told)
+  } else if @ui.window_keys_left_now() && wide.tape.get() {
+    tape_brand_under_buttons()
   } else if @ui.window_keys_left_now() {
     dmax(side_top_inset, @ui.window_points_to_content_now(side_top_inset))
   } else if side_full_height(bar) {
     side_top_web + top
-  } else if wide.tape {
+  } else if wide.tape.get() {
     side_top_web
   } else {
     // (beside the rail's first place, in the window's corner: its row as far over that place's 38 as ever, the bell and
@@ -678,7 +682,7 @@ let side_over_rail : Double = 3.0
 /// there is never empty (land: popped, a new chat would come again), so nothing to go back to.
 pub fn wide_back(src : Source) -> (() -> Unit)? {
   let over_all = app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_))
-  if wide.tape && !over_all {
+  if wide.tape.get() && !over_all {
     match tape_back_to() {
       Some(p) => Some(fn() { wide.tape_ask.set(Some(p)) })
       None =>
@@ -690,6 +694,8 @@ pub fn wide_back(src : Source) -> (() -> Unit)? {
                 @sfbase.go_place("chats") |> ignore
                 wide.landed.set("")
               })
+            } else if wide.tape_ask.get() == Some(Page) {
+              Some(fn() { wide.tape_ask.set(None) })
             } else {
               None
             }
@@ -743,11 +749,34 @@ pub fn tape_shows_right() -> Double {
 
 ///|
 /// The window's buttons in the app's top row (mbui's mac_app.m: 16 from the window's left, centred on its 44, as far
-/// apart as the system has them): from 16, the three 54 across (each 14, 20 apart).
+/// apart as the system has them): from 16, the three 60 across (macOS 27's: each 14, 23 from one's middle to the next's;
+/// measured on the user's screenshot, 2026-11-09).
 let window_buttons_in : Double = 16.0
 
 ///|
-let window_buttons_w : Double = 54.0
+let window_buttons_w : Double = 60.0
+
+///|
+/// How tall each of the window's buttons is (macOS 27's 14) and how high their row is in the app's top row (mbui's
+/// mac_app.m: centred on its first 44).
+let window_buttons_side : Double = 14.0
+
+///|
+let window_buttons_row : Double = 44.0
+
+///|
+/// The sidebar's top row on the tape with the window's buttons in it (side_brand_h): as tall as puts the middle of its
+/// first row, the bell's and 新建对话's (tape_first_row_mid), as far under the buttons as they stand under the panel's
+/// top edge, the bell's icon's top there; the buttons as the host has them on the tape (tape_view: as much lower as the
+/// panel stands under the window's top). The user, 2026-11-09: 中屏侧边栏顶部空太多 (its row stood 44 under the
+/// panel's content, the band the buttons have in a window with no panel, 31 under the buttons).
+fn tape_brand_under_buttons() -> Double {
+  let content_top = bar_in_now() + dock_line
+  let top = @ui.window_points_to_content_now((window_buttons_row - window_buttons_side) / 2.0) + bar_in_now()
+  let bottom = top + @ui.window_points_to_content_now(window_buttons_side)
+  let mid = bottom + (top - content_top) + rail_icon_size / 2.0 - content_top
+  mid - band_new_top - band_row_h() / 2.0
+}
 
 ///|
 /// How wide a panel is on the tape with one beside it, a window `width` wide: what the window leaves in use past what
@@ -834,7 +863,7 @@ fn tape_pull_clamp(at : (Double, Double, Double), p : TapePane, drag : Double) -
 /// taken off, as a phone's are: the page's stack, Ctx::nav_flat's; what is over the whole window put away, the
 /// sidebar's own: wide_back).
 fn tape_back_to() -> TapePane? {
-  if !wide.tape || app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_)) {
+  if !wide.tape.get() || app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_)) {
     return None
   }
   match wide.tape_at.get() {
@@ -860,7 +889,7 @@ fn page_back_pops() -> Bool {
 /// it opens from there, as a phone's page does, pushed over it, Nav::push_over, back coming to it again) rather than in
 /// its place (the sidebar in use, choosing what the page shows; laid out Large, the web's pane).
 pub fn page_goes_on() -> Bool {
-  wide.tape && wide.tape_at.get() != Side
+  wide.tape.get() && wide.tape_at.get() != Side
 }
 
 ///|
@@ -873,7 +902,7 @@ pub fn goes_over(p : Page) -> Bool {
 
 ///|
 /// Whether page `p` is a chat's detail asked as a page, which the frame lays beside its chat in its side panel
-/// (main_page): its history, a service, a file. Opened on the tape, the panel comes over with it (tape_frame: a panel
+/// (beside_follow): its history, a service, a file. Opened on the tape, the panel comes over with it (tape_frame: a panel
 /// opened), not the page, which keeps the chat.
 pub fn laid_beside(p : Page) -> Bool {
   p is (History(_, _, _) | Service(_, _) | PreviewFile(_, _, _, _))
@@ -956,7 +985,7 @@ let frame_gate : @ui.Style = @ui.css("bg=Bg")
 /// aside taken back): where the block's move has got to (side_moves' page-bar), so a bar built of them moves with the
 /// page it is on, its words not jumping ahead of it.
 pub fn page_bar_room() -> (Double, Double, Double, Double) {
-  (wide.bar_pl, if wide.tape { @sf.tape_bar_end(bar_in) } else { @sf.window_end_in(bar_in) }, wide.bar_ml, wide.bar_mr)
+  (wide.bar_pl, if wide.tape.get() { @sf.tape_bar_end(bar_in) } else { @sf.window_end_in(bar_in) }, wide.bar_ml, wide.bar_mr)
 }
 
 ///|
@@ -1023,17 +1052,80 @@ fn land(src : Source, w : Workspace) -> Unit {
     app.nav.push(NewChat)
     return
   }
-  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().snapshot()
-  guard marks.value is Some(_) else { return }
+  guard land_page(w.id, @sfbase.read_now(src)) is Some(page) else { return }
   wide.landed.set(w.id)
-  let chat = field(field(field(marks.value, "workspaces"), w.id), "chat")
+  app.nav.push(page)
+}
+
+///|
+/// The page the chats' place of workspace `ws` lands on with nothing open, the first time it does (land's): the chat
+/// the core's marks say was open last there, else a new chat; None till the marks, asked of `ask`, are read.
+fn land_page(ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Page? {
+  let marks = ask("workspaceMarks", @sfbase.marks_asked())
+  guard marks.value is Some(_) else { return None }
+  let chat = field(field(field(marks.value, "workspaces"), ws), "chat")
   let station = text(chat, "station")
   let key = text(chat, "key")
   if station != "" && key != "" {
-    app.nav.push(Chat({ station, session: key, title: "", station_name: "" }))
+    Some(Chat({ station, session: key, title: "", station_name: "" }))
   } else {
-    app.nav.push(NewChat)
+    Some(NewChat)
   }
+}
+
+///|
+/// What page `p` of workspace `ws` in the wide frame's pane opens on, asked of `ask` (sfbase's opens_answered): a chat
+/// its view (sfbase's chat_opens), a new chat its stations as read (sfpages' new_chat_opens); any other page nothing
+/// waited for. The pane shows a page come on top once it is answered (sfapp's pane_ready), a workspace switched waits
+/// for the page its pane lands on (frame_opens).
+pub fn pane_opens(ws : String, p : Page, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  match p {
+    Chat(r) => @sfbase.chat_opens(r, ask)
+    NewChat => @sfpages.new_chat_opens(ws, ask)
+    _ => true
+  }
+}
+
+///|
+/// What the wide frame (on the tape, 中屏, and off it, 大屏: both make the same panes) shows of workspace `ws` as it
+/// opens with nothing open, asked of `ask`: the rail's (rail_opens), the chats' sidebar's (side_opens), and the page the
+/// pane lands on (land_page) with what that opens on (pane_opens). Whether all of it is answered. A workspace switched
+/// waits for it (sfapp's tape_shell.mbt: sfbase's workspace_switch_node).
+pub fn frame_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  // (come back to a workspace landed on last: a new chat, as land has it)
+  let landed : Page? = if wide.landed.get() == ws { Some(NewChat) } else { land_page(ws, ask) }
+  frame_opens_on(src, ws, landed, ask)
+}
+
+///|
+/// What the wide frame shows of workspace `ws` as it first opens on it with nothing open, asked of `ask`: the page it
+/// lands on (land_page) whether or not it has landed on it yet (frame_opens' before landing: what opens_ahead_node
+/// declared), for what waits for the first screen as it is answered, not as a frame lands the pane (sfapp's
+/// first_page_node).
+pub fn landing_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
+  frame_opens_on(src, ws, land_page(ws, ask), ask)
+}
+
+///|
+/// What the wide frame shows of workspace `ws` with page `landed` in its pane (None: the marks could not say which),
+/// asked of `ask`: frame_opens's, the page the pane shows given (a run that opens on a page already open, not landing).
+pub fn frame_opens_on(
+  src : Source,
+  ws : String,
+  landed : Page?,
+  ask : (String, Map[String, Json]) -> @sfbase.TopicState,
+) -> Bool {
+  let rail = rail_opens(ask)
+  let side = side_opens(src, ws, ask)
+  let pane = match landed {
+    Some(p) => pane_opens(ws, p, ask)
+    // (the marks could not be read: nothing it lands on to wait for)
+    None => ask("workspaceMarks", @sfbase.marks_asked()).error is Some(_)
+  }
+  // (and what the wide frame round them reads as it is first built, asked with it and not waited for: sfbase's
+  // shell_opens)
+  @sfbase.shell_opens(src, ws, ask) |> ignore
+  rail && side && pane
 }
 
 ///|
@@ -1042,18 +1134,14 @@ fn main_page(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  all : Array[Workspace],
-  invited : Bool,
   page : Page,
 ) -> Unit {
   match page {
+    // (its bar the page node's: chat_bar_wide_node)
     Chat(r) => chat_page(c, src, w, r)
-    // an agent's history, asked as a page (a link's `?history=…&entry=…`): on the desktop its chat with the history
-    // open beside it at the entry asked, the page the chat's
-    History(r, key, entry) => {
-      c.tell("history-page/" + key, fn() { history_beside(src, r, key, entry) })
-      chat_page(c, src, w, r)
-    }
+    // an agent's history, asked as a page (a link's `?history=…&entry=…`), and a visualization: never on top here,
+    // their chat put in their place with them beside it as they come on top (service_tab.mbt beside_follow)
+    History(_, _, _) | PreviewFile(_, _, _, _) => ()
     // the chats' list is the sidebar's: nothing open (yet), the page's ground
     Home => ()
     // the settings come to beside their list: its first row's page (settings_frame.mbt settings_landing)
@@ -1071,9 +1159,8 @@ fn main_page(
     Screen(_) | DriveRead(_) | DrivePlay(_) => ()
     // 已归档, none of its chats open beside the list: what it is
     Archived => archive_main(c)
-    // a web service, a visualization opened aside: its chat with it beside it (service_tab.mbt)
-    Service(station, job) => service_beside(c, src, w, station, job)
-    PreviewFile(station, key, path, name) => tab_beside(c, src, w, station, key, file_tab(key, path, name))
+    // a web service: as those above once the station says whose chat runs it; till then nothing, not found said so
+    Service(station, job) => service_beside(c, src, station, job)
   }
 }
 
@@ -1136,7 +1223,7 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   c.after_build("side-kept", fn() {
     wide.kept_w.set(kept_w)
     wide.kept_folded.set(kept_folded)
-    (src.call)("prefs.set", Json::object({ "sidebars": Json::object(said) }), fn(_) {  })
+    (src.call)("prefs.set", Json::object({ "sidebars": Json::object(said) }), @sfbase.answer_unread)
   })
 }
 
@@ -1157,7 +1244,7 @@ fn side_take(src : Source, ws : String) -> Bool {
   let width_key = "\n" + group
   if wide.side_key != key {
     let kept = field(prefs, "sidebars")
-    let parts = text(kept, key).split(",").map(fn(p) { p.to_string() }).collect()
+    let parts = text(kept, key).split(",").map(fn(p) { p.to_owned() }).collect()
     let closed = parts.contains("closed")
     let own = if parts.length() > 0 && parts[0] != "closed" { parts[0] } else { "" }
     let width = match text(kept, width_key) {
@@ -1249,7 +1336,7 @@ let dock_made : Ref[@view.View?] = Ref(None)
 fn block_pointed() -> (Bool, Bool) {
   let within = fn(v : @view.View?) {
     match v {
-      Some(n) if n.alive() => n.pointer_within()
+      Some(n) if n.alive() => n.takes_input() && n.pointer_within()
       _ => false
     }
   }

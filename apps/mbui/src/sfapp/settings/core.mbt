@@ -96,10 +96,13 @@ pub(all) struct Core {
   now : () -> Double
   /// run with MBUI_READONLY=1: what is said in place of an answer sent (a vault request's); "" where answers go
   read_only : String
+  /// whether the workspace's devices are asked for (the source's `asks_devices`: not in a replay of a run from before)
+  devices_on : () -> Bool
 }
 
 ///|
 /// A page of the settings (the ones of these slices).
+#derive(Eq)
 pub(all) enum Route {
   /// settings itself, from the gear
   Home
@@ -136,8 +139,6 @@ pub(all) enum Route {
   Archive
   /// this device's adb lent to a station's agents, by the station's address
   AdbShare(String)
-  /// the person's own lock, from 安全
-  PersonalLock
   /// a new profile on a station (NewProfileScreen), by its address
   NewProfile(String)
   /// an account on several stations (ProfileAccountScreen), by its key in the workspace's profiles
@@ -173,7 +174,7 @@ pub(all) enum Route {
   UsagePrices(Int)
   /// how a chat's agent runs (RunSettingsScreen): its station, its session's key
   RunSettings(String, String)
-} derive(Eq)
+}
 
 ///|
 /// How this build's update stands, as 关于's update row says it (sfbase updates.mbt update_stands): whether a newer
@@ -293,7 +294,7 @@ pub fn error_text(e : Json) -> String {
 
 ///|
 pub fn obj(pairs : Array[(String, Json)]) -> Json {
-  let m : Map[String, Json] = Map::new()
+  let m : Map[String, Json] = Map([])
   for p in pairs {
     m[p.0] = p.1
   }
@@ -350,7 +351,7 @@ pub fn failed_of(core : Core, calls : Array[String], on : Array[(String, String)
 
 ///|
 fn doing_items(core : Core) -> Array[Json] {
-  items((core.topic)("doing", Map::new()).get().value, "doing")
+  items((core.topic)("doing", Map([])).get().value, "doing")
 }
 
 ///|
@@ -360,8 +361,19 @@ fn doing_matches(d : Json, calls : Array[String], on : Array[(String, String)]) 
 }
 
 ///|
+/// What a call's answer says in place of its done words where what it asked is a change of a lock no station took yet:
+/// its `pending` row's sentence (lock-pending.ts: what it does and what it waits for); "" where it carries none. Any
+/// call's answer may carry one: every caller that says how a call ended asks this first (act, adding people, a device
+/// approved face to face).
+pub fn pending_said(answer : Json) -> String {
+  text(field(Some(answer), "pending"), "text")
+}
+
+///|
 /// What a person did, let go on by itself (AppState.act): the call made; failed, `没能<what>：<why>` said (felt as
-/// something refused); gone through, `done` (when there is one) said (felt as something done) and `then` run.
+/// something refused); gone through, `done` (when there is one) said (felt as something done) and `then` run. Answered
+/// with a change of a lock no station took yet (its `pending` row: lock-pending.ts), that row's sentence is said in
+/// `done`'s place, whatever the caller's words, with nothing felt: it is not done yet, and says what it waits for.
 pub fn act(
   core : Core,
   what : String,
@@ -373,9 +385,13 @@ pub fn act(
   (core.call)(name, params, fn(r) {
     match r {
       Ok(v) => {
-        if done != "" {
-          (core.say)(done)
-          @ui.haptic(Confirm)
+        match pending_said(v) {
+          "" =>
+            if done != "" {
+              (core.say)(done)
+              @ui.haptic(Confirm)
+            }
+          waits => (core.say)(waits)
         }
         then(v)
       }
@@ -403,7 +419,10 @@ pub fn workspace_view(core : Core, here : Here) -> Read {
 }
 
 ///|
-/// The workspace's stations (`stations`: StationView).
+/// The workspace's stations as a list's rows (`stations`: each one's mark, name, how it is, its machine's meters, how
+/// many agents run on it, its drive), asked one way wherever a list shows them, so the core is asked them once. What a
+/// row does not carry is one station's page (station_of) or a part of its overview (station_part): a list never holds
+/// each station whole (the user, 2026-11-10: only what the UI shows or may show is subscribed to).
 pub fn stations_of(core : Core, here : Here) -> Read {
   (core.topic)("stations", { "scope": str(here.workspace) }).get()
 }
@@ -454,7 +473,7 @@ pub fn workspace_of(address : String) -> String {
 ///|
 /// The workspace `id` and the account it is reached through, from the `workspaces` topic (AccountWorkspaces).
 pub fn here_of(core : Core, id : String, name : String) -> Here {
-  let ws = (core.topic)("workspaces", Map::new()).get()
+  let ws = (core.topic)("workspaces", Map([])).get()
   match ws.value {
     Some(Array(accounts)) =>
       for a in accounts {
@@ -519,6 +538,8 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  browser_tabs_seen.clear()
+  tabs_made.val = 0
   page_rows.clear()
   page_keys.clear()
   vault_ask_reset()
@@ -535,7 +556,7 @@ pub fn reset() -> Unit {
   connects_mine.val = false
   chosen.clear()
   builtin_open.clear()
-  panels_core.val = None
+  panels_core.set(None)
   frame_core.val = None
   at_root.val = false
   root_top.val = 0.0
@@ -565,11 +586,6 @@ pub fn reset() -> Unit {
   adding.order.clear()
   adding.picked.set("")
   adding.serial.set(0)
-  mark_pick.emojis = false
-  mark_pick.color = ""
-  mark_pick.serial = 0
-  mark_pick.asking = false
-  mark_pick.reading = ""
   mark_pictures.val = 0
   env_form.val = 0
   versions_state.updating.clear()
@@ -606,7 +622,7 @@ pub fn reset() -> Unit {
 /// Whether every frame makes `r`'s page once as nodes of the window's tree (narrow_made, pane_made, tape_made), as a page
 /// of the stack and as a place: its old view gone.
 pub fn made_once(r : Route) -> Bool {
-  r is (About | Changelog | Memories | Memory(_) | MemoryDoc(_, _, _) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion | Permissions | AutoPolicy(_) | Appearance | LocalStation | Security | SecurityOpen | Workspace | VaultItems | Connects(_) | Connect(_, _) | Profile(_, _) | NewProfile(_))
+  r is (About | Changelog | Memories | Memory(_) | MemoryDoc(_, _, _) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion | Permissions | AutoPolicy(_) | Appearance | LocalStation | Security | SecurityOpen | Workspace | VaultItems | Connects(_) | Connect(_, _) | Profile(_, _) | NewProfile(_) | Station(_))
 }
 
 ///|
@@ -656,7 +672,9 @@ pub fn route_of(name : String) -> Route? {
           match what {
             "station" => Some(Station(arg))
             "adb" => Some(AdbShare(arg))
-            "personal-lock" => Some(PersonalLock)
+            // (the person's own lock's page of before: the devices that approve phone debugging are 共享调试's now,
+            // the user, 2026-11-10; its links keep working)
+            "personal-lock" => Some(AdbShare(""))
             "new-profile" => Some(NewProfile(arg))
             "vault-item" => Some(VaultItem(address, id))
             "policy" => Some(AutoPolicy(arg))
@@ -706,3 +724,11 @@ pub fn Core::quiet(self : Core) -> Core {
 using @sf {
   dmax,
 }
+
+///|
+/// The `done` of a call whose answer nobody reads (a call told and let go: `(core.call)("lockPrompt.hide", p,
+/// answer_unread)`): what asks the core gives it no `on_done` (@core.call), so its answer, taken as it comes, runs
+/// nothing, builds nothing and is awaited by nothing; the call goes all the same. An empty `done` of a call's own is
+/// refused (detlint's `empty-on-done`): to the core it would be a reader, its answer awaited and the frame after it
+/// built whole for nothing. sfbase's `answer_unread` is this one.
+pub let answer_unread : (Result[Json, Json]) -> Unit = fn(_) { () }

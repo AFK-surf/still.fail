@@ -12,7 +12,7 @@ import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { signalGroup } from "../src/ops/group.ts";
 import { Jobs, type Machine } from "../src/jobs/jobs.ts";
-import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, hash, readJson, writeJson } from "../src/jobs/remote.ts";
+import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, hash, readJson, writeJson, written } from "../src/jobs/remote.ts";
 import { type Load, OLDER } from "../src/jobs/load.ts";
 import { type Json, Store } from "../src/store/store.ts";
 import { remoteTools } from "../src/tools/remote.ts";
@@ -74,13 +74,13 @@ async function rounds(_what: string, clock: ReturnType<typeof testClock>, by: Du
 
 type Station = { dir: string; store: Store; jobs: Jobs; remote: Remote; told: [string, string][] };
 
-function station(options: { clock?: Clock.Clock; jobsClock?: Clock.Clock; machine?: Machine; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void; removeMirror?: (path: string) => Promise<void> } = {}): Station {
+function station(options: { clock?: Clock.Clock; jobsClock?: Clock.Clock; machine?: Machine; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void; removeMirror?: (path: string) => Promise<void>; removeTask?: (path: string) => Promise<void> } = {}): Station {
   const dir = options.dir ?? tempdir();
   const store = options.store ?? Store.open(":memory:");
   const told: [string, string][] = [];
   const jobs = options.jobs ?? new Jobs({ store, data: dir, notify: () => {}, link: () => null, clock: options.jobsClock, machine: options.machine });
   const remote = new Remote({
-    data: dir, store, jobs, clock: options.clock, meshWaitMs: options.meshWaitMs, removeMirror: options.removeMirror,
+    data: dir, store, jobs, clock: options.clock, meshWaitMs: options.meshWaitMs, removeMirror: options.removeMirror, removeTask: options.removeTask,
     notify: options.notify ?? ((session, text) => void told.push([session, text])),
   });
   cleanup.push(async () => {
@@ -248,7 +248,8 @@ describe("remote", { concurrency: true }, () => {
     const room = r.remote.room("ws", "peer-a", "s");
     const record = join(room, "session.json");
     const now = Date.now();
-    writeJson(record, { ...readJson(record), seen: now - IDLE_MS - 1000 });
+    await written(record);
+    await writeJson(record, { ...readJson(record), seen: now - IDLE_MS - 1000 });
     writeFileSync(join(work, "keep"), "the session's work");
 
     const remote = r.remote as unknown as { tasksOf: (...args: [string, string, string]) => Promise<unknown[]> };
@@ -268,6 +269,72 @@ describe("remote", { concurrency: true }, () => {
     release();
     await sweeping;
     assert.equal(readFileSync(join(work, "keep"), "utf8"), "the session's work");
+  });
+
+  test("a session used again while its idle room's task directory is being removed has a room to work in", async () => {
+    // The station's time is the test's: the room's use, and its sweep, on the same clock.
+    const clock = testClock();
+    const store = Store.open(":memory:", null, clock);
+    cleanup.push(() => store.close());
+    let entered!: () => void;
+    let release!: () => void;
+    const removing = new Promise<void>((resolve) => (entered = resolve));
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const r = station({ store, removeTask: async (path) => {
+      entered();
+      await held;
+      await rm(path, { recursive: true, force: true });
+    } });
+    // The room, used, and a task of it that ended (its directory, nothing running).
+    r.remote.work("ws", "peer-a", "s");
+    const room = r.remote.room("ws", "peer-a", "s");
+    await written(join(room, "session.json"));
+    const task = join(r.remote.root, "incoming", hash(["ws", "peer-a", "s", "k"]));
+    mkdirSync(task, { recursive: true });
+    writeFileSync(join(task, "task.json"), JSON.stringify({ workspace: "ws", station: "peer-a", session: "s", key: "k", layout: "session", spec: { command: "true" } }));
+    // Unused for IDLE_MS: swept, held as its task's directory goes.
+    await Effect.runPromise(clock.adjust(`${IDLE_MS + 1000} millis`));
+    const sweeping = r.remote.sweep(store.now());
+    await removing;
+    // Used again meanwhile: a command is about to run there.
+    const work = r.remote.work("ws", "peer-a", "s");
+    release();
+    await sweeping;
+    assert.ok(existsSync(room), "a room");
+    assert.ok(existsSync(work), "and its work directory");
+  });
+
+  test("a use that comes while an idle room's task directories are being removed finds a whole room, never half of the old one", async () => {
+    const clock = testClock();
+    const store = Store.open(":memory:", null, clock);
+    cleanup.push(() => store.close());
+    let entered!: () => void;
+    let release!: () => void;
+    const removing = new Promise<void>((resolve) => (entered = resolve));
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const r = station({ store, removeTask: async (path) => {
+      entered();
+      await held;
+      await rm(path, { recursive: true, force: true });
+    } });
+    r.remote.work("ws", "peer-a", "s");
+    const room = r.remote.room("ws", "peer-a", "s");
+    await written(join(room, "session.json"));
+    // What the room held before it went idle, and a task of it that ended.
+    writeFileSync(join(room, "work", "before.txt"), "old");
+    const task = join(r.remote.root, "incoming", hash(["ws", "peer-a", "s", "k"]));
+    mkdirSync(task, { recursive: true });
+    writeFileSync(join(task, "task.json"), JSON.stringify({ workspace: "ws", station: "peer-a", session: "s", key: "k", layout: "session", spec: { command: "true" } }));
+    await Effect.runPromise(clock.adjust(`${IDLE_MS + 1000} millis`));
+    const sweeping = r.remote.sweep(store.now());
+    await removing;
+    // Used again (outside its lane) while the task's directory goes: the room it works in is a new one.
+    const work = r.remote.work("ws", "peer-a", "s");
+    release();
+    await sweeping;
+    assert.ok(existsSync(work), "a room to work in");
+    assert.ok(!existsSync(join(work, "before.txt")), "the old room went whole, with its tasks");
+    assert.ok(!existsSync(task), "its task's directory with it");
   });
 
   test("a remote workspace's size is measured for its owning chat, never another station's chat", async () => {
@@ -302,24 +369,24 @@ describe("remote", { concurrency: true }, () => {
     assert.ok(Date.now() - t0 >= 180, "refused only after the wait");
   });
 
-  test("transfer paths do not escape or follow links", () => {
+  test("transfer paths do not escape or follow links", async () => {
     const dir = tempdir();
     for (const path of ["", "/etc/passwd", "../secret", "a/../../secret", "./a", "."]) {
-      assert.throws(() => filePath(dir, path, true), Error, path);
+      await assert.rejects(filePath(dir, path, true), Error, path);
     }
     symlinkSync("/tmp", join(dir, "link"));
-    assert.throws(() => filePath(dir, "link/file", true));
-    assert.throws(() => filePath(join(dir, "link"), "file", true));
-    assert.ok(filePath(dir, "nested/file", true).startsWith(dir));
-    assert.equal(filePath(dir, "a/./b", false), join(dir, "a", "b"), "a . inside is no component, as Path::components has it");
+    await assert.rejects(filePath(dir, "link/file", true));
+    await assert.rejects(filePath(join(dir, "link"), "file", true));
+    assert.ok((await filePath(dir, "nested/file", true)).startsWith(dir));
+    assert.equal(await filePath(dir, "a/./b", false), join(dir, "a", "b"), "a . inside is no component, as Path::components has it");
   });
 
-  test("on Windows a backslash separates too, and a drive, a share or a stream is not relative", { skip: process.platform !== "win32" && "Windows only" }, () => {
+  test("on Windows a backslash separates too, and a drive, a share or a stream is not relative", { skip: process.platform !== "win32" && "Windows only" }, async () => {
     const dir = tempdir();
     for (const path of ["..\\outside.txt", "a\\..\\..\\secret", ".\\a", "C:\\Windows\\win.ini", "C:secret", "\\\\server\\share\\x", "\\x", "file:stream"]) {
-      assert.throws(() => filePath(dir, path, true), Error, path);
+      await assert.rejects(filePath(dir, path, true), Error, path);
     }
-    assert.equal(filePath(dir, "nested\\file", false), join(dir, "nested", "file"));
+    assert.equal(await filePath(dir, "nested\\file", false), join(dir, "nested", "file"));
   });
 
   // ── task_tests ──
@@ -338,7 +405,7 @@ describe("remote", { concurrency: true }, () => {
     assert.equal(answer.thread, "CHAT/1.1");
     const [peer, request] = got.pop()!;
     assert.deepEqual([peer, request.to, request.text], ["peer-c", "k", "hi"]);
-    for (const method of ["session.file", "session.put"]) {
+    for (const method of ["session.file", "session.put", "session.archive"]) {
       await call(r, "peer-c", method, { to: "k" });
       assert.equal(got.pop()![1].method, method, "a chat's files and a message's go where messages go");
     }
@@ -387,28 +454,29 @@ describe("remote", { concurrency: true }, () => {
 
   test("a queued task tells the agent the measured capacity and the reason for its wait", async () => {
     const clock = testClock();
-    let busy = 0;
-    let total = 0;
-    const machine: Machine = { cpus: () => 12, ticks: () => [busy += 55, total += 100], pressure: async () => "normal" };
+    const machine: Machine = { pressure: async () => "normal" };
     const r = station({ jobsClock: clock, machine });
     const capacity = { cpus: 12, cpuBusy: { share: 0.55, seconds: 60 }, memory: { totalBytes: 64 * 1024 ** 3, availableBytes: 45 * 1024 ** 3 }, checkedAt: 123 };
     let reads = 0;
     r.remote.setLoad(async () => { reads++; return capacity; });
+    // (each uses the screen: the first has it, the others wait for it; busy CPUs alone hold none back)
     for (const key of ["first", "second", "third"]) {
-      await callAs(r, "s", key, "task.prepare", { spec: { command: FOREVER } });
+      await callAs(r, "s", key, "task.prepare", { spec: { command: FOREVER, screen: true } });
       const started = await callAs(r, "s", key, "task.start");
       if (key !== "first") {
         assert.equal(started.job.queued, true);
-        assert.equal(started.queue.cause, "sampling");
+        assert.equal(started.queue.why, "screen");
+        assert.equal(started.queue.cause, undefined);
         assert.deepEqual(started.queue.load, capacity);
       } else {
         assert.equal(reads, 0, "a task that starts at once does not wait on a host reading");
       }
     }
     const got = await callAs(r, "s", "second", "task.get");
-    assert.equal(got.queue.cause, "sampling");
+    assert.equal(got.queue.why, "screen");
     assert.deepEqual(got.queue.load, capacity);
-    assert.equal(got.queue.decision.cpuBusy, null, "the queue has not measured a whole window yet");
+    assert.deepEqual(Object.keys(got.queue.decision), ["memoryPressure"], "no CPU measurement in the queue's decision");
+    assert.doesNotMatch(got.queue.note, /CPU/);
     const laterCapacity = { ...capacity, cpuBusy: { share: 0.25, seconds: 60 }, checkedAt: 456 };
     r.remote.setLoad(async () => laterCapacity);
     assert.deepEqual((await callAs(r, "s", "second", "task.get")).queue.load, laterCapacity, "a later request gets a new reading");
@@ -424,12 +492,12 @@ describe("remote", { concurrency: true }, () => {
   test("a slow capacity reading never holds up a queued task's reply", async () => {
     const clock = testClock();
     const jobsClock = testClock();
-    const machine: Machine = { cpus: () => 12, ticks: () => [0, 0], pressure: async () => "normal" };
+    const machine: Machine = { pressure: async () => "normal" };
     const r = station({ clock, jobsClock, machine });
     r.remote.setLoad(() => new Promise(() => {}));
-    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER } });
+    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER, screen: true } });
     await callAs(r, "s", "first", "task.start");
-    await callAs(r, "s", "second", "task.prepare", { spec: { command: FOREVER } });
+    await callAs(r, "s", "second", "task.prepare", { spec: { command: FOREVER, screen: true } });
     const before = clock.asked();
     let answer: Json = null;
     void callAs(r, "s", "second", "task.start").then((got) => (answer = got));
@@ -443,16 +511,15 @@ describe("remote", { concurrency: true }, () => {
   test("a task that starts while its capacity is read is no longer reported queued", async () => {
     const clock = testClock();
     const jobsClock = testClock();
-    let busy = 0;
-    let total = 0;
-    const machine: Machine = { cpus: () => 12, ticks: () => [busy += 20, total += 100], pressure: async () => "normal" };
+    const machine: Machine = { pressure: async () => "normal" };
     const r = station({ clock, jobsClock, machine });
     let read = false;
     let release!: (load: Json) => void;
     r.remote.setLoad(() => { read = true; return new Promise((resolve) => { release = resolve; }); });
-    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER } });
+    // (the first has the screen a second; the second waits for it)
+    await callAs(r, "s", "first", "task.prepare", { spec: { command: "sleep 1", screen: true } });
     await callAs(r, "s", "first", "task.start");
-    await callAs(r, "s", "second", "task.prepare", { spec: { name: "second", command: FOREVER } });
+    await callAs(r, "s", "second", "task.prepare", { spec: { name: "second", command: FOREVER, screen: true } });
     const starting = callAs(r, "s", "second", "task.start");
     await until("the capacity is being read", () => read);
     await rounds("the second task starts", jobsClock, "5 seconds", () => r.store.listJobs(null).some((j) => j.name === "second" && j.queued !== true));
@@ -525,12 +592,13 @@ describe("remote", { concurrency: true }, () => {
     await run(r, "recent", "a", "touch made");
     const old = join(r.remote.root, "incoming", "from-before");
     mkdirSync(join(old, "work"), { recursive: true });
-    writeJson(join(old, "task.json"), { spec: { command: "true" }, workspace: "ws", station: "peer-a", session: "x", key: "k" });
+    await writeJson(join(old, "task.json"), { spec: { command: "true" }, workspace: "ws", station: "peer-a", session: "x", key: "k" });
     const later = Date.now() + IDLE_MS + 1000;
     const record = join(r.remote.room("ws", "peer-a", "recent"), "session.json");
+    await written(record);
     const seen = readJson(record);
     seen.seen = later;
-    writeJson(record, seen);
+    await writeJson(record, seen);
     await r.remote.sweep(later);
     assert.ok(!existsSync(r.remote.room("ws", "peer-a", "idle")));
     assert.ok(existsSync(r.remote.room("ws", "peer-a", "recent")));
@@ -545,6 +613,7 @@ describe("remote", { concurrency: true }, () => {
     r.remote.recordUse("ws", "s", "old");
     r.remote.recordUse("ws", "s", "down");
     r.remote.recordUse("ws", "other", "up");
+    await written(r.remote.usedPath("s"));
     const asked: string[] = [];
     let down = 0;
     r.remote.attach(async (station, _workspace, request) => {
@@ -572,7 +641,7 @@ describe("remote", { concurrency: true }, () => {
     const clock = testClock();
     const first = station();
     const path = first.remote.outgoing("ws", "original-session", "target", "stable-key");
-    writeJson(path, { workspace: "ws", session: "original-session", station: "target", key: "stable-key", delivered: false });
+    await writeJson(path, { workspace: "ws", session: "original-session", station: "target", key: "stable-key", delivered: false });
     await first.remote.close();
     const messages: [string, string][] = [];
     const restarted = station({ clock, dir: first.dir, store: first.store, jobs: first.jobs, notify: (s, t) => void messages.push([s, t]) });
@@ -665,7 +734,7 @@ describe("remote", { concurrency: true }, () => {
     await assert.rejects(use("station_task", { ...task, action: "prepare", command: "different" }), /different inputs/);
     // A pre-migration record found after the failure must not replace the newer fence.
     const name = `${hash(["ws", "s1", "B", "restart"])}.json`;
-    writeJson(join(a.dir, "remote", "prepared", name), { workspace: "ws", session: "s1", station: "B", key: "restart" });
+    await writeJson(join(a.dir, "remote", "prepared", name), { workspace: "ws", session: "s1", station: "B", key: "restart" });
     await a.remote["movePrepared"]();
     await a.remote.close();
     const next = station({ dir: a.dir, store: a.store, jobs: a.jobs, clock });
@@ -1010,14 +1079,14 @@ describe("remote", { concurrency: true }, () => {
     await until("its end is told", () => a.told.length === 1);
     assert.ok(a.told[0][1].includes('"state":"stopped"'), a.told[0][1]);
     assert.deepEqual(asked.slice(before).map((r) => r.method), ["task.gets"], "asked once, after it was told");
+    await written(a.remote.outgoing("ws", "s1", "B", "k"));
     assert.equal(readJson(a.remote.outgoing("ws", "s1", "B", "k")).delivered, true);
   });
 
   test("a task waiting for the screen is not reported ended before it actually runs", async () => {
     {
       const jobsClock = testClock();
-      let ticks = 0;
-      const machine: Machine = { cpus: () => 8, ticks: () => [0, ticks += 1000], pressure: async () => "normal" };
+      const machine: Machine = { pressure: async () => "normal" };
       const { a, b, use, clock } = pair(undefined, { jobsClock, machine });
       const first = { station: "B", key: "first" };
       const second = { station: "B", key: "second" };
@@ -1080,7 +1149,7 @@ describe("remote", { concurrency: true }, () => {
     const s = station({ clock });
     const paths = ["k1", "k2"].map((key) => {
       const path = s.remote.outgoing("ws", "s1", "old", key);
-      writeJson(path, { workspace: "ws", session: "s1", station: "old", key, delivered: false });
+      writeFileSync(path, JSON.stringify({ workspace: "ws", session: "s1", station: "old", key, delivered: false }));
       return path;
     });
     const asked: Json[] = [];
@@ -1090,6 +1159,7 @@ describe("remote", { concurrency: true }, () => {
     });
     await rounds("both told", clock, "1 second", () => s.told.length === 2);
     assert.ok(s.told.every(([session, text]) => session === "s1" && text.includes("is not followed")));
+    for (const path of paths) await written(path);
     for (const path of paths) assert.equal(readJson(path).delivered, true);
     const before = asked.length;
     for (let i = 0; i < 6; i++) {
@@ -1104,7 +1174,7 @@ describe("remote", { concurrency: true }, () => {
     const s = station({ clock });
     const paths = ["k1", "k2"].map((key) => {
       const path = s.remote.outgoing("ws", "s1", "old", key);
-      writeJson(path, { workspace: "ws", session: "s1", station: "old", key, delivered: false });
+      writeFileSync(path, JSON.stringify({ workspace: "ws", session: "s1", station: "old", key, delivered: false }));
       return path;
     });
     const methods: string[] = [];
@@ -1128,7 +1198,7 @@ describe("remote", { concurrency: true }, () => {
     const s = station({ clock, store });
     const record = (key: string) => {
       const path = s.remote.outgoing("ws", "s1", "B", key);
-      writeJson(path, { workspace: "ws", session: "s1", station: "B", key, delivered: false });
+      writeFileSync(path, JSON.stringify({ workspace: "ws", session: "s1", station: "B", key, delivered: false }));
       return path;
     };
     const [unknown, unstarted, running] = [record("unknown"), record("unstarted"), record("running")];
@@ -1144,6 +1214,7 @@ describe("remote", { concurrency: true }, () => {
     assert.deepEqual(s.told.map(([, text]) => text.split(":")[0]).sort(), ["Remote task unknown on B", "Remote task unstarted on B"]);
     assert.ok(s.told.some(([, text]) => text.includes("does not know it")));
     assert.ok(s.told.some(([, text]) => text.includes("never started")));
+    for (const path of [unknown, unstarted]) await written(path);
     for (const path of [unknown, unstarted]) assert.deepEqual([readJson(path).delivered, readJson(path).lost], [true, true]);
     assert.equal(readJson(running).delivered, false, "a running one is followed on");
   });

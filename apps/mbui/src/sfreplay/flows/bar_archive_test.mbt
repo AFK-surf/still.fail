@@ -3,7 +3,7 @@
 
 ///|
 test "72-bar-archive" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("bar-archive"), seed~)
     // (made by alice's other device before the app starts: a live run's step, the trace has what came of it)
     f.before("peer create 从栏上归档 085454 post:都弄好了 085454")

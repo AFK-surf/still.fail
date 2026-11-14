@@ -1,4 +1,4 @@
 members = [
   ".",
-  "../../apps/mbui/mbui",
+  "../../libs/mbui",
 ]

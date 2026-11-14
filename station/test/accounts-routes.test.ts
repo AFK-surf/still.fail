@@ -6,10 +6,11 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Accounts, type AccountsDeps } from "../src/accounts/index.ts";
+import { createHash } from "node:crypto";
+import { Accounts, LOGIN_BROWSER_FILE, type AccountsDeps } from "../src/accounts/index.ts";
 import { checkConfig } from "../src/accounts/check.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
-import { OUTDATED } from "../src/accounts/models.ts";
+import { learn } from "../src/accounts/catalog.ts";
 import { routes } from "../src/api/routes/accounts.ts";
 import { overview } from "../src/api/overview.ts";
 import type { Request } from "../src/api/request.ts";
@@ -20,7 +21,7 @@ import { fingerprint } from "../src/sessions/decision.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
 import { Store } from "../src/store/store.ts";
 import { SessionChatPreparation, sessionChatReady } from "../src/store/session-chat-index.ts";
-import { approval, exe, fakeLogin, machine as fakeMachine, provider, script, temp, until, upon } from "./accounts-fakes.ts";
+import { approval, exe, fakeBrowser, fakeLogin, machine as fakeMachine, provider, script, temp, until, upon } from "./accounts-fakes.ts";
 import { URLS } from "../src/accounts/profiles.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
@@ -30,7 +31,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; review?: AccountsDeps["reviewUndecided"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; review?: AccountsDeps["reviewUndecided"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"]; claudeVersion?: string; ownReset?: boolean } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -67,7 +68,8 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
             return { state: "ok", windows: [{ label: "5 小时", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: Date.now() };
           }
         : null),
-    resetQuota: o.resetQuota ?? null,
+    // (ownReset: the station's own way of resetting, a Claude subscription's here)
+    ...(o.ownReset ? {} : { resetQuota: o.resetQuota ?? null }),
     codex: o.codex,
     hub: o.hub,
     reviewUndecided: o.review,
@@ -77,6 +79,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     workspaces: () => o.workspaces ?? [],
     shared: o.shared,
     urls: o.urls,
+    ...(o.claudeVersion !== undefined ? { claudeVersion: () => o.claudeVersion! } : {}),
   });
   accounts.start();
   const table = routes({
@@ -348,6 +351,74 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("Claude sign-ins prefill --email when known and bind their browser state file across profile creation and cancellation", async () => {
+    const dir = temp("claude-login-email-state");
+    const argsLog = join(dir, "args.log");
+    const t = await rig({ data: dir });
+    script(
+      join(dir, "fake-login"),
+      `#!/bin/sh\necho "$*" >> '${argsLog}'\n` + fakeLogin().replace("#!/bin/sh\n", ""),
+    );
+    const b = fakeBrowser();
+    t.accounts.logins.attach(b.pages);
+    try {
+      // 1. Email read from .claude.json in the profile's home, and browser state file in homes/<id>.
+      await t.call("PUT", "/profiles/sub1", { name: "Claude 1", runtime: "claude", access: { kind: "subscription" } });
+      mkdirSync(join(dir, "homes/sub1"), { recursive: true });
+      writeFileSync(join(dir, "homes/sub1/.claude.json"), JSON.stringify({ oauthAccount: { emailAddress: "cuesurf1@proton.me" } }));
+      await t.call("POST", "/profiles/sub1/login");
+      await waitFor(t, "sub1", "needs_code");
+      assert.equal(await t.accounts.logins.openPage("sub1", "zh"), "browser:T1");
+      assert.equal(b.options.get("T1")?.stateFile?.(), join(dir, "homes/sub1", LOGIN_BROWSER_FILE));
+      await t.call("DELETE", "/profiles/sub1/login");
+      assert.equal(b.options.get("T1")?.stateFile?.(), join(dir, "homes/sub1", LOGIN_BROWSER_FILE), "an existing profile keeps its browser state across restarted sign-ins");
+
+      // 2. Fallback to email-shaped profile name when .claude.json has none.
+      await t.call("PUT", "/profiles/sub2", { name: "cuesurf2@proton.me", runtime: "claude", access: { kind: "subscription" } });
+      await t.call("POST", "/profiles/sub2/login");
+      await waitFor(t, "sub2", "needs_code");
+      await t.call("DELETE", "/profiles/sub2/login");
+
+      // 3. Non-email name without .claude.json omits --email.
+      await t.call("PUT", "/profiles/sub3", { name: "Claude 主账号", runtime: "claude", access: { kind: "subscription" } });
+      await t.call("POST", "/profiles/sub3/login");
+      await waitFor(t, "sub3", "needs_code");
+      await t.call("DELETE", "/profiles/sub3/login");
+
+      const lines = readFileSync(argsLog, "utf8").trim().split("\n");
+      assert.deepEqual(lines, [
+        "auth login --claudeai --email cuesurf1@proton.me",
+        "auth login --claudeai --email cuesurf2@proton.me",
+        "auth login --claudeai",
+      ]);
+
+      // 4. New subscription login: stateFile follows homes/login-<hex> -> homes/<created> once finished, and becomes null when dropped.
+      const [, started] = await t.call("POST", "/logins", { runtime: "claude" });
+      await upon((wake) => t.accounts.onChange(wake), () => t.accounts.logins.get(started.id)?.state === "needs_code", "newLogin needs_code");
+      assert.equal(await t.accounts.logins.openPage(started.id, "zh"), "browser:T2");
+      const stateForNew = b.options.get("T2")!.stateFile!;
+      assert.equal(stateForNew(), join(dir, "homes", started.id, LOGIN_BROWSER_FILE));
+      await t.call("POST", `/logins/${started.id}/code`, { code: "good-code" });
+      const created = await upon(
+        (wake) => t.accounts.onChange(wake),
+        () => t.accounts.loginsView().find((l) => l.id === started.id)?.created as string | undefined,
+        "newLogin created profile",
+      );
+      assert.equal(stateForNew(), join(dir, "homes", created, LOGIN_BROWSER_FILE));
+
+      const [, dropped] = await t.call("POST", "/logins", { runtime: "claude" });
+      await upon((wake) => t.accounts.onChange(wake), () => t.accounts.logins.get(dropped.id)?.state === "needs_code", "dropped needs_code");
+      assert.equal(await t.accounts.logins.openPage(dropped.id, "zh"), "browser:T3");
+      const stateForDropped = b.options.get("T3")!.stateFile!;
+      assert.equal(stateForDropped(), join(dir, "homes", dropped.id, LOGIN_BROWSER_FILE));
+      await t.call("DELETE", `/logins/${dropped.id}`);
+      assert.equal(stateForDropped(), null);
+      assert.equal(existsSync(join(dir, "homes", dropped.id)), false);
+    } finally {
+      await t.close();
+    }
+  });
+
   test("a profile runs every model its check found, besides those config.json names, and names none of them there", async () => {
     const data = temp("found");
     writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [] }));
@@ -385,7 +456,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
-  test("known outdated models are unchecked once when the station starts; one checked again by hand stays", async () => {
+  test("outdated models are unchecked once when the station starts; one checked again by hand stays", async () => {
     const data = temp("outdated");
     writeFileSync(
       join(data, "config.json"),
@@ -396,12 +467,51 @@ describe("the accounts routes", { concurrency: true }, () => {
     store.setProfileCheck("cc", { state: "ok", detail: "", models: ["claude-opus-4-6", "claude-opus-5-5", "claude-sonnet-5-5"], checkedAt: 1 });
     const first = await rig({ data, store });
     assert.deepEqual(first.profile("cc")!.named, ["claude-sonnet-5-5", "claude-opus-5-5"]);
-    assert.deepEqual(JSON.parse(readFileSync(first.path, "utf8")).outdatedUnchecked, [...OUTDATED.keys()].sort());
+    assert.deepEqual(JSON.parse(readFileSync(first.path, "utf8")).outdatedUnchecked, ["claude-opus-4-6"]);
     assert.equal((await first.call("PUT", "/profiles/cc", { models: ["claude-opus-4-6", "claude-opus-5-5"] }))[0], 200);
     await first.close();
     const again = await rig({ data, store: Store.open(db, null) });
     assert.deepEqual(again.profile("cc")!.named, ["claude-opus-4-6", "claude-opus-5-5"]);
     await again.close();
+  });
+
+  test("a model new in the catalog has its maker's profiles checked again, and replaces the one before it", async () => {
+    const data = temp("new-model");
+    writeFileSync(
+      join(data, "config.json"),
+      JSON.stringify({
+        profiles: [
+          { id: "cc", runtime: "claude", access: { kind: "subscription" }, home: "homes/cc", models: ["claude-fable-5-1", "claude-opus-5-5"] },
+          { id: "cx", runtime: "codex", access: { kind: "subscription" }, home: "homes/cx", models: ["gpt-6.1-sol"] },
+        ],
+      }),
+    );
+    const store = Store.open(join(data, "stillfail.db"), null);
+    store.setProfileCheck("cc", { state: "ok", detail: "", models: ["claude-fable-5-1", "claude-opus-5-5"], checkedAt: 1 });
+    store.setProfileCheck("cx", { state: "ok", detail: "", models: ["gpt-6.1-sol"], checkedAt: 1 });
+    const checked: string[] = [];
+    const t = await rig({
+      data,
+      store,
+      check: async (o) => {
+        checked.push(o.runtime);
+        return { state: "ok", detail: "fake", models: o.runtime === "claude" ? ["claude-fable-5-2", "claude-fable-5-1", "claude-opus-5-5"] : ["gpt-6.1-sol"], checkedAt: 0 };
+      },
+    });
+    try {
+      learn({ "claude-fable-5-2": { maker: "anthropic" }, "claude-fable-5-1": { maker: "anthropic" }, "claude-opus-5-5": { maker: "anthropic" }, "gpt-6.1-sol": { maker: "openai" } });
+      // A maker none of its profiles has a model of: nothing checked.
+      t.accounts.newModels(["glm-9"]);
+      t.accounts.newModels(["claude-fable-5-2"]);
+      await until(() => t.profile("cc")!.named.includes("claude-fable-5-2"), "checked again");
+      await settle();
+      assert.deepEqual(checked, ["claude"]);
+      assert.deepEqual(t.profile("cc")!.named, ["claude-opus-5-5", "claude-fable-5-2"]);
+      assert.deepEqual(JSON.parse(readFileSync(t.path, "utf8")).outdatedUnchecked, ["claude-fable-5-1"]);
+    } finally {
+      learn(null);
+      await t.close();
+    }
   });
 
   test("a login its allowance's reading finds over is checked again, once, and the check says to sign in", async () => {
@@ -684,6 +794,65 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("an allowance read stands while its provider gives no answer, half an hour at most; a person who asks it again is told it was not answered", async () => {
+    // One round's question not reaching Anthropic took every Claude account's allowance and resets off their pages
+    // until the next round (ccvm, 2026-11-11).
+    const time = testClock();
+    const ok = (used: number) => ({ state: "ok", windows: [{ label: "每周", usedPercent: used, resetsAt: null }], resetCount: 1, detail: null, checkedAt: 0 });
+    const none = { state: "unavailable", windows: [], detail: "无法连接服务商", checkedAt: 0, unanswered: true };
+    let answer: any = ok(40);
+    let asked = 0;
+    const t = await rig({ clock: time.clock, readQuota: async () => { asked++; return answer; }, resetQuota: async () => ({ outcome: "reset" }) });
+    try {
+      assert.equal((await t.call("POST", "/profiles/cc/quota"))[0], 200);
+      const read = t.view("cc")!.quota;
+      assert.deepEqual([read.state, read.windows[0].usedPercent, read.resetCount], ["ok", 40, 1]);
+      // No answer: what was read stands, with when it was read.
+      answer = none;
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.deepEqual(t.view("cc")!.quota, read);
+      // Told to a station borrowing it the same; not asked again before the next round.
+      const before = asked;
+      assert.deepEqual((await t.accounts.lentHealth("cc")).quota, read);
+      assert.equal(asked, before);
+      // Asked by a person: told it was not answered, what stands left as it is.
+      assert.deepEqual(await t.call("POST", "/profiles/cc/quota"), [502, { error: "无法连接服务商" }]);
+      assert.deepEqual(t.view("cc")!.quota, read);
+      // An answer again: the allowance as it is now, and a person asking is answered.
+      answer = ok(55);
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.equal(t.view("cc")!.quota.windows[0].usedPercent, 55);
+      assert.equal((await t.call("POST", "/profiles/cc/quota"))[0], 200);
+      // None for half an hour since it was read: the failure is said, the marker not kept in it.
+      answer = none;
+      await time.adjust(25 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.equal(t.view("cc")!.quota.windows[0].usedPercent, 55);
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      const failed = t.view("cc")!.quota;
+      assert.deepEqual([failed.state, failed.windows.length, failed.detail, "unanswered" in failed], ["unavailable", 0, "无法连接服务商", false]);
+      // What the provider says of the account itself (its sign-in over) is said at once, an allowance read or not.
+      answer = ok(60);
+      await t.accounts.refreshQuota("cc");
+      answer = { state: "unavailable", windows: [], detail: "登录已过期或失效", checkedAt: 0 };
+      await time.adjust(5 * 60_000);
+      await t.accounts.refreshQuota("cc");
+      assert.deepEqual([t.view("cc")!.quota.state, t.view("cc")!.quota.detail], ["unavailable", "登录已过期或失效"]);
+      // Asked because it changed (a reset used): what was read before the reset does not stand through no answer.
+      await t.call("PUT", "/profiles/cx", { access: { kind: "subscription" } });
+      await settle();
+      answer = ok(100);
+      await t.accounts.refreshQuota("cx");
+      assert.equal(t.view("cx")!.quota.windows[0].usedPercent, 100);
+      answer = none;
+      assert.equal((await t.call("POST", "/profiles/cx/reset-quota", undefined, owner, { "Idempotency-Key": "k1" }))[0], 200);
+      assert.equal(t.view("cx")!.quota.state, "unavailable");
+    } finally { await t.close(); }
+  });
+
   test("a borrowed Codex subscription's allowance is read with the login its host lent while that is good, else its host's", async () => {
     const data = temp("borrowed-quota");
     const home = join(data, "homes", "bx");
@@ -869,6 +1038,63 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a Claude subscription's limit reset is used as the installed Claude Code uses it, and wakes its account", async () => {
+    const woke: string[] = [];
+    let grantLeft = 1;
+    const p = await provider((asked) => {
+      if (asked.url.startsWith("/api/oauth/usage")) {
+        return { status: 200, body: {
+          seven_day: { utilization: 100, resets_at: null },
+          juniper_tide: { eligible: false, ineligible_reason: "not_at_wall", arm: null, available: false },
+          cedar_ember: { eligible: true, grants: [{ id: "launch-fable", resets_total: 1, resets_left: grantLeft, ends_at: "2027-03-09T07:59:00+00:00", paused: false, usable_now: true }], next_grant_id: grantLeft > 0 ? "launch-fable" : null },
+        } };
+      }
+      if (asked.url === "/api/oauth/profile") return { status: 200, body: { organization: { uuid: "0f0e-org" } } };
+      if (asked.url === "/api/organizations/0f0e-org/reset_rate_limits") {
+        const result = grantLeft > 0 ? "reset" : "already_used";
+        grantLeft = 0;
+        return { status: 200, body: { result, resets_left: 0 } };
+      }
+      return { status: 404, body: {} };
+    });
+    const t = await rig({
+      urls: { ...URLS, anthropic: p.base },
+      claudeVersion: "2.1.321",
+      ownReset: true,
+      hub: { accounts: { setHealth: () => {}, healthOf: () => ({}) }, allowanceReset: async (id) => { woke.push(id); } },
+      readQuota: async () => ({ state: "ok", windows: [{ label: "每周", usedPercent: grantLeft > 0 ? 100 : 3, resetsAt: null }], detail: null, checkedAt: 0 }),
+    });
+    await t.call("PUT", "/profiles/cc", { access: { kind: "subscription" } });
+    mkdirSync(join(t.data, "homes/cc"), { recursive: true });
+    writeFileSync(join(t.data, "homes/cc/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "claude-token", refreshToken: "r", expiresAt: Date.now() + 86_400_000 } }));
+    const redeem = (key: string, reset?: string) => t.call("POST", "/profiles/cc/reset-quota", reset !== undefined ? { reset } : undefined, owner, { "Idempotency-Key": key });
+    // A kind it holds none of: nothing claimed.
+    assert.equal((await redeem("weekly", "weekly"))[0], 409);
+    assert.equal(p.asked.filter((a) => a.method === "POST").length, 0);
+    assert.deepEqual(await redeem("first", "full"), [200, { outcome: "reset" }]);
+    const claim = p.asked.find((a) => a.method === "POST")!;
+    assert.deepEqual(claim.body, { program: "cedar_ember", grant_id: "launch-fable", request_id: createHash("sha256").update("first").digest("hex") });
+    assert.equal(claim.headers.authorization, "Bearer claude-token");
+    assert.equal(claim.headers["user-agent"], "claude-cli/2.1.321 (external, cli)");
+    assert.deepEqual(woke, ["cc"]);
+    // None left now: said so, nothing claimed.
+    const claims = p.asked.filter((a) => a.method === "POST").length;
+    assert.equal((await redeem("second"))[0], 409);
+    assert.equal(p.asked.filter((a) => a.method === "POST").length, claims);
+    await t.close();
+    await p.close();
+  });
+
+  test("without an installed Claude Code a Claude subscription's reset is not asked", async () => {
+    const p = await provider(() => ({ status: 500, body: {} }));
+    const t = await rig({ urls: { ...URLS, anthropic: p.base }, ownReset: true, readQuota: async () => ({ state: "ok", windows: [], detail: null, checkedAt: 0 }) });
+    await t.call("PUT", "/profiles/cc", { access: { kind: "subscription" } });
+    assert.equal((await t.call("POST", "/profiles/cc/reset-quota", undefined, owner, { "Idempotency-Key": "k" }))[0], 503);
+    assert.equal(p.asked.length, 0);
+    await t.close();
+    await p.close();
+  });
+
   test("a successful reset wakes its account and informs its share; an old redemption with no allowance does neither", async () => {
     const woke: string[] = [];
     const sent: string[] = [];
@@ -931,6 +1157,48 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(replaced, 2, "a quota or profile update with the same login does not restart a running app-server");
     await chatgpt.close();
     await t.close();
+  });
+
+  test("a copy of another station's profile is paused and used again here, nothing else of it edited here", async () => {
+    const data = temp("borrowed-paused");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+    const moved: string[] = [];
+    const shared = { status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: null }), view: () => ({ id: "s1", role: "user", host: "H", allow: null, reachable: true, pausable: true as const }) };
+    const t = await rig({ data, shared, hub: { accounts: { setHealth: () => {}, healthOf: () => ({}) }, profileGone: async (id) => { moved.push(id); } } });
+    try {
+      assert.equal(t.view("bx")!.enabled, true);
+      assert.equal((await t.call("PUT", "/profiles/bx", { name: "Mine" }))[0], 409, "a copy is edited on its host");
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false, name: "Mine" }))[0], 409);
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false }))[0], 200);
+      assert.equal(t.view("bx")!.enabled, false);
+      assert.deepEqual(moved, ["bx"], "its sessions here move off it");
+      assert.equal((t.profile("bx") as any).share.paused, true);
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false }))[0], 200);
+      assert.deepEqual(moved, ["bx"], "paused already: nothing moves again");
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: true }))[0], 200);
+      assert.equal(t.view("bx")!.enabled, true);
+      assert.equal((t.profile("bx") as any).share.paused, undefined);
+      assert.notEqual(t.profile("bx")!.enabled, false);
+    } finally { await t.close(); }
+  });
+
+  test("a copy its host disabled stays disabled as it is used again here, said so or placed before that was said", async () => {
+    // (`hostOff` is written as a copy is placed; one placed before it was, disabled, its host disabled: nothing else did)
+    for (const share of [{ id: "s1", borrowed: true, host: "H", hostOff: true }, { id: "s1", borrowed: true, host: "H" }]) {
+      const data = temp("borrowed-host-off");
+      writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, enabled: false, share }], connects: [] }));
+      const shared = { status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: null }), view: () => null };
+      const t = await rig({ data, shared });
+      try {
+        assert.equal((await t.call("PUT", "/profiles/bx", { enabled: true }))[0], 200);
+        assert.equal(t.view("bx")!.enabled, false, `its host disabled it (${JSON.stringify(share)}): using it again is the host's to say`);
+        assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false }))[0], 200);
+        assert.equal((t.profile("bx") as any).share.paused, true);
+        assert.equal(t.view("bx")!.enabled, false);
+        assert.equal((await t.call("PUT", "/profiles/bx", { enabled: true }))[0], 200);
+        assert.equal(t.view("bx")!.enabled, false, "paused here and ended: still its host's disabling");
+      } finally { await t.close(); }
+    }
   });
 
   test("a shared Codex host signing out updates the borrowed check even when there is no login to lend", async () => {

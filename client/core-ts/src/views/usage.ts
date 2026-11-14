@@ -365,10 +365,9 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
         const surface = get(known, "surface");
         const slack = typeof surface === "string" && !isOwnSurface(surface);
         const sub = [place, slack ? "Slack" : null, archived ? t("core-views.usage.archived") : null].filter((x) => x !== null);
-        let page: J = null;
-        if (known !== undefined && !slack) page = { station: s.address, thread };
-        else if (known !== undefined && slack && get(known, "home") !== undefined && known.home !== null) page = { station: s.address, session: known.home };
-        else if (session !== "" && known !== undefined) page = { station: s.address, session };
+        // (opened by its agent's session, as the app's chats are: its home, else the one that spent)
+        const home = typeof get(known, "home") === "string" && known.home !== "" ? (known.home as string) : session;
+        const page: J = known !== undefined && home !== "" ? { station: s.address, session: home } : null;
         return { key: chatKey, title, sub: sub.length > 0 ? sub.join(" · ") : null, extra: { chat: page }, sum: new Sum() };
       }).sum.add(row);
 

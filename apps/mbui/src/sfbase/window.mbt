@@ -73,7 +73,7 @@ pub fn open_window(p : Page) -> Bool {
 ///|
 /// What each window this run opened was started with, by what it shows (window_key): its title can differ from the
 /// next way to it, the window being the same.
-let windows_open : Map[String, String] = {}
+let windows_open : Map[String, String] = Map([])
 
 ///|
 /// What `p` is, whichever way it was opened (its title aside): None for a page that goes in no window.

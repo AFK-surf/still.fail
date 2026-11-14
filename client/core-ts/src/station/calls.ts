@@ -12,12 +12,15 @@ import { Beside } from "../protocol.ts";
 import { chatKeptId, keptId, sentKeptId } from "../drive-kept.ts";
 import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
+import { buildFusion } from "../present.ts";
 import { machineMeta } from "../views/models.ts";
 import { StationAddr } from "./addr.ts";
 import { readAll, replyHeader, takeFrames, encodeFrame, type Frame } from "./wire.ts";
 import type { SpanContext } from "../trace.ts";
 import { DOWNLOAD_PART } from "../views/downloads.ts";
 import * as logins from "./machine-logins.ts";
+import { filePeekKey, linkPreviewKey } from "./link.ts";
+import { linkPicture, peekPicture, peekShown } from "../peek-pictures.ts";
 
 const parse = (station: string) => Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
 
@@ -204,6 +207,12 @@ export function install(): void {
         }
         // What the clients show of it, put in here.
         looks.answer(op.method, op.path, answer);
+        if (op.method === "GET" && /^\/profiles\/[^/?]+\/fusion$/.test(op.path) && answer !== null && typeof answer === "object") {
+          return { fusion: buildFusion((answer as { fusion?: unknown }).fusion) };
+        }
+        // A file's peek (`file.peek`) goes out as the `filePeek` topic's does: its picture by its token, not its bytes
+        // (peek-pictures.ts), which `file.peek.picture` answers once the topic has read them.
+        if (op.method === "GET" && /^\/sessions\/[^/?]+\/peek\?/.test(op.path)) return peekShown(answer);
         return answer;
       }),
     );
@@ -232,7 +241,7 @@ export function install(): void {
   };
   handlers.chatOlder = (inner, call) => {
     const c = call as Extract<Call, { kind: "chatOlder" }>;
-    return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.older(c.station, c.thread), (more) => ({ more })));
+    return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.older(c.station, c.thread, c.rows), (more) => ({ more })));
   };
   handlers.chatNewer = (inner, call) => {
     const c = call as Extract<Call, { kind: "chatNewer" }>;
@@ -254,6 +263,18 @@ export function install(): void {
   handlers.chatFind = (inner, call) => {
     const c = call as Extract<Call, { kind: "chatFind" }>;
     return Effect.andThen(parse(c.station), inner.stationTopics.find(c.station, c.thread, c.query, c.bring));
+  };
+  handlers.chatBring = (inner, call) => {
+    const c = call as Extract<Call, { kind: "chatBring" }>;
+    return Effect.andThen(parse(c.station), inner.stationTopics.bring(c.station, c.thread));
+  };
+  handlers.chatOutlineFind = (inner, call) => {
+    const c = call as Extract<Call, { kind: "chatOutlineFind" }>;
+    return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.found(c.station, c.thread, c.query, c.bring), (f) => inner.views.outlineFound(c.station, c.thread, f)));
+  };
+  handlers.chatOutlineRows = (inner, call) => {
+    const c = call as Extract<Call, { kind: "chatOutlineRows" }>;
+    return Effect.andThen(parse(c.station), Effect.sync(() => inner.views.outlineRows(c.station, c.thread, c.seqs)));
   };
   handlers.historyOlder = (inner, call) => {
     const c = call as Extract<Call, { kind: "historyOlder" }>;
@@ -413,6 +434,28 @@ export function install(): void {
         return new Beside({ type: "image/jpeg" }, bytes);
       }),
     );
+  };
+  // A link's card's picture and a file's peek's, out of what their topic's read brought (the link's memory): no request
+  // made; none there (not read yet, read with none), the error that says so.
+  handlers.linkPicture = (inner, call) => {
+    const c = call as Extract<Call, { kind: "linkPicture" }>;
+    return Effect.try({
+      try: () => {
+        const got = linkPicture(inner.stations.link(c.station)?.memory.get(linkPreviewKey(c.url)), c.which);
+        return new Beside({ type: got.type }, got.bytes);
+      },
+      catch: asCoreError,
+    });
+  };
+  handlers.peekPicture = (inner, call) => {
+    const c = call as Extract<Call, { kind: "peekPicture" }>;
+    return Effect.try({
+      try: () => {
+        const got = peekPicture(inner.stations.link(c.station)?.memory.get(filePeekKey(c.key, c.path, c.line)));
+        return new Beside({ type: got.type }, got.bytes);
+      },
+      catch: asCoreError,
+    });
   };
   handlers.fileOpen = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "fileOpen" }>;

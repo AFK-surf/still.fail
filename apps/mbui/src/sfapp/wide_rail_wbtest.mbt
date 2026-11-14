@@ -30,11 +30,11 @@ test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on
   // the bar's rail, 6 from the window's edge: its places 2 in
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   assert_eq(rx, @sfdesk.closed_bar_in + 2.0)
-  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.move_to(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("新建对话") is Some(_), msg="shown a while")
   // off it: still there for a moment, then folded again
-  t.move(1000.0, 400.0)
+  t.move_to(1000.0, 400.0)
   t.frame()
   assert_true(@sfdesk.wide.peeking.get())
   t.run_for(@sfdesk.peek_leave_ms)
@@ -75,7 +75,7 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
   for peek in [false, true] {
     let gear = t.query(Button, label=@sf.t("web-pages.settings.title")).unwrap().rect
     if peek {
-      t.move(gear.0 + gear.2 / 2.0, gear.1 + gear.3 / 2.0)
+      t.move_to(gear.0 + gear.2 / 2.0, gear.1 + gear.3 / 2.0)
       t.run_for(@ui.move_most_ms)
       assert_true(t.find("新建对话") is Some(_), msg="shown a while")
     }
@@ -106,7 +106,7 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
     if peek {
       let named = @sf.t("web-main.filter.chats.named", args=[("named", @sf.t("web-main.filter.all"))])
       let (fx, fy, fw, fh) = t.query(Button, label=named).unwrap().rect
-      t.move(fx + fw / 2.0, fy + fh / 2.0)
+      t.move_to(fx + fw / 2.0, fy + fh / 2.0)
       t.run_for(@ui.move_most_ms)
       // (the band's filter a node of the window's tree: its ground as the tree draws it)
       let filter = @ui.view_tree()
@@ -155,7 +155,7 @@ test "wide: each place's sidebar as it was left: 对话's folded at its width, �
   let t = wide_tester(calls)
   let press = fn(label : String) {
     let (x, y, w, h) = t.query(Button, label~).unwrap().rect
-    t.move(x + w / 2.0, y + h / 2.0)
+    t.move_to(x + w / 2.0, y + h / 2.0)
     t.tap(x + w / 2.0, y + h / 2.0)
     t.run_for(@ui.move_most_ms)
   }
@@ -176,7 +176,7 @@ test "wide: each place's sidebar as it was left: 对话's folded at its width, �
   assert_eq(@sfdesk.wide.side_w.get(), 300.0)
   assert_true(t.find("新建对话") is Some(_))
   // the pointer off it: folded again a moment after
-  t.move(1000.0, 400.0)
+  t.move_to(1000.0, 400.0)
   t.run_for(@sfdesk.peek_leave_ms)
   t.frame()
   t.run_for(@ui.move_most_ms)
@@ -194,7 +194,7 @@ test "wide: the sidebar's edge is pressed and shows its ↔ 6 either side of its
     let shown : Array[Double] = []
     for dx in offsets {
       let x = edge + dx
-      t.move(x, y)
+      t.move_to(x, y)
       if t.cursor() != ResizeX {
         continue
       }
@@ -272,6 +272,7 @@ test "wide: a row's menu has 接力到频道… for a chat with an agent" {
   let (x, y) = t.find("整理发布清单").unwrap()
   t.right_click(x, y)
   t.frame()
+  open_share(t)
   assert_true(t.find("接力到频道…") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
@@ -305,7 +306,7 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -333,7 +334,7 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
   assert_eq(open_title(), "整理上个月的发票")
   // pointed at, 恢复
   let (x, y) = t.find("试一下新的图标尺寸").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   let (bx, by, bw, bh) = t.query(Button, label="恢复「试一下新的图标尺寸」").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
@@ -388,7 +389,7 @@ test "wide: 自定义侧边条 from the rail's menu: what can be added beside th
 fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
   new_run()
   let base = fixture("home")
-  let kept : Map[String, Json] = {}
+  let kept : Map[String, Json] = Map([])
   // (told as `kept` changes, where the prefs set changes it)
   let kept_told = @signals.signal(0)
   let src : Source = {
@@ -409,7 +410,7 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       if name == "prefs.set" {
         match field(Some(params), "trouble") {
           Some(Object(t)) => {
@@ -458,7 +459,7 @@ test "wide: with the bell in the rail, the stations' trouble is in 待处理's p
   assert_true(x >= bx + bw + 10.0, msg=x.to_string())
   assert_eq(trouble_said(calls, "ws1\nseen"), Some(Json::string("Maple 连不上了")))
   // nothing to let it go with: looked at, it goes by itself
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   assert_true(t.find("忽略") is None)
   t.key(@ui.key_escape)
@@ -525,11 +526,11 @@ test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on i
   t.frame()
   // one gone wrong is not let go from here
   let (ax, ay) = t.find("磁盘满了").unwrap()
-  t.move(ax, ay)
+  t.move_to(ax, ay)
   t.frame()
   assert_true(t.find("忽略") is None)
   let (x, y) = t.find("选一个发布日期").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   let (dx, dy) = t.find("忽略").unwrap()
   t.tap(dx, dy)
@@ -550,7 +551,7 @@ test "wide: the rail's menu beside the place right clicked, 8 past it; a place's
   t.frame()
   let (mx, my) = t.find("我参与的").unwrap()
   assert_true(mx > rx + rw + 8.0, msg=mx.to_string())
-  t.move(mx, my)
+  t.move_to(mx, my)
   t.frame()
   let (px, py, pw, ph) = t.query(Button, label="将我参与的添加到侧边条").unwrap().rect
   t.tap(px + pw / 2.0, py + ph / 2.0)
@@ -595,7 +596,7 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   assert_eq(fx, @sfdesk.closed_edge)
   // the pointer on the bar: shown a while, its edge at the sidebar's
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
-  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.move_to(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@ui.move_most_ms)
   let (px, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
   // (its line in the middle of its strip)
@@ -608,15 +609,15 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  t.move(1000.0, 400.0)
+  t.move_to(1000.0, 400.0)
   t.run_for(@ui.move_most_ms)
   // folded: what the page shows across (its bar left out), and where its field is
-  let (left, right) = t.ctx().shown_across(@sfdesk.pane_page_id(), but="page-bar").unwrap()
+  let (left, right) = @sfdesk.pane_shown_across().unwrap()
   let (x0, _, _, _) = t.rect_of("发消息").unwrap()
   // the pointer on the bar: shown a while, the page moved aside as far as that needs, no further than the room on its
   // right or the sidebar's width
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
-  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.move_to(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@ui.move_most_ms)
   let reach = @sfdesk.closed_bar_in + @sfdesk.rail_closed_w + @sfdesk.wide.side_w.get() + @sfdesk.peek_gap
   let room = 1280.0 - 2.0 * @sfdesk.peek_gap - right
@@ -685,7 +686,7 @@ test "wide, the window's buttons in the app's top row: the sidebar shown a while
   }
   // folded, the pointer off the rail: beside the window's buttons
   press_lit()
-  t.move(1000.0, 400.0)
+  t.move_to(1000.0, 400.0)
   t.run_for(@sfdesk.peek_leave_ms)
   t.frame()
   t.run_for(@ui.move_most_ms)
@@ -693,7 +694,7 @@ test "wide, the window's buttons in the app's top row: the sidebar shown a while
   let (folded_x, _) = bar_title_at(t)
   // the pointer on the rail: shown a while, the title where it was halfway and after
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
-  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.move_to(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@ui.move_most_ms / 2.0)
   assert_true((bar_title_at(t).0 - folded_x).abs() < 0.01, msg="halfway at \{bar_title_at(t).0}, folded \{folded_x}")
   t.run_for(@ui.move_most_ms)
@@ -761,7 +762,7 @@ test "wide: the files sidebar's update stays in place as it starts to float" {
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(@sfdesk.wide.folded.get() && @sfdesk.wide.peeking.get())
   let start = update_at()
-  assert_true((start.0 - open.0).abs() < 0.5 && (start.1 - open.1).abs() < 0.5, msg="open \{open}, floating starts \{start}")
+  assert_true((start.0 - open.0).abs() < 0.5 && (start.1 - open.1).abs() < 0.5, msg="open \{Repr(open)}, floating starts \{Repr(start)}")
 }
 
 ///|
@@ -810,9 +811,9 @@ test "an update in each sidebar keeps its corner and press room on medium and la
         t.run_for(@ui.move_most_ms)
       }
       let corners = t.corner_faults()
-      assert_true(corners.is_empty(), msg="\{win.0} \{mode}: \{corners}")
+      assert_true(corners.is_empty(), msg="\{win.0} \{mode}: \{Repr(corners)}")
       let rooms = t.room_faults().filter(fn(f) { f.contains("正在下载") })
-      assert_true(rooms.is_empty(), msg="\{win.0} \{mode}: \{rooms}")
+      assert_true(rooms.is_empty(), msg="\{win.0} \{mode}: \{Repr(rooms)}")
     }
   }
 }
@@ -827,7 +828,7 @@ test "wide: a downloading update shows its progress where restart will be offere
   assert_true(downloading is Some(_), msg="the update's download in the sidebar")
   let before = downloading.unwrap().rect
   let (x, y, w, h) = before
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sf.tip_delay_ms * 2.0)
   assert_true(t.find("正在下载 0.1.9999 · 40% · 22.4 MB") is Some(_), msg="the download's progress in its tip")
   t.click(Button, label="正在下载 0.1.9999")
@@ -877,7 +878,7 @@ test "wide: a downloading update's ring sits in the middle of its key, as the fi
   let (mx, my) = ((left + right) / 2.0, (top + bottom) / 2.0)
   assert_true(
     (mx - (x + w / 2.0)).abs() < 0.5 && (my - (y + h / 2.0)).abs() < 0.5,
-    msg="the ring's middle \{(mx, my)}, the key's \{(x + w / 2.0, y + h / 2.0)}",
+    msg="the ring's middle \{Repr((mx, my))}, the key's \{Repr((x + w / 2.0, y + h / 2.0))}",
   )
 }
 
@@ -895,14 +896,14 @@ test "wide: a newer build of the desktop app ready: 重启更新 the update key 
   assert_true(x + w <= fx, msg="更新 to \{x + w}, the filter from \{fx}")
   // folded: 68 from the window's edge, the page bar's words clear of it (72 in)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  t.move(1000.0, 400.0)
+  t.move_to(1000.0, 400.0)
   t.run_for(@ui.move_most_ms)
   let (fx, _, _, _) = t.query(Button, label="重启更新").unwrap().rect
   assert_eq(fx, @sfdesk.update_closed_in)
   assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_update_in)
   // shown a while: 更新 back in the sidebar's first row, the bar starting past the sidebar with its own 12
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
-  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.move_to(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.peeking.get())
   assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_in)
@@ -919,13 +920,13 @@ test "wide: 重启更新 a mark alone, its tip as the pointer rests on it says w
   let said = fn(s : String) { t.words().filter(fn(w) { w.0.contains(s) && w.5 > 0.5 }) }
   assert_eq(said("重启以更新到 0.1.9999").length(), 0)
   let (x, y, w, h) = t.query(Button, label="重启更新").unwrap().rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sf.tip_delay_ms * 2.0)
   let tip = said("重启以更新到 0.1.9999")
   assert_eq(tip.length(), 1, msg="its tip: \{t.words().map(fn(w) { w.0 }).join("|")}")
   // under the key, in the window
-  assert_true(tip[0].2 >= y + h, msg="\{tip[0]} under \{y + h}")
-  assert_true(tip[0].1 >= 0.0, msg="\{tip[0]}")
+  assert_true(tip[0].2 >= y + h, msg="\{Repr(tip[0])} under \{y + h}")
+  assert_true(tip[0].1 >= 0.0, msg="\{Repr(tip[0])}")
   // pressed, still.fail cloud asked first: the key stays, under way, said so
   @sfbase.update.checking.set(true)
   t.frame()
@@ -1056,11 +1057,23 @@ test "wide: Station's page picked in one workspace: in another, that one's first
               }
             _ => t
           }
+        // (its page, the first's first station's as it is renamed)
+        ("station", Some(String("ws2"))) =>
+          match base.topic(name, { "scope": Json::string("ws1"), "station": Json::string("ws1/st1") }).get().value {
+            Some(Object(m)) => {
+              let s = Map::from_iter(m.iter())
+              s["station"] = Json::string("ws2/st9")
+              s["id"] = Json::string("st9")
+              s["name"] = Json::string("家里的 mini")
+              { ..t, value: Some(Json::object(s)) }
+            }
+            _ => t
+          }
         _ => t
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -1100,4 +1113,30 @@ test "wide: the update's three stages in the sidebar, the same key in the same p
   t.run_for(@ui.move_most_ms)
   assert_eq(t.query(Button, label="重启更新").unwrap().rect, at)
   update_reset()
+}
+
+///|
+test "wide: switching rail places with same-width sidebars starts no fold motion, and returning to chats lands on the frame" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  assert_true(app.nav.top() != Home)
+  // switch to files, profiles, and archive on the rail: same sidebar width, no fold way started
+  @sfbase.go_place("files") |> ignore
+  t.frame()
+  assert_eq(@sfbase.page_way.id, "")
+  assert_true(app.nav.top() == Files)
+  @sfbase.go_place("profiles") |> ignore
+  t.frame()
+  assert_eq(@sfbase.page_way.id, "")
+  assert_true(app.nav.top() == Place("profiles"))
+  @sfbase.go_place("archive") |> ignore
+  t.frame()
+  assert_eq(@sfbase.page_way.id, "")
+  assert_true(app.nav.top() == Place("archive"))
+  // switch back to chats on the rail: no fold way started, landed on the frame
+  let (cx, cy, cw, ch) = t.query(Button, label="对话").unwrap().rect
+  t.tap(cx + cw / 2.0, cy + ch / 2.0)
+  t.frame()
+  assert_eq(@sfbase.page_way.id, "")
+  assert_true(app.nav.top() != Home)
 }

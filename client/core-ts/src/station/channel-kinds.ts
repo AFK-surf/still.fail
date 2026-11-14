@@ -101,10 +101,7 @@ export const transcriptOf = (station: string, session: string): Channel => ({ ki
 /// Where the channels' items are held: the logs of the core's database, by number (data.ts), let go for room where a
 /// chat was not opened for long (KEPT). How far a thread goes is its summary's `last` there; a transcript, its session's
 /// summary's `transcriptLength`, or further as a stream or a read said.
-/// `follows`: whether a station's stream follows the sessions at work itself (link.ts `followsRunning`): only then is
-/// a transcript kept whole from its lowest item held (a station from before says neither how far one goes nor gives a
-/// stretch in brief).
-export function heldIn(data: Data, follows: (station: string) => boolean = () => true): Held {
+export function heldIn(data: Data): Held {
   const table = (c: Channel) => (c.kind === ENTRIES ? "entry" : c.kind === LETTERS ? "letter" : "transcript");
   // (how far a thread's letters go, as told since its summary: a letter told before its summary is read again)
   const lettersRaised = new Map<string, number>();
@@ -124,7 +121,7 @@ export function heldIn(data: Data, follows: (station: string) => boolean = () =>
       else if (c.kind === LETTERS) lettersRaised.set(`${c.station}\u0001${c.id}`, Math.max(n, lettersRaised.get(`${c.station}\u0001${c.id}`) ?? 0));
       else data.raiseTranscript(c.station, c.id, n);
     },
-    holes: (c) => c.kind !== TRANSCRIPT || follows(c.station),
-    whole: (c) => c.kind === TRANSCRIPT && follows(c.station) && data.usedLately(c.station, c.id),
+    holes: () => true,
+    whole: (c) => c.kind === TRANSCRIPT && data.usedLately(c.station, c.id),
   };
 }

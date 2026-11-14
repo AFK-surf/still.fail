@@ -7,7 +7,8 @@
 // hover_card's (hover_tile's, a page's tile) round a small panel, what it holds hover_inner in. What it holds as
 // link_card's: a pull request's or an issue's card, a page's tile, the bones of the one it will be while it is read,
 // its address to copy at its foot's end. Read as peek_read reads it: as the pointer comes onto the row and while the
-// card is there, let go of once neither, so the next time it shows it is read again.
+// card is there, let go of once neither, so the next time it shows it is read again; the pictures its value names asked
+// as it is read (@sfbase.link_pictures_ask), the card showing as it does while it is read till they are here.
 
 ///|
 /// A web link's card (web_peek's) over `row` (what draws it: the node the pointer rests on, what is pressed) while a
@@ -45,8 +46,26 @@ pub fn web_peek_node(
     due.val = fn() {  }
   }
   let holder : Ref[@view.View?] = Ref(None)
+  // (what is read as the pointer comes onto the row, while it is: the pictures it names asked as it comes, so that they
+  // are mostly here as the card opens)
+  let warm : @signals.Signal[@signals.Computed[@sfbase.TopicState]?] = @signals.signal(None, same=fn(a, b) {
+    match (a, b) {
+      (None, None) => true
+      (Some(x), Some(y)) => physical_equal(x, y)
+      _ => false
+    }
+  })
+  row.reacts(
+    fn() {
+      match warm.get() {
+        Some(read) => read.get().value
+        None => None
+      }
+    },
+    fn(v) { @sfbase.link_pictures_ask(src, station, @signals.untracked(href), v) },
+  )
   let set_open = fn(on : Bool) {
-    if on == @signals.untracked(fn() { open.get() }) {
+    if on == open.untracked() {
       return
     }
     if on && holder.val is None {
@@ -70,9 +89,9 @@ pub fn web_peek_node(
     }
     // (read as the pointer comes onto it, so the card mostly opens with it there: Peeks.tsx Hover's `warm`)
     if over && web {
-      @sfbase.hold(src, scope, "linkPreview", link_params(station, href())) |> ignore
+      warm.set(Some(@sfbase.hold(src, scope, "linkPreview", link_params(station, href()))))
     }
-    let shows = @signals.untracked(fn() { open.get() })
+    let shows = open.untracked()
     if !web || !takes || shut.val {
       set_open(false)
     } else if shows {
@@ -91,6 +110,7 @@ pub fn web_peek_node(
     }
     // (neither pointed at nor drawn: what it read let go of)
     if !over && !card_made.val {
+      warm.set(None)
       @sfbase.let_go(src, scope)
     }
   })
@@ -104,6 +124,7 @@ pub fn web_peek_node(
   // (its row let go: nothing of it left pending, nothing read for it)
   row.owns(fn() {
     stop_due()
+    warm.set(None)
     @sfbase.let_go(src, scope)
   })
   |> ignore
@@ -136,7 +157,7 @@ fn peek_holder(
   let layer = peek_layer(row)
   let h = layer.box(fn(h) { h.over(Is(true)).over_all(Is(true)) |> ignore }).lives_with(row)
   h.on_key(fn(k) {
-    if k.code == @ui.key_escape && @signals.untracked(fn() { open.get() }) {
+    if k.code == @ui.key_escape && open.untracked() {
       escaped()
       open.set(false)
       true
@@ -170,10 +191,10 @@ fn peek_holder(
     .alpha(By(fn() { look().alpha }))
     .scale(By(fn() { look().sx }), about=FromBeside)
     .says(Is(Some(@view.said(Group))))
-    // (a press on it its own, not the row's under it nor one elsewhere; going, nothing of it read out)
-    .presses(Is(true))
-    .on_press(fn() {  })
+    // (going, nothing of it read out)
     .hides(By(fn() { card.leaving() }))
+    // (a press on it its own, not the row's under it nor one elsewhere)
+    |> @sf.ground_node
     |> ignore
     card.reacts(fn() { card.pointed_in() }, fn(on) { on_card.set(on) })
     card.owns(fn() {
@@ -195,7 +216,6 @@ fn peek_holder(
       // as wide as the window at most, as an old overlay's is), what it holds scrolling in it where it is taller with
       // the panel's own room over and under it (@kit.in_room's: as tall as the room then, by what it holds as it is
       // laid out whole))
-      let whole_h : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
       let most = fn() {
         let m = w.window().1 - 2.0 * peek_room_in
         if m > 0.0 {
@@ -205,12 +225,6 @@ fn peek_holder(
         }
       }
       w
-      .height(By(fn() {
-        match whole_h.get() {
-          Some(held) if held + 2.0 * @sf.panel_pad > most() + peek_room_slop => Some(most())
-          _ => None
-        }
-      }))
       .max_width(By(fn() {
         let across = w.window().0
         match (tile, @sf.hover_tile_most) {
@@ -219,26 +233,39 @@ fn peek_holder(
         }
       }))
       |> ignore
-      w.box(fn(p) {
-        @sf.small_panel_node(p).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-        p.box(fn(reach) {
-          @sf.style_node(reach, fn() { @sf.held_reach() })
-          reach
-          .shrink(Is(1.0))
-          .min_height(Is(Some(0.0)))
-          .scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(held) {
-            held.box(fn(whole) {
-              @sf.style_node(whole, fn() { @sf.held_in() })
-              whole.reacts(fn() { whole.laid_size_told() }, fn(z) { whole_h.set(z.map(fn(z) { z.1 })) })
-              whole.box(fn(inner) {
-                @sf.style_node(inner, fn() { hover_inner })
-                inner.alpha(By(fn() { look().words })) |> ignore
-                link_card_node(inner, read, href, words, peek, fn(at) { link_copy_node(at, href) })
+      // (as tall as what it holds comes to whole in the room it is given, measured as it is laid out)
+      w.by_room(fn(g, given) {
+        g.box(fn(p) {
+          @sf.small_panel_node(p).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+          let whole_at : Ref[@view.View?] = Ref(None)
+          p.box(fn(reach) {
+            @sf.style_node(reach, fn() { @sf.held_reach() })
+            reach
+            .shrink(Is(1.0))
+            .min_height(Is(Some(0.0)))
+            .scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(held) {
+              held.box(fn(whole) {
+                @sf.style_node(whole, fn() { @sf.held_in() })
+                whole_at.val = Some(whole)
+                whole.box(fn(inner) {
+                  @sf.style_node(inner, fn() { hover_inner })
+                  inner.alpha(By(fn() { look().words })) |> ignore
+                  link_card_node(inner, src, station, read, href, words, peek, fn(at) { link_copy_node(at, href) })
+                })
+                |> ignore
               })
               |> ignore
             })
             |> ignore
           })
+          |> ignore
+          p
+          .height(By(fn() {
+            match whole_at.val {
+              Some(whole) if given.tall(whole) + 2.0 * @sf.panel_pad > most() + peek_room_slop => Some(most())
+              _ => None
+            }
+          }))
           |> ignore
         })
         |> ignore
@@ -270,29 +297,40 @@ fn peek_layer(v : @view.View) -> @view.View {
 ///|
 /// What a link's card shows (link_card's): a pull request's card or an issue's; the bones of one (a pull request's
 /// where `true`) while it is read and the core says it is one; else a page's tile.
+#derive(Eq)
 priv enum PeekShows {
   Change(Bool)
   Sample(Bool)
   Page
-} derive(Eq)
+}
 
 ///|
-/// The card (link_card's) in `parent`, of what `read` reads (`href`, `words`, `peek` as web_peek_node's): what it shows
-/// made again as that changes kind, its words and facts as they are read; `copy` makes what copies it, at its foot's
+/// The card (link_card's) in `parent`, of what `read` reads (`href`, `words`, `peek` as web_peek_node's) of station
+/// `station`: what it shows made again as that changes kind, its words and facts as they are read, as it is while it is
+/// read till the pictures they name are here (@sfbase.link_pictures_here_told); `copy` makes what copies it, at its foot's
 /// end.
 fn link_card_node(
   parent : @view.View,
+  src : Source,
+  station : String,
   read : @signals.Computed[@sfbase.TopicState],
   href : () -> String,
   words : () -> String,
   peek : () -> String,
   copy : (@view.View) -> Unit,
 ) -> Unit {
+  // (the pictures its value names asked as it is read, as that changes: told to what reads them as each comes, none
+  // asked as a binding runs)
+  parent.reacts(fn() { (href(), read.get().value) }, fn(r) { @sfbase.link_pictures_ask(src, station, r.0, r.1) })
   let value = fn() -> Json? {
     match read.get().value {
-      Some(Object(_)) as v => v
+      Some(Object(_)) as v if @sfbase.link_pictures_here_told(src, station, href(), v) => v
       _ => None
     }
+  }
+  // (a picture of it, as its image's key: "" none)
+  let picture = fn(which : String) {
+    @sfbase.picture_drawn(@sfbase.link_picture_told(src, station, href(), value(), which))
   }
   let shows = fn() {
     let v = value()
@@ -305,18 +343,25 @@ fn link_card_node(
   parent.pick(shows, fn(b, s) {
     @sf.style_node(b, fn() { peek_card_part })
     match s {
-      Change(pr) => change_card_node(b, value, pr, copy)
+      Change(pr) => change_card_node(b, value, pr, copy, fn() { picture("avatar") })
       // (while it is read: a made-up one's, in its bones)
-      Sample(pr) => @sf.waiting_node(b, fn(bones) { change_card_node(bones, peek_sample, pr, fn(_) {  }) })
+      Sample(pr) => @sf.waiting_node(b, fn(bones) { change_card_node(bones, peek_sample, pr, fn(_) {  }, fn() { "" }) })
       Page =>
-        page_tile_node(b, href, words, fn() {
-          let v = value()
-          if text(v, "kind") == "page" {
-            v
-          } else {
-            None
-          }
-        }, copy)
+        page_tile_node(
+          b,
+          href,
+          words,
+          fn() {
+            let v = value()
+            if text(v, "kind") == "page" {
+              v
+            } else {
+              None
+            }
+          },
+          copy,
+          picture,
+        )
     }
   })
 }
@@ -340,14 +385,16 @@ fn peek_sample() -> Json? {
 ///|
 /// A page's tile (page_tile's) in `parent`: its icon in its thumb (GitHub's mark for a GitHub page, the globe for any
 /// other), its title over where it goes; the page's picture over it where `page` has one; its foot, `copy` at its end.
+/// `pictures`: a picture of it by which (`icon`, `image`), its image's key, "" none.
 fn page_tile_node(
   parent : @view.View,
   href : () -> String,
   words : () -> String,
   page : () -> Json?,
   copy : (@view.View) -> Unit,
+  pictures : (String) -> String,
 ) -> Unit {
-  let picture = fn() { @sf.data_image(text(page(), "image")) }
+  let picture = fn() { if page() is None { "" } else { pictures("image") } }
   let tile = fn(holder : @view.View) {
     holder.box(fn(t) {
       @sf.style_node(t, fn() { peek_tile })
@@ -355,7 +402,7 @@ fn page_tile_node(
         @sf.style_node(th, fn() { peek_thumb }, in_row=true)
         let thumb = fn() {
           let h = href()
-          (@sf.data_image(text(page(), "icon")), h.has_prefix("https://github.com/") || h.contains(".github.com/"))
+          (if page() is None { "" } else { pictures("icon") }, h.has_prefix("https://github.com/") || h.contains(".github.com/"))
         }
         th.pick(thumb, fn(m, k) {
           match k {
@@ -386,18 +433,23 @@ fn page_tile_node(
           fn() { peek_tile_title },
         )
         |> ignore
-        @sf.words_node(
-          body,
-          fn() {
-            let site = text(page(), "site")
-            if site != "" {
-              site + " · " + destination(href())
-            } else {
-              destination(href())
-            }
-          },
-          fn() { peek_tile_url },
-        )
+        // (as wide as its words, as the old view's (w=Cut): cut where it is longer, not stretched across)
+        body.box(fn(u) {
+          u.lines_up(Is(Some(@view.Along::Start))) |> ignore
+          @sf.words_node(
+            u,
+            fn() {
+              let site = text(page(), "site")
+              if site != "" {
+                site + " · " + destination(href())
+              } else {
+                destination(href())
+              }
+            },
+            fn() { peek_tile_url },
+          )
+          |> ignore
+        })
         |> ignore
       })
       |> ignore
@@ -436,8 +488,15 @@ let peek_image_most : Int = 8192
 
 ///|
 /// A pull request's (`pr`) or an issue's card (change_card's) in `parent`, of `v` as it is read: its state's pill,
-/// where it is and when it last changed; its title; who opened it and its facts, `copy` at their line's end.
-fn change_card_node(parent : @view.View, v : () -> Json?, pr : Bool, copy : (@view.View) -> Unit) -> Unit {
+/// where it is and when it last changed; its title; who opened it (`avatar`: their picture's image's key, "" none) and
+/// its facts, `copy` at their line's end.
+fn change_card_node(
+  parent : @view.View,
+  v : () -> Json?,
+  pr : Bool,
+  copy : (@view.View) -> Unit,
+  avatar : () -> String,
+) -> Unit {
   let state = fn() { text(v(), "state") }
   parent.box(fn(rich) {
     @sf.style_node(rich, fn() { peek_rich })
@@ -475,8 +534,8 @@ fn change_card_node(parent : @view.View, v : () -> Json?, pr : Bool, copy : (@vi
         // (what the copy at the line's end leaves of it, from none, its facts wrapping in that: not as wide as they all
         // are in a line)
         facts.wraps(Is(Some(@ui.Space::S2.px()))).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-        facts.each(fn() { peek_facts_of(v(), pr).mapi(fn(i, f) { (i, f) }) }, fn(f) { f }, fn(cell, item) {
-          peek_fact_node(cell, @signals.untracked(fn() { item.get() }).1)
+        facts.each(fn() { peek_facts_of(v(), pr, avatar).mapi(fn(i, f) { (i, f) }) }, fn(f) { f }, fn(cell, item) {
+          peek_fact_node(cell, item.untracked().1)
         })
       })
       |> ignore
@@ -495,20 +554,22 @@ fn change_card_node(parent : @view.View, v : () -> Json?, pr : Bool, copy : (@vi
 /// A fact a pull request's or an issue's card shows (change_card's): who opened it (their login, their picture's key),
 /// a pull request's size (added, taken out), a fact in a pill, how its checks stand (as a state: failed, pending,
 /// passed; in words).
+#derive(Eq, Hash)
 priv enum PeekFact {
   Person(String, String)
   Size(Int, Int)
   Chip(String)
   Checks(String, String)
-} derive(Eq, Hash)
+}
 
 ///|
 /// What facts `v` has (change_card's, in its order): who opened it; a pull request's (`pr`) size where it says one,
-/// its files and how its checks stand; an issue's labels and how many comments it has.
-fn peek_facts_of(v : Json?, pr : Bool) -> Array[PeekFact] {
+/// its files and how its checks stand; an issue's labels and how many comments it has. `avatar`: who opened it's
+/// picture's image's key ("" none).
+fn peek_facts_of(v : Json?, pr : Bool, avatar : () -> String) -> Array[PeekFact] {
   let out : Array[PeekFact] = []
   match field(v, "author") {
-    Some(Object(_)) as a => out.push(Person(text(a, "login"), @sf.data_image(text(a, "avatar"))))
+    Some(Object(_)) as a => out.push(Person(text(a, "login"), avatar()))
     _ => ()
   }
   if pr {
@@ -675,4 +736,4 @@ fn link_copy_node(parent : @view.View, href : () -> String) -> Unit {
 /// When each link's address was last copied from its card (link_copy_node's), by the link: what a card of it made again
 /// says, as link_copy's mark by the link is kept.
 // kept across runs: let go as the app begins anew (hover_reset)
-let peek_copied_at : Map[String, Double] = {}
+let peek_copied_at : Map[String, Double] = Map([])

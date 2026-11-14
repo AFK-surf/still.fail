@@ -59,28 +59,28 @@ let writing_cache : Ref[Array[WritingCached]] = Ref([])
 
 ///|
 /// Each draft by its key, as the page has it.
-pub let writings : Map[String, Writing] = {}
+pub let writings : Map[String, Writing] = Map([])
 
 ///|
 /// The pictures of the files picked or pasted here, by their id: shown at once from their bytes (until the file leaves
 /// the draft), and the station each went up to with its bytes (one sent to another station goes up again there).
-pub let writing_pictures : Map[String, String] = {}
+pub let writing_pictures : Map[String, String] = Map([])
 
 ///|
-let writing_went : Map[String, (String, String, Bytes)] = {}
+let writing_went : Map[String, (String, String, Bytes)] = Map([])
 
 ///|
 /// The videos added here, read whole, that the host has no picture of (no address for them: @hostapi.Picked.src), by
 /// their id: their picture their first frame, drawn here from their bytes (writing_went) by writing_stills.
 // kept across runs: put back by writings_reset (sfbase's reset)
-let writing_unseen : Set[String] = Set::new()
+let writing_unseen : Set[String] = Set([])
 
 ///|
 /// The stills of the videos waiting here the host has no picture of, made from their bytes (bytes_first_frame), each
 /// its tile's picture and its message's once made: called as a composer is built.
 pub fn writing_stills(c : @ui.Ctx) -> Unit {
   for id in writing_unseen.to_array() {
-    guard writing_went.get(id) is Some((_, name, bytes)) else {
+    guard writing_went.get(id) is Some((station, name, bytes)) else {
       writing_unseen.remove(id)
       continue
     }
@@ -90,7 +90,18 @@ pub fn writing_stills(c : @ui.Ctx) -> Unit {
       still => {
         writing_unseen.remove(id)
         writing_pictures[id] = still
-        sent_pictures["upload\u{1}" + id] = still
+        sent_picture_kept("upload\u{1}" + id, still)
+        for _, w in writings {
+          for f in writing_files(w) {
+            let o = Some(f)
+            if text(o, "id") == id {
+              let path = text(field(o, "done"), "path")
+              if path != "" {
+                sent_picture_kept(sent_key(station, path), still)
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -99,7 +110,7 @@ pub fn writing_stills(c : @ui.Ctx) -> Unit {
 ///|
 /// The station each file added here goes up to, by its id.
 // kept across runs: put back by writings_reset (sfbase's reset)
-let writing_stations : Map[String, String] = {}
+let writing_stations : Map[String, String] = Map([])
 
 ///|
 /// Whether file `id` of a draft was put up from here (picked or pasted here: writing_add), which every message it goes
@@ -112,7 +123,7 @@ pub fn writing_put_here(id : String) -> Bool {
 /// What each file picked or pasted here is (file_seed, held_seed), by its id: the same one added again while it is in
 /// its draft is not added twice.
 // kept across runs: put back by writings_reset (sfbase's reset)
-let writing_seeds : Map[String, String] = {}
+let writing_seeds : Map[String, String] = Map([])
 
 ///|
 /// Whether draft `w` has the file `seed` names already (writing_seeds).
@@ -263,7 +274,7 @@ fn writing_adopt(w : WritingState, v : Json?, version : Int, generation : Int, f
     let o = Some(f)
     match (writing_pictures.get(text(o, "id")), writing_stations.get(text(o, "id")), field(o, "done")) {
       (Some(picture), Some(station), Some(done)) if text(Some(done), "path") != "" =>
-        sent_pictures[sent_key(station, text(Some(done), "path"))] = picture
+        sent_picture_kept(sent_key(station, text(Some(done), "path")), picture)
       _ => ()
     }
   }
@@ -340,6 +351,22 @@ fn writing_act(
 }
 
 ///|
+/// The core's calls whose answers change only signals (@core.said, as the app starts; a made-up core's the same): the
+/// words of a draft told (`composer.text`: what writing_act does with its answer, `pending` and the version it is at,
+/// read by what follows the draft's topic), where a ref is asked at the caret (`ref.at`: refs_ask_at's, what it found
+/// set with the signals the menu reads). Taken as they come, what read those is built again, nothing else: not a page
+/// whose field had a word typed in it built whole for each.
+pub fn calls_said() -> Array[String] {
+  ["composer.text", "ref.at"]
+}
+
+///|
+/// Whether call `name`'s answer changes only signals (calls_said).
+pub fn call_said(name : String) -> Bool {
+  calls_said().contains(name)
+}
+
+///|
 /// What is typed, told to the core as it is typed (`composer.text`).
 pub fn writing_text(src : Source, w : Writing, words : String) -> Unit {
   if words == w.text.get() {
@@ -384,7 +411,7 @@ pub fn writing_add(
         @ui.add_image(key, bytes)
         writing_pictures[id] = key
         // its message drawn from it, as picked, sent before it is up (it names its upload: sent.mbt)
-        sent_pictures["upload\u{1}" + id] = key
+        sent_picture_kept("upload\u{1}" + id, key)
       }
       None =>
         match host_picture(name, still) {
@@ -392,7 +419,7 @@ pub fn writing_add(
           "" => ()
           picture => {
             writing_pictures[id] = picture
-            sent_pictures["upload\u{1}" + id] = picture
+            sent_picture_kept("upload\u{1}" + id, picture)
           }
         }
     }
@@ -468,7 +495,7 @@ pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostap
     "" => ()
     picture => {
       writing_pictures[id] = picture
-      sent_pictures["upload\u{1}" + id] = picture
+      sent_picture_kept("upload\u{1}" + id, picture)
     }
   }
   writing_stations[id] = station
@@ -531,7 +558,7 @@ pub fn host_picture(name : String, src : String) -> String {
 /// Files shared into the app from another (Android's share sheet), waiting for their chat's composer to take them, by
 /// its draft's key.
 // kept across runs: put back by writings_reset (sfbase's reset)
-pub let shared_into : Map[String, Array[@hostapi.Picked]] = {}
+pub let shared_into : Map[String, Array[@hostapi.Picked]] = Map([])
 
 ///|
 /// The station files' picker (＋ → Station 文件) put up for draft `key` (`src` what it reads the stations by): sfdesk's
@@ -540,29 +567,46 @@ pub let shared_into : Map[String, Array[@hostapi.Picked]] = {}
 pub let station_files_asked : Ref[(Source, String) -> Unit] = Ref(fn(_, _) {  })
 
 ///|
-/// The files' page's folder picker (sfdesk drive_dialogs.mbt) drawn inside something else (a preset's dialog, in
-/// place of what it held): put at a station's home (its address), drawn each frame where it is shown, the folder it
-/// shows ("" while it is read, or one the station may not read), let go.
-// kept across runs: what the app says once as it starts
-pub let folder_browse_open : Ref[(String) -> Unit] = Ref(fn(_) {  })
+/// A folder to choose on a station (sfdesk drive_dialogs.mbt's picker, folder_pick_asked): its panel's `title` and what it
+/// says under it (`note`, "" nothing), the `stations` it can be chosen on and the one it starts on (`station`), the
+/// folder it starts in there (`at`, "" the station's home); its button's words given the name of the folder shown
+/// (`action`), whether that folder is taken already (`taken`, given the station and its path: the button disabled,
+/// `taken_words` its words then); what a folder chosen does (`pick`, given its station, its path, its name, and what
+/// closes the picker).
+pub(all) struct FolderPick {
+  title : String
+  note : String
+  stations : Array[@sf.StationChoice]
+  station : String
+  at : String
+  action : (String) -> String
+  taken : (String, String) -> Bool
+  taken_words : String
+  pick : (String, String, String, () -> Unit) -> Unit
+}
 
 ///|
+/// The folder picker put up (`src` what it asks the stations by), a step further in from the panel that asked for it
+/// as that one closes for it: sfdesk's folder_pick (浏览文件夹 of a preset's folders, sfpages presets.mbt).
 // kept across runs: what the app says once as it starts
-pub let folder_browse_body : Ref[(@ui.Ctx, Source, String) -> Unit] = Ref(fn(_, _, _) {  })
-
-///|
-// kept across runs: what the app says once as it starts
-pub let folder_browse_here : Ref[() -> String] = Ref(fn() { "" })
-
-///|
-// kept across runs: what the app says once as it starts
-pub let folder_browse_close : Ref[() -> Unit] = Ref(fn() {  })
+pub let folder_pick_asked : Ref[(Source, FolderPick) -> Unit] = Ref(fn(_, _) {  })
 
 ///|
 /// Chat `r`'s services and jobs put up (an agent's card's jobs pressed, sfpages): the screen's (sfapp's: the desktop's
 /// popover, the phone's panel).
 // kept across runs: what the app says once as it starts
 pub let chat_jobs_asked : Ref[(@ui.Ctx, Source, ChatRef) -> Unit] = Ref(fn(_, _, _) {  })
+
+///|
+/// A key that is the page's (Space's composer.focus) at moment `at`: the page brought over first where the tape (中屏)
+/// has it behind the sidebar (sfdesk's tape_page_for_key), as the old page's own key did; nothing elsewhere.
+// kept across runs: what the app says once as it starts
+pub let page_for_key : Ref[(Double) -> Unit] = Ref(fn(_) {  })
+
+///|
+/// The same from what is made once (an agent's card as nodes), the window's width given (what its screen is of).
+// kept across runs: what the app says once as it starts
+pub let chat_jobs_open : Ref[(Source, ChatRef, Double) -> Unit] = Ref(fn(_, _, _) {  })
 
 ///|
 /// Files and folders dragged in from where they are (a station's files: `ref` with its station, its name and path, a
@@ -605,6 +649,7 @@ pub fn writing_mode(src : Source, w : Writing, id : String, mode : String) -> Un
 pub fn writing_remove(src : Source, w : Writing, id : String) -> Unit {
   writing_pictures.remove(id)
   writing_went.remove(id)
+  writing_unseen.remove(id)
   writing_seeds.remove(id)
   writing_act(src, w, "remove", { "id": Json::string(id) }, show=fn(w) {
     w.state.files.set(w.state.files.get().filter(fn(f) { text(Some(f), "id") != id }))
@@ -711,7 +756,7 @@ pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
 /// the one it goes to, where a new chat's files go up now.
 pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (Json?) -> Unit) -> Unit {
   w.taken = Some((w.state.text.get(), w.state.quotes.get(), w.state.files.get()))
-  let params : Map[String, Json] = {}
+  let params : Map[String, Json] = Map([])
   if station != "" {
     params["station"] = Json::string(station)
   }
@@ -742,7 +787,7 @@ pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (J
 /// What `take` took put back (a chat that could not be made, a message never sent), saying why; with `unless_written`,
 /// only while nothing new is written there (`composer.restore`).
 pub fn writing_restore(src : Source, w : Writing, error : String, unless_written? : Bool = false) -> Unit {
-  if unless_written && (w.state.text.get().trim(chars=" \n\t").to_string() != "" || w.state.files.get().length() > 0 || w.state.quotes.get().length() > 0) {
+  if unless_written && (w.state.text.get().trim(chars=" \n\t").to_owned() != "" || w.state.files.get().length() > 0 || w.state.quotes.get().length() > 0) {
     return
   }
   let kept = w.taken
@@ -908,20 +953,20 @@ pub fn finder_dragged(src : Source, paths : Array[@ui.DroppedPath]) -> Array[Dra
     station_name
   } else {
     match station.rev_find("/") {
-      Some(i) => station.view(start_offset=i + 1).to_owned()
+      Some(i) => station.exact_view(start=i + 1).to_owned()
       None => station
     }
   }
   paths.map(fn(p) {
     let abs = if p.path.length() > 1 && p.path.has_suffix("/") {
-      p.path.view(end_offset=p.path.length() - 1).to_owned()
+      p.path.exact_view(end=p.path.length() - 1).to_owned()
     } else {
       p.path
     }
     // (its folder the root it is asked from: the station's own reach any folder of it, drive.ts `anywhere`)
     let (root, name) = match abs.rev_find("/") {
-      Some(0) => ("/", abs.view(start_offset=1).to_owned())
-      Some(i) => (abs.view(end_offset=i).to_owned(), abs.view(start_offset=i + 1).to_owned())
+      Some(0) => ("/", abs.exact_view(start=1).to_owned())
+      Some(i) => (abs.exact_view(end=i).to_owned(), abs.exact_view(start=i + 1).to_owned())
       None => ("", abs)
     }
     { station, station_name, root, path: name, abs, name, size: p.size, dir: p.dir }
@@ -969,4 +1014,4 @@ pub let neighbour_held : Ref[() -> Bool] = Ref(fn() { false })
 ///|
 /// The files quoted, by draft key, not yet taken by a composer.
 // kept across runs: put back by writings_reset (sfbase's reset)
-pub let quoted_into : Map[String, Array[(String, String, String, Json)]] = {}
+pub let quoted_into : Map[String, Array[(String, String, String, Json)]] = Map([])

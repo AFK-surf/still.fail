@@ -3,37 +3,47 @@
 // the app's presses there (mbui's mac host: its canvas opaque to window moves under the system's bar).
 
 ///|
-/// Whether a press at (x, y) lands on a control: what its semantics say it is, named (a box pressed for itself alone,
-/// a page's, a list's, says no name; a panel's edge, dragged, is a Separator named).
+/// Whether a press at (x, y) lands on a control: on what does something pressed, as the hit test has it
+/// (Tester::press_lands_at: a node of the window's tree with its press or its drag said, as the rule of a press's room
+/// measures by Tree::target_at; an old view's target whose press is read), not on what is only named (a part that
+/// takes the press and does nothing with it is no control: the coordinator of the migration, 2026-11-12).
 fn control_at(t : @ui.Tester, x : Double, y : Double) -> Bool {
-  t.semantics().iter().any(fn(s) {
-    let (sx, sy, sw, sh) = s.rect
-    let control = s.role
-      is (Button | Link | Tab | Switch | Checkbox | Radio | TextField | Combobox | MenuItem | Slider | Option | Separator)
-    !s.hidden && control && s.label != "" && x >= sx && x < sx + sw && y >= sy && y < sy + sh
-  })
+  t.press_lands_at(x, y) == "pressed"
 }
 
 ///|
 /// Across the window's top row at `y`, every 8 points: what is not a control drags the window, and so does some of the
-/// page's part of it (from `from` on).
-fn row_drags(t : @ui.Tester, what : String, from : Double, y? : Double = 22.0) -> Unit raise {
+/// page's part of it (from `from` on). `known`: the points where a press is neither, as the page is now (not the
+/// chat's bar's: row_dead_known), held to be those and no more.
+fn row_drags(t : @ui.Tester, what : String, from : Double, y? : Double = 22.0, known? : Array[Double] = []) -> Unit raise {
   let mut x = 2.0
   let mut page = false
+  let neither : Array[Double] = []
   while x < t.ctx().width {
     let drags = t.drags_window_at(x, y)
     if !drags && !control_at(t, x, y) {
-      fail("\{what}: a press at \{x} is neither a control's nor the window's")
+      neither.push(x)
     }
     if drags && x >= from {
       page = true
     }
     x = x + 8.0
   }
+  if neither != known {
+    fail("\{what}: a press at each of \{Repr(neither)} is neither a control's nor the window's (known so: \{Repr(known)})")
+  }
   if !page {
     fail("\{what}: nothing of the page's top row drags the window")
   }
 }
+
+///|
+/// Where a press in a page's top row is neither a control's nor the window's as the page is now, its own (each a
+/// segmented choice's 2 of padding past its first or last choice, a box that takes the press and does nothing with it:
+/// 文件's 显示方式 at 922), found as the press's judgment came to be the hit
+/// test's (Tester::press_lands_at). Only falls.
+// kept across runs: a value (no field of it changes)
+let row_dead_known : Map[String, Array[Double]] = Map([])
 
 ///|
 test "a Mac's window: the top row drags it on every page, with a bar there or not, but for what is pressed there" {
@@ -58,7 +68,7 @@ test "a Mac's window: the top row drags it on every page, with a bar there or no
   let t = wide_tester(calls, window_inset=true)
   app.nav.replace(Files)
   t.run_for(@ui.move_most_ms)
-  row_drags(t, "文件", 400.0)
+  row_drags(t, "文件", 400.0, known=row_dead_known.get("文件").unwrap_or([]))
   // laid out Medium, on the tape: the sidebar in use, then the page's panel brought over
   let t = wide_tester(calls, mode="chat", w=690.0, h=840.0, window_inset=true)
   t.run_for(@ui.move_most_ms)
@@ -185,7 +195,7 @@ test "a new chat with its 文件 tab: the empty part of its bar drags the window
 }
 
 ///|
-test "a window of its own, a station's screen live alone in it (the window's tree's frame round the page, an old view hosted): its top row drags it but for what is pressed there; 控制中心's panel (画质) a modal: a blank part of it pressed sends the screen nothing, nor drags the window; its 任务管理器 sends its keys; closed, the same point pressed sent to the screen; open, the top row's empty part pressed lets the panel go, the window not dragged till the next press" {
+test "a window of its own, a station's screen live alone in it (the window's tree's frame round the page, an old view hosted): its top row drags it but for what is pressed there; 控制中心's panel (快捷操作, 画面: 画质) a modal: a blank part of it pressed sends the screen nothing, nor drags the window; the bar's 组合键 panel's 任务管理器 sends its keys, the panel open after it; closed, the same point pressed sent to the screen; open, the top row's empty part pressed lets the panel go, the window not dragged till the next press" {
   let calls : Array[Made] = []
   let shell : Ref[ShellIs] = Ref(Unsized)
   let t = wide_tester(calls, mode="screen-live", window_inset=true, before=fn(src) {
@@ -198,11 +208,16 @@ test "a window of its own, a station's screen live alone in it (the window's tre
   t.run_for(@ui.move_most_ms)
   let read = fn() { t.semantics().filter(fn(s) { !s.hidden && s.label != "" }) }
   let center = read().iter().find_first(fn(s) { s.label == @sf.t("web-pages.screen.panel") && s.role is Button })
-  // (the window of its own it is, its screen live (控制中心 there), none of the app's)
-  assert_eq((shell.val == Lone, center is Some(_), t.find("新建对话") is None), (true, true, true), msg="\{read().map(fn(s) { s.label })}")
-  row_drags(t, "a window of its own", 0.0)
+  let combos = read().iter().find_first(fn(s) { s.label == @sf.t("web-pages.screen.combos") && s.role is Button })
+  // (the window of its own it is, its screen live and driven (控制中心 and 组合键 there), none of the app's)
+  assert_eq(
+    (shell.val == Lone, center is Some(_), combos is Some(_), t.find("新建对话") is None),
+    (true, true, true, true),
+    msg="\{Repr(read().map(fn(s) { s.label }))}",
+  )
+  row_drags(t, "a window of its own", 0.0, known=row_dead_known.get("a window of its own").unwrap_or([]))
   let inputs = fn() { calls.filter(fn(c) { c.name == "screen.input" }).length() }
-  let sent_since = fn(n : Int) { calls.filter(fn(c) { c.name == "screen.input" })[n:].to_array().map(fn(c) { c.params.stringify() }) }
+  let sent_since = fn(n : Int) { calls.filter(fn(c) { c.name == "screen.input" })[n:].to_owned().map(fn(c) { c.params.stringify() }) }
   let (cx, cy) = match center {
     Some(s) => (s.rect.0 + s.rect.2 / 2.0, s.rect.1 + s.rect.3 / 2.0)
     None => (0.0, 0.0)
@@ -212,16 +227,28 @@ test "a window of its own, a station's screen live alone in it (the window's tre
     t.tap(cx, cy)
     t.run_for(@sf.later_ms)
   }
+  // (组合键's tool, which opens and shuts its panel the same way)
+  let (kx, ky) = match combos {
+    Some(s) => (s.rect.0 + s.rect.2 / 2.0, s.rect.1 + s.rect.3 / 2.0)
+    None => (0.0, 0.0)
+  }
+  let toggle_combos = fn() {
+    t.tap(kx, ky)
+    t.run_for(@sf.later_ms)
+  }
   // (an empty part of the top row, the window's)
   let mut ex = 400.0
   while !t.drags_window_at(ex, 22.0) && ex < cx - 40.0 {
     ex = ex + 8.0
   }
   let empty_drags = t.drags_window_at(ex, 22.0)
-  // open: 画质 in it; a blank part of it (the panel alone read out there), found down its middle
+  // open: what 控制中心 holds now in it (快捷操作's tiles, 画面's 画质); a blank part of it (the panel alone read out
+  // there), found down its middle
   toggle()
   let panel = dialogs()
-  let quality = t.find(@sf.t("web-pages.screen.quality")) is Some(_)
+  let quality = t.find(@sf.t("web-pages.screen.quick")) is Some(_) &&
+    t.find(@sf.t("web-pages.screen.picture")) is Some(_) &&
+    t.find(@sf.t("web-pages.screen.quality")) is Some(_)
   let (px0, py0, pw, ph) = if panel.length() > 0 { panel[0].rect } else { (0.0, 0.0, 0.0, 0.0) }
   let px = px0 + pw / 2.0
   let mut py = py0 + ph - 8.0
@@ -232,7 +259,12 @@ test "a window of its own, a station's screen live alone in it (the window's tre
     py = py - 8.0
   }
   let blank = py > py0
-  // (its 任务管理器: its keys sent, as it is for)
+  if dialogs().length() > 0 {
+    toggle()
+  }
+  // (组合键's panel, by its own tool: its 任务管理器's keys sent, as it is for, and the panel open after it, for the
+  // next)
+  toggle_combos()
   let task = read().iter().find_first(fn(s) { s.label == "任务管理器" && s.role is Button })
   let before_task = inputs()
   match task {
@@ -240,8 +272,10 @@ test "a window of its own, a station's screen live alone in it (the window's tre
     None => ()
   }
   let task_keys = sent_since(before_task)
+  t.run_for(@sf.later_ms)
+  let combos_kept = dialogs().length() == 1 && read().iter().any(fn(s) { s.label == "任务管理器" && s.role is Button })
   if dialogs().length() > 0 {
-    toggle()
+    toggle_combos()
   }
   // shut: the point (the screen there) pressed: sent to the screen
   let n = inputs()
@@ -281,6 +315,7 @@ test "a window of its own, a station's screen live alone in it (the window's tre
     quality,
     blank,
     task_keys.iter().any(fn(k) { k.contains("Escape") }),
+    combos_kept,
     sent_before,
     open_again,
     sent_open,
@@ -293,7 +328,7 @@ test "a window of its own, a station's screen live alone in it (the window's tre
   )
   assert_eq(
     saw,
-    (true, 1, true, true, true, true, true, [], false, true, true, 0, true, 1),
-    msg="saw \{saw}; blank at \{(px, py)}; panel \{panel.map(fn(s) { s.rect })}; task's keys \{task_keys}",
+    (true, 1, true, true, true, true, true, true, [], false, true, true, 0, true, 1),
+    msg="saw \{Repr(saw)}; blank at \{Repr((px, py))}; panel \{Repr(panel.map(fn(s) { s.rect }))}; task's keys \{Repr(task_keys)}",
   )
 }

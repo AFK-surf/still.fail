@@ -7,7 +7,8 @@ import { t } from "../i18n.ts";
 import { RECHECKING } from "../station/words.ts";
 import { Loads } from "../preview-load.ts";
 import * as status from "../status.ts";
-import type { Topic } from "../protocol.ts";
+import { topicKey, type Topic } from "../protocol.ts";
+import { computed, type Derived } from "../reactive.ts";
 import type { Source, Value } from "../store.ts";
 import { timed } from "../spent.ts";
 
@@ -19,13 +20,36 @@ export interface Owner {
   stop?(topic: Topic): void;
   compute?(topic: Topic): Value | undefined;
   waits?(topic: Topic): boolean;
+  opened?(topic: Topic): void;
+}
+
+/// Whether two values `after` made of one are the same: each field the very same, a list's items each the very same
+/// (what it puts in a chat: its unread line, the messages said and the agents started while it shows).
+function sameSaid(a: Value | undefined, b: Value | undefined): boolean {
+  if (a === undefined || b === undefined || !("ok" in a) || !("ok" in b)) return a === b;
+  const [x, y] = [a.ok as Record<string, unknown>, b.ok as Record<string, unknown>];
+  if (x === y) return true;
+  if (typeof x !== "object" || typeof y !== "object" || x === null || y === null) return false;
+  const keys = Object.keys(x);
+  if (keys.length !== Object.keys(y).length) return false;
+  return keys.every((k) => {
+    const [u, w] = [x[k], y[k]];
+    if (u === w) return true;
+    return Array.isArray(u) && Array.isArray(w) && u.length === w.length && u.every((item, i) => item === w[i]);
+  });
 }
 
 export class Router implements Source {
   readonly #core: Inner;
   readonly owners: Owner[] = [];
-  /// What a topic's value goes through once computed (a chat as its UIs attend to it).
+  /// What a topic's value goes through once computed (a chat as its UIs attend to it), and the topics it changes
+  /// (`attends`): their value is made in a computed of their own (#made), apart from what `after` reads, so a UI's focus
+  /// moving (`client.focus`, sent at every switch of workspace or chat, whatever it shows) puts the chat as it was made
+  /// through `after` again, and does not make it again (3-6 ms in Hermes, twice as a switch of workspace committed onto
+  /// a chat, 2026-11-11).
   after: (topic: Topic, value: Value | undefined) => Value | undefined = (_topic, value) => value;
+  attends: (topic: Topic) => boolean = () => false;
+  readonly #made = new Map<string, { value: Derived<Value | undefined>; said: { of: Value | undefined; out: Value | undefined } | undefined }>();
 
   constructor(core: Inner) {
     this.#core = core;
@@ -42,7 +66,12 @@ export class Router implements Source {
     this.owners.find((o) => o.owns(topic))?.resume?.(topic);
   }
 
+  opened(topic: Topic): void {
+    this.owners.find((o) => o.owns(topic))?.opened?.(topic);
+  }
+
   stop(topic: Topic): void {
+    this.#made.delete(topicKey(topic));
     this.owners.find((o) => o.owns(topic))?.stop?.(topic);
   }
 
@@ -88,6 +117,10 @@ export class Router implements Source {
         return { ok: core.adb.value() };
       case "adbCard":
         return { ok: core.adb.card(String(topic.station)) };
+      case "rigs":
+        return { ok: core.rigs.value(String(topic.workspace)) };
+      case "devices":
+        return { ok: core.devices.value(String(topic.workspace)) };
       case "previewLoad":
         return { ok: core.workspaces.ofStation(topic.station as string).part("previewLoad", () => new Loads()).value(topic) };
       case "prefs":
@@ -95,7 +128,18 @@ export class Router implements Source {
       case "drivePlace":
         return { ok: null };
     }
-    return this.after(topic, this.owners.find((o) => o.owns(topic))?.compute?.(topic));
+    const owner = this.owners.find((o) => o.owns(topic));
+    if (!this.attends(topic)) return this.after(topic, owner?.compute?.(topic));
+    // (made in a computed of its own: what `after` alone reads, a UI's focus, puts it through again as it was made)
+    const key = topicKey(topic);
+    let made = this.#made.get(key);
+    if (made === undefined) this.#made.set(key, (made = { value: computed(() => owner?.compute?.(topic)), said: undefined }));
+    const value = made.value.get();
+    const said = this.after(topic, value);
+    // (and as it went through before where that made the same of it: the very value, which goes out as it did)
+    if (made.said !== undefined && made.said.of === value && sameSaid(made.said.out, said)) return made.said.out;
+    made.said = { of: value, out: said };
+    return said;
   }
 
   /// What is waited on: of a workspace, its own waits, its account's socket and the relay opened for no station; of

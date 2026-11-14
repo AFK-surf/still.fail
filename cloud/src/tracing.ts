@@ -1,17 +1,19 @@
 // Traces. Clients and stations send their spans here, to
-// POST /v1/telemetry/traces, and still.fail cloud passes them on to Axiom with its
-// own token, which never leaves the Worker. It records spans of its own for
-// the /v1/* calls that carry a recorded W3C traceparent, sent straight to
-// Axiom once the answer is out.
+// POST /v1/telemetry/traces, and still.fail cloud passes them on to Google Cloud (Cloud Trace; logs to Cloud Logging)
+// through its Telemetry API, as its own service account (GCP_TELEMETRY), whose key never leaves the Worker. It records
+// spans of its own for the /v1/* calls that carry a recorded W3C traceparent, sent straight there once the answer is out.
 import { DurableObject } from "cloudflare:workers";
 import { clock, nowSeconds, readText, reply } from "./auth";
 import { header, publicOrigins, signedMessages } from "./compat";
+import { sockets } from "./directory";
 import type { Env } from "./env";
+import { accessToken, dropToken, serviceAccount } from "./google";
 import { validKeyHex, verifyAnySignature } from "./grants";
 import { TELEMETRY_BATCHES_PER_MINUTE } from "./limits";
 
-const AXIOM = "https://api.axiom.co/v1/traces";
-const AXIOM_LOGS = "https://api.axiom.co/v1/logs";
+/** Google Cloud's OTLP endpoint (the Telemetry API): `/v1/traces` into Cloud Trace, `/v1/logs` into Cloud Logging. */
+const TELEMETRY = "https://telemetry.googleapis.com/v1";
+const SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const MAX_BYTES = 512 * 1024;
 const MAX_SPANS = 1000;
 
@@ -106,13 +108,31 @@ export class TelemetryLimiter extends DurableObject<Env> {
   }
 }
 
-async function toAxiom(env: Env, body: string, to = AXIOM): Promise<boolean> {
-  const response = await fetch(to, {
+type Resources = { resource?: { attributes?: unknown[] } }[];
+
+/**
+ * A batch (OTLP JSON: `resourceSpans` or `resourceLogs`) sent to Google Cloud as GCP_TELEMETRY's service account, each
+ * resource named with its project (`gcp.project_id`, which the Telemetry API files it under). False when there is no
+ * account or Google did not take it.
+ */
+async function toGoogle(env: Env, kind: "traces" | "logs", value: { resourceSpans?: Resources; resourceLogs?: Resources }): Promise<boolean> {
+  const account = serviceAccount(env.GCP_TELEMETRY);
+  if (!account) return false;
+  for (const resource of value.resourceSpans ?? value.resourceLogs ?? []) {
+    resource.resource ??= {};
+    const kept = (Array.isArray(resource.resource.attributes) ? resource.resource.attributes : []).filter((a) => (a as { key?: string })?.key !== "gcp.project_id");
+    resource.resource.attributes = [...kept, { key: "gcp.project_id", value: { stringValue: account.project_id } }];
+  }
+  const token = await accessToken(account, SCOPE);
+  if (!token) return false;
+  const response = await fetch(`${TELEMETRY}/${kind}`, {
     method: "POST",
-    headers: { authorization: `Bearer ${env.AXIOM_TOKEN}`, "x-axiom-dataset": env.AXIOM_DATASET ?? "ember", "content-type": "application/json" },
-    body,
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(value),
   });
-  await response.body?.cancel();
+  if (response.status === 401) dropToken(account, SCOPE);
+  if (!response.ok) console.warn(`telemetry ${kind}: ${response.status} ${(await response.text().catch(() => "")).slice(0, 200)}`);
+  else await response.body?.cancel();
   return response.ok;
 }
 
@@ -131,10 +151,12 @@ export async function stationSender(request: Request, env: Env, body: string, ta
   const digest = hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)));
   const messages = signedMessages(tag, publicOrigins(env), `${station}:${ts}:${digest}`, former);
   if (!(await verifyAnySignature(station, header(request, "signature") ?? "", messages))) return null;
-  return (await env.DIRECTORY.getByName("primary").isStation(station)) ? station : null;
+  // Its own object says (station.ts), off the Directory, which every one of its requests went through before.
+  const enrolled = sockets.where(env) === "primary" ? env.DIRECTORY.getByName("primary").isStation(station) : env.STATIONS.getByName(station).isStation(station);
+  return (await enrolled) ? station : null;
 }
 
-/** POST /v1/telemetry/traces: a batch of spans (OTLP JSON), passed on to Axiom. `account` is the signed-in sender, if any. */
+/** POST /v1/telemetry/traces: a batch of spans (OTLP JSON), passed on to Google Cloud. `account` is the signed-in sender, if any. */
 export async function receiveTraces(request: Request, env: Env, account: string | null): Promise<Response> {
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") return reply({ error: "invalid_request" }, 400);
   let body: string;
@@ -156,20 +178,20 @@ export async function receiveTraces(request: Request, env: Env, account: string 
     return reply({ error: "invalid_request" }, 400);
   }
   if (spans > MAX_SPANS) return reply({ error: "too_large" }, 413);
-  if (!env.AXIOM_TOKEN) return reply({ error: "telemetry_not_configured" }, 503);
-  return (await toAxiom(env, withNetwork(request, value.resourceSpans!, body, value))) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
+  if (!env.GCP_TELEMETRY) return reply({ error: "telemetry_not_configured" }, 503);
+  withNetwork(request, value.resourceSpans!);
+  return (await toGoogle(env, "traces", value)) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
 }
 
-/** The batch with the network it came from (`networkOf`) on each of its resources, sent as JSON again; as it was if Cloudflare said nothing of where it came from. */
-function withNetwork(request: Request, resources: { resource?: { attributes?: unknown[] } }[], body: string, value: unknown): string {
+/** Puts the network the batch came from (`networkOf`) on each of its resources; none if Cloudflare said nothing of where it came from. */
+function withNetwork(request: Request, resources: Resources): void {
   const network = networkOf((request as { cf?: unknown }).cf);
-  if (network.length === 0) return body;
+  if (network.length === 0) return;
   for (const resource of resources) {
     resource.resource ??= {};
     const kept = (Array.isArray(resource.resource.attributes) ? resource.resource.attributes : []).filter((a) => !NETWORK_KEYS.has((a as { key?: string })?.key ?? ""));
     resource.resource.attributes = [...kept, ...network];
   }
-  return JSON.stringify(value);
 }
 
 const NETWORK_KEYS = new Set(["stillfail.net.asn", "stillfail.net.org", "stillfail.net.country", "stillfail.net.region", "stillfail.net.city"]);
@@ -196,7 +218,7 @@ export function networkOf(cf: unknown): { key: string; value: { stringValue: str
 
 /**
  * POST /v1/telemetry/logs: a batch of a station's log lines (OTLP JSON logs, scrubbed by the station:
- * station/src/ops/log-export.ts), signed by the station as its spans are, passed on to Axiom.
+ * station/src/ops/log-export.ts), signed by the station as its spans are, passed on to Google Cloud.
  */
 export async function receiveLogs(request: Request, env: Env): Promise<Response> {
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") return reply({ error: "invalid_request" }, 400);
@@ -219,18 +241,19 @@ export async function receiveLogs(request: Request, env: Env): Promise<Response>
     return reply({ error: "invalid_request" }, 400);
   }
   if (records > MAX_SPANS) return reply({ error: "too_large" }, 413);
-  if (!env.AXIOM_TOKEN) return reply({ error: "telemetry_not_configured" }, 503);
+  if (!env.GCP_TELEMETRY) return reply({ error: "telemetry_not_configured" }, 503);
   // The station's network too: which carrier and province a station is reached through decides how its ways do.
-  return (await toAxiom(env, withNetwork(request, value.resourceLogs!, body, value), AXIOM_LOGS)) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
+  withNetwork(request, value.resourceLogs!);
+  return (await toGoogle(env, "logs", value)) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
 }
 
 /**
- * What a relay did in a minute (relay-load.ts), as a log line of `stillfail-relay` in Axiom, its fields `log.<name>` as a
+ * What a relay did in a minute (relay-load.ts), as a log line of `stillfail-relay` in Cloud Logging, its fields `log.<name>` as a
  * station's lines' are: so a device's slow way through a relay is seen beside the relay's own count of that minute (how
  * many it held, what it passed on and dropped). Dropped if that fails, as spans are.
  */
-export async function relayToAxiom(env: Env, url: string, minute: object | null, lines: { what: string; fields: object }[] = []): Promise<void> {
-  if (!env.AXIOM_TOKEN || (minute === null && lines.length === 0)) return;
+export async function relayToTelemetry(env: Env, url: string, minute: object | null, lines: { what: string; fields: object }[] = []): Promise<void> {
+  if (!env.GCP_TELEMETRY || (minute === null && lines.length === 0)) return;
   const attribute = (key: string, value: unknown) => ({ key, value: typeof value === "number" && Number.isSafeInteger(value) ? { intValue: String(value) } : typeof value === "number" ? { doubleValue: value } : typeof value === "boolean" ? { boolValue: value } : { stringValue: String(value) } });
   const host = new URL(url).host;
   const at = (BigInt(clock.now()) * 1_000_000n).toString();
@@ -244,13 +267,13 @@ export async function relayToAxiom(env: Env, url: string, minute: object | null,
   // Lines beside the minute: each client connection that sent in it (`relay conn`, relay-metrics.ts relayConns), what
   // probes in China's networks found of it (`relay probe`, probes.ts).
   const records = [...(minute !== null ? [record("relay minute", minute)] : []), ...lines.map((l) => record(l.what, l.fields))];
-  const body = JSON.stringify({ resourceLogs: [{ resource: { attributes: [attribute("service.name", "stillfail-relay"), attribute("stillfail.relay", host)] }, scopeLogs: [{ scope: { name: "stillfail-cloud" }, logRecords: records }] }] });
-  await toAxiom(env, body, AXIOM_LOGS).catch(() => false);
+  const value = { resourceLogs: [{ resource: { attributes: [attribute("service.name", "stillfail-relay"), attribute("stillfail.relay", host)] }, scopeLogs: [{ scope: { name: "stillfail-cloud" }, logRecords: records }] }] };
+  await toGoogle(env, "logs", value).catch(() => false);
 }
 
-/** The span of a /v1/* call made in a recorded trace, sent to Axiom (dropped if that fails). */
+/** The span of a /v1/* call made in a recorded trace, sent to Google Cloud (dropped if that fails). */
 export async function recordCall(env: Env, parent: TraceParent, request: Request, response: Response, startMs: number, endMs: number, notes: SpanNotes = {}): Promise<void> {
-  if (!env.AXIOM_TOKEN) return;
+  if (!env.GCP_TELEMETRY) return;
   const path = route(new URL(request.url).pathname);
   const nanos = (ms: number) => (BigInt(Math.round(ms)) * 1_000_000n).toString();
   const attribute = (key: string, value: string | number) => ({ key, value: typeof value === "number" ? { intValue: String(value) } : { stringValue: value } });
@@ -273,6 +296,6 @@ export async function recordCall(env: Env, parent: TraceParent, request: Request
     status: { code: response.status >= 500 ? 2 : 1 },
   };
   // Named after the Worker (stillfail-cloud), as the queries know it.
-  const body = JSON.stringify({ resourceSpans: [{ resource: { attributes: [attribute("service.name", "stillfail-cloud")] }, scopeSpans: [{ scope: { name: "stillfail-cloud" }, spans: [span] }] }] });
-  await toAxiom(env, body).catch(() => false);
+  const value = { resourceSpans: [{ resource: { attributes: [attribute("service.name", "stillfail-cloud")] }, scopeSpans: [{ scope: { name: "stillfail-cloud" }, spans: [span] }] }] };
+  await toGoogle(env, "traces", value).catch(() => false);
 }

@@ -4,13 +4,15 @@
 // iroh's public relays come in only while none of ours answers (so the station can still be reached; the DHT says
 // where), and go once one does again (else iroh may home on a public relay, where browsers can't follow). The relay
 // iroh homes on is asked first, and once it answers asked again on the same connection, timed: the ping other stations
-// are told of (jobs/load.ts).
+// are told of (jobs/load.ts). The workspaces' own relays (mesh/ways.ts, kept by their stations) are kept the same way,
+// after still.fail's, as they are added or taken away.
 import { Effect, Schedule, Stream } from "effect";
 import type { Net } from "../jobs/load.ts";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { ControlPlane } from "../services.ts";
 import type { Endpoint } from "./native.ts";
+import { sameUrl, waysOf } from "./ways.ts";
 
 /// Asking our relays whether they answer is asking an outside system: the one timer here.
 const RELAY_CHECK = "30 seconds";
@@ -19,25 +21,30 @@ const RELAY_CHECK = "30 seconds";
 export const keepRelays = (endpoint: Endpoint, net?: Net) =>
   Effect.gen(function* () {
     const cloud = yield* ControlPlane;
-    let ours = cloud.state.relays();
+    const ways = waysOf(cloud.state);
+    // still.fail's, then the workspaces' own not among them.
+    const wanted = () => {
+      const theirs = cloud.state.relays();
+      return [...theirs, ...ways.relays().filter((u) => !theirs.some((t) => sameUrl(t) === sameUrl(u)))];
+    };
+    let ours = wanted();
     endpoint.keep(ours);
     let added = false;
 
-    // As the cloud pushes them.
-    const follow = cloud.changes.pipe(
-      Stream.runForEach(() =>
-        Effect.promise(async () => {
-          const now = cloud.state.relays();
-          if (now.length === 0 || JSON.stringify(now) === JSON.stringify(ours)) return;
-          log.info("mesh", "still.fail's relays changed", { relays: now });
-          const was = ours;
-          ours = now;
-          for (const url of now.filter((u) => !was.includes(u))) await endpoint.insertRelay(url);
-          for (const url of was.filter((u) => !now.includes(u))) await endpoint.removeRelay(url);
-          endpoint.keep(now);
-        }),
-      ),
-    );
+    // As the cloud pushes still.fail's, and as a workspace's own are added or taken away. One change at a time.
+    let changing: Promise<void> = Promise.resolve();
+    const changed = () => (changing = changing.then(async () => {
+      const now = wanted();
+      if (cloud.state.relays().length === 0 || JSON.stringify(now) === JSON.stringify(ours)) return;
+      log.info("mesh", "the relays kept changed", { relays: now });
+      const was = ours;
+      ours = now;
+      for (const url of now.filter((u) => !was.includes(u))) await endpoint.insertRelay(url);
+      for (const url of was.filter((u) => !now.includes(u))) await endpoint.removeRelay(url);
+      endpoint.keep(now);
+    }).catch((e) => log.warn("mesh", "the relays kept were not changed", { error: (e as Error).message })));
+    const follow = cloud.changes.pipe(Stream.runForEach(() => Effect.promise(changed)));
+    const stopWays = ways.listen(() => void changed());
 
     const check = Effect.promise(async () => {
       let up = false;
@@ -78,5 +85,5 @@ export const keepRelays = (endpoint: Endpoint, net?: Net) =>
       }
     });
 
-    yield* Effect.all([follow, Effect.repeat(check, Schedule.spaced(RELAY_CHECK))], { concurrency: "unbounded", discard: true });
+    yield* Effect.all([follow, Effect.repeat(check, Schedule.spaced(RELAY_CHECK))], { concurrency: "unbounded", discard: true }).pipe(Effect.ensuring(Effect.sync(stopWays))); // timer: a ping that measures the relays, which tell nothing by themselves
   });

@@ -3,6 +3,7 @@
 // The providers' addresses can be pointed elsewhere (`Urls`): tests give fake servers.
 import { execFile } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Env } from "../agents/machine-logins.ts";
@@ -11,12 +12,13 @@ import { fileCredentials, takeBack } from "../agents/no-keychain.ts";
 import { type AccessKind, OPENCODE, profileRuntimes, type Runtime, type Via } from "../agents/profiles.ts";
 import { type Endpoints, endpoints, find, type Source } from "../agents/providers.ts";
 import type { Capability } from "../sessions/decision.ts";
+import type { QuotaReset } from "./claude-reset.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeOAuthToken, claudeToken as tokenOf } from "./oauth.ts";
 import { CONSOLE, RenewRefused } from "./console.ts";
 import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./cursor.ts";
-import { devinCatalog, devinData } from "../agents/devin.ts";
-import { agyEmailIn, agyHome, agyToken } from "../agents/agy.ts";
+import { type DevinFusion, devinCatalog, devinData } from "../agents/devin.ts";
+import { agyHome, agyTakeBack, agyToken, noteAgyEmail } from "../agents/agy.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 import { withShellCommand } from "../ops/shell-path.ts";
@@ -40,11 +42,14 @@ export type ProfileCheck = {
   detail: string;
   /// Models the account can use, when the provider lists them.
   models: string[] | null;
+  /// Opt-in Devin Fusion pairings (`fusion-*-sidekick-*`), factored by lead and sidekick.
+  fusion?: DevinFusion;
   checkedAt: number;
 };
 
 /// `minutes`: how long the window is, where known (the pool weighs what is left by how soon it is lost).
-export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null };
+/// `scope`: the one model it is the allowance of (its series as the provider names it: Fable).
+export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null; scope?: string };
 export type QuotaCredits = { hasCredits: boolean; unlimited: boolean; balance: string | null };
 
 /// How much of a profile's allowance is used, where the provider says.
@@ -53,10 +58,16 @@ export type ProfileQuota = {
   /// refuses the account.
   state: string;
   windows: QuotaWindow[];
+  /// What one model has to itself under the account's windows (each its `scope`'s). Apart from `windows`: one used up
+  /// stops that model alone, so nothing that weighs the account (sessions/pool.ts, a core from before it) counts it.
+  scoped?: QuotaWindow[];
   credits?: QuotaCredits;
   resetCount?: number;
   /// Expiries of available reset credits for which the provider returned details, in epoch milliseconds.
   resetExpiries?: number[];
+  /// The resets held, a kind each, where the provider tells them apart by what they give back (a Claude subscription's:
+  /// claude-reset.ts); `resetCount` and `resetExpiries` are all of them together. None: one kind (a ChatGPT one's).
+  resets?: QuotaReset[];
   /// The subscription tier, when the provider reports it with the allowance.
   plan?: string;
   /// Whether a Claude subscription has usage credits (extra usage) turned on: what its Fast is billed to, so only then
@@ -66,6 +77,10 @@ export type ProfileQuota = {
   checkedAt: number;
   /// Asked with a login that turned out to be over: its profile's check is updated. Not kept in the allowance.
   signedOut?: boolean;
+  /// Asked and not answered: the provider was not reached, gave no answer in time, or was itself in trouble (429, a
+  /// 5xx). It says nothing of the allowance, so the one read before stands a while (Accounts.askQuota). Not kept in
+  /// the allowance.
+  unanswered?: boolean;
 };
 
 /// Where the providers are: the real ones unless a test says otherwise.
@@ -86,6 +101,8 @@ export type Urls = {
   /// ones when not given.
   kimi?: string;
   kimiApi?: string;
+  /// Google AI Code (an Antigravity CLI profile's allowance: agy-quota.ts); the real one when not given.
+  agyQuota?: string;
 };
 
 export const URLS: Urls = {
@@ -323,19 +340,23 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
       } catch {}
     }
     const done = check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), catalog !== null && catalog.models.length > 0 ? catalog.models : null);
-    if (catalog !== null) done.modelEfforts = { devin: catalog.efforts };
+    if (catalog !== null) {
+      done.modelEfforts = { devin: catalog.efforts };
+      if (catalog.fusion !== null) done.fusion = catalog.fusion;
+    }
     return done;
   }
   if (o.kind === "subscription" && o.runtime === "agy") {
-    // Signed in when its sign-in's file is in the profile's (agents/agy.ts), whose account it says; whether it works,
-    // and its models, a session opened only to ask says (index.ts).
-    let text: string;
+    // Signed in when its sign-in's file is in the profile's (agents/agy.ts), taken back from the macOS keychain where
+    // `agy` had moved it (`agyTakeBack`); whether it works, and its models, a session opened only to ask says (index.ts).
+    if (!(await agyTakeBack(o.home))) return check("login", t("station.profile.signedOut"), null);
+    let email: string | null = null;
     try {
-      text = readFileSync(agyToken(o.home), "utf8");
+      email = await noteAgyEmail(o.home, await readFile(agyToken(o.home), "utf8"));
     } catch {
       return check("login", t("station.profile.signedOut"), null);
     }
-    return check("ok", [t("station.profile.signedIn"), agyEmailIn(text) ?? ""].filter((s) => s !== "").join(t("station.list.comma")), null);
+    return check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), null);
   }
   return check("unknown", t("station.profile.envUnchecked"), null);
 }
@@ -403,7 +424,7 @@ async function profileToken(o: CheckOptions, urls: Urls, lang: Lang): Promise<st
     return (await claudeOAuthToken(o.env, o.home, null, urls.claudeToken, lang))[0];
   } catch (e) {
     if (e instanceof RenewRefused) throw e;
-    return tokenOf(o.home);
+    return await tokenOf(o.home);
   }
 }
 
@@ -440,6 +461,8 @@ async function checkApi(source: Source, at: Endpoints, key: string, lang: Lang):
   const response = await get(`${base}/models`, headers);
   if (response.status === 401 || response.status === 403) return check("failed", t("station.profile.keyRefused", { provider: source.name, status: response.status }), null);
   if (!response.ok) return check("unknown", t("station.profile.noModelList", { provider: source.name }), null);
-  const models = sorted(await modelIds(response));
+  // A `:batch` entry (OpenRouter's) is served by the provider's Batch API alone, results within a day: refused on the
+  // endpoints a runtime speaks ("cannot be used with the chat/completions endpoint", checked 2026-11-11).
+  const models = sorted((await modelIds(response)).filter((id) => !id.endsWith(":batch")));
   return check("ok", t("station.profile.works", { n: models.length }), models);
 }

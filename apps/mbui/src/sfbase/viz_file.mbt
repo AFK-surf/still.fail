@@ -132,7 +132,7 @@ fn viz_origin(url : String) -> String {
 
 ///|
 pub fn viz_tokens_json(dark : Bool) -> String {
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   for t in viz_tokens(dark) {
     m[t.0] = Json::string(t.1)
   }
@@ -144,7 +144,7 @@ pub let viz_cdns : String = "https://cdnjs.cloudflare.com https://esm.sh https:/
 
 ///|
 pub fn viz_csp(sheets? : Array[String] = []) -> String {
-  let faces = StringBuilder::new()
+  let faces = StringBuilder()
   let seen : Array[String] = []
   for sheet in sheets {
     let o = viz_origin(sheet)
@@ -180,7 +180,7 @@ pub fn viz_ground_style(ground : Int64) -> String {
 /// A colour as CSS has it (#rrggbb, #rrggbbaa when it is not opaque).
 pub fn viz_css_color(c : Int64) -> String {
   let digits = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_char('#')
   for k in 0..<(if (c & 0xFFL) == 0xFFL { 6 } else { 8 }) {
     let d = ((c >> (28 - 4 * k)) & 15L).to_int()
@@ -192,14 +192,14 @@ pub fn viz_css_color(c : Int64) -> String {
 ///|
 /// Whether an HTML file is a fragment (as the viz skill has agents write them), to be drawn in the stylesheet.
 pub fn viz_is_fragment(html : String) -> Bool {
-  let head = if html.length() > 2048 { html.view(end_offset=2048).to_owned() } else { html }
+  let head = if html.length() > 2048 { html.clamped_view(end=2048).to_owned() } else { html }
   let lower = head.to_lower()
   if lower.contains("<!doctype") {
     return false
   }
   // <html followed by a space or >
   let mut at = 0
-  while lower.view(start_offset=at).find("<html") is Some(i) {
+  while lower.exact_view(start=at).find("<html") is Some(i) {
     let k = at + i + 5
     if k < lower.length() {
       let ch = lower.get_char(k).unwrap_or(' ')
@@ -267,11 +267,11 @@ pub fn viz_document(
 pub fn viz_tag_end(html : String, tag : String) -> Int {
   let lower = html.to_lower()
   let mut at = 0
-  while lower.view(start_offset=at).find(tag) is Some(i) {
+  while lower.exact_view(start=at).find(tag) is Some(i) {
     let k = at + i + tag.length()
     let next = lower.get_char(k).unwrap_or('x')
     if next == '>' || next == ' ' || next == '\n' || next == '\t' || next == '\r' {
-      match lower.view(start_offset=k).find(">") {
+      match lower.exact_view(start=k).find(">") {
         Some(j) => return k + j + 1
         None => return -1
       }
@@ -302,7 +302,7 @@ pub fn viz_page_document(html : String) -> String {
     n => n
   }
   if at >= 0 {
-    html.view(end_offset=at).to_owned() + head + html.view(start_offset=at).to_owned()
+    html.clamped_view(end=at).to_owned() + head + html.clamped_view(start=at).to_owned()
   } else {
     head + html
   }
@@ -320,7 +320,7 @@ pub fn viz_served(html : String, state : Json?, dark : Bool, ground : Int64, scr
     n => n
   }
   if at >= 0 {
-    doc.view(end_offset=at).to_owned() + tag + doc.view(start_offset=at).to_owned()
+    doc.clamped_view(end=at).to_owned() + tag + doc.clamped_view(start=at).to_owned()
   } else {
     tag + doc
   }
@@ -370,7 +370,40 @@ pub fn viz_load(
   size? : Double = 0.0,
 ) -> Result[(String, Json?), Unit]? {
   let id = viz_id(station, key, path)
-  let l = match viz_loads.get(id) {
+  let l = viz_load_of(id)
+  if !l.asked {
+    l.asked = true
+    c.tell("viz/load/" + id, fn() { viz_ask(src, l, station, key, path, size) })
+  }
+  viz_loaded(l)
+}
+
+///|
+/// viz_load for a node of the window's tree `v`: asked as it is made (where not asked yet), read as it comes (a reader
+/// of its signals).
+pub fn viz_load_node(
+  v : @view.View,
+  src : Source,
+  station : String,
+  key : String,
+  path : String,
+  size? : Double = 0.0,
+) -> () -> Result[(String, Json?), Unit]? {
+  let l = viz_load_of(viz_id(station, key, path))
+  // (asked in a handler, as it is made: its answer may come at once)
+  v.reacts(fn() { () }, fn(_) {
+    if !l.asked {
+      l.asked = true
+      viz_ask(src, l, station, key, path, size)
+    }
+  })
+  fn() { viz_loaded(l) }
+}
+
+///|
+/// The load of the file `id` (viz_id), made where there is none.
+fn viz_load_of(id : String) -> VizLoad {
+  match viz_loads.get(id) {
     Some(l) => l
     None => {
       let l : VizLoad = { html: @signals.signal(None), state: @signals.signal(None), state_read: @signals.signal(false), failed: @signals.signal(false), asked: false }
@@ -378,42 +411,11 @@ pub fn viz_load(
       l
     }
   }
-  if !l.asked {
-    l.asked = true
-    c.tell("viz/load/" + id, fn() {
-      let p : Map[String, Json] = {
-        "station": Json::string(station),
-        "key": Json::string(key),
-        "name": Json::string(viz_base_name(path)),
-      }
-      chat_keep(p, size)
-      (src.read_bytes)(
-        "station.file",
-        Json::object(p),
-        fn(r) {
-          match r {
-            Ok((_, bytes)) => l.html.set(Some(@utf8.decode_lossy(bytes)))
-            Err(_) => l.failed.set(true)
-          }
-        },
-      )
-      (src.call)(
-        "widget.state",
-        Json::object({ "station": Json::string(station), "key": Json::string(key), "path": Json::string(path) }),
-        fn(r) {
-          match r {
-            Ok(v) =>
-              l.state.set(match field(Some(v), "state") {
-                Some(Null) | None => None
-                Some(s) => Some(s)
-              })
-            Err(_) => ()
-          }
-          l.state_read.set(true)
-        },
-      )
-    })
-  }
+}
+
+///|
+/// What `l` has come to (viz_load's answer).
+fn viz_loaded(l : VizLoad) -> Result[(String, Json?), Unit]? {
   if l.failed.get() {
     return Some(Err(()))
   }
@@ -421,6 +423,42 @@ pub fn viz_load(
     Some(h) if l.state_read.get() => Some(Ok((h, l.state.get())))
     _ => None
   }
+}
+
+///|
+/// The file's page and what it kept asked of the core, into `l` (viz_load's).
+fn viz_ask(src : Source, l : VizLoad, station : String, key : String, path : String, size : Double) -> Unit {
+  let p : Map[String, Json] = {
+    "station": Json::string(station),
+    "key": Json::string(key),
+    "name": Json::string(viz_base_name(path)),
+  }
+  chat_keep(p, size)
+  (src.read_bytes)(
+    "station.file",
+    Json::object(p),
+    fn(r) {
+      match r {
+        Ok((_, bytes)) => l.html.set(Some(@utf8.decode_lossy(bytes)))
+        Err(_) => l.failed.set(true)
+      }
+    },
+  )
+  (src.call)(
+    "widget.state",
+    Json::object({ "station": Json::string(station), "key": Json::string(key), "path": Json::string(path) }),
+    fn(r) {
+      match r {
+        Ok(v) =>
+          l.state.set(match field(Some(v), "state") {
+            Some(Null) | None => None
+            Some(s) => Some(s)
+          })
+        Err(_) => ()
+      }
+      l.state_read.set(true)
+    },
+  )
 }
 
 ///|
@@ -452,10 +490,7 @@ pub fn viz_keep(src : Source, station : String, key : String, path : String, sta
 ///|
 /// A path's last part (its file's name).
 pub fn viz_base_name(path : String) -> String {
-  match path.rev_find("/") {
-    Some(i) => path.view(start_offset=i + 1).to_string()
-    None => path
-  }
+  base_name(path)
 }
 
 ///|
@@ -463,11 +498,11 @@ pub fn viz_base_name(path : String) -> String {
 /// extension, reloaded with what it kept since), and nothing else there is.
 pub fn file_serve(f : FilePage, req : @ui.SiteRequest, reply : @ui.SiteReply) -> Unit {
   let bare = match req.path.find("?") {
-    Some(i) => req.path.view(end_offset=i).to_owned()
+    Some(i) => req.path.exact_view(end=i).to_owned()
     None => req.path
   }
   let last = match bare.rev_find("/") {
-    Some(i) => bare.view(start_offset=i + 1).to_owned()
+    Some(i) => bare.exact_view(start=i + 1).to_owned()
     None => bare
   }
   let served = req.verb == "GET" && !last.contains(".")

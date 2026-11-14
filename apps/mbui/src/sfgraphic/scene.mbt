@@ -39,7 +39,7 @@ fn scene_only(m : Map[String, Json], allowed : Array[String]) -> Bool {
 fn scene_color(m : Map[String, Json], key : String) -> Int64? {
   guard m.get(key) is Some(String(s)) && s.length() == 9 && s.has_prefix("#") else { return None }
   let mut color = 0L
-  for ch in s.view(start_offset=1) {
+  for ch in s.exact_view(start=1) {
     let d = match ch {
       '0'..='9' => ch.to_int() - '0'.to_int()
       'a'..='f' => ch.to_int() - 'a'.to_int() + 10

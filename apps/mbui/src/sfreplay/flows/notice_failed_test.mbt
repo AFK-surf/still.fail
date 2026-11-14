@@ -4,7 +4,7 @@
 
 ///|
 test "41-notice-failed" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     // (the run's app had the local cloud, its trace's env says which: the notice's link read against it, link.parse)
     let f = @sfreplay.Flow::start(@sfreplay.trace("notice-failed"), seed~)
     f.see("端到端测试")
@@ -16,12 +16,12 @@ test "41-notice-failed" {
     f.run_for(@ui.move_most_ms)
     f.see("发消息")
     // the ⚠ gone to flashes, all of its way
-    f.run_to(@sfapp.flash_rest())
+    f.run_to(@sfapp.flash_rest)
     f.back()
     f.run_for(@ui.move_most_ms)
     f.see("端到端测试")
     // the bottom bar at its end
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

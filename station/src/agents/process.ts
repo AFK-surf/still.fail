@@ -6,12 +6,13 @@
 // `freeze` stops handling lines (none more is acknowledged): what a snapshot says then matches where the next station
 // begins. After a crash there is no snapshot; `ackedOffset` and `linesBefore` let a driver read what the dead station
 // had handled (silently) to know where things stand before the rest comes.
-import { closeSync, openSync, readSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
+import { open } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { join } from "node:path";
-import { keyPart } from "./sandbox.ts";
+import { keyPart } from "./sandbox-name.ts";
 import { log } from "../ops/log.ts";
-import { RunnerConnection, leave, listening, runnerOf, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
+import { Lines, RunnerConnection, leave, listening, listeningSoon, runnerOf, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
 import type { RuntimeKind } from "./runtime.ts";
 
@@ -56,9 +57,9 @@ const pidAlive = (pid: number) => {
 };
 
 /// A runner of this id that keeps its process still (its socket there: one on its way out has let it go).
-export const findRunner = (data: string, id: string): RunnerInfo | undefined => {
-  const runner = runnerOf(data, id);
-  return runner !== undefined && runner.id === id && listening(runner) ? runner : undefined;
+export const findRunner = async (data: string, id: string): Promise<RunnerInfo | undefined> => {
+  const runner = await runnerOf(data, id);
+  return runner !== undefined && runner.id === id && (await listeningSoon(runner)) ? runner : undefined;
 };
 export const outFile = (data: string, id: string) => join(runnersDir(data), `${id}.out`);
 
@@ -76,8 +77,6 @@ export type ProcessOptions = {
   /// It exited (all of its output handled), as `describeExit` says, unless it was let go first; with the last lines it
   /// wrote to stderr (STDERR_TAIL of them, "" when none): what a runtime that fails as it starts says of why.
   exit: (said: string, stderr: string) => void;
-  /// Run here even when the station runs things in sandboxes (agents/sandbox.ts): a process no session's work runs in.
-  local?: boolean;
 };
 
 /// How many of a runtime's last stderr lines its exit carries, and how long each may be.
@@ -142,7 +141,7 @@ export class AgentProcess {
   /// nobody took up) is ended first, as process.rs reap_stale_groups did.
   static async start(data: string, id: string, program: string, args: string[], env: Record<string, string>, cwd: string, options: ProcessOptions) {
     await endRunner(data, id, options.label);
-    const info = await startRunner(data, id, program, args, env, cwd, options.local === true);
+    const info = await startRunner(data, id, program, args, env, cwd);
     return new AgentProcess(info, options);
   }
 
@@ -224,7 +223,7 @@ export class AgentProcess {
 
 /// Ends a runner of this id left by an earlier station, and waits for it to go.
 export async function endRunner(data: string, id: string, label: string) {
-  const info = findRunner(data, id);
+  const info = await findRunner(data, id);
   if (!info) return;
   log.warn("agents::process", "ending a runtime process left by a previous run", { label, runner: info.runner, pgid: info.pgid });
   if (listening(info)) {
@@ -289,45 +288,48 @@ const READ_CHUNK = 1 << 20;
 
 /// The whole lines of `file` before byte `end` (a line boundary: acknowledgements are at line ends), one at a time: an
 /// app-server's output holds days of its threads (hundreds of MB), more than one string can, so it is never held whole.
-export function* linesBefore(file: string, end: number, chunk = READ_CHUNK): Generator<string> {
-  for (const line of linesWithin(file, 0, end, chunk)) yield line.text;
+export async function* linesBefore(file: string, end: number, chunk = READ_CHUNK): AsyncGenerator<string> {
+  for await (const line of linesWithin(file, 0, end, chunk)) yield line.text;
 }
 
-/// The whole lines of `file` from byte `start` to byte `end` (both line boundaries), each with where it begins.
-export function* linesWithin(file: string, start: number, end: number, chunk = READ_CHUNK): Generator<{ text: string; at: number }> {
+/// The whole lines of `file` from byte `start` to byte `end` (both line boundaries), each with where it begins. Read off
+/// the station's thread: what a station taking up its runners reads, up to hundreds of MB, held it 33 s on one
+/// (2026-11-06).
+export async function* linesWithin(file: string, start: number, end: number, chunk = READ_CHUNK): AsyncGenerator<{ text: string; at: number }> {
+  for await (const line of bytesWithin(file, start, end, chunk)) yield { text: line.bytes.toString("utf8"), at: line.at };
+}
+
+/// `linesWithin`'s lines as their bytes, not decoded: what reads only some of them tells the rest by how they begin
+/// (codex.ts `takeUp`), and most of an app-server's output is lines it passes over, MBs each.
+export async function* bytesWithin(file: string, start: number, end: number, chunk = READ_CHUNK): AsyncGenerator<{ bytes: Buffer; at: number }> {
   if (end <= start) return;
-  const fd = openSync(file, "r");
+  const fd = await open(file, "r");
   try {
-    let carry = Buffer.alloc(0);
+    // A line longer than a chunk is held a part at a time and joined once, at its end.
+    const lines = new Lines();
     let at = start;
-    // Where the first byte of `carry` is in the file.
+    // Where the line held (or the next) begins in the file.
     let base = start;
     while (at < end) {
       const buf = Buffer.allocUnsafe(Math.min(chunk, end - at));
-      const n = readSync(fd, buf, 0, buf.length, at);
+      const { bytesRead: n } = await fd.read(buf, 0, buf.length, at);
       if (n <= 0) break;
       // Where the runner gave the disk back (what was acknowledged long before: native/runner `punch`) it reads as
       // zeros: skipped, with the line it cut (never carried on, a part at a time, as one line hundreds of MB long).
       let skip = 0;
       if (buf[0] === 0) {
         while (skip < n && buf[skip] === 0) skip++;
-        carry = Buffer.alloc(0);
+        lines.drop();
         base = at + skip;
       }
       at += n;
-      const bytes = carry.length === 0 ? buf.subarray(skip, n) : Buffer.concat([carry, buf.subarray(0, n)]);
-      let from = 0;
-      for (let i = bytes.indexOf(0x0a); i >= 0; i = bytes.indexOf(0x0a, from)) {
-        const line = bytes.toString("utf8", from, i);
-        const lineAt = base + from;
-        from = i + 1;
-        yield { text: line.endsWith("\r") ? line.slice(0, -1) : line, at: lineAt };
+      for (const line of lines.take(buf.subarray(skip, n))) {
+        const lineAt = base;
+        base += line.length + 1;
+        yield { bytes: line.at(-1) === 0x0d ? line.subarray(0, -1) : line, at: lineAt };
       }
-      // A line longer than a chunk is carried whole into the next read.
-      carry = Buffer.from(bytes.subarray(from));
-      base += from;
     }
   } finally {
-    closeSync(fd);
+    await fd.close();
   }
 }

@@ -12,6 +12,10 @@ import { BUILT_AT } from "./built.ts";
 import initIroh, * as iroh from "./iroh-pkg/stillfail_iroh_wasm.js";
 import type { WorkerFault } from "./client.ts";
 
+/// This build as the apps number theirs (`0.1.<n>`, vite.config.ts), null outside a checkout: given to the core as it
+/// starts, which says it to the stations with every request.
+declare const __BUILD__: string | null;
+
 // Typed by hand: the web tsconfig has the DOM lib, not the worker's.
 interface Port {
   postMessage(message: unknown, transfer?: Transferable[]): void;
@@ -328,7 +332,7 @@ async function lead(): Promise<void> {
   ready = startWeb(emit, (globalThis as { name?: string }).name?.endsWith("-test") ?? false, loadIroh, (reason, error) => {
     if (!dead) fault(error);
     fatal(reason);
-  }, loadSqlite, fault);
+  }, loadSqlite, fault, typeof __BUILD__ === "string" ? __BUILD__ : "");
   ready.catch((error: unknown) => fatal(`核心启动失败：${String(error)}`));
   const running = await ready;
   core = running;

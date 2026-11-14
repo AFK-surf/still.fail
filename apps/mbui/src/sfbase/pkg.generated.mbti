@@ -19,7 +19,7 @@ import {
 }
 
 // Values
-pub let absolute_times : @ref.Ref[Bool]
+pub let absolute_times : @signals.Signal[Bool]
 
 pub fn act(Source, String, String, String, @json.Json, done? : String, done_action? : String, done_run? : () -> Unit, at_once? : Bool, ok? : (@json.Json) -> Unit, failed? : () -> Unit) -> Unit
 
@@ -31,7 +31,6 @@ pub fn acting_reset() -> Unit
 
 pub fn adb_card_of(Source, @sf.LinkTo) -> @json.Json?
 
-pub fn adb_link_card(@ui.Ctx, Source, String, @sf.LinkTo, String?) -> Unit
 
 pub fn adb_title(Source, @sf.LinkTo) -> String
 
@@ -67,6 +66,8 @@ pub fn ask_clears(ChatView) -> Bool
 
 pub fn ask_rows_of(ChatView, Array[Entry]) -> Array[Int32]
 
+pub fn ask_whole(Source, ChatItem) -> TopicLease?
+
 pub fn asks_in_view(Array[Int32], @ui.ListInfo?) -> Bool
 
 pub fn at_end_asked() -> Bool
@@ -85,7 +86,7 @@ pub fn back_pop() -> Unit
 
 pub fn back_step() -> (() -> Unit)?
 
-pub fn badge_frame(@ui.Ctx, Source, Workspace) -> Unit
+pub fn badge_frame(@ui.Ctx, Source) -> Unit
 
 pub fn bar_as_nodes(Viewer, Double) -> Bool
 
@@ -107,6 +108,8 @@ pub let big_file : Double
 
 pub let body_header : String
 
+pub fn bring_chosen() -> Unit
+
 pub fn browse_topic(Source, Map[String, @json.Json]) -> BrowseView?
 
 pub fn browse_view_of(@json.Json?) -> BrowseView?
@@ -119,6 +122,14 @@ pub fn by_of(@json.Json?) -> By
 
 pub fn bytes_first_frame(@ui.Ctx, String, String, Bytes) -> String
 
+pub fn call_said(String) -> Bool
+
+pub fn calls_said() -> Array[String]
+
+pub fn chat_first_window(Double) -> Int32
+
+pub let chat_grow_rows : Int32
+
 pub fn chat_inputs_left(ChatRef) -> Unit
 
 pub fn chat_inputs_left_from(Source, ChatRef) -> Unit
@@ -126,6 +137,8 @@ pub fn chat_inputs_left_from(Source, ChatRef) -> Unit
 pub fn chat_item(@json.Json) -> ChatItem
 
 pub let chat_jobs_asked : @ref.Ref[(@ui.Ctx, Source, ChatRef) -> Unit]
+
+pub let chat_jobs_open : @ref.Ref[(Source, ChatRef, Double) -> Unit]
 
 pub fn chat_jobs_summary_params(ChatRef) -> Map[String, @json.Json]
 
@@ -137,21 +150,29 @@ pub fn chat_kept_from(Source, ChatRef) -> ChatView?
 
 pub fn chat_latest(@ui.Ctx, Source, ChatRef, ChatView, String) -> Unit
 
-pub fn chat_limits_reset() -> Unit
+pub fn chat_latest_now(Source, ChatRef, ChatView, String) -> Bool
+
+pub fn chat_windows_reset() -> Unit
 
 pub fn chat_link(String, String) -> String
 
 pub fn chat_open_is_pending(Int32) -> Bool
 
+pub fn chat_opens(ChatRef, (String, Map[String, @json.Json]) -> TopicState) -> Bool
+
 pub fn chat_page_is(Page) -> Bool
 
-pub fn chat_page_made(@view.View, Source, Int32, (@ui.Ctx, Source, Page) -> Unit, key? : () -> String, over? : (@view.View, Source, () -> Page?, () -> Int32) -> Unit, stint? : () -> Int32) -> Source
+pub fn chat_page_made(@view.View, Source, Int32, (@ui.Ctx, Source, Page) -> Unit, key? : () -> String, over? : (@view.View, Source, () -> Page?, () -> Int32) -> Unit, stint? : () -> Int32, drawn? : (Int32) -> Bool, body? : (@view.View, Source, ChatRef, (@view.View) -> Unit, () -> Bool) -> Unit, foot? : (@ui.Ctx, Source, ChatRef) -> Unit) -> Source
+
+pub let chat_page_nodes : @signals.Signal[Bool]
 
 pub fn chat_params(ChatRef) -> Map[String, @json.Json]
 
 pub fn chat_ref(String, String) -> ChatRef
 
 pub fn chat_ref_of(ChatItem) -> ChatRef
+
+pub let chat_row_least : Double
 
 pub fn chat_scope(String, String) -> String
 
@@ -165,23 +186,33 @@ pub fn chat_screens_driven(Array[ChatScreen]) -> Bool
 
 pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside, along? : @view.Along) -> Unit
 
+pub fn chat_short_above(@ui.ListInfo, @ui.ListReader) -> Bool
+
 pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
 pub fn chat_view_made(@json.Json) -> ChatView
 
-pub fn chats_ask_more(Source, String, String, Int) -> Unit
+pub fn chat_whole_held(Source, ChatRef) -> TopicState
 
-pub fn chats_limit(String, String) -> Int
+pub fn chats_all_opens(Source, String, (String, Map[String, @json.Json]) -> TopicState) -> Bool
+
+pub fn chats_asked(String, String) -> Map[String, @json.Json]
+
+pub fn chats_grow(Source, String, String, Int, Int) -> Unit
+
+pub fn chats_held(ChatsView?) -> Int
 
 pub fn chats_more(Source, String, String) -> Int
 
 pub fn chats_of(Source, String, String) -> (ChatsView?, String?)
 
-pub let chats_page : Int
+pub fn chats_told_before(String, @json.Json) -> Array[(String, @json.Json)]
 
 pub fn chats_topic(Source, String) -> Topic
 
 pub fn chats_view_made(@json.Json) -> ChatsView
+
+pub fn chats_window_for(Source, String, String, Double, Int, Int) -> Unit
 
 pub fn choices_of(@json.Json?, String) -> Array[Choice]?
 
@@ -198,8 +229,6 @@ pub let close_gap : @motion.Spec
 pub fn close_now() -> Unit
 
 pub fn close_page(Page) -> Bool
-
-pub let close_turn_ms : Double
 
 pub fn cloud_origin() -> String
 
@@ -278,8 +307,6 @@ pub let desk_whole : Double
 pub let desktop_face : String
 
 pub fn direct_part(String, Map[String, @json.Json], Double) -> String
-
-pub let dismiss_turn_ms : Double
 
 pub fn doing(String) -> Bool
 
@@ -367,6 +394,8 @@ pub fn dv_file(String, String, String, DvEntry) -> DriveFile
 
 pub fn dv_in_order(Array[String]?, Array[DvEntry]) -> Array[DvEntry]?
 
+pub fn dv_in_order_held(String, Array[String]?, Array[DvEntry]) -> Array[DvEntry]?
+
 pub fn dv_join(String, String) -> String
 
 pub fn dv_keep_both(Source, DvUpload) -> Unit
@@ -402,6 +431,8 @@ pub fn dv_trim_root(String) -> String
 pub fn dv_trouble(String) -> (String, String)?
 
 pub fn dv_up_done(Source, DvUpload) -> Unit
+
+pub fn dv_up_listed(Source, DvUpload) -> Bool
 
 pub fn dv_up_part(Source, DvUpload, Int32, Int32) -> Unit
 
@@ -481,9 +512,19 @@ pub fn feel_needed(@ui.Ctx, ChatRef, ChatView) -> Unit
 
 pub fn felt_change(@ui.Ctx, String, Bool, @ui.Haptic) -> Unit
 
+pub fn felt_change_node(@view.View, () -> Bool, @ui.Haptic) -> Unit
+
+pub fn field_lines_n(@ui.Field) -> Int
+
 pub fn file_image_id(String, String, String) -> String
 
 pub fn file_key(Attachment) -> String
+
+pub fn file_peek_picture(Source, String, String, String, Int32?, @json.Json?) -> String
+
+pub fn file_peek_picture_ask(Source, String, String, String, Int32?, @json.Json?) -> Unit
+
+pub fn file_peek_picture_told(Source, String, String, String, Int32?, @json.Json?) -> String
 
 pub fn file_params(Viewer) -> Map[String, @json.Json]
 
@@ -498,6 +539,8 @@ pub fn file_seed(String, String, Bytes) -> String
 pub fn file_serve(FilePage, @ui.SiteRequest, @ui.SiteReply) -> Unit
 
 pub fn file_type(String) -> String
+
+pub fn first_window(Double) -> Int
 
 pub fn file_viewer_reset() -> Unit
 
@@ -579,6 +622,8 @@ pub fn flight_ground(Double, Bool) -> Double
 
 pub fn flight_ground_of(@ui.Ctx, SendFlight) -> Double
 
+pub fn flight_grounded(@ui.Ctx, SendFlight) -> Bool
+
 pub fn flight_hint_away(@ui.Ctx, String) -> Bool
 
 pub fn flight_landing(@ui.Ctx, SendFlight, Int32, String, share? : (Double, Double), top_crop? : Bool, paint? : ((Double, Double, @ui.Fit, Double) -> Unit)?) -> Unit
@@ -594,6 +639,8 @@ pub let flight_ms : Double
 pub fn flight_ms_of(SendFlight) -> Double
 
 pub fn flight_of(String) -> SendFlight?
+
+pub fn flight_out(@ui.Ctx, SendFlight) -> Bool
 
 pub fn flight_p(@ui.Ctx, SendFlight) -> Double
 
@@ -617,6 +664,10 @@ pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[Flyin
 
 pub fn flight_takes(String, String) -> Bool
 
+pub fn flight_to(String, String) -> SendFlight?
+
+pub fn flight_to_key(SendFlight, String) -> String
+
 pub fn flight_up(Double, Bool) -> Double
 
 pub fn flight_up_of(@ui.Ctx, SendFlight) -> Double
@@ -627,7 +678,9 @@ pub fn flight_waiting(@ui.Ctx, String) -> Unit
 
 pub fn flight_way_ms(Bool, Double) -> Double
 
-pub let flight_words_key : String
+pub fn flight_words_key(SendFlight) -> String
+
+pub fn flights_reset() -> Unit
 
 pub fn floor_of(@ui.Ctx, Reading, String, Array[String]) -> Double
 
@@ -665,13 +718,13 @@ pub fn fresh_view(ChatRef) -> (ChatView, Array[Entry])?
 
 pub let globe_mark : LinkMark
 
-pub fn glyph_change(Double, Double, Int32, Int32, Bool) -> @ui.GlyphLook
+pub fn glyph_change(Double, Double, Int32, Int32, Bool) -> @view.GlyphLook
 
 pub let glyph_change_in_ms : Double
 
 pub let glyph_change_line_ms : Double
 
-pub fn glyph_in(Double, Double, Int32, Int32) -> @ui.GlyphLook
+pub fn glyph_in(Double, Double, Int32, Int32) -> @view.GlyphLook
 
 pub let glyph_line_in_ms : Double
 
@@ -679,17 +732,23 @@ pub let glyph_line_ms : Double
 
 pub fn go_back() -> Bool
 
+pub let go_back_offsets : Map[String, Double]
+
+pub fn go_back_to(ChatRef) -> Bool
+
 pub fn go_forward(Source) -> Bool
 
 pub fn go_place(String, way? : Int32) -> Bool
 
-pub fn go_to(ChatRef, Double, passage? : String) -> Unit
+pub fn go_to(ChatRef, Double, passage? : String, keep_place? : Bool) -> Unit
 
 pub let go_to_passages : Map[String, String]
 
 pub let go_to_words : Map[String, Array[String]]
 
 pub let go_tos : Map[String, Double]
+
+pub let go_tos_said : @signals.Signal[Int32]
 
 pub fn halo_of(Int64) -> Int64
 
@@ -739,7 +798,9 @@ pub fn is_viz(String) -> Bool
 
 pub fn java_hash(String) -> Int32
 
-pub fn job_output_lines(Source, String, String, Double, Int64, Bool) -> Array[Array[@text.Run]]?
+pub fn job_output_lines(Source, String, String, Double, Int64, Bool) -> TermLines?
+
+pub fn job_output_of(Source, Map[String, @json.Json], Int64, Bool) -> TermLines
 
 pub fn jobs_scope(String) -> String
 
@@ -783,8 +844,6 @@ pub fn let_go(Source, String) -> Unit
 
 pub fn lift_of(Thumb) -> Double
 
-pub let linger_ms : Double
-
 pub fn linger_tick(@ui.Ctx, Source, in_front~ : Bool) -> Unit
 
 pub let link_card : @ui.Style
@@ -812,6 +871,16 @@ pub fn link_name(String) -> Bool
 pub fn link_open(Source, ServicePage, @ui.NativeView, String, String, String) -> Unit
 
 pub fn link_path(String) -> Bool
+
+pub fn link_picture(Source, String, String, @json.Json?, String) -> String
+
+pub fn link_picture_told(Source, String, String, @json.Json?, String) -> String
+
+pub fn link_pictures_ask(Source, String, String, @json.Json?) -> Unit
+
+pub fn link_pictures_here(Source, String, String, @json.Json?) -> Bool
+
+pub fn link_pictures_here_told(Source, String, String, @json.Json?) -> Bool
 
 pub fn link_port(Source, ServicePage, @ui.NativeView, @json.Json) -> Unit
 
@@ -843,7 +912,9 @@ pub fn list_after(@ui.Ctx, Source, ChatRef, ChatView, ListFrame, top~ : Double, 
 
 pub fn list_frame(@ui.Ctx, ChatRef, ChatView, Array[Entry], key~ : String, draft~ : String, rise_ms~ : Double, top~ : Double, in_front~ : Bool, laid? : String, laid_at? : Double, foot_way? : (Double, Double)) -> ListFrame
 
-pub fn list_made(@ui.ListInfo?, Int32, Array[Int32]) -> ListMade
+pub fn list_made(@ui.ListInfo?, Int32, Array[Int32], @ui.ListReader) -> ListMade
+
+pub fn list_opens(Source, String, (String, Map[String, @json.Json]) -> TopicState) -> Bool
 
 pub fn local_machine_name() -> String
 
@@ -857,7 +928,11 @@ pub let lone_page : @ref.Ref[Page?]
 
 pub fn long_jobs(Source, Workspace) -> Int32
 
+pub fn long_jobs_asked(String) -> Map[String, @json.Json]
+
 pub fn long_jobs_lit(Source, Workspace) -> Bool
+
+pub fn long_jobs_read(@view.View, Source, () -> Workspace?) -> Unit
 
 pub fn long_jobs_seen(Source, Workspace) -> Unit
 
@@ -900,6 +975,8 @@ pub let marking : Marking
 pub fn marks_actions(@ui.Ctx, Bool, (Bool) -> Unit, ink? : Int64) -> Unit
 
 pub fn marks_any() -> Bool
+
+pub fn marks_asked() -> Map[String, @json.Json]
 
 pub fn marks_back(@ui.Ctx) -> Unit
 
@@ -956,6 +1033,8 @@ pub fn menu_bar(@ui.Ctx, Source) -> Unit
 pub let menu_bar_given : @ref.Ref[String]
 
 pub fn menu_bar_json(@json.Json?, Bool) -> String
+
+pub fn message_items(String, String, () -> Unit) -> Array[@sf.MenuItem?]
 
 pub fn message_link(String, String, Double) -> String
 
@@ -1078,6 +1157,8 @@ pub fn open_window(Page) -> Bool
 pub fn opened_of(@json.Json?) -> Array[OpenedChat]
 
 pub fn opener_of(@json.Json?) -> Opener?
+
+pub fn opens_answered(TopicState) -> Bool
 
 pub fn opt_number(@json.Json?, String) -> Double?
 
@@ -1237,6 +1318,8 @@ pub let picture_bar_corner : Double
 
 pub fn picture_button(@ui.Ctx, String, String, Int64, Bool, enabled? : Bool, held? : Bool, said~ : String) -> Bool
 
+pub fn picture_drawn(String) -> String
+
 pub let picture_key : Double
 
 pub let picture_pick : @ref.Ref[(@ui.Pick, (Bytes?) -> Unit)?]
@@ -1245,13 +1328,33 @@ pub let pin_open_scale : Double
 
 pub let pk : ChatPick
 
+pub fn place_forget(String) -> Unit
+
 pub fn place_icon(String) -> String
+
+pub fn place_kept(String) -> Bool
 
 pub fn place_key(String, String) -> String
 
 pub fn place_page(String) -> Page
 
+pub fn place_press_lifted(Double) -> Unit
+
+pub fn place_pressed(String) -> Unit
+
+pub fn place_switched(Double) -> Unit
+
+pub fn places_ahead_in_build() -> Int32
+
+pub fn places_ahead_node(@view.View, Source, () -> String?) -> Unit
+
+pub fn places_ahead_open() -> Bool
+
 pub let place_pick : @sf.LiveMap[String, @settings.Route]
+
+pub let places_back : Map[String, (Double, Double)]
+
+pub let places_back_said : @signals.Signal[Int32]
 
 pub let plain_small_foot : Double
 
@@ -1311,6 +1414,8 @@ pub fn quote_picture_key(Int32) -> String
 
 pub let quoted_into : Map[String, Array[(String, String, String, @json.Json)]]
 
+pub fn read_now(Source) -> (String, Map[String, @json.Json]) -> TopicState
+
 pub let read_only_words : String
 
 pub fn read_place(Reading, ChatView, Array[Entry], @ui.ListReader, Double, Double) -> Unit
@@ -1359,21 +1464,23 @@ pub fn refs_sent_runs(String, String) -> @json.Json?
 
 pub fn refs_still_at(@ui.Field, (Int32, String)?, String, String) -> Bool
 
+pub fn relay_asks_node(@view.View, Source) -> Unit
+
 pub fn relay_connect(String) -> @json.Json?
 
 pub fn relay_go(Source, @json.Json?, done? : () -> Unit) -> Unit
 
-pub fn relay_mention_active(Int32, by? : Int32, to? : Int32) -> Int32
-
-pub fn relay_mentions(@ui.Ctx, Source, @json.Json?) -> Array[@json.Json]
+pub fn relay_mention_query() -> String
 
 pub fn relay_mentions_close() -> Unit
+
+pub fn relay_mentions_now() -> Array[@json.Json]
 
 pub fn relay_open(Source, String, Double) -> Unit
 
 pub fn relay_reset() -> Unit
 
-pub fn relay_view(@ui.Ctx, Source) -> @json.Json?
+pub fn relay_view_now() -> @json.Json?
 
 pub let relaying : Relaying
 
@@ -1395,8 +1502,6 @@ pub fn row_name(ChatItem) -> String
 
 pub fn row_tone(ChatItem) -> String
 
-pub let row_turn_ms : Double
-
 pub fn runs_by_line(Array[@text.Run]) -> Array[Array[@text.Run]]
 
 pub fn same_pane(DriveAt, DriveAt) -> Bool
@@ -1410,6 +1515,8 @@ pub fn screen_card_of(Source, @sf.LinkTo) -> ScreenCard?
 pub fn screen_link_card(@ui.Ctx, Source, String, String, @sf.LinkTo, String?) -> Unit
 
 pub fn screen_links(@ui.Ctx, Source, String) -> @sf.Screens
+
+pub fn screen_links_node(Source) -> @sf.ScreensNode
 
 pub let screen_made_stream : @ref.Ref[(@json.Json, (@json.Json, Bytes?) -> Unit, (Result[@json.Json, @json.Json]) -> Unit) -> Int32]
 
@@ -1427,6 +1534,8 @@ pub fn send_sharing(Source, String, String, String, () -> Unit) -> Unit
 
 pub fn sending_of(String) -> Array[LocalSent]
 
+pub fn sending_now(String) -> Array[LocalSent]
+
 pub let sent_down_ms : Double
 
 pub fn sent_down_of(String) -> Double
@@ -1435,7 +1544,7 @@ pub fn sent_key(String, String) -> String
 
 pub fn sent_let_go(Reading, SendFlight?) -> Bool
 
-pub fn sent_local(@ui.Ctx, String, ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?) -> String
+pub fn sent_local(String, ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?, now~ : Double) -> String
 
 pub fn sent_local_gone(String, String) -> Unit
 
@@ -1505,6 +1614,8 @@ pub let share_offered : @signals.Signal[(Double, Double, () -> Unit, String, Str
 
 pub let share_over : @signals.Signal[Bool]
 
+pub fn share_offer(Double, Double, () -> Unit, String, String, String) -> Unit
+
 pub fn share_turn_tool(@ui.Ctx, String, Int32, String, String, () -> Unit) -> Unit
 
 pub let shared_into : Map[String, Array[@hostapi.Picked]]
@@ -1530,6 +1641,8 @@ pub fn show_chosen() -> Unit
 pub let show_limit : Int32
 
 pub let shown_days : Map[String, Array[ChatDay]]
+
+pub fn shown_kind(Shown) -> String
 
 pub fn signed_out_links(Source) -> Unit
 
@@ -1591,6 +1704,10 @@ pub let svc_presets : Array[(String, Int32, Int32)]
 
 pub let svc_viewports : Map[String, Viewport?]
 
+pub let switch_wait_ms : Double
+
+pub fn switch_workspace_to(Source, String) -> Unit
+
 pub let table_rows : Int32
 
 pub fn tag_end(Array[Int32], String) -> Int32?
@@ -1609,7 +1726,7 @@ pub fn tell_place(Source, ChatRef, ChatView, Reading, exact? : Bool) -> Unit
 
 pub fn term_color(String, Bool) -> Int64
 
-pub fn term_lines(Array[@json.Json], Int64, Bool) -> Array[Array[@text.Run]]
+pub fn term_line(Array[@json.Json], Int64, Bool) -> Array[@text.Run]
 
 pub fn this_machine() -> String
 
@@ -1634,10 +1751,6 @@ pub fn tr(String, args? : Array[(String, String)]) -> String
 
 pub fn trim_slash(String) -> String
 
-pub let turn_calm_ms : Double
-
-pub let turn_most_ms : Double
-
 pub let turns_by : Map[String, Turns]
 
 pub fn turns_of(String) -> Turns
@@ -1649,10 +1762,6 @@ pub fn under_post(@ui.Ctx, String, Bool, enter? : @motion.Trans, open? : @motion
 pub fn under_reset() -> Unit
 
 pub fn under_rest() -> Double
-
-pub fn under_turn(String) -> Double
-
-pub let unseen_at : Double
 
 pub let update : Update
 
@@ -1808,6 +1917,8 @@ pub let viz_max_state : Int32
 
 pub fn viz_mermaid_block(@ui.Ctx, Source, String, String, String, Int64) -> Unit
 
+pub fn viz_mermaid_node(@view.View, Source, String, () -> String, () -> Int64, @sf.TipLayer) -> Unit
+
 pub let viz_mermaid_box : @ui.Style
 
 pub fn viz_open_full(String, String, String, String, String, linked? : Bool) -> Unit
@@ -1856,6 +1967,16 @@ pub let viz_way : @ui.Style
 
 pub let viz_ways : @ui.Style
 
+pub fn whole_already(Source, ChatItem) -> Bool
+
+pub fn whole_answered(Source, ChatItem) -> Bool
+
+pub fn whole_of_state(ChatItem, TopicState) -> ChatItem?
+
+pub fn whole_params(String, String) -> Map[String, @json.Json]
+
+pub fn whole_row(Source, ChatItem) -> ChatItem?
+
 pub fn window_front(Page) -> Bool
 
 pub fn window_opens_for(Page) -> Bool
@@ -1866,15 +1987,19 @@ pub fn window_text(Page) -> String?
 
 pub let window_zoom_levels : Array[(String, Double)]
 
+pub let window_tall : Ref[Double]
+
+pub fn window_step(Double) -> Int
+
 pub fn wire_topic_key(String, Map[String, @json.Json]) -> String
 
 pub fn with_lingering(Reading, Array[Entry]) -> Array[Entry]
 
 pub fn words_runs(Array[@json.Json], Int64, chat_title? : (String) -> String?) -> Array[@text.Run]
 
-pub let working_turn_ms : Double
-
 pub fn workspace_in_view(Source) -> (Workspace?, Array[Workspace], Bool, Bool)
+
+pub fn workspace_switch_node(@view.View, Source, (Source, String, (String, Map[String, @json.Json]) -> TopicState) -> Bool) -> Unit
 
 pub fn workspaces_of(@json.Json?) -> (Array[Workspace], Bool, Bool)
 
@@ -1952,6 +2077,7 @@ pub(all) struct Agent {
   wait : (Double, Double?, String)?
   started : Bool
   last_turn : String
+  about : Double?
 }
 
 pub(all) struct App {
@@ -2040,6 +2166,8 @@ pub struct ChatImages {
 pub fn ChatImages::again(Self, String) -> Unit
 pub fn ChatImages::clear(Self) -> Unit
 pub fn ChatImages::coming(Self, String) -> (Double, Double?)?
+pub fn ChatImages::coming_let_go(Self, String) -> Unit
+pub fn ChatImages::coming_since(Self, String, Double) -> Double
 pub fn ChatImages::get(Self, String, String, String, ((@json.Json) -> Unit, (Result[(@json.Json, Bytes?), @json.Json]) -> Unit) -> Unit) -> String
 pub fn ChatImages::held(Self, String) -> Bool
 pub fn ChatImages::new() -> Self
@@ -2142,12 +2270,15 @@ pub(all) struct ChatView {
   newer : Bool
   first_entry : Double?
   last_entry : Double?
+  older : String
+  older_failed : String
   letters : Int32
   at : Double?
   at_offset : Double?
   unread_line : Double?
   unread_above : Bool
   outbox : Array[Outgoing]
+  joins_until : Double?
   offline : Bool
   offline_note : String?
   updating : Bool
@@ -2339,7 +2470,7 @@ pub fn Emits::read(Self) -> Unit
 
 pub(all) enum Entry {
   Top
-  Older
+  Older(String)
   Empty
   Line
   Said(Message)
@@ -2502,9 +2633,7 @@ pub struct Kept[T] {
 }
 pub fn[T] Kept::new() -> Self[T]
 pub fn[T] Kept::peek(Self[T], String) -> T?
-pub fn[T] Kept::read(Self[T], String, (T?) -> T, same? : (T, T) -> Bool) -> T
-
-type KeptOne[T]
+pub fn[T] Kept::read(Self[T], Source, String, (T?) -> T, same? : (T, T) -> Bool) -> T
 
 pub(all) struct KeptPlace {
   top : Double
@@ -2524,8 +2653,9 @@ pub(all) struct Leaving {
 
 pub(all) struct Lingering {
   agent : Agent
-  id : Int32
-  mut n : Int32
+  mut once : Bool
+  unseen : Bool
+  mut awaits : Double
 }
 
 pub(all) struct LinkMark {
@@ -2707,9 +2837,11 @@ pub(all) struct Message {
   notice_link : Int32
   notice_md : @json.Json?
   notice_retry_session : String
+  notice_again_session : String
   notice_detail : String
   notice_short : String
   notice_lines : Array[String]
+  notice_sides : RunSides?
   chats : Array[LinkedChat]
 }
 pub fn Message::linked(Self, String) -> LinkedChat?
@@ -2882,6 +3014,7 @@ pub(all) struct Peek {
   mut got : Int32
   pictures : Array[String]
   mut target : Int32
+  mut was : Int32
   mut codec : String
   mut stream : @ui.Stream?
   mut video : Bool
@@ -2962,7 +3095,11 @@ pub(all) struct Reading {
   mut rows_laid : String
   mut head : String
   mut head_at : Int32
+  mut first_was : Double
+  mut newer_was : Bool
   mut placed : Bool
+  mut put_there : Bool
+  mut put_place : (Int, Double)?
   mut put : Bool
   mut lined : Bool
   asked : @signals.Signal[Double]
@@ -2973,9 +3110,6 @@ pub(all) struct Reading {
   mut seen_whole : Double
   mut top_seq : Double
   mut bottom_seq : Double
-  mut view_read : Bool
-  mut state_seen : Bool
-  mut view_still : Bool
   mut top_off : Double
   mut at_end : Bool
   mut told_place : String
@@ -2983,6 +3117,7 @@ pub(all) struct Reading {
   mut scale : Double
   mut jump : Bool
   mut jump_at : Double
+  mut far : Bool
   mut ask : Bool
   mut bench : Int32
   mut bench_phase : Int32
@@ -3002,7 +3137,6 @@ pub(all) struct Reading {
   makes_way : Map[String, String]
   mut over : String
   admitted : Map[String, Bool]
-  mut list_read : @ui.ListReader?
   mut newest : String
   mut following_row : Bool
   mut follow_key : String
@@ -3010,7 +3144,6 @@ pub(all) struct Reading {
   sent_as : Map[String, String]
   sent_as_told : @signals.Signal[Int32]
   linger : Map[String, Lingering]
-  mut lingered : Int32
   act_order : Map[String, Int32]
   mut acts_seen : Int32
   linger_said : @signals.Signal[Int32]
@@ -3022,7 +3155,11 @@ pub(all) struct Reading {
   mut floor_counted : Bool
   mut floor_was : Double
   running : Map[String, Agent]
+  answered : Map[String, String]
+  answered_unseen : Map[String, Bool]
   last_turns : Map[String, String]
+  turn_from : Map[String, Double]
+  idle_here : Map[String, Double]
   mut flash : String
   flash_lit : @motion.Anim
   mut flash_n : Int32
@@ -3038,7 +3175,6 @@ pub(all) struct Reading {
   mut motion_keys : Array[String]
   rows : @ui.ListRows[Entry]
 }
-pub fn Reading::sees(Self, Double?) -> Bool
 
 pub(all) struct Relaying {
   station : @signals.Signal[String]
@@ -3084,6 +3220,16 @@ pub struct RowsMade {
   keys : Array[String]
 }
 
+pub(all) struct RunSides {
+  was : String
+  now : String
+  to : String
+  was_maker : String
+  was_runtime : String
+  now_maker : String
+  now_runtime : String
+}
+
 #derive(Eq)
 pub(all) struct ScreenAt {
   station : String
@@ -3116,6 +3262,7 @@ pub(all) struct SearchView {
 }
 
 pub(all) struct SendFlight {
+  n : Int
   mut chat : String
   mut turns : String
   text : String
@@ -3151,7 +3298,7 @@ pub(all) struct ServicePage {
   mut site : @ui.NativeView?
   mut port : Int32
   cookies : Map[String, String]
-  mut viewport : Viewport?
+  viewport : @signals.Signal[Viewport?]
   mut restarting : Bool
   calls : @sf.LiveMap[Int32, Int32]
   mut asked : Int32
@@ -3160,14 +3307,13 @@ pub(all) struct ServicePage {
   address : @ui.Field
   link : PageLink
   view : @kit.Zoom
-  mut moving : Bool
+  moving : @signals.Signal[Bool]
   mut placed : Placed?
   mut hold : StageHold?
   mut tapped_at : Double
   mut name : String
   mut session : String
   marks : PageMarks
-  mut custom_typing : Bool
   custom_w : @ui.Field
   custom_h : @ui.Field
 }
@@ -3182,6 +3328,7 @@ pub(all) struct Shell {
   detail : (Source, ChatRef, String) -> Unit
   back : () -> (() -> Unit)?
   show : () -> Unit
+  bring : () -> Unit
   edit_rail : () -> Unit
 }
 
@@ -3202,6 +3349,15 @@ pub(all) enum ShotWait {
   Place(Bool)
   Grab(Bool)
   Draw(@ui.MarkedImage)
+}
+
+#derive(Eq)
+pub(all) enum Shown {
+  Starting
+  SignIn
+  Landing
+  Share
+  Shows(Page)
 }
 
 pub(all) struct SignInAsk {
@@ -3262,6 +3418,8 @@ pub(all) struct Source {
   release : (String, Map[String, @json.Json]) -> Unit
   refresh : (String, Map[String, @json.Json]) -> Unit
   read_only : Bool
+  reads_ahead : () -> Bool
+  asks_outline : () -> Bool
 }
 pub fn Source::lease_topic(Self, String, Map[String, @json.Json]) -> TopicLease
 pub fn Source::owned_by(Self, @view.View) -> Self
@@ -3306,6 +3464,17 @@ pub(all) struct Tagging {
   start : @buffer.Buffer
   mut placed : Bool
 }
+
+pub(all) struct TermLine {
+  n : Int32
+  line : @json.Json
+  runs : Array[@text.Run]
+}
+
+pub(all) struct TermLines {
+  lines : Array[TermLine]
+}
+pub fn TermLines::at(Self, Int32) -> TermLine?
 
 pub(all) struct Thumb {
   x : Double
@@ -3389,53 +3558,29 @@ pub(all) struct Turn {
   warp : (Double, Double, Double)?
 }
 
-pub(all) struct TurnAsk {
-  what : TurnFor
-  ms : Double
-  after : Bool
-  at : Double
-  n : Int32
-}
-
 #derive(Eq, Show)
 pub(all) enum TurnFor {
-  Admit(String)
-  Change(String)
   Send
   Emits
-  Kept
 }
 
 pub(all) struct Turns {
-  asks : Array[TurnAsk]
-  mut on : TurnFor?
-  mut until : Double
   mut open : Bool
-  mut asked_n : Int32
-  waiting : Map[String, Bool]
   shown : Map[String, Bool]
-  wants : Map[String, Bool]
   started : Map[String, Double]
   mut sent_at : Double
-  mut sent_until : Double
-  mut list_rest : Double
   mut stepped_at : Double
   mut now : Double
   mover : @ui.Mover
 }
 pub fn Turns::admit(Self, @ui.Ctx, String, Double, after? : Bool) -> Unit
-pub fn Turns::ask(Self, @ui.Ctx, TurnFor, Double, after? : Bool) -> Unit
 pub fn Turns::emits(Self, @ui.Ctx) -> Unit
 pub fn Turns::emitting(Self) -> Bool
-pub fn Turns::free_at(Self, TurnAsk) -> Double
 pub fn Turns::in_turn(Self, @ui.Ctx, String, Bool, Double, seen~ : Bool) -> Bool
-pub fn Turns::keep_turn(Self, @ui.Ctx) -> Unit
 pub fn Turns::moment(Self, @ui.Ctx) -> Double
-pub fn Turns::next_ask(Self) -> Int32?
 pub fn Turns::over(Self, @ui.Ctx, TurnFor, Double) -> Unit
 pub fn Turns::send(Self, @ui.Ctx, Double) -> Unit
 pub fn Turns::start(Self, String) -> Double?
-pub fn Turns::start_of(Self, String) -> Double
 pub fn Turns::started_at(Self, String) -> Double
 pub fn Turns::step(Self, @ui.Ctx, Double) -> Unit
 
@@ -3689,6 +3834,13 @@ pub(all) struct VizLoad {
   failed : @signals.Signal[Bool]
   mut asked : Bool
 }
+
+pub struct WholeAsk {
+  // private fields
+}
+pub fn WholeAsk::ask(Self, Source, ChatItem) -> Unit
+pub fn WholeAsk::let_go(Self) -> Unit
+pub fn WholeAsk::new() -> Self
 
 pub(all) struct Workspace {
   id : String

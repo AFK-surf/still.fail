@@ -122,7 +122,6 @@ export function resourcesView(sources: Source[], _now: number, waitNote: Wait): 
       const session = typeof get(g, "session") === "string" ? (get(g, "session") as string) : null;
       const kind = kindOf(key);
       const c = session !== null ? get(named, session) : undefined;
-      const thread = typeof get(c, "thread") === "number" ? get(c, "thread") : null;
       const title =
         key === "app" ? t("core-views.resources.whose.app")
         : key === "station" ? t("core-views.resources.whose.station")
@@ -135,7 +134,7 @@ export function resourcesView(sources: Source[], _now: number, waitNote: Wait): 
         title,
         // What it is, where its title does not say it already (a chat's: 对话; the app's and the station's say it).
         kindText: [...(several ? [s.name] : []), ...(kind === "chats" ? [t(`core-views.resources.kind.${kind}`)] : [])].join(" · "),
-        ...(session !== null && key !== "agents" ? { chat: { station: s.address, ...(thread !== null ? { thread } : { session }) } } : {}),
+        ...(session !== null && key !== "agents" ? { chat: { station: s.address, session } } : {}),
         station: s.address,
         session: key !== "agents" ? session : null,
         use: said(useOf(g)),

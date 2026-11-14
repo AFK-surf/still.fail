@@ -146,6 +146,292 @@ fn seg(
 }
 
 ///|
+/// What a `stops` keeps between builds: the level its caller last said, the level it shows, the level last picked in
+/// it that its caller has yet to say back (-1 none), and while one is, the levels its caller may still say that are
+/// not news (what it said as each was picked, and what was picked before); a finger on it: its track as the press went
+/// down (where along it each step of that press is) and the stop last felt under it.
+pub struct Stops {
+  mut said : Int
+  mut shown : Int
+  mut expect : Int
+  stale : Array[Int]
+  mut track_x : Double
+  mut track_w : Double
+  mut felt : Int
+}
+
+///|
+pub fn Stops::new() -> Stops {
+  { said: -2, shown: -1, expect: -1, stale: [], track_x: 0.0, track_w: 0.0, felt: -1 }
+}
+
+///|
+/// What was picked in it did not take (its caller's: a save refused): it shows what its caller says again.
+pub fn Stops::reset(self : Stops) -> Unit {
+  self.said = -2
+  self.expect = -1
+  self.stale.clear()
+}
+
+///|
+/// How far toward a finger its thumb leans from the stop it is drawn to (the bar's ball's `lean`).
+let stops_lean : Double = 0.25
+
+///|
+/// How much larger its thumb is held, and its lens over that (the bar's ball's 6%, its lens's 18%).
+let stops_held_grow : Double = 0.06
+
+///|
+let stops_lens_grow : Double = 0.18
+
+///|
+/// One of a few levels in order (how hard a model thinks), as many as there are on one line whatever they are called:
+/// a capsule track on the words' tint, as a search field's and a panel's capsules beside it are, a stop for each level
+/// across it, a dot each; over the one it is at its thumb, saying that level's name, as wide as the name needs.
+///
+/// Its thumb is the bottom bar's ball in small (the user, 2026-11-10: 「选择条需要能滑动」「手感跟小屏下边栏差不多」
+/// 「玻璃效果也要重做」): a finger takes it along the track, to the stop under the finger and leaning a quarter of the
+/// way on toward the finger itself, on the ball's spring (@kit.follow_spring), each stop come to under the finger
+/// felt; let go, the level under the finger is picked. At
+/// rest it is no glass, a lifted capsule (「按下边栏做，平时应该不是玻璃，按住才是玻璃，然后效果也按下边栏来，不要乱画」,
+/// of a thumb of frosted glass with a lit rim at rest and a knob's lens held); held it is a little larger and the
+/// bar's lens of liquid glass, its rim as narrow as a knob's (glass_knob), grows over it as it fades under the lens, by as much as the ball's does,
+/// gone as it is let go; where glass is solid, the capsule alone. No shadow (「为啥有阴影」). A tap on a stop is a press let go there. Of what came before: a segmented choice of the names
+/// (「分级再多点不就放不下了吗」), a line with a knob (「动效和 ui 都不符合整体风格」), Seg's track of corners (「这个选择
+/// 控件本身就不符合整体风格」), and the sliding group's lens, which took the thumb to the stop pressed and left the
+/// name of the one it was at on the bare track (「这又是什么鬼」).
+///
+/// `state`: what it keeps (its caller's, one for each of them). The level it shows is its own between builds: a level
+/// picked is shown from then on whatever its caller says meanwhile that is not news (the level it had, an earlier
+/// pick's: a caller whose save is answered before its value is told says the old level again for a few frames, and
+/// the thumb went back and out again on a person's phone) until its caller says that level back; a level its caller
+/// says that is news is shown as it is said. `said`: what a screen reader calls it. `on_pick`: what choosing another
+/// level does, given its index, as it is chosen, outside any build; where that does not take, its caller says so
+/// (Stops::reset). Returns the level it shows.
+pub fn stops(
+  c : @ui.Ctx,
+  key : String,
+  labels : Array[String],
+  chosen : Int,
+  state : Stops,
+  said? : String = "",
+  on_pick? : (Int) -> Unit,
+) -> Int {
+  if state.expect >= 0 {
+    if chosen == state.expect {
+      // (what was picked here said back)
+      state.expect = -1
+      state.stale.clear()
+      state.said = chosen
+    } else if !state.stale.contains(chosen) {
+      // (news from elsewhere while a pick was on its way)
+      state.expect = -1
+      state.stale.clear()
+      state.said = chosen
+      state.shown = chosen
+    }
+  } else if chosen != state.said {
+    state.said = chosen
+    state.shown = chosen
+  }
+  let shown = state.shown
+  let n = labels.length()
+  let last = dmax(0.0, (n - 1).to_double())
+  let id = c.id(key)
+  let r = c.interact(id, keys=0, focus_on_press=true)
+  let pad = @ui.Space::px(S1)
+  let high = button_height()
+  // the stop `px` across the window is over, on a track at `x` and `w` wide: which, and how far along counted in stops
+  let along = fn(px : Double, x : Double, w : Double) -> Double? {
+    if n > 0 && w > 2.0 * pad {
+      Some(dclamp((px - x - pad) / (w - 2.0 * pad) * n.to_double() - 0.5, -0.5, last + 0.5))
+    } else {
+      None
+    }
+  }
+  let stop_of = fn(p : Double) -> Int {
+    let i = p.round().to_int()
+    if i < 0 { 0 } else if i > n - 1 { n - 1 } else { i }
+  }
+  // a finger on it, as it is built: where along it (its track as last laid out)
+  let (rx, _, rw, _) = r.rect()
+  let finger = match c.drag_of(id) {
+    Some(d) if d.down => along(d.x, rx, rw)
+    _ => None
+  }
+  let at = match finger {
+    Some(fp) => stop_of(fp)
+    None => shown
+  }
+  // told as it comes, outside any build: each stop come to under the finger felt, the one it is let go over picked
+  c.follow_press(id, fn(s) {
+    let over = fn(px : Double) -> Int {
+      match along(px, state.track_x, state.track_w) {
+        Some(p) => stop_of(p)
+        None => -1
+      }
+    }
+    match s {
+      Down(x, _, box) => {
+        match box {
+          Some((bx, _, bw, _)) => {
+            state.track_x = bx
+            state.track_w = bw
+          }
+          None => ()
+        }
+        state.felt = over(x)
+      }
+      Moving(x, _) => {
+        let i = over(x)
+        if i >= 0 && i != state.felt {
+          state.felt = i
+          @ui.haptic(TextHandleMove)
+        }
+      }
+      Up(x, _) => {
+        let i = over(x)
+        state.felt = -1
+        if i >= 0 && i != state.shown {
+          // (what its caller may say meanwhile that is no news: what it says now, what was shown, an earlier pick)
+          // (none of them, -1, is what its caller says too, of what has no level yet: no news either, or its thumb
+          // went from the stop picked back to none until the save was told)
+          for old in [(state.said, -1), (state.shown, -1), (state.expect, 0)] {
+            if old.0 >= old.1 && old.0 != i && !state.stale.contains(old.0) {
+              state.stale.push(old.0)
+            }
+          }
+          state.stale.retain(fn(x) { x != i })
+          state.expect = i
+          state.shown = i
+          match on_pick {
+            Some(f) => {
+              @signals.start_batch()
+              @signals.untracked(fn() { f(i) })
+              @signals.end_batch()
+            }
+            None => ()
+          }
+        }
+      }
+      Off => state.felt = -1
+    }
+  })
+  // where its thumb goes, counted in stops: the stop it is at, leaning toward a finger. Told as it is built, on the
+  // ball's spring, and read where it is drawn, as each frame is painted (nothing built again as it goes); held, the same
+  let goal = match finger {
+    Some(fp) => dclamp(at.to_double() + (fp - at.to_double()) * stops_lean, 0.0, last)
+    None => dmax(0.0, at.to_double())
+  }
+  let pa = @motion.told(c, "sf-stops-p/" + key, goal, spec=@kit.follow_spring)
+  let ha = @motion.told(c, "sf-stops-held/" + key, if finger is Some(_) { 1.0 } else { 0.0 }, spec=@motion.lift_spring)
+  let cell = if n > 0 && rw > 2.0 * pad { (rw - 2.0 * pad) / n.to_double() } else { 0.0 }
+  let thumb_h = high - 2.0 * pad
+  let solid = c.glass_solid()
+  let node = c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
+    c.box(style=stops_track.then(@ui.style(h=Fixed(high))), fn() {
+      // its stops, a dot each, the one under its thumb gone
+      for i, l in labels {
+        let a = @motion.told(c, "sf-stops/" + key + "/" + l, if i == at { 0.0 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
+        c.box(style=stops_cell, fn() {
+          let d = c.box(style=stops_dot, fn() {  })
+          c.look_by(d, fn() { @ui.look(alpha=a.get(c)) })
+        })
+        |> ignore
+      }
+      // its thumb over them, the bar's ball's way: at rest a lifted capsule, no glass, the name of the stop it is at
+      // in it; held, a little larger, and the lens of liquid glass grown over it as it fades under the lens. Laid out
+      // at the stop it goes to and drawn where its spring has it on the way. (Not drawn longer and lower by its
+      // speed, as the ball is: the ball is laid out by its speed each frame it moves, which nothing new is.)
+      if at >= 0 && n > 0 {
+        if cell > 0.0 {
+          let inner = rw - 2.0 * pad
+          let tw = dmin(inner, dmax(cell, c.words_across(labels[at], stops_words) + 2.0 * @ui.Space::px(S3)))
+          let left_at = fn(p : Double) -> Double { dclamp(pad + (p + 0.5) * cell - tw / 2.0, pad, pad + inner - tw) }
+          let laid = left_at(goal)
+          let off = fn() -> Double { left_at(dclamp(pa.get(c), 0.0, last)) - laid }
+          let held = fn() -> Double { dmax(0.0, ha.get(c)) }
+          let lensed = fn() -> Double { if solid { 0.0 } else { dmin(1.0, held()) } }
+          let size = @ui.style(w=Fixed(tw), h=Fixed(thumb_h))
+          let ball = c.box(style=stops_ball.then(size), left=laid, top=pad, fn() {  })
+          c.look_by(ball, fn() { @ui.look(alpha=1.0 - lensed(), dx=off(), scale=1.0 + stops_held_grow * held()) })
+          let name = c.box(style=stops_name.then(@ui.style(w=Fixed(tw), h=Fixed(high))), left=laid, top=0.0, fn() {
+            c.text(labels[at], style=stops_words) |> ignore
+          })
+          c.look_by(name, fn() { @ui.look(dx=off()) })
+          if !solid {
+            // (the bar's lens as the library has it for a knob this small, glass_knob: the bar's own rim, 16, is more
+            // than half this thumb's height, all of it rim then, its name drawn tall with coloured ends, 2026-11-10;
+            // not drawn at all while it is not held: its look's opacity none)
+            let lens = c.box(style=stops_ball_room.then(size), left=laid, top=pad, glass=glass_knob(), fn() {  })
+            c.look_by(lens, fn() {
+              let l = lensed()
+              @ui.look(alpha=l, dx=off(), scale=(1.0 + stops_held_grow * held()) * (1.0 + stops_lens_grow * l))
+            })
+          }
+        } else {
+          // (not laid out yet: its thumb a stop's share of the track, where it goes)
+          c.box(style=stops_over, left=pad, right=pad, top=pad, bottom=pad, fn() {
+            c.box(style=@ui.style(w=Grow(goal)), fn() {  }) |> ignore
+            c.box(style=stops_thumb, keep=true, fn() { c.text(labels[at], style=stops_words) |> ignore }) |> ignore
+            c.box(style=@ui.style(w=Grow(last - goal)), fn() {  }) |> ignore
+          })
+          |> ignore
+        }
+      }
+    })
+    |> ignore
+  })
+  c.semantics(node, Slider, id~, label=said, value=if at >= 0 && at < n { labels[at] } else { "" }, range=(0.0, dmax(0.0, at.to_double()), last))
+  state.shown
+}
+
+///|
+/// A stop: an equal share of the track, its dot in its middle.
+// kept across runs: a value (no field of it changes)
+let stops_cell : @ui.Style = @ui.css("row h=Full align=ACenter justify=JCenter").then(@ui.style(w=grow))
+
+///|
+/// Its thumb's row over the stops, out of their flow: what is before it, it, what is after.
+// kept across runs: a value (no field of it changes)
+let stops_over : @ui.Style = @ui.css("row align=ACenter")
+
+///|
+/// Its thumb before its track is laid out: as tall as the row, a stop's share of it across, the name in its middle
+/// 12 in.
+// kept across runs: a value (no field of it changes)
+let stops_thumb : @ui.Style = @ui.css("row h=Full px=S3 align=ACenter justify=JCenter radius=Full bg=Lifted").then(@ui.style(w=grow))
+
+///|
+/// Its thumb at rest, a lifted capsule; and a capsule's room alone, its lens's.
+// kept across runs: a value (no field of it changes)
+let stops_ball : @ui.Style = @ui.css("radius=Full bg=Lifted")
+
+///|
+// kept across runs: a value (no field of it changes)
+let stops_ball_room : @ui.Style = @ui.css("radius=Full")
+
+///|
+/// A stop's dot: 4 across, the ink at 30% on the track's tint.
+// kept across runs: a value (no field of it changes)
+let stops_dot : @ui.Style = @ui.css("w=S1 h=S1 radius=Full bg=A(Fg,O30)")
+
+///|
+/// Its name over its thumb: in the thumb's middle.
+// kept across runs: a value (no field of it changes)
+let stops_name : @ui.Style = @ui.css("row align=ACenter justify=JCenter")
+
+///|
+/// Its track: a capsule on the words' tint, its stops in a line across it, 4 in.
+// kept across runs: a value (no field of it changes)
+let stops_track : @ui.Style = @ui.css("row w=Full p=S1 radius=Full bg=Tint")
+
+///|
+/// The name of the level it is at.
+// kept across runs: a value (no field of it changes)
+let stops_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
+
+///|
 /// How wide a filling Seg of `options` is with its options' words whole at their size with their sides, and how
 /// narrow it may go: the chosen one's (the widest's) words with the chevron, as it is when they do not fit side by
 /// side (seg's pick). A filling one as wide as its options (at a head's end: @sf.segmented) is laid in that.
@@ -168,7 +454,7 @@ fn choice_words_w(c : @ui.Ctx, s : String, size : Double, weight? : Int = 400) -
 ///|
 /// The same of a node's words: in the theme the window's tree's words are drawn in (@ui.tree_theme, view_host's
 /// words_style), whatever theme an old view was left in.
-fn node_words_w(s : String, size : Double, weight? : Int = 400) -> Double {
+pub fn node_words_w(s : String, size : Double, weight? : Int = 400) -> Double {
   words_w(@ui.tree_theme().tabular, s, size, weight~)
 }
 
@@ -242,11 +528,14 @@ let seg_least : Double = @ui.Space::px(S1)
 /// How a choice's options fit the room option_widths gives them: their words at their size; their words made smaller
 /// alike, by this much (down to the system's own size of words, as the systems' own segmented controls make theirs);
 /// or not side by side at all, the chosen one alone and the others offered in a pick (choice_pick).
+// Eq, Show and Debug for its tests
+#warnings("-unused_value")
+#derive(Eq, Debug)
 priv enum Fit {
   Whole
   Smaller(Double)
   Menu
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// How wide each of a choice's options is in `room` (all of it, the gaps between them aside), their words `words`
@@ -358,7 +647,7 @@ priv struct ChoicePick {
 
 ///|
 /// Each choice that has been drawn not side by side, by its key.
-let choice_picks : Map[String, ChoicePick] = {}
+let choice_picks : Map[String, ChoicePick] = Map([])
 
 ///|
 fn init {

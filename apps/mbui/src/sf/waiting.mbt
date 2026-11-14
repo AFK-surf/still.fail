@@ -50,7 +50,7 @@ pub fn breathe(
     return
   }
   match share {
-    Some(s) if s.target() <= 0.0 && s.over() => return
+    Some(s) if s.target() <= 0.0 && s.over(c) => return
     _ => ()
   }
   c.cycle_look(
@@ -59,7 +59,7 @@ pub fn breathe(
     fn(f) {
       let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
       let share = match share {
-        Some(s) => dmax(0.0, s.get())
+        Some(s) => dmax(0.0, s.get(c))
         None => 1.0
       }
       @ui.look(alpha=1.0 - (1.0 - low) * share * @ui.Ease::InOut.at(way))
@@ -200,6 +200,7 @@ pub fn spinner(
 /// (View::lines, in the theme's colours as they change, or `ring` and `arc`'s), turned by the clock about the middle of
 /// what its pieces cover as each frame is drawn (View::cycle, View::turn): nothing made again for it while it turns; its turning let go with it.
 /// The node.
+#callsite(autofill(loc))
 pub fn spinner_node(
   parent : @view.View,
   size? : Double = 14.0,
@@ -208,6 +209,7 @@ pub fn spinner_node(
   arc? : () -> Int64,
   sweep? : Double = 0.25,
   period? : Double = spinner_turn_ms,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let pi = 3.141592653589793
   let mid = size / 2.0
@@ -217,7 +219,7 @@ pub fn spinner_node(
   // (its points worked out once: only its colours change as it lives)
   let round = @ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi)
   let part = @ui.arc(mid, mid, r, from=-0.75 * pi, sweep=sweep * 2.0 * pi)
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     v
     .width(Is(Some(size)))
     .height(Is(Some(size)))
@@ -337,7 +339,7 @@ pub(all) struct WaitNote {
 /// Made-up words `n` letters long, for what a page's bones are drawn of (`waiting`'s `sample`): only how long they are
 /// is seen, as a bar.
 pub fn sample_words(n : Int) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for _ in 0..<n {
     out.write_char('字')
   }
@@ -444,34 +446,43 @@ let bones_box : @ui.Style = @ui.css("")
 let wait_pills : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1 gap=S2 align=ACenter")
 
 ///|
-/// A wait as nodes of the window's tree (wait_line's): nothing for a moment but its room, 18 high (later_ms from as it
-/// is made: a wait that ends sooner shows none), then a spinner and `words` in the muted ink, 8 apart, as high as they
-/// are (wait_words: the Ui size, L5's line, both as the system's size of words makes them).
-pub fn wait_line_node(parent : @view.View, words : () -> String) -> @view.View {
+/// A wait as nodes of the window's tree (wait_line's): nothing for a moment but its room (later_ms from as it is made: a
+/// wait that ends sooner shows none), then a spinner and `words` in the muted ink, 8 apart. Its room is what it will
+/// show from the first: as high as its words, wrapped in what the line leaves them past the spinner (wait_words: the Ui
+/// size, L5's line, both as the system's size of words makes them), 18 at least, so nothing under it moves as they come
+/// (words of two lines no taller then than before). Read out once they are seen.
+#callsite(autofill(loc))
+pub fn wait_line_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> @view.View {
   let long = @signals.signal(false)
-  parent.box(fn(l) {
+  parent.box(made_for=loc, fn(l) {
     l
     .row(Is(true))
     .gap(Is(8.0))
     .lines_up(Is(Some(Middle)))
-    .height(By(fn() { if long.get() { None } else { Some(18.0) } }))
+    .min_height(Is(Some(18.0)))
     |> ignore
     l.at_moment(l.cause_at() + later_ms, fn() { long.set(true) }) |> ignore
-    l.show(fn() { long.get() }, fn(s) { spinner_node(s, size=12.0) |> ignore })
-    l.show(fn() { long.get() }, fn(s) {
-      s.box(fn(w) {
-        w
-        .words(By(words))
-        .words_look(By(fn() {
-          let th = @ui.tree_theme()
-          let (size, own) = th.text_size(Ui)
-          { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: false, tracking: @view.letters_own, balance: false }
-        }))
-        .ink(By(fn() { theme().p.muted }))
-        |> ignore
-      })
+    // (the spinner's room while it is not yet there: one in the other's place along the row, at once)
+    l.pick(fn() { long.get() }, fn(s, on) {
+      if on {
+        spinner_node(s, size=12.0) |> ignore
+      } else {
+        s.width(Is(Some(12.0))).height(Is(Some(12.0))) |> ignore
+      }
+    })
+    l.box(fn(w) {
+      w.shrink(Is(1.0)).min_width(Is(Some(0.0))).hides(By(fn() { !long.get() })) |> ignore
+      w
+      .words(By(words))
+      .words_look(By(fn() {
+        let th = @ui.tree_theme()
+        let (size, own) = th.text_size(Ui)
+        { size, weight: 400, line: th.leading(L5).unwrap_or(own), wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
+      }))
+      .ink(By(fn() { if long.get() { theme().p.muted } else { alpha(theme().p.muted, 0.0) } }))
       |> ignore
     })
+    |> ignore
   })
 }
 
@@ -483,12 +494,14 @@ pub fn wait_line_node(parent : @view.View, words : () -> String) -> @view.View {
 /// failing), each in a pill, at once; what it waits on (`note`'s words, where it says any) said only to a screen reader,
 /// while it is read. `fill`: it takes the room left (a page's body). Made inside what is in its bones already: only its
 /// sample, breathing as that does (one breath).
+#callsite(autofill(loc))
 pub fn waiting_node(
   parent : @view.View,
   sample : (@view.View) -> Unit,
   error? : () -> String = fn() { "" },
   note? : () -> WaitNote = fn() { { reading: true, text: "", failing: [] } },
   fill? : Bool = false,
+  loc~ : SourceLoc,
 ) -> Unit {
   if parent.in_bones() {
     sample(parent)
@@ -500,7 +513,7 @@ pub fn waiting_node(
     out + note().failing
   }
   let reading = fn() { error() == "" && note().reading }
-  parent.box(fn(w) {
+  parent.box(made_for=loc, fn(w) {
     w.min_width(Is(Some(0.0))) |> ignore
     if fill {
       w.grow(Is(1.0)) |> ignore
@@ -564,8 +577,9 @@ let wait_pills_gap : Double = 8.0
 ///|
 /// What could not be read, in a grey capsule, in red at once (wait_pill's `error`, as a node): its words 12 on 18,
 /// 12 and 6 in.
-fn wait_pill_node(parent : @view.View, words : () -> String) -> Unit {
-  parent.box(fn(p) {
+#callsite(autofill(loc))
+fn wait_pill_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(p) {
     p
     .row(Is(true))
     .padding(Is((12.0, 6.0, 12.0, 6.0)))
@@ -579,7 +593,7 @@ fn wait_pill_node(parent : @view.View, words : () -> String) -> Unit {
       .words_look(By(fn() {
         let th = @ui.tree_theme()
         let (size, _) = th.text_size(Meta)
-        { size, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line: 18.0, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { theme().p.red }))
       .words_centered(Is(true))

@@ -78,7 +78,7 @@ pub fn pick_node(
       p
       .beside(at.id(), side=Bottom, along=view_along(along), offset~, padding=8.0)
       .width(Is(Some(chooser_menu_w)))
-      .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))
+      .max_height(By(fn() { Some(dmax(0.0, over_room(layer).1 - 16.0)) }))
       // (small_panel: its padding; its search and rows reaching past it to stand concentric with its corners)
       // (small_panel's padding: its search and rows reaching past it at its sides and top to stand concentric with its
       // corners, its last row at its foot, menu_item's at_foot)
@@ -92,8 +92,7 @@ pub fn pick_node(
       .scale(By(fn() { look().sx }), about=FromBeside)
       .says(Is(Some(@view.said(Dialog, label=title))))
       // (a press on it its own: on what of it takes none, nothing, not outside it)
-      .presses(Is(true))
-      .on_press(fn() {  })
+      |> ground_node
       |> ignore
       // (its search, a capsule in its top corners, the library's line: Enter in it picks the first found)
       let search : Ref[@view.View?] = Ref(None)
@@ -129,7 +128,7 @@ pub fn pick_node(
         l.max_height(Is(Some(pick_list_most))).alpha(By(words_in)) |> ignore
         l.scrolls(list, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
           b.each(fn() { found().map(fn(x) { x.key }) }, fn(k) { k }, fn(cell, k) {
-            let k = @signals.untracked(fn() { k.get() })
+            let k = k.untracked()
             match choices.iter().find_first(fn(x) { x.key == k }) {
               Some(x) => {
                 // (the last found reaching into the panel's padding at its foot, as menu_item's at_foot)
@@ -159,6 +158,7 @@ pub fn pick_node(
 /// A choice of a long pick's (menu_item's look) in `b`: its mark or icon in a column before its words, its value after
 /// them, its note under them, in the accent where it is the one chosen; lit under the pointer or the keyboard's focus;
 /// pressed, `go`.
+#callsite(autofill(loc))
 fn pick_row_node(
   b : @view.View,
   x : Choice,
@@ -166,12 +166,13 @@ fn pick_row_node(
   go : () -> Unit,
   last : () -> Bool,
   reach : Double,
+  loc~ : SourceLoc,
 ) -> Unit {
   let t = theme()
   let panel = x.icon != "" || x.mark is Some(_)
   let gap = if panel { panel_row_gap } else { menu_row_gap }
   let said = [x.label, x.value, x.note].filter(fn(s) { s != "" })
-  b.box(fn(r) {
+  b.box(made_for=loc, fn(r) {
     r
     .row(Is(true))
     .lines_up(Is(Some(Middle)))
@@ -184,7 +185,7 @@ fn pick_row_node(
     .presses(Is(true))
     .focusable(Is(true))
     .on_press(go)
-    .says(Is(Some(@view.said(Button, label=said.join(" ")))))
+    .says(Is(Some(@view.said(MenuItemRadio, label=said.join(" "), check=if on { On } else { Off }))))
     |> ignore
     let first_line = fn(into : @view.View) {
       if panel {

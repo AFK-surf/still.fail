@@ -43,7 +43,7 @@ let tape_settle_ms : Double = 1500.0
 
 ///|
 fn tape_read(json : String) -> Tape {
-  let v = @json.parse(json) catch { _ => abort("the tape's JSON does not parse") }
+  let v = @json.parse(json) catch { _ => @halt.saying("the tape's JSON does not parse") }
   let topics : Array[(Json, Json)] = []
   for x in items(Some(v), "topics") {
     match (field(Some(x), "topic"), field(Some(x), "value")) {
@@ -84,7 +84,7 @@ fn tape_topic_key(name : String, params : Map[String, Json]) -> Json {
     match (k, v) {
       ("session", String(s)) if s.has_prefix("thread:") => {
         let mut n = 0.0
-        for ch in s.view(start_offset=7) {
+        for ch in s.exact_view(start=7) {
           n = n * 10.0 + (ch.to_int() - 48).to_double()
         }
         key["thread"] = Json::number(n)
@@ -132,7 +132,7 @@ fn tape_source(tape : Tape, at : () -> Double, base : Source) -> Source {
       }
       // (the device's prefs, which Android's tapes kept none of: a new device's, as the core has them from the start)
       if name == "prefs" && value is None {
-        return { value: Some(Json::object(Map::new())), error: None, version: 1 }
+        return { value: Some(Json::object(Map([]))), error: None, version: 1 }
       }
       // (its values as the tape set them by now: followed by its moment as it moves on, `at`)
       { value, error: None, version }
@@ -207,7 +207,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
   let t0 = t.time()
   let out : Array[String] = []
   // each word's frames that differ: from, to, how many, how many not drawn here, the worst offset (here less Android's)
-  let runs : Map[String, TapeRun] = {}
+  let runs : Map[String, TapeRun] = Map([])
   let order : Array[String] = []
   // what the person did: taps (by their words or where they were), a finger's down, moves and up, pages pushed, back
   let taps = tape.events.filter(fn(e) {
@@ -232,7 +232,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
           let (x, y) = (number(Some(e), "x"), number(Some(e), "y"))
           match kind {
             "down" => t.press_at(x, y)
-            "move" => t.move(x, y)
+            "move" => t.move_to(x, y)
             _ => t.release(x, y)
           }
         }
@@ -257,7 +257,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
     for want in trace {
       let a = words.filter(fn(w) { w.text == want }).map(fn(w) { "\{w.x.round()},\{w.y.round()}" })
       let h = here.filter(fn(h) { h.0 == want }).map(fn(h) { "\{h.1.round()},\{h.2.round()} a\{(h.5 * 100.0).round() / 100.0}" })
-      out.push("TRACE \{ft} \{want}: android \{a} here \{h}")
+      out.push("TRACE \{ft} \{want}: android \{@ui.list_text(a)} here \{@ui.list_text(h)}")
     }
     for w in words {
       // (a time counted on the wall clock, which Android's test does not stop: 8s there is 1s here)

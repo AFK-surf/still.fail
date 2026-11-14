@@ -3,7 +3,7 @@
 
 ///|
 test "14-mark-read" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("mark-read"), seed~)
     f.see("端到端测试")
     // (alice's other device asks: a live run's step beside the app)
@@ -12,7 +12,7 @@ test "14-mark-read" {
     f.tap("=这一条应当显示为未读 082947")
     f.run_for(@ui.move_most_ms)
     f.see_n(2, "这一条应当显示为未读 082947")
-    assert_true(f.t.at_end())
+    f.check_by(fn() { f.t.at_end() }, "the list not at its end")
     f.tap("icon:chevron-left")
     f.run_for(@ui.move_most_ms)
     // the page popped is let go at the frame after its slide (the core told it is left then)
@@ -20,7 +20,7 @@ test "14-mark-read" {
     f.core()
     f.see("端到端测试")
     // the bar moved by what this did (the field focused, the chat left) at rest
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

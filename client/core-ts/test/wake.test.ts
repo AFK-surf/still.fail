@@ -1,11 +1,11 @@
 // wake.rs's tests, ported (same names, same checks): fibers in place of polled futures.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Effect, Exit, Queue, type Fiber } from "effect";
+import { Clock, Effect, Exit, Queue, type Fiber } from "effect";
 import { HostError } from "../src/error.ts";
-import type { Host, HttpRequest, HttpResponse, Pull } from "../src/host.ts";
+import { HEDGE, type Host, type HttpRequest, type HttpResponse, type Pull } from "../src/host.ts";
 import { FakeHost, flush, jsonResponse } from "../src/testing.ts";
-import { DROPPED, GONE, HEDGE, NETWORK, QUIET_MS, STREAM_AWAY_MS, Wake, WakingHost, Wakes, hedgeable, hedged, quietEnds, unlessDropped } from "../src/wake.ts";
+import { DROPPED, GONE, NETWORK, QUIET_MS, STREAM_AWAY_MS, Wake, WakingHost, Wakes, hedgeable, hedged, quietEnds, resendable, unlessDropped } from "../src/wake.ts";
 
 // Optional host capabilities must also be considered by the wrapper used by a running core.
 type Assert<T extends true> = T;
@@ -92,7 +92,12 @@ test("only_reads_and_what_says_so_are_asked_twice", () => {
   const request = (method: string, headers: [string, string][]): HttpRequest => ({ method, url: "", headers, body: null });
   assert.ok(hedgeable(request("GET", [])));
   assert.ok(!hedgeable(request("POST", [])));
-  assert.ok(hedgeable(request("POST", [[HEDGE, "1"]])));
+  // (by the header the program names, the core's host.ts `HEDGE`; a host given none asks reads alone twice)
+  assert.equal(HEDGE, "x-stillfail-hedge");
+  assert.ok(hedgeable(request("POST", [[HEDGE, "1"]]), HEDGE));
+  assert.ok(!hedgeable(request("POST", [[HEDGE, "1"]])));
+  assert.ok(!resendable(request("PUT", [[HEDGE, "1"]]), HEDGE));
+  assert.ok(resendable(request("PUT", [[HEDGE, "1"]])));
 });
 
 test("the_network_changing_fails_every_request_under_way", async () => {
@@ -166,4 +171,65 @@ test("a_stream_opened_while_away_and_quiet_since_ends", async () => {
   // The page went away before it opened (it was opened in the background), and nothing came since.
   wakes.wake(wake(opened + STREAM_AWAY_MS, STREAM_AWAY_MS + 60_000));
   assert.equal(errorOf(await next.done()), GONE);
+});
+
+// (what is sent again is told by what the host is sent, not by wake.ts's names: these fail on a core that does not)
+/// Longer than any wait before a write is sent again (wake.ts RESEND_MS).
+const AWHILE = 10_000;
+
+/// A host whose first `fails` requests fail under it (no answer), and answers 200 after; what it was sent.
+function failingFirst(fails: number) {
+  const host = new FakeHost();
+  let left = fails;
+  host.onFetch(() => {
+    if (left > 0) {
+      left--;
+      throw new HostError("error sending request for url (https://x/y): connection closed before message completed");
+    }
+    return jsonResponse(200, "ok");
+  });
+  const wakes = new Wakes();
+  const waking = new WakingHost(host, wakes, HEDGE);
+  const send = (method: string) => watch(waking.fetch({ method, url: "https://x/y", headers: [], body: null }).pipe(Effect.provideService(Clock.Clock, host.time.clock)));
+  return { host, wakes, send };
+}
+
+test("a_write_that_put_a_value_and_got_no_answer_is_sent_again_once_after_a_while", async () => {
+  const { host, send } = failingFirst(1);
+  const patch = send("PATCH");
+  assert.ok(await patch.pending());
+  assert.equal(host.requests.length, 1);
+  await host.time.pass(AWHILE);
+  const exit = await patch.done();
+  assert.ok(exit && Exit.isSuccess(exit));
+  assert.equal(host.requests.length, 2);
+});
+
+test("a_write_sent_again_goes_as_the_network_comes_back", async () => {
+  const { host, wakes, send } = failingFirst(1);
+  const put = send("PUT");
+  assert.ok(await put.pending());
+  wakes.wake(new Wake(host.nowMs(), 0, true, false));
+  const exit = await put.done();
+  assert.ok(exit && Exit.isSuccess(exit));
+  assert.equal(host.requests.length, 2);
+});
+
+test("a_write_sent_again_is_sent_once_only_and_its_failure_is_said", async () => {
+  const { host, send } = failingFirst(2);
+  const patch = send("PATCH");
+  await host.time.pass(AWHILE * 3);
+  assert.match(errorOf(await patch.done()) ?? "", /connection closed/);
+  assert.equal(host.requests.length, 2);
+});
+
+test("a_write_that_makes_or_takes_away_or_a_read_is_not_sent_again_by_it", async () => {
+  // (a read is asked again by the sync, and beside itself at a wake: `hedged`)
+  for (const method of ["POST", "DELETE", "GET"]) {
+    const { host, send } = failingFirst(1);
+    const request = send(method);
+    assert.match(errorOf(await request.done()) ?? "", /connection closed/);
+    await host.time.pass(AWHILE * 2);
+    assert.equal(host.requests.length, 1, method);
+  }
 });

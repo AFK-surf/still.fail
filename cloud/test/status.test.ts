@@ -42,7 +42,8 @@ test("the status page's numbers: what the cron found of each service, a failure 
     const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: string): Promise<unknown> };
     await bucket.put("station.json", "{}");
     await cron();
-    assert.deepEqual(asked, ["HEAD https://site.test/", "HEAD https://share.test/"]);
+    // The page checks run in parallel; either request can reach the mock first.
+    assert.deepEqual([...asked].sort(), ["HEAD https://share.test/", "HEAD https://site.test/"]);
     // The first of a relay's failures is not counted as down either.
     // still.fail's own relay's counters come from the same cron; Beijing's have not come.
     const own = new URL(h.origin).host;
@@ -80,14 +81,14 @@ test("incidents come from the repository's workflow alone, and show as its issue
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const jwk = { ...(await exportJWK(publicKey)), kid: "actions", alg: "RS256", use: "sig" };
   const h = await harness({
-    statusRepo: "o/r",
+    statusRepoId: "42",
     push: (request) => {
       assert.equal(request.url, "https://token.actions.githubusercontent.com/.well-known/jwks");
       return { status: 200, body: JSON.stringify({ keys: [jwk] }) };
     },
   });
   try {
-    const token = (claims: Record<string, unknown>, audience = h.origin) => new SignJWT({ repository: "o/r", workflow_ref: "o/r/.github/workflows/status-incidents.yml@refs/heads/main", ...claims })
+    const token = (claims: Record<string, unknown>, audience = h.origin) => new SignJWT({ repository: "o/r", repository_id: "42", workflow_ref: "o/r/.github/workflows/status-incidents.yml@refs/heads/main", ...claims })
       .setProtectedHeader({ alg: "RS256", kid: "actions" }).setIssuer("https://token.actions.githubusercontent.com").setAudience(audience).setIssuedAt().setExpirationTime("10 years").sign(privateKey);
     const send = async (bearer: string | null, issues: unknown) => (await h.fetch("/v1/status/incidents", { method: "POST", headers: bearer ? { authorization: `Bearer ${bearer}` } : {}, body: JSON.stringify(issues) })).status;
     const incidents = async () => ((await (await h.fetch("/v1/status")).json()) as { incidents: unknown[] }).incidents;
@@ -97,7 +98,7 @@ test("incidents come from the repository's workflow alone, and show as its issue
 
     // Nobody else's: no token, another repository's, another workflow's or branch's, one meant for elsewhere.
     assert.equal(await send(null, [issue]), 401);
-    assert.equal(await send(await token({ repository: "fork/r" }), [issue]), 401);
+    assert.equal(await send(await token({ repository: "fork/r", repository_id: "43", workflow_ref: "fork/r/.github/workflows/status-incidents.yml@refs/heads/main" }), [issue]), 401);
     assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/other.yml@refs/heads/main" }), [issue]), 401);
     assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/status-incidents.yml@refs/heads/mine" }), [issue]), 401);
     assert.equal(await send(await token({}, "https://elsewhere.example"), [issue]), 401);
@@ -110,6 +111,10 @@ test("incidents come from the repository's workflow alone, and show as its issue
     assert.deepEqual(await incidents(), [open]);
     assert.equal(await send(good, [{ ...issue, closed_at: "2030-01-01T12:00:00Z" }]), 200);
     assert.deepEqual(await incidents(), [{ ...open, end: "2030-01-01T12:00:00Z" }]);
+    // The repository renamed: known by its id, its workflow under the new name.
+    const renamed = await token({ repository: "o/renamed", workflow_ref: "o/renamed/.github/workflows/status-incidents.yml@refs/heads/main" });
+    assert.equal(await send(renamed, [issue]), 200);
+    assert.deepEqual(await incidents(), [open]);
   } finally {
     await h.close();
   }

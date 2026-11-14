@@ -252,6 +252,64 @@ test("a_windows_build_signed_by_a_key_the_app_adds_is_offered_and_parsed_from_th
   assert.deepEqual(parseAsk("app.update", { platform: "win", versionCode: 1100 }), { kind: "appUpdate", platform: "win", version: 1100, now: false, keys: [] });
 });
 
+test("a_newer_build_comes_with_the_delta_from_the_build_asking_and_none_for_another", async () => {
+  const sha = (c: string) => c.repeat(64);
+  const host = new FakeHost();
+  host.onFetch(() =>
+    jsonResponse(200, {
+      versionCode: 1200, versionName: "0.1.1200", file: "android/stillfail-1200.apk", sha256: sha("a"), size: 9000,
+      deltas: [
+        { from: 1100, file: "android/stillfail-1200.apk.from-1100.delta", sha256: sha("1"), size: 700 },
+        { from: 1150, file: "android/stillfail-1200.apk.from-1150.delta", sha256: sha("2"), size: 400 },
+        { from: 1160, file: "android/../x.delta", sha256: sha("3"), size: 400 },
+        { from: 1170, file: "android/big.delta", sha256: sha("4"), size: 9000 },
+      ],
+      // (the feed's own word for the answer's field is not taken)
+      delta: { file: "android/evil.delta", sha256: sha("e"), size: 1, makesSha256: sha("e"), makesSize: 1 },
+    }),
+  );
+  const asks = new Asks(host, nothing);
+  const from1100 = await run(asks.update("android", 1100, false, false));
+  assert.deepEqual(from1100.delta, { file: "android/stillfail-1200.apk.from-1100.delta", sha256: sha("1"), size: 700, makesSha256: sha("a"), makesSize: 9000 });
+  // the one release kept for the feed, another build asking: its own
+  assert.equal((await run(asks.update("android", 1150, false, false))).delta.file, "android/stillfail-1200.apk.from-1150.delta");
+  for (const version of [1101, 1160, 1170]) assert.equal((await run(asks.update("android", version, false, false))).delta, null, `${version}`);
+  assert.equal(host.requests.length, 1);
+  assert.equal(from1100.versionCode, 1200);
+  // (a feed without deltas, as before: none)
+  const bare = new FakeHost();
+  bare.onFetch(() => jsonResponse(200, { versionCode: 1200, versionName: "0.1.1200", file: "android/stillfail-1200.apk", sha256: "ab", size: 9 }));
+  assert.equal((await run(new Asks(bare, nothing).update("android", 1100, true, false))).delta, null);
+});
+
+test("a_windows_build_offers_a_delta_only_for_the_raw_installer_its_signed_words_say", async () => {
+  const secret = ed25519.utils.randomSecretKey();
+  const key = base64(ed25519.getPublicKey(secret));
+  const sha = (c: string) => c.repeat(64);
+  const feedRaw = { sha256: sha("f"), size: 50_000 };
+  const feed = (signedRaw: J) => {
+    const words = utf8(JSON.stringify({ kind: "stillfail-desktop-win", version: "0.1.1200", build: 1200, file: "stillfail-0.1.1200-x64-win.exe", sha256: sha("a"), size: 9000, ...(signedRaw ? { raw: signedRaw } : {}) }));
+    const signed = { release: base64(words), signature: base64(ed25519.sign(words, secret)), key: keyIdOf(ed25519.getPublicKey(secret)) };
+    return {
+      versionCode: 1200, versionName: "0.1.1200", file: "desktop/stillfail-0.1.1200-x64-win.exe", sha256: sha("a"), size: 9000, signed, raw: feedRaw,
+      deltas: [{ from: 1100, file: "desktop/stillfail-0.1.1200-x64-win.exe.from-1100.delta", sha256: sha("1"), size: 700 }],
+    };
+  };
+  let served: J = feed({ sha256: sha("c"), size: 40_000 });
+  const host = new FakeHost();
+  host.onFetch(() => jsonResponse(200, served));
+  const asks = new Asks(host, nothing);
+  const got = await run(asks.update("win", 1100, true, false, [key]));
+  assert.deepEqual([got.delta.file, got.delta.makesSha256, got.delta.makesSize], ["desktop/stillfail-0.1.1200-x64-win.exe.from-1100.delta", sha("c"), 40_000]);
+  // signed words without `raw`: the build offered whole, the feed's unsigned raw not taken
+  served = feed(null);
+  const whole = await run(asks.update("win", 1100, true, false, [key]));
+  assert.deepEqual([whole.versionCode, whole.delta], [1200, null]);
+  // signed `raw` said wrong: whole as well
+  served = feed({ sha256: "nope", size: 40_000 });
+  assert.equal((await run(asks.update("win", 1100, true, false, [key]))).delta, null);
+});
+
 test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
   const release = (code: number) => ({ versionCode: code, versionName: `0.1.${code}`, file: `android/stillfail-${code}.apk`, sha256: "ab", size: 9 });
   const feeds = (req: { url: string }) =>

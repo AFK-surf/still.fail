@@ -17,20 +17,22 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Pushes, as still.fail's Android app has them: Firebase Cloud Messaging, set up by hand from the app's
- * resources (res/values/push.xml: apps/android/firebase.properties' values) rather than google-services.json, for the
- * Firebase app of the package the app is built as (fail.still.android's and fail.still.android.beta's; none registered
- * for the others, whose pushes stay off and only local notices are shown). The device's token goes to mbui's host (dev.mbui.Notices.token),
+ * resources rather than google-services.json. Each product's resource overlay names its Firebase project and its
+ * stable and beta apps (still.fail's in res/values/push.xml, monoid's in src/monoid/res/values/push.xml). Other
+ * packages have no Firebase app, so their pushes stay off and only local notices are shown. The device's token goes to mbui's host (dev.mbui.Notices.token),
  * which the app registers as the core's {@code notify} says (src/sfapp/notices.mbt push_sync: {@code push.register},
  * a new token registered again).
  */
 final class Push {
     private Push() {}
 
-    /** The Firebase app of this package (as firebase.properties names them): "" where none is registered. */
+    /** The Firebase app of this package, from its product's resources: "" where none is registered. */
     private static String appId(Context c) {
         switch (c.getPackageName()) {
-            case "fail.still.android": return c.getString(R.string.fcm_stable_app_id);
-            case "fail.still.android.beta": return c.getString(R.string.fcm_beta_app_id);
+            case "fail.still.android":
+            case "build.monoid.android": return c.getString(R.string.fcm_stable_app_id);
+            case "fail.still.android.beta":
+            case "build.monoid.android.beta": return c.getString(R.string.fcm_beta_app_id);
             default: return "";
         }
     }

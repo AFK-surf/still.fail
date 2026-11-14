@@ -50,7 +50,7 @@ test("rechecking a shared runner's command directory does not reread unrelated s
         for (let i = 0; i < unrelated; i++) put.run(`other:${i}`, `/sessions/other-${i}/workspace`, `token-${i}`);
         Object.defineProperty(store, "db", { value: observed });
         const builder = new SessionDirectoryBuilder(store, Promise.resolve());
-        const watch = liveMemory({ data, store, jobs: {} as Jobs, runnerNames: () => new Map(), directory: (dir) => builder.find(dir), notify: (session) => told.push(session) });
+        const watch = liveMemory({ data, store, jobs: { memorySeen: () => {} } as unknown as Jobs, runnerNames: () => new Map(), directory: (dir) => builder.find(dir), notify: (session) => told.push(session) });
         try {
           await watch.look();
           assert.deepEqual(told, ["target"]);
@@ -101,7 +101,7 @@ test("a live directory takes precedence while the old archived answer remains ca
     const put = store.db.prepare(`INSERT INTO sessions(key,connect,scope,runtime,profile,workspace,token,created_at,last_active_at,archived_at)
       VALUES (?,'connected','thread','codex','default','/same',?,0,?,?)`);
     put.run("old", "old", 1, 1);
-    const watch = liveMemory({ data, store, jobs: {} as Jobs, runnerNames: () => new Map(), directory: (dir) => builder.find(dir), notify: (session) => told.push(session) });
+    const watch = liveMemory({ data, store, jobs: { memorySeen: () => {} } as unknown as Jobs, runnerNames: () => new Map(), directory: (dir) => builder.find(dir), notify: (session) => told.push(session) });
     try {
       await watch.look();
       await builder.settled();

@@ -23,8 +23,8 @@ pub fn nav_ground_by(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : 
   let h = @motion.told(c, key + "/hover", if hover { 1.0 } else { 0.0 }, spec=nav_fade)
   let o = @motion.told(c, key + "/on", if on { 1.0 } else { 0.0 }, spec=nav_fade)
   fn() {
-    let h = h.get()
-    let o = o.get()
+    let h = h.get(c)
+    let o = o.get(c)
     if h <= 0.0 && o <= 0.0 {
       0L
     } else {
@@ -183,7 +183,7 @@ let nav_action_main : @ui.Style = @ui.css("w=Full")
 /// theme's band (the search's field's); what is beside the action (the filter, 更新) as far from it as keys are
 /// (keys_gap: 4 with keyboard and mouse, 12 with touch).
 pub fn nav_new() -> @ui.Style {
-  nav_new_look.then(@ui.style(px=room_of(theme().chat_list.band_in), gap=keys_gap()))
+  nav_new_look.then(@ui.style(px=room_of(theme().chat_list.band_in), gap=S1))
 }
 
 ///|

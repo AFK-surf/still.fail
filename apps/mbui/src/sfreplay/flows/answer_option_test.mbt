@@ -5,7 +5,7 @@
 
 ///|
 test "22-answer-option" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("answer-option"), seed~)
     f.tap("端到端测试")
     // the chat pushed over Home: in place once its push is over
@@ -29,9 +29,9 @@ test "22-answer-option" {
     // (closed as the core said it decided: to its end)
     let closing = @sfapp.under_rest()
     if closing > f.t.time() {
-      f.run_to(closing)
+      f.run_to(fn() { closing })
     }
-    f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
+    f.check(@sfapp.under_rest() <= f.t.time(), "something under the post moves: \{@sfapp.under_rest()}")
     f.end()
   })
 }

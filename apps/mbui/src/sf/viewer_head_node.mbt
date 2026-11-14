@@ -12,6 +12,7 @@
 /// changes), then × (`close` as it is pressed). There while `awake`
 /// (in over wake_ms, out over sleep_ms, from where it is at that moment), as far in as `shown` says of the node as it is
 /// drawn (the viewer's fade). Its tools' tips in `tips`. The bar's node.
+#callsite(autofill(loc))
 pub fn viewer_head_node(
   parent : @view.View,
   name : () -> String,
@@ -26,11 +27,12 @@ pub fn viewer_head_node(
   holds : () -> String,
   close : () -> Unit,
   tips? : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let small = fn() { width() <= viewer_small_w }
   let fade = TipFade::new()
   let mut head : @view.View? = None
-  parent.box(fn(room) {
+  parent.box(made_for=loc, fn(room) {
     room.over(Is(true)).lines_up(Is(Some(Middle))) |> ignore
     // (awake as it is made: in whole, not come in)
     let woke = @signals.untracked(awake)
@@ -77,7 +79,7 @@ pub fn viewer_head_node(
           .words(By(name))
           .words_look(By(fn() {
             let (size, line) = @ui.tree_theme().text_size(Body)
-            { size, weight: 600, line, wrap: false, tracking: @view.letters_own, balance: false }
+            { size, weight: 600, line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
           }))
           .ink(By(fn() { @ui.tree_theme().color(Fg) }))
           // (read out whole, however much of it is drawn)
@@ -92,7 +94,7 @@ pub fn viewer_head_node(
           .words(By(meta))
           .words_look(By(fn() {
             let (size, line) = @ui.tree_theme().text_size(Meta)
-            { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
+            { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
           }))
           .ink(By(fn() { @ui.tree_theme().color(Muted) }))
           .says(By(fn() { Some(@view.said(Text, label=meta())) }))

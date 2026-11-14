@@ -77,7 +77,7 @@ pub let bar_adding : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b
 ///|
 /// How far a place held on 下方栏's page is moved along its bar (BarCard's `dx`: the finger's way past the slop), by
 /// its bar and its name, while a finger has it.
-pub let bar_moves : Map[String, Double] = {}
+pub let bar_moves : Map[String, Double] = Map([])
 
 // ---------------------------------------------------------------------------
 // 存储空间 (what this device keeps)
@@ -250,7 +250,8 @@ fn size_row(
 /// then its files).
 fn kept_sample(c : @ui.Ctx, chats : Bool) -> Unit {
   list_card(c, fn() {
-    for n in if chats { [6, 8, 5] } else { [4] } {
+    let sample_sizes = if chats { [6, 8, 5] } else { [4] }
+    for n in sample_sizes {
       size_row(c, "", @sf.sample_words(n), if chats { "" } else { @sf.sample_words(14) }, 1.0) |> ignore
     }
   })
@@ -519,11 +520,6 @@ let kept_part_size : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=
 let kept_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full")
 
 ///|
-/// A row's words beside what is at its end (a switch, a ✕), as wide as it leaves them.
-// kept across runs: a value (no field of it changes)
-let fill_words : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
 /// The size chosen at its row's end, as a size row's.
 // kept across runs: a value (no field of it changes)
 let fill_size_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
@@ -539,14 +535,14 @@ let fill_sizes : Array[Double] = [1024.0 * 1024.0 * 1024.0, 100.0 * 1024.0 * 102
 /// `keeping`), each with how it stands, all of them stopped at once; into `blocks`.
 fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
   let t = @sf.theme()
-  let prefs = (core.topic)("prefs", Map::new()).get().value
+  let prefs = (core.topic)("prefs", Map([])).get().value
   let on = !flag(prefs, "fillOff")
   let most = match field(prefs, "fillMax") {
     Some(Number(n, ..)) => n
     _ => fill_sizes[0]
   }
   let size_said = fn(n : Double) { if n == 0.0 { tr("android-settings.files.fill.any") } else { size_words(n) } }
-  let set = fn(name : String, value : Json) { (core.call)("prefs.set", obj([(name, value)]), fn(_) {  }) }
+  let set = fn(name : String, value : Json) { (core.call)("prefs.set", obj([(name, value)]), answer_unread) }
   blocks.push(fn() { section_header(c, tr("android-settings.files.fill.title"), start=S6) })
   blocks.push(fn() {
     list_card(c, fn() {
@@ -577,7 +573,7 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
       }
     })
   })
-  let keeping = items((core.topic)("downloads", Map::new()).get().value, "keeping")
+  let keeping = items((core.topic)("downloads", Map([])).get().value, "keeping")
   if !on || keeping.length() == 0 {
     return
   }
@@ -597,7 +593,7 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
     list_row(c, key="kept-fill-stop-all", piece=(false, true), fn() {
       row_title(c, tr("android-settings.files.fill.stopAll"), color=t.p.red)
     }, on_press=fn() {
-      (core.call)("fill.stopAll", obj([]), fn(_) {  })
+      (core.call)("fill.stopAll", obj([]), answer_unread)
     })
   })
 }

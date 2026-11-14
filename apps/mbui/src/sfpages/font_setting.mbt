@@ -29,10 +29,10 @@ let fonts_pointed : Ref[String] = Ref("")
 /// 字体's setting, a block at a time: the places' choice, the chat as their faces set it, the faces of the place in
 /// view.
 fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
-  let prefs = (core.topic)("prefs", Map::new()).get().value
+  let prefs = (core.topic)("prefs", Map([])).get().value
   let chosen_of = fn(place : String) { text(field(prefs, "fonts"), place) }
   let all = items(field(prefs, "faces"), "list")
-  let files_state = (core.topic)("fonts", Map::new()).get().value
+  let files_state = (core.topic)("fonts", Map([])).get().value
   // the faces whose files this device keeps (chosen or not): no size said, choosing one fetches nothing
   let kept = items(files_state, "kept")
   let place = @settings.font_places[@settings.fonts_at.get()]
@@ -209,7 +209,6 @@ fn face_words(c : @ui.Ctx, key : String, name : String, face : Int, status : Str
 /// pressed, a list of the families installed here under it, a field to find one, each pointed at tried in the chat,
 /// one chosen as the place's face (`local:<family>`).
 fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> Unit {
-  let t = @sf.theme()
   let picked = if chosen.has_prefix(local_prefix) {
     chosen.unsafe_substring(start=local_prefix.length(), end=chosen.length())
   } else {
@@ -257,7 +256,7 @@ fn local_faces(c : @ui.Ctx, core : Core, place : String, tid : Int, picked : Str
       |> ignore
       let find = local_filter.text().trim(chars=" ").to_lower()
       let shown = local_families().filter(fn(f) { find == "" || f.to_lower().contains(find) })
-      let list = if shown.length() > local_most { shown[:local_most].to_array() } else { shown }
+      let list = if shown.length() > local_most { shown[:local_most].to_owned() } else { shown }
       if list.length() == 0 {
         c.box(style=local_note_box, fn() { c.text(@sf.t("web-pages.appearance.fonts.noMatch"), style=local_note) |> ignore })
         |> ignore

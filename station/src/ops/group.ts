@@ -18,14 +18,14 @@ export const groupAlive = (pgid: number): boolean => platform.groupAlive(pgid);
 export { pidAlive } from "../platform/processes.ts";
 
 /// When `pid` started (ms), or null if it is not running.
-export const startTimeOf = (pid: number): number | null => platform.startTimeOf(pid);
+export const startTimeOf = (pid: number): Promise<number | null> => platform.startTimeOf(pid);
 
 /// Whether a group recorded by an earlier run is still that group. One whose leader is alive is only if the leader
 /// started when it was recorded (pids get reused); one whose leader is gone but still has members is, where a group
 /// lives on without its leader (a pgid cannot be reused while any member remains); where it does not, only a leader
 /// known to be the one recorded is ours.
-export function stillOurs(entry: ProcessRow): boolean {
-  const started = startTimeOf(entry.pgid);
+export async function stillOurs(entry: ProcessRow): Promise<boolean> {
+  const started = await startTimeOf(entry.pgid);
   // ps gives whole seconds: a few seconds either way is the same start.
   const ours = started !== null ? Math.abs(started - entry.startedAt) < 5000 : platform.groupOutlivesLeader && groupAlive(entry.pgid);
   return ours && groupAlive(entry.pgid);

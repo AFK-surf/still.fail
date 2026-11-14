@@ -5,14 +5,21 @@
 # default of 6 hours. A job that needs longer is to be made faster, not given longer (2026-10-22: mbui-ios hung 25
 # minutes on a PR). Only those in LONGER may take 10: runs of the day's or by hand, which hold no push back, and two
 # not yet made faster. A job whose own runs differ says `${{ github.event_name == 'push' && A || B }}`: A for a push
-# (5 at most), B for the others (its LONGER). A job that calls a workflow (`uses:`) is that workflow's jobs, checked
+# (5 at most), B for the others (its LONGER); or `!= 'schedule'`: A for all but the day's run (a push's, the merge
+# queue's). A job that calls a workflow (`uses:`) is that workflow's jobs, checked
 # there. Prints each one that does not, and fails then.
 import glob, os, re, sys
 
 LIMIT = 5
 # (workflow, job): minutes. sfapp's pages in one process of the day's (mbui-check.yml native), the emulator's checks of the day's (2026-10-31: android-devices 430-575 s), the Windows
 # app's end to end of the day's (preview.yml windows' runs that are no push), prebuild's Windows shell (300-450 s) and
-# TestFlight's release (330-550 s), both to be made faster; the side run's station part, its simulators one at a time
+# TestFlight's release (330-550 s), both to be made faster; the stable Windows app's, from a later commit's cached build
+# when the day before's main has none (2026-11-11: 3m44s, monoid's pack after it) and
+# its Android app's with monoid's after it (2026-11-11: cut at 5); the stable station's three platforms, built and signed
+# on a shared Mac (2026-11-13: cut at 5 twice on mini1-2, 3m48s on mini1-3); the stable Mac app's, its build and notary with no warm build
+# (2026-11-12: 4m59s; 2026-11-13: cut at 5); the side run's station part, its simulators one at a time; the iOS app's of
+# a run by hand or the day's, the Linux packages' too, and the Mac and Windows apps' builds of a run by hand, compiling
+# what main's store has none of whole (2026-11-13: cut at 5 after mbui moved)
 LONGER = {
     ("mbui-ci.yml", "android-devices"): 10,
     ("mbui-ci.yml", "android-oldest"): 10,
@@ -22,13 +29,22 @@ LONGER = {
     ("mbui-host-android.yml", "contracts"): 10,
     ("mbui-android-sdk.yml", "put"): 10,
     ("preview.yml", "windows"): 10,
+    ("preview.yml", "ios"): 10,
+    ("pipeline.yml", "desktop-build"): 10,
+    ("pipeline.yml", "desktop-win"): 10,
+    ("preview.yml", "linux"): 10,
     ("mbui-check.yml", "native"): 10,
     ("mbui-check.yml", "app"): 10,
+    ("mbui-check.yml", "app-rates"): 10,
     ("prebuild.yml", "build"): 10,
     ("rules.yml", "tools"): 10,
     ("prebuild.yml", "again"): 10,
     ("mbui-testflight.yml", "release"): 10,
     ("side.yml", "side"): 10,
+    ("stable.yml", "desktop-win"): 10,
+    ("stable.yml", "android"): 10,
+    ("stable.yml", "station"): 10,
+    ("stable.yml", "desktop"): 10,
 }
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 bad = []
@@ -60,7 +76,7 @@ for path in sorted(glob.glob(os.path.join(root, ".github/workflows/*.yml"))):
             continue
         t = j["timeout"]
         most = LONGER.get((os.path.basename(path), j["name"]), LIMIT)
-        m = re.match(r"^\$\{\{ *github\.event_name *== *'push' *&& *(\d+) *\|\| *(\d+) *\}\}$", t or "")
+        m = re.match(r"^\$\{\{ *github\.event_name *(?:== *'push'|!= *'schedule') *&& *(\d+) *\|\| *(\d+) *\}\}$", t or "")
         if t is None:
             bad.append(f"{name}: {j['name']}: no timeout-minutes")
         elif m:

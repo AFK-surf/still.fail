@@ -29,10 +29,10 @@ fn tall_said(t : @ui.Tester, n : Int) -> String {
   let under = ok.map(fn(r) { r.1 }).unwrap_or(d.1 + d.3)
   let between = t.words().filter(fn(x) { x.0.has_prefix("第") && x.2 >= over && x.2 + x.4 <= under })
   let last = between.last().map(fn(x) { x.0 })
-  let before = "dialog \{tenth4(d)} row0 \{w("第0行")} last between \{last} ok \{ok.map(tenth4)}"
+  let before = "dialog \{@ui.rect_text(tenth4(d))} row0 \{@ui.list_text(w("第0行").map(@ui.rect_text))} last between \{@ui.some_text(last)} ok \{@ui.some_text(ok.map(tenth4).map(@ui.rect_text))}"
   t.wheel(d.0 + d.2 / 2.0, d.1 + d.3 / 2.0, 120.0)
   t.run_for(@ui.move_most_ms)
-  let after = "row0 \{w("第0行")}"
+  let after = "row0 \{@ui.list_text(w("第0行").map(@ui.rect_text))}"
   t.wheel(d.0 + d.2 / 2.0, d.1 + d.3 / 2.0, -240.0)
   t.run_for(@ui.move_most_ms)
   let far = 60.0 * n.to_double() + 2000.0
@@ -58,7 +58,7 @@ fn tall_said(t : @ui.Tester, n : Int) -> String {
   })
   t.wheel(d.0 + d.2 / 2.0, d.1 + d.3 / 2.0, -far)
   t.run_for(@ui.move_most_ms)
-  "\{before} | wheel: \{after} | end: \{end}"
+  "\{before} | wheel: \{after} | end: \{@ui.list_text(end)}"
 }
 
 ///|

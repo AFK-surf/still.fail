@@ -1,0 +1,377 @@
+// Words dragged in from another app (a browser page's text) and let go on the window (drop.mbt's "words"): on a field,
+// in where they were let go, as a paste's; beside one, only on a box that takes them for its field (Ctx::words_into),
+// the frame they came. Words 10 high, Latin 5 across (editor_keys_test.mbt's keys_field; editor_pointer_test.mbt's
+// letter_at).
+
+///|
+test "words let go on a field go in where they were let go, a step of their own to undo, the field taking the focus" {
+  let other = @ui.Field::new(text="other")
+  let f = @ui.Field::new(text="hello world")
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Fill(1.0), fn() {
+        c.editor("a", field=other, placeholder="first field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+        c.text("between") |> ignore
+        c.editor("b", field=f, placeholder="second field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  // where the second field's words start (its caret at its start)
+  let (bx, by, _, bh) = t.rect_of("second field").unwrap()
+  t.tap(bx + 2.0, by + bh / 2.0)
+  f.set("hello world", caret=0)
+  t.draw()
+  let (x0, y0, _, h) = t.ime_rect()
+  // the other field has the focus as they come
+  let (ax, ay, _, ah) = t.rect_of("first field").unwrap()
+  t.tap(ax + 2.0, ay + ah / 2.0)
+  assert_eq(t.ime().1, "other")
+  let (x, y) = letter_at(x0, y0, h, 6)
+  t.drop_words(x, y, "brave ")
+  t.frame()
+  assert_eq(f.text(), "hello brave world")
+  assert_eq(f.selection(), (12, 12))
+  assert_eq(other.text(), "other")
+  // the field they went into has the focus: what is typed goes on there
+  assert_eq(t.ime().1, "hello brave world")
+  t.type_text("big ")
+  assert_eq(f.text(), "hello brave big world")
+  // undone: what was typed, then the words let go in
+  t.key(@ui.key_of_char('z'), mods=@ui.mod_cmd)
+  assert_eq(f.text(), "hello brave world")
+  t.key(@ui.key_of_char('z'), mods=@ui.mod_cmd)
+  assert_eq(f.text(), "hello world")
+}
+
+///|
+test "words let go beside a field go into it only on a box that takes them for it, at its caret, the frame they came" {
+  let f = @ui.Field::new(text="ab")
+  let takes = Ref(true)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Fill(1.0), fn() {
+        // a box pressed for its field (a composer's capsule): words let go on it beside the field are the field's
+        let cap = c.id("cap")
+        c.takes_presses(cap)
+        if takes.val {
+          c.words_into(cap, "e")
+        }
+        c.box(id=cap, w=Fill(1.0), pad=40.0, fn() {
+          c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+        })
+        |> ignore
+        c.text("beside it") |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  let (ex, ey, _, _) = t.rect_of("the field").unwrap()
+  // on the box, well over its field: at the field's caret (its end), the field focused
+  t.drop_words(ex + 50.0, ey - 36.0, "cd")
+  t.frame()
+  assert_eq(f.text(), "abcd")
+  assert_eq(f.selection(), (4, 4))
+  assert_eq(t.ime().1, "abcd")
+  // beside the box: nothing takes them
+  let (bx, by) = t.find("beside it").unwrap()
+  t.drop_words(bx, by, "ef")
+  t.frame()
+  t.frame()
+  assert_eq(f.text(), "abcd")
+  // let go on the box in a frame whose build takes none: not taken by a later one
+  takes.val = false
+  t.drop_words(ex + 50.0, ey - 36.0, "gh")
+  t.frame()
+  takes.val = true
+  // (built again: a press beside it)
+  t.tap(bx, by)
+  t.frame()
+  assert_eq(f.text(), "abcd")
+}
+
+///|
+test "words dropped on a modal or its ground do not reach the page underneath" {
+  let field = @ui.Field::new(text="draft")
+  let t = @ui.Tester::new(fn(c) {
+    let page = c.id("page")
+    c.words_into(page, "composer")
+    c.box(id=page, w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() {
+      c.editor("composer", field~, placeholder="composer") |> ignore
+    }) |> ignore
+    c.overlay("modal", modal=true, fn() {
+      c.box(id=c.id("panel"), tx=20.0, ty=20.0, w=Px(150.0), h=Px(100.0), fn() {
+        c.text("dialog") |> ignore
+      }) |> ignore
+    }) |> ignore
+  }, w=300.0, h=300.0)
+  t.draw()
+  t.drop_words(50.0, 50.0, "on the dialog")
+  t.frame()
+  assert_eq(field.text(), "draft")
+  t.drop_words(250.0, 250.0, "on the ground")
+  t.frame()
+  assert_eq(field.text(), "draft")
+}
+
+///|
+test "a popover blocks words dropped on it and leaves the page outside it reachable" {
+  let field = @ui.Field::new(text="draft")
+  let t = @ui.Tester::new(fn(c) {
+    let page = c.id("page")
+    c.words_into(page, "composer")
+    c.box(id=page, w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() {
+      c.editor("composer", field~, placeholder="composer") |> ignore
+    }) |> ignore
+    c.overlay("popover", fn() {
+      c.box(id=c.id("panel"), tx=20.0, ty=20.0, w=Px(150.0), h=Px(100.0), fn() {
+        c.text("menu") |> ignore
+      }) |> ignore
+    }) |> ignore
+  }, w=300.0, h=300.0)
+  t.draw()
+  t.drop_words(50.0, 50.0, "on the menu")
+  t.frame()
+  assert_eq(field.text(), "draft")
+  t.drop_words(250.0, 250.0, " outside")
+  t.frame()
+  assert_eq(field.text(), "draft outside")
+}
+
+///|
+test "words dropped beside a field in a dialog belong to that field, not the page underneath" {
+  let page_field = @ui.Field::new(text="draft")
+  let dialog_field = @ui.Field::new(text="dialog")
+  let t = @ui.Tester::new(fn(c) {
+    let page = c.id("page")
+    c.words_into(page, "composer")
+    c.box(id=page, w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() {
+      c.editor("composer", field=page_field, placeholder="composer") |> ignore
+    }) |> ignore
+    c.overlay("modal", modal=true, fn() {
+      let panel = c.id("panel")
+      c.words_into(panel, "dialog-field")
+      c.box(id=panel, tx=20.0, ty=20.0, w=Px(200.0), h=Px(180.0), pad=40.0, fn() {
+        c.editor("dialog-field", field=dialog_field, placeholder="dialog field") |> ignore
+      }) |> ignore
+    }) |> ignore
+  }, w=300.0, h=300.0)
+  t.draw()
+  t.drop_words(50.0, 150.0, " words")
+  t.frame()
+  assert_eq(page_field.text(), "draft")
+  assert_eq(dialog_field.text(), "dialog words")
+  assert_eq(t.ime().1, "dialog words")
+}
+
+///|
+test "files from the Finder let go on a field go in as their paths, a line each, and are not read" {
+  let f = @ui.Field::new(text="see ")
+  let t = @ui.Tester::new(
+    fn(c) {
+      // (a box around it that would take files as they came)
+      let page = c.id("page")
+      c.on_files(page, held=fn(_) {  }, take=fn(_, _) { @halt.saying("files let go on a field taken as files") })
+      c.box(id=page, w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() {
+        c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  let (ex, ey, ew, eh) = t.rect_of("the field").unwrap()
+  t.drop_files(ex + ew - 4.0, ey + eh / 2.0, [("a.txt", b"a"), ("My Folder/", b"")], paths=[
+    "/Users/lin/a.txt", "/Users/lin/My Folder",
+  ])
+  t.frame()
+  t.frame()
+  assert_eq(f.text(), "see /Users/lin/a.txt\n/Users/lin/My Folder")
+  assert_eq(t.ime().1, "see /Users/lin/a.txt\n/Users/lin/My Folder")
+}
+
+///|
+test "files let go on a box that takes words go in as their paths; on a box that takes files, as files, not their paths" {
+  let f = @ui.Field::new(text="")
+  let took : Array[@ui.Pick] = []
+  let held : Array[Bool] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Fill(1.0), fn() {
+        let cap = c.id("cap")
+        c.takes_presses(cap)
+        c.words_into(cap, "e")
+        c.box(id=cap, w=Fill(1.0), pad=40.0, fn() {
+          c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+        })
+        |> ignore
+        // a folder of a files page: what is let go on it goes up there
+        let folder = c.id("folder")
+        c.takes_presses(folder)
+        c.on_files(folder, held=fn(at) { held.push(at is Some(_)) }, take=fn(_, _) { Some(fn(pick) { took.push(pick) }) })
+        c.box(id=folder, w=Fill(1.0), pad=20.0, fn() { c.text("a folder") |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  let (ex, ey, _, _) = t.rect_of("the field").unwrap()
+  // on the box, beside its field: their paths in the field
+  t.drop_files(ex + 50.0, ey - 36.0, [("a.txt", b"a")], paths=["/Users/lin/a.txt"])
+  t.frame()
+  t.frame()
+  assert_eq(f.text(), "/Users/lin/a.txt")
+  assert_eq(took.length(), 0)
+  assert_eq(held, [])
+  // held over the folder, then over the box: the folder told they are over it, then gone from over it
+  let (fx, fy) = t.find("a folder").unwrap()
+  t.hold_files(Some((fx, fy)))
+  t.frame()
+  t.hold_files(Some((ex + 50.0, ey - 36.0)))
+  t.frame()
+  assert_eq(held, [true, false])
+  // on the folder: the files, read, and no paths in the field
+  t.drop_files(fx, fy, [("b.txt", b"bb")], paths=["/Users/lin/b.txt"])
+  t.frame()
+  t.frame()
+  assert_eq(took.length(), 1)
+  assert_eq(took[0].files().map(fn(fs) { fs.map(fn(p) { p.name }) }), Some(["b.txt"]))
+  assert_eq(f.text(), "/Users/lin/a.txt")
+}
+
+///|
+test "files let go where nothing takes them as they come are let go, not taken by a box that takes files said later" {
+  let takes = Ref(false)
+  let took : Array[@ui.Pick] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      let here = c.id("here")
+      c.takes_presses(here)
+      if takes.val {
+        c.on_files(here, held=fn(_) {  }, take=fn(_, _) { Some(fn(pick) { took.push(pick) }) })
+      }
+      c.box(id=here, fn() { c.text("nothing here") |> ignore }) |> ignore
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  let (x, y) = t.find("nothing here").unwrap()
+  t.drop_files(x, y, [("a.txt", b"a")], paths=["/Users/lin/a.txt"])
+  t.frame()
+  takes.val = true
+  // (built again: a press on it)
+  t.tap(x, y)
+  t.frame()
+  assert_eq(took.length(), 0)
+}
+
+///|
+test "a box that takes files by their paths takes those let go on it and on its field, unread; one let go on another field in it is that field's" {
+  let f = @ui.Field::new(text="")
+  let g = @ui.Field::new(text="")
+  let took : Array[Array[@ui.DroppedPath]] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      let cap = c.id("cap")
+      c.takes_presses(cap)
+      match c.paths_into(cap, "e") {
+        Some(paths) => took.push(paths)
+        None => ()
+      }
+      c.words_into(cap, "e")
+      c.box(id=cap, w=Fill(1.0), pad=40.0, fn() {
+        c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+        c.editor("g", field=g, placeholder="another field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  // on its field: the box's, by their paths
+  let (ex, ey, ew, eh) = t.rect_of("the field").unwrap()
+  t.drop_files(ex + ew / 2.0, ey + eh / 2.0, [("a.txt", b"abc"), ("My Folder/", b"")], paths=[
+    "/Users/lin/a.txt", "/Users/lin/My Folder",
+  ])
+  t.frame()
+  t.frame()
+  assert_eq(took, [
+    [{ path: "/Users/lin/a.txt", dir: false, size: 3.0 }, { path: "/Users/lin/My Folder", dir: true, size: 0.0 }],
+  ])
+  assert_eq(f.text(), "")
+  // on the box beside its fields: the box's too
+  t.drop_files(ex + 50.0, ey - 36.0, [("b.txt", b"b")], paths=["/Users/lin/b.txt"])
+  t.frame()
+  t.frame()
+  assert_eq(took.length(), 2)
+  assert_eq(took[1].map(fn(p) { p.path }), ["/Users/lin/b.txt"])
+  // on another field in it: that field's, as their paths
+  let (gx, gy, gw, gh) = t.rect_of("another field").unwrap()
+  t.drop_files(gx + gw - 4.0, gy + gh / 2.0, [("c.txt", b"c")], paths=["/Users/lin/c.txt"])
+  t.frame()
+  t.frame()
+  assert_eq(took.length(), 2)
+  assert_eq(g.text(), "/Users/lin/c.txt")
+  assert_eq(f.text(), "")
+}
+
+///|
+test "files let go beside a box that takes files only on its folders are left to what is there: a box's field takes their paths" {
+  let f = @ui.Field::new(text="")
+  let took : Array[@ui.Pick] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      let folder = c.id("folder")
+      let cap = c.id("cap")
+      // (the page holding both takes them on its folder alone: what it does not take, it leaves)
+      let page = c.id("page")
+      c.on_files(page, held=fn(_) {  }, take=fn(x, y) {
+        match c.rect_of(folder) {
+          Some((fx, fy, fw, fh)) if x >= fx && x < fx + fw && y >= fy && y < fy + fh =>
+            Some(fn(pick) { took.push(pick) })
+          _ => None
+        }
+      })
+      c.box(id=page, w=Fill(1.0), taps=false, points=true, fn() {
+        c.column(w=Fill(1.0), fn() {
+          c.takes_presses(folder)
+          c.box(id=folder, w=Fill(1.0), pad=20.0, fn() { c.text("a folder") |> ignore }) |> ignore
+          c.takes_presses(cap)
+          c.words_into(cap, "e")
+          c.box(id=cap, w=Fill(1.0), pad=40.0, fn() {
+            c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  let (ex, ey, _, _) = t.rect_of("the field").unwrap()
+  t.drop_files(ex + 50.0, ey - 36.0, [("a.txt", b"a")], paths=["/Users/lin/a.txt"])
+  t.frame()
+  t.frame()
+  assert_eq(took.length(), 0)
+  assert_eq(f.text(), "/Users/lin/a.txt")
+  let (fx, fy) = t.find("a folder").unwrap()
+  t.drop_files(fx, fy, [("b.txt", b"bb")], paths=["/Users/lin/b.txt"])
+  t.frame()
+  t.frame()
+  assert_eq(took.length(), 1)
+  assert_eq(f.text(), "/Users/lin/a.txt")
+}

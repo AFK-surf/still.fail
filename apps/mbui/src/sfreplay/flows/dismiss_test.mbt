@@ -4,7 +4,7 @@
 
 ///|
 test "23-dismiss" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("dismiss"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
@@ -26,12 +26,12 @@ test "23-dismiss" {
     for _ in 0..<4 {
       let closing = @sfapp.under_rest()
       if closing > f.t.time() && closing < @double.infinity {
-        f.run_to(closing)
+        f.run_to(fn() { closing })
       } else {
         break
       }
     }
-    f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
+    f.check(@sfapp.under_rest() <= f.t.time(), "something under the post moves: \{@sfapp.under_rest()}")
     f.gone("=先合 B 083209")
     f.end()
   })

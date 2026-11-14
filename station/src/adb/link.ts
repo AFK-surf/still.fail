@@ -7,7 +7,8 @@
 // Wire (unchanged from the Rust station; the phone's core is released): a request stream whose head line has an
 // `"adb"` object. `op: "share"` is an offer, answered `{status: 200, headers: {content-type: application/x-ndjson}}`
 // and then a `{serial, adb, message}` line each time how adb holds the phone changes, for as long as the stream lasts;
-// `op: "pair" | "grant"` is an ask, answered with a status and `{message}`. Tunnels are streams the station opens on the
+// `op: "pair" | "grant"` is an ask, answered with a status and `{message}` (and `code` where the app goes by which
+// failure it was: GRANT_REFUSED). Tunnels are streams the station opens on the
 // offer's connection: `{"tunnel": "connect" | "pair"}`, the phone's `{ok: true}` (or `{error}`), then bytes both ways.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -24,7 +25,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import type { Connection, Stream } from "../mesh/native.ts";
 import { Reader, writeLine } from "../mesh/serve.ts";
 import type { GrantServers } from "./servers.ts";
-import { AdbActivity, KEEP_LENDING } from "./activity.ts";
+import { AdbActivity, KEEP_LENDING, KEEP_TCP, TCP_PORT } from "./activity.ts";
 
 type Json = any;
 
@@ -110,6 +111,10 @@ export class Share {
   failures = 0;
   /// How many of its offers' streams are open: tried again only while one is (not in GRACE).
   streams = 0;
+  /// What keeps it lending (keepLending), each pass after the one before: the phone let go waits for it before adb
+  /// is told to disconnect, so nothing is asked of it after (a pass begun as adb connected again after pairing asked
+  /// its boot after the disconnect, main 7c7349a1, 2026-11-10).
+  keeping: Promise<void> = Promise.resolve();
   readonly server: net.Server;
   private sockets = new Map<net.Socket, AbortController>();
   private closing = false;
@@ -128,6 +133,11 @@ export class Share {
 
   serial(): string {
     return `127.0.0.1:${this.port}`;
+  }
+
+  /// Whether it is being let go (close): nothing more is asked of the phone for it.
+  ending(): boolean {
+    return this.closing;
   }
 
   /// Every accepted socket belongs to this offer, including one still being checked for a grant.
@@ -212,6 +222,8 @@ export class Share {
 /// The phones offered now, by whose and which (`key`).
 export class Shares {
   readonly byKey = new Map<string, Share>();
+  /// The phones' boots `adb tcpip` was asked in (keepTcp).
+  readonly tcpAsked = new Set<string>();
   /// When each person's phone was last offered no longer, and why (`stopped`: the phone ended it; else its link went):
   /// what phone_use says of a granted phone not lent now.
   readonly gone = new Map<string, { at: number; ended: string }>();
@@ -291,9 +303,9 @@ export async function answerAdb(shares: Shares, conn: Connection, viewer: Viewer
   const headers: Record<string, string> = {};
   for (const [k, v] of Object.entries(head.headers ?? {})) if (typeof v === "string") headers[k] = v;
   const asked = langOfCore(headers);
-  const reply = async (status: number, message: string) => {
+  const reply = async (status: number, message: string, code?: string) => {
     await writeLine(stream, { status, headers: { "content-type": "application/json" } });
-    await stream.write(Buffer.from(JSON.stringify({ message })));
+    await stream.write(Buffer.from(JSON.stringify(code === undefined ? { message } : { message, code })));
     await stream.finish();
   };
   const op = ask.op;
@@ -301,15 +313,15 @@ export async function answerAdb(shares: Shares, conn: Connection, viewer: Viewer
   if (op === "pair" || op === "grant") {
     const share = shares.byKey.get(device);
     if (!share) return reply(409, tr(asked, "station.adb.notSharing"));
-    let done: { ok: true; message: string } | { ok: false; error: string };
+    let done: { ok: true; message: string } | { ok: false; error: string; code?: string };
     try {
       const message = op === "pair" ? await pair(shares, share, typeof ask.code === "string" ? ask.code : "", asked) : await grant(shares, share, asked);
       done = { ok: true, message };
     } catch (e) {
-      done = { ok: false, error: (e as Error).message };
+      done = { ok: false, error: (e as Error).message, ...(e instanceof GrantRefused ? { code: GRANT_REFUSED } : {}) };
     }
     log.info("adb", "adb asked", { email: viewer.email, op, done: done.ok ? done.message : `error: ${done.error}` });
-    return done.ok ? reply(200, done.message) : reply(422, done.error);
+    return done.ok ? reply(200, done.message) : reply(422, done.error, done.code);
   }
   return reply(400, tr(asked, "station.adb.unknownAsk"));
 }
@@ -438,6 +450,8 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     shares.gone.set(viewer.email.toLowerCase(), { at: wall.now(), ended: String(ended) });
     shares.options.stated?.(viewer.email, null);
     const adb = shares.adb();
+    // (after what was keeping it lending: closing, it asks nothing more, and what it had asked is done)
+    await share.keeping;
     if (adb) for (const server of (await serversOf(shares, share)) ?? [[]]) await run(adb, [...server, "disconnect", share.serial()], shares.limits.quick).catch(() => {});
   }
   await stream.finish().catch(() => {});
@@ -461,14 +475,14 @@ function listen(shares: Shares, share: Share) {
         const activity = new AdbActivity(share.info.package, (force) => shares.options.used?.(id, force));
         tunnel(conn, "connect", socket, signal, activity).catch((error) => {
           log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
-          share.refuse((error as Error).message, error instanceof Unpaired);
+          share.refuse(refusal(error), error instanceof Unpaired);
         });
       });
       return;
     }
     tunnel(conn, "connect", socket, signal).catch((error) => {
       log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
-      share.refuse((error as Error).message, error instanceof Unpaired);
+      share.refuse(refusal(error), error instanceof Unpaired);
     });
   });
 }
@@ -513,6 +527,21 @@ function listenOn(port: number): Promise<net.Server> {
 /// A phone holding its own adb session turned a tunnel down as not paired with its adbd yet.
 class Unpaired extends Error {}
 
+/// The phone turned a tunnel down, not reaching its adbd: `said` its own words (in its person's language), what they
+/// are shown; the message, for the log.
+class Refused extends Error {
+  readonly said: string;
+  constructor(said: string) {
+    super(`the phone did not reach adb: ${said}`);
+    this.said = said;
+  }
+}
+
+/// What a tunnel's end tells the lending: the phone's own words where it turned it down.
+function refusal(error: unknown): string {
+  return error instanceof Refused ? error.said : (error as Error).message;
+}
+
 /// A stream to the phone for `socket`: `{"tunnel": kind}`, the phone's answer once it reached adbd (or why not), then
 /// the bytes both ways until either side ends. `signal` ends it at once (the pairing done).
 export async function tunnel(conn: Connection, kind: string, socket: net.Socket, signal?: AbortSignal, activity?: AdbActivity): Promise<void> {
@@ -530,7 +559,7 @@ export async function tunnel(conn: Connection, kind: string, socket: net.Socket,
     const reader = new Reader(stream);
     const answer = await wall.within(TUNNEL_OPEN, reader.line(), "the phone did not answer");
     if (answer === null) throw new Error("the phone closed the tunnel");
-    if (typeof answer.error === "string") throw answer.unpaired === true ? new Unpaired(answer.error) : new Error(`the phone did not reach adb: ${answer.error}`);
+    if (typeof answer.error === "string") throw answer.unpaired === true ? new Unpaired(answer.error) : new Refused(answer.error);
     const s = stream;
     const up = (async () => {
       try {
@@ -635,7 +664,7 @@ async function connectOnce(shares: Shares, share: Share) {
   const adb = shares.adb();
   const servers = await serversOf(shares, share);
   if (adb !== null && servers !== null && servers[0]!.length > 0) await run(adb, ["disconnect", share.serial()], shares.limits.quick).catch(() => {});
-  if (servers === null) return share.set("failed", "a grant's adb server did not start");
+  if (servers === null) return share.set("failed", tr(share.lang, "station.adb.serverDown"));
   let first: AdbState | null = null;
   for (const server of servers) {
     await connectIn(shares, share, server);
@@ -744,7 +773,7 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
 /// (`WRITE_SECURE_SETTINGS`: after the phone starts again, or as its Wi-Fi changes, Android turns it off), and Android's
 /// idling leaves the app's connection be (`deviceidle whitelist`: a phone left aside put the app's network to sleep,
 /// its tunnels not taken). What the phone refuses (MIUI and ColorOS refuse the shell's grant until a switch of
-/// Developer options is on) is logged, not said: the person turns it on from 共享调试 (grant).
+/// Developer options is on) is logged, not said: the app's own ask (`grant`) is answered which switch.
 function keepLending(shares: Shares, share: Share, server: string[]): void {
   const pkg = share.info.package;
   const adb = shares.adb();
@@ -753,15 +782,39 @@ function keepLending(shares: Shares, share: Share, server: string[]): void {
     ["shell", KEEP_LENDING, "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"],
     ["shell", KEEP_LENDING, "cmd", "deviceidle", "whitelist", `+${pkg}`],
   ];
-  void (async () => {
+  share.keeping = share.keeping.then(async () => {
     for (const ask of asks) {
+      if (share.ending()) return;
       const said = await run(adb, [...server, "-s", share.serial(), ...ask], shares.limits.long).catch((error: Error) => error.message);
       log.info("adb", "adb kept the phone lending", { ask: ask.slice(2, 4).join(" "), said: said.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
     }
-  })();
+    if (!share.ending()) await keepTcp(shares, share, adb, server);
+  }).catch(() => {});
 }
 
-/// Lets the app turn Wireless debugging on itself from now on (`WRITE_SECURE_SETTINGS`), as its person asked.
+/// adbd's plain port, `TCP_PORT`, on: what the app holds its session to once Wi-Fi is gone, which Wireless debugging
+/// goes with (on mobile data, the phone lent on). `adb tcpip` restarts adbd, the held session with it, and lasts until
+/// the phone starts again: asked once a boot (`/proc/sys/kernel/random/boot_id`), so a phone that does not keep it is
+/// not restarted again and again.
+export async function keepTcp(shares: Shares, share: Pick<Share, "info" | "serial" | "conn">, adb: string, server: string[]): Promise<void> {
+  if (share.info.connect === TCP_PORT) return;
+  const said = await run(adb, [...server, "-s", share.serial(), "shell", KEEP_TCP], shares.limits.long).catch(() => "");
+  const [boot, port] = said.split("\n").map((l) => l.trim());
+  if (port === String(TCP_PORT) || !boot || !/^[0-9a-z-]+$/.test(boot) || shares.tcpAsked.has(boot)) return;
+  shares.tcpAsked.add(boot);
+  const done = await run(adb, [...server, "-s", share.serial(), "tcpip", String(TCP_PORT)], shares.limits.long).catch((error: Error) => error.message);
+  log.info("adb", "adb asked for adbd's plain port", { said: done.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
+}
+
+/// The code a refused `grant` is answered with beside its words, which the app goes by (it says, under 开启无线调试,
+/// which switch of Developer options lets it turn Wireless debugging on itself).
+export const GRANT_REFUSED = "adb_grant_refused";
+
+/// What the phone said no to the shell's grant with (MIUI, ColorOS), its words the person's.
+class GrantRefused extends Error {}
+
+/// Lets the app turn Wireless debugging on itself from now on (`WRITE_SECURE_SETTINGS`): the app asks, each time the
+/// phone is newly held here while it may not yet (AdbShareService).
 async function grant(shares: Shares, share: Share, lang: Lang): Promise<string> {
   const pkg = share.info.package;
   if (!pkg) throw new Error(tr(lang, "station.adb.noPackage"));
@@ -771,7 +824,7 @@ async function grant(shares: Shares, share: Share, lang: Lang): Promise<string> 
   const said = await run(adb, [...server, "-s", share.serial(), "shell", "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"], shares.limits.long);
   // Quiet is granted. MIUI and ColorOS refuse the shell's grant (a SecurityException, a page of stack) until a switch in
   // Developer options is on: said as which one; anything else, by its first line.
-  if (/GRANT_RUNTIME_PERMISSIONS/.test(said)) throw new Error(tr(lang, "station.adb.grantRefused"));
+  if (/GRANT_RUNTIME_PERMISSIONS/.test(said)) throw new GrantRefused(tr(lang, "station.adb.grantRefused"));
   if (said !== "") throw new Error(tr(lang, "station.adb.grantFailed", { said: said.split("\n")[0]!.trim() }));
   return tr(lang, "station.adb.granted");
 }

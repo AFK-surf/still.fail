@@ -202,7 +202,7 @@ pub fn data_image(url : String) -> String {
       let key = "mem:sf/station/\{url.length()}/\{@ui.stable_hash(url)}"
       if !made.contains(key) {
         made[key] = true
-        @ui.add_image(key, @codec.from_base64(url.view(start_offset=i + 7).to_owned()))
+        @ui.add_image(key, @codec.from_base64(url.exact_view(start=i + 7).to_owned()))
       }
       key
     }
@@ -231,12 +231,12 @@ pub fn station_mark(
   still? : Bool = false,
 ) -> Unit {
   if icon.has_prefix("glyph:") {
-    let rest = icon.view(start_offset=6).to_owned()
+    let rest = icon.exact_view(start=6).to_owned()
     let (name, colour) = match rest.find(":") {
       Some(i) =>
         (
-          rest.view(end_offset=i).to_owned(),
-          rest.view(start_offset=i + 1).to_owned(),
+          rest.exact_view(end=i).to_owned(),
+          rest.exact_view(start=i + 1).to_owned(),
         )
       None => (rest, "")
     }
@@ -395,10 +395,10 @@ fn glyph_paths(name : String) -> (Array[String], Array[String])? {
     return Some(g)
   }
   guard station_glyphs.get(name) is Some(text) else { return None }
-  let parts = text.split("|").map(fn(p) { p.to_string() }).to_array()
+  let parts = text.split("|").map(fn(p) { p.to_owned() }).to_array()
   let paths = fn(i : Int) -> Array[String] {
     if i < parts.length() && parts[i] != "" {
-      parts[i].split(";").map(fn(p) { p.to_string() }).to_array()
+      parts[i].split(";").map(fn(p) { p.to_owned() }).to_array()
     } else {
       []
     }
@@ -409,7 +409,7 @@ fn glyph_paths(name : String) -> (Array[String], Array[String])? {
 }
 
 ///|
-let glyphs_read : Map[String, (Array[String], Array[String])] = {}
+let glyphs_read : Map[String, (Array[String], Array[String])] = Map([])
 
 ///|
 /// Whose service a profile runs on (ProviderLogo): OpenCode's square, a listed provider's maker
@@ -441,7 +441,7 @@ pub fn provider_logo(c : @ui.Ctx, runtime : String, kind : String, size : Double
       "cursor" => "cursor"
       "devin" => "devin"
       "hermes" => "hermes"
-      "agy" => "gemini"
+      "agy" => "agy"
       _ => "openai"
     }
   }

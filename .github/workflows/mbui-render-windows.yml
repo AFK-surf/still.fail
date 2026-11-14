@@ -1,4 +1,4 @@
-# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
+# mbui (libs/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The renderer's pixels on Windows ("Pixel references belong to one kind of machine"): a Tester's
 # draw list drawn offscreen by the Direct3D 11 renderer on WARP on GitHub's windows-2025 runner, twice in each of two
 # jobs at once, against its reference (goldens/render/windows-controls.png) to the byte, on the runner image the
@@ -8,24 +8,24 @@ name: mbui-render-windows
 on:
   pull_request:
     paths: &paths
-      - "apps/mbui/mbui/src/host/win_render.cpp"
-      - "apps/mbui/mbui/src/host/win_text.cpp"
-      - "apps/mbui/mbui/src/host/win_image.cpp"
-      - "apps/mbui/mbui/scripts/win.sh"
-      - "apps/mbui/mbui/src/render/**"
-      - "apps/mbui/mbui/src/damage/**"
-      - "apps/mbui/mbui/src/ui/drawlist.mbt"
-      - "apps/mbui/mbui/src/ui/scene.mbt"
-      - "apps/mbui/mbui/src/ui/line.mbt"
-      - "apps/mbui/mbui/tools/chk/pictures.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
-      - "apps/mbui/mbui/src/ui/smooth.mbt"
-      - "apps/mbui/mbui/src/host/corner*"
-      - "apps/mbui/mbui/src/host/contained.h"
-      - "apps/mbui/mbui/goldens/render/windows*"
-      - "apps/mbui/mbui/goldens/render/controls.dl"
-      - "apps/mbui/mbui/scripts/render_dl.sh"
-      - "apps/mbui/mbui/scripts/render_windows.sh"
+      - "libs/mbui/src/host/win_render.cpp"
+      - "libs/mbui/src/host/win_text.cpp"
+      - "libs/mbui/src/host/win_image.cpp"
+      - "libs/mbui/scripts/win.sh"
+      - "libs/mbui/src/render/**"
+      - "libs/mbui/src/damage/**"
+      - "libs/mbui/src/ui/drawlist.mbt"
+      - "libs/mbui/src/ui/scene.mbt"
+      - "libs/mbui/src/ui/line.mbt"
+      - "libs/mbui/tools/chk/pictures.mbt"
+      - "libs/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
+      - "libs/mbui/src/ui/smooth.mbt"
+      - "libs/mbui/src/host/corner*"
+      - "libs/mbui/src/host/contained.h"
+      - "libs/mbui/goldens/render/windows*"
+      - "libs/mbui/goldens/render/controls.dl"
+      - "libs/mbui/scripts/render_dl.sh"
+      - "libs/mbui/scripts/render_windows.sh"
       - ".github/workflows/mbui-render-windows.yml"
       - ".github/actions/mbui-warp/**"
       - ".github/actions/msvc/**"
@@ -36,7 +36,30 @@ on:
 
 
 jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: libs/mbui
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
+      - name: The renderer and its draw lists
+        run: scripts/render_windows.sh build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-render-build
+          path: |
+            libs/mbui/out/render/
+            libs/mbui/out/win/mod/_build/native/release/build/render/render.exe
+
   offscreen:
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -45,7 +68,7 @@ jobs:
     timeout-minutes: 5
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
         shell: bash
     steps:
       - run: git config --global core.autocrlf false
@@ -54,15 +77,19 @@ jobs:
       - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
       - uses: ./.github/actions/mbui-warp
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-render-build
+          path: libs/mbui/out/
       - name: Drawn offscreen, twice (scripts/render_windows.sh)
-        run: scripts/render_windows.sh
+        run: scripts/render_windows.sh draw
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: render-windows-${{ matrix.run }}
           # (a rerun's own: the attempt before's put by, so `same` compares this attempt's pictures)
           overwrite: true
-          path: apps/mbui/mbui/out/render/
+          path: libs/mbui/out/render/
       - name: Against the reference, on the machine it was made on
         run: scripts/render_windows.sh against
 

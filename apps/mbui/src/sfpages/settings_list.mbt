@@ -200,14 +200,14 @@ fn settings_parts_of(core : Core, here : @settings.Here, bars~ : Bool, kept~ : S
   })
   // this device's: what there is of it here (the bottom bar where the window has one, 2026-10-26: 「为啥中型屏会有这个
   // 设置」; the keys, this computer's station a computer's)
-  let prefs = (core.topic)("prefs", Map::new()).get().value
+  let prefs = (core.topic)("prefs", Map([])).get().value
   let theme = match @settings.appearance(prefs) {
     "light" => @sf.t("android-settings.theme.light")
     "dark" => @sf.t("android-settings.theme.dark")
     _ => @sf.t("android-settings.theme.system")
   }
   // notifications as the core's `notify` says, or as switched while `notify.set` is out; refused by the system, in red
-  let notify = (core.topic)("notify", Map::new()).get().value
+  let notify = (core.topic)("notify", Map([])).get().value
   let on = match @settings.notify_switched.get() {
     Some(v) => v
     None => notify is None || flag(notify, "on")
@@ -237,11 +237,13 @@ fn settings_parts_of(core : Core, here : @settings.Here, bars~ : Bool, kept~ : S
   if platform == 0 || platform == 3 || platform == 5 {
     device.push(settings_row(Shortcuts, "shortcuts", "keyboard", @sf.t("web-pages.settings.nav.shortcuts")))
   }
-  if platform == 0 {
+  if @settings.local_station_managed() {
     device.push(settings_row(LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title")))
   }
-  // 共享调试, the phone's: its page says which chats it is lent to
-  if platform == 2 {
+  // 共享调试: on a phone its switch and which chats it is lent to; on every app, which chats were allowed, how long a
+  // grant lasts, and the devices that approve it (their own page under 安全 of before, gone: the user, 2026-11-10, to
+  // people there is one safe mode). Not the web's: a page signs nothing
+  if platform != 4 {
     device.push(settings_row(AdbShare(""), "adb", "phone", @sf.t("android-misc.adb.title")))
   }
   device.push(settings_row(KeptFiles, "files", "disk", @sf.t("android-settings.files.title"), value=kept))
@@ -273,10 +275,10 @@ fn settings_parts_of(core : Core, here : @settings.Here, bars~ : Bool, kept~ : S
 pub fn settings_row_of(r : @settings.Route) -> @settings.Route {
   match r {
     Fonts => Appearance
-    SecurityOpen | PersonalLock => Security
+    SecurityOpen => Security
     VaultItems | VaultItem(_, _) => Vault
-    AdbShare("") => AdbShare("")
-    Station(_) | AdbShare(_) => Stations
+    AdbShare(_) => AdbShare("")
+    Station(_) => Stations
     Profile(_, _) | NewProfile(_) | ProfileAccount(_) => Profiles("")
     Connects(_) | Connect(_, _) | RunSettings(_, _) => Connects("")
     Memory(_) | MemoryDoc(_, _, _) => Memories
@@ -361,10 +363,6 @@ let settings_search_grow : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 // kept across runs: a value (no field of it changes)
 let settings_search_page : @ui.Style = @ui.css("w=Full pb=S3 clip=true")
-
-///|
-/// The room under the search field on a page (settings_search_page's S3).
-let settings_search_foot : Double = 12.0
 
 ///|
 /// The same search control (settings_search's) as nodes, over the settings' list made once: its round ground as tall as
@@ -758,7 +756,7 @@ pub fn settings_home_node(
       block.show(fn() { heading() != "" }, fn(h) { @sf.heading_node(h, heading) })
       @sf.group_node(block, fn(g) {
         g.each(fn() { card_of(id).map(fn(c) { c.2 }).unwrap_or([]) }, fn(k) { k }, fn(rb, key) {
-          let key = @signals.untracked(fn() { key.get() })
+          let key = key.untracked()
           settings_row_node(rb, core, here, key, row_of, open, stint)
         })
       })

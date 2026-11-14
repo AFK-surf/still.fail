@@ -19,7 +19,6 @@
 // every actor into <data>/run/handover.json; the runners keep the processes. A starting hub takes them up from that
 // file (`takeUp`), and from the runners a crashed station left (no snapshot), then `recover` resumes the turns marked
 // running that nothing took up.
-import { idleSandboxes, keyPart, sandboxIdleMs, sandboxName, sandboxed, sessionSync, stopSandbox, syncChanged } from "../agents/sandbox.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -33,22 +32,25 @@ import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, sessionPlaces, transcriptSources } from "../read/transcript.ts";
 import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, commaSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
-import type { DeliveryCardState, PendingMessage } from "../store/rows.ts";
+import type { DeliveryCardState, InWorkspace, PendingMessage } from "../store/rows.ts";
+import { runShown } from "./run-change.ts";
+import type { PolicyChecks } from "./archive-policy.ts";
 import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
-import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
+import { SessionActor, type SessionDeps, type Snapshot, linkSkills, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
 import { threadCommand, type Args } from "./args.ts";
 import type { CardPage } from "../logins/index.ts";
 import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ModelChoice, Person, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
 import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle, sameModel } from "./config.ts";
-import { candidates as modelsRun } from "./model-choice.ts";
+import { FEW_MOST, USED_WITHIN_MS, candidates as modelsRun, few } from "./model-choice.ts";
 import { CHAT_KEY, INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { Presets, RepoIndex } from "./presets.ts";
+import { Clones } from "./clones.ts";
 import { type Roots, roots as machineRoots } from "../read/machine.ts";
 import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldLongChat, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
@@ -88,7 +90,7 @@ export type OutsideChat = { workspace: string; workspaceName: string; station: s
 /// transcripts packed, and restored before its runtime starts again or when it is shown again. The station's is
 /// cold.ts; the default keeps nothing cold.
 export interface ColdStorage {
-  isCold(key: string): boolean;
+  isCold(key: string): Promise<boolean>;
   restore(key: string): void | Promise<void>;
   /// Packs what it can of an archived, idle session.
   pack(key: string): void | Promise<void>;
@@ -99,8 +101,10 @@ export interface ColdStorage {
 
 /// The most of a shared file the station fetches, as much as an agent may attach.
 const MAX_INBOUND_FILE = 50 * 1024 * 1024;
+/// How long transcripts' lengths are gathered before they are written (`noteLength`).
+export const LENGTHS_GATHER_MS = 5_000;
 
-const NOTHING_COLD: ColdStorage = { isCold: () => false, restore: () => {}, pack: () => {} };
+const NOTHING_COLD: ColdStorage = { isCold: async () => false, restore: () => {}, pack: () => {} };
 
 /// What the hub hands to the next station: each actor's snapshot (handover.json).
 export type Handover = { sessions: Snapshot[] };
@@ -123,6 +127,8 @@ export type HubOptions = {
   link?: (key: string) => string | undefined;
   /// The workspaces the station is in now, its home one first; none outside any.
   workspaces?: () => string[];
+  /// This station's id in its workspaces (null: none yet, outside any).
+  station?: () => string | null;
   /// The runners alive on this machine now, by id (default: <data>/run/runners).
   runners?: () => string[];
   /// Another session being taken up: the launcher hears the station gets on with it (ops/launcher.ts `taking`).
@@ -136,10 +142,24 @@ export type HubOptions = {
   background?: (work: Promise<void>) => void;
   /// The previous station has released its foreground writes.
   previous?: Promise<void>;
+  /// What the deployment adds to every session's instructions, as the station read it at its start
+  /// (agents/instructions.ts `readSiteInstructions`); none by default.
+  siteInstructions?: string;
 };
 
 /// The handover file, in the data directory.
 export const handoverFile = (dataDir: string) => join(dataDir, "run", "handover.json");
+
+/// A message refused, unrecorded, by a station handing its chats of that workspace to another (Hub `quiet`).
+export class Retiring extends Error {
+  constructor() {
+    super("this station is handing its chats of this workspace to another station");
+  }
+}
+
+/// What a station retired from `ws` says its chats there are of once the station they went to took them: no workspace
+/// it is in, so they are out of every device's sight here (replica/retire.ts).
+export const retiredWs = (ws: string) => `retired:${ws}`;
 
 export class Hub {
   readonly options: HubOptions;
@@ -148,6 +168,7 @@ export class Hub {
   readonly drivers: Map<string, AgentDriver>;
   readonly link: (key: string) => string | undefined;
   readonly workspaces: () => string[];
+  readonly station: () => string | null;
   readonly cold: ColdStorage;
   readonly accounts: Accounts;
   readonly clock: Clock.Clock;
@@ -167,6 +188,12 @@ export class Hub {
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
   /// (review.ts), up to 400 of them through the merged view, 3 seconds held on a station. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
+  /// How a session's skills are linked where it runs before its process opens; none: on the disk (actor.ts
+  /// `linkSkills`). A test's hub, whose sessions run nowhere, links none.
+  skillsLinker: ((row: SessionRow) => Promise<string>) | null = null;
+  /// What a week's checks say of a workspace's chats, counted by the readers (null: on the main thread, as the store is
+  /// still preparing their lookups); none (tests): counted here.
+  policyChecks: ((since: number, viewer: InWorkspace) => Promise<PolicyChecks | null>) | null = null;
   /// Check whether a chat's opener wrote among its latest messages without reading their edits.
   openedChatSaid: ((thread: number, author: string, agentOnly: boolean) => Promise<boolean>) | null = null;
   /// Read a chat_history page and its optional before-message boundary off the station thread.
@@ -215,7 +242,7 @@ export class Hub {
   private processJobs: ProcessJobsBuilder | null = null;
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
-  /// Fibers of the hub's own (title waits, archive reviews): interrupted at shutdown.
+  /// Fibers of the hub's own (archive reviews): interrupted at shutdown.
   readonly fibers = new Set<Fiber.Fiber<void>>();
   /// Why turns are held (SessionDeps.held): held while any reason stands.
   private holdsNow = new Set<Hold>();
@@ -223,8 +250,6 @@ export class Hub {
   private adopted = new Set<string>();
   /// Chats made lately by session key: the key their client gave them, and when (NewChat.clientKey).
   readonly clientKeysMade = new Map<string, [string, number]>();
-  /// Titles agents gave chats someone has open, waiting until they leave (titles.ts), by thread.
-  readonly titles = new Map<number, string>();
   /// Conversations a chat was relayed to whose agent has not posted there yet, by thread: the session and the station's
   /// first message there, which that post goes into (relay.ts). Kept in memory: after a restart it is a reply.
   readonly openings = new Map<number, { session: string; ts: string; claimed?: boolean }>();
@@ -243,6 +268,8 @@ export class Hub {
   readonly presets = new Presets((ws) => workspaceAgentHome(this.config().agentHome, ws, this.workspaces()[0] ?? null), () => this.now());
   /// The repositories on the machine, offered as a preset's folders (presets.ts).
   readonly repoIndex = new RepoIndex({ roots: () => [homedir()], file: () => join(this.config().dataDir, "repo-index.json"), now: () => this.now(), besides: () => [this.config().dataDir] });
+  /// Repositories cloned from git into the repository cache, for presets to name (clones.ts).
+  readonly clones = new Clones({ reposDir: () => this.reposDir(), now: () => this.now(), index: this.repoIndex });
   private closedHook: ((key: string) => void) | null = null;
   private peersHook: ((station: string, request: Json) => Promise<Json>) | null = null;
   private outsideHook: ((ws: string | null) => OutsideChat[]) | null = null;
@@ -256,6 +283,7 @@ export class Hub {
     this.drivers = new Map(options.drivers.map((d) => [d.runtime(), d]));
     this.link = options.link ?? (() => undefined);
     this.workspaces = options.workspaces ?? (() => []);
+    this.station = options.station ?? (() => null);
     this.cold = options.cold ?? NOTHING_COLD;
     this.machineRoots = options.machineRoots ?? machineRoots;
     this.places = options.places ?? new Places();
@@ -265,6 +293,17 @@ export class Hub {
       running: (except) => [...this.actors.values()].filter((a) => a.key !== except && a.processState() !== "cold").flatMap((a) => this.store.getSession(a.key)?.profile ?? []),
       clock: this.clock,
       allows: (key, profile) => allowedIn(profile, this.wsOf(key), this.workspaces()[0] ?? null),
+      // Moved to another account by the station (its allowance ran out, its login is over, its profile deleted): said in
+      // its chat as a change by hand is (lifecycle.ts `configure`).
+      moved: (key, was) => {
+        const now = this.store.getSession(key);
+        if (!now) return;
+        const named = (id: string) => {
+          const name = this.accounts.profile(id)?.name;
+          return typeof name === "string" ? name : null;
+        };
+        void this.actor(now).runChanged({ was: runShown(was, named), now: runShown(now, named) }).catch(() => {});
+      },
     });
     this.live = new LiveHub(
       (key) => {
@@ -280,9 +319,11 @@ export class Hub {
     );
     // The sessions at work are followed by the station itself (live.ts `running`): as the store says each starts and
     // stops, and those at work now. Each transcript's length goes where its summary reads it (its usage, the usage
-    // part keeps: usage/module.ts).
-    this.live.lengths = (key, n) => this.store.setTranscriptLength(key, n);
+    // part keeps: usage/module.ts), gathered (`noteLength`).
+    this.live.lengths = (key, n) => this.noteLength(key, n);
     this.unlistenRunning = this.store.subscribe((change) => {
+      // Its summary is told now: with its transcript's length as read.
+      if (change.type === "session" && this.lengths.has(change.key)) this.writeLengths([change.key]);
       if (change.type === "session") this.live.running(change.key, this.store.getSession(change.key)?.running === true);
       else if (change.type === "sessionRemoved") this.live.running(change.key, false);
     });
@@ -349,12 +390,55 @@ export class Hub {
   }
 
   /// Whether a session's workspace is one the station is in now (a joined one may have taken it out): held otherwise.
-  /// Outside every workspace the "unbound" hold says so instead.
+  /// Outside every workspace the "unbound" hold says so instead. A workspace whose chats this station is handing to
+  /// another (`quiet`) is one it is not in.
   private inAWorkspace(key: string): boolean {
     const all = this.workspaces();
+    const ws = this.store.sessionWs(key) ?? null;
+    if (this.quieted.has(ws ?? all[0] ?? "")) return false;
     if (all.length === 0) return true;
-    const ws = this.store.getSession(key)?.ws ?? null;
     return ws === null || all.includes(ws);
+  }
+
+  /// The workspaces whose chats this station hands to another as it is retired from them (replica/retire.ts).
+  private readonly quieted = new Set<string>();
+
+  /// Whether session `key` is one of `ws`'s chats here: its workspace, a home one's saying none (as `inAWorkspace`
+  /// reads it), or one put out of sight as the station was retired from `ws` (`retiredWs`).
+  ofWorkspace(key: string, ws: string): boolean {
+    const was = this.store.sessionWs(key);
+    if (was === undefined) return false;
+    return (was ?? this.workspaces()[0] ?? null) === ws || was === retiredWs(ws);
+  }
+
+  /// This station's chats of `ws` go to another (replica/retire.ts): from now on none of them takes a turn, those
+  /// running end as the station's leaving a workspace ends them (their deadlines with them), and what their platforms
+  /// say is not taken here (`acceptInTurn` refuses it, unrecorded; connects/workspace.ts keeps it for that station).
+  async quiet(ws: string) {
+    this.quieted.add(ws);
+    const keys = new Set([...this.deadlines.keys(), ...this.actors.keys()].filter((key) => this.ofWorkspace(key, ws)));
+    for (const [key, fiber] of this.deadlines) if (keys.has(key)) (this.interrupt(fiber), this.deadlines.delete(key));
+    await Promise.all([...this.actors.values()].filter((a) => keys.has(a.key)).map((a) => a.suspend()));
+  }
+
+  /// `quiet` taken back (the retirement cancelled): what it cut off resumes and what waited goes on, as `backIn` does.
+  unquiet(ws: string) {
+    if (!this.quieted.delete(ws)) return;
+    // (the home one's chats say no workspace, which the index of a workspace's activity does not name)
+    if (ws !== (this.workspaces()[0] ?? null)) return this.backIn(ws);
+    const keys = new Set([...this.store.runningSessions().map((row) => row.key), ...this.store.sessionsWithPending()]);
+    const rows = [...keys].filter((key) => this.ofWorkspace(key, ws)).map((key) => this.store.getSession(key)).filter((row): row is SessionRow =>
+      row !== null && (row.running || this.store.hasPending(row.key))).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+    for (const row of rows) {
+      if (!this.online(row)) continue;
+      if (row.running) void this.actor(row).recover();
+      else void this.actor(row).kick();
+    }
+  }
+
+  /// Whether this station is handing `ws`'s chats to another.
+  quietIn(ws: string): boolean {
+    return this.quieted.has(ws);
   }
 
   /// The station left one of its workspaces but is still in others: that workspace's
@@ -362,7 +446,7 @@ export class Hub {
   async leftWorkspace(ws: string) {
     // Only actors and their eviction deadlines have anything to suspend. Historical sessions have neither.
     const candidates = new Set([...this.deadlines.keys(), ...this.actors.keys()]);
-    const keys = new Set([...candidates].filter((key) => this.store.getSession(key)?.ws === ws));
+    const keys = new Set([...candidates].filter((key) => this.store.sessionWs(key) === ws));
     for (const [key, fiber] of this.deadlines) if (keys.has(key)) (this.interrupt(fiber), this.deadlines.delete(key));
     await Promise.all([...this.actors.values()].filter((a) => keys.has(a.key)).map((a) => a.suspend()));
   }
@@ -489,7 +573,7 @@ export class Hub {
         key: row.key,
         runtime,
         agent: null,
-        turn: turn && turn.summary.endedAt === null ? { id: turn.id, authRetried: turn.summary.kind === "auth_retry", lostRetried: turn.summary.kind === "sandbox_retry", codexRetried: turn.summary.kind === "codex_retry", by: { profile: null, person: null, thread: null }, declared: turn.summary.declared, wait: turn.summary.waitSeconds } : null,
+        turn: turn && turn.summary.endedAt === null ? { id: turn.id, authRetried: turn.summary.kind === "auth_retry", codexRetried: turn.summary.kind === "codex_retry", by: { profile: null, person: null, thread: null }, declared: turn.summary.declared, wait: turn.summary.waitSeconds } : null,
         workingFor: [],
         notices: [],
         waitingMs: null,
@@ -530,7 +614,8 @@ export class Hub {
       try {
         const driver = this.sessionDriver(snap.runtime);
         const generation = actor.nextGeneration();
-        agent = await driver.adopt(openOptions(row, this.accounts.profile(ranOn) ?? this.accounts.runOn(row.key), this.deps), snap.agent, actor.listener(generation));
+        const memory = await this.deps.linkSkills(row);
+        agent = await driver.adopt(openOptions(row, this.accounts.profile(ranOn) ?? this.accounts.runOn(row.key), this.deps, memory), snap.agent, actor.listener(generation));
       } catch (error) {
         log.warn("hub", "a session's runtime could not be taken up; it resumes the usual way", { session: row.key, error: (error as Error).message });
       }
@@ -627,13 +712,21 @@ export class Hub {
     // copy of it, seen through another connect, is not a message of its own.
     if (this.ownBot(config, message.user)) return;
     const connect = connectOf(config, connectId);
+    // (a workspace whose chats go to another station: not taken here, so that it is said there)
+    if (this.quieted.size > 0 && this.quieted.has(connect.workspace ?? this.workspaces()[0] ?? "")) throw new Retiring();
     const chat = this.chat(connectId);
     const surface = this.surface(connectId);
     const single = connect.mode === "single-session";
     const bound = single ? this.store.binding(connect.id) : null;
-    const key = bound ?? (single ? newSingleSessionKey(connect.id) : sessionKey(connect.id, message.channel, message.threadTs));
     const existing = this.store.threadAt(surface, message.channel, message.threadTs);
     const members = existing ? this.store.threadSessions(existing.id) : [];
+    // A thread this connect's bot already takes part in (a chat relayed there) is its session's: the bot mentioned
+    // there goes to the one still following it, never to a second agent of the same bot (relay.ts refuses the other
+    // way round), and one that left stays out while another follows.
+    const own = single ? null : sessionKey(connect.id, message.channel, message.threadTs);
+    const sameBot = single ? [] : members.filter((m) => m.connect === connect.id);
+    const taken = sameBot.find((m) => m.leftAt === null) ?? sameBot.find((m) => m.session === own) ?? sameBot[0];
+    const key = bound ?? taken?.session ?? own ?? newSingleSessionKey(connect.id);
     const exists = this.store.getSession(key) !== null;
     // Left (chat_leave): it hears the thread again only once someone mentions it.
     const left = members.some((m) => m.session === key && m.leftAt !== null);
@@ -670,11 +763,33 @@ export class Hub {
     if (wanted) this.store.joinThread(thread.id, key, connect.id);
     // Its files go where a session of the thread reads them; once (Slack sends a message again it was slow to hear of).
     const into = wanted ? key : (members[0]?.session ?? key);
-    const said = this.store.messageNumberAt(thread.id, message.ts) === null ? await this.fetched(chat, into, message.text, message.files) : { text: message.text, attachments: [] };
+    const first = this.store.messageNumberAt(thread.id, message.ts) === null;
+    let said = first ? await this.fetched(chat, into, message.text, message.files) : { text: message.text, attachments: [] };
+    if (first && wanted) said = await this.withQuoted(chat, thread.id, here, into, message, said);
     const [n, fresh] = this.store.insertMessage({ thread: thread.id, ts: message.ts, authorKind: "person", author: message.user, ...said });
     // A message seen by a second connect is already delivered to the thread; only a session it brings in lacks it.
     const targets = fresh ? this.store.threadSessions(thread.id).map((m) => m.session) : wanted ? [key] : [];
+    // Its own words, never the quote's: a quoted `-stop` is no command.
     this.deliver(thread.id, n, targets, message.text);
+  }
+
+  /// The quoted messages already brought in, as `thread:message` (the newest; a restart forgets them, and one is brought once more).
+  private readonly quotedIn = new Set<string>();
+
+  /// A message that quotes one the conversation does not have (Feishu's 回复, `InboundMessage.quoted`) brings it in:
+  /// its words as a blockquote before the message's, its files fetched before the message's own.
+  private async withQuoted(chat: ChatSurface, thread: number, here: ThreadRef, into: string, message: InboundMessage, said: { text: string; attachments: Attachment[] }): Promise<{ text: string; attachments: Attachment[] }> {
+    if (message.quoted === undefined || !chat.quoted || this.store.messageNumberAt(thread, message.quoted) !== null) return said;
+    // Once a conversation: every reply in a Feishu thread names the thread's first message as what it replies to.
+    const once = `${thread}:${message.quoted}`;
+    if (this.quotedIn.has(once)) return said;
+    this.quotedIn.add(once);
+    if (this.quotedIn.size > 2000) this.quotedIn.delete(this.quotedIn.keys().next().value!);
+    const quoted = await chat.quoted(here, message.quoted);
+    if (quoted === null || (quoted.text === "" && (quoted.files ?? []).length === 0)) return said;
+    const its = await this.fetched(chat, into, quoted.text, quoted.files);
+    const block = its.text === "" ? "" : its.text.split("\n").map((line) => `> ${line}`).join("\n");
+    return { text: [block, said.text].filter((t) => t !== "").join("\n\n"), attachments: [...its.attachments, ...said.attachments] };
   }
 
   /// A Slack thread the station starts following. When that happens mid-thread, what was said before is recorded first
@@ -845,20 +960,6 @@ export class Hub {
   private evictIdle() {
     const config = this.config();
     const now = this.now();
-    // In sandboxes every session's process goes once idle long enough, whatever its runtime, and its sandbox with it:
-    // nothing is kept warm there (agents/sandbox.ts `sandboxIdleMs`).
-    const sandboxIdle = sandboxIdleMs(config.dataDir);
-    if (sandboxIdle !== null) {
-      for (const actor of this.actors.values()) {
-        const ms = actor.idleMs(now);
-        if (ms !== null && ms >= sandboxIdle) {
-          const work = this.stopIdle(actor);
-          this.options.background?.(work);
-          void work.catch((error) => log.warn("hub", "idle sandbox cleanup failed", { session: actor.key, error: (error as Error).message }));
-        }
-      }
-      return;
-    }
     const idle = [...this.actors.values()]
       .filter((a) => a.runtime !== "codex")
       .flatMap((a) => {
@@ -874,19 +975,10 @@ export class Hub {
     }
   }
 
-  /// Ends an idle session's process, then stops its sandbox, unless something started there again meanwhile (the front
-  /// door refuses while a job or a new process has a connection to it).
-  private async stopIdle(actor: SessionActor) {
-    await actor.evict();
-    if (actor.processState() !== "cold") return;
-    const data = this.config().dataDir;
-    if (await stopSandbox(data, keyPart(actor.key))) log.info("hub", "idle session's sandbox stopped", { session: actor.key });
-  }
-
-  /// The same session-name lookup serves idle sandboxes and runners, whose ids use the same session-key part.
+  /// The session-name lookup of runners, whose ids use the session-key part (it served sessions' sandboxes before
+  /// sandboxes as station_task's targets took their place: no longer prepared).
   private sandboxNameLookup(): SandboxNameBuilder {
-    return this.sandboxNames ??= new SandboxNameBuilder(this.store, this.options?.previous ?? Promise.resolve(),
-      () => sandboxIdleMs(this.config().dataDir) !== null);
+    return this.sandboxNames ??= new SandboxNameBuilder(this.store, this.options?.previous ?? Promise.resolve(), () => false);
   }
 
   runnerNameSessions(runners: readonly { id: string; part: string }[]): Map<string, string> | "fallback" {
@@ -905,33 +997,10 @@ export class Hub {
     return this.processJobs ??= new ProcessJobsBuilder(this.store, this.options?.previous ?? Promise.resolve());
   }
 
-  /// Stops the sandboxes of this station's sessions that nothing runs in: a session whose process ended some other way
-  /// than going idle (it exited, the station restarted without it), left with its sandbox. Every `SWEEP_MS` while the
-  /// station runs things in sandboxes (agents.ts).
+  /// The lookup of sessions by their sandbox's name a station kept while sessions ran in sandboxes, taken down (its
+  /// triggers on sessions with it). Every `SWEEP_MS` (agents.ts), till there is none.
   async sweepSandboxes() {
-    const data = this.config().dataDir;
-    if (sandboxIdleMs(data) === null) {
-      if (sandboxIndexEnabled(this.store.db)) {
-        await this.sandboxNameLookup().disable();
-      }
-      return;
-    }
-    const idle = await idleSandboxes(data);
-    // Once the lookup exists, keep its journal caught up even when no sandbox is idle. A station that has never
-    // needed it does no preparation at all until an idle sandbox is seen.
-    if (idle.length === 0 && !sandboxIndexEnabled(this.store.db)) return;
-    const lookup = this.sandboxNameLookup();
-    let sessions = await lookup.sessions(idle);
-    // Keep the previous immediate sweep while a handover or a failed preparation keeps the lookup unavailable.
-    if (sessions === "fallback" && idle.length > 0)
-      sessions = new Map(this.store.listSessions().map((row) => [sandboxName(keyPart(row.key)), row.key]));
-    if (sessions === null || sessions === "fallback") return;
-    for (const name of idle) {
-      const key = sessions.get(name);
-      if (key === undefined) continue;
-      if ((this.actors.get(key)?.processState() ?? "cold") !== "cold") continue;
-      if (await stopSandbox(data, keyPart(key))) log.info("hub", "a sandbox nothing ran in stopped", { session: key });
-    }
+    if (sandboxIndexEnabled(this.store.db)) await this.sandboxNameLookup().disable();
   }
 
   /// A process went idle: look again when it has idled past warmMs.
@@ -947,7 +1016,7 @@ export class Hub {
     if (old) this.interrupt(old);
     // When it will have idled long enough: from when it went idle (one taken up from the previous station may have been
     // idle a while already).
-    const limit = Math.min(this.config().warmMs, sandboxIdleMs(this.config().dataDir) ?? Infinity);
+    const limit = this.config().warmMs;
     const idleFor = this.actors.get(key)?.idleMs(this.now()) ?? 0;
     const fiber = this.runFork(
       Effect.sleep(Math.max(0, limit - idleFor)).pipe(
@@ -974,12 +1043,13 @@ export class Hub {
     await this.actors.get(key)?.changed(restart);
   }
 
-  /// A manual allowance reset lets every waiting session on the same account go on now.
+  /// A manual allowance reset lets every waiting session on the same account, or left to the station and able to move
+  /// to it, go on now.
   allowanceReset(profile: string) {
     this.accounts.resetAllowance(profile);
     const waiting = [...this.actors.values()].filter((actor) => {
       const row = this.store.getSession(actor.key);
-      return row !== null && this.accounts.sameAccount(profile, row.profile);
+      return row !== null && this.accounts.goesOnWith(row, profile);
     });
     for (const actor of waiting) void actor.allowanceReset().catch((error) => {
       log.warn("hub", "could not resume a session after its allowance was reset", { session: actor.key, error: (error as Error).message });
@@ -990,6 +1060,14 @@ export class Hub {
   /// session's process ends now if idle, else before its next turn, and the next starts with it (none retuned in place).
   everyChanged() {
     for (const actor of [...this.actors.values()]) void actor.changed(true).catch(() => {});
+  }
+
+  /// A runtime updated here (from the pages): the processes of its sessions still run the old executable, which the
+  /// service may refuse from then on (a model a version before does not support), so each ends now if idle, else before
+  /// its next turn, and the next starts on the new one, resuming. Codex's app-servers are its driver's (codex.ts
+  /// `runtimeChanged`).
+  runtimeUpdated(runtime: RuntimeKind) {
+    for (const actor of [...this.actors.values()]) if (actor.runtime === runtime) void actor.changed(true).catch(() => {});
   }
 
   /// A profile was deleted: the sessions on it are taken on by another of their runtime's (their process ends now if
@@ -1029,6 +1107,13 @@ export class Hub {
     const row = this.store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
     await this.actor(row).cancelRetry(thread, seq);
+  }
+
+  /// Takes up again the failed turn this particular notice is about (its 重试), if it is still the last.
+  async retryFailed(key: string, thread: number, seq: number) {
+    const row = this.store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    await this.actor(row).retryFailed(thread, seq);
   }
 
   /// Compacts the session's context between turns, as `-compact` in a thread would (SessionActor.compact): why not,
@@ -1121,7 +1206,45 @@ export class Hub {
     await Promise.all([...this.drivers.values()].map((d) => d.shutdown()));
   }
 
+  /// Transcripts' lengths not written yet, and whether their write is due (`noteLength`).
+  private lengths = new Map<string, number>();
+  private lengthsDue = false;
+  /// The sessions whose length was written in this process.
+  private lengthWritten = new Set<string>();
+
+  /// A transcript's length, written with the others' that come within LENGTHS_GATHER_MS: one statement of its own at each
+  /// read was one at every step of every agent at work, on the main thread. Only a session's summary reads it (its
+  /// entries told as they come say more): its first in this process is written at once, the rest before its summary is
+  /// next told (a change of the session), else within LENGTHS_GATHER_MS; one read between says the length before.
+  /// Written as the hub stops (a handover, a shutdown); one lost in a crash is read again, as the next station follows
+  /// its transcript from the start (live.ts `begin`).
+  private noteLength(key: string, n: number) {
+    this.lengths.set(key, n);
+    if (!this.lengthWritten.has(key)) {
+      this.lengthWritten.add(key);
+      this.writeLengths([key]);
+      return;
+    }
+    if (this.lengthsDue) return;
+    this.lengthsDue = true;
+    this.fork(Effect.sleep(LENGTHS_GATHER_MS).pipe(Effect.andThen(Effect.sync(() => this.writeLengths()))));
+  }
+
+  private writeLengths(only?: string[]) {
+    if (only === undefined) this.lengthsDue = false;
+    const lengths = only === undefined ? this.lengths : new Map(only.flatMap((key) => this.lengths.has(key) ? [[key, this.lengths.get(key)!] as const] : []));
+    if (only === undefined) this.lengths = new Map();
+    else for (const key of only) this.lengths.delete(key);
+    if (lengths.size === 0) return;
+    try {
+      this.store.setTranscriptLengths(lengths);
+    } catch (error) {
+      log.warn("hub", "transcripts' lengths not written", { error: (error as Error).message });
+    }
+  }
+
   private stopTimers() {
+    this.writeLengths();
     for (const fiber of [...this.deadlines.values(), ...this.fibers]) this.interrupt(fiber);
     this.deadlines.clear();
     this.fibers.clear();
@@ -1221,6 +1344,20 @@ export class Hub {
     return [own, ...modelsRun(profiles, null).filter((c) => !same(c))];
   }
 
+  /// Of those, the few `user` (a person as the connect's platform names them) is offered before they type anything
+  /// (model-choice.ts `few`): what they started chats on lately counts with any connect, as one person talks to
+  /// several bots.
+  modelsFirst(connectId: string, user: string): ModelChoice[] {
+    const all = this.modelsFor(connectId);
+    if (all.length <= FEW_MOST) return all;
+    const config = this.config();
+    const connect = connectOf(config, connectId);
+    const since = this.now() - USED_WITHIN_MS;
+    const used = user === "" ? [] : config.connects.flatMap((c) => this.store.modelsUsedBy(`slack:${c.id}:${user}`, since));
+    const profiles = config.profiles.filter((p) => p.enabled !== false && allowedIn(p, connect.workspace ?? null, this.workspaces()[0] ?? null));
+    return few(all, used, modelsRun(profiles.map((p) => ({ ...p, models: p.named })), null));
+  }
+
   /// A session for a connect: the connect's own profile when it keeps to one (and it still can run it); else any of its
   /// runtime, the model's first (pool.ts). A message sent to a model (`model`) starts one on that model instead, on any
   /// profile of the connect's workspace that runs it.
@@ -1233,8 +1370,14 @@ export class Hub {
     const fits = chosen === null ? profilesFor(config, connect, home) : config.profiles.filter((p) => p.enabled !== false && p.runtimes.includes(runtime) && allowedIn(p, connect.workspace ?? null, home) && serves(p, model));
     if (fits.length === 0 && chosen !== null) throw new Error(tr(stationLang(), "station.session.noProfileForModel", { model: model ?? runtimeTitle(runtime), runtime: runtimeTitle(runtime) }));
     if (fits.length === 0 && profilesFor(config, connect).length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(connect.bind.runtime) }));
-    const kept = chosen === null && connect.bind.profile !== undefined ? fits.find((p) => p.id === connect.bind.profile && serves(p, model)) : undefined;
-    const profile = kept ?? this.accounts.pick(fits, model, false);
+    const boundIds = chosen === null && connect.bind.profiles && connect.bind.profiles.length > 0
+      ? connect.bind.profiles
+      : chosen === null && connect.bind.profile !== undefined
+        ? [connect.bind.profile]
+        : null;
+    const boundFits = boundIds !== null ? fits.filter((p) => boundIds.includes(p.id) && serves(p, model)) : [];
+    const savedProfiles = boundFits.length > 0 ? boundFits.map((p) => p.id) : null;
+    const profile = boundFits.length === 1 ? boundFits[0]! : this.accounts.pick(boundFits.length > 0 ? boundFits : fits, model, false);
     const dir = scope === "thread" && message ? `${message.channel}-${message.threadTs.replace(".", "-")}` : key.slice(connect.id.length + 1);
     const workspace = join(config.dataDir, "sessions", connect.id, dir, "workspace");
     mkdirSync(workspace, { recursive: true });
@@ -1248,7 +1391,8 @@ export class Hub {
       createdBy,
       runtime,
       profile: profile.id,
-      profilePinned: kept !== undefined,
+      profilePinned: savedProfiles?.length === 1,
+      profiles: savedProfiles,
       model,
       effort: chosen === null ? (connect.bind.effort ?? null) : null,
       fast: null,
@@ -1294,6 +1438,7 @@ export class Hub {
   private sessionDeps(): SessionDeps {
     return {
       store: this.store,
+      linkSkills: (row) => this.skillsLinker ? this.skillsLinker(row) : linkSkills(row, this.deps),
       pendingDeliveries: async (key, signal) => this.pendingDeliveries
         ? this.pendingDeliveries(key, signal) : this.store.pendingMessages(key),
       deliveryCardState: async (thread, n, signal) => {
@@ -1319,12 +1464,8 @@ export class Hub {
       refillsAt: (key) => this.accounts.refillsAt(key),
       recheck: (profile) => this.accounts.recheck(profile),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
-      toSandbox: async (key) => {
-        const data = this.config().dataDir;
-        const row = this.store.getSession(key);
-        if (row && sandboxed(data)) await syncChanged(data, keyPart(key), sessionSync(data, row.workspace));
-      },
       reposDir: () => this.reposDir(),
+      siteInstructions: () => this.options.siteInstructions ?? "",
       memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],
       maxNudges: () => this.config().maxNudges,
       untitled: (key) => (this.config().askToName ? untitledChat(this, key) : null),

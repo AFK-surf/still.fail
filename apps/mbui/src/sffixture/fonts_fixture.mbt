@@ -88,7 +88,7 @@ pub fn fixture_faces(fonts : Map[String, String]) -> Json {
 ///|
 /// The chosen faces as kept (`fonts`).
 pub fn fixture_fonts(fonts : Map[String, String]) -> Json {
-  let m : Map[String, Json] = {}
+  let m : Map[String, Json] = Map([])
   for k, v in fonts {
     m[k] = ToJson::to_json(v)
   }
@@ -98,13 +98,13 @@ pub fn fixture_fonts(fonts : Map[String, String]) -> Json {
 ///|
 /// The core's `fonts`: what is being fetched, how far; what failed; the faces whose files are kept.
 pub fn fixture_fonts_topic(f : Fixture) -> Json {
-  let fetching : Map[String, Json] = {}
+  let fetching : Map[String, Json] = Map([])
   if f.mode == "settings-fonts-coming" {
     fetching["noto-sans-sc"] = ToJson::to_json(0.42)
   }
   let kept : Array[Json] = f.fonts_fetched.keys().map(fn(id) { ToJson::to_json(id) }).collect()
   // (share-card-senren-adv-coming: its picture and face partly here, its tiles' not begun)
-  let share : Map[String, Json] = {}
+  let share : Map[String, Json] = Map([])
   if f.mode == "share-card-senren-adv-coming" {
     share["1/a1-murasame-adv.webp"] = { "got": 82000, "bytes": 196076 }
     share["1/face-400.gz"] = { "got": 90000, "bytes": 203995 }
@@ -141,7 +141,7 @@ pub fn fixture_fonts_read(f : Fixture, name : String, params? : Json = Json::nul
   match name {
     "fonts.file" =>
       Some(
-        if f.fonts_fetched.size() > 0 {
+        if f.fonts_fetched.length() > 0 {
           Ok(({ "zipped": true }, file))
         } else {
           Err({ "code": "not_found", "message": "没有这个文件" })

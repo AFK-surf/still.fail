@@ -4,7 +4,7 @@
 
 ///|
 test "63-wide-switcher" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("wide-switcher"), seed~, w=1280.0, h=800.0)
     f.see("端到端测试")
     f.key("cmd+k")

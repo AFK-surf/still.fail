@@ -93,7 +93,7 @@ pub(all) struct ChatList {
   /// how its panes slide one to another (navTrack: 240 ease-out; mHomePane: 240 standard) and how a row moves as the
   /// list changes (motion.ts MOVE; the phone's row spring)
   slide : @motion.Spec
-  move : @motion.Spec
+  reorder : @motion.Spec
 }
 
 ///|
@@ -155,14 +155,14 @@ pub let mouse_chat_list : ChatList = {
   side_hint: @ui.css("row w=Full py=S1_5 gap=S2 align=ACenter").then(@ui.style(px=room(mouse_band_pad))),
   side_drop: @ui.css("w=Full").then(@ui.style(radius=side_row_radius)),
   heading: @ui.css("w=Full pt=S3_5 pb=S1"),
-  heading_in: 8.0,
+  heading_in: mouse_band_pad,
   heading_words: @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false),
   waiting_rows: 10,
   waiting_noted: 6,
   keys: true,
   found: mouse_found,
-  slide: @motion.move(),
-  move: @motion.move_spring,
+  slide: @motion.moved(),
+  reorder: @motion.move_spring,
 }
 
 ///|
@@ -218,23 +218,30 @@ pub let touch_chat_list : ChatList = {
   waiting_noted: 4,
   keys: false,
   found: touch_found,
-  slide: @motion.move(),
-  move: @motion.row_spring,
+  slide: @motion.moved(),
+  reorder: @motion.row_spring,
 }
 
 ///|
-/// What stands over a sidebar's list: how far in its ground is and its words from it (band_in, band_pad: a row's
-/// words the ladder's inset in, what stands on them round by its small step, 18 less 8).
+/// What stands over a sidebar's list: how far in its ground is and its words from it (band_in, band_pad).
 let mouse_band_in : Double = 8.0
 
 ///|
-let mouse_band_pad : Double = corner_inset
+/// A sidebar row's mark and words, and its list's headings, start where a capsule in the row's foot corner does
+/// (side_capsule_in): one line down the sidebar (the user, 2026-11-10: 「全跟 logo 对齐」, then 「所有侧栏内容右移 2px」
+/// over the allowance chips 2 px in from the marks, at the ladder's inset, 8).
+let mouse_band_pad : Double = side_capsule_in
 
 ///|
 let touch_band_in : Double = 16.0
 
 ///|
-let touch_band_pad : Double = corner_inset
+let touch_band_pad : Double = side_capsule_in
+
+///|
+/// Where a small capsule in a side row's foot corner stands from the row's edges, concentric with its corner
+/// (nav_quota_chips' allowance chips).
+let side_capsule_in : Double = @ui.capsule_in(row_corner, fill_chip_small_h)
 
 ///|
 /// How far in from its ground the words of what stands over a list are, and a row's words in a side column, where the
@@ -276,13 +283,14 @@ pub fn heading_in_at(at : ListAt) -> Double {
 /// panel over it (⌘K's), in the tape's side column, or across the whole screen (a phone's home, its search). How far in its rows are and whether their grounds are rounded follow it,
 /// not the native input (asked, 2026-10-25: touch's square rows, lit, in a tape's sidebar beside 新建对话's
 /// round ground).
+#derive(Eq)
 pub(all) enum ListAt {
   Side
   /// the tape's side column (its sidebar's panel, laid out Medium: tape_view): a side column whose words stand as
   /// before #3806 (band_pad_in)
   Tape
   Whole
-} derive(Eq)
+}
 
 ///|
 /// Where a list's lines stand (Sidebar.css.ts navScroll): in a side column as far in from its sides as what stands

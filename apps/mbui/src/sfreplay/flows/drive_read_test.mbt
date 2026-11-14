@@ -6,11 +6,11 @@
 
 ///|
 test "17-drive-read" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-read"), seed~)
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-082940")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.tap("小说-e2e.txt")
     // (the reader in, its push over: a live run taps its text only then)
     f.run_for(@ui.move_most_ms)
@@ -21,15 +21,15 @@ test "17-drive-read" {
     f.see("下一章")
     f.see("第一章 雨后的车站")
     f.tap("目录")
-    f.run_to(@kit.sheet_rest("dv-reader-sheet"))
+    f.run_to(fn() { @kit.sheet_rest("dv-reader-sheet") })
     f.see("第三章 灯塔的钥匙")
     f.tap("第三章 灯塔的钥匙")
-    f.run_to(@kit.sheet_rest("dv-reader-sheet"))
+    f.run_to(fn() { @kit.sheet_rest("dv-reader-sheet") })
     f.gone("第四章 回程")
     // held still there: where it is told to the core
     f.run_for(@sf.reader_still_ms)
     f.back()
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("小说-e2e.txt")
     f.see("%")
     f.end()

@@ -2,7 +2,7 @@
 
 ///|
 test "draft changes reach its readers without another page build" {
-  new_run()
+  fresh_app()
   let initial : Json = {
     "version": 1,
     "rev": 1,
@@ -48,7 +48,7 @@ test "draft changes reach its readers without another page build" {
 
 ///|
 test "a retained node reads the same draft without being made again" {
-  new_run()
+  fresh_app()
   let topic : @signals.Signal[@sfbase.Topic] = @signals.signal({
     value: Some({ "version": 1, "rev": 1, "text": "first" }), error: None, version: 1,
   })
@@ -77,7 +77,7 @@ test "a retained node reads the same draft without being made again" {
 
 ///|
 test "a shared draft follows the topic until its last owner leaves" {
-  new_run()
+  fresh_app()
   let topic : @signals.Signal[@sfbase.Topic] = @signals.signal({
     value: Some({ "version": 1, "rev": 1, "text": "first" }), error: None, version: 1,
   })
@@ -102,7 +102,7 @@ test "a shared draft follows the topic until its last owner leaves" {
 
 ///|
 test "reading draft fields once outside the graph does not acquire another core subscription" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = @sfbase.made_source()
@@ -128,7 +128,7 @@ test "reading draft fields once outside the graph does not acquire another core 
 
 ///|
 test "changing one draft slot leaves another slot following its draft" {
-  new_run()
+  fresh_app()
   let first : @signals.Signal[@sfbase.Topic] = @signals.signal({
     value: Some({ "version": 1, "rev": 1, "text": "first" }), error: None, version: 1,
   })
@@ -166,7 +166,7 @@ test "changing one draft slot leaves another slot following its draft" {
 
 ///|
 test "a topic received during a pending draft action is adopted when the action finishes" {
-  new_run()
+  fresh_app()
   let topic : @signals.Signal[@sfbase.Topic] = @signals.signal({
     value: Some({ "version": 1, "rev": 1, "text": "first", "starting": false }),
     error: None, version: 1,
@@ -195,7 +195,7 @@ test "a topic received during a pending draft action is adopted when the action 
 
 ///|
 test "out-of-order draft answers cannot adopt a core version older than the latest ack" {
-  new_run()
+  fresh_app()
   let topic : @signals.Signal[@sfbase.Topic] = @signals.signal({
     value: Some({ "version": 1, "rev": 1, "text": "first", "starting": false }), error: None, version: 1,
   })
@@ -221,7 +221,7 @@ test "out-of-order draft answers cannot adopt a core version older than the late
 
 ///|
 test "a failed optimistic action adopts the unchanged core value again" {
-  new_run()
+  fresh_app()
   let topic : @signals.Signal[@sfbase.Topic] = @signals.signal({
     value: Some({ "version": 1, "rev": 1, "text": "first", "starting": false }), error: None, version: 1,
   })
@@ -240,7 +240,7 @@ test "a failed optimistic action adopts the unchanged core value again" {
 
 ///|
 test "drafts with the same key from different sources stay independent" {
-  new_run()
+  fresh_app()
   let first : @signals.Signal[@sfbase.Topic] = @signals.signal({
     value: Some({ "version": 1, "rev": 1, "text": "first" }), error: None, version: 1,
   })
@@ -265,7 +265,7 @@ test "drafts with the same key from different sources stay independent" {
 
 ///|
 test "core text does not echo as a user edit, but a field edit is sent once" {
-  new_run()
+  fresh_app()
   let topic : @signals.Signal[@sfbase.Topic] = @signals.signal({
     value: Some({ "version": 1, "rev": 1, "text": "first" }), error: None, version: 1,
   })
@@ -401,7 +401,7 @@ test "committing composition keeps the local words when a core update arrived du
 
 ///|
 test "a core reset ends pending draft calls and adopts the restarted core's version" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let base = @sfbase.made_source()
   let src : Source = {
@@ -442,7 +442,7 @@ test "a core reset ends pending draft calls and adopts the restarted core's vers
 
 ///|
 test "a closed draft does not reopen a real client subscription" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = @sfbase.made_source()
@@ -476,7 +476,7 @@ test "a closed draft does not reopen a real client subscription" {
 
 ///|
 test "a draft reopened after its last reader left follows a fresh core subscription" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = @sfbase.made_source()
@@ -545,7 +545,7 @@ test "a draft reopened after its last reader left follows a fresh core subscript
 
 ///|
 test "reopening a draft preserves an acknowledged local edit until the core catches up" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = @sfbase.made_source()
@@ -607,7 +607,7 @@ test "reopening a draft preserves an acknowledged local edit until the core catc
 
 ///|
 fn reopened_text_same_revision(ack_before_reopen : Bool) -> Unit raise {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let base = @sfbase.made_source()
   let src : Source = {
@@ -677,7 +677,7 @@ test "reopening keeps a local edit through old and new snapshots of the same rev
 
 ///|
 test "a restarted core can replace a watched draft with a lower version" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = @sfbase.made_source()
@@ -719,7 +719,7 @@ test "a restarted core can replace a watched draft with a lower version" {
 
 ///|
 test "a new draft does not adopt a retained value from before a core restart" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let params = { "key": Json::string("new:ws1") }
   let direct = client.subscribe("composer", params~)

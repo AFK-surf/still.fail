@@ -6,8 +6,11 @@
 // again when it was left within 5 s of its end), the subtitle beside it (names.mbt side_subtitle), faster speeds,
 // 15 s back and on, the folder's others of its kind as its playlist, the next one played at its end after a moment.
 // A film is shown on black, the controls over it a deep tint with words near white, whatever the theme; a song has no
-// picture, and is on the page's own colours. How it plays is mbui's player's (@kit.Media: the system's player in a
-// native view, its bytes asked a part at a time of the file's `stream`).
+// picture, and is on the page's own colours. Embedded in a page (`player_view`'s `embedded`: a file's tab beside a
+// chat) it is part of the page, not a cinema in it: no ground of its own, its picture fitted in a room over its
+// controls, which are always there, in the page's colours and on its ground; only what lies over the picture keeps the
+// colours over a picture. How it plays is mbui's player's (@kit.Media: the system's player in a native view, its bytes
+// asked a part at a time of the file's `stream`).
 //
 // On a desktop's layout (`player_view` in the wide frame): the bar every file opened has along the top
 // (viewer_bar.mbt), the controls floating over the foot (media.mbt), both there till a click or a finger's tap takes
@@ -86,6 +89,7 @@ pub(all) struct Playing {
 
 ///|
 /// The files played, by their key (let go of as their page goes: player_let_go).
+// kept across runs: put back by players_reset (viewer_reset), as a run begins (run_begin)
 let playings : Map[String, Playing] = Map([])
 
 ///|
@@ -252,7 +256,7 @@ fn player_slice(b : Bytes, offset : Double, length : Int) -> Bytes {
   if from >= to {
     b""
   } else {
-    b[from:to].to_bytes()
+    b[from:to].to_owned()
   }
 }
 
@@ -387,19 +391,21 @@ pub fn player_full_act(p : @kit.Media, width : Double) -> (String, Bool, () -> U
 
 ///|
 /// What a finger dragging the picture does.
+#derive(Eq)
 priv enum PlayerDrag {
   NoDrag
   AlongTime
   DownClose
   MoveZoom
-} derive(Eq)
+}
 
 ///|
 /// The views open, by their player's key.
+// kept across runs: put back by players_reset (viewer_reset), as a run begins (run_begin)
 let player_views : Map[String, PlayerView] = Map([])
 
 ///|
-fn view_for(key : String) -> PlayerView {
+fn view_for(key : String, margin? : Double = 0.0) -> PlayerView {
   match player_views.get(key) {
     Some(v) => v
     None => {
@@ -408,8 +414,9 @@ fn view_for(key : String) -> PlayerView {
         list_closing: false,
         rates: false,
         fulled: false,
-        // (a film edge to edge in its stage, enlarged as players do: no margin round it)
-        zoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true),
+        // (a film edge to edge in its stage, enlarged as players do: no margin round it, but where a page holds it, as far
+        // in as the page's pictures are: player_view's `margin`)
+        zoom: @kit.Zoom::new(margin=fn(_) { margin }, enlarge=true),
         grabbing: false,
         grab_at: 0,
         held: -1.0,
@@ -459,15 +466,13 @@ fn players_reset() -> Unit {
 
 ///|
 /// Where it is among its frames: the file's own (when each starts, read by the host), else a 60th of a second each;
-/// how many, which one shows (the last to start by now), when that one starts, its rate (0: not known), whether they
-/// were read (or there are none to read).
+/// how many, which one shows (the last to start by now), when that one starts, its rate (0: not known).
 priv struct Frames {
   starts : Array[Double]?
   count : Int
   at : Int
   now : Double
   fps : Double
-  read : Bool
   dur : Double
 }
 
@@ -490,11 +495,11 @@ fn frames_of(p : @kit.Media, s : @kit.MediaStatus, pos : Double) -> Frames {
       let k = list.length()
       let span = list[k - 1] - list[0]
       let at = frame_at(list, pos)
-      { starts, count: k, at, now: list[at], fps: if span > 0.0 { (k - 1).to_double() * 1000.0 / span } else { 0.0 }, read, dur }
+      { starts, count: k, at, now: list[at], fps: if span > 0.0 { (k - 1).to_double() * 1000.0 / span } else { 0.0 }, dur }
     }
     None => {
       let count = if dur > 0.0 && read { (dur / step).round().to_int() } else { 0 }
-      { starts, count, at: if dur > 0.0 { ((pos + player_frame_slack) / step).floor().to_int() } else { 0 }, now: pos, fps: 0.0, read, dur }
+      { starts, count, at: if dur > 0.0 { ((pos + player_frame_slack) / step).floor().to_int() } else { 0 }, now: pos, fps: 0.0, dur }
     }
   }
 }
@@ -612,7 +617,7 @@ fn take_grab(c : @ui.Ctx, v : PlayerView, p : @kit.Media, name : String) -> Unit
         Some(png) => {
           v.grabbing = false
           let base = match name.rev_find(".") {
-            Some(i) if i > 0 => name.view(end_offset=i).to_owned()
+            Some(i) if i > 0 => name.exact_view(end=i).to_owned()
             _ => name
           }
           if png.length() > 0 {
@@ -647,49 +652,77 @@ fn grab(v : PlayerView, p : @kit.Media, fr : Frames) -> Unit {
 
 ///|
 /// Where the picture shows in the stage `w` × `h`: zoomed as the view's zoom has it (fitted until zoomed in), or
-/// filling the screen turned sideways (cropped); its size not known yet, a point in the middle.
+/// filling the screen turned sideways (cropped); its size not known yet, a point in the middle (`embedded`, of the room
+/// over the controls, where its picture will be; the whole window's, of the stage). As the old view `c` has it.
 fn picture_place(
+  c : @ui.Ctx,
   v : PlayerView,
   p : @kit.Media,
   s : @kit.MediaStatus,
   w : Double,
   h : Double,
   still : String,
+  facts : FileFacts,
   top? : Double = 0.0,
   foot? : Double = 0.0,
+  embedded? : Bool = false,
 ) -> (Double, Double, Double, Double) {
   let z = v.zoom
-  z.boxed(w, h - top - foot)
+  z.boxed(w, h - top - foot, at=c.moment())
   if s.width > 0.0 && s.height > 0.0 {
-    z.natural(s.width, s.height)
+    z.natural(s.width, s.height, at=c.moment())
+  } else if facts.width > 0.0 && facts.height > 0.0 {
+    // (not playing yet: its size as its message says it, where the viewer's flight landed it and flies back from,
+    // not a point in the middle: a film not come yet, no still of it either, went back into its thumbnail from a dot)
+    z.natural(facts.width, facts.height, at=c.moment())
   } else {
     // (its size not said yet: its still's, which is of it)
     match @ui.image_natural(still) {
-      Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => z.natural(sw, sh)
+      Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => z.natural(sw, sh, at=c.moment())
       _ => ()
     }
   }
-  z.step()
+  z.step(c)
   if p.fills() && p.is_sideways() {
     return p.picture_rect(s, w, h)
   }
-  match z.rect() {
+  match z.rect(c) {
     Some((x, y, pw, ph)) => (x, y + top, pw, ph)
+    None if embedded => {
+      let (x, y, pw, ph) = p.picture_rect(s, w, dmax(desk_none, h - top - foot))
+      (x, y + top, pw, ph)
+    }
     None => p.picture_rect(s, w, h)
   }
+}
+
+///|
+/// A song's player embedded in a page (it has no picture to show): placed, its host keeping it as it keeps one shown
+/// (Apple's WebKit plays media only in a view put in the window: apple_views.m's prime_webm_grab), but wholly above
+/// its node, which clips it, so that no hole is cut in the page for it (on a device the player's own layer, black,
+/// would show through one) and nothing of it is seen.
+fn song_out_of_sight(c : @ui.Ctx, n : @ui.NativeView, w : Double, h : Double) -> Unit {
+  let (w, h) = (dmax(w, desk_whole), dmax(h, desk_whole))
+  c.native(n, content=Some((desk_none, -h, w, h))) |> ignore
 }
 
 ///|
 /// How far in from the stage's top and foot a film's picture is fitted (`top`, `foot`): laid out wider than Small,
 /// clear of the bar along the top and of the controls over the foot (and of the system's bars where they are over the
 /// window), so neither ever hides an edge of it (a screen's recording looked at closely, its time dragged along); it
-/// stays where it is as they come and go. Laid out Small (a phone's) edge to edge, its controls over it.
-pub fn player_room(width : Double) -> (Double, Double) {
+/// stays where it is as they come and go. Laid out Small (a phone's) edge to edge, its controls over it. `embedded`: in
+/// a stage of a page's own (a tab beside a chat), no bar over it and nothing of the window's bars: the room over its
+/// controls, a phone's (phone_embedded_foot) or a desktop's, which stand as far up from the stage's foot as a panel's
+/// corner is round.
+pub fn player_room(width : Double, embedded? : Bool = false) -> (Double, Double) {
   if layout(width) is Small {
-    return (0.0, 0.0)
+    return (0.0, if embedded { phone_embedded_foot() } else { 0.0 })
+  }
+  let said = if desk_narrow(width) { desk_time_over - media_bar_top + desk_time_h } else { 0.0 }
+  if embedded {
+    return (0.0, media_bar_h() + said + pane_corner)
   }
   let (top, foot) = (viewer_host().room)()
-  let said = if desk_narrow(width) { desk_time_over - media_bar_top + desk_time_h } else { 0.0 }
   // (beside the system's bars, an iPhone Duo's: its bar's actions in them, none of its own over the film; filling the
   // window, nothing of them either)
   let top = if native_on() && native_full.get() {
@@ -836,7 +869,7 @@ fn player_cue(c : @ui.Ctx, words : String, up : Bool, right : Double, over~ : Do
 /// A familiar container name, only when the media type says which it is.
 fn player_format(mime : String) -> String? {
   let raw = match mime.find(";") {
-    Some(i) => mime.view(end_offset=i).to_owned()
+    Some(i) => mime.exact_view(end=i).to_owned()
     None => mime
   }
   match raw.trim(chars=" \t\r\n").to_lower() {
@@ -930,7 +963,18 @@ fn player_cover(c : @ui.Ctx, name : String, ink : MediaInk) -> Unit {
 /// flown in from a thumbnail or back into it by what opened it (the preview's, sfbase viewer.mbt), only its bars and
 /// controls drawn over that, on no ground of their own, answering nothing. `going`: closed and still drawn as it leaves
 /// (its fade), its controls away at once as when a finger takes it down, so that none of their words is seen over the
-/// page as that shows through.
+/// page as that shows through. `move_beside`: the desktop's bar's 移到侧边 (its file to a tab beside the page instead),
+/// where it is offered.
+///
+/// `embedded`: in a stage of a page's own (a file's tab beside a chat), which has its name, its 下载 and its 全屏 over
+/// it, as part of the page: no ground of its own (the page's shows round the picture); the picture (a song's cover)
+/// fitted `margin` clear of the edges of the room over the controls, seen only there however zoomed; the controls under
+/// that room, clear of the stage's foot corners (player_room), in the page's colours with no ground of their own, a
+/// phone's where the stage is as narrow as Small, else a desktop's, always there and taking presses (a single tap or
+/// where the pointer is hides nothing); what lies over the picture (the subtitle at the room's foot, what it waits on,
+/// a double tap's note) in the colours over a picture. No bar, no back, no 选集, nothing that fills the screen or turns
+/// it sideways, no keys (what is typed is the page's), no finger's drag down to close it (nothing to close). Its double
+/// taps, timeline, held 2× and zoom as anywhere.
 pub fn player_view(
   c : @ui.Ctx,
   p : @kit.Media,
@@ -942,14 +986,20 @@ pub fn player_view(
   still? : String = "",
   flying? : Bool = false,
   going? : Bool = false,
+  move_beside? : (() -> Unit)? = None,
+  embedded? : Bool = false,
+  margin? : Double = 0.0,
 ) -> Unit {
   // what the view holds of the file it shows (zoomed in, its end's card, a frame being saved) not held of the next one
   // played in its place; what it holds of the player (选集 open, its speeds' menu) stays
-  let v = view_for(p.key())
+  let v = view_for(p.key(), margin~)
   if v.file != file.key {
     v.file = file.key
-    native_full.set(false)
-    v.zoom.fit_now()
+    // (the window's player's alone: one embedded fills nothing)
+    if !embedded {
+      native_full.set(false)
+    }
+    v.zoom.fit_now(at=c.moment())
     v.grabbing = false
     v.ended_off = ""
     v.taken_down = false
@@ -957,16 +1007,17 @@ pub fn player_view(
   }
   // laid out Small: a phone's player, as the viewer's frame
   if layout(c.width) is Small {
-    phone_player(c, p, file, list, back_label, on_back, on_go, still, flying, going)
+    phone_player(c, p, file, list, back_label, on_back, on_go, still, flying, going, embedded)
   } else {
-    desk_player(c, p, file, list, back_label, on_back, on_go, still, flying, going)
+    desk_player(c, p, file, list, back_label, on_back, on_go, still, flying, going, move_beside, embedded)
   }
 }
 
 // ── a desktop's ─────────────────────────────────────────────────────────
 
 ///|
-/// The player over the window, a desktop's layout (see the file's head).
+/// The player over the window, a desktop's layout (see the file's head); `embedded` in a stage of a page's own
+/// (player_view's).
 fn desk_player(
   c : @ui.Ctx,
   p : @kit.Media,
@@ -978,6 +1029,8 @@ fn desk_player(
   still : String,
   flying : Bool,
   going : Bool,
+  move_beside : (() -> Unit)?,
+  embedded : Bool,
 ) -> Unit {
   let f = p.frame(c)
   let s = f.status
@@ -1020,7 +1073,7 @@ fn desk_player(
   let full = fn() {
     // (beside the system's bars, an iPhone Duo's: the window filled, the bars put away: native_full)
     if native_on() {
-      native_full.set(!@signals.untracked(fn() { native_full.get() }))
+      native_full.set(!native_full.untracked())
       p.wake()
       return
     }
@@ -1029,95 +1082,90 @@ fn desk_player(
     v.fulled = !on
     p.wake()
   }
-  if native_on() && native_full.get() {
+  if !embedded && native_on() && native_full.get() {
     c.on_back(fn() { native_full.set(false) })
   }
   let z = v.zoom
-  let (room_top, room_foot) = player_room(c.width)
-  p.near(!finger && py >= 0.0 && (py < room_top || py >= c.height - room_foot))
-  // the keys (see the file's head), once it is up
-  if !flying {
-    let char = fn(ch : Char) { c.key_pressed(@ui.key_of_char(ch)) }
-    let shifted = fn(ch : Char) {
-      c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key) || c.key_pressed(@ui.key_of_char(ch.to_ascii_uppercase()))
+  let (room_top, room_foot) = player_room(c.width, embedded~)
+  // (embedded, the controls lie under the picture's room on the page's own ground, always there: the page's colours,
+  // nothing of where the pointer is)
+  let cink = if embedded { media_pane_ink() } else { ink }
+  p.near(!embedded && !finger && py >= 0.0 && (py < room_top || py >= c.height - room_foot))
+  // the keys (see the file's head), once it is up: the keymap's player.* (player_bindings), done at their key's moment;
+  // embedded, none (what is typed is the page's)
+  if !flying && !embedded {
+    c.key_context("Player")
+    let on = fn(action : String, f : () -> Unit) {
+      c.on_action("player." + action, fn() {
+        f()
+        true
+      })
     }
-    if c.key_pressed(@ui.key_space) || char('k') {
+    on("play", fn() {
       p.play_pause()
       p.wake()
-    }
-    if char(',') {
-      step_frame(c, p, fr, -1)
-    }
-    if char('.') {
-      step_frame(c, p, fr, 1)
-    }
-    if c.key_pressed(@ui.key_code_left) {
+    })
+    on("frame_back", fn() { step_frame(c, p, fr, -1) })
+    on("frame_on", fn() { step_frame(c, p, fr, 1) })
+    on("back", fn() {
       if playing {
         p.seek_by(-p.nudge_ms())
         p.wake()
       } else {
         step_frame(c, p, fr, -1)
       }
-    }
-    if c.key_pressed(@ui.key_code_right) {
+    })
+    on("on", fn() {
       if playing {
         p.seek_by(p.nudge_ms())
         p.wake()
       } else {
         step_frame(c, p, fr, 1)
       }
-    }
-    if char('j') {
+    })
+    on("jump_back", fn() {
       p.seek_by(-p.nudge_ms())
       p.wake()
-    }
-    if char('l') {
+    })
+    on("jump_on", fn() {
       p.seek_by(p.nudge_ms())
       p.wake()
-    }
-    if c.key_pressed(@ui.key_code_up) || c.key_pressed(@ui.key_code_down) {
+    })
+    let loud = fn(by : Double) {
       let (volume, _) = p.volume()
-      p.set_volume(volume + (if c.key_pressed(@ui.key_code_up) { player_volume_key } else { -player_volume_key }))
+      p.set_volume(volume + by)
       p.wake()
     }
-    if char('m') {
+    on("louder", fn() { loud(player_volume_key) })
+    on("quieter", fn() { loud(-player_volume_key) })
+    on("mute", fn() {
       p.toggle_mute()
       p.wake()
+    })
+    if picture && mac {
+      on("full", full)
     }
-    if char('f') && picture && mac {
-      full()
+    if p.subtitle().0 {
+      on("subtitle", fn() {
+        p.toggle_subtitle()
+        p.wake()
+      })
     }
-    if char('c') && p.subtitle().0 {
-      p.toggle_subtitle()
-      p.wake()
+    match next {
+      Some(other) => on("next", fn() { go(other) })
+      None => ()
     }
-    if shifted('n') {
-      match next {
-        Some(other) => go(other)
-        None => ()
-      }
-    }
-    if shifted('p') {
-      match prev {
-        Some(other) => go(other)
-        None => ()
-      }
+    match prev {
+      Some(other) => on("prev", fn() { go(other) })
+      None => ()
     }
     if picture && z.nw > 0.0 {
-      let zoom_key = fn(ch : Char) {
-        c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
-      }
-      if zoom_key('+') || zoom_key('=') {
-        z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-      } else if zoom_key('-') || zoom_key('_') {
-        z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-      } else if char('0') {
-        z.reset()
-      } else if char('1') {
-        z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true)
-      }
+      on("zoom_in", fn() { z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at=c.moment()) })
+      on("zoom_out", fn() { z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at=c.moment()) })
+      on("zoom_reset", fn() { z.reset(at=c.moment()) })
+      on("zoom_whole", fn() { z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true, at=c.moment()) })
     }
-    if c.key_pressed(@ui.key_escape) {
+    on("escape", fn() {
       if v.rates {
         v.rates = false
       } else if listing {
@@ -1125,9 +1173,9 @@ fn desk_player(
       } else {
         desk_leave(c, v, on_back)
       }
-    }
+    })
   }
-  c.box(style=desk_play_ground.then(@ui.style(bg=Data(if flying { no_ground } else { ink.stage }))), fn() {
+  c.box(style=desk_play_ground.then(@ui.style(bg=Data(if flying || embedded { no_ground } else { ink.stage }))), fn() {
     // the picture, in the window less the list beside it, as a phone's (Media::stage): a click or a finger's tap shows
     // or hides the controls, a double one in the middle plays or pauses, on the left third back, on the right on (the
     // user, 2026-10-28); the screen filled by F or its key
@@ -1141,21 +1189,31 @@ fn desk_player(
     if picture && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
       if (mods & (@ui.wheel_mod_ctrl | @ui.wheel_mod_cmd)) != 0 {
         let fine = (mods & @ui.wheel_mod_ctrl) != 0 && wy.abs() < player_pinch_step
-        z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { player_pinch_rate } else { player_wheel_rate })), px, py - room_top, false)
-      } else if z.zoomed() {
+        z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { player_pinch_rate } else { player_wheel_rate })), px, py - room_top, false, at=c.moment())
+      } else if z.zoomed(c) {
         if (mods & @ui.wheel_mod_shift) != 0 && wx == 0.0 {
-          z.pan(-wy, 0.0)
+          z.pan(-wy, 0.0, at=c.moment())
         } else {
-          z.pan(-wx, -wy)
+          z.pan(-wx, -wy, at=c.moment())
         }
       }
     }
-    c.box(style=desk_play_row, fn() {
+    // (embedded, the picture's room alone, what is zoomed in seen only there)
+    let row = if embedded {
+      desk_play_row.then(@ui.style(h=Fixed(dmax(desk_none, c.height - room_foot)), clip=true))
+    } else {
+      desk_play_row
+    }
+    c.box(style=row, fn() {
       c.box(style=desk_grow_full, id=stage, fn() {
         let w = dmax(desk_none, c.width - panel)
         match p.native() {
+          Some(n) if n.here() && !flying && embedded && f.audio => {
+            v.placed = None
+            song_out_of_sight(c, n, w, c.height - room_foot)
+          }
           Some(n) if n.here() && !flying => {
-            let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still, top=room_top, foot=room_foot)
+            let (x, y, pw, ph) = picture_place(c, v, p, s, w, c.height, still, file.facts, top=room_top, foot=room_foot, embedded~)
             v.placed = Some((x, y, pw, ph))
             c.native(n, content=Some((x, y, pw, ph))) |> ignore
             player_still(c, n, still, x, y, pw, ph)
@@ -1171,10 +1229,10 @@ fn desk_player(
       c.box(style=@ui.style(w=Fixed(panel), h=Full), fn() {  }) |> ignore
     })
     |> ignore
-    player_cue(c, if p.subtitle().1 { f.said } else { "" }, f.shown > desk_half, panel, over=desk_cue_over(c.width))
+    player_cue(c, if p.subtitle().1 { f.said } else { "" }, embedded || f.shown > desk_half, panel, over=desk_cue_over(c.width, embedded))
     // the bar along the top (beside the system's bars, an iPhone Duo's: its actions in them, the viewer's
-    // vf_native_media)
-    if !native_on() {
+    // vf_native_media; embedded, the page's own over it)
+    if !native_on() && !embedded {
       c.layer(fn() {
         // which of the folder's, its size; a film's own facts after them
         let facts = if picture { film_facts(file.facts, s, fr) } else { "" }
@@ -1184,6 +1242,14 @@ fn desk_player(
             viewer_tool(c, key + "/list", "list", t("web-pages.drive.player.list"), bar_ink, on=listing, on_press=fn() {
               v.listing = !listing
             })
+          }
+          // (its file to a tab beside the page, once the frame's builds are over: what plays it let go then)
+          match move_beside {
+            Some(f) =>
+              viewer_tool(c, key + "/beside", "panel-open", t("web-main.preview.moveBeside"), bar_ink, on_press=fn() {
+                c.tell(key + "/beside", f)
+              })
+            None => ()
           }
           viewer_download(c, key + "/download", bar_ink, on_press=fn() {
             (file.save)()
@@ -1200,22 +1266,23 @@ fn desk_player(
     }
     // the controls over the foot
     c.layer(fn() {
-      c.box(style=desk_controls_place, fn() {
+      c.box(style=if embedded { desk_controls_embedded } else { desk_controls_place }, fn() {
         c.box(style=desk_play_row_end, fn() {
           c.box(style=desk_grow_middle, fn() {
             let most = dmin(media_bar_most, dmax(desk_none, c.width - panel - 2.0 * media_bar_in))
             let over = if desk_narrow(c.width) { desk_time_over } else { media_bar_top }
-            let n = c.box(style=media_bar_box().then(@ui.style(w=Fixed(most), pt=room(over), bg=Data(ink.ground))), id=c.id(key + "/desk-controls"), fn() {
-              desk_play_controls(c, v, p, s, f, fr, many, prev, next, go, full, picture, ink)
+            let ground = if embedded { no_ground } else { ink.ground }
+            let n = c.box(style=media_bar_box().then(@ui.style(w=Fixed(most), pt=room(over), bg=Data(ground))), id=c.id(key + "/desk-controls"), fn() {
+              desk_play_controls(c, v, p, s, f, fr, many, prev, next, go, full, embedded, picture, cink)
             })
-            c.look(n, @ui.look(alpha=if going { desk_none } else { f.shown }))
+            c.look(n, @ui.look(alpha=if going { desk_none } else if embedded { desk_whole } else { f.shown }))
           })
           |> ignore
           c.box(style=@ui.style(w=Fixed(panel)), fn() {  }) |> ignore
         })
         |> ignore
-        // (over the navigation bar where the system's bars are over the window: a tablet's)
-        let foot = (viewer_host().room)().1
+        // (over the navigation bar where the system's bars are over the window: a tablet's; embedded, the stage's foot)
+        let foot = if embedded { desk_none } else { (viewer_host().room)().1 }
         if foot > 0.0 {
           c.box(style=@ui.style(h=Fixed(foot)), fn() {  }) |> ignore
         }
@@ -1244,7 +1311,7 @@ fn desk_leave(c : @ui.Ctx, v : PlayerView, go_back : () -> Unit) -> Unit {
 ///|
 /// The controls: the timeline; then the one before, 15 s back, a frame back, play, a frame on, 15 s on, the one after;
 /// where it is (the time, or paused its frame to the millisecond); the sound, the speed, the subtitle, the frame saved,
-/// full screen.
+/// full screen (a film over the window). `embedded` (player_view's): no full screen, and its play key names no key.
 fn desk_play_controls(
   c : @ui.Ctx,
   v : PlayerView,
@@ -1257,11 +1324,13 @@ fn desk_play_controls(
   next : String?,
   go : (String) -> Unit,
   full : () -> Unit,
+  embedded : Bool,
   picture : Bool,
   ink : MediaInk,
 ) -> Unit {
   let key = p.key()
-  let on = f.on
+  // (embedded, always there and taking presses)
+  let on = f.on || embedded
   let playing = plays(p, f)
   let ready = s.duration > 0.0
   // (under 640 where it is said a line of its own over the timeline, as a phone's: the row is the keys')
@@ -1290,7 +1359,14 @@ fn desk_play_controls(
           step_frame(c, p, fr, -1)
         })
       }
-      media_key(c, key + "/play", if playing { "pause" } else { "play" }, t(if playing { "web-main.video.pauseKey" } else { "web-main.video.playKey" }), on, bright=true, ink~, on_press=fn() {
+      // (its key said where Space plays it: not embedded, where what is typed is the page's)
+      let said = match (playing, embedded) {
+        (true, false) => "web-main.video.pauseKey"
+        (false, false) => "web-main.video.playKey"
+        (true, true) => "android-chat.video.pause"
+        (false, true) => "android-chat.video.play"
+      }
+      media_key(c, key + "/play", if playing { "pause" } else { "play" }, t(said), on, bright=true, ink~, on_press=fn() {
         p.play_pause()
         p.wake()
       })
@@ -1398,7 +1474,7 @@ fn desk_play_controls(
       }
       // 全屏: the window filling the screen (macOS's), back as it was (and as the player is left); beside the system's
       // bars, the window filled, the bars put away (native_full)
-      if picture && (@ui.platform() == 0 || native_on()) {
+      if picture && !embedded && (@ui.platform() == 0 || native_on()) {
         let is_full = if native_on() { native_full.get() } else { @ui.full_screen() }
         media_key(c, key + "/full", if is_full { "shrink" } else { "expand" }, t(if is_full { "web-pages.drive.player.unfull" } else { "web-pages.drive.player.full" }), on, small=true, ink~, on_press=fn() {
           full()
@@ -1586,7 +1662,9 @@ fn desk_play_list(
 /// The player on a phone's page (see the file's head): its controls float over the picture and go when it is left
 /// alone while it plays (a tap brings them back): the bar at the top (back, the name, which of the folder's, 选集), at
 /// the foot where it is over its timeline, then the one before, 15 s back (paused: a frame back), play, 15 s on (a frame
-/// on), the one after; the speed, the subtitle, the frame saved (paused), fit or fill, sideways.
+/// on), the one after; the speed, the subtitle, the frame saved (paused), fit or fill, sideways. `embedded` in a stage
+/// of a page's own (player_view's): no bar, nothing of the window's bars round it, nothing to turn it sideways, no drag
+/// down to close it.
 fn phone_player(
   c : @ui.Ctx,
   p : @kit.Media,
@@ -1598,6 +1676,7 @@ fn phone_player(
   still : String,
   flying : Bool,
   going : Bool,
+  embedded : Bool,
 ) -> Unit {
   ignore(back_label)
   let f = p.frame(c)
@@ -1606,7 +1685,11 @@ fn phone_player(
   let v = view_for(key)
   let picture = !f.audio
   let ink = media_ink(picture)
-  let (room_top, room_foot) = (viewer_host().room)()
+  let (room_top, room_foot) = if embedded { (desk_none, desk_none) } else { (viewer_host().room)() }
+  // (embedded, the controls under the picture's room on the page's own ground, in the page's colours, always there; what
+  // lies over the picture keeps `ink`)
+  let cink = if embedded { media_pane_ink() } else { ink }
+  let foot = if embedded { phone_embedded_foot() } else { desk_none }
   let name = file.name
   let index = list.search(name).unwrap_or(-1)
   let next = next_in(name, list)
@@ -1630,28 +1713,18 @@ fn phone_player(
   // (a ground: a tap shows or hides the controls)
   c.cursor(stage, Arrow)
   if !flying {
-    phone_gestures(c, v, p, s, fr, stage, picture, back)
+    phone_gestures(c, v, p, s, fr, stage, picture, back, !embedded)
   }
-  c.box(style=player_fill.then(@ui.style(bg=Data(if flying { no_ground } else { ink.stage }))), fn() {
-    // the picture where its zoom puts it, a drag down taking it down with the finger
-    c.box(style=player_fill, id=stage, fn() {
-      match p.native() {
-        Some(n) if n.here() && !flying => {
-          let (x, y, w, h) = picture_place(v, p, s, c.width, c.height, still)
-          v.placed = Some((x, y + v.drag_dy, w, h))
-          c.native(n, content=Some((x, y + v.drag_dy, w, h))) |> ignore
-          player_still(c, n, still, x, y + v.drag_dy, w, h)
-        }
-        _ => ()
-      }
-    })
-    |> ignore
+  // what lies over the picture: a song's cover, the subtitle's cue, what it waits on, what a double tap did, a held
+  // finger's 2×, where a finger along it has gone (said a moment in the middle)
+  let over_picture = fn() {
     if f.audio {
       player_cover(c, name, ink)
     }
-    player_cue(c, if p.subtitle().1 { f.said } else { "" }, f.shown > desk_half, desk_none, over=phone_cue_over())
+    // (embedded, at the foot of the picture's room, under which the controls lie)
+    let up = embedded || f.shown > desk_half
+    player_cue(c, if p.subtitle().1 { f.said } else { "" }, up, desk_none, over=if embedded { desk_cue_apart } else { phone_cue_over() })
     player_waits(c, p, f, ink)
-    // what a double tap did, a held finger's 2×, where a finger along it has gone: said a moment in the middle
     let said = match (f.note, v.held >= 0.0, v.drag) {
       (_, _, AlongTime) => clock(p.scrubbing().unwrap_or(v.drag_to)) + " / " + (if s.duration > 0.0 { clock(s.duration) } else { "--:--" })
       (_, true, _) => t("web-pages.drive.player.held")
@@ -1670,11 +1743,48 @@ fn phone_player(
       })
       |> ignore
     }
-    let shown = if v.drag == DownClose || v.taken_down || going { desk_none } else { f.shown }
-    let live = f.on && v.drag != DownClose && !v.taken_down && !flying && !going
+  }
+  c.box(style=player_fill.then(@ui.style(bg=Data(if flying || embedded { no_ground } else { ink.stage }))), fn() {
+    // the picture where its zoom puts it, a drag down taking it down with the finger; embedded, in the room over the
+    // controls alone, what is zoomed in seen only there, what lies over the picture in it
+    let room = if embedded {
+      @ui.style(w=Full, h=Fixed(dmax(desk_none, c.height - foot)), clip=true)
+    } else {
+      player_fill
+    }
+    c.box(style=room, id=stage, fn() {
+      match p.native() {
+        Some(n) if n.here() && !flying && embedded && f.audio => {
+          v.placed = None
+          song_out_of_sight(c, n, c.width, c.height - foot)
+        }
+        Some(n) if n.here() && !flying => {
+          let (x, y, w, h) = picture_place(c, v, p, s, c.width, c.height, still, file.facts, foot~, embedded~)
+          v.placed = Some((x, y + v.drag_dy, w, h))
+          c.native(n, content=Some((x, y + v.drag_dy, w, h))) |> ignore
+          player_still(c, n, still, x, y + v.drag_dy, w, h)
+        }
+        _ => ()
+      }
+      if embedded {
+        over_picture()
+      }
+    })
+    |> ignore
+    if !embedded {
+      over_picture()
+    }
+    let shown = if embedded {
+      desk_whole
+    } else if v.drag == DownClose || v.taken_down || going {
+      desk_none
+    } else {
+      f.shown
+    }
+    let live = (f.on || embedded) && v.drag != DownClose && !v.taken_down && !flying && !going
     // the bar at the top: back, the name, which of the folder's it is, 选集 (beside the system's bars, an iPhone Duo's:
-    // its actions in them, the viewer's vf_native_media)
-    if !native_on() {
+    // its actions in them, the viewer's vf_native_media; embedded, the page's own over it)
+    if !native_on() && !embedded {
       c.layer(fn() {
         c.box(style=@ui.style(h=Fixed(room_top)), fn() {  }) |> ignore
         let n = c.box(style=phone_head_place.then(sides_clear(@ui.Space::S2.px())), fn() {
@@ -1710,9 +1820,9 @@ fn phone_player(
     // the controls at the foot
     c.layer(fn() {
       c.box(style=desk_grow_full_h, fn() {  }) |> ignore
-      let n = c.box(style=phone_foot_place.then(sides_clear(@ui.Space::S2.px())), fn() {
-        phone_controls(c, v, p, s, f, fr, picture, many, prev, next, go, live, ink)
-      })
+      // (embedded, clear of the corners of what holds the stage, none of the window's bars beside it)
+      let place = if embedded { phone_foot_embedded } else { phone_foot_place.then(sides_clear(@ui.Space::S2.px())) }
+      let n = c.box(style=place, fn() { phone_controls(c, v, p, s, f, fr, embedded, many, prev, next, go, live, picture, cink) })
       c.look(n, @ui.look(alpha=shown))
       c.box(style=@ui.style(h=Fixed(room_foot)), fn() {  }) |> ignore
     })
@@ -1728,7 +1838,8 @@ fn phone_player(
 /// by frame, paused meanwhile: @kit.Media scrub_to), down it takes the picture down and closes it past player_close_dy (sideways: upright first), held still
 /// it plays at 2× until let go; zoomed in, one moves what is shown (let go moving, it goes on, slowing). A tap or a
 /// double tap is the player's own (@kit.Media stage: the controls; a side's 15 s; play or pause), not when the finger
-/// did any of these, nor when it came down on the picture flinging (stopping it).
+/// did any of these, nor when it came down on the picture flinging (stopping it). `closes` false: down it does nothing
+/// of its own (an embedded player's: nothing to close).
 fn phone_gestures(
   c : @ui.Ctx,
   v : PlayerView,
@@ -1738,12 +1849,13 @@ fn phone_gestures(
   stage : Int,
   picture : Bool,
   back : () -> Unit,
+  closes : Bool,
 ) -> Unit {
   let z = v.zoom
   // a finger come down on it flinging stops it there (caught: no tap)
   c.follow_press(stage, fn(step) {
     if step is Down(_, _, _) {
-      v.caught = z.stop_fling()
+      v.caught = z.stop_fling(at=c.moment())
     }
   })
   let (px, py, down) = c.pointer()
@@ -1756,7 +1868,7 @@ fn phone_gestures(
       let d = ((px - x2) * (px - x2) + (py - y2) * (py - y2)).sqrt()
       let (was_d, was_x, was_y) = v.pinch
       if was_d > 0.0 && d > 0.0 {
-        z.transform(cx, cy, d / was_d, cx - was_x, cy - was_y)
+        z.transform(cx, cy, d / was_d, cx - was_x, cy - was_y, at=c.moment())
       }
       v.pinch = (d, cx, cy)
       v.pinched = true
@@ -1771,11 +1883,11 @@ fn phone_gestures(
     let dx = px - press.x
     let dy = py - press.y
     if v.drag == NoDrag && press.moved && !v.pinched {
-      v.drag = if z.zoomed() {
+      v.drag = if z.zoomed(c) {
         MoveZoom
       } else if dx.abs() > dy.abs() && s.duration > 0.0 {
         AlongTime
-      } else if dy > 0.0 {
+      } else if dy > 0.0 && closes {
         DownClose
       } else {
         MoveZoom
@@ -1795,7 +1907,7 @@ fn phone_gestures(
       MoveZoom => {
         let (lx, ly) = v.last
         if press.moved && !v.pinched {
-          z.pan(px - lx, py - ly)
+          z.pan(px - lx, py - ly, at=c.moment())
         }
       }
       NoDrag => ()
@@ -1821,7 +1933,7 @@ fn phone_gestures(
       MoveZoom =>
         if !v.pinched {
           let (fx, fy) = c.pointer_velocity()
-          z.fling(fx, fy)
+          z.fling(fx, fy, at=c.moment())
         }
       _ => ()
     }
@@ -1834,6 +1946,10 @@ fn phone_gestures(
       v.drag_dy = 0.0
     }
     if !down {
+      // pinched smaller than fitted and let go: back to fitted, as an image is
+      if v.pinched && z.scale_at(c.moment()) < z.fit() {
+        z.reset(at=c.moment())
+      }
       v.pinched = false
     }
     // a tap or a double tap (none of the above)
@@ -1857,7 +1973,8 @@ fn phone_note_words(note : @kit.MediaNote) -> String {
 ///|
 /// The controls (the foot): where it is over the timeline; the one before, 15 s back or (paused) a frame back, play,
 /// 15 s on or a frame on, the one after; the speed, the subtitle, the frame saved (paused), fit or fill (sideways),
-/// sideways. A finger down anywhere on them keeps them a while.
+/// sideways (a film over the window). A finger down anywhere on them keeps them a while. `embedded` (player_view's):
+/// nothing turns it sideways.
 fn phone_controls(
   c : @ui.Ctx,
   v : PlayerView,
@@ -1865,12 +1982,13 @@ fn phone_controls(
   s : @kit.MediaStatus,
   f : @kit.MediaFrame,
   fr : Frames,
-  picture : Bool,
+  embedded : Bool,
   many : Bool,
   prev : String?,
   next : String?,
   go : (String) -> Unit,
   on : Bool,
+  picture : Bool,
   ink : MediaInk,
 ) -> Unit {
   let key = p.key()
@@ -1878,9 +1996,14 @@ fn phone_controls(
   p.keep_awake(c, id)
   let playing = plays(p, f)
   let inspect = picture && !playing && s.duration > 0.0
-  c.box(style=phone_controls_box().then(@ui.style(bg=Data(ink.ground))), id~, fn() {
-    c.box(style=phone_time_box, fn() {
-      c.rich(where_runs(p, fr, s, playing, picture, ink), style=phone_time_words) |> ignore
+  let turns = picture && !embedded
+  // (embedded, on the page's own ground, none of their own; where it is a line as tall as a desktop's said over its
+  // timeline, so the room over them is known: phone_embedded_foot)
+  let ground = if embedded { no_ground } else { ink.ground }
+  c.box(style=phone_controls_box().then(@ui.style(bg=Data(ground))), id~, fn() {
+    c.box(style=if embedded { desk_time_line } else { phone_time_box }, fn() {
+      c.rich(where_runs(p, fr, s, playing, picture, ink), style=if embedded { desk_time_words } else { phone_time_words })
+      |> ignore
     })
     |> ignore
     phone_timeline(c, v, p, s, fr, on, ink)
@@ -1948,13 +2071,13 @@ fn phone_controls(
         })
       }
       // turned sideways the picture can fill the screen (cropped) or fit in it
-      if picture && p.is_sideways() {
+      if turns && p.is_sideways() {
         phone_key(c, key + "/fill", if p.fills() { "shrink" } else { "expand" }, on, t(if p.fills() { "android-misc.drive.player.fit" } else { "android-misc.drive.player.fill" }), ink, lit=p.fills(), on_press=fn() {
           p.toggle_fill()
           p.wake()
         })
       }
-      if picture {
+      if turns {
         phone_key(c, key + "/sideways", "landscape", on, t(if p.is_sideways() { "android-misc.drive.player.unfull" } else { "android-misc.drive.player.full" }), ink, lit=p.is_sideways(), on_press=fn() {
           p.toggle_sideways()
           p.wake()
@@ -2171,7 +2294,7 @@ let phone_controls_most : Double = 720.0
 
 ///|
 fn phone_timeline_h() -> Double {
-  dmax(phone_timeline_least, @ui.room_least())
+  phone_timeline_least
 }
 
 ///|
@@ -2253,6 +2376,27 @@ fn phone_controls_box() -> @ui.Style {
 }
 
 ///|
+/// The controls embedded in a stage of a page's own (a tab beside a chat): under the picture's room on the page's own
+/// ground, in from its sides as over the window, and as far up from its foot as a panel's corner is round, so that none
+/// of their keys lies in a corner of what holds the stage (a panel's, the window's): the page's margin.
+let phone_foot_embedded : @ui.Style = @ui.style(w=Full, px=S2, pt=S2, pb=room(pane_corner), align=ACenter)
+
+///|
+/// How tall a phone's controls are embedded, from the picture's room's foot to the stage's (phone_foot_embedded round
+/// them, their line of where it is a desktop's said one, their timeline, their keys' row): what the room is less.
+fn phone_embedded_foot() -> Double {
+  @ui.Space::S2.px() * 2.0 + desk_time_h + phone_timeline_h() + phone_row_h() + phone_controls_foot() + pane_corner
+}
+
+///|
+/// The colours of the controls embedded in a page (its own ground under them): the page's words and its quieter ones,
+/// no ground of their own.
+fn media_pane_ink() -> MediaInk {
+  let p = theme().p
+  { text: p.text, muted: p.muted, ground: no_ground, stage: no_ground }
+}
+
+///|
 let phone_keys_in : Double = @ui.capsule_in(card_corner, 40.0)
 
 ///|
@@ -2289,7 +2433,7 @@ fn phone_keys_row() -> @ui.Style {
 
 ///|
 fn phone_row_h() -> Double {
-  dmax(phone_key_side, @ui.room_least())
+  phone_key_side
 }
 
 ///|
@@ -2399,17 +2543,10 @@ let desk_play_cover : @ui.Style = @ui.css("w=Full h=Full px=S8 gap=S4 align=ACen
 let desk_cover_name : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, center=true)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let desk_play_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
-
-// kept across runs: a value (no field of it changes)
-let desk_play_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)
-
-///|
 /// A cue over a desktop's controls: as far off the foot as they reach (player_room), and 16 more (with keyboard and
 /// mouse on a wide page, the 112 it stood at before).
-fn desk_cue_over(width : Double) -> Double {
-  player_room(width).1 + desk_cue_apart
+fn desk_cue_over(width : Double, embedded : Bool) -> Double {
+  player_room(width, embedded~).1 + desk_cue_apart
 }
 
 ///|
@@ -2451,6 +2588,11 @@ let desk_cue_words : @ui.TextStyle = @ui.text_style(size=Title, color=OnVeil, ce
 let desk_controls_place : @ui.Style = @ui.css("w=Full h=Full justify=JEnd").then(@ui.style(pb=room(media_bar_in)))
 
 ///|
+/// The same embedded in a stage of a page's own: as far up from its foot as a panel's corner is round, its keys in no
+/// corner of what holds the stage (player_room's `embedded`).
+let desk_controls_embedded : @ui.Style = @ui.css("w=Full h=Full justify=JEnd").then(@ui.style(pb=room(pane_corner)))
+
+///|
 // kept across runs: a value (no field of it changes)
 let desk_play_row_end : @ui.Style = @ui.css("row w=Full")
 
@@ -2480,15 +2622,18 @@ fn desk_narrow(width : Double) -> Bool {
 }
 
 ///|
-/// That line: the bar 8 over it (a phone's, clear of its corner), 16 high, in from its side as the timeline's track is.
+/// That line: the bar 8 over it (a phone's, clear of its corner), 16 high at least, in from its side as the timeline's
+/// track is.
 let desk_time_over : Double = 8.0
 
 ///|
 let desk_time_h : Double = 16.0
 
 ///|
+/// (grown by its words where their line is drawn higher than 16, its time's strong figures: a box with its height said
+/// held them 2 over, a chat's side panel's song at rest, corners_wbtest.mbt)
 // kept across runs: a value (no field of it changes)
-let desk_time_line : @ui.Style = @ui.style(h=Fixed(desk_time_h), pl=S2_5, justify=JCenter)
+let desk_time_line : @ui.Style = @ui.style(min_h=Fixed(desk_time_h), pl=S2_5, justify=JCenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2509,3 +2654,42 @@ fn two_digits(n : Int64) -> String {
   }
 }
 
+
+///|
+/// The player's keys (the file's head), the keymap's own, never changed: where a player is up (`Player`), not with the
+/// cursor in a field. Each its action, `player.` and what it does (desk_player's): Space and K play or pause, , and .
+/// step a frame, ← → step or jump, J L jump, ↑ ↓ the sound, M mutes, F fills the screen, C the subtitle, ⇧N ⇧P the
+/// next and the one before, + = − _ 0 1 zoom, Escape closes what is open over it, or it.
+pub fn player_bindings() -> Array[@view.Binding] {
+  let when : @view.KeyWhen = All([In("Player"), Not(In("Field"))])
+  let ch = fn(c : Char) { @ui.key_of_char(c) }
+  let shift = @ui.mod_shift_key
+  let keys : Array[(String, Array[(Int, Int)])] = [
+    ("play", [(@ui.key_space, 0), (ch('k'), 0)]),
+    ("frame_back", [(ch(','), 0)]),
+    ("frame_on", [(ch('.'), 0)]),
+    ("back", [(@ui.key_code_left, 0)]),
+    ("on", [(@ui.key_code_right, 0)]),
+    ("jump_back", [(ch('j'), 0)]),
+    ("jump_on", [(ch('l'), 0)]),
+    ("louder", [(@ui.key_code_up, 0)]),
+    ("quieter", [(@ui.key_code_down, 0)]),
+    ("mute", [(ch('m'), 0)]),
+    ("full", [(ch('f'), 0)]),
+    ("subtitle", [(ch('c'), 0)]),
+    ("next", [(ch('n'), shift), (ch('N'), 0)]),
+    ("prev", [(ch('p'), shift), (ch('P'), 0)]),
+    ("zoom_in", [(ch('+'), 0), (ch('+'), shift), (ch('='), 0), (ch('='), shift)]),
+    ("zoom_out", [(ch('-'), 0), (ch('-'), shift), (ch('_'), 0), (ch('_'), shift)]),
+    ("zoom_reset", [(ch('0'), 0)]),
+    ("zoom_whole", [(ch('1'), 0)]),
+    ("escape", [(@ui.key_escape, 0)]),
+  ]
+  let out : Array[@view.Binding] = []
+  for k in keys {
+    for s in k.1 {
+      out.push({ keys: [{ code: s.0, mods: s.1 }], action: "player." + k.0, when })
+    }
+  }
+  out
+}

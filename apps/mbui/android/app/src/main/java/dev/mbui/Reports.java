@@ -2,7 +2,8 @@ package dev.mbui;
 
 /**
  * What the MoonBit app tells still.fail's own host (src/stillfail/reports.mbt, through src/host/android_reports.c), on
- * the UI's (GL) thread: the account signed in, the core failing, what the UI could not do as asked, the bar's switches and the topics their pages subscribe.
+ * the UI's (GL) thread: the account signed in, the core failing, what the UI could not do as asked, the bar's switches and the topics their pages subscribe, the window
+ * thread's hangs.
  */
 final class Reports {
     private Reports() {}
@@ -36,6 +37,14 @@ final class Reports {
             case "ui_fault":
                 Crashes.uiFault(app, a);
                 return 0;
+            // the window thread's hang, as JSON (mbui's src/ui/journal.mbt; Crashes.hang)
+            case "hang":
+                Crashes.hang(app, a, "ui_hang");
+                return 0;
+            // what the app did while shown, as it is hidden: its hangs counted (Crashes.hang)
+            case "hang_summary":
+                Crashes.hang(app, a, "ui_hang_summary");
+                return 0;
             // a place's page put on the stack: the place left ("" none), the place
             case "placed":
                 BarTiming.placed(a, b, now);
@@ -47,9 +56,10 @@ final class Reports {
             // a topic subscribed (its name, its subscription's id): 1 when a switch times it
             case "followed":
                 return BarTiming.followed(n, a, now) ? 1 : 0;
-            // its first message taken: its id, its value's size in bytes (-1: an error)
+            // its first message taken: its id, its value's size in bytes (-1: an error), and of a heavy one where its
+            // bytes are, by field (`b`: {path: bytes}, src/core/weights.mbt; "" none)
             case "decoded":
-                BarTiming.decoded(n, m, now);
+                BarTiming.decoded(n, m, b, now);
                 return 0;
             default:
                 return 0;

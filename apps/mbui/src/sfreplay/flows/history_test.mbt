@@ -4,7 +4,7 @@
 
 ///|
 test "26-history" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("history"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
@@ -17,16 +17,16 @@ test "26-history" {
     f.see_n(2, "文档目录看过了 083209")
     f.tap("icon:info")
     // the chat's sheet risen
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     // (its first row's: under it, the pull requests' and the public links' have one too)
     f.tap("icon:chevron-right", top=true)
     // the agent's card in the sheet's place, the sheet at its height
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("=历史")
     f.tap("=历史")
     // the history pushed over the chat, the sheet sunk away
     f.run_for(@ui.move_most_ms)
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("执行历史")
     f.see("文档目录看过了 083209")
     f.tap("icon:chevron-right")

@@ -23,7 +23,10 @@ export function trustedKeys(env: Record<string, string | undefined> = process.en
   return new Map(all.map((k) => [keyId(k), k]));
 }
 
-export type Build = { sha256: string; size: number; nodeSha256: string };
+/// A platform's build: its archive's sha256 and size, its Node binary's sha256, and (from releases signed since deltas)
+/// the sha256 and size of the archive's raw form, what a delta to it makes (scripts/delta.ts rawOf: the tar inside the
+/// .tar.gz; Windows' zip with every entry stored), which the installer is then handed and checks instead.
+export type Build = { sha256: string; size: number; nodeSha256: string; rawSha256?: string; rawSize?: number };
 
 /// A release's signed words, as scripts/release-sign.ts writes them.
 export type Release = {
@@ -70,6 +73,10 @@ export function verifyFeed(feed: any, trusted: Map<string, string> = trustedKeys
   if (!new RegExp(`^0\\.\\d+\\.${r.build}$`).test(r.version) || (feed.version !== undefined && feed.version !== r.version)) throw new Unverified("the feed's version is not the signed one");
   for (const [p, b] of Object.entries<any>(r.builds)) {
     if (!SHA.test(b?.sha256 ?? "") || !SHA.test(b?.nodeSha256 ?? "") || !Number.isSafeInteger(b?.size)) throw new Unverified(`the release's ${p} build is not well formed`);
+    // The raw form's words, said together or not at all (a release from before says none, and a station from before
+    // takes no notice of them).
+    if ((b.rawSha256 !== undefined || b.rawSize !== undefined) && (!SHA.test(b.rawSha256 ?? "") || !Number.isSafeInteger(b.rawSize) || b.rawSize < 0))
+      throw new Unverified(`the release's ${p} build is not well formed`);
   }
   return r as Release;
 }

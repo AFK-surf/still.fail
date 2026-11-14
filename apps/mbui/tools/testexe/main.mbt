@@ -52,7 +52,7 @@ fn tests_of(info : String) -> Map[String, Array[String]] {
       Json::null()
     }
   }
-  let all : Map[String, Array[String]] = {}
+  let all : Map[String, Array[String]] = Map([])
   match j {
     Object(m) =>
       match m.get("tests") {
@@ -94,18 +94,18 @@ fn base(p : String) -> String {
 fn parts_of(arg : String) -> Array[(String, Int, Int)] {
   let out : Array[(String, Int, Int)] = []
   for p in arg.split("/") {
-    let p = p.to_string()
+    let p = p.to_owned()
     match p.rev_find(":") {
       Some(c) => {
-        let f = p.view(end_offset=c).to_string()
-        let r = p.view(start_offset=c + 1).to_string()
+        let f = p.exact_view(end=c).to_owned()
+        let r = p.exact_view(start=c + 1).to_owned()
         match r.find("-") {
           Some(d) =>
             out.push(
               (
                 f,
-                parse_int(r.view(end_offset=d).to_string()),
-                parse_int(r.view(start_offset=d + 1).to_string()),
+                parse_int(r.exact_view(end=d).to_owned()),
+                parse_int(r.exact_view(start=d + 1).to_owned()),
               ),
             )
           None => fail("not file:from-to: \{p}")
@@ -129,7 +129,7 @@ fn cmd_parts(args : Array[String]) -> Unit {
   }
   let tests = tests_of(args[0])
   let jobs = parse_int(args[1])
-  let rest = args[2:].to_array()
+  let rest = args[2:].to_owned()
   let asked : Array[(String, Int, Int)] = []
   if rest.length() == 3 && rest[1] == "--index" {
     let r = parts_of("x:" + rest[2])
@@ -180,16 +180,18 @@ fn cmd_said(args : Array[String]) -> Unit {
   }
   let lines = @sys.read_text(@sys.join(dir, "parts")).unwrap_or("")
   let failed : Array[String] = []
+  // (how many tests failed: `failed` holds as well the lines said under one that ended its program)
+  let mut failures = 0
   let times : Array[(String, Int)] = []
   let mut total = 0
   let mut skipped = 0
   for line in lines.split("\n") {
-    let line = line.to_string()
+    let line = line.to_owned()
     if line == "" {
       continue
     }
     let (k, arg) = match line.find(" ") {
-      Some(s) => (line.view(end_offset=s).to_string(), line.view(start_offset=s + 1).to_string())
+      Some(s) => (line.exact_view(end=s).to_owned(), line.exact_view(start=s + 1).to_owned())
       None => {
         fail("not K ARG: \{line}")
         ("", "")
@@ -197,18 +199,21 @@ fn cmd_said(args : Array[String]) -> Unit {
     }
     let parts = parts_of(arg)
     let said = @sys.read_text(@sys.join(dir, k + ".out")).unwrap_or("")
-    let code_line = @sys.read_text(@sys.join(dir, k + ".code")).unwrap_or("127 0").trim(chars=" \t\r\n").to_string()
-    let words = code_line.split(" ").map(fn(w) { w.to_string() }).to_array()
+    let code_line = @sys.read_text(@sys.join(dir, k + ".code")).unwrap_or("127 0").trim(chars=" \t\r\n").to_owned()
+    let words = code_line.split(" ").map(fn(w) { w.to_owned() }).to_array()
     let code = parse_int(words[0])
     let secs = if words.length() > 1 { parse_int(words[1]) } else { 0 }
     times.push((parts[0].0, secs))
     // their markers' results, and what else they printed (passed through, as moon does)
-    let done : Map[String, String] = {}
+    let done : Map[String, String] = Map([])
     let mut started = ""
-    let rest = StringBuilder::new()
+    let rest = StringBuilder()
+    // (what the program printed since the test that ended it began: a halt's words and the line that said them,
+    // @halt.saying, said again under that test's failure, so they are there whatever else came after them)
+    let mut since_start : Array[String] = []
     let mut in_mark = false
     for l in said.split("\n") {
-      let l = l.to_string()
+      let l = l.to_owned()
       if in_mark {
         if l == end_mark {
           in_mark = false
@@ -221,7 +226,10 @@ fn cmd_said(args : Array[String]) -> Unit {
             _ => ""
           }
           match o.get("type") {
-            Some(String("start")) => started = key
+            Some(String("start")) => {
+              started = key
+              since_start = []
+            }
             Some(String("result")) =>
               done[key] = match o.get("message") {
                 Some(String(m)) => m
@@ -234,15 +242,16 @@ fn cmd_said(args : Array[String]) -> Unit {
       }
       if l.has_suffix(begin_mark) {
         in_mark = true
-        let head = l.view(end_offset=l.length() - begin_mark.length()).to_string()
+        let head = l.exact_view(end=l.length() - begin_mark.length()).to_owned()
         if head != "" {
           rest.write_string(head + "\n")
         }
         continue
       }
       rest.write_string(l + "\n")
+      since_start.push(l)
     }
-    let text = rest.to_string().trim(chars=" \t\r\n").to_string()
+    let text = rest.to_string().trim(chars=" \t\r\n").to_owned()
     if text != "" {
       @sys.println_out(text)
     }
@@ -259,24 +268,36 @@ fn cmd_said(args : Array[String]) -> Unit {
               "not run: the program ended before it"
             }
             failed.push("[\{pkg}] test \{key} (\{name(f, i)}) failed: \{why} (exit \{code})")
+            failures = failures + 1
+            if key == started {
+              for w in ended_words(since_start) {
+                failed.push("  " + w)
+              }
+            }
           }
           Some("skipped test") => skipped = skipped + 1
           Some("") => ()
-          Some(m) => failed.push("[\{pkg}] test \{key} (\{name(f, i)}) failed: \{m}")
+          Some(m) => {
+            failed.push("[\{pkg}] test \{key} (\{name(f, i)}) failed: \{m}")
+            failures = failures + 1
+          }
         }
       }
     }
   }
   if times.length() > 1 {
     times.sort_by(fn(a, b) { b.1 - a.1 })
-    let top = times[0:@cmp.minimum(5, times.length())].to_array()
+    let top = times[0:@cmp.minimum(5, times.length())].to_owned()
     @sys.println_out("testexe: the slowest files: " + top.map(fn(t) { "\{t.0} \{t.1} s" }).join(", "))
+    // (every file's, for scripts/page-seconds.sh: check-mbui deals sfapp's pages by them, scripts/page-seconds.txt;
+    // the package said, as the small packages' programs beside them say theirs too)
+    @sys.println_out("testexe: each file's seconds of \{pkg}: " + times.map(fn(t) { "\{t.0} \{t.1}" }).join(", "))
   }
   for f in failed {
     @sys.println_out(f)
   }
   let n = total - skipped
-  @sys.println_out("Total tests: \{n}, passed: \{n - failed.length()}, failed: \{failed.length()}.")
+  @sys.println_out("Total tests: \{n}, passed: \{n - failures}, failed: \{failures}.")
   @sys.exit(if failed.is_empty() { 0 } else { 1 })
 }
 
@@ -287,10 +308,23 @@ fn main {
     fail("parts … | said …")
     return
   }
-  let args = argv[2:].to_array()
+  let args = argv[2:].to_owned()
   match argv[1] {
     "parts" => cmd_parts(args)
     "said" => cmd_said(args)
     w => fail("no command \{w}")
+  }
+}
+
+///|
+/// What a test that ended its program printed last (a halt's words and the line that said them, @halt.saying, its
+/// stack after them on native): the last of its lines, a few at most, its own and not the runtime's noise.
+fn ended_words(lines : Array[String]) -> Array[String] {
+  let kept = lines.filter(fn(l) { l.trim(chars=" \t\r").to_owned() != "" })
+  let most = 12
+  if kept.length() <= most {
+    kept
+  } else {
+    kept[kept.length() - most:].to_owned()
   }
 }

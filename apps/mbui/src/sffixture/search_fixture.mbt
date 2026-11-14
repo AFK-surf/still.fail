@@ -15,7 +15,7 @@ pub fn found_marks(text : String, word : String) -> Json {
   let out : Array[Json] = []
   let mut at = 0
   while at + word.length() <= text.length() {
-    if text.view(start_offset=at, end_offset=at + word.length()).to_string() == word {
+    if text.clamped_view(start=at, end=at + word.length()).to_owned() == word {
       out.push(found_mark(at, at + word.length()))
       at = at + word.length()
     } else {
@@ -159,7 +159,7 @@ pub fn fixture_search(f : Fixture, params : Map[String, Json]) -> Json? {
     })
   } else {
     // the device's chats whose titles have the words (with none, the latest), as the core's search lists them
-    let words = query.trim(chars=" ").to_string().to_lower()
+    let words = query.trim(chars=" ").to_owned().to_lower()
     let chats : Array[Json] = []
     for d in fixture_days(f) {
       for c in items(Some(d), "items") {
@@ -260,7 +260,7 @@ pub fn login_search(kind : String) -> Json {
     ],
     "messagesMore": false,
     "groups": [
-      { "kind": "job", "title": "服务和任务", "items": Json::array(jobs[0:2].to_array()), "more": true },
+      { "kind": "job", "title": "服务和任务", "items": Json::array(jobs[0:2].to_owned()), "more": true },
       {
         "kind": "member",
         "title": "成员",

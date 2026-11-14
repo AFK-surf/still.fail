@@ -18,7 +18,7 @@ import {
 }
 
 // Values
-pub let absolute_times : @ref.Ref[Bool]
+pub let absolute_times : @signals.Signal[Bool]
 
 pub fn act(@sfbase.Source, String, String, String, @json.Json, done? : String, done_action? : String, done_run? : () -> Unit, at_once? : Bool, ok? : (@json.Json) -> Unit, failed? : () -> Unit) -> Unit
 
@@ -66,7 +66,7 @@ pub fn attachment_of(@json.Json) -> @sfbase.Attachment
 
 pub fn attend(@sfbase.Source, String, Bool) -> Unit
 
-pub fn badge_frame(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
+pub fn badge_frame(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn bar_landed() -> Double
 
@@ -132,8 +132,6 @@ pub fn clock_stamp(Double) -> String
 
 pub let close_gap : @motion.Spec
 
-pub let close_turn_ms : Double
-
 pub fn cloud_origin() -> String
 
 pub fn cloud_updates(@sfbase.Source, String, String) -> @sfbase.UpdateSource
@@ -155,8 +153,6 @@ pub let dark_muted : Int64
 pub let dark_text : Int64
 
 pub let desktop_face : String
-
-pub let dismiss_turn_ms : Double
 
 pub fn doing(String) -> Bool
 
@@ -462,7 +458,7 @@ pub fn items(@json.Json?, String) -> Array[@json.Json]
 
 pub fn java_hash(String) -> Int32
 
-pub fn job_output_lines(@sfbase.Source, String, String, Double, Int64, Bool) -> Array[Array[@text.Run]]?
+pub fn job_output_lines(@sfbase.Source, String, String, Double, Int64, Bool) -> @sfbase.TermLines?
 
 pub fn keep_bytes(@ui.Ctx, String, String, Bytes, way? : @hostapi.KeepWay, saved? : String, failed? : String) -> Unit
 
@@ -475,8 +471,6 @@ pub fn keeps_frame(@ui.Ctx) -> Unit
 pub let kept_places : Map[String, @sfbase.KeptPlace]
 
 pub let left_pages : Array[@sfbase.Page]
-
-pub let linger_ms : Double
 
 pub fn linger_tick(@ui.Ctx, @sfbase.Source, in_front~ : Bool) -> Unit
 
@@ -514,7 +508,7 @@ pub fn list_after(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, @s
 
 pub fn list_frame(@ui.Ctx, @sfbase.ChatRef, @sfbase.ChatView, Array[@sfbase.Entry], key~ : String, draft~ : String, rise_ms~ : Double, top~ : Double, in_front~ : Bool) -> @sfbase.ListFrame
 
-pub fn list_made(@ui.ListInfo?, Int32, Array[Int32]) -> @sfbase.ListMade
+pub fn list_made(@ui.ListInfo?, Int32, Array[Int32], @ui.ListReader) -> @sfbase.ListMade
 
 pub fn local_sent(@sfbase.Outgoing) -> Bool
 
@@ -754,8 +748,6 @@ pub fn relay_go(@sfbase.Source, @json.Json?, done? : () -> Unit) -> Unit
 
 pub fn relay_open(@sfbase.Source, String, Double) -> Unit
 
-pub fn relay_view(@ui.Ctx, @sfbase.Source) -> @json.Json?
-
 pub let relaying : @sfbase.Relaying
 
 pub let reporting_host : @signals.Signal[@sfbase.ReportingHost?]
@@ -769,8 +761,6 @@ pub fn row_keys(@ui.Ctx, @sfbase.Reading, String, @sfbase.ChatView, Array[@sfbas
 pub fn row_name(@sfbase.ChatItem) -> String
 
 pub fn row_tone(@sfbase.ChatItem) -> String
-
-pub let row_turn_ms : Double
 
 pub fn runs_by_line(Array[@text.Run]) -> Array[Array[@text.Run]]
 
@@ -788,7 +778,7 @@ pub fn sending_of(String) -> Array[@sfbase.LocalSent]
 
 pub fn sent_key(String, String) -> String
 
-pub fn sent_local(@ui.Ctx, String, @sfbase.ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?) -> String
+pub fn sent_local(String, @sfbase.ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?, now~ : Double) -> String
 
 pub fn sent_local_gone(String, String) -> Unit
 
@@ -944,19 +934,11 @@ pub fn tr(String, args? : Array[(String, String)]) -> String
 
 pub fn trim_slash(String) -> String
 
-pub let turn_calm_ms : Double
-
-pub let turn_most_ms : Double
-
 pub let turns_by : Map[String, @sfbase.Turns]
 
 pub fn turns_of(String) -> @sfbase.Turns
 
 pub fn under_rest() -> Double
-
-pub fn under_turn(String) -> Double
-
-pub let unseen_at : Double
 
 pub let update : @sfbase.Update
 
@@ -1083,8 +1065,6 @@ pub fn viz_tr(String, args? : Array[(String, String)]) -> String
 pub fn with_lingering(@sfbase.Reading, Array[@sfbase.Entry]) -> Array[@sfbase.Entry]
 
 pub fn words_runs(Array[@json.Json], Int64, chat_title? : (String) -> String?) -> Array[@text.Run]
-
-pub let working_turn_ms : Double
 
 pub fn workspace_in_view(@sfbase.Source) -> (@sfbase.Workspace?, Array[@sfbase.Workspace], Bool, Bool)
 
@@ -1256,8 +1236,6 @@ pub using @sfbase {type Station}
 pub using @sfbase {type Tagging}
 
 pub using @sfbase {type Topic}
-
-pub using @sfbase {type TurnAsk}
 
 pub using @sfbase {type TurnFor}
 

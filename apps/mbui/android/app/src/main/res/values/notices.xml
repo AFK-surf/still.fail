@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A notification's colour (mbui's Notices.java): still.fail's accent. -->
+<resources>
+    <color name="mbui_notice">#FFE5704A</color>
+</resources>

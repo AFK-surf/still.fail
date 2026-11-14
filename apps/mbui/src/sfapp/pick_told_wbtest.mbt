@@ -32,12 +32,12 @@ test "a passage held with a finger: an identity told once, the message and where
     hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
     t.run_for(pick_bar_in_ms)
   })
-  assert_eq(told.length(), 3, msg="\{told}")
+  assert_eq(told.length(), 3, msg="\{Repr(told)}")
   let one = told[0]
-  assert_true(one.serial > 0 && one.ts != "" && one.a >= 0 && one.b > one.a, msg="\{one}")
+  assert_true(one.serial > 0 && one.ts != "" && one.a >= 0 && one.b > one.a, msg="\{Repr(one)}")
   assert_eq(told[1], @sfbase.picked_none)
   let two = told[2]
-  assert_true(two.ts == one.ts && two.serial > one.serial, msg="\{one} then \{two}")
+  assert_true(two.ts == one.ts && two.serial > one.serial, msg="\{Repr(one)} then \{Repr(two)}")
   assert_eq(@sfbase.picked.get(), two)
 }
 
@@ -48,11 +48,11 @@ test "a run begun anew: nothing picked told, no identity of a run before given a
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   let before = @sfbase.picked.get().serial
   assert_true(before > 0)
-  new_run()
+  fresh_app()
   assert_eq(@sfbase.picked.get(), @sfbase.picked_none)
   let t2 = fake_core(calls)
   hold_on(t2, "做完了：列表、跳到最新的按钮") |> ignore
-  assert_true(@sfbase.picked.get().serial > before, msg="\{@sfbase.picked.get()} after \{before}")
+  assert_true(@sfbase.picked.get().serial > before, msg="\{Repr(@sfbase.picked.get())} after \{before}")
 }
 
 ///|
@@ -85,11 +85,11 @@ test "a mouse's passage picked anew in the same message (another passage, or the
     @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
     t.run_for(@ui.move_most_ms)
     let one = mouse_picked(t, 4.0, 120.0, framed)
-    assert_true(one.serial > 0, msg="framed \{framed}: \{one}")
+    assert_true(one.serial > 0, msg="framed \{framed}: \{Repr(one)}")
     let two = mouse_picked(t, 40.0, 200.0, framed)
-    assert_true(two.ts == one.ts && two.serial > one.serial, msg="framed \{framed}: \{one} then \{two}")
+    assert_true(two.ts == one.ts && two.serial > one.serial, msg="framed \{framed}: \{Repr(one)} then \{Repr(two)}")
     let three = mouse_picked(t, 40.0, 200.0, framed)
-    assert_true(three.serial > two.serial, msg="framed \{framed}: \{two} then \{three}")
+    assert_true(three.serial > two.serial, msg="framed \{framed}: \{Repr(two)} then \{Repr(three)}")
     t.run_for(@ui.move_most_ms)
     assert_eq(@sfbase.picked.get(), three, msg="framed \{framed}")
   }

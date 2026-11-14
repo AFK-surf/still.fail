@@ -108,7 +108,7 @@ pub fn row_aside(
   let (face, after, round, ring, d) = (l.face, l.face_after, l.face_ground, l.face_ring, l.face_d)
   let round = round.then(@ui.style(bg=Data(ground)))
   let faces = fn() {
-    let shown = if people.length() > aside_most { people[:aside_most].to_array() } else { people }
+    let shown = if people.length() > aside_most { people[:aside_most].to_owned() } else { people }
     let id = c.id(key + "/faces")
     c.box(style=aside_faces, label=item.people_text, id~, taps=false, points=true, fn() {
       for i, p in shown {

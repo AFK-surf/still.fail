@@ -17,11 +17,19 @@ pub struct ChatImages {
   /// how far the ones coming have come, by id: the bytes here, of how many when that is known (the core's
   /// `{loaded, total}`)
   coming : Map[String, (Double, Double?)]
+  /// what a node of the window's tree read of each picture (the `*_told` reads), by id: told as that one changes, made
+  /// as one is first read so, let go as nothing reads it any more. The old views' reads track nothing (they are built
+  /// again each frame), so none is made for them and nothing is told of what they read.
+  priv told : Map[String, @signals.Signal[Int]]
+  /// when each one coming was first said to be on its way to what shows it (the cause's moment its node was told so:
+  /// coming_since), by id: what shows how far it has come counts from it, a row let go of and made again not waiting
+  /// anew; let go as it is here, fails or is asked again
+  priv since : Map[String, Double]
 }
 
 ///|
 pub fn ChatImages::new() -> ChatImages {
-  { keys: {}, unreached: {}, reached: {}, held: {}, coming: {} }
+  { keys: {}, unreached: {}, reached: {}, held: {}, coming: {}, told: {}, since: {} }
 }
 
 ///|
@@ -32,6 +40,40 @@ pub fn ChatImages::clear(self : ChatImages) -> Unit {
   self.reached.clear()
   self.held.clear()
   self.coming.clear()
+  self.since.clear()
+  let ids = self.told.keys().to_array()
+  for id in ids {
+    self.tell(id)
+  }
+  self.told.clear()
+}
+
+///|
+/// What a node read of picture `id` changed: told, where one reads it (none made where none does).
+fn ChatImages::tell(self : ChatImages, id : String) -> Unit {
+  match self.told.get(id) {
+    Some(s) =>
+      if s.watched() {
+        s.set(s.untracked() + 1)
+      } else {
+        self.told.remove(id)
+      }
+    None => ()
+  }
+}
+
+///|
+/// Picture `id` read by a node: what reads it told as it changes (its key, how far it has come, failed or not).
+pub fn ChatImages::track(self : ChatImages, id : String) -> Unit {
+  let s = match self.told.get(id) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(0)
+      self.told[id] = s
+      s
+    }
+  }
+  s.get() |> ignore
 }
 
 ///|
@@ -52,19 +94,25 @@ pub fn ChatImages::get(
         fn(v) {
           match field(Some(v), "loaded") {
             Some(Number(n, ..)) if self.keys.get(id) == Some("") =>
-              self.coming[id] = (
-                n,
-                match field(Some(v), "total") {
-                  Some(Number(t, ..)) if t > 0.0 => Some(t)
-                  _ => None
-                },
-              )
+              {
+                self.coming[id] = (
+                  n,
+                  match field(Some(v), "total") {
+                    Some(Number(t, ..)) if t > 0.0 => Some(t)
+                    _ => None
+                  },
+                )
+                self.tell(id)
+              }
             _ => ()
           }
         },
         fn(r) {
         self.coming.remove(id)
+        self.since.remove(id)
         match r {
+          // (its whole picture given meanwhile, by the viewer that read it: kept, not swapped for the smaller)
+          _ if self.keys.get(id) is Some(k) && k != "" && k != "!" => ()
           Ok((said, Some(bytes))) if bytes.length() > 0 => {
             @ui.add_image(name, bytes)
             self.keys[id] = name
@@ -81,9 +129,27 @@ pub fn ChatImages::get(
             }
           }
         }
+        // (told once all of it is said: its key, failed or not, held or not)
+        self.tell(id)
       },
       )
       ""
+    }
+  }
+}
+
+///|
+/// The whole of picture `id` read (the viewer's, put up as `key`): what shows it while its own is not here (still
+/// coming, or failed) shows that from now on, its own let go of when it comes; one here already is kept as it is.
+pub fn ChatImages::whole(self : ChatImages, id : String, key : String) -> Unit {
+  match self.keys.get(id) {
+    Some(k) if k != "" && k != "!" => ()
+    _ => {
+      self.keys[id] = key
+      self.unreached.remove(id)
+      self.coming.remove(id)
+      self.since.remove(id)
+      self.tell(id)
     }
   }
 }
@@ -93,6 +159,47 @@ pub fn ChatImages::get(
 /// said, or once it is here.
 pub fn ChatImages::coming(self : ChatImages, id : String) -> (Double, Double?)? {
   self.coming.get(id)
+}
+
+///|
+/// How far picture `id` has come (coming), read by a node: told as it changes.
+pub fn ChatImages::coming_told(self : ChatImages, id : String) -> (Double, Double?)? {
+  self.track(id)
+  self.coming.get(id)
+}
+
+///|
+/// When picture `id` was first said to be on its way to what shows it: `at` (a node's cause's moment as it is told so)
+/// the first time it is asked, the moment kept since then after (till it is here, fails or is asked again).
+pub fn ChatImages::coming_since(self : ChatImages, id : String, at : Double) -> Double {
+  match self.since.get(id) {
+    Some(t) => t
+    None => {
+      self.since[id] = at
+      at
+    }
+  }
+}
+
+///|
+/// What was on its way as `id` (a download of a chat's file, by its own id: not a picture's) no longer so: when it
+/// was first said to be (coming_since) let go, the next time counted anew.
+pub fn ChatImages::coming_let_go(self : ChatImages, id : String) -> Unit {
+  self.since.remove(id)
+}
+
+///|
+/// Whether picture `id` failed for want of its station (unreached), read by a node: told as that changes.
+pub fn ChatImages::unreached_told(self : ChatImages, id : String) -> Bool {
+  self.track(id)
+  self.unreached.contains(id)
+}
+
+///|
+/// Whether picture `id` came from what the device had (held), read by a node: told as that changes.
+pub fn ChatImages::held_told(self : ChatImages, id : String) -> Bool {
+  self.track(id)
+  self.held.contains(id)
 }
 
 ///|
@@ -115,6 +222,8 @@ pub fn ChatImages::again(self : ChatImages, station : String) -> Unit {
     self.unreached.remove(id)
     self.keys.remove(id)
     self.coming.remove(id)
+    self.since.remove(id)
+    self.tell(id)
   }
 }
 
@@ -150,10 +259,11 @@ pub fn poster_image_id(station : String, key : String, name : String) -> String 
 }
 
 ///|
-/// Whether a message's picture the device holds (Attachment.held) was drawn this frame before it was decoded: the app's
-/// first page waits for it with the rest of what it shows (sfapp's first_page_shown, which reads and clears it each
-/// frame), not shown with a likeness in its place for the frame or two its decoding takes.
-pub let held_pictures_waiting : Ref[Bool] = Ref(false)
+/// The pictures the device holds (Attachment.held) a page's build drew before they were decoded, by their image keys:
+/// the app's first page waits for them with the rest of what it shows (sfapp's first_page_done, by the host's word
+/// that each is decoded), not shown with a likeness in a picture's place for the frame or two its decoding takes. Said
+/// afresh by each build of the page (emptied as it begins).
+pub let held_pictures_waiting : Ref[Array[String]] = Ref([])
 
 ///|
 /// Whether the app's first page is built and waits for what it shows (sfapp's first_waiting), followed: what the chats'
@@ -161,3 +271,20 @@ pub let held_pictures_waiting : Ref[Bool] = Ref(false)
 /// the splash in their place.
 // kept across runs: said by the frame as it is told (sfapp's first_hide)
 pub let first_page_waits : @signals.Signal[Bool] = @signals.signal(false)
+
+///|
+/// The picture of a chat's file (Source's `file`) read by a node of the window's tree: told as it comes, fails or is
+/// asked again (ChatImages::track), where `file` alone tells nothing (the old views' read, built again each frame).
+pub fn Source::file_told(self : Source, station : String, key : String, name : String) -> String {
+  let k = (self.file)(station, key, name)
+  self.images.track(file_image_id(station, key, name))
+  k
+}
+
+///|
+/// A video's still from its station (Source's `poster`) read by a node: told as it comes.
+pub fn Source::poster_told(self : Source, station : String, key : String, name : String) -> String {
+  let k = (self.poster)(station, key, name)
+  self.images.track(poster_image_id(station, key, name))
+  k
+}

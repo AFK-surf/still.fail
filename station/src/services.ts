@@ -17,6 +17,7 @@ import { Cloud as CloudState } from "./cloud/state.ts";
 import { type ControlPlaneShape, makeControlPlane } from "./cloud/plane.ts";
 import type { Provider } from "./cloud/provider.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
+import { withFront } from "./mesh/front.ts";
 import { verifyWith } from "./cloud/lock.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
 import { makeStore } from "./read/store.ts";
@@ -42,11 +43,16 @@ import { PeerBus } from "./mesh/bus.ts";
 import type { Outside } from "./mesh/peer.ts";
 import { Net } from "./jobs/load.ts";
 import type { PeerRoute } from "./tools/http.ts";
+import type { HereLocal } from "./mesh/peer-http.ts";
+import type { Json } from "./store/store.ts";
 import { StationParts } from "./parts.ts";
 import { wall } from "./ops/fibers.ts";
 
+
 /// Where the station keeps its data, and the release it runs from.
-export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string }>()("stillfail/Paths") {}
+/// `beforeStore`: what is done before the store first opens (a lost station's chats taken back: replica/restore.ts,
+/// given by main.ts).
+export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string; readonly beforeStore?: () => Promise<void> }>()("stillfail/Paths") {}
 
 /// The control plane this station is enrolled in (cloud/plane.ts): cloud.json and its changes, the presence socket,
 /// notices, traces, releases and which credentials it takes. `layer` follows cloud.json's provider (still.fail cloud
@@ -140,7 +146,8 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
   static readonly layer = Layer.effect(
     Store,
     Effect.gen(function* () {
-      const { data } = yield* Paths;
+      const { data, beforeStore } = yield* Paths;
+      if (beforeStore !== undefined) yield* Effect.promise(beforeStore);
       return yield* Effect.acquireRelease(
         Effect.sync(() => {
           return StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
@@ -246,7 +253,7 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
         tail,
         outputAt,
         sessionExists: (key) => store.getSession(key) !== null,
-        liveSeen: (viewer, key) => { const row = store.getSession(key); return row !== null && sees(viewer, row.ws); },
+        liveSeen: (viewer, key) => { const ws = store.sessionWs(key); return ws !== undefined && sees(viewer, ws); },
         seen: (viewer, of) => ("session" in of ? sessionSeen(store, viewer, of.session) : "thread" in of ? threadSeen(store, viewer, of.thread) : jobSeen(store, viewer, of.job)),
         handover: { file: eventsHandoverFile(data), previous },
       });
@@ -269,7 +276,7 @@ export class AdminHost extends Context.Service<AdminHost, Host>()("stillfail/Adm
   static readonly layer = Layer.effect(
     AdminHost,
     Effect.gen(function* () {
-      const host = new Host(yield* Readers);
+      const host = new Host((yield* Readers).data);
       yield* Effect.acquireRelease(Effect.sync(() => host.follow()), (stop) => Effect.sync(stop));
       return host;
     }),
@@ -282,7 +289,12 @@ export class StationConfig extends Context.Service<StationConfig, ConfigFile>()(
   static readonly layer = Layer.effect(
     StationConfig,
     Effect.gen(function* () {
-      return new ConfigFile((yield* Paths).data);
+      const { data } = yield* Paths;
+      return yield* Effect.acquireRelease(Effect.sync(() => {
+        const config = new ConfigFile(data);
+        config.watch();
+        return config;
+      }), (config) => Effect.sync(() => config.unwatch()));
     }),
   );
 }
@@ -327,9 +339,44 @@ export type MeshSideShape = {
   outside: Outside | null;
   forwarded: (port: number) => boolean;
   runtimes: () => string[];
+  /// A connection to a device attached here, for a chat of another station (devices/module.ts): what peer-http.ts's
+  /// `HereLocal.device` is; none until the devices' part is up.
+  device: HereLocal["device"] | null;
 };
 export class MeshSide extends Context.Service<MeshSide, MeshSideShape>()("stillfail/MeshSide") {
-  static readonly layer = Layer.sync(MeshSide, (): MeshSideShape => ({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [] }));
+  static readonly layer = Layer.sync(MeshSide, (): MeshSideShape => ({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [], device: null }));
+}
+
+/// A device as an agent is shown it (devices/, 2026-11-10): what it is, where it is attached, whose it is, and whether
+/// this chat may use it now and who may.
+export type DeviceEntry = {
+  id: string; name: string; kind: string; target: string; baud?: number;
+  /// Where it is attached: a station's id and name (`via: station`), a tasks-only station's (`rig`), or its person's
+  /// phone itself (`phone`, its app lending it).
+  via: "station" | "rig" | "phone"; station: string; stationName: string;
+  owner: string; ownerEmail: string; ownerName: string;
+  online?: boolean; thisChat: string; hasAccess: string | string[];
+};
+/// Where devices come from besides this station's own whole ones (devices/module.ts): the tasks-only stations'
+/// (rigs/module.ts) and the members' phones (adb/module.ts), each filled by its part.
+export type DeviceSource = {
+  list(workspace: string, session: string): Promise<DeviceEntry[]>;
+  /// What the agent is told of asking for `device` (its id or name, as found by `list`).
+  use(workspace: string, session: string, device: DeviceEntry, reason: string, timeout: unknown, signal?: AbortSignal): Promise<string>;
+  /// The chat's grants (or requests) of devices of this source handed back (one, or every one: none named): their names.
+  done(workspace: string, session: string, device: DeviceEntry | null): string[];
+  /// What the members' apps are shown of them (the phones lent here, with the chats that hold each); none: nothing.
+  shown?(workspace: string): Json[];
+};
+/// `forward`: the devices' part's, a device a chat may use put on a port here for it (what the agent is told of it).
+export type DeviceSourcesShape = {
+  rigs: DeviceSource | null; phones: DeviceSource | null;
+  forward: ((session: string, device: DeviceEntry) => Promise<string>) | null;
+  /// What the members' apps are shown changed (a phone lent or gone, a grant of it): told again.
+  changed: ((workspace: string | null) => void) | null;
+};
+export class DeviceSources extends Context.Service<DeviceSources, DeviceSourcesShape>()("stillfail/DeviceSources") {
+  static readonly layer = Layer.sync(DeviceSources, (): DeviceSourcesShape => ({ rigs: null, phones: null, forward: null, changed: null }));
 }
 
 /// The station's parts in its own process (parts.ts): what each adds to the admin API, the overview and the agents'
@@ -391,6 +438,8 @@ export class MeshNative extends Context.Service<MeshNative, Mesh>()("stillfail/M
   static readonly layer = Layer.effect(MeshNative, Effect.sync(() => {
     const mesh = loadMesh();
     if (mesh.verify) verifyWith((alg, key, signature, message) => mesh.verify!(alg, key, signature, message));
-    return mesh;
+    // The endpoint kept by the MoonBit front where the launcher started one (mesh/front.ts), across handovers.
+    const front = process.env.STILLFAIL_MESH_FRONT;
+    return front ? withFront(mesh, front) : mesh;
   }));
 }

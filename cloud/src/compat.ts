@@ -1,12 +1,11 @@
 // still.fail was called ember. No station, app or page from before the rename is left
 // (2026-11-05: none in two weeks of telemetry), so the cloud answers only the new names, but for its old hosts (the
 // *_ORIGIN_ALIASES, bound to the same Workers: stations enrolled then may still be told them in their own settings,
-// which they move off themselves) and the tag of a station's notices (push.ts: stations of now still sign with it).
+// which they move off themselves).
+import { guestOrigins } from "./guests.ts";
 
 /** The prefix of the names on the wire. */
 const PREFIX = "stillfail";
-/** The prefix a station's notices are still signed under, by stations from before 2026-11-05 (station/src/cloud/provider.ts). */
-export const FORMER_NOTICE_PREFIX = "ember";
 
 /** `primary` and its aliases (a comma-separated list of origins), primary first, no empties. */
 export function originList(primary: string, aliases?: string): string[] {
@@ -14,8 +13,9 @@ export function originList(primary: string, aliases?: string): string[] {
   return [...new Set(list)];
 }
 
-/** The web app's and the API's origins: PUBLIC_ORIGIN (links are made with it) and its old ones. */
-export const publicOrigins = (env: { PUBLIC_ORIGIN: string; PUBLIC_ORIGIN_ALIASES?: string }) => originList(env.PUBLIC_ORIGIN, env.PUBLIC_ORIGIN_ALIASES);
+/** The web app's and the API's origins: PUBLIC_ORIGIN (links are made with it), its old ones, and the guests' (guests.ts). */
+export const publicOrigins = (env: { PUBLIC_ORIGIN: string; PUBLIC_ORIGIN_ALIASES?: string; GUESTS?: string }) =>
+  originList(env.PUBLIC_ORIGIN, [env.PUBLIC_ORIGIN_ALIASES ?? "", ...guestOrigins(env)].join(","));
 
 /** The admin console's origins: ADMIN_ORIGIN and its old ones. */
 export const adminOrigins = (env: { ADMIN_ORIGIN: string; ADMIN_ORIGIN_ALIASES?: string }) => originList(env.ADMIN_ORIGIN, env.ADMIN_ORIGIN_ALIASES);

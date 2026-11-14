@@ -1,6 +1,6 @@
 // Runtime-reported model capabilities (as the station reads them). Missing metadata keeps old stations usable;
 // an explicitly empty list means the model has no adjustable reasoning.
-import { same } from "./model.ts";
+import { same, splitAgyTier, splitDevinFusion } from "./model.ts";
 
 export type Catalog = Record<string, Record<string, string[]>>;
 
@@ -18,7 +18,16 @@ export function fallback(runtime: string): string[] {
 export function reported(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] | null {
   const models = catalog?.[runtime];
   if (model === null || model === undefined || !models) return null;
-  const levels = models[model] ?? Object.entries(models).find(([id]) => same(id, model))?.[1];
+  const base =
+    runtime === "agy"
+      ? (splitAgyTier(model)?.model ?? model)
+      : runtime === "devin"
+        ? (splitDevinFusion(model)?.lead ?? model)
+        : model;
+  const levels =
+    models[model] ??
+    models[base] ??
+    Object.entries(models).find(([id]) => same(id, model) || (base !== model && same(id, base)))?.[1];
   return levels ? [...levels] : null;
 }
 

@@ -126,7 +126,7 @@ async function member(device: Endpoint, station: string, credential: string): Pr
 }
 async function ask(conn: Connection, method: string, path: string, body?: unknown): Promise<{ status: number; answer: any }> {
   const s = await conn.openBi();
-  await writeLine(s, { method, path: `/admin/api${path}`, headers: { "stillfail-lang": "zh" } });
+  await writeLine(s, { method, path: `/admin/api${path}`, headers: { "stillfail-lang": "zh", "stillfail-build": "0.1.0" } });
   if (body !== undefined) await s.write(Buffer.from(JSON.stringify(body)));
   await s.finish();
   const r = new Reader(s);

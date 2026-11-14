@@ -117,6 +117,37 @@ test("the feedback monitor reads the console's list with its token, and that tok
   }
 });
 
+test("the feedback monitor marks where a report is with its token, as the console does", async () => {
+  const h = await harness();
+  try {
+    const { station, aliceTokens } = await workspace(h);
+    assert.equal((await send(h, station, report())).status, 201);
+    const admin = h.as(aliceTokens, "admin");
+    const id = ((await (await admin("GET", "/v1/admin/feedback")).json()) as any).feedback[0].id as string;
+    const mark = (token: string, status: unknown, which = id) =>
+      h.fetch(`/v1/admin/feedback/${which}/status`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ status }) });
+    const now = async () => ((await (await admin("GET", "/v1/admin/feedback")).json()) as any).feedback[0].status;
+
+    assert.equal((await mark(h.feedbackToken, "triaged")).status, 200);
+    assert.equal(await now(), "triaged");
+    assert.equal((await mark(h.feedbackToken, "gone")).status, 400);
+    assert.equal((await mark(h.feedbackToken, undefined)).status, 400);
+    assert.equal((await mark(h.feedbackToken, "fixed", "0".repeat(26))).status, 404);
+    assert.equal(await now(), "triaged");
+
+    // Not the admin token's, nor a made-up one's: they fall to the console's sign-in, which they are not.
+    assert.notEqual((await mark(h.adminToken, "wontfix")).status, 200, "not the admin token");
+    assert.notEqual((await mark("x".repeat(43), "wontfix")).status, 200);
+    assert.equal(await now(), "triaged");
+
+    // The console's admin marks it as before.
+    assert.equal((await admin("POST", `/v1/admin/feedback/${id}/status`, { status: "wontfix" })).status, 200);
+    assert.equal(await now(), "wontfix");
+  } finally {
+    await h.close();
+  }
+});
+
 test("reports signed wrong, not signed, by a station not enrolled, or without a title are refused", async () => {
   const h = await harness();
   try {
@@ -214,6 +245,203 @@ test("the changelog is anyone's to read, with what each part has out on the host
     assert.deepEqual(stable.released, { station: null, android: null, desktop: 1300, web: 1338 });
     const beta = (await (await h.fetch("/v1/changelog", { headers: { "x-stillfail-channel": "beta" } })).json()) as any;
     assert.equal(beta.released.web, 1340);
+  } finally {
+    await h.close();
+  }
+});
+
+/** A device's events socket; `take`: the events since the last take (h.heard). */
+async function listen(h: Harness, token: string) {
+  const response = await h.fetch("/v1/events", { headers: { upgrade: "websocket", "sec-websocket-protocol": `stillfail-events, stillfail-token.${token}` } });
+  assert.equal(response.status, 101);
+  const ws = response.webSocket!;
+  ws.accept();
+  const got: any[] = [];
+  ws.addEventListener("message", (event) => void (event.data === "pong" || got.push(JSON.parse(event.data as string))));
+  return { ws, take: async () => (await h.heard(ws), got.splice(0)) };
+}
+
+/** The station's presence socket, its frames kept (the pongs aside). */
+async function connect(h: Harness, station: Station) {
+  const ts = h.now();
+  const signature = await station.sign(`stillfail-station-connect-v1:${h.origin}:${station.id}:${ts}`);
+  const response = await h.fetch("/v1/stations/connect", {
+    headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": signature, "x-stillfail-version": "0.2.0" },
+  });
+  assert.equal(response.status, 101);
+  const ws = response.webSocket!;
+  const frames: any[] = [];
+  ws.addEventListener("message", (event) => void (event.data === "pong" || frames.push(JSON.parse(event.data as string))));
+  ws.accept();
+  return { ws, frames, ping: () => h.heard(ws) };
+}
+
+/** The station joins another workspace of `owner`'s (a token it redeems as stations do). */
+async function join(h: Harness, owner: ReturnType<Harness["as"]>, workspace: string, station: Station) {
+  const made = (await (await owner("POST", `/v1/workspaces/${workspace}/enrollments`, { name: "lab box" })).json()) as any;
+  const response = await h.fetch("/v1/stations/join", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: made.token, station: station.id, signature: await station.sign(`stillfail-station-enroll-v1:${h.origin}:${made.token}:${station.id}`), version: "0.5.0" }),
+  });
+  assert.equal(response.status, 200);
+}
+
+/** The team replies, as the console's admin or with the feedback monitor's token. */
+const teamReply = (h: Harness, id: string, text: unknown, token = h.feedbackToken) =>
+  h.fetch(`/v1/admin/feedback/${id}/reply`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ text }) });
+
+/** The reporter's agent answers a report, as its station. */
+const answer = (h: Harness, station: Station, value: unknown) => send(h, station, value, { path: "/v1/feedback/reply", tag: "stillfail-station-feedback-reply-v1" });
+
+test("the team's reply is shown to the members of the chat's workspace, told on their events, and never to the station", async () => {
+  const h = await harness();
+  try {
+    const { id: home, station, aliceTokens } = await workspace(h);
+    const alice = h.as(aliceTokens);
+    const carolTokens = await h.login("carol");
+    await send(h, station, report({ context: { session: "chat:c-1", thread: "CHAT/1.1", workspace: home } }));
+    const admin = h.as(aliceTokens, "admin");
+    const listed = async () => ((await (await admin("GET", "/v1/admin/feedback")).json()) as any).feedback[0];
+    const fb = (await listed()).id as string;
+    assert.deepEqual((await listed()).replies, []);
+    assert.deepEqual(((await (await alice("GET", `/v1/workspaces/${home}/feedback`)).json()) as any).feedback, [], "none replied on yet");
+
+    const socket = await connect(h, station);
+    const events = await listen(h, aliceTokens.access_token);
+    const carol = await listen(h, carolTokens.access_token);
+    await events.take();
+    const made = await admin("POST", `/v1/admin/feedback/${fb}/reply`, { text: "  能发一下出错时的日志吗？ " });
+    assert.equal(made.status, 201);
+    const reply = (await made.json()) as any;
+    assert.equal(reply.delivery, "pending");
+    await h.settled();
+    assert.deepEqual(await events.take(), [{ type: "feedback", workspace: home }]);
+    assert.deepEqual(await carol.take(), [], "not a member");
+    await socket.ping();
+    assert.ok(!socket.frames.some((f) => f.type === "feedback" || JSON.stringify(f).includes("日志")), "nothing to the station");
+    assert.equal((await send(h, station, { told: [] }, { path: "/v1/feedback/replies", tag: "stillfail-station-feedback-replies-v1" })).status, 404, "no way for a station to read them");
+
+    const kept = (await listed()).replies;
+    assert.deepEqual(kept.map((r: any) => [r.from, r.by, r.text, r.created_at, r.delivery]), [["team", "alice@example.test", "能发一下出错时的日志吗？", h.now(), "pending"]]);
+    assert.equal((await listed()).updated_at, h.now());
+
+    // A member's app reads it, which marks it delivered.
+    const shown = ((await (await alice("GET", `/v1/workspaces/${home}/feedback`)).json()) as any).feedback;
+    assert.deepEqual(shown.map((f: any) => [f.number, f.title, f.station, f.session, f.thread]), [[1, "chat_post 发不出去", station.id, "chat:c-1", "CHAT/1.1"]]);
+    assert.deepEqual(shown[0].replies.map((r: any) => [r.from, r.name, r.text]), [["team", "", "能发一下出错时的日志吗？"]], "the team's, not the admin's email");
+    assert.equal((await listed()).replies[0].delivery, "delivered");
+    assert.equal((await h.as(carolTokens)("GET", `/v1/workspaces/${home}/feedback`)).status, 404, "not to one outside it");
+
+    // The monitor replies with its token; the console's token and a made-up one are not it.
+    assert.equal((await teamReply(h, fb, "绕过：重开一次 chat。")).status, 201);
+    assert.notEqual((await teamReply(h, fb, "x", h.adminToken)).status, 201);
+    assert.notEqual((await teamReply(h, fb, "x", "x".repeat(43))).status, 201);
+    assert.deepEqual((await listed()).replies.map((r: any) => r.by), ["alice@example.test", "feedback-monitor"]);
+    assert.equal((await teamReply(h, fb, " ")).status, 400);
+    assert.equal((await teamReply(h, "0".repeat(26), "hi")).status, 404);
+    socket.ws.close(1000);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a report from a chat of a workspace the station joined is that workspace's, not the station's home's", async () => {
+  const h = await harness();
+  try {
+    const { id: home, station, aliceTokens } = await workspace(h);
+    const bobTokens = await h.login("bob");
+    const bob = h.as(bobTokens);
+    const lab = ((await (await bob("POST", "/v1/workspaces", { name: "Lab" })).json()) as any).id as string;
+    await join(h, bob, lab, station);
+    // As a station from before says it: no workspace in its context, its chat's in the link; the report is its home's.
+    await send(h, station, report({ context: { session: "chat:c-9", thread: "CHAT/9.9", link: `${h.origin}/o/${lab}/${station.id}/chat%3Ac-9` } }));
+    // As stations say it now: the chat's workspace in the context.
+    await send(h, station, report({ key: "k2", context: { session: "chat:c-8", workspace: lab } }));
+    const admin = h.as(aliceTokens, "admin");
+    const all = ((await (await admin("GET", "/v1/admin/feedback")).json()) as any).feedback;
+    assert.deepEqual(all.map((f: any) => f.workspace.id), [home, home], "the reports' own workspace: the station's home");
+    const bobEvents = await listen(h, bobTokens.access_token);
+    const aliceEvents = await listen(h, aliceTokens.access_token);
+    await bobEvents.take();
+    await aliceEvents.take();
+    for (const f of all) assert.equal((await teamReply(h, f.id, `看看 FB-${f.number}`)).status, 201);
+    await h.settled();
+    assert.deepEqual(await bobEvents.take(), [{ type: "feedback", workspace: lab }, { type: "feedback", workspace: lab }]);
+    assert.deepEqual(await aliceEvents.take(), [], "the home's members are not the chat's");
+    const shown = ((await (await bob("GET", `/v1/workspaces/${lab}/feedback`)).json()) as any).feedback;
+    assert.deepEqual(shown.map((f: any) => [f.number, f.session]), [[2, "chat:c-8"], [1, "chat:c-9"]]);
+    assert.deepEqual(((await (await h.as(aliceTokens)("GET", `/v1/workspaces/${home}/feedback`)).json()) as any).feedback, []);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a reply cannot reach a report from an account, or one whose chat cannot be told: refused as undeliverable", async () => {
+  const h = await harness();
+  try {
+    const { station } = await workspace(h);
+    const bob = h.as(await h.login("bob"));
+    assert.equal((await bob("POST", "/v1/feedback", report())).status, 201);
+    // From before stations said their chat's workspace, its link cut away.
+    await send(h, station, report({ key: "k2", context: { session: "chat:c-1" } }));
+    const outside = ((await (await bob("POST", "/v1/workspaces", { name: "Elsewhere" })).json()) as any).id as string;
+    // Naming a workspace the station is not in.
+    await send(h, station, report({ key: "k3", context: { session: "chat:c-2", workspace: outside } }));
+    const admin = h.as(await h.login("alice"), "admin");
+    const all = ((await (await admin("GET", "/v1/admin/feedback")).json()) as any).feedback;
+    const [k3, k2, account] = all;
+    assert.equal(account.station, null);
+    for (const [f, reason] of [[account, "no_station"], [k2, "no_chat"], [k3, "no_chat"]] as const) {
+      const refused = await admin("POST", `/v1/admin/feedback/${f.id}/reply`, { text: "能再说说吗？" });
+      assert.equal(refused.status, 409);
+      assert.deepEqual(await refused.json(), { error: "undeliverable", reason });
+    }
+    assert.ok(((await (await admin("GET", "/v1/admin/feedback")).json()) as any).feedback.every((f: any) => f.replies.length === 0), "none kept");
+  } finally {
+    await h.close();
+  }
+});
+
+test("the chat's people answer in the app, or their agent answers for them: kept with the team's replies, the report updated", async () => {
+  const h = await harness();
+  try {
+    const { id: home, station, aliceTokens } = await workspace(h);
+    const alice = h.as(aliceTokens);
+    await send(h, station, report({ context: { session: "chat:c-1", thread: "CHAT/1.1", workspace: home } }));
+    const admin = h.as(aliceTokens, "admin");
+    const fb = ((await (await admin("GET", "/v1/admin/feedback")).json()) as any).feedback[0].id as string;
+    assert.equal((await teamReply(h, fb, "能发一下日志吗？")).status, 201);
+
+    const events = await listen(h, aliceTokens.access_token);
+    await events.take();
+    const mine = await alice("POST", `/v1/workspaces/${home}/feedback/${fb}/reply`, { text: " 昨天下午三点左右 " });
+    assert.equal(mine.status, 200);
+    assert.match(((await mine.json()) as any).id, /^[0-9A-Z]{26}$/);
+    const answered = await answer(h, station, { number: 1, text: "日志：ERROR chat_post 500", session: "chat:c-1" });
+    assert.equal(answered.status, 201);
+    await h.settled();
+    assert.deepEqual(await events.take(), [{ type: "feedback", workspace: home }, { type: "feedback", workspace: home }]);
+
+    const one = ((await (await admin("GET", "/v1/admin/feedback")).json()) as any).feedback[0];
+    assert.deepEqual(one.replies.map((r: any) => [r.from, r.by, r.text]), [
+      ["team", "feedback-monitor", "能发一下日志吗？"],
+      ["reporter", `account:${one.replies[1].by.slice("account:".length)}`, "昨天下午三点左右"],
+      ["reporter", "session:chat:c-1", "日志：ERROR chat_post 500"],
+    ]);
+    assert.equal(one.updated_at, h.now());
+    const listed = (await (await h.fetch("/v1/admin/feedback/list", { method: "POST", headers: { authorization: `Bearer ${h.feedbackToken}`, "content-type": "application/json" }, body: "{}" })).json()) as any;
+    assert.equal(listed.feedback[0].replies.length, 3, "the monitor reads them too");
+    const shown = ((await (await alice("GET", `/v1/workspaces/${home}/feedback`)).json()) as any).feedback[0];
+    assert.deepEqual(shown.replies.map((r: any) => [r.from, r.name]), [["team", ""], ["person", "Name of alice"], ["agent", ""]]);
+
+    assert.equal((await alice("POST", `/v1/workspaces/${home}/feedback/${fb}/reply`, { text: " " })).status, 400);
+    const carol = h.as(await h.login("carol"));
+    assert.equal((await carol("POST", `/v1/workspaces/${home}/feedback/${fb}/reply`, { text: "hi" })).status, 404, "not a member");
+    assert.equal((await answer(h, station, { number: 2, text: "hi" })).status, 404, "no such report");
+    assert.equal((await answer(h, station, { number: 1, text: " " })).status, 400);
+    const { station: other } = await workspace(h);
+    assert.equal((await answer(h, other, { number: 1, text: "hi" })).status, 404, "another station's report");
   } finally {
     await h.close();
   }

@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { protectedPlace } from "../drive/fs.ts";
 import { SKILL_HOMES } from "./agent-home.ts";
+import { type Lang, tr } from "../ops/i18n.ts";
 
 /// A directory a preset works with: a path, and the repository it is a clone of (its origin), if one. `station`
 /// (its address) and `stationName`: another station of the workspace's it is on; none: the station the preset is on.
@@ -20,12 +21,31 @@ export type PresetDir = { path: string; repo: string | null; station?: string; s
 /// it said (its start, where it is long), whether that is all of it.
 export type Guide = { file: string; text: string; whole: boolean };
 
+/// A model configuration a preset runs with; absent when unrestricted ("不限模型").
+export type PresetModel = {
+  model: string;
+  runtime?: string;
+  effort?: string;
+  fast?: boolean;
+  context?: number;
+  profile?: string;
+  profiles?: string[];
+};
+
 export type Preset = {
   id: string;
   name: string;
   dirs: PresetDir[];
   /// What people want of its chats, as they wrote it.
   instructions: string;
+  /// True when auto-allocating across all eligible online stations; absent when unrestricted or pinned/subset.
+  autoStation?: boolean;
+  /// Fixed station id/address when pinned to one station; absent when unrestricted or auto-allocated.
+  station?: string;
+  /// Station ids/addresses to auto-allocate among when a subset is checked; absent when unrestricted or all stations.
+  stations?: string[];
+  /// Model configuration for chats opened with this preset; absent when unrestricted.
+  model?: PresetModel;
   createdBy: string;
   createdAt: number;
   updatedAt: number;
@@ -33,7 +53,30 @@ export type Preset = {
 
 /// What a chat was opened with: the preset as it was then, each folder's `elsewhere` said where it is not the chat's
 /// station's.
-export type PresetCopy = { id: string; name: string; dirs: PresetDir[]; instructions: string };
+export type PresetCopy = { id: string; name: string; dirs: PresetDir[]; instructions: string; model?: PresetModel; stations?: string[] };
+
+/// What a preset binds its chats to, as the page shows it unchangeable (the user, 2026-11-13: 「锁住，绑定了的不能改」):
+/// the model it names (and its runtime, where it names one), and the stations (ids or addresses) they may be opened
+/// on. Where a chat asked for differs, why it is not opened, said with the way to have it (edit the preset, or open it
+/// with none); null: it may be. How it runs that model (effort, accounts, Fast) only the app holds to: a level or an
+/// account no longer offered here would otherwise make the preset open nothing. `here`: this station's id (null: none
+/// known, the stations not held to).
+export function presetRefusal(
+  p: { name: string; model?: PresetModel; station?: string; stations?: string[] },
+  here: string | null,
+  asked: { runtime: string; model: string | null },
+  lang: Lang,
+): string | null {
+  const m = p.model;
+  if (m !== undefined && (asked.model !== m.model || (m.runtime !== undefined && m.runtime !== asked.runtime))) {
+    return tr(lang, "station.presets.modelBound", { preset: p.name, model: m.model });
+  }
+  const named = p.station !== undefined ? [p.station] : (p.stations ?? []);
+  if (here !== null && named.length > 0 && !named.some((s) => s === here || s.endsWith(`/${here}`))) {
+    return tr(lang, "station.presets.stationBound", { preset: p.name });
+  }
+  return null;
+}
 
 const FILE = "presets.json";
 const COPY = ".stillfail-preset.json";
@@ -55,13 +98,57 @@ function dirsOf(v: unknown): PresetDir[] {
   });
 }
 
+function modelOf(v: unknown): PresetModel | undefined {
+  if (typeof v !== "object" || v === null) return undefined;
+  const o = v as Record<string, unknown>;
+  const m = (str(o.model) ?? "").trim();
+  if (m === "") return undefined;
+  const out: PresetModel = { model: m };
+  const rt = (str(o.runtime) ?? "").trim();
+  if (rt !== "") out.runtime = rt;
+  const eff = (str(o.effort) ?? "").trim();
+  if (eff !== "") out.effort = eff;
+  if (typeof o.fast === "boolean") out.fast = o.fast;
+  if (typeof o.context === "number" && Number.isInteger(o.context) && o.context > 0) out.context = o.context;
+  const prof = (str(o.profile) ?? "").trim();
+  if (prof !== "") out.profile = prof;
+  if (Array.isArray(o.profiles)) {
+    const ps = [...new Set(o.profiles.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim()))];
+    if (ps.length > 0) out.profiles = ps;
+  }
+  return out;
+}
+
+function presetModelOf(o: Record<string, unknown>): PresetModel | undefined {
+  return modelOf(o.model) ?? (typeof o.models === "object" && o.models !== null ? modelOf((o.models as Record<string, unknown>).lead) : undefined);
+}
+
+function stationsOf(o: Record<string, unknown>): { autoStation?: boolean; station?: string; stations?: string[] } {
+  if (Array.isArray(o.stations)) {
+    const list = [...new Set(o.stations.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim()))];
+    if (list.length === 1) return { station: list[0]! };
+    if (list.length > 1) return { stations: list };
+    return {};
+  }
+  const s = (str(o.station) ?? "").trim();
+  if (s !== "") return { station: s };
+  if (o.autoStation === true) return { autoStation: true };
+  return {};
+}
+
 function presetOf(v: any): Preset | null {
   if (typeof v?.id !== "string" || typeof v?.name !== "string") return null;
+  const st = stationsOf(v);
+  const model = presetModelOf(v);
   return {
     id: v.id,
     name: v.name,
     dirs: dirsOf(v.dirs),
     instructions: str(v.instructions) ?? "",
+    ...(st.autoStation ? { autoStation: true } : {}),
+    ...(st.station ? { station: st.station } : {}),
+    ...(st.stations ? { stations: st.stations } : {}),
+    ...(model ? { model } : {}),
     createdBy: str(v.createdBy) ?? "",
     createdAt: typeof v.createdAt === "number" ? v.createdAt : 0,
     updatedAt: typeof v.updatedAt === "number" ? v.updatedAt : 0,
@@ -87,17 +174,26 @@ function writePresets(home: string, presets: Preset[]): void {
 }
 
 /// What a preset is said to be (POST, PUT /presets): its name and instructions trimmed, its directories each a
-/// directory on this machine (`~` its home), named once each.
-export function presetInput(v: unknown): { name: string; dirs: PresetDir[]; instructions: string } {
+/// directory on this machine (`~` its home), named once each, plus optional station policy and model configuration.
+export function presetInput(v: unknown): {
+  name: string;
+  dirs: PresetDir[];
+  instructions: string;
+  autoStation?: boolean;
+  station?: string;
+  stations?: string[];
+  model?: PresetModel;
+} {
   const o = (v ?? {}) as Record<string, unknown>;
   const name = (str(o.name) ?? "").trim();
   if (name === "") throw new Error("a preset needs a name");
   if (Array.from(name).length > NAME_MAX) throw new Error(`a preset's name is ${NAME_MAX} characters at most`);
   const instructions = (str(o.instructions) ?? "").trim();
   if (instructions.length > INSTRUCTIONS_MAX) throw new Error("its instructions are too long");
-  if (!Array.isArray(o.dirs)) throw new Error("dirs: a list of directories");
+  const rawDirs = o.dirs === undefined || o.dirs === null ? [] : o.dirs;
+  if (!Array.isArray(rawDirs)) throw new Error("dirs: a list of directories");
   const dirs: PresetDir[] = [];
-  for (const d of o.dirs) {
+  for (const d of rawDirs) {
     const given = typeof d === "string" ? d : str((d as { path?: unknown })?.path);
     if (given === null || given.trim() === "") throw new Error("a directory needs a path");
     // (another station's, as the app read it there: taken as said, not looked for here)
@@ -113,7 +209,17 @@ export function presetInput(v: unknown): { name: string; dirs: PresetDir[]; inst
     dirs.push({ path, repo: originOf(path) });
   }
   if (dirs.length > DIRS_MAX) throw new Error(`a preset has ${DIRS_MAX} directories at most`);
-  return { name, dirs, instructions };
+  const st = stationsOf(o);
+  const model = presetModelOf(o);
+  return {
+    name,
+    dirs,
+    instructions,
+    ...(st.autoStation ? { autoStation: true } : {}),
+    ...(st.station ? { station: st.station } : {}),
+    ...(st.stations ? { stations: st.stations } : {}),
+    ...(model ? { model } : {}),
+  };
 }
 
 function expand(path: string): string {
@@ -144,7 +250,7 @@ export function originOf(path: string): string | null {
 }
 
 /// The origin a git config names, as `host/owner/name`.
-function originIn(config: string): string | null {
+export function originIn(config: string): string | null {
   const at = config.search(/\[remote "origin"\]/);
   if (at < 0) return null;
   const url = /^\s*url\s*=\s*(.+)$/m.exec(config.slice(at))?.[1]?.trim();
@@ -208,7 +314,8 @@ export class Presets {
     const all = this.list(ws);
     const at = all.findIndex((p) => p.id === id);
     if (at < 0) throw new NoPreset(id);
-    const preset = { ...all[at]!, ...presetInput(input), updatedAt: this.now() };
+    const prev = all[at]!;
+    const preset: Preset = { id: prev.id, ...presetInput(input), createdBy: prev.createdBy, createdAt: prev.createdAt, updatedAt: this.now() };
     all[at] = preset;
     writePresets(this.home(ws), all);
     return preset;
@@ -296,7 +403,17 @@ export function presetCopyInput(v: unknown): PresetCopy {
   if (name === "" || Array.from(name).length > NAME_MAX) throw new Error("presetCopy: a preset needs a name");
   const dirs = dirsOf(o.dirs).slice(0, DIRS_MAX);
   const instructions = (str(o.instructions) ?? "").slice(0, INSTRUCTIONS_MAX);
-  return { id: str(o.id) ?? "", name, dirs: dirs.map(({ station: _s, stationName: _n, guides: _g, skills: _k, ...d }) => d), instructions };
+  const model = modelOf(o.model);
+  const st = stationsOf({ stations: o.stations });
+  const stations = st.station !== undefined ? [st.station] : st.stations;
+  return {
+    id: str(o.id) ?? "",
+    name,
+    dirs: dirs.map(({ station: _s, stationName: _n, guides: _g, skills: _k, ...d }) => d),
+    instructions,
+    ...(model ? { model } : {}),
+    ...(stations ? { stations } : {}),
+  };
 }
 
 /// What a chat whose session workspace is `workspace` was opened with, if anything.
@@ -358,6 +475,8 @@ export async function candidates(reposDir: string, presets: Preset[], found: Can
   const list = async (dir: string) => readdir(dir).catch(() => [] as string[]);
   const cached = await Promise.all(
     (await list(reposDir)).map(async (name): Promise<Candidate | null> => {
+      // (one being cloned, sessions/clones.ts: not there until it is whole)
+      if (name.startsWith(".")) return null;
       const path = join(reposDir, name);
       const git = join(path, ".git");
       const at = await stat(git).catch(() => null);

@@ -10,9 +10,18 @@
 //   RELAY=https://… node scripts/native.ts run mesh -- node station/side/screen-net.ts   (through that relay alone)
 //
 // LINK_SECONDS (default 8) a link; LINKS to pick some by name (comma separated); BITRATE (default 6000000) the source's.
+// AUDIO=1: the view asks for the computer's sound too, the source making a 20 ms packet of 48 kHz stereo PCM every
+// 20 ms as still.fail Helper does; each link then says what share of the bytes that came were sound, how many of the
+// packets made came (`soundCame`, 1 all of them), the longest the sound went without one (`soundGapMs`), and how late
+// the sound and the pictures were (`soundLateP50`, beside `lateP50`). AUDIO=opus: the view says it decodes Opus too,
+// and the source makes packets of OPUS_BYTES (default 160: 64 kbit/s, what the Mac's helper encodes at) instead, or
+// of the sizes OPUS_PACKETS has (a file of packets, each after its length in 2 bytes big-endian), in turn. With
+// SOURCE=helper the helper makes the sound too (a tone, encoded as Opus by AudioToolbox where asked). SOUND_DUMP: each
+// link's packets of sound kept as `<SOUND_DUMP>-<link>.bin` (its codec's name in a line, then each packet's capture
+// time in 8 bytes and its length in 2, big-endian, and the packet), to be decoded and heard.
 import { execFileSync } from "node:child_process";
 import { createSocket, type RemoteInfo } from "node:dgram";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { networkInterfaces, tmpdir } from "node:os";
@@ -39,6 +48,19 @@ const DUMP = process.env.DUMP;
 const helperApp = () => process.env.STILLFAIL_HELPER ?? execFileSync(process.execPath, [join(import.meta.dirname, "../../scripts/native.ts"), "file", "helper"], { encoding: "utf8" }).trim();
 /// How long a device takes to decode and draw a frame before it acknowledges it.
 const DRAW_MS = 4;
+const AUDIO = process.env.AUDIO === "1" || process.env.AUDIO === "opus";
+const OPUS = process.env.AUDIO === "opus";
+/// A 20 ms packet of 48 kHz stereo 16-bit PCM, as still.fail Helper sends the system's sound; one of Opus.
+const AUDIO_BYTES = 3840;
+const OPUS_BYTES = Number(process.env.OPUS_BYTES ?? 160);
+const OPUS_SIZES = ((file) => {
+  if (!file) return [OPUS_BYTES];
+  const b = readFileSync(file);
+  const sizes: number[] = [];
+  for (let at = 0; at + 2 <= b.length; at += 2 + b.readUInt16BE(at)) sizes.push(b.readUInt16BE(at));
+  return sizes;
+})(process.env.OPUS_PACKETS);
+const SOUND_DUMP = process.env.SOUND_DUMP;
 
 type Link = { name: string; rttMs: number; loss: number; mbps: number | null; relay?: string };
 const LINKS: Link[] = [
@@ -51,6 +73,9 @@ const LINKS: Link[] = [
   { name: "city-4M", rttMs: 40, loss: 0, mbps: 4 },
   { name: "city-1M", rttMs: 40, loss: 0, mbps: 1 },
   { name: "far-2%-20M", rttMs: 150, loss: 0.02, mbps: 20 },
+  // a relay far away carrying a few hundred kbit/s, as a phone's way to a station through one
+  { name: "far-800k", rttMs: 150, loss: 0, mbps: 0.8 },
+  { name: "far-400k", rttMs: 150, loss: 0, mbps: 0.4 },
 ];
 
 const now = () => performance.now();
@@ -75,7 +100,19 @@ function movingSource(): ScreenSource {
       // The picture's size: 1080p fitted into the bounds asked.
       const fit = (w: number, h: number) => { const k = Math.min(1, w / 1920, h / 1080); return { width: Math.round(1920 * k), height: Math.round(1080 * k) }; };
       let size = fit(options.maxWidth, options.maxHeight);
+      let heard = now();
+      let made = 0;
       return {
+        ...(options.audio
+          ? {
+              async nextAudio() {
+                heard += 20;
+                if (now() < heard) await sleep(heard - now());
+                else heard = now();
+                return closed ? null : options.opus ? { ts: nowUs(), data: randomBytes(OPUS_SIZES[made++ % OPUS_SIZES.length]!), codec: "opus" as const } : { ts: nowUs(), data: randomBytes(AUDIO_BYTES), codec: "pcm_s16le" as const };
+              },
+            }
+          : {}),
         async next(): Promise<Frame | null> {
           const due = last + 1000 / FPS;
           if (now() < due) await sleep(due - now());
@@ -171,7 +208,7 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
   const proxy = link.relay ? { close() {} } : await impair(link, station.sockets().find((s) => !s.startsWith("0.0.0.0") && !s.startsWith("["))!);
   const conn = await device.connect(link.relay ? { id: station.id(), relays: [link.relay] } : { id: station.id(), ips: [(proxy as { address: string }).address] }, ALPN);
   const stream = await conn.openBi();
-  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: {}, screen: { maxWidth: 1920, maxHeight: 1080, codecs: CODECS, control: false } });
+  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: {}, screen: { maxWidth: 1920, maxHeight: 1080, codecs: CODECS, control: false, ...(AUDIO ? { audio: "pcm_s16le", ...(OPUS ? { opus: true } : {}) } : {}) } });
   const reader = new Reader(stream);
   const head = await reader.line();
   if (head?.status !== 200) throw new Error(`refused: ${JSON.stringify(head)}`);
@@ -179,7 +216,14 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
   const late: number[] = [];
   const drawn: number[] = [];
   let bytes = 0;
+  let audioBytes = 0;
+  let videoBytes = 0;
   let codec = "";
+  let audioCodec = "";
+  /// Each packet of sound that came (its capture time, ms) and how late it was.
+  const heard: number[] = [];
+  const soundLate: number[] = [];
+  const sound: Buffer[] = [];
   /// The station's own measure of how late the frames were, as it last said it.
   let said: { frame: number; before: number } | null = null;
   /// The picture's heights, as each config said them.
@@ -202,7 +246,21 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
       heights.push(config.height);
       if (DUMP && config.description) kept.push(...parameterSets(codec, Buffer.from(config.description, "base64")));
     }
+    if (f.kind === KIND.audioConfig) audioCodec = JSON.parse(f.payload.toString()).codec;
+    if (f.kind === KIND.audio && now() >= counted) {
+      audioBytes += f.payload.length;
+      const ts = Number(f.payload.readBigUInt64BE(0));
+      soundLate.push((nowUs() - ts) / 1000);
+      heard.push(ts / 1000);
+      if (SOUND_DUMP) {
+        const head = Buffer.alloc(10);
+        head.writeBigUInt64BE(BigInt(ts), 0);
+        head.writeUInt16BE(f.payload.length - 8, 8);
+        sound.push(head, f.payload.subarray(8));
+      }
+    }
     if (f.kind !== KIND.video) continue;
+    if (now() >= counted) videoBytes += f.payload.length;
     if (DUMP) kept.push(...units(f.payload.subarray(9)));
     await sleep(DRAW_MS);
     const at = now();
@@ -217,6 +275,7 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
   conn.close(0, "done");
   proxy.close();
   if (DUMP) writeFileSync(`${DUMP}-${link.name}.${codec}`, Buffer.concat(kept));
+  if (SOUND_DUMP) writeFileSync(`${SOUND_DUMP}-${link.name}.bin`, Buffer.concat([Buffer.from(`${audioCodec}\n`), ...sound]));
   const span = (now() - counted) / 1000;
   const gaps = drawn.slice(1).map((t, i) => t - drawn[i]!);
   const stalls = gaps.filter((g) => g > 200);
@@ -231,7 +290,17 @@ async function run(link: Link, station: Endpoint, device: Endpoint) {
     stalls: stalls.length,
     stalledMs: Math.round(stalls.reduce((a, b) => a + b, 0)),
     mbps: +((bytes * 8) / span / 1e6).toFixed(2),
+    ...(AUDIO ? soundOf(audioCodec, heard, soundLate, span) : {}),
+    ...(AUDIO ? { audioShare: +(audioBytes / Math.max(1, audioBytes + videoBytes)).toFixed(2), audioKbps: Math.round((audioBytes * 8) / span / 1000), videoKbps: Math.round((videoBytes * 8) / span / 1000) } : {}),
   };
+}
+
+/// How whole the sound was: the share of the packets made over the span that came (50 a second), the longest it went
+/// without one between the first and the last, and how late they were.
+function soundOf(codec: string, heard: number[], late: number[], span: number) {
+  const sorted = [...heard].sort((a, b) => a - b);
+  const gaps = sorted.slice(1).map((t, i) => t - sorted[i]!);
+  return { soundCodec: codec, soundCame: +(heard.length / (span * 50)).toFixed(2), soundGapMs: Math.round(Math.max(0, ...gaps)), soundLateP50: Math.round(pct(late, 0.5)) };
 }
 
 async function main() {

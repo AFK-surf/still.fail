@@ -90,7 +90,7 @@ test "a filling Seg short of room at a larger size of words: their words smaller
 ///|
 test "a filling Seg whose options do not fit side by side even at the system's own size: the chosen one and a chevron, as wide as its room; a sheet of them all, one picked chosen; given the room, side by side again" {
   let parts = ["Android", "Desktop", "Web", "Station", "Cloud"]
-  let chosen = Ref::new(4)
+  let chosen = Ref(4)
   presenters_reset()
   // 260 wide: 224 in the track for options whose words with the least either side need 243
   let t = @ui.Tester::new(
@@ -119,7 +119,7 @@ test "a filling Seg whose options do not fit side by side even at the system's o
   assert_eq(presented_how, [AsSheet])
   t.tap_text("Station")
   assert_true(!presenting())
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(presented_rest() - t.time())
   assert_eq(chosen.val, 3)
   assert_true(t.query(@ui.Role::Button, label="Station") is Some(_))
   // (given the room: its options side by side, the one picked chosen)
@@ -171,7 +171,7 @@ test "the dark theme's segmented thumb seen off its track on every ground, its w
 ///|
 test "segmented whose options do not fit side by side even at the system's own size: the chosen one and a chevron; a pick of them all, one picked chosen" {
   let parts = ["Overview", "Software and devices", "Settings"]
-  let chosen = Ref::new(0)
+  let chosen = Ref(0)
   presenters_reset()
   let t = @ui.Tester::new(
     fn(c) {
@@ -221,7 +221,7 @@ test "segmented short of room for its equal columns: the longer as wide as its w
     assert_eq(t.lines_of(words), [words], msg=words)
   }
   let short = widths()
-  assert_true((short[1] - need()).abs() < 1.0, msg="\{short} \{need()}")
+  assert_true((short[1] - need()).abs() < 1.0, msg="\{Repr(short)} \{need()}")
   assert_true(short[0] < short[1])
   let (x0, _, _, _) = t.get(@ui.Role::Radio, label="Settings").rect
   let (x1, _, w1, _) = t.get(@ui.Role::Radio, label="Software and devices").rect
@@ -230,7 +230,7 @@ test "segmented short of room for its equal columns: the longer as wide as its w
   t.resize(600.0, 200.0)
   t.draw()
   let wide = widths()
-  assert_true((wide[0] - wide[1]).abs() < 0.5 && (wide[1] - need()).abs() < 1.0, msg="\{wide} \{need()}")
+  assert_true((wide[0] - wide[1]).abs() < 0.5 && (wide[1] - need()).abs() < 1.0, msg="\{Repr(wide)} \{need()}")
   t.resize(320.0, 200.0)
   t.draw()
   assert_eq(widths(), short)
@@ -258,7 +258,7 @@ test "option_widths: alike, none narrower than its words and sides; then their s
 fn open_choice(t : @ui.Tester, words : String) -> Unit raise {
   t.click(@ui.Role::Button, label=words)
   if presented_how == [AsSheet] {
-    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(presented_rest() - t.time())
   } else {
     t.run_for(@kit.presence_in_ms)
   }

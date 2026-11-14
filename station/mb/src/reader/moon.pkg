@@ -30,6 +30,10 @@ import {
   "station/search",
   "station/history",
   "station/readops",
+  "station/replica",
+  "station/front",
+  "station/jsjson",
+  "moonbitlang/core/string",
   "moonbitlang/core/json",
 }
 

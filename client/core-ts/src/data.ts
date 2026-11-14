@@ -6,7 +6,10 @@
 // Topics of this data have no value of their own: their value is read from here (`shared`), by query, when it goes
 // out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
 import { Effect, Fiber, Queue } from "effect";
-import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type LogTable, type RowChange, frozen } from "./db/account.ts";
+import { OVERVIEW_CHAT, OVERVIEW_PROFILED } from "./db/schema.ts";
+import { AccountDb, LIST_OF, foundOf, type ChatFound, type Changes, type Derive, type HeadRow, type ListKind, type LogTable, type RowChange, frozen } from "./db/account.ts";
+import { KEPT as BESIDE, type AnyKept, type Kept, type Maker, type Owner } from "./db/kept.ts";
+import { CHAT_READS, chatKeys, type ChatRead, type ReadKey } from "./db/chat-reads.ts";
 import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
 import type { MdStore } from "./markdown.ts";
@@ -14,9 +17,10 @@ import { topicKey, type Topic } from "./protocol.ts";
 import { Marks, signal, tracking, untracked, type Source as ReactiveSource } from "./reactive.ts";
 import type { Runner } from "./runtime.ts";
 import { equal, get, isObject, parseJson, toJsonBytes } from "./util.ts";
-import { worded } from "./chat-row.ts";
-import { current, tr } from "./i18n.ts";
+import { worded, type Words } from "./chat-row.ts";
+import { rowWords } from "./station/rows-made.ts";
 import { ofAddress } from "./workspace.ts";
+import { glanced } from "./work.ts";
 
 export { frozen };
 export type { ListKind, RowChange };
@@ -37,7 +41,7 @@ export function num(n: number): string {
 export const SOON_MS = 300;
 
 /// The topics whose values are held here.
-const HELD = new Set(["workspace", "overview", "session", "chatRows", "sessions", "threads", "archivedRows", "jobs", "job", "slackApp", "stationUsage", "footprint", "loginSessions", "admin", "draft", "prefs", "drive", "drivePlace"]);
+const HELD = new Set(["workspace", "overview", "session", "chatRows", "sessions", "threads", "archivedRows", "jobs", "job", "slackApp", "stationUsage", "loginSessions", "admin", "draft", "prefs", "drive", "drivePlace"]);
 const LIST_TOPIC: Record<ListKind, string> = { chats: "chatRows", archived: "archivedRows", sessions: "sessions", threads: "threads", jobs: "jobs" };
 
 /// What a folder of a station's drive is kept as among the station's documents (the `drive` topic).
@@ -273,7 +277,15 @@ export const rowsRead: { count: number; by?: Map<string, number> } = { count: 0 
 /// An account's database opened, or why not (`sql`: the file opened, its tables not read).
 type Opened = { db: AccountDb; sql: Sql } | { db: null; sql: Sql | null; error: SqlError | HostError };
 
-const NO_DERIVE: Derive = { tone: () => null, asks: () => false };
+const NO_DERIVE: Derive = { tone: () => null, asks: () => false, state: () => null, watched: () => false };
+/// Every declared read of the chat table (db/chat-reads.ts).
+const CHAT_READ_LIST: readonly ChatRead<never>[] = Object.values(CHAT_READS) as readonly ChatRead<never>[];
+/// What a declared read's readers are told by, of one of its keys.
+const readTopic = (name: string, k: ReadKey): Topic => ({ topic: name, station: k[0], key: k.slice(1).join(SEP) });
+/// What a chat's record a read found is told by (its station, whether archived, its id): every write of it.
+const CHAT_RECORD = "$chat-record";
+/// How many declared reads' answers are kept as their statements gave them, read again only as their keys are told.
+const CHAT_ANSWERS_KEPT = 64;
 
 /// How long a session counts as used lately once its chat or history was opened (`usedLately`).
 export const RECENT_MS = 3 * 86_400_000;
@@ -294,9 +306,17 @@ export class Data {
   readonly #mdSeen = new Marks();
   /// Indexed reads can follow changes without loading a whole topic or keeping a network watch open.
   readonly #queryReads = new Map<string, { signal: ReactiveSource<number>; revision: number }>();
+  /// What each read's revision is taken from (`#queryReads`): one count for all, so that a read let go of and read
+  /// again never has a revision it had before.
+  #revisions = 0;
+  /// Each declared read's answer as its statement gave it, by its database, statement and parameters, with the
+  /// revisions of its keys it was read at (`at`): taken again, no statement run, while those are the same (#chatRows).
+  readonly #chatAnswers = new Map<string, { at: string; rows: readonly SqlRow[] }>();
   readonly #listReads = new Map<string, { signal: ReactiveSource<boolean>; station: string; kind: ListKind }>();
   readonly #slackNamesReads = new Map<string, { signal: ReactiveSource<number>; revision: number; names: [string, string][]; sawDifferent: boolean }>();
   readonly #modelEdits = new Map<string, [unknown, unknown]>();
+  /// How the views make what is kept beside a record (makes; db/kept.ts).
+  readonly #makers = new Map<AnyKept, Maker<unknown>>();
   /// Sign-ins for new profiles as their station answered a step of them (`login.new`, `login.code`), by station and
   /// login: shown in its overview's `logins` while the overview still has the login where the step found it (`from`: the
   /// state it moved on from; null, not listed yet). A code sent showed its field again, empty, until the station's next
@@ -405,6 +425,7 @@ export class Data {
       }
       if (db.readOnly) note = { kind: "newer", detail: null };
       db.onCommit = (changes) => this.#committed(changes);
+      for (const [d, maker] of this.#makers) db.kept.made(d, maker);
       db.onFull = (full, error) => this.#setNote(sub, full ? { kind: "full", detail: error } : null);
       this.#dbs.set(sub, db);
       if (note) this.#setNote(sub, note);
@@ -543,23 +564,32 @@ export class Data {
       for (const l of this.#logChanged) l(table, station, id);
     }
     for (const station of slackStations) this.#refreshSlackNames(station);
+    // Each declared read told by the keys a written row says, before and after (db/chat-reads.ts `of`), one with `by`
+    // only where what of a row its answer reads differs before and after (or the row came or went); the records a read
+    // found by their own keys (CHAT_RECORD); whether it is marked worked out only while the station's marks are read.
     for (const [station, rows] of changes.readChats) {
-      let markedChanged = false;
-      const markedRead = this.#queryReads.has(topicKey({ topic: "$marked", station }));
+      const markedRead = this.#queryReads.has(topicKey(readTopic(CHAT_READS.marked.name, [station])));
+      const told = new Set<string>();
+      const tell = (topic: Topic) => {
+        const key = topicKey(topic);
+        if (told.has(key)) return;
+        told.add(key);
+        this.#tellQuery(topic);
+      };
       for (const row of rows.values()) {
-        this.#tellQuery({ topic: "$chat-row", station, id: row.id });
-        if (markedRead && !row.archived && !markedChanged) {
-          markedChanged = [row.before, row.after, ...(row.between ?? [])].some((value) =>
-            value !== undefined && (this.#derive.tone(value) !== null || this.#derive.asks(value))
-          );
-        }
-        for (const value of [row.before, row.after, ...(row.between ?? [])]) {
-          if (typeof get(value, "session") === "string") this.#tellQuery({ topic: "$chat-session", station, session: value.session });
-          if (typeof get(value, "thread") === "number") this.#tellQuery({ topic: "$chat-thread", station, thread: value.thread });
-          if (typeof get(value, "clientKey") === "string") this.#tellQuery({ topic: "$chat-client", station, key: value.clientKey });
+        tell(readTopic(CHAT_RECORD, [station, row.archived ? 1 : 0, row.id]));
+        const keysOf = (value: unknown, ord: number | undefined) =>
+          chatKeys(station, row.archived, row.id, value, markedRead && !row.archived && (this.#derive.tone(value) !== null || this.#derive.asks(value)), { state: this.#derive.state(value), watched: this.#derive.watched(value) }, ord ?? 0);
+        const before = row.before === undefined ? undefined : keysOf(row.before, row.ordBefore);
+        const after = row.after === undefined ? undefined : keysOf(row.after, row.ordAfter);
+        const between = (row.between ?? []).map((v) => keysOf(v, row.ordAfter));
+        for (const read of CHAT_READ_LIST) {
+          if (read.by !== undefined && before !== undefined && after !== undefined && equal(read.by(before), read.by(after))) continue;
+          for (const c of read.by !== undefined ? [before, after] : [before, after, ...between]) {
+            if (c !== undefined) for (const k of read.of(c)) tell(readTopic(read.name, k));
+          }
         }
       }
-      if (markedChanged) this.#tellQuery({ topic: "$marked", station });
     }
     for (const [station, rows] of changes.chats) {
       const list = [...rows.values()];
@@ -585,7 +615,7 @@ export class Data {
 
   #tell(topic: Topic): void {
     if (topic.topic === "*") {
-      for (const read of this.#queryReads.values()) read.signal.set(++read.revision);
+      for (const read of this.#queryReads.values()) read.signal.set((read.revision = ++this.#revisions));
       for (const read of this.#listReads.values()) read.signal.set(this.of(read.station)?.listed(read.station, read.kind) ?? false);
       for (const station of this.#slackNamesReads.keys()) this.#refreshSlackNames(station);
     } else {
@@ -598,7 +628,7 @@ export class Data {
 
   #tellQuery(topic: Topic): void {
     const read = this.#queryReads.get(topicKey(topic));
-    if (read) read.signal.set(++read.revision);
+    if (read) read.signal.set((read.revision = ++this.#revisions));
   }
 
   #readQuery(topic: Topic): void {
@@ -608,8 +638,9 @@ export class Data {
     for (const key of keys) {
       let read = this.#queryReads.get(key);
       if (!read) {
-        const node = signal(0, () => this.#queryReads.delete(key));
-        read = { signal: node, revision: 0 };
+        const revision = ++this.#revisions;
+        const node = signal(revision, () => this.#queryReads.delete(key));
+        read = { signal: node, revision };
         this.#queryReads.set(key, read);
       }
       read.signal.get();
@@ -662,10 +693,8 @@ export class Data {
     if (kind) return db.list(station, kind);
     switch (topic.topic) {
       case "overview":
-        if ([...this.#modelEdits.keys(), ...this.#loginSteps.keys()].some((k) => k.startsWith(station + SEP))) return this.shown(topic);
+        if (this.#overlaid(station)) return this.shown(topic);
         return db.stationDoc(station, "overview");
-      case "footprint":
-        return db.stationDoc(station, "footprint");
       case "stationUsage":
         return db.stationDoc(station, "usage");
       case "drive":
@@ -684,6 +713,12 @@ export class Data {
   get(topic: Topic): unknown {
     const v = topic.topic === "overview" ? this.#rawOverview(topic) : this.shared(topic);
     return v === undefined ? undefined : structuredClone(v);
+  }
+
+  /// Whether a station's overview is shown with what is being done to it here (a profile's models being saved, a
+  /// sign-in's step): `shared` gives it so, made anew, not as it is held.
+  #overlaid(station: string): boolean {
+    return [...this.#modelEdits.keys(), ...this.#loginSteps.keys()].some((k) => k.startsWith(station + SEP));
   }
 
   #rawOverview(topic: Topic): unknown {
@@ -745,6 +780,10 @@ export class Data {
     this.#loginSteps.delete(key);
     if (isObject(job) && loginAt(this.#rawOverview({ topic: "overview", station }), id) === from) this.#loginSteps.set(key, { id, job, from });
     this.#tell({ topic: "overview", station });
+    this.#tellQuery({ topic: "$overview-fit", station });
+    this.#tellQuery({ topic: "$overview-chat", station });
+    this.#tellQuery({ topic: "$overview-profiles", station });
+    this.#tellQuery({ topic: "$overview-profiled", station });
   }
 
   /// The steps an overview of the station has gone past (or that it no longer has where they were): let go.
@@ -763,17 +802,26 @@ export class Data {
     if (this.#modelEdits.has(key)) return false;
     this.#modelEdits.set(key, [models, changed]);
     this.#tell({ topic: "overview", station });
+    this.#tellQuery({ topic: "$overview-fit", station });
+    this.#tellQuery({ topic: "$overview-chat", station });
+    this.#tellQuery({ topic: "$overview-profiles", station });
+    this.#tellQuery({ topic: "$overview-profiled", station });
     return true;
   }
 
   endModels(station: string, id: string): void {
     this.#modelEdits.delete(join([station, id]));
     this.#tell({ topic: "overview", station });
+    this.#tellQuery({ topic: "$overview-fit", station });
+    this.#tellQuery({ topic: "$overview-chat", station });
+    this.#tellQuery({ topic: "$overview-profiles", station });
+    this.#tellQuery({ topic: "$overview-profiled", station });
   }
 
   /// A held topic's new value (read, or as an event left it). `confirmed`: it came from its source just now (else it
-  /// is the core's own change).
-  set(topic: Topic, value: unknown, confirmed = true): void {
+  /// is the core's own change). `changed`: of a list of sessions or threads, the keys of the rows its station said
+  /// changed from those held (sync.ts #whole), the rest as held (none: any of them may have).
+  set(topic: Topic, value: unknown, confirmed = true, changed?: ReadonlySet<string>): void {
     const s = (k: string) => String(topic[k]);
     const at = confirmed ? this.#host.nowMs() : null;
     if (topic.topic === "prefs") {
@@ -800,20 +848,18 @@ export class Data {
     const list = Array.isArray(value) ? value : [];
     switch (topic.topic) {
       case "chatRows":
-        return db.setChats(station, false, list.map(inWords), at);
       case "archivedRows":
-        return db.setChats(station, true, list.map(inWords), at);
+        glanced.chatRowsWorded += list.length;
+        return db.setChats(station, topic.topic === "archivedRows", list.map(inWords), at);
       case "sessions":
-        return db.setSessions(station, list, at);
+        return db.setSessions(station, list, at, changed);
       case "threads":
-        return db.setThreads(station, list, at);
+        return db.setThreads(station, list, at, changed);
       case "jobs":
         return db.setJobs(station, list, at);
       case "overview":
         this.#loginsMoved(station, value);
         return db.putStationDoc(station, "overview", value, at, topic);
-      case "footprint":
-        return db.putStationDoc(station, "footprint", value, at, topic);
       case "stationUsage":
         return db.putStationDoc(station, "usage", value, at, topic);
       case "drive":
@@ -911,9 +957,9 @@ export class Data {
 
   // ── records by table and key: the account's own and the device's ──
 
-  /// A value the core keeps itself: `me` by account; a new chat's picks (`choice`) and chats' links (`chat_ref`), a
-  /// workspace's in its account's database (`ws:<id>:…`, `links:<id>`), a station's (`place`, `link`) too; the rest the
-  /// device's; the changelog's.
+  /// A value the core keeps itself: `me` by account; a new chat's picks (`choice`), chats' links and the chats opened
+  /// (`chat_ref`), a workspace's in its account's database (`ws:<id>:…`, `links:<id>`, `opened:<id>`), a station's
+  /// (`place`, `link`) too; the rest the device's; the changelog's.
   record(table: string, key: string): unknown {
     const [db, k] = this.#recordAt(table, key);
     this.#readQuery(this.#recordTopic(table, key, db, k));
@@ -958,11 +1004,29 @@ export class Data {
       const ws = key.slice(6);
       return [this.#ofWorkspace(ws) ?? null, [ws, "links"]];
     }
+    // The chats opened on this device in a workspace, the latest last (refs.ts opened).
+    if (table === "chat_ref" && key.startsWith("opened:")) {
+      const ws = key.slice(7);
+      return [this.#ofWorkspace(ws) ?? null, [ws, "opened"]];
+    }
+    // The team's replies on bug reports from the workspace's chats, as the cloud gives them, and the ones dismissed here (feedback-replies.ts).
+    if (table === "feedback" || table === "feedbackDismissed") return [this.#ofWorkspace(key) ?? null, [key, table]];
     // A workspace's lock as the cloud keeps it (views/lock.ts): in the workspace's, by its id.
     if (table === "lock") return [this.#ofWorkspace(key) ?? null, [key, "lock"]];
+    // Beside it, once its chain moved to its people's logs: the person logs and the statements' bodies its stations
+    // gave (views/lock.ts `lockLogs`, `lockBodies`); whom the person here added and as what (`lockAdded`); whether the
+    // lock held says it is in safe mode, a few bytes (`lockSafe`); which of its stations last said to this device that
+    // they serve what a moved chain is made of (`lockServes`); what they saw of its devices' builds (`lockBuilds`).
+    if (table === "lockLogs" || table === "lockBodies" || table === "lockAdded" || table === "lockSafe" || table === "lockServes" || table === "lockBuilds") return [this.#ofWorkspace(key) ?? null, [key, table]];
+    // A workspace's ways as its stations keep them (views/ways-stations.ts): in the workspace's, by its id.
+    if (table === "ways") return [this.#ofWorkspace(key) ?? null, [key, "ways"]];
+    // Its stations' names and marks as they keep them (views/station-marks.ts): in the workspace's, by its id.
+    if (table === "stationMarks") return [this.#ofWorkspace(key) ?? null, [key, "stationMarks"]];
     // A workspace's vaults as its stations hold them (views/vault.ts): the vaults, box certificates and requests by the
     // workspace's id; each vault's items by `<workspace>/<vault>`.
     if (table === "vault") return [this.#ofWorkspace(key) ?? null, [key, "vault"]];
+    // Beside them, where the workspace's chain moved: what of the state in force took each version (`vaultTook`).
+    if (table === "vaultTook") return [this.#ofWorkspace(key) ?? null, [key, "vaultTook"]];
     if (table === "vaultItems") {
       const ws = ofAddress(key);
       return [this.#ofWorkspace(ws) ?? null, [ws, `vaultItems:${key.slice(ws.length + 1)}`]];
@@ -1033,33 +1097,126 @@ export class Data {
     return known;
   }
 
-  /// A sidebar row as an event has it.
-  putChat(station: string, row: unknown): void {
-    this.of(station)?.putChat(station, inWords(row));
+  /// A sidebar row as an event has it; at `place` where its list says each row's (rows-made.ts `sharedPlace`).
+  putChat(station: string, row: unknown, place?: number): void {
+    this.of(station)?.putChat(station, inWords(row), place);
+  }
+
+  /// A station's sidebar as it was made whole, each row at the place `places` says (rows-made.ts `sharedPlace`): what
+  /// `set` does of a `chatRows`, but where the list says each row's place.
+  setChatsAt(station: string, rows: readonly unknown[], places: readonly number[]): void {
+    glanced.chatRowsWorded += rows.length;
+    this.of(station)?.setChats(station, false, rows.map(inWords) as Record<string, any>[], this.#host.nowMs(), places);
   }
 
   dropChat(station: string, id: string): void {
     this.of(station)?.dropChat(station, id);
   }
 
+  /// What a declared read of the chat table finds (db/chat-reads.ts), across the databases of the stations it reads (its
+  /// `station`, or its `stations` each in theirs): read in a computed, it is made again as its keys are told, its
+  /// statement run again only then (#chatRows), each record it reads (`wants`, by the read's own columns) told by its own
+  /// key.
+  chatFound<P extends { station: string } | { stations: string[] }>(read: ChatRead<P>, p: P, wants: (cols: SqlRow) => boolean = () => true): ChatFound[] {
+    const out: ChatFound[] = [];
+    for (const [db, rows] of this.#chatRead(read, p)) {
+      const found = foundOf(rows);
+      if (read.records) this.#records(db, found.filter((f) => wants(f.cols)));
+      out.push(...found);
+    }
+    return out;
+  }
+
+  /// What a declared read of counts or columns answers (db/chat-reads.ts), across the databases as chatFound's.
+  chatCounted<P extends { station: string } | { stations: string[] }>(read: ChatRead<P>, p: P): SqlRow[] {
+    return this.#chatRead(read, p).flatMap(([, rows]) => rows);
+  }
+
+  /// The records of rows a read found (their `record`), each told by its own key: read as chatFound reads them.
+  chatRecords(found: ChatFound[]): void {
+    const by = new Map<AccountDb, ChatFound[]>();
+    for (const f of found) {
+      const db = this.of(f.station);
+      if (db) by.set(db, [...(by.get(db) ?? []), f]);
+    }
+    for (const [db, of] of by) this.#records(db, of);
+  }
+
+  #records(db: AccountDb, found: ChatFound[]): void {
+    for (const f of found) this.#readQuery(readTopic(CHAT_RECORD, [f.station, f.archived ? 1 : 0, f.id]));
+    db.chatRecords(found);
+  }
+
+  #chatRead<P extends { station: string } | { stations: string[] }>(read: ChatRead<P>, p: P): [AccountDb, readonly SqlRow[]][] {
+    const topics = read.keys(p).map((k) => readTopic(read.name, k));
+    for (const topic of topics) this.#readQuery(topic);
+    if ("station" in p) {
+      const db = this.of(p.station);
+      return db === undefined ? [] : [[db, this.#chatRows(db, read, p, topics)]];
+    }
+    const by = new Map<AccountDb, string[]>();
+    for (const s of p.stations) {
+      const db = this.of(s);
+      if (db) by.set(db, [...(by.get(db) ?? []), s]);
+    }
+    return [...by].map(([db, stations]) => [db, this.#chatRows(db, read, { ...p, stations }, topics)]);
+  }
+
+  /// A declared read's answer in one database: as its statement gave it while its keys' revisions (and their stations'
+  /// resets) are what they were, else read and kept. Only in a computed, whose reading made those keys' revisions.
+  #chatRows<P>(db: AccountDb, read: ChatRead<P>, p: P, topics: Topic[]): readonly SqlRow[] {
+    if (!tracking()) return db.chatCounted(read, p);
+    const revs: number[] = [];
+    for (const topic of topics) {
+      for (const t of [topic, { topic: "$station-reset", station: topic.station }]) {
+        const r = this.#queryReads.get(topicKey(t))?.revision;
+        if (r === undefined) return db.chatCounted(read, p);
+        revs.push(r);
+      }
+    }
+    const key = `${db.name}${SEP}${read.sql}${SEP}${JSON.stringify(read.params(p))}`;
+    const at = revs.join(",");
+    const kept = this.#chatAnswers.get(key);
+    if (kept !== undefined && kept.at === at) return kept.rows;
+    const rows = db.chatCounted(read, p);
+    this.#chatAnswers.delete(key);
+    this.#chatAnswers.set(key, { at, rows });
+    if (this.#chatAnswers.size > CHAT_ANSWERS_KEPT) this.#chatAnswers.delete(this.#chatAnswers.keys().next().value!);
+    return rows;
+  }
+
+  /// A listed chat's record where it is held in memory now (read or written this run), else undefined: nothing read.
+  heldChat(station: string, id: string): unknown {
+    this.#readQuery(readTopic(CHAT_READS.row.name, [station, id]));
+    return this.of(station)?.heldChat(station, id);
+  }
+
   chat(station: string, id: string): unknown {
     void this.listed(station, "chats");
-    this.#readQuery({ topic: "$chat-row", station, id });
+    this.#readQuery(readTopic(CHAT_READS.row.name, [station, id]));
     return this.of(station)?.chat(station, id);
   }
 
   chatNamed(station: string, id: string): { row: unknown; archived: boolean } | undefined {
     void this.listed(station, "chats");
     void this.listed(station, "archived");
-    this.#readQuery({ topic: "$chat-row", station, id });
-    this.#readQuery({ topic: "$chat-session", station, session: id });
+    this.#readQuery(readTopic(CHAT_READS.named.name, [station, id]));
     return this.of(station)?.chatNamed(station, id);
+  }
+
+  /// The chat a link names (as chatNamed finds it): its id, its title and whether it is archived, of their columns, no
+  /// record read.
+  chatTitled(station: string, id: string): { id: string; title: string | null; archived: boolean } | undefined {
+    void this.listed(station, "chats");
+    void this.listed(station, "archived");
+    const f = this.chatFound(CHAT_READS.named, { station, id }, () => false)[0];
+    return f === undefined ? undefined : { id: f.id, title: typeof f.cols[0] === "string" ? f.cols[0] : null, archived: f.archived };
   }
 
   chatOfThread(station: string, thread: number): unknown {
     if (!Number.isInteger(thread)) return undefined;
     void this.listed(station, "chats");
-    this.#readQuery({ topic: "$chat-thread", station, thread });
+    this.#readQuery(readTopic(CHAT_READS.thread.name, [station, thread]));
     return this.of(station)?.chatOfThread(station, thread);
   }
 
@@ -1070,13 +1227,33 @@ export class Data {
 
   chatOfSession(station: string, session: string): unknown {
     void this.listed(station, "chats");
-    this.#readQuery({ topic: "$chat-session", station, session });
+    this.#readQuery(readTopic(CHAT_READS.session.name, [station, session]));
     return this.of(station)?.chatOfSession(station, session);
+  }
+
+  /// The listed chat an agent's session is in: its own (chatOfSession), else the first it is among the agents of
+  /// (`chat_agent`), as the station names a session's chat.
+  chatOfAgent(station: string, session: string): unknown {
+    const own = this.chatOfSession(station, session);
+    if (own !== undefined) return own;
+    this.#readQuery(readTopic(CHAT_READS.agent.name, [station, session]));
+    return this.of(station)?.chatOfAgent(station, session);
+  }
+
+  /// The listed chat an agent's session is in (as chatOfAgent finds it): its id and title alone, of their columns, no
+  /// record read.
+  chatNamedOfAgent(station: string, session: string): { id: string; title: string | null } | undefined {
+    void this.listed(station, "chats");
+    for (const read of [CHAT_READS.session, CHAT_READS.agent]) {
+      const f = this.chatFound(read, { station, session }, () => false)[0];
+      if (f !== undefined) return { id: f.id, title: typeof f.cols[0] === "string" ? f.cols[0] : null };
+    }
+    return undefined;
   }
 
   chatOfClientKey(station: string, key: string): unknown {
     void this.listed(station, "chats");
-    this.#readQuery({ topic: "$chat-client", station, key });
+    this.#readQuery(readTopic(CHAT_READS.client.name, [station, key]));
     return this.of(station)?.chatOfClientKey(station, key);
   }
 
@@ -1085,15 +1262,129 @@ export class Data {
     return this.of(station)?.rowsRev(station) ?? 0;
   }
 
-  /// The rows of these stations a list shows first, across their databases.
-  chatHead(stations: string[], limit: number): [string, any][] {
+  /// The rows of these stations a list shows first, across their databases (`mine`: of the viewer's own alone).
+  chatHead(stations: string[], limit: number, mine = false): [string, any][] {
     const by = new Map<AccountDb, string[]>();
     for (const s of stations) {
       const db = this.of(s);
       if (!db) continue;
       by.set(db, [...(by.get(db) ?? []), s]);
     }
-    return [...by].flatMap(([db, list]) => db.chatHead(list, limit));
+    return [...by].flatMap(([db, list]) => db.chatHead(list, limit, mine));
+  }
+
+  /// What the chat list reads of a station's overview (account.ts overviewPart): read in a computed, it is made again
+  /// only as that part changes, not with the rest of the overview.
+  overviewPart(station: string): unknown {
+    this.#readQuery({ topic: "$overview-part", station });
+    return this.of(station)?.overviewPart(station);
+  }
+
+  /// What a station's row reads of its overview (account.ts overviewRow), kept beside it apart from the list's part:
+  /// read in a computed, it is made again only as that changes.
+  overviewRow(station: string): unknown {
+    this.#readQuery({ topic: "$overview-row", station });
+    return this.of(station)?.overviewRow(station);
+  }
+
+  /// What a chat's page reads of a station's overview (account.ts overviewChat, schema.ts OVERVIEW_CHAT), kept beside
+  /// it: read in a computed, it is made again only as that changes, not with the rest of the overview. Where the
+  /// overview is shown with what is being done to it here (overlaid), made of that, anew.
+  overviewChat(station: string): unknown {
+    this.#readQuery({ topic: "$overview-chat", station });
+    if (!this.#overlaid(station)) return this.of(station)?.overviewChat(station);
+    const shown = this.shown({ topic: "overview", station });
+    if (!isObject(shown)) return undefined;
+    const out: Record<string, unknown> = {};
+    for (const k of OVERVIEW_CHAT) if (k in shown) out[k] = shown[k];
+    return frozen(out);
+  }
+
+  /// Profile `id` of a station's overview (account.ts overviewProfile), alone: read in a computed, it is made again as
+  /// the station's profiles change. Where the overview is shown with what is being done to it here (overlaid), that
+  /// one of what is shown.
+  overviewProfile(station: string, id: string): unknown {
+    this.#readQuery({ topic: "$overview-profiles", station });
+    if (!this.#overlaid(station)) return this.of(station)?.overviewProfile(station, id);
+    const shown = this.shown({ topic: "overview", station });
+    const found = isObject(shown) && Array.isArray(shown.profiles) ? shown.profiles.find((p) => isObject(p) && p.id === id) : undefined;
+    return found === undefined ? undefined : frozen(found);
+  }
+
+  /// What the workspace's profiles read of a station's overview (account.ts overviewProfiled, schema.ts
+  /// OVERVIEW_PROFILED), kept beside it: read in a computed, it is made again only as that changes, not with the rest of
+  /// the overview. Where the overview is shown with what is being done to it here (overlaid), made of that, anew.
+  overviewProfiled(station: string): unknown {
+    this.#readQuery({ topic: "$overview-profiled", station });
+    if (!this.#overlaid(station)) return this.of(station)?.overviewProfiled(station);
+    const shown = this.shown({ topic: "overview", station });
+    if (!isObject(shown)) return undefined;
+    const out: Record<string, unknown> = {};
+    // (in the overview's order, as SQLite keeps the part: json_each)
+    for (const k of Object.keys(shown)) if ((OVERVIEW_PROFILED as readonly string[]).includes(k)) out[k] = shown[k];
+    return frozen(out);
+  }
+
+  /// The stations a station took the place of (account.ts overviewFormerly), kept beside its overview: read in a
+  /// computed, it is made again only as that changes.
+  overviewFormerly(station: string): unknown {
+    this.#readQuery({ topic: "$overview-formerly", station });
+    return this.of(station)?.overviewFormerly(station);
+  }
+
+  /// How the views make a declaration's values (db/kept.ts), for each database to make them as their records are
+  /// written and keep them beside them.
+  makes<V>(d: Kept<V>, maker: Maker<V> | null): void {
+    if (maker === null) this.#makers.delete(d as AnyKept);
+    else this.#makers.set(d as AnyKept, maker as Maker<unknown>);
+    for (const db of this.#dbs.values()) db.kept.made(d, maker);
+  }
+
+  /// An owner's value kept beside its record under `key` (the key in force where none is given), across the databases
+  /// (db/kept.ts `one`): undefined where none is, or its record is shown otherwise than it is held (`overlaid`). Read in
+  /// a computed, it is made again as its record's writer tells (`told`).
+  kept<V>(d: Kept<V>, owner: Owner, key?: string): V | undefined {
+    if (d.told !== undefined) this.#readQuery({ topic: d.told, station: owner[0] });
+    if (d.overlaid === true && this.#overlaid(owner[0])) return undefined;
+    return this.of(owner[0])?.kept.one(d, owner, key);
+  }
+
+  /// The values of `owners` kept under their keys (`keys`), across their databases (db/kept.ts `many`).
+  keptMany<V>(d: Kept<V>, owners: readonly Owner[], keys: readonly string[]): (V | undefined)[] {
+    const out: (V | undefined)[] = owners.map(() => undefined);
+    const by = new Map<AccountDb, number[]>();
+    owners.forEach((o, i) => {
+      const db = this.of(o[0]);
+      if (db) by.set(db, [...(by.get(db) ?? []), i]);
+    });
+    for (const [db, at] of by) db.kept.many(d, at.map((i) => owners[i]), at.map((i) => keys[i])).forEach((v, j) => (out[at[j]] = v));
+    return out;
+  }
+
+  /// A value a reader made of `record` as it read it, kept beside it while that is the record held (db/kept.ts `keep`).
+  keep<V>(d: Kept<V>, owner: Owner, record: unknown, key: string, value: V): void {
+    this.of(owner[0])?.kept.keep(d, owner, record, key, value);
+  }
+
+  /// The rows of these stations a list shows first, each its row kept beside it under its station's key (`keys`), else
+  /// its record (account.ts listHead), across their databases.
+  listHead(stations: string[], limit: number, mine: boolean, keys: Map<string, string>): HeadRow[] {
+    const by = new Map<AccountDb, string[]>();
+    for (const s of stations) {
+      const db = this.of(s);
+      if (!db) continue;
+      by.set(db, [...(by.get(db) ?? []), s]);
+    }
+    return [...by].flatMap(([db, list]) => db.listHead(list, limit, mine, keys));
+  }
+
+  /// Whether this core can read a station's overview as kept beside it (db/kept.ts KEPT.overviewFit): undefined, none held; null,
+  /// nothing kept for this core's shapes, or what is shown is not what is held (overlaid): to be judged as it is read
+  /// (and kept). Read in a computed, it is made again as the overview changes.
+  overviewFit(station: string): boolean | null | undefined {
+    const fit = this.kept(BESIDE.overviewFit, [station]);
+    if (fit !== undefined) return fit;
+    return this.of(station)?.overviewHeld(station) === true ? null : undefined;
   }
 
   /// How many sidebar rows these stations have.
@@ -1111,7 +1402,7 @@ export class Data {
     const by = new Map<AccountDb, string[]>();
     for (const s of stations) {
       void this.listed(s, "chats");
-      this.#readQuery({ topic: "$marked", station: s });
+      this.#readQuery(readTopic(CHAT_READS.marked.name, [s]));
       const db = this.of(s);
       if (!db) continue;
       by.set(db, [...(by.get(db) ?? []), s]);
@@ -1188,10 +1479,6 @@ export class Data {
         this.#keeping.delete(db);
       }
     }));
-  }
-
-  running(station: string): unknown[] {
-    return this.of(station)?.running(station) ?? [];
   }
 
   putSummary(station: string, summary: unknown): boolean {
@@ -1297,10 +1584,6 @@ export class Data {
     this.of(station)?.dropThread(station, id);
   }
 
-  unlistThread(station: string, id: number): void {
-    this.of(station)?.unlistThread(station, id);
-  }
-
   raiseLast(station: string, id: number, n: number): void {
     if (!Number.isInteger(id)) return;
     this.of(station)?.raiseLast(station, id, n);
@@ -1329,6 +1612,13 @@ export class Data {
   logNumbers(table: LogTable, station: string, id: string): readonly number[] {
     this.#readQuery({ topic: "$log", table, station, id });
     return this.of(station)?.logNumbers(table, station, id) ?? [];
+  }
+
+  /// The numbers put in a log since change `since`, and the change it is at now (AccountDb.logPutSince); `put` null:
+  /// not known, all of it to be read again.
+  logPutSince(table: LogTable, station: string, id: string, since: number): { rev: number; put: number[] | null } {
+    this.#readQuery({ topic: "$log", table, station, id });
+    return this.of(station)?.logPutSince(table, station, id, since) ?? { rev: 0, put: null };
   }
 
   logRange(table: LogTable, station: string, id: string, from: number, to: number): Map<number, unknown> {
@@ -1436,9 +1726,18 @@ export class Data {
 }
 
 /// A chat's row as its station gives it (station/src/read/views.ts `chats`: what names it, `named`, and a last message
-/// that only quotes, marked so) in this device's words; one a station from before worded itself, as it is.
+/// that only quotes, marked so) in this device's words; one a station from before worded itself, as it is. A frozen row
+/// (as the sync makes them, rows-made.ts RowsMemo) is what it was while it is the same object: in the same words it is
+/// the same object here too (`wordedRows`), frozen, and so taken as written (account.ts `setChats`). Any other is worded
+/// anew.
+const wordedRows = new WeakMap<object, { words: Words; row: unknown }>();
 function inWords(row: unknown): unknown {
   if (!isObject(row)) return row;
-  const lang = current();
-  return worded(row as Record<string, any>, { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") });
+  const words = rowWords();
+  if (!Object.isFrozen(row)) return worded(row as Record<string, any>, words);
+  const was = wordedRows.get(row);
+  if (was?.words === words) return was.row;
+  const out = Object.freeze(worded(row as Record<string, any>, words));
+  wordedRows.set(row, { words, row: out });
+  return out;
 }

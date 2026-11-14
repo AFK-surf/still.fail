@@ -38,7 +38,7 @@ fn way_steps(t : @ui.Tester, most : Double) -> Array[String] {
           off > way_step_most && off > dmax(v0.abs(), v1.abs()) / 2.0
         }
         if stepped(a.0, b.0, n.0) || stepped(a.1, b.1, n.1) {
-          steps.push("at \{t.time()} (\{em.current.map(fn(c) { c.pose })}): its speed went \{b.1 - a.1} then \{n.1 - b.1}")
+          steps.push("at \{t.time()} (\{Repr(em.current.map(fn(c) { c.pose }))}): its speed went \{b.1 - a.1} then \{n.1 - b.1}")
         }
       }
       _ => ()
@@ -46,7 +46,7 @@ fn way_steps(t : @ui.Tester, most : Double) -> Array[String] {
     match (last, now) {
       (Some(b), Some(n)) =>
         if (n.2 - b.2).abs() > shape_step_most || (n.3 - b.3).abs() > shape_step_most {
-          steps.push("at \{t.time()} (\{em.current.map(fn(c) { c.pose })}): its shape went from \{b.2} × \{b.3} to \{n.2} × \{n.3}")
+          steps.push("at \{t.time()} (\{Repr(em.current.map(fn(c) { c.pose }))}): its shape went from \{b.2} × \{b.3} to \{n.2} × \{n.3}")
         }
       _ => ()
     }
@@ -126,7 +126,7 @@ test "an answer said once its agent's turn is over: no avatar to come out of, it
   fix_later(1.0, fn() { fix_chat("s-c1").working = -1.0 })
   fix_clock_set(clock, clock.val + 1.0)
   t.draw()
-  t.run_for(linger_ms + @ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find(tr("android-chat.chat.working")) is None)
   fix_later(1.0, fn() {
     fix_chat("s-c1").sent.push(

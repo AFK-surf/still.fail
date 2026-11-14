@@ -111,9 +111,10 @@ export class FakeControlPlane {
     return state;
   }
 
-  /// A device tool request pushed as Comma does over the presence socket (contract §8, presence transport).
+  /// A device tool request pushed as Comma does over the presence socket (contract §8, presence transport): `type`
+  /// last, as its map encoder writes it.
   tool(id: string, request: unknown) {
-    for (const ws of this.sockets) ws.send(JSON.stringify({ type: "tool", id, request }));
+    for (const ws of this.sockets) ws.send(JSON.stringify({ id, request, type: "tool" }));
   }
 
   /// The roster, gateways and the rest pushed again to every station connected.

@@ -95,7 +95,7 @@ export abstract class OwnProcessDriver<S extends OwnProcessSession = OwnProcessS
   protected abstract handedOver(options: OpenOptions, snapshot: Json, info: RunnerInfo, events: Events): S;
   /// The session the station before had when it crashed: `lines`, what that one had handled of the process's output,
   /// read again (silently) to know it and where its turn stands.
-  protected abstract crashed(options: OpenOptions, lines: Iterable<string>, info: RunnerInfo, events: Events): S;
+  protected abstract crashed(options: OpenOptions, lines: AsyncIterable<string>, info: RunnerInfo, events: Events): Promise<S>;
 
   /// How its process is named in the log.
   protected label(options: OpenOptions, _session: S): string {
@@ -113,7 +113,7 @@ export abstract class OwnProcessDriver<S extends OwnProcessSession = OwnProcessS
     const kind = this.runtime();
     const handed = snapshot as ProcessSnapshot | null;
     const id = handed?.runner ?? runnerId(kind, options.key);
-    const info = findRunner(this.data, id);
+    const info = await findRunner(this.data, id);
     if (!info) throw new Error(`no runner keeps ${kind} for ${options.key}`);
     let session: S;
     if (handed) {
@@ -122,7 +122,7 @@ export abstract class OwnProcessDriver<S extends OwnProcessSession = OwnProcessS
     } else {
       const out = outFile(this.data, id);
       const { at } = await ackedOffset(info, out);
-      session = this.crashed(options, linesBefore(out, at), info, events);
+      session = await this.crashed(options, linesBefore(out, at), info, events);
       log.info(`agents::${kind}`, `taking up a ${kind} process after a crash`, { session: session.id(), pgid: info.pgid, busy: session.busy(), from: at });
       // A turn is running that this station did not start.
       if (session.busy()) events({ type: "turnStarted" });

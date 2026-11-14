@@ -10,7 +10,9 @@
 //   flow ends with the activity's onStop).
 // - What the system lets the app show, told to the core as the app starts and each time it is shown again
 //   (`notify.permission`); the system asked once, the first time signed in with notifications on (`notify.set
-//   {asked}`), and again as they are turned on in settings (refused there, a toast says where to allow them).
+//   {asked}`), and again as they are turned on in settings (refused there, a toast says where to allow them). Android
+//   cannot tell never asked from refused ("ask"), so once `asked` it is told "denied"; a browser can ("default": its
+//   prompt put away leaves it so), which is told as it is, the page's way to allow them asking it again.
 // - A chat on top: its notification taken off. A notification tapped: its link read by the core
 //   (`link.parse`), its workspace switched to, the chat pushed over Home at the message (chat.mbt `go_to`).
 // - Pushes: this device's registration held as the core's `notify` says (`push.register` with the host's
@@ -119,14 +121,14 @@ pub fn push_sync(src : Source, wanted : Bool?) -> Unit {
   let push = match wanted {
     Some(b) => Some(b)
     None =>
-      match field(src.topic("notify", Map::new()).get().value, "push") {
+      match field(src.topic("notify", Map([])).get().value, "push") {
         Some(True) => Some(true)
         Some(False) => Some(false)
         _ => None
       }
   }
   match push {
-    Some(false) => (src.call)("push.unregister", Json::object(Map::new()), fn(_) {  })
+    Some(false) => (src.call)("push.unregister", Json::object(Map([])), answer_unread)
     Some(true) =>
       match (notice_host.val.token)() {
         "" => ()
@@ -148,7 +150,7 @@ pub fn push_sync(src : Source, wanted : Bool?) -> Unit {
             _ => Some({ "kind": "fcm", "token": Json::string(token) })
           }
           if registration is Some(r) {
-            (src.call)("push.register", Json::object(r), fn(_) {  })
+            (src.call)("push.register", Json::object(r), answer_unread)
           }
         }
       }
@@ -162,6 +164,46 @@ fn notify_params(workspace : String) -> Map[String, Json] {
 }
 
 ///|
+/// What the start says of notifications, signed in with a workspace in view, said in node `v` at the moment its cause
+/// comes (the core's `notify` answered, the app shown again: both signals), between frames, not as a frame after it
+/// runs: what the system allows (`notify.permission`, as the app starts and each time it is shown again: MainActivity
+/// onStart), the system asked once (the first time signed in with notifications on: App.kt
+/// rememberNotificationAsk(once)) and this device's push registration (once at the start: MainActivity Push.sync).
+/// Read with a workspace in view only, as notices_frame was: `notify` is held by then (sfbase's shell_opens).
+pub fn notices_said_node(v : @view.View, src : Source) -> Unit {
+  v.reacts(
+    fn() {
+      match workspace_in_view(src).0 {
+        Some(_) if !src.read_only => src.topic("notify", Map([])).get().value is Some(_) && @ui.app_visible()
+        _ => false
+      }
+    },
+    fn(now) {
+      if !now {
+        return
+      }
+      notice_state.src = Some(src)
+      let h = notice_host.val
+      let notify = @signals.untracked(fn() { src.topic("notify", Map([])).get().value })
+      if !notice_state.told {
+        notice_state.told = true
+        tell_permission(src, notify)
+      }
+      if !notice_state.asked_once && flag(notify, "on") && field(notify, "asked") is Some(False) {
+        notice_state.asked_once = true
+        (src.call)("notify.set", { "asked": Json::boolean(true) }, answer_unread)
+        (h.ask)() |> ignore
+      }
+      if !notice_state.synced {
+        notice_state.synced = true
+        notice_state.token = (h.token)()
+        push_sync(src, None)
+      }
+    },
+  )
+}
+
+///|
 /// Each frame, signed in, the workspace `w` in view.
 pub fn notices_frame(src : Source, w : Workspace) -> Unit {
   if src.read_only {
@@ -169,49 +211,31 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
   }
   notice_state.src = Some(src)
   let h = notice_host.val
-  let shown = @ui.app_visible()
-  let notify = src.topic("notify", Map::new()).get().value
-  match notify {
-    Some(_) => {
-      // what the system allows, as the app starts and each time it is shown again (MainActivity onStart)
-      if shown && !notice_state.told {
-        notice_state.told = true
-        tell_permission(src, notify)
-      }
-      // asked once, the first time signed in with notifications on (App.kt rememberNotificationAsk(once))
-      if !notice_state.asked_once && flag(notify, "on") && field(notify, "asked") is Some(False) {
-        notice_state.asked_once = true
-        (src.call)("notify.set", { "asked": Json::boolean(true) }, fn(_) {  })
-        (h.ask)() |> ignore
-      }
-      // the registration for pushes, once at the start (MainActivity: Push.sync)
-      if !notice_state.synced {
-        notice_state.synced = true
-        notice_state.token = (h.token)()
-        push_sync(src, None)
-      }
-      // a token come since (the push service's first, given after the start, or a new one): registered as the core
-      // says (PushService.onNewToken)
-      let token = (h.token)()
-      if token != "" && token != notice_state.token {
-        notice_state.token = token
-        push_sync(src, None)
-      }
+  // a token come since (the push service's first, given after the start, or a new one): registered as the core says
+  // (PushService.onNewToken); what the start says is notices_said_node's
+  if notice_state.synced {
+    let token = (h.token)()
+    if token != "" && token != notice_state.token {
+      notice_state.token = token
+      push_sync(src, None)
     }
-    None => ()
   }
-  // the system's answer to an ask
+  // the system's answer to an ask: not granted, what it says now ("ask" right after a refusal is refused; a browser's
+  // prompt put away leaves it "default", asked again by the page's way to allow them, no toast)
   match (h.answer)() {
     Some(granted) => {
-      if !granted && notice_state.from_switch {
+      let state = if granted {
+        "granted"
+      } else if (h.permission)() == "default" {
+        "default"
+      } else {
+        "denied"
+      }
+      if state == "denied" && notice_state.from_switch {
         toast_later(@sf.t("android-misc.notify.allowInSettings", args=[("app", "still.fail")]))
       }
       notice_state.from_switch = false
-      (src.call)(
-        "notify.permission",
-        { "state": Json::string(if granted { "granted" } else { "denied" }) },
-        fn(_) {  },
-      )
+      (src.call)("notify.permission", { "state": Json::string(state) }, answer_unread)
     }
     None => ()
   }
@@ -302,14 +326,15 @@ fn show_notice(n : Json) -> Unit {
 }
 
 ///|
-/// What the system lets the app show, to the core (Notifier.permission): the host's say, "default" while the system
-/// can still be asked and never was.
+/// What the system lets the app show, to the core (Notifier.permission): the host's say; Android's "ask" (never asked,
+/// or refused: it cannot tell) "default" while the core says it was never asked, else "denied"; a browser's "default"
+/// (never answered, its prompt shown whenever asked) as it is, whether asked or not.
 fn tell_permission(src : Source, notify : Json?) -> Unit {
   let state = match (notice_host.val.permission)() {
     "ask" => if field(notify, "asked") is Some(False) { "default" } else { "denied" }
     s => s
   }
-  (src.call)("notify.permission", { "state": Json::string(state) }, fn(_) {  })
+  (src.call)("notify.permission", { "state": Json::string(state) }, answer_unread)
 }
 
 ///|
@@ -318,23 +343,26 @@ fn tell_permission(src : Source, notify : Json?) -> Unit {
 /// notifications: 共享调试's, AdbShare.java) that settings page over Home.
 fn open_notice(src : Source, opens : String) -> Unit {
   if opens.has_prefix("settings:") {
-    let name = opens.view(start_offset=9).to_owned()
+    let name = opens.exact_view(start=9).to_owned()
     @hostapi.log("notice tapped settings:\{name}")
     match @settings.route_of(name) {
-      Some(route) if app.nav.top() != Setting(route) => {
-        (shell.val.close_overlays)()
-        (shell.val.home)()
-        if app.nav.top() != Home {
-          app.nav.replace(Home)
+      Some(route) => {
+        if app.nav.top() != Setting(route) {
+          (shell.val.close_overlays)()
+          (shell.val.home)()
+          if app.nav.top() != Home {
+            app.nav.replace(Home)
+          }
+          open_page(Setting(route))
         }
-        open_page(Setting(route))
+        bring_chosen()
       }
       _ => ()
     }
     return
   }
   let (url, seq) = match opens.find("\n") {
-    Some(i) => (opens.view(end_offset=i).to_owned(), opens.view(start_offset=i + 1).to_owned())
+    Some(i) => (opens.exact_view(end=i).to_owned(), opens.exact_view(start=i + 1).to_owned())
     None => (opens, "")
   }
   let at = match seq_of(seq) {
@@ -366,7 +394,7 @@ pub fn seq_of(s : String) -> Double {
 ///|
 pub fn trim_slash(o : String) -> String {
   if o.has_suffix("/") {
-    o.view(end_offset=o.length() - 1).to_owned()
+    o.exact_view(end=o.length() - 1).to_owned()
   } else {
     o
   }

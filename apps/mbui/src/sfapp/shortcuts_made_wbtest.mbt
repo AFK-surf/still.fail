@@ -17,7 +17,7 @@ test "快捷键 made once, on each screen: recording, another page put over it (
     let at = "\{w}"
     // (its keys in the window, to be pressed)
     let keys = t.get(Button, label=@sf.t("web-main.keymap.chat.switch")).rect
-    assert_true(keys.0 >= 0.0 && keys.0 + keys.2 <= w, msg="\{at}: its keys at \{keys}")
+    assert_true(keys.0 >= 0.0 && keys.0 + keys.2 <= w, msg="\{at}: its keys at \{Repr(keys)}")
     t.click(Button, label=@sf.t("web-main.keymap.chat.switch"))
     t.frame()
     assert_eq(@settings.keys_recording.get(), "chat.switch", msg=at)

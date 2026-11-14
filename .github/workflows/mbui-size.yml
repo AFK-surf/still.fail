@@ -1,0 +1,212 @@
+# What the app and mbui's minimal demo weigh and the memory they take once idle, for each run of the pipeline on main
+# that built them (the app's web build, the beta's APK, the beta's Mac app, handed over as that run's artifacts: built
+# when what they are made of changed, scripts/plan.sh; and mbui's own demo when libs/mbui changed), kept as a line per
+# commit in mbui-size.jsonl on the branch mbui-size, with mbui-size.md the newest rows side by side. Recorded, never a
+# gate (the user, 2026-11-09: no threshold yet); MyGo's internal/idlemem is the way of it. The sizes:
+# libs/mbui/scripts/size.sh (apps/mbui/scripts/size.sh); the memory: libs/mbui/scripts/idlemem.sh, the Mac's footprint
+# and an arm64 emulator's PSS on the Mac mini (one emulator at a time: the one mbui-render runner).
+name: mbui-size
+on:
+  workflow_run:
+    workflows: [pipeline]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run: { description: "a main pipeline run's id", required: true }
+concurrency:
+  group: mbui-size
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: read # the pipeline run's artifacts
+env:
+  RUN: ${{ github.event.workflow_run.id || inputs.run }}
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  # Which of the builds the run made, by its artifacts' names, and whether libs/mbui changed since demo was last measured
+  find:
+    if: github.repository_owner == 'AFK-surf' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.f.outputs.sha }}
+      web: ${{ steps.f.outputs.web }}
+      apk: ${{ steps.f.outputs.apk }}
+      mac: ${{ steps.f.outputs.mac }}
+      demo: ${{ steps.f.outputs.demo }}
+    steps:
+      - id: f
+        run: |
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN" --jq .head_sha)
+          names=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN/artifacts?per_page=100" --jq '.artifacts[] | select(.expired | not) | .name')
+          has() { printf '%s\n' "$names" | grep -qx "$1-$sha" && echo true || echo false; }
+          last_demo=$(gh api "repos/$GITHUB_REPOSITORY/contents/mbui-size.jsonl?ref=mbui-size" --jq '.content' 2>/dev/null | tr -d '\n' | base64 -d 2>/dev/null | grep '"demo_web":' | tail -1 | jq -r .sha 2>/dev/null || true)
+          demo=false
+          if [ -z "$last_demo" ] || gh api "repos/$GITHUB_REPOSITORY/compare/$last_demo...$sha" --jq '.files[].filename' 2>/dev/null | grep -q '^libs/mbui/'; then
+            demo=true
+          fi
+          { echo "sha=$sha"; echo "web=$(has mbui-web)"; echo "apk=$(has mbui-apk)"; echo "mac=$(has mac-unsigned)"; echo "demo=$demo"; } | tee -a "$GITHUB_OUTPUT"
+
+  sizes:
+    needs: find
+    if: needs.find.outputs.web == 'true' || needs.find.outputs.apk == 'true' || needs.find.outputs.mac == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # (the scripts as main has them now, not the measured commit's: one from before them had none, run 42573827310)
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            apps/mbui/scripts
+            libs/mbui/scripts
+      - run: command -v brotli || (sudo apt-get update -q && sudo apt-get install -yq brotli)
+      - if: needs.find.outputs.web == 'true'
+        uses: actions/download-artifact@v4
+        with: { name: "mbui-web-${{ needs.find.outputs.sha }}", path: in/web, run-id: "${{ env.RUN }}", github-token: "${{ github.token }}" }
+      - if: needs.find.outputs.apk == 'true'
+        uses: actions/download-artifact@v4
+        with: { name: "mbui-apk-${{ needs.find.outputs.sha }}", path: in/apk, run-id: "${{ env.RUN }}", github-token: "${{ github.token }}" }
+      - if: needs.find.outputs.mac == 'true'
+        uses: actions/download-artifact@v4
+        with: { name: "mac-unsigned-${{ needs.find.outputs.sha }}", path: in/mac, run-id: "${{ env.RUN }}", github-token: "${{ github.token }}" }
+      - run: |
+          set -eo pipefail
+          S=apps/mbui/scripts/size.sh
+          { [ ! -d in/web ] || bash $S web in/web
+            [ ! -d in/apk ] || bash $S apk "$(ls in/apk/*.apk | head -1)"
+            [ ! -d in/mac ] || bash $S mac in/mac/bundle.zip; } | tee sizes.jsonl
+      - uses: actions/upload-artifact@v4
+        with: { name: sizes, path: sizes.jsonl, retention-days: 1 }
+
+  # mbui's own minimal app (libs/mbui APP=demo: no business pages, no Hermes/Rust shell), built and weighed when
+  # libs/mbui changed, its Mac bundle handed to idle on the mini so framework and app footprint sit side by side.
+  demo:
+    needs: find
+    if: needs.find.outputs.demo == 'true'
+    runs-on: macos-15
+    timeout-minutes: 5
+    env:
+      MBC_STORE: ${{ github.workspace }}/libs/mbui/_build/mbc-store-mac
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: "${{ needs.find.outputs.sha }}" }
+      - uses: ./.github/actions/setup
+        with: { pnpm: 'false' }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: ./.github/actions/mbui-apk
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.MBC_STORE }}
+          key: mbui-ci-macos-store-${{ needs.find.outputs.sha }}
+          restore-keys: mbui-ci-macos-store-
+      - run: |
+          set -eo pipefail
+          APP=demo bash libs/mbui/scripts/web.sh bundle libs/mbui/out/web
+          APP=demo bash libs/mbui/scripts/mac.sh bundle
+          APP=demo VARIANT=release bash libs/mbui/scripts/android.sh build
+          S=libs/mbui/scripts/size.sh
+          { MBUI_SIZE_PREFIX=demo_ bash $S web libs/mbui/out/web
+            MBUI_SIZE_PREFIX=demo_ bash $S apk libs/mbui/android/app/build/outputs/apk/release/app-release.apk
+            MBUI_SIZE_PREFIX=demo_ bash $S mac libs/mbui/out/mac/demo-mac.zip; } | tee demo-sizes.jsonl
+      - uses: actions/upload-artifact@v4
+        with: { name: demo-sizes, path: demo-sizes.jsonl, retention-days: 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demo-mac
+          path: libs/mbui/out/mac/demo-mac.zip
+          retention-days: 1
+          compression-level: 0
+
+  # The memory once idle: the Mac app signed out on data of its own, the APK on the mini's arm64 emulator
+  idle:
+    needs: [find, demo]
+    if: ${{ !cancelled() && (needs.find.outputs.apk == 'true' || needs.find.outputs.mac == 'true' || needs.demo.result == 'success') }}
+    runs-on: [self-hosted, mbui-render]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            apps/mbui/scripts
+            libs/mbui/scripts
+      - if: needs.find.outputs.apk == 'true'
+        uses: actions/download-artifact@v4
+        with: { name: "mbui-apk-${{ needs.find.outputs.sha }}", path: in/apk, run-id: "${{ env.RUN }}", github-token: "${{ github.token }}" }
+      - if: needs.find.outputs.mac == 'true'
+        uses: actions/download-artifact@v4
+        with: { name: "mac-unsigned-${{ needs.find.outputs.sha }}", path: in/mac, run-id: "${{ env.RUN }}", github-token: "${{ github.token }}" }
+      - if: needs.demo.result == 'success'
+        uses: actions/download-artifact@v4
+        with: { name: demo-mac, path: in/demo-mac }
+      - run: |
+          set -eo pipefail
+          : > idle.jsonl
+          if [ -d in/mac ]; then
+            bash apps/mbui/scripts/idlemem.sh mac in/mac/bundle.zip | tee -a idle.jsonl
+          fi
+          if [ -d in/demo-mac ]; then
+            MBUI_SIZE_PREFIX=demo_ bash libs/mbui/scripts/idlemem.sh mac in/demo-mac/demo-mac.zip | tee -a idle.jsonl
+          fi
+          if [ -d in/apk ]; then
+            # (an emulator of its own, gone after: scripts/android.sh emu, its AVD kept between runs)
+            export JAVA_HOME=/opt/homebrew/opt/openjdk@17 AVD=mbui-idlemem EMU_PORT=5592 ANDROID_SERIAL=emulator-5592
+            trap '"${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb" -s $ANDROID_SERIAL emu kill >/dev/null 2>&1 || true' EXIT
+            # (wiped each run, the same state each time; a data partition of 2 GB: the mini's disk is small)
+            EMU_FLAGS="-wipe-data -partition-size 2048" bash apps/mbui/scripts/android.sh emu
+            # (five runs: on the emulator one run's PSS is ±10% of another's, 136-162 MB on 2026-11-09)
+            COUNT=5 bash apps/mbui/scripts/idlemem.sh android "$(ls in/apk/*.apk | head -1)" | tee -a idle.jsonl
+          fi
+      - uses: actions/upload-artifact@v4
+        with: { name: idle, path: idle.jsonl, retention-days: 1 }
+
+  # A line for the commit, appended on the branch mbui-size (made when it is not there)
+  record:
+    needs: [find, sizes, demo, idle]
+    if: ${{ !cancelled() && (needs.sizes.result == 'success' || needs.demo.result == 'success' || needs.idle.result == 'success') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: in, merge-multiple: true }
+      - run: |
+          set -eo pipefail
+          sha=${{ needs.find.outputs.sha }}
+          at=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq .commit.committer.date)
+          subject=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq '.commit.message | split("\n")[0]')
+          cat in/*.jsonl 2>/dev/null | jq -s -c --arg sha "$sha" --arg at "$at" --arg s "$subject" --arg run "$RUN" \
+            '{sha: $sha, at: $at, subject: $s, run: ($run | tonumber)} + add' > line.json
+          cat line.json
+          git init -q rec && cd rec
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git"
+          git fetch -q --depth 1 origin mbui-size && git checkout -q FETCH_HEAD || true
+          cat ../line.json >> mbui-size.jsonl
+          # (the newest 40, newest first: MB with two decimals; a value not measured this time is the one before's)
+          jq -s -r '
+            def mb: if . == null then "" else (. / 10000 | round / 100 | tostring) end;
+            def carry: reduce .[] as $r ([]; . + [((.[-1] // {}) * $r)]);
+            carry | .[-40:] | reverse as $rows
+            | "## Full app (`apps/mbui`)\n",
+              (["commit", "web app.js br", "gzip", "raw", "APK", "libmbui.so", "Mac zip", "Mac program", "Mac idle", "Android idle PSS"] as $h
+              | ($h | "| " + join(" | ") + " |"), ($h | map("---") | "| " + join(" | ") + " |"),
+                ($rows[] | "| [\(.sha[0:9])](https://github.com/AFK-surf/monoid/commit/\(.sha)) \(.subject[0:50] | gsub("\\|"; "/")) | \(.web.app_js.brotli | mb) | \(.web.app_js.gzip | mb) | \(.web.app_js.raw | mb) | \(.android.apk | mb) | \(.android.libmbui_so.raw | mb) | \(.mac.zip | mb) | \(.mac.program | mb) | \(.mac_idle.app | mb) | \(.android_idle.app | mb) |")),
+              "\n## Minimal framework baseline (`libs/mbui` `demo`)\n",
+              (["commit", "web app.js br", "gzip", "raw", "APK", "libmbui.so", "Mac zip", "Mac program", "Mac idle"] as $dh
+              | ($dh | "| " + join(" | ") + " |"), ($dh | map("---") | "| " + join(" | ") + " |"),
+                ($rows[] | select(.demo_web != null or .demo_mac != null or .demo_android != null) | "| [\(.sha[0:9])](https://github.com/AFK-surf/monoid/commit/\(.sha)) \(.subject[0:50] | gsub("\\|"; "/")) | \(.demo_web.app_js.brotli | mb) | \(.demo_web.app_js.gzip | mb) | \(.demo_web.app_js.raw | mb) | \(.demo_android.apk | mb) | \(.demo_android.libmbui_so.raw | mb) | \(.demo_mac.zip | mb) | \(.demo_mac.program | mb) | \(.demo_mac_idle.app | mb) |"))
+          ' mbui-size.jsonl > table.md
+          { echo "# mbui's sizes and idle memory (MB), each main commit that built them"
+            echo
+            echo "Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes)."
+            echo
+            cat table.md; } > mbui-size.md && rm table.md
+          head -8 mbui-size.md | tail -3 >> "$GITHUB_STEP_SUMMARY"
+          git add mbui-size.jsonl mbui-size.md
+          git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
+            commit -q -m "mbui-size: ${sha:0:10}"
+          git push -q origin HEAD:refs/heads/mbui-size

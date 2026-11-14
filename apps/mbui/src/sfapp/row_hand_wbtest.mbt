@@ -32,7 +32,7 @@ test "a row swiped left a little: what it uncovers past its end on the chip's gr
   let under = row_band_rects(t, y).filter(fn(e) { (e.1).4 == chip })
   assert_true(
     under.iter().any(fn(e) { (e.1).0 <= 390.0 - 60.0 + 1.0 && (e.1).0 >= 390.0 - 60.0 - 1.0 && (e.1).0 + (e.1).2 >= 390.0 }),
-    msg="the chip's ground from where the row ends to the window's: \{row_band_rects(t, y)}",
+    msg="the chip's ground from where the row ends to the window's: \{Repr(row_band_rects(t, y))}",
   )
   let (wx, _) = t.find("归档").unwrap()
   assert_true(wx > 390.0 - 60.0 && wx < 390.0, msg="归档 where the row has uncovered: \{wx}")
@@ -56,7 +56,7 @@ test "a row swiped left less than 归档 is wide: of 归档 only what the row ha
     .filter(fn(e) { (e.0.0 + e.0.2) / 2.0 > 320.0 && e.0.1 < wy && e.0.3 > wy })
   assert_true(
     words.iter().all(fn(e) { dmin(e.0.2, e.1.2) <= dmax(e.0.0, e.1.0) || dmax(e.0.0, e.1.0) >= 390.0 - 20.0 - 0.5 }),
-    msg="of 归档 only what is past where the row ends shows: \{words}",
+    msg="of 归档 only what is past where the row ends shows: \{Repr(words)}",
   )
   t.release(280.0, y)
   t.run_for(@ui.move_most_ms)
@@ -72,7 +72,7 @@ test "a row swiped left past the line letting go archives at: what it uncovers i
   let ink = @sf.theme().p.text
   assert_true(
     row_band_rects(t, y).iter().any(fn(e) { (e.1).4 == ink && (e.1).0 + (e.1).2 >= 390.0 && (e.1).0 <= 390.0 - 199.0 }),
-    msg="the ink's ground past the row's end: \{row_band_rects(t, y)}",
+    msg="the ink's ground past the row's end: \{Repr(row_band_rects(t, y))}",
   )
   t.release(140.0, y)
 }
@@ -95,7 +95,7 @@ test "a row held for its menu: lifted over the menu's scrim, a card of the raise
   }
   let raised = @sf.theme().p.raised
   let cards = row_band_rects(t, y).filter(fn(e) { (e.1).4 == raised && (e.1).2 > 300.0 })
-  assert_true(cards.length() == 1, msg="one card of the raised ground: \{row_band_rects(t, y)}")
+  assert_true(cards.length() == 1, msg="one card of the raised ground: \{Repr(row_band_rects(t, y))}")
   let (k, (cx, _, cw, _, _)) = cards[0]
   // drawn in from the screen's sides
   assert_true(cx > 1.0 && cx + cw < 389.0, msg="drawn in: \{cx} \{cw}")
@@ -122,7 +122,7 @@ test "a row low in the list held for its menu: lifted clear of the sheet its men
   assert_true(y > menu_y - 40.0, msg="the row where the sheet comes up: \{y} against \{menu_y}")
   let raised = @sf.theme().p.raised
   let cards = t.drawn_rects().filter(fn(r) { r.4 == raised && r.2 > 300.0 && r.3 < 120.0 })
-  assert_true(cards.length() == 1, msg="its card: \{cards}")
+  assert_true(cards.length() == 1, msg="its card: \{Repr(cards)}")
   let (_, cy, _, ch, _) = cards[0]
   assert_true(cy + ch + 12.0 <= menu_y, msg="clear of the sheet: card \{cy}+\{ch}, its menu at \{menu_y}")
 }

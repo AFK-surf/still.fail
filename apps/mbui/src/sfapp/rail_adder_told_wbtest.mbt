@@ -18,7 +18,7 @@ fn rail_changed(at? : (Double, Double)) -> @ui.Tester {
     Some(p) => p
     None => (rx + rw / 2.0, ry + rh / 2.0)
   }
-  t.move(px, py)
+  t.move_to(px, py)
   t.frame()
   t
 }
@@ -142,7 +142,7 @@ test "大屏: the rail changed, a press on the sidebar's edge (a node of the win
   }
   let (ex, ey, ew, eh) = s.rect
   let (x, y) = (ex + ew / 2.0, 790.0)
-  assert_true(y >= ey && y < ey + eh, msg="on the edge as read out: \{s.rect}")
+  assert_true(y >= ey && y < ey + eh, msg="on the edge as read out: \{Repr(s.rect)}")
   t.touch_at(0, x, y, t.time())
   let down = @sfdesk.wide.editing.get()
   // (the edge's node took it: held as it goes down)
@@ -163,7 +163,7 @@ fn files_twice(frames : Bool) -> ((Bool, Bool), (Int, Bool, Bool, Bool)) {
   t.draw()
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   let (x, y) = (rx + rw / 2.0, ry + rh / 2.0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   t.touch_at(0, x, y, t.time())
   t.touch_at(2, x, y, t.time())
@@ -181,7 +181,7 @@ fn files_twice(frames : Bool) -> ((Bool, Bool), (Int, Bool, Bool, Bool)) {
 test "大屏: 文件 on the rail pressed twice from Home: gone to 文件, then, lit, its sidebar folded and shown a while, a frame between the presses or none" {
   let none = files_twice(false)
   let framed = files_twice(true)
-  assert_eq((none, framed), (framed, ((true, true), (framed.1.0, true, true, true))), msg="no frame \{none}, a frame \{framed}")
+  assert_eq((none, framed), (framed, ((true, true), (framed.1.0, true, true, true))), msg="no frame \{Repr(none)}, a frame \{Repr(framed)}")
 }
 
 ///|
@@ -194,7 +194,7 @@ test "大屏: 文件 on the rail held with ⌘ and moved down past the slop, let
   // (near its top, let go 10 lower: past the slop, still on it, where a press of it is let go)
   let (x, y) = (rx + rw / 2.0, ry + 4.0)
   assert_true(y + 10.0 < ry + rh, msg="let go on it: \{rh}")
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   let before = (app.nav.depth(), app.nav.top())
   t.hold_mods(@ui.mod_cmd)

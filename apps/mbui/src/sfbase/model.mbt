@@ -344,7 +344,7 @@ fn chats_view(v : Json) -> ChatsView {
 ///|
 /// The list's stations that say something of each of their rows (station_on), by address.
 fn stations_said(v : Json) -> Map[String, Json] {
-  let out : Map[String, Json] = {}
+  let out : Map[String, Json] = Map([])
   for s in items(Some(v), "stations") {
     if field(Some(s), "offline") is Some(_) || field(Some(s), "reconnecting") is Some(_) {
       out[text(Some(s), "station")] = s
@@ -446,7 +446,7 @@ pub fn java_hash(s : String) -> Int {
 /// The first line of some words that has any: what a one-line event shows of them.
 pub fn first_line(words : String) -> String {
   for l in words.split("\n") {
-    let s = l.trim(chars=" \t").to_string()
+    let s = l.trim(chars=" \t").to_owned()
     if s != "" {
       return s
     }
@@ -461,7 +461,7 @@ pub fn this_machine() -> String {
   match machine_here.val {
     Some(h) => h
     None => {
-      let v = @json.parse(@ui.local_station()) catch { _ => Json::null() }
+      let v = @json.parse(@hostapi.app_said("local_station")) catch { _ => Json::null() }
       let ws = field(Some(v), "workspace")
       let h = if text(ws, "id") != "" && text(ws, "station") != "" {
         text(ws, "id") + "/" + text(ws, "station")

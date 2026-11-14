@@ -5,7 +5,7 @@
 /// The chat scrolled till `words` (a run of its text) is in the list's clear middle, under its bar and over the
 /// composer, not under either; the moment of the last wheel (-1 when none).
 fn scroll_run_clear(t : @ui.Tester, words : String) -> Double {
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   let mut wheeled = -1.0
   for _ in 0..<12 {
     let dy = match t.run_rects(words) {
@@ -43,7 +43,7 @@ test "a link held still: its menu (打开链接, 复制链接: the presenters' s
   t.release(x + w / 2.0, y + h / 2.0)
   assert_eq(t.opened().length(), 0)
   // (its menu, the presenters': a sheet with a finger, in)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("打开链接") is Some(_))
   // felt as it opened, once
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
@@ -56,7 +56,7 @@ test "a link held still: its menu (打开链接, 复制链接: the presenters' s
   assert_true(t.find("已复制链接") is Some(_))
   assert_true(!@sf.presenting())
   // gone as the sheet goes
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("打开链接") is None)
 }
 
@@ -65,7 +65,8 @@ test "a link held still: its menu (打开链接, 复制链接: the presenters' s
 
 ///|
 /// The fixture's app in `mode`, its calls kept and answered (`link.parse` as the core would, `invitation.*` as
-/// `invitation` says), `history` its history view when given.
+/// `invitation` says), `history` its history view when given; `as_host`: built as a host builds it, what a pass kept
+/// drawn as kept (Tester::check_looks(false)).
 fn links_core(
   calls : Array[Made],
   mode : String,
@@ -75,6 +76,7 @@ fn links_core(
   w? : Double = 390.0,
   h? : Double = 844.0,
   platform? : Int = 2,
+  as_host? : Bool = false,
 ) -> @ui.Tester {
   new_run()
   let base = fixture(mode)
@@ -88,7 +90,7 @@ fn links_core(
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "link.parse" => done(Ok(fixture_link_parse(text(Some(params), "url"))))
         "invitation.preview" => done(invitation)
@@ -101,6 +103,9 @@ fn links_core(
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
+  if as_host {
+    t.check_looks(false)
+  }
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -118,9 +123,12 @@ test "message links jump to the specified message in this chat or another chat" 
   for path in ["/o/ws1/st1/s-c1", "/o/ws1/st1/s-c2", "/w/ws1/s/st1/chats/s-c2"] {
     let calls : Array[Made] = []
     let t = links_core(calls, "chat")
+    let said = @sfbase.go_tos_said.untracked()
     open_link("https://app.still.fail" + path + "?message=11")
     let session = if path.has_suffix("s-c1") { "s-c1" } else { "s-c2" }
-    assert_eq(@sfbase.go_tos.get("ws1/st1\u{1}" + session), Some(11.0))
+    // (the chat told to go to 11: there yet, or taken already by a page that goes to it as it is told, chat_goes_to)
+    assert_true(@sfbase.go_tos_said.untracked() > said)
+    assert_true(@sfbase.go_tos.get("ws1/st1\u{1}" + session) is (Some(11.0) | None))
     assert_eq(top_chat().map(fn(r) { r.session }), Some(session))
     assert_eq(t.opened().length(), 0)
   }
@@ -158,7 +166,7 @@ test "a chat's link followed on the wide frame: that chat over this one, back co
 ///|
 test "a link to this chat's own item with ?service=: only its web service over this chat" {
   let calls : Array[Made] = []
-  let t = links_core(calls, "chat")
+  let _ = links_core(calls, "chat")
   open_link("https://app.still.fail/o/ws1/st1/s-c1?service=j-web")
   let pages = app.nav.pages()
   assert_eq(pages.length(), 3)
@@ -186,7 +194,7 @@ test "a web service's own page's link (/w/…/s/…/services/<job>): the service
 ///|
 test "a chat's link of another workspace: that workspace in view, the chat over its Home (openItem)" {
   let calls : Array[Made] = []
-  let t = links_core(calls, "chat")
+  let _ = links_core(calls, "chat")
   open_link("https://app.still.fail/w/ws2/s/st9/chats/s-x")
   assert_eq(app.picked.get(), "ws2")
   let set = named(calls, "prefs.set")
@@ -236,6 +244,24 @@ test "a screen's link: its viewer over the chat (back comes back to it)" {
   assert_eq(app.nav.depth(), 3)
   guard app.nav.top() is Screen(at) else { fail("no viewer on top") }
   assert_eq(at.screen, "main")
+}
+
+///|
+test "a page put over a screen's viewer (a chat a notice opened): the view let go of and the device let sleep meanwhile; back on it, open again" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat")
+  open_link("https://app.still.fail/w/ws1/s/st1/screen/main")
+  t.run_for(@ui.move_most_ms)
+  guard app.nav.top() is Screen(_) else { fail("no viewer on top") }
+  assert_true(t.awake())
+  @sfbase.open_page(NewChat)
+  t.run_for(@ui.move_most_ms)
+  assert_false(app.nav.top() is Screen(_))
+  assert_false(t.awake())
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.top() is Screen(_))
+  assert_true(t.awake())
 }
 
 ///|
@@ -401,7 +427,7 @@ test "a login's page on this device: the notice that holds the app up says which
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "machineLogin.open" => done(Ok({ "url": "https://accounts.example.com/o/oauth2/auth?x=1" }))
         _ => (base.call)(name, params, done)

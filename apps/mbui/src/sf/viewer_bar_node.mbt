@@ -10,13 +10,14 @@
 /// over a 20 blur, saturated, 45 high under the room's top (`top`: a tablet's status bar, its ground on under it); the
 /// way back first (`back`'s words after the chevron, `went` as it is pressed), clear of the window's buttons where they
 /// are the system's at its left; `name` and `meta` under it in the middle, as wide as they are (the window's `width`
-/// less 320 at most), where the file is (`title`, none: "") its tip while the pointer is over them; what `tools` makes in
+/// less viewer_bar_sides at most), where the file is (`title`, none: "") its tip while the pointer is over them; what `tools` makes in
 /// the row at its end (the corner each is round at given: the window's followed at its corner, a bar's buttons'), the
 /// last as far in from the window's side as a page's bar's last. There while `hidden` holds not (gone up its height and
 /// faded over 240 ms, eased out, from where it is at the moment it is told, and back so; at once with motion
 /// reduced), as far in as `shown` says of the node as it is drawn (the viewer's fade). A press on it where nothing of it
 /// takes one is its own, moving the window while it has none of the system's title bar (the app's own top row). Its
 /// tips in `tips`. The bar's node.
+#callsite(autofill(loc))
 pub fn viewer_bar_node(
   parent : @view.View,
   back : () -> String,
@@ -31,11 +32,12 @@ pub fn viewer_bar_node(
   tools : (@view.View, @view.Live[Double]) -> Unit,
   went : () -> Unit,
   tips : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
   // (hidden as it is made: gone whole, not gone up; its way a motion's, there at once with motion reduced)
   let gone = EdgeWay::new(if @signals.untracked(hidden) { 1.0 } else { 0.0 })
   let mut bar : @view.View? = None
-  parent.box(fn(room) {
+  parent.box(made_for=loc, fn(room) {
     room.over(Is(true)) |> ignore
     room.reacts(hidden, fn(off) { gone.go(room, if off { 1.0 } else { 0.0 }, viewer_bar_ms) })
     let b = room.box(fn(b) {
@@ -88,7 +90,7 @@ pub fn viewer_bar_node(
         let middle = row.box(fn(m) {
           m
           .lines_up(Is(Some(Middle)))
-          .max_width(By(fn() { Some(dmax(viewer_none, width() - viewer_bar_sides)) }))
+          .max_width(By(fn() { Some(dmax(viewer_none, width() - viewer_bar_sides())) }))
           .shrink(Is(1.0))
           .min_width(Is(Some(0.0)))
           |> ignore
@@ -190,7 +192,7 @@ fn bar_tool_corner() -> @view.Live[Double] {
 fn bar_words(size : @ui.TextSize, line : @ui.Leading, weight : Int) -> @view.WordsLook {
   let th = @ui.tree_theme()
   let (px, own) = th.text_size(size)
-  { size: px, weight, line: th.leading(line).unwrap_or(own), wrap: false, tracking: @view.letters_own, balance: false }
+  { size: px, weight, line: th.leading(line).unwrap_or(own), wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|
@@ -198,13 +200,20 @@ fn bar_words(size : @ui.TextSize, line : @ui.Leading, weight : Int) -> @view.Wor
 /// at the window's corner following it (bar_back_corner); the chevron and `words` in the ink's own, its hover ground
 /// where the hand is on it (or the keyboard's focus shows); `went` as it is pressed, at the press's moment. Read out a
 /// button, by its words.
-fn back_node(parent : @view.View, words : () -> String, ink : () -> ViewerInk, went : () -> Unit) -> @view.View {
-  parent.box(fn(v) {
+#callsite(autofill(loc))
+fn back_node(
+  parent : @view.View,
+  words : () -> String,
+  ink : () -> ViewerInk,
+  went : () -> Unit,
+  loc~ : SourceLoc,
+) -> @view.View {
+  @headless.button(made_for=loc, parent, words, fn(_) { went() }, fn(v, b) {
     let lit = fn() {
-      v.focus_shown() ||
+      b.focus_shown() ||
       (match @ui.pointing() {
-        Mouse => v.pointed()
-        Finger => v.pressed()
+        Mouse => b.hovered()
+        Finger => b.pressed()
       })
     }
     v
@@ -216,11 +225,7 @@ fn back_node(parent : @view.View, words : () -> String, ink : () -> ViewerInk, w
     .radius(By(bar_back_corner))
     .shrink(Is(1.0))
     .min_width(Is(Some(0.0)))
-    .presses(Is(true))
-    .focusable(Is(true))
     .ground(By(fn() { if lit() { ink().hover } else { 0L } }))
-    .says(By(fn() { Some(@view.said(Button, label=words())) }))
-    .on_press(went)
     |> ignore
     v.box(fn(i) {
       i
@@ -260,11 +265,13 @@ fn back_shapes() -> Array[@ui.Shape] {
 /// size so far in bold in its own, then a progress bar 120 wide (progress_node); before the core has said how much and
 /// with no size it was sent with, 正在打开 over a bar that sweeps. `got`: what has come and its whole size; `size`: the
 /// size it was sent with. Each as it changes. The row's node.
+#callsite(autofill(loc))
 pub fn viewer_coming_node(
   parent : @view.View,
   got : () -> (Double, Double?)?,
   size : () -> Double,
   ink : () -> ViewerInk,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let total = fn() -> Double? {
     match got() {
@@ -272,7 +279,7 @@ pub fn viewer_coming_node(
       _ => if size() > 0.0 { Some(size()) } else { None }
     }
   }
-  parent.box(fn(row) {
+  parent.box(made_for=loc, fn(row) {
     row
     .row(Is(true))
     .lines_up(Is(Some(Middle)))
@@ -294,7 +301,7 @@ pub fn viewer_coming_node(
       }))
       .words_look(By(fn() {
         let (size, line) = @ui.tree_theme().text_size(Meta)
-        { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
+        { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
       }))
       .ink(By(fn() { ink().muted }))
       |> ignore

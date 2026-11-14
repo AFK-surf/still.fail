@@ -34,7 +34,7 @@ priv struct BrowsePlace {
 ///|
 /// The places by the page's key for each (the files' page's sides, a chat's tab), named p1, p2… as they come (the
 /// same steps give the same names).
-let browse_places : Map[String, BrowsePlace] = {}
+let browse_places : Map[String, BrowsePlace] = Map([])
 
 ///|
 fn browse_reset() -> Unit {
@@ -161,7 +161,7 @@ pub fn Browse::arrangement(self : Browse) -> Arrangement {
 /// The folder `folder`'s entries in the order shown, as the core says them; None while it has not.
 pub fn Browse::arranged(self : Browse, folder : String, entries : Array[DvEntry]) -> Array[DvEntry]? {
   match self.shown {
-    Some(v) => dv_in_order(v.folders.get(folder), entries)
+    Some(v) => @sfbase.dv_in_order_held(self.key + "|" + folder, v.folders.get(folder), entries)
     None => None
   }
 }
@@ -392,7 +392,7 @@ pub fn Browse::rename(self : Browse, c : @ui.Ctx, src : Source, folder : String,
   let p = browse_place(self.key)
   p.renaming = None
   let name = match to {
-    Some(t) => t.trim(chars=" \t\n").to_string()
+    Some(t) => t.trim(chars=" \t\n").to_owned()
     None => return
   }
   if name == "" || name == e.name {

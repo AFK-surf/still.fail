@@ -4,7 +4,7 @@
 
 ///|
 test "24-close-option" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("close-option"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
@@ -18,7 +18,7 @@ test "24-close-option" {
     f.tap("=不需要部署 083209")
     f.answered("decision.answer", 1)
     f.see("=不需要部署 083209")
-    f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
+    f.check(@sfapp.under_rest() <= f.t.time(), "something under the post moves: \{@sfapp.under_rest()}")
     f.end()
   })
 }

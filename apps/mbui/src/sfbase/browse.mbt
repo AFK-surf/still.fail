@@ -7,21 +7,23 @@
 ///|
 /// How a folder's entries are shown (Arrangement): ordered by `by` (name, time, size or kind), the other way (`down`),
 /// hidden ones too.
+#derive(Eq)
 pub(all) struct Arrangement {
   by : String
   down : Bool
   hidden : Bool
-} derive(Eq)
+}
 
 ///|
 /// What is chosen (Chosen): names in one folder (its path under the root), the one ⇧ goes from and the one the keys move
 /// from.
+#derive(Eq)
 pub(all) struct Chosen {
   folder : String
   names : Array[String]
   anchor : String?
   lead : String?
-} derive(Eq)
+}
 
 ///|
 /// Nothing chosen.
@@ -84,7 +86,7 @@ pub fn chosen_of(v : Json?) -> Chosen {
 pub fn browse_view_of(v : Json?) -> BrowseView? {
   match v {
     Some(Object(_)) => {
-      let folders : Map[String, Array[String]] = {}
+      let folders : Map[String, Array[String]] = Map([])
       match field(v, "folders") {
         Some(Object(m)) =>
           for k, x in m {
@@ -92,7 +94,7 @@ pub fn browse_view_of(v : Json?) -> BrowseView? {
           }
         _ => ()
       }
-      let widths : Map[String, Double] = {}
+      let widths : Map[String, Double] = Map([])
       match field(v, "widths") {
         Some(Object(m)) =>
           for k, x in m {
@@ -165,7 +167,7 @@ let browse_read : Derived[BrowseView?] = Derived::new("driveBrowse", fn(v, _) {
 pub fn dv_in_order(names : Array[String]?, entries : Array[DvEntry]) -> Array[DvEntry]? {
   match names {
     Some(ns) => {
-      let by : Map[String, DvEntry] = {}
+      let by : Map[String, DvEntry] = Map([])
       for e in entries {
         by[e.name] = e
       }
@@ -185,7 +187,7 @@ pub fn dv_in_order(names : Array[String]?, entries : Array[DvEntry]) -> Array[Dv
 ///|
 /// The order and whether hidden files show, changed (`drive.arrange`: what is not said stays).
 pub fn dv_arrange(src : Source, by? : String, down? : Bool, hidden? : Bool) -> Unit {
-  let o : Map[String, Json] = {}
+  let o : Map[String, Json] = Map([])
   match by {
     Some(b) => o["by"] = Json::string(b)
     None => ()
@@ -198,26 +200,7 @@ pub fn dv_arrange(src : Source, by? : String, down? : Bool, hidden? : Bool) -> U
     Some(h) => o["hidden"] = Json::boolean(h)
     None => ()
   }
-  (src.call)("drive.arrange", Json::object(o), fn(_) {  })
-}
-
-///|
-/// The workspace's stations with a drive (`stations {scope, drive: true, here?}`: this machine's, `here`, first), and
-/// why they could not be read.
-pub fn dv_drive_stations(src : Source, ws : String, here? : String = "") -> (Array[DvStation]?, String?) {
-  let params : Map[String, Json] = { "scope": Json::string(ws), "drive": Json::boolean(true) }
-  if here != "" {
-    params["here"] = Json::string(here)
-  }
-  let t = src.topic("stations", params).get().snapshot()
-  let error = match t.error {
-    Some(e) => Some(text(Some(e), "message"))
-    None => None
-  }
-  match t.value {
-    Some(Array(a)) => (Some(a.map(dv_station)), error)
-    _ => (None, error)
-  }
+  (src.call)("drive.arrange", Json::object(o), answer_unread)
 }
 
 ///|
@@ -227,8 +210,47 @@ pub fn dv_drive_stations(src : Source, ws : String, here? : String = "") -> (Arr
 pub fn dv_shown(src : Source, station : String, root : String, path : String, entries : Array[DvEntry]) -> Array[DvEntry]? {
   let v = browse_topic(src, browse_where("page", "phone", "list", station, root, path))
   match v {
-    Some(b) => dv_in_order(b.folders.get(path), entries)
+    Some(b) => dv_in_order_held(station + "|" + root + "|" + path, b.folders.get(path), entries)
     None => Some(entries)
+  }
+}
+
+///|
+/// Each folder's entries as last shown in an order said of the same entries (dv_in_order_held), by where it is.
+let dv_orders_held : Map[String, Array[DvEntry]] = Map([])
+
+///|
+/// Let go of each folder's entries held (sfbase's reset).
+fn dv_orders_reset() -> Unit {
+  dv_orders_held.clear()
+}
+
+///|
+/// `entries` in the order `names` says, as dv_in_order; but while the order names one the entries do not have (the
+/// core's two topics, the folder's entries and their order, each its own message: an entry renamed, gone or come told
+/// by one before the other), as the folder `key` was last shown, till they agree: a name changed is one row changed in
+/// place, not the old row gone and the new come a frame after (rows_steady.mbt's jolt, the list's room going back).
+pub fn dv_in_order_held(key : String, names : Array[String]?, entries : Array[DvEntry]) -> Array[DvEntry]? {
+  match names {
+    Some(ns) => {
+      let have : Set[String] = Set([])
+      for e in entries {
+        have.add(e.name)
+      }
+      if ns.iter().any(fn(n) { !have.contains(n) }) {
+        match dv_orders_held.get(key) {
+          Some(was) => return Some(was)
+          None => ()
+        }
+      }
+      let out = dv_in_order(names, entries)
+      match out {
+        Some(o) => dv_orders_held[key] = o
+        None => ()
+      }
+      out
+    }
+    None => None
   }
 }
 

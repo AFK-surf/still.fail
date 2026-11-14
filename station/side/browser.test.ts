@@ -16,7 +16,7 @@ import { type Cdp, connectCdp } from "../src/browser/cdp.ts";
 import { chromeHost } from "../src/browser/chrome.ts";
 import { BEHIND } from "../src/browser/proxy.ts";
 import { type FormField, TabForm, drive } from "../src/browser/signin-form.ts";
-import { COPY_BINDING, LOGIN_BINDING, PASSKEY_BINDING, jpegSize } from "../src/browser/view.ts";
+import { COPY_BINDING, LOGIN_BINDING, jpegSize } from "../src/browser/view.ts";
 import type { Clip, LoginField, PasskeyAsk } from "../src/screens/source.ts";
 import { makeScreens } from "../src/screens/source.ts";
 import { platform } from "../src/platform/index.ts";
@@ -351,7 +351,7 @@ window.ask = (rpId, signal) => { window.got = null; navigator.credentials.get({ 
     await view.next();
     const heard: (PasskeyAsk | null)[] = [];
     const unwatch = view.watchPasskey!((a) => heard.push(a));
-    await until(async () => (await evaluate(`typeof window.${PASSKEY_BINDING}`)) === "function", "the binding is there");
+    await until(async () => (await evaluate("typeof window.__stillfailPasskeyWatch")) === "function", "the hook is there");
     assert.equal(await evaluate("PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()"), true, "sites are told there is one");
     // Asked: said with the tab's origin (not the page's word), the passkeys it takes, as the device is to sign it.
     await evaluate(`ask("127.0.0.1")`);
@@ -380,8 +380,35 @@ window.ask = (rpId, signal) => { window.got = null; navigator.credentials.get({ 
     await evaluate("stop.abort(); true");
     await until(() => heard.at(-1) === null, "given up");
     assert.deepEqual(await evaluate("window.got"), { error: "AbortError" });
+    // Runtime.addBinding without Runtime.enable works in the current document but vanishes on the next one.
+    await agent.send("Page.navigate", { url: `http://127.0.0.1:${port}/before-handover` }, sessionId);
+    await until(async () => await evaluate("location.pathname === '/before-handover' && typeof ask === 'function' && window.got === undefined"), "single viewer's next document ready");
+    // A resize opens the replacement before closing this view. A pending request follows it, and the old
+    // cleanup cannot reject that request or disable subsequent ones on the replacement's hook.
+    await evaluate(`ask("127.0.0.1")`);
+    const moving = await until(() => heard.at(-1), "asked before the handover");
+    const replacement = await tab.open({ maxWidth: 1000, maxHeight: 700, codecs: ["jpeg"] });
+    const nextHeard: (PasskeyAsk | null)[] = [];
+    const unnext = replacement.watchPasskey!((a) => nextHeard.push(a));
+    const moved = await until(() => nextHeard.at(-1), "the pending request moved to the replacement");
+    assert.equal(moved.id, moving.id);
+    await until(() => heard.at(-1) === null, "old viewer no longer asks");
     unwatch();
     view.close();
+    await replacement.passkey!({ id: moved.id, error: "NotAllowedError" });
+    assert.deepEqual(await until(() => evaluate("window.got"), "replacement answered"), { error: "NotAllowedError" });
+    await evaluate(`ask("127.0.0.1")`);
+    const after = await until(() => nextHeard.at(-1), "still forwarded after old cleanup");
+    await replacement.passkey!({ id: after.id, error: "NotAllowedError" });
+    assert.deepEqual(await until(() => evaluate("window.got"), "answered after handover"), { error: "NotAllowedError" });
+    await agent.send("Page.navigate", { url: `http://127.0.0.1:${port}/next` }, sessionId);
+    await until(async () => await evaluate("location.pathname === '/next' && typeof ask === 'function' && window.got === undefined"), "next document ready");
+    await evaluate(`ask("127.0.0.1")`);
+    const navigated = await until(() => nextHeard.at(-1), "forwarded after navigation with only the replacement's hook");
+    await replacement.passkey!({ id: navigated.id, error: "NotAllowedError" });
+    assert.deepEqual(await until(() => evaluate("window.got"), "answered after navigation"), { error: "NotAllowedError" });
+    unnext();
+    replacement.close();
   } finally {
     agent?.close();
     await browser.stop().catch(() => {});
@@ -559,11 +586,12 @@ window.sign = () => navigator.credentials.get({ signal: AbortSignal.timeout(5000
     const heard: (PasskeyAsk | null)[] = [];
     const unwatch = view.watchPasskey!((a) => heard.push(a));
     const page2 = two.contexts()[0]!.pages().find((p: { url(): string }) => p.url() === site)!;
-    await until(async () => (await page2.evaluate(`typeof window.${PASSKEY_BINDING}`)) === "function", "the hook is there");
+    await until(async () => (await page2.evaluate("typeof window.__stillfailPasskeyWatch")) === "function", "the hook is there");
     assert.equal(await page2.evaluate("sign()"), made);
     assert.deepEqual(heard.filter((a) => a !== null), [], "not asked of the person's device");
     unwatch();
-    view.close();
+    // Keep this session attached until revocation is checked: Chrome can reset the tab's virtual authenticator
+    // when a CDP target session detaches, so closing it here can interrupt sign() or look like a revoked grant.
     // The grant ends: taken out (no tab of chat-2 signs), and given back as it was then, its count gone up.
     const afterwards = await until(async () => {
       const r = await p2.evaluate("sign()");
@@ -573,6 +601,7 @@ window.sign = () => navigator.credentials.get({ signal: AbortSignal.timeout(5000
     const back = stateOf(await until(() => takenOut.at(-1), "given back"));
     assert.equal(back.passkeys.length, 1);
     assert.ok(back.passkeys[0]!.signCount > kept.passkeys[0]!.signCount, "its count as it was then");
+    view.close();
     await one.close();
     await two.close();
   } finally {

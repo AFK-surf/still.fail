@@ -357,3 +357,19 @@ test("a workspace the station joined keeps its own pinned folders, and reaches t
   assert.equal((await ask(table, theirs(request("GET", "/drive/list", { root, path: "" }), "viewer"))).json.code, "not_a_root");
   assert.deepEqual((await ask(table, theirs(request("GET", "/drive/list", { root: season, path: "" }), "viewer"))).json.entries.map((e: any) => e.name), ["e1.mp4", "E2.mp4", "E10.mp4"]);
 });
+
+test("the folder picker says which folders are git repositories, a worktree's .git file too", async () => {
+  const { base, drive } = place();
+  mkdirSync(join(base, "app", ".git"), { recursive: true });
+  mkdirSync(join(base, "app-wt"));
+  writeFileSync(join(base, "app-wt", ".git"), `gitdir: ${join(base, "app", ".git", "worktrees", "wt")}\n`);
+  mkdirSync(join(base, "plain", "inner", ".git"), { recursive: true });
+  // (more than are looked at at once: each still looked at)
+  for (let i = 0; i < 40; i++) mkdirSync(join(base, "many", `r${String(i).padStart(2, "0")}`, ...(i % 2 === 0 ? [".git"] : [])), { recursive: true });
+  const at = await drive.folders(base, base, "en");
+  assert.deepEqual(at.entries.filter((e) => e.git).map((e) => e.name), ["app", "app-wt"]);
+  assert.equal(at.entries.find((e) => e.name === "plain")!.git, undefined, "only a .git of its own");
+  const many = await drive.folders(join(base, "many"), base, "en");
+  assert.equal(many.entries.length, 40);
+  assert.deepEqual(many.entries.filter((e) => e.git).map((e) => e.name), Array.from({ length: 20 }, (_, i) => `r${String(i * 2).padStart(2, "0")}`));
+});

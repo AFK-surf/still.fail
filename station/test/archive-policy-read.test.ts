@@ -13,7 +13,7 @@ test("a review sweep reads each workspace's policy once and sees changes on its 
     lastTurn: () => ({ endedAt: 1, ending: "all_done" }),
     hasUndelivered: () => false,
     archivePolicy: (ws: string | null) => { read.push(ws); return { change: { id: ids.get(ws) } }; },
-    sessionThreads: (key: string) => [{ thread: { id: Number(key.slice(1)) } }],
+    recentSessionThreads: (key: string) => ({ threads: [{ thread: { id: Number(key.slice(1)) } }], more: false }),
     lastDecision: (key: string) => ({ policyAt: lookup.get(key)!.ws === "B" ? 20 : 10, result: {}, error: null, threads: [[Number(key.slice(1)), 5]] }),
     archiveSuggested: () => false,
     lastEntry: () => 5,

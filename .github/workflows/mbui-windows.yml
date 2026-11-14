@@ -1,4 +1,4 @@
-# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
+# mbui (libs/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The demo on Windows: build with MoonBit and MSVC, its input method's script run in a window (Direct3D falls back to
 # WARP on the GPU-less runner), text against DirectWrite's own, and WebView2, as independent jobs. No picture of the
 # app's window is compared with a kept one (goldens/windows.png is scripts/shots.sh's, by hand): what Direct3D draws is held to its references
@@ -9,13 +9,13 @@ on:
   # a commit to the station's code as well)
   push:
     branches: [main]
-    paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**", ".github/actions/msvc/**"]
+    paths: ["libs/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**", ".github/actions/msvc/**"]
   pull_request:
-    paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**", ".github/actions/msvc/**"]
+    paths: ["libs/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**", ".github/actions/msvc/**"]
   workflow_dispatch:
     inputs:
       stillfail_ref:
-        description: "also build still.fail's apps/mbui sffix (AFK-surf/still.fail at this ref) and shoot its wide frame"
+        description: "also build still.fail's apps/mbui sffix (AFK-surf/monoid at this ref) and shoot its wide frame"
         required: false
         default: ""
 
@@ -36,7 +36,7 @@ jobs:
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
         shell: bash
     steps:
       - run: git config --global core.autocrlf false
@@ -47,6 +47,12 @@ jobs:
       # core, a HEAD each): installed (~16 s, most of it bundling the core) only when either changed. No answer: no
       # key, installed as before.
       - uses: ./.github/actions/mbui-moonbit
+      # The SDK is pinned by win.sh's WV2_VERSION. Keep its download out of a demo's build on later runs.
+      - uses: actions/cache@v4
+        with:
+          path: libs/mbui/out/webview2
+          key: mbui-webview2-${{ hashFiles('libs/mbui/scripts/win.sh') }}
+          restore-keys: mbui-webview2-
       - uses: actions/cache/restore@v4
         with:
           path: .ci/mbc-store
@@ -100,14 +106,15 @@ jobs:
           key: mbui-windows-demo-${{ matrix.check }}-${{ github.sha }}
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: windows-shots-${{ matrix.check }}
           path: |
-            apps/mbui/mbui/out/webviews/
-            apps/mbui/mbui/out/shot-kit/
-            apps/mbui/mbui/out/ime/
-            apps/mbui/mbui/out/photos/
-            apps/mbui/mbui/out/textdiff/
+            libs/mbui/out/webviews/
+            libs/mbui/out/shot-kit/
+            libs/mbui/out/ime/
+            libs/mbui/out/photos/
+            libs/mbui/out/textdiff/
           if-no-files-found: warn
 
   # still.fail's app over made-up data (its apps/mbui sffix, against this mbui), asked for by a run's stillfail_ref:
@@ -118,7 +125,7 @@ jobs:
     timeout-minutes: 5
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
         shell: bash
     steps:
       - run: git config --global core.autocrlf false
@@ -126,9 +133,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
-          repository: AFK-surf/still.fail
+          repository: ${{ github.repository }}
           ref: ${{ inputs.stillfail_ref }}
-          path: apps/mbui/mbui/sf
+          path: libs/mbui/sf
           sparse-checkout: apps/mbui
       - uses: ./.github/actions/msvc
       # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
@@ -158,7 +165,8 @@ jobs:
           ls -la out/shot-sf
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: stillfail-windows-shots
-          path: apps/mbui/mbui/out/shot-sf/
+          path: libs/mbui/out/shot-sf/
           if-no-files-found: warn

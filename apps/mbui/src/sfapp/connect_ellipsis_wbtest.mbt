@@ -32,5 +32,5 @@ test "the workspace setup actions stay beside each other where they fit" {
   let t = screen_in("settings-new-connect", corner_windows[1], "zh")
   let (bx, by, bw, bh) = t.get(Button, label=add).rect
   let (mx, my, _, mh) = t.rect_of(manual).unwrap()
-  assert_true(mx >= bx + bw && my < by + bh && my + mh > by, msg="add=\{(bx, by, bw, bh)}, manual=\{(mx, my, mh)}")
+  assert_true(mx >= bx + bw && my < by + bh && my + mh > by, msg="add=\{Repr((bx, by, bw, bh))}, manual=\{Repr((mx, my, mh))}")
 }

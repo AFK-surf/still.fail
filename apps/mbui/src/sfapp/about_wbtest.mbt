@@ -23,7 +23,7 @@ fn one_page_tester(
   t.draw()
   app.nav.push(Settings)
   // (on the tape opened from the settings' page in use, over it, as their pages open their next: back takes it off)
-  if @sfdesk.wide.tape {
+  if @sfdesk.wide.tape.get() {
     app.nav.push_over(Setting(route))
   } else {
     app.nav.push(Setting(route))
@@ -32,27 +32,12 @@ fn one_page_tester(
   t.run_for(@ui.move_most_ms)
   // laid out Medium, the settings' list in use beside it: the page brought over (as a press on it does) before what is
   // in it is pressed
-  if @sfdesk.wide.tape {
+  if @sfdesk.wide.tape.get() {
     @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
     t.draw()
     t.run_for(@ui.move_most_ms)
   }
   t
-}
-
-///|
-/// `words` pressed where the page shows them: the furthest right of those drawn (the settings' list beside it, left of
-/// it, may say the same).
-fn tap_in_page(t : @ui.Tester, words : String) -> Unit raise {
-  let shown = t.words().filter(fn(w) { w.0 == words && w.5 > 0.5 })
-  guard shown.length() > 0 else { fail("no \{words} drawn") }
-  let mut at = shown[0]
-  for w in shown {
-    if w.1 > at.1 {
-      at = w
-    }
-  }
-  t.tap(at.1 + at.3 / 2.0, at.2 + at.4 / 2.0)
 }
 
 ///|
@@ -169,4 +154,155 @@ test "关于 on a phone: back goes to settings" {
   t.tap_text("设置")
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Settings)
+}
+
+///|
+/// Each screen the update dialog opens on: a phone with a finger (a sheet from the foot), a phone's width with a mouse,
+/// a desktop's window (a dialog in the window's middle).
+let update_screens : Array[(Double, Int)] = [(390.0, 2), (390.0, 0), (1280.0, 0)]
+
+///|
+/// 关于 on screen (`w`, `platform`), a newer build known (0.1.3 over this 0.1.2: two lines it brings, its size), what
+/// is asked now of still.fail cloud kept in `asked`; the update dialog put up from the menu bar's 检查更新, at rest.
+fn update_dialog_tester(w : Double, platform : Int, asked : Array[(Result[Json, String]) -> Unit], newer? : Bool = true) -> @ui.Tester raise {
+  @sf.presenters_reset()
+  let t = one_page_tester(@settings.Route::About, w, platform~)
+  update_version.val = 2
+  set_update_source(Some({ check: fn(_, now, done) { if now { asked.push(done) } }, url: fn(f) { f } }))
+  if newer {
+    update.available.set(Some({
+      "versionCode": 3,
+      "versionName": "0.1.3",
+      "file": "mac/stillfail-3.zip",
+      "size": 24012345,
+      "news": ["修复：一", "修复：二"],
+    }))
+  }
+  t.draw()
+  t.post(@hostapi.system_channel, "{\"menu\":\"update.check\"}")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(update_dialog_open(), msg="\{w} platform \{platform}: open")
+  t
+}
+
+///|
+/// The update dialog's way out (`label` pressed, its foot's key), gone at rest; the update put back.
+fn update_dialog_closed(t : @ui.Tester, label : String, at : String) -> Unit raise {
+  t.click(Button, label~)
+  t.run_for(@ui.move_most_ms)
+  assert_false(update_dialog_open(), msg="\{at}: closed by \{label}")
+  assert_false(@sf.presented_drawn(), msg="\{at}: gone")
+  update_reset()
+}
+
+///|
+test "the update dialog as tall in every stage of a newer build on every screen: offered, the person's check, coming, ready, allowed, being put in place, failed" {
+  for s in update_screens {
+    let (w, platform) = s
+    let at = "\{w} platform \{platform}"
+    let asked : Array[(Result[Json, String]) -> Unit] = []
+    let t = update_dialog_tester(w, platform, asked)
+    // (its head where it was: a dialog in the middle as tall, a sheet from the foot as tall; its foot where it was)
+    let head = fn() { t.find("当前版本 0.1.2").unwrap().1 }
+    let foot = fn() raise { t.get(Button, label="稍后").rect.1 }
+    let first = head()
+    let first_foot = foot()
+    let same = fn(stage : String) raise {
+      t.draw()
+      assert_eq(head(), first, msg="\{at}: \{stage}, as it changed")
+      t.run_for(@ui.move_most_ms)
+      assert_eq(head(), first, msg="\{at}: \{stage}")
+    }
+    assert_true(t.find("有新版本 0.1.3") is Some(_), msg=at)
+    assert_true(t.find("修复：二") is Some(_), msg=at)
+    t.click(Button, label="下载")
+    same("the person's check")
+    assert_true(t.find("正在检查最新版本") is Some(_), msg=at)
+    (asked[0])(Ok(update.available.get().unwrap()))
+    t.tells_update("{\"phase\":\"downloading\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+    same("coming, how far unknown")
+    t.tells_update("{\"phase\":\"downloading\",\"percent\":13,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+    same("coming")
+    assert_true(t.find("关闭") is Some(_), msg="\{at}: 关闭 while it comes")
+    t.tells_update("{\"phase\":\"retrying\",\"percent\":13,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+    same("coming again")
+    t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+    same("ready")
+    assert_true(t.find("重启更新") is Some(_), msg=at)
+    t.tells_update("{\"phase\":\"allow\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+    same("allowed")
+    assert_true(t.find("允许安装更新") is Some(_), msg=at)
+    t.tells_update("{\"phase\":\"installing\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+    same("being put in place")
+    t.tells_update("{\"phase\":\"failed\",\"percent\":-1,\"error\":\"incomplete\",\"file\":\"stillfail-3.zip\"}")
+    same("failed")
+    assert_true(t.find("重试") is Some(_), msg=at)
+    assert_eq(foot(), first_foot, msg="\{at}: its foot where it was")
+    update_dialog_closed(t, "稍后", at)
+  }
+}
+
+///|
+test "the update dialog asked again while it is open stays the one: no second over it" {
+  for s in update_screens {
+    let (w, platform) = s
+    let at = "\{w} platform \{platform}"
+    let asked : Array[(Result[Json, String]) -> Unit] = []
+    let t = update_dialog_tester(w, platform, asked)
+    let serial = @sf.last_presented()
+    // (its title, and 关于's row saying the same under it where it shows)
+    let titles = fn() { t.words().filter(fn(w) { w.0 == "有新版本 0.1.3" && w.5 > 0.5 }).length() }
+    let was = titles()
+    t.post(@hostapi.system_channel, "{\"menu\":\"update.check\"}")
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    assert_eq(@sf.last_presented(), serial, msg="\{at}: none more presented")
+    assert_true(update_dialog_open(), msg="\{at}: still open")
+    assert_eq(titles(), was, msg="\{at}: no second title")
+    update_dialog_closed(t, "稍后", at)
+  }
+}
+
+///|
+test "the update dialog while still.fail cloud is asked: its title, this build under it, a bar to and fro; 取消 closes it; answered none newer, 确定; could not ask, why, 重试 asks again" {
+  for s in update_screens {
+    let (w, platform) = s
+    let at = "\{w} platform \{platform}"
+    let asked : Array[(Result[Json, String]) -> Unit] = []
+    let t = update_dialog_tester(w, platform, asked, newer=false)
+    assert_eq(asked.length(), 1, msg=at)
+    guard t.find("正在检查最新版本") is Some((_, title_y)) else { fail("\{at}: no title") }
+    guard t.find("当前版本 0.1.2") is Some((_, lead_y)) else { fail("\{at}: no lead") }
+    assert_true(title_y < lead_y, msg=at)
+    // (from the line under its title to its foot: the bar's room between)
+    let asking_gap = t.get(Button, label="取消").rect.1 - lead_y
+    update_dialog_closed(t, "取消", at)
+    // asked again: none newer
+    let asked : Array[(Result[Json, String]) -> Unit] = []
+    let t = update_dialog_tester(w, platform, asked, newer=false)
+    (asked[0])(Ok(Json::null()))
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("已是最新版本") is Some(_), msg=at)
+    // (holding nothing, none of its room: the line under its title straight over its foot)
+    guard t.find("当前版本 0.1.2") is Some((_, lead_y)) else { fail("\{at}: no lead") }
+    let said_gap = t.get(Button, label="确定").rect.1 - lead_y
+    assert_true(said_gap < asking_gap, msg="\{at}: none newer, \{said_gap} under its lead, asking \{asking_gap}")
+    update_dialog_closed(t, "确定", at)
+    // could not ask: why, in place of this build; 重试 asks again
+    let asked : Array[(Result[Json, String]) -> Unit] = []
+    let t = update_dialog_tester(w, platform, asked, newer=false)
+    (asked[0])(Err("无法获取最新版本：offline"))
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("检查更新失败") is Some(_), msg=at)
+    guard t.find("无法获取最新版本：offline") is Some((_, why_y)) else { fail("\{at}: no why") }
+    assert_eq(t.get(Button, label="重试").rect.1 - why_y, said_gap, msg="\{at}: could not ask, as none newer")
+    t.click(Button, label="重试")
+    t.run_for(@ui.move_most_ms)
+    assert_eq(asked.length(), 2, msg="\{at}: asked again")
+    assert_true(t.find("正在检查最新版本") is Some(_), msg=at)
+    update_dialog_closed(t, "取消", at)
+  }
 }

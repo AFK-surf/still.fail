@@ -48,7 +48,15 @@ pub fn release_topic(String, params? : Map[String, @json.Json]) -> Unit
 
 pub let restarted_text : @ref.Ref[String]
 
+pub fn said(String) -> Unit
+
 pub fn screen_ack(Int32, Double) -> Bool
+
+pub fn serve((String) -> Unit) -> Int32
+
+pub fn serve_end() -> Unit
+
+pub fn served() -> Int32
 
 pub fn sign_in((Result[@json.Json, @json.Json]) -> Unit) -> Unit
 
@@ -74,6 +82,8 @@ pub fn trace_to((String) -> Unit, bytes_max? : Int32) -> Unit
 
 pub fn track((String) -> Int32, (Int32) -> Unit) -> Unit
 
+pub fn unheld_said() -> Array[(String, Int32, Int32)]
+
 pub fn unread(String) -> Unit
 
 pub fn unsubscribe(Sub) -> Unit
@@ -81,6 +91,8 @@ pub fn unsubscribe(Sub) -> Unit
 pub fn unsubscribe_topic(String, params? : Map[String, @json.Json]) -> Unit
 
 pub fn wall_ms() -> Double
+
+pub fn weights(@json.Json, most? : Int32) -> (Int32, Array[(String, Int32)])
 
 // Errors
 
@@ -108,13 +120,17 @@ pub fn Client::refresh_topic(Self, String, params? : Map[String, @json.Json]) ->
 pub fn Client::release_topic(Self, String, params? : Map[String, @json.Json]) -> Unit
 pub fn Client::reset(Self) -> Unit
 pub fn Client::restarted(Self) -> Unit
+pub fn Client::said(Self, String) -> Unit
 pub fn Client::stream(Self, String, params? : @json.Json, bytes? : Bytes?, on_value~ : (@json.Json, Bytes?) -> Unit, on_done? : (Result[@json.Json, @json.Json]) -> Unit) -> Int32
 pub fn Client::stream_bytes(Self, String, params? : @json.Json, on_value~ : (@json.Json, Bytes?) -> Unit, on_done~ : (Result[(@json.Json, Bytes?), @json.Json]) -> Unit) -> Int32
 pub fn Client::subscribe(Self, String, params? : Map[String, @json.Json]) -> Sub
+pub fn Client::tells_before(Self, (String, @json.Json) -> Array[(String, @json.Json)]) -> Unit
 pub fn Client::time_topics(Self, ((Int32, String, @json.Json?, Bool) -> Unit)?) -> Unit
 pub fn Client::topic_generation(Self, String, params? : Map[String, @json.Json]) -> (Int32, Bool)
 pub fn Client::topic_said(Self, Map[String, @json.Json]) -> Bool
 pub fn Client::track(Self, (String) -> Int32, (Int32) -> Unit) -> Unit
+pub fn Client::unheld(Self, String) -> Bool
+pub fn Client::unheld_said(Self) -> Array[(String, Int32, Int32)]
 pub fn Client::unread(Self, String) -> Unit
 pub fn Client::unsubscribe(Self, Sub) -> Unit
 pub fn Client::unsubscribe_topic(Self, String, params? : Map[String, @json.Json]) -> Unit
@@ -137,6 +153,8 @@ pub struct Replay {
   // private fields
 }
 pub fn Replay::answers_given(Self, String) -> Int32
+pub fn Replay::asks_before_step(Self) -> Bool
+pub fn Replay::asks_before_step_due(Self) -> Double
 pub fn Replay::attach(Self) -> Unit
 pub fn Replay::client(Self) -> Client
 pub fn Replay::clock(Self, () -> Double) -> Unit
@@ -155,6 +173,8 @@ pub fn Replay::has_jobs_summary(Self) -> Bool
 pub fn Replay::host(Self, (String) -> Unit) -> Unit
 pub fn Replay::host_frames(Self) -> Array[Double]
 pub fn Replay::host_given(Self) -> (Double, Double)?
+pub fn Replay::last_given(Self) -> Double
+pub fn Replay::late_unsubs(Self) -> Array[(String, Int, Double)]
 pub fn Replay::left(Self) -> Int32
 pub fn Replay::local_station(Self) -> String
 pub fn Replay::next_due(Self) -> Double?
@@ -163,10 +183,12 @@ pub fn Replay::pace(Self, Pace, strict? : Bool) -> Unit
 pub fn Replay::parse(String) -> Self
 pub fn Replay::sent_bytes(Self, String, String, String) -> Bytes?
 pub fn Replay::sent_bytes_from(Self, String, String, String) -> Bytes?
+pub fn Replay::settings(Self) -> @json.Json?
 pub fn Replay::shuffle(Self, UInt32) -> Unit
 pub fn Replay::skip(Self, String) -> Unit
 pub fn Replay::skip_where(Self, (String, @json.Json) -> Bool) -> Unit
 pub fn Replay::step_at(Self, String) -> Double?
+pub fn Replay::step_moved_to(Self, Double) -> Unit
 pub fn Replay::step_taken(Self, String) -> Bool
 pub fn Replay::step_wall(Self, String) -> Double?
 pub fn Replay::take_asked(Self) -> Array[String]

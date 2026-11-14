@@ -11,6 +11,9 @@ import { ConfigFile } from "../src/ops/config.ts";
 import { channelCommand, setChannel } from "../src/updates/channel.ts";
 import { CHANNEL_ANSWER, CHANNEL_ASK, Updates, answerChannelAsk } from "../src/updates/updates.ts";
 import type { Channel } from "../src/updates/versions.ts";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { feedOf, nextRelease, programBytes, trusted, withDeltas } from "./release-fakes.ts";
 
 delete process.env.STILLFAIL_CONFIG;
 delete process.env.EMBER_CONFIG;
@@ -208,4 +211,45 @@ test("the channel command says the channel, set first when named", async () => {
   }
   assert.deepEqual(said, ["beta", "stable", "! Error: channel 必须是 stable 或 beta，不是 nightly"]);
   assert.equal(new ConfigFile(dir).raw().updateChannel, "stable");
+});
+
+test("asked to update with a delta to take first, the station answers at once, its download shown", { skip: process.platform === "win32" && "install.sh is macOS's and Linux's" }, async (t) => {
+  const dir = temp();
+  const before = process.env.TMPDIR;
+  process.env.TMPDIR = dir;
+  t.after(() => (before === undefined ? delete process.env.TMPDIR : (process.env.TMPDIR = before)));
+  const data = join(dir, "data");
+  const app = join(data, "app");
+  mkdirSync(join(app, "bin"), { recursive: true });
+  mkdirSync(join(app, "station"));
+  writeFileSync(join(app, "BUILD"), "1300");
+  // The installer it carries: says what it was handed, takes it, and ends.
+  writeFileSync(join(app, "bin", "install.zh.sh"), 'printf "%s\\n" "${STILLFAIL_ARCHIVE:-}" > "$STILLFAIL_DATA/handed"; rm -rf "$(dirname "${STILLFAIL_ARCHIVE:-/nowhere/x}")"\n');
+  writeFileSync(join(app, "station", "main.js"), programBytes(200_000));
+  const release = nextRelease(join(dir, "release"), app);
+  let send = () => {};
+  const sent = new Promise<void>((r) => (send = r));
+  const server = createServer(async (req, res) => {
+    if (req.url === "/releases/station.json") return void res.end(JSON.stringify(withDeltas(feedOf(1310, release.build), [release.entry(1300)])));
+    if (req.url === "/releases/station/next.delta") return void sent.then(() => res.end(release.delta));
+    res.writeHead(404).end();
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => server.close());
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const updates = new Updates({ app, data, config: new ConfigFile(data), origin: () => origin, registry: "http://127.0.0.1:1", devinManifest: "http://127.0.0.1:1", env: { PATH: "/usr/bin:/bin" }, trusted, timing: { followLook: 200 } });
+  t.after(() => updates.close());
+  const ask = rig(updates);
+  await ask("POST", "/updates/check");
+  const [status, lines] = await ask("POST", "/updates", { id: "station" });
+  assert.equal(status, 200);
+  assert.deepEqual([stationOf(lines).state, stationOf(lines).percent], ["updating", 0]);
+  send();
+  // Its end is told as every change is (no look on a timer).
+  await new Promise<void>((resolve) => {
+    const ended = () => stationOf(updates.get("zh")).state !== "updating" && (off(), resolve(), true);
+    const off = updates.changes(() => void ended());
+    ended();
+  });
+  assert.match(readFileSync(join(data, "handed"), "utf8"), /stillfail-handed\.[0-9a-f]+\/stillfail\.tar\.gz/);
 });

@@ -1,10 +1,11 @@
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions, Response as MFResponse, Log, LogLevel } from "miniflare";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { exportJWK, exportPKCS8, generateKeyPair, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
 import type { MailMessage } from "../src/mail.ts";
 import { createRequire } from "node:module";
+import { brotliCompressSync } from "node:zlib";
 
 // workerd keeps a WebSocket's TCP connection open some ten seconds after a close the Worker began (Cloudflare does
 // not), and the ws client miniflare hands sockets through says "close" only once it ends: a test waiting on a close
@@ -26,6 +27,9 @@ WS.prototype.close = function (this: any, ...args: unknown[]) {
  * depends on the hour it runs at (a minute's budget turning over halfway, say). Ahead of any real one, so the alarms
  * set from it (a login limit's day, a session's end) never go off during a test.
  */
+
+/** Where the test service account of `telemetry` gets its token. */
+const TELEMETRY_TOKEN_URI = "https://oauth.example/telemetry-token";
 export const NOW_MS = Date.UTC(2030, 0, 1, 12, 0, 30);
 
 /** A request the Worker made to somewhere outside (a push service, say), as a stand-in sees it. */
@@ -35,6 +39,9 @@ export interface OutboundRequest {
   headers: Record<string, string>;
   body: Uint8Array;
 }
+
+/** The OpenID provider the harness's `oidc` puts in Google's place. */
+export const OIDC_ISSUER = "https://sso.example.test";
 
 /** The Cloudflare Access team the harness's `access` puts in front of the console. */
 const ACCESS_TEAM = "https://team.cloudflareaccess.example";
@@ -47,6 +54,8 @@ export async function harness(
     port?: number;
     signingKey?: string;
     noGoogle?: boolean;
+    /** LOGIN_LIMIT_TIMES: the sign-ins an address may start, times this (env.ts). */
+    loginLimitTimes?: number;
     /** REVIEW_ACCOUNTS: who signs in with a password (password.ts). */
     reviewAccounts?: string;
     relayUrl?: string;
@@ -55,8 +64,8 @@ export async function harness(
     relayNames?: Record<string, string>;
     /** STATUS_PAGES: the pages the cron checks for still.fail/status; answered by `push` (they are outside). */
     statusPages?: Record<string, string>;
-    /** STATUS_REPO: whose issues labelled `incident` it shows; answered by `push`. */
-    statusRepo?: string;
+    /** STATUS_REPO_ID: the id of the repository whose issues labelled `incident` it shows; answered by `push`. */
+    statusRepoId?: string;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
     /** The console's host. */
@@ -70,11 +79,15 @@ export async function harness(
     oldPreviewOrigin?: string;
     /** The static sites' files (`/web/…`, `/admin/…`, `/preview/…`): a few stand-ins unless given. */
     assets?: (request: Request) => Promise<Response> | Response;
-    /** Axiom: a stand-in answering its requests, or "real" to reach it (with AXIOM_TOKEN from the environment). */
-    axiom?: ((request: Request) => Promise<Response> | Response) | "real";
+    /** Google Cloud's Telemetry API (traces and logs): a stand-in answering its requests, made as a test service
+     * account whose token is "test-telemetry-token", or "real" to reach it (with GCP_TELEMETRY, the account's JSON,
+     * from the environment). */
+    telemetry?: ((request: Request) => Promise<Response> | Response) | "real";
     /** Push notifications: the VAPID key (base64url point and scalar), the FCM service account's JSON. */
     vapid?: { publicKey: string; privateKey: string };
     fcm?: string;
+    /** FCM_SERVICE_ACCOUNT_MORE: the other product's projects' accounts. */
+    fcmMore?: string;
     apns?: string;
     /** "real": the machine's time instead of NOW_MS (dev.ts, which real stations sign in to). */
     clock?: "real";
@@ -83,10 +96,20 @@ export async function harness(
     /** Signing in with an email: the codes sent are kept in `mails` (and handed to this, if it is one: false, or an
      * error code, and the binding throws as Cloudflare's would). */
     mail?: true | ((message: MailMessage) => boolean | string);
+    /** An OpenID provider in Google's place (OIDC_ISSUER; its client a public one, without a secret),
+     * its discovery, keys and token endpoint answered here; `codes` hold what it gave, as Google's do (their `sub` its). */
+    oidc?: true;
     /** Cloudflare Access in front of the console's host (ACCESS_TEAM_DOMAIN, ACCESS_AUD): `accessToken` makes its tokens. */
     access?: true;
     /** Another cloud's releases its own bucket lacks some of (RELEASES_UPSTREAM, https://upstream.test/releases): its answer to each file asked there. */
     upstream?: (file: string, request: OutboundRequest) => { status: number; body?: string; headers?: Record<string, string> };
+    /** The other product's origins answered as that product (GUESTS, guests.ts), and the secret forwarded requests carry. */
+    guests?: unknown[];
+    forwardSecret?: string;
+    /** Moved into another cloud (FORWARD_TO): where its requests go, answered by `push` as every other outbound one. */
+    forwardTo?: string;
+    /** MOVING: accounts moving between clouds (move.ts). */
+    moving?: true;
     /** Push services, FCM and its token endpoint: a stand-in answering every other outbound request. */
     push?: (request: OutboundRequest) => Promise<{ status: number; body?: string }> | { status: number; body?: string };
   } = {},
@@ -112,6 +135,11 @@ export async function harness(
   };
   const codes = new Map<string, { nonce: string; challenge: string; sub: string; invalid?: string }>();
   const mails: MailMessage[] = [];
+  const telemetryAccount = options.telemetry === "real"
+    ? process.env.GCP_TELEMETRY!
+    : options.telemetry
+      ? JSON.stringify({ type: "service_account", project_id: "stillfail-test", client_email: "telemetry@stillfail-test.iam.gserviceaccount.com", private_key: await exportPKCS8((await generateKeyPair("RS256", { extractable: true })).privateKey), token_uri: TELEMETRY_TOKEN_URI })
+      : null;
   const grantPair = options.grantJwk ? null : await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
   const grantJwk = options.grantJwk ? { ...options.grantJwk, kid: "test-grant" } : { ...(await exportJWK(grantPair!.privateKey)), kid: "test-grant" };
   const { d: _d, ...grantPublicFields } = grantJwk as JsonWebKey & { kid: string };
@@ -166,7 +194,8 @@ export async function harness(
         ADMIN_ORIGIN_ALIASES: oldAdminOrigin,
         BETA_ORIGIN: betaOrigin,
         GOOGLE_CLIENT_ID: options.noGoogle ? "" : "test-google-client",
-        GOOGLE_CLIENT_SECRET: randomSecret(),
+        GOOGLE_CLIENT_SECRET: options.oidc ? "" : randomSecret(),
+        ...(options.oidc ? { OIDC_ISSUER: OIDC_ISSUER, OIDC_NAME: "Example SSO" } : {}),
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
         FEEDBACK_TOKEN: feedbackToken,
@@ -178,17 +207,23 @@ export async function harness(
         ...(options.relayUrls ? { RELAY_URLS: options.relayUrls } : {}),
         ...(options.relayNames ? { RELAY_NAMES: options.relayNames } : {}),
         ...(options.statusPages ? { STATUS_PAGES: options.statusPages } : {}),
-        ...(options.statusRepo ? { STATUS_REPO: options.statusRepo } : {}),
+        ...(options.statusRepoId ? { STATUS_REPO_ID: options.statusRepoId } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
+        ...(options.fcmMore ? { FCM_SERVICE_ACCOUNT_MORE: options.fcmMore } : {}),
         ...(options.apns ? { APNS_KEY: options.apns } : {}),
+        ...(options.guests ? { GUESTS: JSON.stringify(options.guests) } : {}),
+        ...(options.forwardSecret ? { FORWARD_SECRET: options.forwardSecret } : {}),
+        ...(options.forwardTo ? { FORWARD_TO: options.forwardTo } : {}),
+        ...(options.moving ? { MOVING: "1" } : {}),
         ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
+        ...(options.loginLimitTimes ? { LOGIN_LIMIT_TIMES: String(options.loginLimitTimes) } : {}),
         ...(options.mail ? { TEST_MAIL: "1" } : {}),
-        ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
+        ...(telemetryAccount ? { GCP_TELEMETRY: telemetryAccount } : {}),
       },
       r2Buckets: ["RELEASES"],
       durableObjects: {
-        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad", "ServiceStatus"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD", "SERVICE_STATUS"][i], { className, useSQLite: true }])),
+        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad", "ServiceStatus", "Station"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD", "SERVICE_STATUS", "STATIONS"][i], { className, useSQLite: true }])),
         RELAY: { className: "Relay", scriptName: "relay", useSQLite: true },
       },
       outboundService: async (request) => {
@@ -200,8 +235,37 @@ export async function harness(
           const answer = options.upstream(url.pathname.slice("/releases/".length), { url: url.href, method: request.method, headers: Object.fromEntries(request.headers), body: new Uint8Array() });
           return new MFResponse(answer.body ?? null, { status: answer.status, headers: answer.headers ?? {} });
         }
+        if (options.oidc && url.href === `${OIDC_ISSUER}/.well-known/openid-configuration`) {
+          return MFResponse.json({ issuer: OIDC_ISSUER, authorization_endpoint: `${OIDC_ISSUER}/authorize`, token_endpoint: `${OIDC_ISSUER}/token`, jwks_uri: `${OIDC_ISSUER}/keys` });
+        }
+        if (options.oidc && url.href === `${OIDC_ISSUER}/keys`) return MFResponse.json({ keys: [publicJwk] });
+        if (options.oidc && url.href === `${OIDC_ISSUER}/token`) {
+          const body = new URLSearchParams(await request.text());
+          const code = codes.get(body.get("code") ?? "");
+          codes.delete(body.get("code") ?? "");
+          // (a public client: it sends no secret)
+          if (!code || body.has("client_secret") || (await digest(body.get("code_verifier") ?? "")) !== code.challenge || body.get("redirect_uri") !== origin + "/v1/auth/google/callback") return new MFResponse(null, { status: 401 });
+          const idToken = await new SignJWT({ nonce: code.nonce, sub: code.sub, email: `${code.sub.replace(/\W/g, "")}@sso.example.test`, email_verified: true, name: `SSO ${code.sub}` })
+            .setProtectedHeader({ alg: "RS256", kid: "test-google" })
+            .setIssuedAt(now())
+            .setExpirationTime(now() + 300)
+            .setIssuer(OIDC_ISSUER)
+            .setAudience("test-google-client")
+            .sign(privateKey);
+          return MFResponse.json({ id_token: idToken });
+        }
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
           return MFResponse.json({ keys: [publicJwk] }, { headers: { "cache-control": "max-age=3600" } });
+        }
+        if (options.telemetry === "real" && (url.origin === "https://telemetry.googleapis.com" || (url.href === "https://oauth2.googleapis.com/token" && new URLSearchParams(await request.clone().text()).get("grant_type") === "urn:ietf:params:oauth:grant-type:jwt-bearer"))) {
+          const answer = await globalThis.fetch(url, { method: request.method, headers: Object.fromEntries(request.headers), body: await request.arrayBuffer() });
+          return new MFResponse(await answer.arrayBuffer(), { status: answer.status, headers: { "content-type": answer.headers.get("content-type") ?? "application/json" } });
+        }
+        if (typeof options.telemetry === "function" && url.href === TELEMETRY_TOKEN_URI) {
+          return MFResponse.json({ access_token: "test-telemetry-token", expires_in: 3600, token_type: "Bearer" });
+        }
+        if (typeof options.telemetry === "function" && url.origin === "https://telemetry.googleapis.com") {
+          return options.telemetry(request as unknown as Request) as any;
         }
         if (url.href === "https://oauth2.googleapis.com/token") {
           const body = new URLSearchParams(await request.text());
@@ -230,11 +294,6 @@ export async function harness(
           if (sent !== true) return new MFResponse(sent || "E_INTERNAL_SERVER_ERROR", { status: 500 });
           mails.push(message);
           return new MFResponse(null, { status: 200 });
-        }
-        if (url.origin === "https://api.axiom.co" && options.axiom) {
-          if (options.axiom !== "real") return options.axiom(request as unknown as Request) as any;
-          const answer = await globalThis.fetch(url, { method: request.method, headers: Object.fromEntries(request.headers), body: await request.arrayBuffer() });
-          return new MFResponse(await answer.arrayBuffer(), { status: answer.status });
         }
         if (options.relay && url.origin === options.relay) {
           // Workerd networking to the real local relay uses a separate service
@@ -266,6 +325,38 @@ export async function harness(
   const fetchOld = (on: "main" | "admin" | "preview", path: string, init?: RequestInit) => mf.dispatchFetch({ main: oldOrigin, admin: oldAdminOrigin, preview: oldPreviewOrigin }[on] + path, init as any);
   /** A request straight to one of the Workers ("api", "relay", "static"), whatever the routes say. */
   const fetchWorker = async (name: string, url: string, init?: RequestInit) => ((await mf.getWorker(name)) as unknown as { fetch(url: string, init?: RequestInit): Promise<Response> }).fetch(url, init);
+  /** One of the API's Durable Objects, by its binding and name, with the test hooks test/worker.ts gives it. */
+  // deno-lint-ignore no-explicit-any
+  const object = async (binding: "DIRECTORY" | "ACCOUNTS" | "STATIONS", name: string): Promise<any> => {
+    const namespace: any = await mf.getDurableObjectNamespace(binding, "api");
+    return namespace.get(namespace.idFromName(name));
+  };
+  /**
+   * Once what still.fail cloud tells devices' and stations' objects after a change has got there (the Directory's
+   * deliveries go out as the change answers): the barrier a test waits at instead of waiting a while.
+   */
+  const settled = async () => (await object("DIRECTORY", "primary")).settled();
+  /**
+   * Once everything still.fail cloud sends on a socket for what was done or said before now has arrived: where a test
+   * reads a socket. The runtime answers "ping" itself, in the socket's order. By the first pong, what the socket said
+   * before has reached its object; `settled` then waits for that to be answered and for what the Directory tells; the
+   * second pong comes after everything those sent.
+   */
+  const heard = async (ws: { send(data: string): void; addEventListener(type: "message", on: (event: { data: unknown }) => void): void; removeEventListener(type: "message", on: (event: { data: unknown }) => void): void }) => {
+    const pong = () =>
+      new Promise<void>((resolve) => {
+        const on = (event: { data: unknown }) => {
+          if (event.data !== "pong") return;
+          ws.removeEventListener("message", on);
+          resolve();
+        };
+        ws.addEventListener("message", on);
+        ws.send("ping");
+      });
+    await pong();
+    await settled();
+    await pong();
+  };
   async function begin(sub = "google-test-user", invalid?: string, callback = "http://127.0.0.1:32145/oauth/callback") {
     const verifier = randomSecret(),
       state = randomSecret();
@@ -366,6 +457,9 @@ export async function harness(
     fetchBeta,
     fetchOld,
     fetchWorker,
+    object,
+    settled,
+    heard,
     begin,
     complete,
     exchange,
@@ -380,17 +474,22 @@ export const STAND_IN_FILES: Record<string, string> = {
   "/web/web.html": "<title>still.fail · web</title>",
   "/web/assets/app.js": "// the web app",
   "/web/sw.js": "// the notifications' worker",
+  "/web/mbui/app.js": "// the app, as mbui-web built it",
+  "/web/mbui/host.js": "// mbui's web host",
   "/admin/index.html": "<title>still.fail 管理后台</title>",
   "/admin/assets/console.js": "// the console",
   "/preview/_stillfail/frame.html": "<title>still.fail preview</title>",
   "/preview/_stillfail/sw.js": "// the preview's service worker",
-  "/preview/_ember/frame.html": "<title>still.fail preview (old path)</title>",
-  "/preview/_ember/sw.js": "// the preview's service worker (old path)",
   "/preview/404.html": "这是 still.fail 的预览地址",
 };
 
+/** The files the build brotlis beside them (apps/mbui/scripts/web-app.sh): app.js's, not host.js's (a build without one). */
+const STAND_IN_PACKED: Record<string, string> = { "/web/mbui/app.js.br": "/web/mbui/app.js" };
+
 function standInAssets(request: Request): Response {
   const path = new URL(request.url).pathname;
+  const packed = STAND_IN_PACKED[path];
+  if (packed) return new MFResponse(brotliCompressSync(STAND_IN_FILES[packed]!)) as unknown as Response;
   const body = STAND_IN_FILES[path];
   const headers = path.endsWith(".html") ? { "content-type": "text/html; charset=utf-8" } : {};
   return body === undefined ? new MFResponse("Not found", { status: 404 }) as unknown as Response : new MFResponse(body, { headers }) as unknown as Response;

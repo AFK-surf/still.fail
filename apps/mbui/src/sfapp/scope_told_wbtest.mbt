@@ -33,7 +33,7 @@ fn scope_dismissed(how : (@ui.Tester) -> Unit) -> Array[Bool] raise {
   seen.push(open())
   t.draw()
   seen.push(open())
-  assert_true(shown, msg="its lengths shown: \{seen}")
+  assert_true(shown, msg="its lengths shown: \{Repr(seen)}")
   seen
 }
 

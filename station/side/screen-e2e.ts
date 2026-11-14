@@ -138,7 +138,7 @@ async function member(device: Endpoint, station: string, credential: string): Pr
 }
 async function screens(conn: Connection): Promise<any[]> {
   const s = await conn.openBi();
-  await writeLine(s, { method: "GET", path: "/admin/api/screens", headers: { "stillfail-lang": "zh" } });
+  await writeLine(s, { method: "GET", path: "/admin/api/screens", headers: { "stillfail-lang": "zh", "stillfail-build": "0.1.0" } });
   await s.finish();
   const r = new Reader(s);
   const head = await r.line();
@@ -163,7 +163,7 @@ function nals(avcc: Buffer): Buffer[] {
 /// else what it measured. `move`: the pointer driven around every 16 ms.
 async function view(conn: Connection, label: string, move = false): Promise<{ status: number; error?: string; line?: string }> {
   const stream = await conn.openBi();
-  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "zh" }, screen: { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: move } });
+  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "zh", "stillfail-build": "0.1.0" }, screen: { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: move } });
   const heard = new Reader(stream);
   const answer = await heard.line();
   if (answer.status !== 200) return { status: answer.status, error: JSON.parse((await heard.rest()).toString()).error };
@@ -214,7 +214,7 @@ async function view(conn: Connection, label: string, move = false): Promise<{ st
 /// A request on the member's link with a body (the drive's upload): its status and its answer.
 async function request(conn: Connection, method: string, path: string, body: Buffer): Promise<{ status: number; answer: any }> {
   const s = await conn.openBi();
-  await writeLine(s, { method, path, headers: { "stillfail-lang": "en" } });
+  await writeLine(s, { method, path, headers: { "stillfail-lang": "en", "stillfail-build": "0.1.0" } });
   await s.write(body);
   await s.finish();
   const r = new Reader(s);
@@ -233,7 +233,7 @@ async function transfer(conn: Connection): Promise<boolean> {
   execFileSync("open", ["-a", "TextEdit", notes]);
   await sleep(2500);
   const stream = await conn.openBi();
-  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "zh" }, screen: { maxWidth: 1280, maxHeight: 800, codecs: ["h264"], control: true } });
+  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "zh", "stillfail-build": "0.1.0" }, screen: { maxWidth: 1280, maxHeight: 800, codecs: ["h264"], control: true } });
   const heard = new Reader(stream);
   const answer = await heard.line();
   if (answer.status !== 200) throw new Error(`the view: ${answer.status}`);

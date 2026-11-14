@@ -11,13 +11,14 @@
 
 ///|
 /// The tools.
+#derive(Eq)
 pub(all) enum MarkTool {
   Select
   Rect
   Arrow
   Pen
   Words
-} derive(Eq)
+}
 
 ///|
 /// still.fail's accent, what is drawn by default; the colours to draw in, each with the halo that edges its words.
@@ -111,10 +112,11 @@ pub fn Mark::scaled(self : Mark, ax : Double, ay : Double, sx : Double, sy : Dou
 ///|
 /// A handle of the picked mark: a corner of its box (`Corner(1, 1)` its foot right; the
 /// corner across stays), or an end of an arrow (0 its tail, 1 its point).
+#derive(Eq)
 pub(all) enum MarkHandle {
   Corner(Int, Int)
   End(Int)
-} derive(Eq)
+}
 
 ///|
 /// The picked mark's handles and where each is drawn, in the image's pixels at `k` stage points to one: an arrow's on
@@ -312,7 +314,7 @@ let marks_told : @signals.Signal[Int] = @signals.signal(0)
 ///|
 /// Marking changed (marks_told).
 pub fn marks_changed() -> Unit {
-  marks_told.set(@signals.untracked(fn() { marks_told.get() }) + 1)
+  marks_told.set(marks_told.untracked() + 1)
 }
 
 ///|
@@ -390,7 +392,7 @@ pub fn marks_put_down() -> Unit {
     Some(x) => x
     None => return
   }
-  let text = marking.write_field.text().trim(chars=" \n\t").to_string()
+  let text = marking.write_field.text().trim(chars=" \n\t").to_owned()
   marking.writing = None
   // (the keyboard down, what was written in done with: its field lets go of the focus)
   marking.write_field.let_go()
@@ -776,7 +778,7 @@ pub fn marks_quotes(made : String, original : String, nw : Double, nh : Double) 
           (
             pv_fill("android-chat.marks.quote.title", [("original", original), ("n", "\{n}")]),
             what + "\n" + on,
-            marking.comments.get(s.id).unwrap_or("").trim(chars=" \n\t").to_string(),
+            marking.comments.get(s.id).unwrap_or("").trim(chars=" \n\t").to_owned(),
           ),
         )
       }
@@ -953,7 +955,7 @@ pub let note_pop_ms : Double = 140.0
 ///|
 /// What is said of note `mid`, else 只引用.
 fn note_said(mid : Int) -> String {
-  match marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string() {
+  match marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_owned() {
     "" => pv("android-chat.annotate.quoteOnly")
     said => said
   }

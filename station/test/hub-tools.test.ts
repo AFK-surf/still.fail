@@ -15,7 +15,8 @@ import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer, sender } from "../src/sessions/messages.ts";
 import { handedOf } from "../src/store/rows.ts";
 import { DecisionSessionsUnavailable } from "../src/store/legacy-decision-session.ts";
-import { CREATE, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
+import { CREATE, CREATE_PRESET, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
+import { presetCopyOf } from "../src/sessions/presets.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
 import { forPeer } from "../src/sessions/others.ts";
 import { makeStore } from "../src/read/store.ts";
@@ -47,7 +48,7 @@ test("every tool has a name, a description and an object's input schema; the cha
   const ours = [...chatTools(r.hub), ...archiveTools(r.hub), ...remoteTools({} as Remote), ...adbTools(() => []), ...feedbackTools(r.store, () => null, () => null)];
   assert.deepEqual(
     chatTools(r.hub).map((t) => t.name),
-    ["chat_post", "slack_api", "chat_state", "chat_leave", "chat_history", "chat_list", "chat_read", "session_send", "chat_create", "session_history"],
+    ["chat_post", "slack_api", "chat_state", "chat_leave", "chat_history", "chat_list", "chat_read", "session_send", "chat_create", "chat_archive", "session_history"],
   );
   assert.equal(new Set(ours.map((t) => t.name)).size, ours.length, "no name twice");
   for (const tool of ours) {
@@ -376,6 +377,74 @@ test("a card withdrawn before a message is not attributed to that message", asyn
     await settle();
     const prompt = r.claude.last().steers.at(-1)!;
     assert.ok(!prompt.includes("<card-state"), prompt);
+  } finally {
+    await r.close();
+  }
+});
+
+test("a choice that closes a card is told to its agent once, before what it is next handed, as an earlier choice", async () => {
+  const r = new Rig();
+  try {
+    const [key, thread] = newSession(r.hub, web());
+    const to = `CHAT/${thread.threadTs}`;
+    sayIn(r.hub, thread.id, "ada@x.com", "做这个");
+    await settle();
+    await r.call(key, "chat_post", { to, text: "要部署吗？", kind: "need_human", need: "选是否部署",
+      card: { type: "options", options: [{ label: "部署" }, { label: "不需要部署", action: "close" }] } });
+    const card = r.said(thread.id).at(-1)!;
+    r.claude.last().complete();
+    await settle();
+    const handed = () => r.claude.sessions.flatMap((s) => [...s.prompts, ...s.steers]);
+    const before = handed().length;
+    assert.equal(r.store.closeCard("ada@x.com", thread.id, card.n, "不需要部署"), true);
+    await settle();
+    assert.equal(handed().length, before, "the choice itself sends nothing and wakes no one");
+    assert.deepEqual(r.store.untoldCardChoices(key).map((c) => [c.ts, c.by, c.option, c.question]), [[card.ts, "ada@x.com", "不需要部署", "要部署吗？"]]);
+
+    sayIn(r.hub, thread.id, "ada@x.com", "另外看下日志");
+    await settle();
+    const prompt = handed().at(-1)!;
+    assert.ok(prompt.includes(`<card-choice thread="${to}" card="${card.ts}" by="ada@x.com (ada@x.com)" at="`), prompt);
+    assert.ok(prompt.includes("Asked: 要部署吗？\nChosen: 不需要部署\n</card-choice>"), prompt);
+    assert.ok(prompt.includes("not about them unless it says so"), prompt);
+    assert.ok(prompt.indexOf("<card-choice") < prompt.indexOf("另外看下日志"), "the earlier choice comes before the new message");
+    assert.ok(!prompt.includes("<card-state"), prompt);
+    assert.deepEqual(r.store.untoldCardChoices(key), []);
+
+    r.claude.last().complete();
+    await settle();
+    sayIn(r.hub, thread.id, "ada@x.com", "好了吗");
+    await settle();
+    assert.ok(!handed().at(-1)!.includes("<card-choice"), "told once");
+    const history = await r.call(key, "chat_history", { to });
+    assert.ok(history.includes('Answer card: no longer pending; ada@x.com (ada@x.com) chose "不需要部署", which closed it without a message;'), history);
+  } finally {
+    await r.close();
+  }
+});
+
+test("a choice that closes a card comes with a station notice too, and waits when the notice cannot be handed", async () => {
+  const r = new Rig();
+  try {
+    const [key, thread] = newSession(r.hub, web());
+    const to = `CHAT/${thread.threadTs}`;
+    sayIn(r.hub, thread.id, "ada@x.com", "做这个");
+    await settle();
+    const agent = r.claude.last();
+    await r.call(key, "chat_post", { to, text: "CI 过了要合并吗？", card: { type: "options", options: [{ label: "合并" }, { label: "先不合", action: "close" }] } });
+    const card = r.said(thread.id).at(-1)!;
+    // Chosen while the turn that asked still runs, and it takes no steer: nothing is told, nothing is lost.
+    assert.equal(r.store.closeCard("ada@x.com", thread.id, card.n, "先不合"), true);
+    agent.unsteerable = true;
+    r.hub.notify(key, "the CI watch ended");
+    await settle();
+    assert.equal(r.store.untoldCardChoices(key).length, 1);
+    agent.unsteerable = false;
+    r.hub.notify(key, "the CI watch ended again");
+    await settle();
+    const steer = agent.steers.at(-1)!;
+    assert.ok(steer.includes("Chosen: 先不合") && steer.indexOf("<card-choice") < steer.indexOf("the CI watch ended again"), steer);
+    assert.deepEqual(r.store.untoldCardChoices(key), []);
   } finally {
     await r.close();
   }
@@ -737,7 +806,7 @@ test("naming a Slack conversation alone does not send a Slack message", async ()
   await r.close();
 });
 
-test("an agent names its chat once, and again only after people said enough; never over people's name nor while it is open", async () => {
+test("an agent names its chat once, and again immediately when allowed even while open; never over people's name", async () => {
   const r = new Rig();
   const [key, thread] = newSession(r.hub, web("local"));
   sayIn(r.hub, thread.id, "local", "帮我看下这个");
@@ -756,40 +825,19 @@ test("an agent names its chat once, and again only after people said enough; nev
   read();
   assert.ok((await post("部署失败")).endsWith('Titled the chat "部署失败".'));
   assert.equal(r.store.autoTitle(thread.id).changes, 1);
-  // Someone has it open: the new name waits for them to leave.
+  // Someone has the chat open right now: renaming still takes effect immediately.
   for (let n = 0; n < 5; n++) sayIn(r.hub, thread.id, "local", `又一件 ${n}`);
   r.store.setRead("local", thread.id, r.store.lastEntry(thread.id));
   await settle();
   read();
-  assert.ok((await post("证书过期")).endsWith('The chat will be titled "证书过期" once nobody has it open.'));
-  assert.equal(named(), "部署失败");
+  assert.ok((await post("证书过期")).endsWith('Titled the chat "证书过期".'));
+  assert.equal(named(), "证书过期");
+  assert.equal(r.store.autoTitle(thread.id).changes, 2);
   // A name people gave stays.
   r.store.setThreadTitle(thread.id, "值班");
   assert.ok((await post("别的")).includes("Title not changed: people named this chat"));
   // No title given: the post as before.
   assert.equal(await r.call(key, "chat_post", { to, text: "ok" }), `Posted to ${to}.`);
-  await r.close();
-});
-
-test("a title that waits is given once nobody has the chat open", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
-  const r = new Rig();
-  const [key, thread] = newSession(r.hub, web("local"));
-  sayIn(r.hub, thread.id, "local", "帮我看下这个");
-  await settle();
-  const to = `CHAT/${thread.threadTs}`;
-  await r.call(key, "chat_post", { to, text: "ok", title: "登录" });
-  for (let n = 0; n < 5; n++) sayIn(r.hub, thread.id, "local", `再看 ${n}`);
-  r.store.setRead("local", thread.id, r.store.lastEntry(thread.id));
-  await settle();
-  r.claude.last().reads();
-  assert.ok((await r.call(key, "chat_post", { to, text: "ok", title: "部署" })).includes("once nobody has it open"));
-  t.mock.timers.tick(60_000);
-  await settle();
-  assert.equal(r.store.getThread(thread.id)!.autoTitle, "登录", "still open");
-  t.mock.timers.tick(3 * 60_000);
-  await settle();
-  assert.equal(r.store.getThread(thread.id)!.autoTitle, "部署");
   await r.close();
 });
 
@@ -1417,6 +1465,70 @@ test("an agent opens a chat on another station: made there once per key, its fir
   });
   assert.ok((await near.refused(keyA, "chat_create", { key: "old", station: "far", text: "x" })).includes("not updated yet"));
   assert.ok((await near.refused(keyA, "chat_create", { key: "nowhere", station: "mars", text: "x" })).includes("orchard"));
+  await near.close();
+  await far.close();
+});
+
+test("an agent opens a chat with a preset as a person would in the app: taken as it is, nothing given beside what it names", async () => {
+  const near = new Rig({ link: true });
+  near.edit((raw) => {
+    raw.profiles[0].models = ["opus", "sonnet"];
+  });
+  const far = new Rig({ link: true, place: { workspace: "ws", station: "far" } });
+  const a = say("<@UBOT> review it");
+  await near.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  const asked: string[] = [];
+  near.hub.onPeer(async (_station, request) => {
+    if (request.method === "peers") return { workspace: "ws", stations: [{ id: "st", name: "cedar" }, { id: "far", name: "orchard" }], current: true };
+    asked.push(request.method);
+    if (request.method === CREATE || request.method === CREATE_PRESET) return createForPeer(far.hub, "st", request);
+    return fromPeer(far.hub, "st", request);
+  });
+  const review = near.hub.presets.add(null, { name: "Review", dirs: [], instructions: "Read every line.", model: { model: "opus", runtime: "claude" } }, "local");
+  near.hub.presets.add(null, { name: "Loose", dirs: [], instructions: "" }, "local");
+  near.hub.presets.add(null, { name: "Far", dirs: [], instructions: "On orchard.", station: "ws/far" }, "local");
+
+  // One that names its model runs it as it says; nothing of it can be given beside it.
+  const said = await near.call(keyA, "chat_create", { key: "review", text: "review the PR", preset: "review" });
+  const child = near.store.openedBy(keyA)[0]!.child;
+  assert.ok(said.includes("this station"), said);
+  assert.deepEqual([near.session(child).runtime, near.session(child).model], ["claude", "opus"]);
+  assert.equal(presetCopyOf(near.session(child).workspace)?.id, review.id);
+  for (const beside of [{ model: "sonnet" }, { runtime: "claude" }, { effort: "high" }, { fast: true }, { context: 200_000 }]) {
+    const why = await near.refused(keyA, "chat_create", { key: "beside", text: "x", preset: review.id, ...beside });
+    assert.ok(why.includes("leave runtime, model, effort, fast and context out"), why);
+  }
+  // One that names no model is chosen as without one, and kept with the chat.
+  await near.call(keyA, "chat_create", { key: "loose", text: "x", preset: "Loose", model: "sonnet" });
+  const loose = near.store.openedBy(keyA).find((o) => o.key === "loose")!.child;
+  assert.deepEqual([near.session(loose).model, presetCopyOf(near.session(loose).workspace)?.name], ["sonnet", "Loose"]);
+  // None named: no preset, whatever the opener's chat has.
+  await near.call(keyA, "chat_create", { key: "none", text: "x", model: "sonnet" });
+  const none = near.store.openedBy(keyA).find((o) => o.key === "none")!.child;
+  assert.equal(presetCopyOf(near.session(none).workspace), null);
+  // An unknown one: told those there are.
+  const unknown = await near.refused(keyA, "chat_create", { key: "u", text: "x", preset: "Nope" });
+  assert.ok(unknown.includes("Review, Loose, Far"), unknown);
+
+  // One that names a station opens there with station left out, its copy taken by that station; on another, refused.
+  asked.length = 0;
+  await near.call(keyA, "chat_create", { key: "far", text: "x", preset: "Far", runtime: "claude" });
+  assert.equal(asked[0], CREATE_PRESET);
+  const there = far.store.listSessions().map((s) => s.key);
+  assert.equal(there.length, 1);
+  const copy = presetCopyOf(far.session(there[0]!).workspace);
+  assert.deepEqual([copy?.name, copy?.instructions], ["Far", "On orchard."]);
+  const elsewhere = await near.refused(keyA, "chat_create", { key: "far2", text: "x", preset: "Far", station: "cedar" });
+  assert.ok(elsewhere.includes("only on station far"), elsewhere);
+  // A station from before presets reached chat_create: refused, nothing opened there without the preset.
+  near.hub.onPeer(async (_station, request) => {
+    if (request.method === "peers") return { stations: [{ id: "far", name: "orchard" }] };
+    throw new Refused("remote tasks are not enabled for this source station");
+  });
+  const old = await near.refused(keyA, "chat_create", { key: "old", text: "x", preset: "Far" });
+  assert.ok(old.includes("not updated yet") && old.includes("with a preset"), old);
   await near.close();
   await far.close();
 });

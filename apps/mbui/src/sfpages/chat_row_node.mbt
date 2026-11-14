@@ -3,12 +3,23 @@
 // marks it (failed a moment ago, its station away, from Slack, opened by another chat, its station's mark), where it
 // stands or the last thing said, who is in it; pressed, its chat; with a mouse, pointed at, its time in that place and
 // 归档 at its top right, right clicked its menu at the pointer; with a finger, held a while its time, held long its
-// menu.
+// menu. What only those read (its menu's, its swipe's question, its time in words) is its chat's whole row
+// (@sfbase.whole_row: the list's rows are made without it), asked as the hand comes to it (a pointer down on it, a
+// pointer coming to rest over it, a swipe setting out), held while what reads it is open: what opens waits for it and
+// opens whole the frame it is answered.
+//
+// Archived from its row of a list made once (its swipe, its 归档 key, its menu: archive_row's `here`), what the row
+// uncovers as it goes off to the left stays in its place and says so (its tray: tray_node): 归档 docked at its start
+// with a check before it, 撤销 come in at its end with the row's way out. 撤销 brings the row back over it from the
+// left; its time out, the line leaves the list as a row gone does (RowsMotion). Every place in it is a function of how
+// far the row has gone, so its way back is its way out run backwards: nothing fades, nothing is put in another's place.
 
 ///|
 /// The row of the chat `item` says as it is now (chat_row's) in `parent`: `lead` whose pictures lead, `on` its chat the
 /// page in view, `list_ground` the list's ground (round its faces), `more` another row under it, `at` where its list
-/// stands; tips in `tips`, pictures asked for on `stint`. The row's node.
+/// stands; tips in `tips`, pictures asked for on `stint`. `kept`: in a list made once, whether its chat is gone from that
+/// list, its line kept (its tray offering 撤销 there, then closing): its archive said there (archive_row's `here`). The
+/// row's node.
 pub fn chat_row_node(
   parent : @view.View,
   src : Source,
@@ -20,12 +31,15 @@ pub fn chat_row_node(
   stint : () -> Int,
   list_ground? : () -> Int64 = fn() { @sf.theme().p.bg },
   more? : Bool = false,
+  kept? : () -> Bool,
 ) -> @view.View {
   let t = fn() { @sf.theme() }
   // (a finger rests on nothing: a press reads ahead, a hold shows the time; a pointer's over it shows them)
   let finger = !@sf.pointer_rests()
   let first = @signals.untracked(item)
-  let key = @sfbase.row_name(first)
+  // (which chat it is: another's as the row is taken for another, a list's rows not made and let go as it is scrolled
+  // (View::scrolls_window's reused))
+  let key = fn() { @sfbase.row_name(item()) }
   // (made again for its chat, asked back say: whatever swiped it off before is over)
   rows.swiped_off.remove(swiped_key(first))
   let r = fn() { row_ref(item()) }
@@ -33,7 +47,7 @@ pub fn chat_row_node(
   let menu_ok = fn() { item().offline is None && !item().pending }
   let menu_on = fn() { row_menu_open(item()) }
   // (its title a field in its place, from a mouse's 重命名: rename_node)
-  let renaming = fn() { row_renaming.get() == key }
+  let renaming = fn() { row_renaming.get() == key() }
   let failed = fn() { row_failed(src, item()) }
   // (held by a finger a while: its time shows)
   let held : @signals.Signal[Bool] = @signals.signal(false)
@@ -43,6 +57,56 @@ pub fn chat_row_node(
   // (what a finger pressing it read ahead, let go as it is let go without opening it: a hold)
   let primed : Ref[@sfbase.TopicLease?] = Ref(None)
   let opened = Ref(false)
+  // (its chat's whole row, asked as the hand comes to it: what it is held for, and what waits for it to be answered)
+  let whole = @sfbase.WholeAsk::new()
+  let pressing = Ref(false)
+  let hovering = Ref(false)
+  // (a press waiting for it: sfbase's press_wait, while what it was pressed in stays as it was)
+  let whole_wait : Ref[@sfbase.PressWait?] = Ref(None)
+  let whole_waits = fn() { whole_wait.val is Some(w) && w.waiting() }
+  let ask_whole = fn() { whole.ask(src, @signals.untracked(item)) }
+  // (what reads it done with: hovered no more, let go of, its menu gone, nothing waiting for it)
+  let whole_idle = fn() {
+    @signals.untracked(fn() {
+      if !pressing.val && !hovering.val && !menu_on() && !whole_waits() {
+        whole.let_go()
+      }
+    })
+  }
+  // (`run` with its chat's whole row: now where it is answered, else the frame it is, while what it was pressed in
+  // stays as it was (sfbase's press_wait); else nothing, `gone` done, and what it asked let go of)
+  let then_whole = fn(run : (ChatItem) -> Unit, gone : () -> Unit) {
+    ask_whole()
+    match whole_wait.val {
+      Some(w) => {
+        whole_wait.val = None
+        w.end()
+      }
+      None => ()
+    }
+    let w = @sfbase.press_wait(fn() { @sfbase.whole_answered(src, item()) }, fn() {
+      match @signals.untracked(fn() { @sfbase.whole_row(src, item()) }) {
+        Some(i) => run(i)
+        None => ()
+      }
+      whole_idle()
+    }, let_go=fn() {
+      gone()
+      whole_idle()
+    })
+    whole_wait.val = if w.waiting() { Some(w) } else { None }
+  }
+  // (what waits for it ended with the row: gone, or taken for another chat, what it asked let go of by what follows,
+  // what the row showed put back as it is made anew)
+  let whole_wait_gone = fn() {
+    match whole_wait.val {
+      Some(w) => {
+        whole_wait.val = None
+        w.end()
+      }
+      None => ()
+    }
+  }
   // (where the last press went down, and its state line: pressed there, while the core says which message that is
   // about and nothing in it is unread, its chat goes there as it opens: ChatMark.tsx jumpFromLine)
   let down_at : Ref[(Double, Double)?] = Ref(None)
@@ -75,10 +139,23 @@ pub fn chat_row_node(
     match reader { Some(reader) => @sfbase.handoff_chat_open(r, reader); None => () }
   }
   parent.box(fn(slot) {
-    @sf.style_node(slot, fn() { if more { @sf.list_more(at) } else { row_last } })
+    // (in its slot, cut to its corners where its list stands: moved across in it, its tray beside it; a finger's in a
+    // box of its own, its slot lifted round it; a mouse's its slot itself, the room under it its margin)
+    @sf.style_node(slot, fn() {
+      if finger {
+        if more {
+          @sf.list_more(at)
+        } else {
+          row_last
+        }
+      } else if more {
+        @sf.list_row_slot(at).then(@ui.style(mb?=@sf.list_more(at).base.pb))
+      } else {
+        @sf.list_row_slot(at)
+      }
+    })
     let swipes = finger && @sf.more_held()
-    // (swiped: in its slot, cut to its corners where its list stands, 归档 under it)
-    let holder = if swipes {
+    let holder = if finger {
       slot.box(fn(sw) { @sf.style_node(sw, fn() { @sf.list_row_slot(at) }) })
     } else {
       slot
@@ -127,9 +204,7 @@ pub fn chat_row_node(
       .over_scrim(By(fn() { lifted() > 0.0 }))
       |> ignore
     }
-    let open_menu = fn(x : Double, y : Double, from_row : Bool) {
-      guard @signals.untracked(menu_ok) else { return }
-      let i = @signals.untracked(item)
+    let menu_now = fn(i : ChatItem, x : Double, y : Double, from_row : Bool) {
       let from = if from_row {
         let (x, y, w, h) = row.placed_window_now()
         @sf.Beside::At(x, y, w, h)
@@ -140,13 +215,24 @@ pub fn chat_row_node(
       if from_row {
         @ui.haptic(LongPress)
       }
-      @sf.menu(chat_menu_items(src, i), from~)
+      @sf.menu(chat_menu_items(src, i, share_from=fn() { from }, here=kept is Some(_)), from~)
       rows.menu_for = @sfbase.row_name(i)
       rows.menu_serial = @sf.last_presented()
     }
-    let hover = fn() { !finger && (@sf.lit_in_node(row) || menu_on()) }
-    let shows_time = fn() { hover() || held.get() || (finger && menu_on()) }
-    let archive_key = fn() { !finger && menu_ok() && hover() && !renaming() }
+    // (its menu is its whole row's: opened once that is answered, whole)
+    let open_menu = fn(x : Double, y : Double, from_row : Bool) {
+      guard @signals.untracked(menu_ok) else { return }
+      then_whole(fn(i) { menu_now(i, x, y, from_row) }, fn() {  })
+    }
+    // (moved left in its slot, by so many points (a finger's swipe: swipe_node's; archived from it: off to the left),
+    // and what it uncovers there: its tray)
+    let tray = Tray::new()
+    // (a mouse's: pointed at in its slot, its 归档 key there too, beside the row in what its tray is made in)
+    let hover_in = if finger { row } else { holder }
+    let hover = fn() { !finger && (@sf.lit_in_node(hover_in) || menu_on()) }
+    // (said by its whole row: shown once that is answered, held meanwhile by what reads it here)
+    let shows_time = fn() { (hover() || held.get() || (finger && menu_on())) && @sfbase.whole_answered(src, item()) }
+    let archive_key = fn() { !finger && menu_ok() && hover() && !renaming() && !tray.parked.get() }
     // its ground: a finger's, held or its menu open the ink at 5%, its chat in view the selected one's; a mouse's, the
     // pointer's eased in and out, the selected one's while its chat is in view (nav_ground_by's)
     // a finger's: its chat's page in view, its ground on; gone back from it, the ground stays while the page slides off
@@ -156,8 +242,7 @@ pub fn chat_row_node(
     let left = @sf.EdgeWay::new(0.0)
     // (a finger's press's ground, beside the chat: on at once, off over dur_ms)
     let pressed = @sf.EdgeWay::new(0.0)
-    // (a finger's swiped left in its slot, by so many points: swipe_node's)
-    let off = @sf.EdgeWay::new(0.0)
+    let off = tray.off
     let hand = @sf.EdgeWay::new(0.0)
     let chosen = @sf.EdgeWay::new(if @signals.untracked(on) { 1.0 } else { 0.0 })
     let ground = fn() {
@@ -212,17 +297,16 @@ pub fn chat_row_node(
       },
       corner_shown=cornered,
       corner_w=fn() { row_aside_w_node(row, item(), lead) },
-      slotted=swipes,
+      // (in the slot it moves across in, every row: its corners the slot's, its own ground square)
+      slotted=true,
       end_slot=kind_slot_w,
       corner_end=fn() { row_aside_end_w(item(), lead) },
       fn(h) {
         let tone = fn() { @sfbase.row_tone(item()) }
+        // (the show's own box its slot: a box a part, no box round one)
         h.show(fn() { tone() != "" && !renaming() }, fn(m) {
-          m.box(fn(s) {
-            @sf.style_node(s, fn() { mark_slot }, in_row=true)
-            chat_mark_node(s, tone)
-          })
-          |> ignore
+          @sf.style_node(m, fn() { mark_slot }, in_row=true)
+          chat_mark_node(m, tone)
         })
         h.pick(renaming, fn(n, on) {
           // (what is left of the line, from none: its title cut short in it, what stands at its end kept whole)
@@ -231,33 +315,26 @@ pub fn chat_row_node(
             rename_node(n, src, item, at)
             return
           }
-          n.box(fn(w) {
-            w.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-            @sf.words_node(w, fn() {
-              if item().hidden == Some(true) { item().title + " · " + @sf.t("web-main.filter.hidden") } else { item().title }
-            }, fn() {
-              let look = t().chat_list
-              let title = if item().unread { look.title_unread } else { look.title }
-              if offline() || item().settled {
-                title.then(title_dim)
-              } else {
-                title
-              }
-            })
-            |> ignore
+          @sf.words_node(n, fn() {
+            if item().hidden == Some(true) { item().title + " · " + @sf.t("web-main.filter.hidden") } else { item().title }
+          }, fn() {
+            let look = t().chat_list
+            let title = if item().unread { look.title_unread } else { look.title }
+            if offline() || item().settled {
+              title.then(title_dim)
+            } else {
+              title
+            }
           })
           |> ignore
         })
         // failed a moment ago: a red mark, why on it
-        h.show(fn() { failed() is Some(_) }, fn(f) {
-          f.box(fn(s) {
-            @sf.style_node(s, fn() { kind_slot }, in_row=true)
-            let why = fn() { failed().unwrap_or("") }
-            s.says(By(fn() { Some(@view.said(Image, label=why())) })) |> ignore
-            chat_mark_node(s, fn() { "alert" })
-            @sf.tip_node(tips, s, why, within=true) |> ignore
-          })
-          |> ignore
+        h.show(fn() { failed() is Some(_) }, fn(s) {
+          @sf.style_node(s, fn() { kind_slot }, in_row=true)
+          let why = fn() { failed().unwrap_or("") }
+          s.says(By(fn() { Some(@view.said(Image, label=why())) })) |> ignore
+          chat_mark_node(s, fn() { "alert" })
+          @sf.tip_node(tips, s, why, within=true) |> ignore
         })
         // its station offline, or its link coming back: unplugged (its update's mark while it updates); one from
         // elsewhere (Slack, Feishu) says so, by its platform's mark
@@ -267,7 +344,7 @@ pub fn chat_row_node(
             _ => ""
           }
         }
-        h.pick(fn() {
+        let away_which = fn() {
           if away() != "" {
             if item().updating { 2 } else { 1 }
           } else if item().connect {
@@ -275,68 +352,66 @@ pub fn chat_row_node(
           } else {
             0
           }
-        }, fn(
-          a,
-          which,
-        ) {
+        }
+        h.pick(away_which, fn(s, which) {
           guard which != 0 else { return }
-          a.box(fn(s) {
-            @sf.style_node(s, fn() { kind_slot }, in_row=true)
-            let said = fn() {
-              if which >= 3 {
-                if item().origin_text != "" {
-                  item().origin_text
-                } else {
-                  "Slack"
-                }
+          @sf.style_node(s, fn() { kind_slot }, in_row=true)
+          let said = fn() {
+            if which >= 3 {
+              if item().origin_text != "" {
+                item().origin_text
               } else {
-                away()
+                "Slack"
               }
+            } else {
+              away()
             }
-            s.says(By(fn() { Some(@view.said(Image, label=said())) })) |> ignore
-            match which {
-              2 => @sf.updating_mark_node(s, kind_glyph, fn() { t().p.subtle })
-              1 => @sf.icon_node(s, "unplug", kind_glyph, By(fn() { t().p.subtle })) |> ignore
-              // (Comma's mark is one colour: in the page's ink, as a one-colour maker's is)
-              4 => @sf.drawable_node(s, "comma", kind_mark, tint=fn() { Some(t().p.text) }) |> ignore
-              _ => @sf.origin_mark_node(s, fn() { item().origin_kind }, kind_mark) |> ignore
-            }
-            @sf.tip_node(tips, s, said, within=true) |> ignore
-          })
-          |> ignore
+          }
+          s.says(By(fn() { Some(@view.said(Image, label=said())) })) |> ignore
+          match which {
+            2 => @sf.updating_mark_node(s, kind_glyph, fn() { t().p.subtle })
+            1 => @sf.icon_node(s, "unplug", kind_glyph, By(fn() { t().p.subtle })) |> ignore
+            // (Comma's mark is one colour: in the page's ink, as a one-colour maker's is)
+            4 => @sf.drawable_node(s, "comma", kind_mark, tint=fn() { Some(t().p.text) }) |> ignore
+            _ => @sf.origin_mark_node(s, fn() { item().origin_kind }, kind_mark) |> ignore
+          }
+          @sf.tip_node(tips, s, said, within=true) |> ignore
         })
         // opened by another chat's agent: marked so, that chat named on it
-        h.show(fn() { item().opener is Some(_) && !renaming() }, fn(o) {
-          o.box(fn(s) {
-            @sf.style_node(s, fn() { kind_slot }, in_row=true)
-            let said = fn() {
-              match item().opener {
-                Some(o) => if o.archived { o.text + " · " + o.note } else { o.text }
-                None => ""
-              }
+        h.show(fn() { item().opener is Some(_) && !renaming() }, fn(s) {
+          @sf.style_node(s, fn() { kind_slot }, in_row=true)
+          let said = fn() {
+            match item().opener {
+              Some(o) => if o.archived { o.text + " · " + o.note } else { o.text }
+              None => ""
             }
-            s.says(By(fn() { Some(@view.said(Image, label=said())) })) |> ignore
-            @sf.icon_node(s, "spawned", kind_glyph, By(fn() { t().p.subtle })) |> ignore
-            @sf.tip_node(tips, s, said, within=true) |> ignore
-          })
-          |> ignore
+          }
+          s.says(By(fn() { Some(@view.said(Image, label=said())) })) |> ignore
+          @sf.icon_node(s, "spawned", kind_glyph, By(fn() { t().p.subtle })) |> ignore
+          @sf.tip_node(tips, s, said, within=true) |> ignore
         })
         // the station it runs on, by its mark: last, in the same column at every row's end
-        h.show(fn() { @sf.has_station_mark(item().station_emoji, item().station_icon) && !renaming() }, fn(k) {
-          k.box(fn(s) {
-            @sf.style_node(s, fn() { kind_slot }, in_row=true)
-            s.says(By(fn() { Some(@view.said(Image, label=item().station_name)) })) |> ignore
-            @sf.station_mark_node(
-              s,
-              fn() { item().station_emoji },
-              fn() { item().station_icon },
-              kind_mark_of(@signals.untracked(item).station_icon),
-              fn() { if offline() { t().p.subtle } else { t().p.muted } },
-              stint,
-            )
-            @sf.tip_node(tips, s, fn() { item().station_name }, within=true) |> ignore
-          })
-          |> ignore
+        // (as big as its kind of mark is: made again where another chat's is of another, the row taken for that one)
+        h.pick(fn() {
+          if @sf.has_station_mark(item().station_emoji, item().station_icon) && !renaming() {
+            Some(kind_mark_of(item().station_icon))
+          } else {
+            None
+          }
+        }, fn(k, size) {
+          guard size is Some(size) else { return }
+          let s = k
+          @sf.style_node(s, fn() { kind_slot }, in_row=true)
+          s.says(By(fn() { Some(@view.said(Image, label=item().station_name)) })) |> ignore
+          @sf.station_mark_node(
+            s,
+            fn() { item().station_emoji },
+            fn() { item().station_icon },
+            size,
+            fn() { if offline() { t().p.subtle } else { t().p.muted } },
+            stint,
+          )
+          @sf.tip_node(tips, s, fn() { item().station_name }, within=true) |> ignore
         })
       },
       fn(u) {
@@ -376,8 +451,9 @@ pub fn chat_row_node(
             match which {
               1 =>
                 e.box(fn(time) {
-                  @sf.words_node(time, fn() { item().ago }, fn() { row_time }) |> ignore
-                  @sf.tip_node(tips, time, fn() { item().full }, within=true) |> ignore
+                  let said = fn() { @sfbase.whole_row(src, item()).unwrap_or(item()) }
+                  @sf.words_node(time, fn() { said().ago }, fn() { row_time }) |> ignore
+                  @sf.tip_node(tips, time, fn() { said().full }, within=true) |> ignore
                 })
                 |> ignore
               2 => row_aside_node(e, src, tips, item, lead, face_ground, stint)
@@ -387,15 +463,177 @@ pub fn chat_row_node(
         })
       },
     )
-    if swipes {
-      let past : @signals.Signal[Bool] = @signals.signal(false)
-      let out : @signals.Signal[Bool] = @signals.signal(false)
-      row.offset(By(fn() { (off.shown(row), 0.0) })) |> ignore
-      swipe_under_node(row, off, past, out)
-      swipe_node(holder, src, item, off, past, out)
+    // (held off past its slot's start once it is there, its tray in its place: Tray::parked_now)
+    row
+    .offset(By(fn() { (off.shown(row), 0.0) }))
+    .shift(By(fn() { if tray.parked.get() { (-1.0, 0.0) } else { (0.0, 0.0) } }))
+    |> ignore
+    // archived here: its tray says so where it was, the row gone off to the left over it (where it was not swiped
+    // there already) and held off; back over it from the left once 撤销 is pressed, or its archive refused
+    let here = kept is Some(_)
+    let gone = fn() {
+      match kept {
+        Some(k) => k()
+        None => false
+      }
     }
-    row.reacts(fn() { @sf.lit_in_node(row) }, fn(h) { hand.go(row, if h { 1.0 } else { 0.0 }, @sf.dur_ms) })
-    row.reacts(on, fn(o) { chosen.go(row, if o { 1.0 } else { 0.0 }, @sf.dur_ms) })
+    // (its chat's archive the one said here, 撤销 not pressed)
+    let mine = fn() {
+      here &&
+      (match archived_here.get() {
+        Some(a) => a.name == key() && !a.undone
+        None => false
+      })
+    }
+    // (as wide as its slot as the cause comes: how far it goes)
+    let slot_w = fn() {
+      let (_, _, w, _) = holder.laid_window_now()
+      dmax(w, 1.0)
+    }
+    let come_back = fn() {
+      rows.swiped_off.remove(swiped_key(@signals.untracked(item)))
+      tray.back(holder, slot_w(), fn() {
+        match archived_here.untracked() {
+          Some(a) if a.name == @signals.untracked(key) && a.undone => archived_here.set(None)
+          _ => ()
+        }
+      })
+    }
+    // (made while its chat is archived here, or its line closing: held off at once, still, 撤销 in)
+    if @signals.untracked(fn() { mine() || gone() }) {
+      tray.parked_now()
+    }
+    if here {
+      row.reacts(
+        fn() { tray.pending.get() || mine() || (tray.decided.get() && gone()) },
+        fn(away) {
+          if away {
+            if !tray.decided.untracked() {
+              tray.away(holder, slot_w(), @motion.moved(), gone_at=0.0)
+            }
+          } else if tray.decided.untracked() {
+            come_back()
+          }
+        },
+        at_start=false,
+      )
+    }
+    let undo_now = fn() {
+      match archived_here.untracked() {
+        Some(a) if a.name == @signals.untracked(key) && !a.undone => {
+          archived_here.set(Some({ ..a, undone: true }))
+          (a.undo)()
+          come_back()
+        }
+        _ => ()
+      }
+    }
+    // 归档 at the row's top right while a mouse points at it (concentric with the row's corner), going with the row
+    // as it goes off (a mouse's alone: nothing of it made for a finger's row; in what its tray is made in, one
+    // structure for both)
+    let archive_keys = if finger {
+      None
+    } else {
+      Some((archive_key, fn(o : @view.View) {
+        o
+        .over(Is(true))
+        .lines_up(Is(Some(End)))
+        .padding(Is((0.0, @ui.capsule_in(@sf.row_corner, row_key_side), @ui.capsule_in(@sf.row_corner, row_key_side), 0.0)))
+        .offset(By(fn() { (off.shown(o), 0.0) }))
+        |> ignore
+        o.box(fn(k) {
+          k
+          .width(Is(Some(row_key_side)))
+          .height(Is(Some(row_key_side)))
+          .radius(Is(1.0e6))
+          .lines_up(Is(Some(Middle)))
+          .lies_along(Is(Middle))
+          .ground(By(fn() { if @sf.lit_node(k) { t().p.hover } else { 0L } }))
+          |> ignore
+          @sf.presses_node(k, fn() { then_whole(fn(w) { archive_row(src, w, here=kept is Some(_)) }, fn() {  }) })
+          // (beside the row now, not in it: right clicked, the row's menu still, as on its name)
+          k.on_menu(fn(m) { open_menu(m.wx, m.wy, false) }) |> ignore
+          k.says(By(fn() {
+            Some(@view.said(Button, label=@sf.t("web-main.chat.archiveNamed", args=[("title", item().title)])))
+          }))
+          |> ignore
+          @sf.icon_node(k, "archive", row_icon, By(fn() { if @sf.lit_node(k) { t().p.text } else { t().p.muted } })) |> ignore
+          @sf.tip_node(tips, k, fn() { @sf.t("web-main.chat.archive") }) |> ignore
+        })
+        |> ignore
+      }))
+    }
+    tray_node(holder, tray, at, here, mine, undo_now, keys?=archive_keys)
+    if swipes {
+      swipe_node(holder, src, item, tray, here, ask_whole, then_whole, come_back)
+    }
+    row.reacts(fn() { @sf.lit_in_node(hover_in) }, fn(h) { hand.go(row, if h { 1.0 } else { 0.0 }, @sf.dur_ms) })
+    // (a pointer come to rest over it: its whole row asked for its time, its 归档 and its menu; gone, let go of)
+    if !finger {
+      row.reacts(fn() { @sf.lit_in_node(hover_in) }, fn(h) {
+        hovering.val = h
+        if h {
+          ask_whole()
+        } else {
+          whole_idle()
+        }
+      })
+    }
+    // (its menu gone, what waited answered: let go of where nothing else holds it)
+    row.reacts(fn() { menu_on() }, fn(on) { if !on { whole_idle() } })
+    row.owns(fn() {
+      whole_wait_gone()
+      whole.let_go()
+    })
+    |> ignore
+    // (its chat in view or no more, eased; taken for another chat, as that one's at once, as it would be made)
+    let chosen_for = Ref(@sfbase.row_name(first))
+    row.reacts(fn() { (key(), on()) }, fn(now) {
+      let (k, o) = now
+      let to = if o { 1.0 } else { 0.0 }
+      if k == chosen_for.val {
+        chosen.go(row, to, @sf.dur_ms)
+      } else {
+        chosen.put(to)
+      }
+      chosen_for.val = k
+    })
+    // (taken for another chat: what was the one before's let go, as it would be were it made anew for this one)
+    let made_for = Ref(@sfbase.row_name(first))
+    row.reacts(key, fn(k) {
+      guard k != made_for.val else { return }
+      made_for.val = k
+      rows.swiped_off.remove(swiped_key(@signals.untracked(item)))
+      // (its tray as this one's is: none, or held off where this chat is archived here)
+      tray.put_by()
+      if @signals.untracked(fn() { mine() || gone() }) {
+        tray.parked_now()
+      }
+      held.set(false)
+      (press_due.val)()
+      press_due.val = fn() {  }
+      press_lit.set(false)
+      match primed.val {
+        Some(reader) => {
+          primed.val = None
+          reader.cancel()
+        }
+        None => ()
+      }
+      opened.val = false
+      down_at.val = None
+      whole_wait_gone()
+      pressing.val = false
+      whole.let_go()
+      // (put, never set going: a row taken for another chat is so as its list is laid out (a block given another key
+      // as the list scrolls), what a frame found, no cause; what it shows is put back as it would be were it made anew
+      // for that chat, as a list's reused row's looks always are (a way said here was the frame's, at 60 a second and
+      // 120 at other moments and other times over: tape_wbtest's ways, 2026-11-11))
+      for w in [left, pressed, hand] {
+        w.put(0.0)
+      }
+      lift.put(0.0)
+    })
     if finger {
       if at != Whole {
         row.reacts(fn() { press_lit.get() }, fn(lit) {
@@ -406,10 +644,12 @@ pub fn chat_row_node(
           }
         })
       }
-      let was_on = Ref(@signals.untracked(on))
-      row.reacts(on, fn(o) {
-        if was_on.val && !o {
-          row_left_said.set(key)
+      let was_on = Ref((@sfbase.row_name(first), @signals.untracked(on)))
+      row.reacts(fn() { (key(), on()) }, fn(now) {
+        let (k, o) = now
+        // (gone back from its chat: not another chat it is taken for, which was never in view here)
+        if was_on.val.0 == k && was_on.val.1 && !o {
+          row_left_said.set(k)
           let since = row.cause_at()
           left.go_from(row, 1.0, 1.0, @motion.Snap(0.0))
           if at == Whole {
@@ -419,19 +659,20 @@ pub fn chat_row_node(
             left.go(row, 0.0, @sf.dur_ms)
           }
         }
-        was_on.val = o
+        was_on.val = (k, o)
       })
-      // (another row gone back from since: this one's ground gone at once)
+      // (another row gone back from since: this one's ground gone at once, put, no way set going (at once is no way,
+      // and this is told as often by a row taken for another chat as its list is laid out, a frame's finding: #5420))
       row.reacts(fn() { row_left_said.get() }, fn(k) {
-        if k != key {
-          left.go_from(row, 0.0, 0.0, @motion.Snap(0.0))
+        if k != @signals.untracked(key) {
+          left.put(0.0)
         }
       })
     }
     // pressed: its chat; right clicked, its menu at the pointer; held long by a finger, its menu from the row (its
     // time shown meanwhile); a finger that stays down as long as it takes to show pressed reads its chat ahead then
     row
-    .says(By(fn() { Some(@view.said(Link, label=item().title)) }))
+    .says(By(fn() { if tray.parked.get() { None } else { Some(@view.said(Link, label=item().title)) } }))
     .on_menu(fn(m) { open_menu(m.wx, m.wy, false) })
     |> ignore
     @sf.presses_held_node(
@@ -445,6 +686,9 @@ pub fn chat_row_node(
         }
       },
       down=fn(d) {
+        // (its whole row asked as it goes down: a hold's menu, a swipe's question find it answered)
+        pressing.val = true
+        ask_whole()
         down_at.val = Some((d.wx, d.wy))
         opened.val = false
         (press_due.val)()
@@ -469,105 +713,369 @@ pub fn chat_row_node(
           unprime(src, @signals.untracked(r), reader)
         }
         primed.val = None
+        pressing.val = false
+        whole_idle()
       },
     )
+    // (held off: nothing to the hand where it is drawn, past its slot's start)
+    row.presses(By(fn() { !tray.parked.get() })) |> ignore
     // (Tab passes the rows, as the old list's: they are gone through by ⌥↑ ⌥↓, chat.prev and chat.next)
     row.tab_stop(Is(false)) |> ignore
-    // 归档 at the row's top right while a mouse points at it (concentric with the row's corner)
-    row.show(archive_key, fn(o) {
-      o
+  })
+}
+
+///|
+/// A row's way across its slot and what it uncovers there (its tray, tray_node): how far it is moved left (points), held
+/// off past its slot's start once gone (`parked`: by its own width, `off` back at 0, so a window resized meanwhile does
+/// not bring it in), whether letting it go would archive it (`past`), whether its tray is out, whether its archive is
+/// decided (its tray's 撤销 coming in with its way out, from how far it had gone then: `since`), a swipe's archive not
+/// asked yet (`pending`: it flies off first), on its way back over its tray (`going_back`); what is due at its way's end.
+priv struct Tray {
+  off : @sf.EdgeWay
+  past : @signals.Signal[Bool]
+  out : @signals.Signal[Bool]
+  parked : @signals.Signal[Bool]
+  decided : @signals.Signal[Bool]
+  since : @signals.Signal[Double]
+  pending : @signals.Signal[Bool]
+  going_back : @signals.Signal[Bool]
+  mut due : () -> Unit
+}
+
+///|
+fn Tray::new() -> Tray {
+  {
+    off: @sf.EdgeWay::new(0.0),
+    past: @signals.signal(false),
+    out: @signals.signal(false),
+    parked: @signals.signal(false),
+    decided: @signals.signal(false),
+    since: @signals.signal(0.0),
+    pending: @signals.signal(false),
+    going_back: @signals.signal(false),
+    due: fn() {  },
+  }
+}
+
+///|
+/// Where it rests, nothing uncovered, at once (a row taken for another chat: as were it made anew).
+fn Tray::put_by(self : Tray) -> Unit {
+  (self.due)()
+  self.due = fn() {  }
+  self.off.put(0.0)
+  for s in [self.past, self.out, self.parked, self.decided, self.pending, self.going_back] {
+    s.set(false)
+  }
+  self.since.set(0.0)
+}
+
+///|
+/// Held off past its slot's start, its archive decided, its tray out with 撤销 in: at once, still.
+fn Tray::parked_now(self : Tray) -> Unit {
+  self.decided.set(true)
+  self.out.set(true)
+  self.since.set(0.0)
+  self.parked.set(true)
+  self.off.put(0.0)
+}
+
+///|
+/// Off to the left out of its slot `w` wide as `spec` says from `n`'s cause's moment (at `velocity`: a finger letting it
+/// go), its archive decided as it had gone `gone_at`; there, held off (parked_now) and `then` done.
+fn Tray::away(
+  self : Tray,
+  n : @view.View,
+  w : Double,
+  spec : @motion.Spec,
+  gone_at~ : Double,
+  velocity? : Double,
+  then? : () -> Unit = fn() {  },
+) -> Unit {
+  (self.due)()
+  self.since.set(gone_at)
+  self.decided.set(true)
+  self.out.set(true)
+  self.off.go_by(n, -w, spec, velocity?)
+  self.due = n.at_moment(self.off.end(), fn() {
+    self.due = fn() {  }
+    self.parked_now()
+    then()
+  })
+}
+
+///|
+/// Back into its slot `w` wide over its tray from where it is (held off: from the slot's start) on the spring what makes
+/// way moves by, from `n`'s cause's moment, 撤销 going out as it comes (`since` none); there, its tray in no more and
+/// `done` done. Once, from an archive decided.
+fn Tray::back(self : Tray, n : @view.View, w : Double, done : () -> Unit) -> Unit {
+  guard self.decided.untracked() && !self.going_back.untracked() else { return }
+  (self.due)()
+  self.going_back.set(true)
+  self.pending.set(false)
+  self.past.set(false)
+  self.since.set(0.0)
+  if self.parked.untracked() {
+    self.parked.set(false)
+    self.off.go_from(n, -w, 0.0, @motion.move_spring)
+  } else {
+    self.off.go_by(n, 0.0, @motion.move_spring)
+  }
+  self.due = n.at_moment(self.off.end(), fn() {
+    self.due = fn() {  }
+    self.going_back.set(false)
+    self.decided.set(false)
+    self.out.set(false)
+    done()
+  })
+}
+
+///|
+/// Where the row's end is across its slot `w` wide as `n` is drawn (held off: at its start).
+fn Tray::edge(self : Tray, n : @view.View, w : Double) -> Double {
+  if self.parked.get() {
+    0.0
+  } else {
+    dmax(0.0, dmin(w, w + self.off.shown(n)))
+  }
+}
+
+///|
+/// How far 撤销 has come in (0 out past the slot's end, 1 in its place) as `n` is drawn in a slot `w` wide: with the
+/// row's way out from how far it had gone as its archive was decided (since), on its way back from none.
+fn Tray::undo_in(self : Tray, n : @view.View, w : Double) -> Double {
+  if !self.decided.get() {
+    return 0.0
+  }
+  let gone = w - self.edge(n, w)
+  let since = self.since.get()
+  if w - since <= 0.0 {
+    1.0
+  } else {
+    dmax(0.0, dmin(1.0, (gone - since) / (w - since)))
+  }
+}
+
+///|
+/// How wide a chat row's mark's column is (mark_slot), and the room after it before its title (the theme's first line's
+/// gap): where a marked row's title starts past the row's own inset.
+fn row_mark_w() -> Double {
+  match mark_slot.base.w {
+    Some(l) => l.points().unwrap_or(0.0)
+    None => 0.0
+  }
+}
+
+///|
+fn row_mark_gap() -> Double {
+  match @sf.theme().chat_list.head.base.gap {
+    Some(g) => g.px()
+    None => 0.0
+  }
+}
+
+///|
+/// How far 归档's words are after the check before them: the check in the middle of the row's mark's column, the words
+/// where a marked row's title starts.
+fn tray_check_to_words() -> Double {
+  (row_mark_w() - tray_check) / 2.0 + row_mark_gap()
+}
+
+///|
+/// Where 归档's words stand across a slot `w` wide (their start) as the row's end is at `edge`, they `words` wide, the
+/// row's own inset `pad`: at the slot's end at first as the row uncovers them; once its end is close behind them, with
+/// it, a point less behind it than the check is before them (so the check is never uncovered on the way); docked where
+/// a marked row's title starts, the check in the row's mark's column, the row going on.
+fn tray_words_x(w : Double, edge : Double, words : Double, pad : Double) -> Double {
+  let rest = w - pad - words
+  let dock = pad + row_mark_w() + row_mark_gap()
+  dmax(dock, dmin(edge + tray_check_to_words() - 1.0, rest))
+}
+
+///|
+/// What a row moved left in its slot `holder` uncovers there (`tray`'s), from its end to the slot's (the slot's corners
+/// the row's: it is slotted), what it holds standing still in the slot: quiet (the chip's
+/// ground) until letting go would archive it (`past`), then ink (over swipe_fill_ms); 归档 at the slot's end, uncovered
+/// by the row, then going with its end and docked where a marked row's title starts (`at`'s inset), the check before
+/// it in the row's mark's column, uncovered by the row's end as it goes on. Its archive decided `here` (a list made
+/// once), 撤销 at its end come in from past it with the row's way out, pressed while `undo_on` (`undo`), and 已归档
+/// said. Nothing while the row is where it rests. `keys`: what else is made in it while its own says (a mouse's 归档
+/// key on the row, a structure for both).
+fn tray_node(
+  holder : @view.View,
+  tray : Tray,
+  at : @sf.ListAt,
+  here : Bool,
+  undo_on : () -> Bool,
+  undo : () -> Unit,
+  keys? : (() -> Bool, (@view.View) -> Unit),
+) -> Unit {
+  let fill = @sf.EdgeWay::new(0.0)
+  holder.reacts(fn() { tray.past.get() }, fn(p) { fill.go(holder, if p { 1.0 } else { 0.0 }, swipe_fill_ms) })
+  // (the row's own inset where its list stands: where its mark and title start, list_row_in's)
+  let pad = fn() {
+    match at {
+      Whole => @sf.phone_row_in.px()
+      Side | Tape => @sf.band_pad_in(at)
+    }
+  }
+  // (撤销's capsule's end in from the slot's: as a row's 归档 key stands in a round slot, concentric with its corner;
+  // across the whole screen its words where 归档's stood at first)
+  let side = fn() { dmin(undo_in, pad()) }
+  let end_in = fn() {
+    match at {
+      Whole => pad() - side()
+      Side | Tape => @ui.capsule_in(@sf.row_corner, row_key_side)
+    }
+  }
+  let key_shows = match keys {
+    Some((shows, _)) => shows
+    None => fn() { false }
+  }
+  holder.show(fn() { tray.out.get() || key_shows() }, fn(o) {
+    o.over(Is(true)) |> ignore
+    // (the key going with the row, under its tray)
+    match keys {
+      Some((shows, make)) => o.show(shows, make)
+      None => ()
+    }
+    o.show(fn() { tray.out.get() }, fn(u) {
+      let ink = fn(n : @view.View, of : (@sf.Palette) -> Int64) {
+        let p = @sf.theme().p
+        @sf.mix(p.bg, fill.shown(n), of(p))
+      }
+      // (as wide as the slot, moved to start at the row's end, cut to itself)
+      u
       .over(Is(true))
-      .lines_up(Is(Some(End)))
-      .padding(Is((0.0, @ui.capsule_in(@sf.row_corner, row_key_side), @ui.capsule_in(@sf.row_corner, row_key_side), 0.0)))
+      .clips(Is(true))
+      .ground(By(fn() {
+        let p = @sf.theme().p
+        @sf.mix(p.text, fill.shown(u), p.chip)
+      }))
+      .says(By(fn() {
+        if here && tray.decided.get() && !tray.going_back.get() {
+          Some(@view.said(Status, label=@sf.t("web-main.filter.archived")))
+        } else {
+          None
+        }
+      }))
+      .moved_by(fn(w, _, _) { (tray.edge(u, w), 0.0) }, fn(_, _) { 0.0 })
       |> ignore
-      o.box(fn(k) {
-        k
-        .width(Is(Some(row_key_side)))
-        .height(Is(Some(row_key_side)))
-        .radius(Is(1.0e6))
-        .lines_up(Is(Some(Middle)))
-        .lies_along(Is(Middle))
-        .ground(By(fn() { if @sf.lit_node(k) { t().p.hover } else { 0L } }))
+      // (what it holds the slot across, standing still in it, laid out by its width)
+      let held = u.by_room(fn(h, room) {
+        h.grow(Is(1.0)).row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+        // 归档 and the check before it
+        h.box(fn(l) {
+          l
+          .row(Is(true))
+          .lines_up(Is(Some(Middle)))
+          .shrink(Is(0.0))
+          .moved_by(
+            fn(lw, _, _) {
+              let w = room.width()
+              let words = lw - tray_check - tray_check_to_words()
+              (tray_words_x(w, tray.edge(l, w), words, pad()) - tray_check - tray_check_to_words(), 0.0)
+            },
+            fn(_, _) { 0.0 },
+          )
+          |> ignore
+          @sf.icon_node(l, "check", tray_check, By(fn() { ink(l, fn(p) { p.muted }) }))
+          .margin(By(fn() { (0.0, 0.0, tray_check_to_words(), 0.0) }))
+          |> ignore
+          @sf.words_node(l, fn() { @sf.t("android-chat.archive") }, fn() {
+            swipe_words.then(@ui.text_style(color=Data(ink(l, fn(p) { p.muted }))))
+          })
+          |> ignore
+        })
         |> ignore
-        @sf.presses_node(k, fn() { archive_row(src, @signals.untracked(item)) })
-        k.says(By(fn() {
-          Some(@view.said(Button, label=@sf.t("web-main.chat.archiveNamed", args=[("title", item().title)])))
-        }))
+        h.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
+        // 撤销: its room to the hand at least undo_reach high, its capsule as high as a row's key, lit under the hand
+        h.box(fn(k) {
+          k
+          .row(Is(true))
+          .lines_up(Is(Some(Middle)))
+          .shrink(Is(0.0))
+          .min_height(Is(Some(undo_reach)))
+          .says(By(fn() {
+            if undo_on() {
+              Some(@view.said(Button, label=@sf.t("android-chat.archived.undo")))
+            } else {
+              None
+            }
+          }))
+          .moved_by(
+            fn(kw, _, _) {
+              let w = room.width()
+              let q = if here { tray.undo_in(k, w) } else { 0.0 }
+              (-end_in() + (1.0 - q) * (end_in() + kw), 0.0)
+            },
+            fn(_, _) { 0.0 },
+          )
+          |> ignore
+          @sf.presses_node(k, undo, on=undo_on)
+          k.box(fn(c) {
+            c
+            .row(Is(true))
+            .lines_up(Is(Some(Middle)))
+            .height(Is(Some(row_key_side)))
+            .radius(Is(row_key_side / 2.0))
+            .padding(By(fn() { (side(), 0.0, side(), 0.0) }))
+            .ground(By(fn() { if undo_on() && @sf.lit_node(k) { @sf.alpha(@sf.theme().p.text, 0.08) } else { 0L } }))
+            |> ignore
+            @sf.words_node(c, fn() { @sf.t("android-chat.archived.undo") }, fn() {
+              swipe_words.then(@ui.text_style(color=Data(ink(c, fn(p) { p.text }))))
+            })
+            |> ignore
+          })
+          |> ignore
+        })
         |> ignore
-        @sf.icon_node(k, "archive", row_icon, By(fn() { if @sf.lit_node(k) { t().p.text } else { t().p.muted } })) |> ignore
-        @sf.tip_node(tips, k, fn() { @sf.t("web-main.chat.archive") }) |> ignore
       })
-      |> ignore
+      held.over(Is(true)).moved_by(fn(w, _, _) { (-tray.edge(held, w), 0.0) }, fn(_, _) { 0.0 }) |> ignore
     })
   })
 }
 
 ///|
-/// What a finger's row `row` swiped left uncovers in its slot as it has gone `off` (points, from 0 to as wide as the
-/// slot), in a node past its end that goes with it: at that end as far as the row has gone and no further
-/// , quiet until letting go would archive it (`past`), then ink (over swipe_fill_ms); 归档
-/// at the slot's end in it, laid out the slot across so it is whole (what of it the row has not uncovered yet, cut
-/// with it). Nothing while the row is where it rests.
-fn swipe_under_node(
-  row : @view.View,
-  off : @sf.EdgeWay,
-  past : @signals.Signal[Bool],
-  out : @signals.Signal[Bool],
-) -> Unit {
-  let fill = @sf.EdgeWay::new(0.0)
-  row.reacts(fn() { past.get() }, fn(p) { fill.go(row, if p { 1.0 } else { 0.0 }, swipe_fill_ms) })
-  row.show(fn() { out.get() }, fn(u) {
-    // (over the row as big as it is, out of its row of parts: what is past its end as wide as it)
-    u.over(Is(true)) |> ignore
-    u.box(fn(g) {
-      // (归档 cut to it: laid out at the slot's end, it shows only as far as the row has uncovered, as under the row)
-      g
-      .over(Is(true))
-      .shift(Is((1.0, 0.0)))
-      .clips(Is(true))
-      .ground(By(fn() {
-        let t = @sf.theme()
-        @sf.mix(t.p.text, fill.shown(g), t.p.chip)
-      }))
-      |> ignore
-      g.box(fn(w) {
-        @sf.style_node(w, fn() { swipe_words_line })
-        w.over(Is(true)).shift(Is((-1.0, 0.0))).offset(By(fn() { (-off.shown(w), 0.0) })) |> ignore
-        @sf.words_node(w, fn() { @sf.t("android-chat.archive") }, fn() {
-          let t = @sf.theme()
-          swipe_words.then(@ui.text_style(color=Data(@sf.mix(t.p.bg, fill.shown(w), t.p.muted))))
-        })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-}
+/// The check before 归档 in a tray.
+let tray_check : Double = 12.0
+
+///|
+/// How far 撤销's words are in from its capsule's ends (at most the row's own inset), and the least room to the hand
+/// it has down (what always shows is pressed in 44 at least: the app's principles).
+let undo_in : Double = 12.0
+
+///|
+let undo_reach : Double = 44.0
 
 ///|
 /// A finger's row swiped left in its slot `sw` to archive its chat (swipe_to_archive's):
 /// left past the slop and plainly across first it is the swipe (swipe_claims: the row's press and hold let go), else the list's (or what the row is on:
-/// the tape's, to the right). The row follows the finger, `off` how far (points); let go past `archive_at_share` of
-/// its width or flung left it goes off to the left as fast as the finger let it go and, there, its chat is archived
-/// (refused, it comes back from there); else it springs back. One busy springs back; one keeping watch springs back
-/// and asks first, as its menu's 归档. Passing the line letting go archives at is felt (Home.kt SwipeToArchive:
-/// TextHandleMove), `past` said meanwhile; `out` from its first move until it is back where it rests.
+/// the tape's, to the right). The row follows the finger, `tray.off` how far (points); let go past `archive_at_share`
+/// of its width or flung left it goes off to the left as fast as the finger let it go and, there, its chat is archived
+/// (`here`: said by its tray; refused, it comes back over it: `come_back`); else it springs back. One busy springs
+/// back; one keeping watch springs back and asks first, as its menu's 归档. Passing the line letting go archives at is
+/// felt (Home.kt SwipeToArchive: TextHandleMove), `past` said meanwhile; its tray out from its first move until it is
+/// back where it rests. What it asks is its chat's whole row's (`ask` asks for it as it sets out; `then_whole` runs with
+/// it once answered: let go before, the row stays where it was let go till then). Its archive decided, nothing more to
+/// swipe till it is back.
 fn swipe_node(
   sw : @view.View,
   src : Source,
   item : () -> ChatItem,
-  off : @sf.EdgeWay,
-  past : @signals.Signal[Bool],
-  out : @signals.Signal[Bool],
+  tray : Tray,
+  here : Bool,
+  ask : () -> Unit,
+  then_whole : ((ChatItem) -> Unit, () -> Unit) -> Unit,
+  come_back : () -> Unit,
 ) -> Unit {
+  let off = tray.off
+  let past = tray.past
   let from = Ref(0.0)
   let from_x = Ref(0.0)
-  let due = Ref(fn() {  })
   // (back where it rests: nothing uncovered from its end's moment)
   let rests = fn() {
-    (due.val)()
-    due.val = sw.at_moment(off.end(), fn() { out.set(false) })
+    (tray.due)()
+    tray.due = sw.at_moment(off.end(), fn() { tray.out.set(false) })
   }
   let back = fn(vx : Double) {
     off.go_by(sw, 0.0, @motion.move_spring, velocity=vx * 1000.0)
@@ -576,26 +1084,31 @@ fn swipe_node(
   sw
   .claims(fn(dx, dy) {
     let i = @signals.untracked(item)
-    i.swipe_archive && !rows.swiped_off.contains(swiped_key(i)) && swipe_claims(dx, dy)
+    i.swipe_archive &&
+    !rows.swiped_off.contains(swiped_key(i)) &&
+    !tray.decided.untracked() &&
+    swipe_claims(dx, dy)
   })
   .on_drag(fn(d) {
     let w = if d.w > 1.0 { d.w } else { 1.0 }
     let i = @signals.untracked(item)
     let key = swiped_key(i)
-    guard !rows.swiped_off.contains(key) else { return }
+    guard !rows.swiped_off.contains(key) && !tray.decided.untracked() else { return }
     match d.kind {
       Down => {
+        ask()
         from.val = @signals.untracked(fn() { off.shown(sw) })
         from_x.val = d.wx
-        (due.val)()
+        (tray.due)()
+        tray.due = fn() {  }
         off.put(from.val)
-        out.set(true)
+        tray.out.set(true)
       }
       Moved => {
         let at = dclamp(from.val + (d.wx - from_x.val), -w, 0.0)
         off.put(at)
         let now = at < -w * archive_at_share
-        if now && !@signals.untracked(fn() { past.get() }) {
+        if now && !past.untracked() {
           @ui.haptic(TextHandleMove)
         }
         past.set(now)
@@ -603,29 +1116,33 @@ fn swipe_node(
       Up => {
         let at = @signals.untracked(fn() { off.target() })
         past.set(false)
-        if swipe_archives(at, w, d.vx) {
+        if swipe_archives(at, w, d.vx()) {
+          let vx = d.vx()
           if row_busy(src, i) {
-            back(d.vx)
-          } else if i.swipe_ask is Some(_) {
-            // (one keeping watch, or at work: springs back and asks first, in the core's words: swipeAsk)
-            back(d.vx)
-            archive_row(src, i, ask=i.swipe_ask)
+            back(vx)
           } else {
-            // off to the left, then archived there (no copy of it left behind as it leaves the list: it is out of
-            // sight); refused, it comes back from there
-            rows.swiped_off[key] = true
-            off.go_by(sw, -w, @motion.move(), velocity=d.vx * 1000.0)
-            sw.at_moment(off.end(), fn() {
-              archive_row(src, i, failed=fn() {
-                rows.swiped_off.remove(key)
-                off.go_from(sw, -w, 0.0, @motion.move_spring)
-                rests()
-              })
+            then_whole(fn(i) {
+              if i.swipe_ask is Some(_) {
+                // (one keeping watch, or at work: springs back and asks first, in the core's words: swipeAsk)
+                back(vx)
+                archive_row(src, i, ask=i.swipe_ask, here~)
+              } else {
+                // off to the left, 撤销 coming in with it from how far it had gone, then archived there (no copy of it
+                // left behind as it leaves the list: it is out of sight); refused, it comes back from there
+                rows.swiped_off[key] = true
+                tray.pending.set(true)
+                tray.away(sw, w, @motion.moved(), gone_at=-at, velocity=vx * 1000.0, then=fn() {
+                  tray.pending.set(false)
+                  archive_row(src, i, here~, failed=come_back)
+                })
+              }
+            }, fn() {
+              // (what it was let go in is gone before it was answered: back where it rests, nothing asked)
+              back(0.0)
             })
-            |> ignore
           }
         } else {
-          back(d.vx)
+          back(d.vx())
         }
       }
       Off => {
@@ -706,6 +1223,7 @@ fn rename_node(n : @view.View, src : Source, item : () -> ChatItem, at : @sf.Lis
       b,
       rows.rename_field,
       font_size=rename_size,
+      label=@sf.t("web-main.chat.rename"),
       line=rename_line,
       max_lines=1,
       enter_sends=true,

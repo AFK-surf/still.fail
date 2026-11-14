@@ -1,6 +1,6 @@
 // Links to a station's screens and to its 共享调试 in an agent's words (still.fail apps/android chat/screens/ScreenLinks.kt,
-// AdbLinks.kt), as the web draws them: one alone in a paragraph is its card
-// (@sf.markdown's `screens`), a bare one within a sentence reads as its title. What a card says is the core's (the
+// AdbLinks.kt), as the web draws them: one alone in a paragraph is its card (a screen's; 共享调试's is a link to its page
+// alone too) (@sf.markdown's `screens`), a bare one within a sentence reads as its title. What a card says is the core's (the
 // `screenCard` and `adbCard` topics). A screen its station previews is live in its card while the card is built (the
 // messages' list builds only the rows in view) and the app is shown: `screen.view` with `peek`, small, each frame
 // acknowledged peek_ms after the one before (the station sends the next once the last is acknowledged); stopped (the
@@ -174,13 +174,12 @@ pub fn adb_card_of(src : Source, to : @sf.LinkTo) -> Json? {
 
 ///|
 /// The links to screens in an agent's words as a chat draws them: their cards, and a bare
-/// one's title (屏幕 until it is known); a station's 共享调试 as its own. `message` names the message
+/// one's title (屏幕 until it is known); a station's 共享调试 a link alone too, its title its own. `message` names the message
 /// (a screen's preview is its card's own).
 pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens {
   {
     card: fn(href, to, words) {
       match to.card {
-        "adb" => adb_link_card(c, src, href, to, words)
         "service" => service_link_card(c, src, href, to, words)
         _ => screen_link_card(c, src, message + "\n" + href, href, to, words)
       }
@@ -214,7 +213,7 @@ pub fn service_card_of(src : Source, to : @sf.LinkTo) -> (String, String, Bool) 
   }
   guard j is Some(Object(_)) else { return (name, "", false) }
   let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
   let at = match dv_stations(src, ws).0 {
@@ -336,112 +335,17 @@ pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, 
   |> ignore
 }
 
-///|
-/// A station's 共享调试 asked for (an agent's link to it alone in a paragraph), as a card that asks
-/// (vault_ask.mbt's look: the question for its title, the line the answer turns on, a solid button and a text one):
-/// whether its agents may debug this device. Where the phone has all it takes (as its host says:
-/// @settings.adb_ready), 共享 lends it from here; where it lacks something first, what, and 查看步骤 opens the page that
-/// says how; while it is lent there, how that stands (the core's line) with 详情 and 停止共享. A device with no adb to
-/// lend (the core's `lendable`; an Android before 11, as its host says) says so, with nothing to press. `words`, the
-/// link's own, are not its title: the card asks its own question.
-pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, words : String?) -> Unit {
-  ignore(words)
-  let card = adb_card_of(src, to)
-  let station = to.station
-  let sharing = flag(card, "sharing")
-  let ready = if card is Some(_) && flag(card, "lendable") {
-    @settings.adb_ready(c)
-  } else if card is Some(_) {
-    @settings.AdbCannot(text(card, "line"))
-  } else {
-    @settings.AdbUnknown
-  }
-  let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
-    None => station
-  }
-  let name = match dv_stations(src, ws).0 {
-    Some(list) =>
-      match list.iter().find_first(fn(s) { s.station == station }) {
-        Some(s) => s.name
-        None => @settings.station_name(station)
-      }
-    None => @settings.station_name(station)
-  }
-  let key = "adb-ask/" + href
-  let stopping = "adb-stop/" + station
-  c.box(style=@sf.ask_card_room, fn() {
-    @sf.card(c, fn() {
-      if sharing {
-        @sf.ask_words(c, @sf.t("android-misc.adb.ask.sharing", args=[("name", name)]), text(card, "line"))
-        @sf.ask_buttons(c, fn() {
-          @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Primary, on_press=fn() {
-            open_adb(src, station)
-          }) |> ignore
-          @sf.button(c, @sf.t("android-misc.adb.ask.stop"), key=key + "/stop", tone=Ghost, busy=acting.doing.contains(stopping), on_press=fn() {
-            act(src, @sf.t("android-misc.adb.stopWhat"), stopping, "adb.stop", Json::object({}))
-          }) |> ignore
-        })
-        return
-      }
-      let title = @sf.t("android-misc.adb.ask.title", args=[("name", name)])
-      match ready {
-        @settings.AdbCannot(why) => @sf.ask_words(c, title, why)
-        @settings.AdbLacks(step) => {
-          @sf.ask_words(c, title, @sf.t("android-misc.adb.ask.first", args=[("step", step)]))
-          @sf.ask_buttons(c, fn() {
-            @sf.button(c, @sf.t("android-misc.adb.ask.how"), key=key + "/how", tone=Primary, on_press=fn() {
-              open_adb(src, station)
-            }) |> ignore
-          })
-        }
-        @settings.AdbLends => {
-          // lent to another station now: lending it here moves it
-          let now = src.topic("adbShare", {}).get().value
-          let elsewhere = flag(now, "sharing") && text(now, "station") != station
-          @sf.ask_words(c, title, @sf.t(if elsewhere { "android-misc.adb.elsewhere" } else { "android-misc.adb.hour" }))
-          @sf.ask_buttons(c, fn() {
-            @sf.button(c, @sf.t("android-misc.adb.ask.share"), key=key + "/share", tone=Primary, busy=@settings.adb_asking(), on_press=fn() {
-              @settings.adb_lend(station, name)
-            }) |> ignore
-            @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Ghost, on_press=fn() {
-              open_adb(src, station)
-            }) |> ignore
-          })
-        }
-        // (not known yet what the phone has: the question alone, its answer as it comes)
-        @settings.AdbUnknown => @sf.ask_words(c, title, "")
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The 共享调试 of the station (`<workspace>/<station>`) a link's card names, opened as its link opens it (open_target),
-/// whatever host the link was written with: the card is drawn for any (adb_of_link), and its 详情 opens what it shows
-/// (2026-10-30: a link under another host than the cloud's was drawn as the card, and 详情 handed it to the browser).
-fn open_adb(src : Source, station : String) -> Unit {
-  guard station.find("/") is Some(i) else { return }
-  let target = link_target({
-    "opens": "adbShare",
-    "workspace": Json::string(station.view(end_offset=i).to_owned()),
-    "station": Json::string(station.view(start_offset=i + 1).to_owned()),
-  })
-  open_target(src, target, false, None) |> ignore
-}
-
 // ── a screen live in its card ──
 
 ///|
 /// How a card's preview stands: not asked for, coming (its call), or ended by the station (refused, or the screen no
 /// longer previewed: its picture, or its mark, stays until the card goes from view).
+#derive(Eq)
 pub(all) enum PeekRun {
   PeekOff
   PeekOn
   PeekEnded
-} derive(Eq)
+}
 
 ///|
 /// A card's preview.
@@ -460,8 +364,12 @@ pub(all) struct Peek {
   mut got : Int
   /// its pictures by their keys, oldest first: the one shown (the newest decoded) and any newer one decoding
   pictures : Array[String]
-  /// its card's target (0: none): where it shows, the card is on the screen (peeks_settle)
+  /// its card's target (0: none): where it shows, the card is on the screen (peeks_settle); and, in the frame it changed
+  /// in, the one it had before, the one the last frame showed (its row built at another place in its list, as older
+  /// messages come in before it: a row's ids are by its place, while the card, its preview and its pictures are by its
+  /// key)
   mut target : Int
+  mut was : Int
   /// what its view's frames are (its config's `codec`): "jpeg" before one says otherwise
   mut codec : String
   /// its video's decoder (an H.264 preview), made as its config comes; each frame acknowledged as it is shown
@@ -470,15 +378,29 @@ pub(all) struct Peek {
   mut video : Bool
   /// ended long enough: asked for again where its card shows (peeks_frame, peeks_settle)
   mut again : Bool
+  /// held by a card made as nodes of the window's tree (screen_links_node.mbt's screen_peek_node), which starts and
+  /// stops it itself: not the old view's frames' to settle (peeks_frame, peeks_settle pass it by)
+  mut made : Bool
+  /// how many times what a node draws of it changed (its pictures, its run, its frames waiting), told as it does: what
+  /// its node binds reads it first, then the fields as they are
+  mut changes : Int
+  told : @signals.Signal[Int]
+}
+
+///|
+/// What its node draws of it changed (Peek's `told`).
+fn Peek::tell(self : Peek) -> Unit {
+  self.changes += 1
+  self.told.set(self.changes)
 }
 
 ///|
 /// The cards' previews, by card.
-pub let peeks : Map[String, Peek] = {}
+pub let peeks : Map[String, Peek] = Map([])
 
 ///|
 /// The cards with a preview built in this pass of the frame, or held by a list's row kept as its nodes (@ui.built_used).
-pub let peeks_built : Map[String, Bool] = {}
+pub let peeks_built : Map[String, Bool] = Map([])
 
 ///|
 /// Previews asked for so far: each view's name its own.
@@ -512,10 +434,14 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
         got: 0,
         pictures: [],
         target: 0,
+        was: 0,
         codec: "jpeg",
         stream: None,
         video: false,
         again: false,
+        made: false,
+        changes: 0,
+        told: @signals.signal(0),
       }
       peeks[key] = p
       p
@@ -538,7 +464,10 @@ pub fn screen_peek(
   target? : Int = 0,
 ) -> Unit {
   let p = peek_for(key, station, screen)
-  p.target = target
+  if p.target != target {
+    p.was = p.target
+    p.target = target
+  }
   peeks_built[key] = true
   // (and each frame its row or part is put back as built, kept as its nodes: mbui's kept_nodes.mbt)
   @ui.built_used(fn() { peeks_built[key] = true })
@@ -603,6 +532,13 @@ pub fn peek_took(src : Source, p : Peek, view : String, value : Json, bytes : By
   if p.view != view {
     return
   }
+  peek_took_now(src, p, view, value, bytes)
+  p.tell()
+}
+
+///|
+/// peek_took's, of its own view's value.
+fn peek_took_now(src : Source, p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
   match field(Some(value), "config") {
     Some(Object(_) as cfg) => {
       let codec = text(Some(cfg), "codec")
@@ -624,12 +560,12 @@ pub fn peek_took(src : Source, p : Peek, view : String, value : Json, bytes : By
               // station would wait on it); its pace is the station's own (an Android preview's 2 frames a second)
               shown=fn(ts) {
                 if p.view == view {
-                  (src.call)("screen.ack", { "view": Json::string(view), "ts": Json::number(ts) }, fn(_) {  })
+                  (src.call)("screen.ack", { "view": Json::string(view), "ts": Json::number(ts) }, answer_unread)
                 }
               },
               broken=fn() {
                 if p.view == view {
-                  (src.call)("screen.keyframe", { "view": Json::string(view) }, fn(_) {  })
+                  (src.call)("screen.keyframe", { "view": Json::string(view) }, answer_unread)
                 }
               },
             )
@@ -707,6 +643,7 @@ pub fn peek_start(src : Source, p : Peek) -> Unit {
   if p.view == view && p.run == PeekOn {
     p.call = id
   }
+  p.tell()
 }
 
 ///|
@@ -735,6 +672,7 @@ fn peek_end(src : Source, p : Peek) -> Unit {
   p.run = PeekEnded
   p.waiting.clear()
   peek_drop_video(p)
+  p.tell()
 }
 
 ///|
@@ -749,6 +687,7 @@ pub fn peek_stop(src : Source, p : Peek) -> Unit {
   p.again = false
   p.waiting.clear()
   peek_drop_video(p)
+  p.tell()
 }
 
 ///|
@@ -768,6 +707,9 @@ pub fn peeks_stop_all(src : Source) -> Unit {
 pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
   peeks_built.clear()
   for key, p in peeks {
+    if p.made {
+      continue
+    }
     if p.run == PeekEnded &&
       @kit.after(c, "peek-again/\{key}/\{p.view}", true, peek_again_ms, later=true) {
       p.again = true
@@ -786,7 +728,7 @@ pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
         if p.view == view && p.acked == n && p.waiting.length() > 0 {
           p.waiting.remove(0) |> ignore
           p.acked = n + 1
-          (src.call)("screen.ack", { "view": Json::string(view), "ts": ts }, fn(_) {  })
+          (src.call)("screen.ack", { "view": Json::string(view), "ts": ts }, answer_unread)
         }
       })
     }
@@ -807,8 +749,16 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
   let shown = @ui.app_visible()
   let gone = []
   for key, p in peeks {
+    if p.made {
+      continue
+    }
     let held = peeks_built.contains(key)
-    let on = held && (p.target == 0 || c.rect_of(p.target) is Some(_))
+    // (a card whose target changed in this frame shows where the one it had showed in the last: its row built at
+    // another place is the same card, its preview going on, nothing asked of the station again nor handed to the host
+    // again)
+    let shown_by = if p.was != 0 { p.was } else { p.target }
+    p.was = 0
+    let on = held && (p.target == 0 || c.rect_of(shown_by) is Some(_))
     let want = shown && on
     match p.run {
       PeekOn => if !want { peek_stop(src, p) }
@@ -837,7 +787,7 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
       @ui.add_image(p.pictures[i], b"")
     }
     if newest > 0 {
-      let rest = p.pictures[newest:].to_array()
+      let rest = p.pictures[newest:].to_owned()
       p.pictures.clear()
       p.pictures.append(rest)
     }

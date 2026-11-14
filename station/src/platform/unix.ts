@@ -4,10 +4,10 @@ import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_pro
 import { chmodSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { release, type as osType, userInfo } from "node:os";
 import { basename, delimiter, join } from "node:path";
-import { copyFile, readdir } from "node:fs/promises";
+import { access, copyFile, readFile, readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
-import type { Env, Found, Host, Platform } from "./index.ts";
+import type { Env, Found, Host, HostSample, Platform } from "./index.ts";
 import { holder, osCpuTicks } from "./processes.ts";
 import { fieldOrNull, firstWord, idleOfIoreg, output, parseF64, parseLsof, parseMounts, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
 
@@ -44,11 +44,12 @@ function clean(path: string): string {
   return `/${out.join("/")}`;
 }
 
-/// When `pid` started (ms): from its elapsed time as ps says it ([[dd-]hh:]mm:ss).
-function startTimeOf(pid: number): number | null {
+/// When `pid` started (ms): from its elapsed time as ps says it ([[dd-]hh:]mm:ss). Not waited on: under memory pressure
+/// a process takes seconds to start, and every device and agent waited on each one the main thread started.
+async function startTimeOf(pid: number): Promise<number | null> {
   let text: string;
   try {
-    text = execFileSync("ps", ["-o", "etime=", "-p", String(pid)], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    text = (await run("ps", ["-o", "etime=", "-p", String(pid)], { encoding: "utf8" })).stdout.trim();
   } catch {
     return null;
   }
@@ -71,6 +72,40 @@ function startTimeOf(pid: number): number | null {
   return wall.now() - (seconds + days * 86_400) * 1000;
 }
 
+/// macOS's memory (host.memory) from what sysctl and vm_stat said; `swap` asked only when the rest is known.
+function macMemoryOf(totalText: string | null, vm: string | null, swap: () => string | null): HostSample["memory"] {
+  const total = parseU64(totalText ?? "") ?? 0;
+  if (vm !== null) {
+    const after = vm.split("page size of ")[1];
+    const page = after !== undefined ? parseU64(firstWord(after)) : null;
+    const anonymous = fieldOrNull(vm, "Anonymous pages");
+    const purgeable = fieldOrNull(vm, "Pages purgeable");
+    const wired = fieldOrNull(vm, "Pages wired down");
+    const compressed = fieldOrNull(vm, "Pages occupied by compressor");
+    if (total > 0 && page !== null && page > 0 && anonymous !== null && purgeable !== null && wired !== null && compressed !== null) {
+      const used = Math.max(anonymous - purgeable + wired + compressed, 0) * page;
+      const usedText = swap()?.split("used = ")[1]?.split("M")[0];
+      const swapMb = usedText === undefined ? null : parseF64(usedText);
+      return { totalBytes: total, usedBytes: Math.min(used, total), swapUsedBytes: swapMb === null ? null : Math.round(swapMb * 1024 * 1024) };
+    }
+  }
+  return { totalBytes: total, usedBytes: 0, swapUsedBytes: null, known: false };
+}
+
+/// host.memory on macOS, its commands not waited on (the main thread's: memoryPressure). The swap is not asked: the
+/// pressure reads only the memory used.
+async function macMemory(): Promise<HostSample["memory"]> {
+  const said = async (command: string, args: string[]) => {
+    try {
+      return trim((await run(command, args, { encoding: "utf8", timeout: 3000 })).stdout);
+    } catch {
+      return null;
+    }
+  };
+  const [total, vm] = await Promise.all([said("sysctl", ["-n", "hw.memsize"]), said("vm_stat", [])]);
+  return macMemoryOf(total, vm, () => null);
+}
+
 const host: Host = {
   /// On macOS the CPUs' user, system, idle and nice time (os.cpus, from the same counters as Mach's
   /// HOST_CPU_LOAD_INFO, in ms rather than ticks: the share is the same); elsewhere /proc/stat.
@@ -82,95 +117,58 @@ const host: Host = {
       return null;
     }
   },
-  /// On macOS as Activity Monitor counts it (app, wired and compressed pages, not reclaimable cache).
-  memory() {
-    if (MACOS) {
-      const total = parseU64(output("sysctl", ["-n", "hw.memsize"]) ?? "") ?? 0;
-      const vm = output("vm_stat", []);
-      if (vm !== null) {
-        const after = vm.split("page size of ")[1];
-        const page = after !== undefined ? parseU64(firstWord(after)) : null;
-        const anonymous = fieldOrNull(vm, "Anonymous pages");
-        const purgeable = fieldOrNull(vm, "Pages purgeable");
-        const wired = fieldOrNull(vm, "Pages wired down");
-        const compressed = fieldOrNull(vm, "Pages occupied by compressor");
-        if (total > 0 && page !== null && page > 0 && anonymous !== null && purgeable !== null && wired !== null && compressed !== null) {
-          const used = Math.max(anonymous - purgeable + wired + compressed, 0) * page;
-          const swapText = output("sysctl", ["-n", "vm.swapusage"]);
-          const usedText = swapText?.split("used = ")[1]?.split("M")[0];
-          const swapMb = usedText === undefined ? null : parseF64(usedText);
-          return { totalBytes: total, usedBytes: Math.min(used, total), swapUsedBytes: swapMb === null ? null : Math.round(swapMb * 1024 * 1024) };
-        }
+  /// The memory on macOS as Activity Monitor counts it (app, wired and compressed pages, not reclaimable cache), its
+  /// swap; elsewhere /proc's. Every command and file at once, none waited on.
+  async sample() {
+    const said = async (command: string, args: string[]) => {
+      try {
+        return trim((await run(command, args, { encoding: "utf8", timeout: 3000 })).stdout);
+      } catch {
+        return null;
       }
-      return { totalBytes: total, usedBytes: 0, swapUsedBytes: null, known: false };
+    };
+    const file = (path: string) => readFile(path, "utf8").catch(() => "");
+    const rssOfPs = async () => {
+      const kb = parseU64(trim((await said("ps", ["-o", "rss=", "-p", String(process.pid)])) ?? ""));
+      return kb === null ? 0 : kb * 1024;
+    };
+    if (MACOS) {
+      const [total, vm, swap, model, boot, version, footprint] = await Promise.all([
+        said("sysctl", ["-n", "hw.memsize"]), said("vm_stat", []), said("sysctl", ["-n", "vm.swapusage"]),
+        said("sysctl", ["-n", "machdep.cpu.brand_string"]), said("sysctl", ["-n", "kern.boottime"]), said("sw_vers", ["-productVersion"]),
+        // Its footprint, as Activity Monitor says it. Resident memory there also counts the system's libraries, shared
+        // with every process, and what was freed but not yet taken back: twice or more what it holds.
+        said("footprint", ["-f", "bytes", "--noCategories", "-p", String(process.pid)]),
+      ]);
+      // "{ sec = 1790000000, usec = 0 } ..."
+      const sec = boot?.split("sec = ")[1]?.split(",")[0];
+      const booted = sec === undefined ? null : /^[+-]?[0-9]+$/.test(trim(sec)) ? Number(trim(sec)) : null;
+      const bytes = footprint?.match(/phys_footprint:\s*(\d+)\s*B/)?.[1];
+      return {
+        memory: macMemoryOf(total, vm, () => swap),
+        cpuModel: model ?? "",
+        uptimeSec: booted === null ? 0 : Math.max(Math.trunc(wall.now() / 1000) - booted, 0),
+        osName: version !== null ? `macOS ${version}` : `macOS (Darwin ${release()})`,
+        ownRss: bytes !== undefined ? Number(bytes) : await rssOfPs(),
+      };
     }
-    let info = "";
-    try {
-      info = readFileSync("/proc/meminfo", "utf8");
-    } catch {
-      // No memory data; report it as unknown below.
-    }
+    const [info, cpus, up, ownRss] = await Promise.all([file("/proc/meminfo"), file("/proc/cpuinfo"), file("/proc/uptime"), rssOfPs()]);
     const total = fieldOrNull(info, "MemTotal");
     const available = fieldOrNull(info, "MemAvailable");
     const swapTotal = fieldOrNull(info, "SwapTotal");
     const swapFree = fieldOrNull(info, "SwapFree");
     const swapUsedBytes = swapTotal !== null && swapFree !== null && swapFree <= swapTotal ? (swapTotal - swapFree) * 1024 : null;
-    if (total === null || total <= 0 || available === null || available > total) {
-      return { totalBytes: (total ?? 0) * 1024, usedBytes: 0, swapUsedBytes, known: false };
-    }
-    return {
-      totalBytes: total * 1024,
-      usedBytes: (total - available) * 1024,
-      swapUsedBytes,
-    };
-  },
-  cpuModel() {
-    if (MACOS) return output("sysctl", ["-n", "machdep.cpu.brand_string"]) ?? "";
-    let info = "";
-    try {
-      info = readFileSync("/proc/cpuinfo", "utf8");
-    } catch {
-      // None: empty.
-    }
-    for (const l of info.split("\n")) {
+    const memory = total === null || total <= 0 || available === null || available > total
+      ? { totalBytes: (total ?? 0) * 1024, usedBytes: 0, swapUsedBytes, known: false }
+      : { totalBytes: total * 1024, usedBytes: (total - available) * 1024, swapUsedBytes };
+    let cpuModel = "";
+    for (const l of cpus.split("\n")) {
       if (!l.startsWith("model name")) continue;
       const colon = l.indexOf(":", "model name".length);
-      if (colon >= 0) return trim(l.slice(colon + 1));
+      if (colon >= 0) { cpuModel = trim(l.slice(colon + 1)); break; }
     }
-    return "";
-  },
-  uptimeSec() {
-    if (MACOS) {
-      // "{ sec = 1790000000, usec = 0 } ..."
-      const text = output("sysctl", ["-n", "kern.boottime"]);
-      const sec = text?.split("sec = ")[1]?.split(",")[0];
-      const boot = sec === undefined ? null : /^[+-]?[0-9]+$/.test(trim(sec)) ? Number(trim(sec)) : null;
-      return boot === null ? 0 : Math.max(Math.trunc(wall.now() / 1000) - boot, 0);
-    }
-    try {
-      const s = parseF64(firstWord(readFileSync("/proc/uptime", "utf8")));
-      return s === null ? 0 : Math.round(s);
-    } catch {
-      return 0;
-    }
-  },
-  osName() {
-    if (MACOS) {
-      const version = output("sw_vers", ["-productVersion"]);
-      return version !== null ? `macOS ${version}` : `macOS (Darwin ${release()})`;
-    }
-    return `${osType()} ${release()}`;
-  },
-  ownRss() {
-    // macOS: its footprint, as Activity Monitor says it. Resident memory there also counts the system's libraries,
-    // shared with every process, and what was freed but not yet taken back: twice or more what it holds.
-    if (MACOS) {
-      const said = output("footprint", ["-f", "bytes", "--noCategories", "-p", String(process.pid)]);
-      const bytes = said?.match(/phys_footprint:\s*(\d+)\s*B/)?.[1];
-      if (bytes !== undefined) return Number(bytes);
-    }
-    const kb = parseU64(trim(output("ps", ["-o", "rss=", "-p", String(process.pid)]) ?? ""));
-    return kb === null ? 0 : kb * 1024;
+    const uptime = up === "" ? null : parseF64(firstWord(up));
+    return { memory, cpuModel, uptimeSec: uptime === null ? 0 : Math.round(uptime), osName: `${osType()} ${release()}`, ownRss };
   },
 };
 
@@ -285,6 +283,7 @@ function mounts(): string[] {
 export const unix: Platform = {
   os: OS[process.platform] ?? process.platform,
   buildOs: process.platform === "darwin" || process.platform === "linux" ? process.platform : null,
+  clonesFiles: MACOS,
 
   exe: (name) => name,
   home: (env) => env.HOME,
@@ -461,9 +460,9 @@ export const unix: Platform = {
 
   host,
 
-  isLauncher(pid) {
+  async isLauncher(pid) {
     try {
-      const command = execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      const command = (await run("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" })).stdout;
       return command.includes("stillfail-station");
     } catch {
       return false;
@@ -479,6 +478,19 @@ export const unix: Platform = {
     program: "/bin/sh",
     args: ["-c", `set -e; s=$(curl -fsSL https://cli.devin.ai/install.sh); printf '%s\\n' "$s" | sed -E '/^"[^"]*" setup[[:space:]]*$/d' | bash`],
   },
+  /// The Antigravity CLI's own installer, as antigravity.google/cli gives it.
+  agyInstall: { program: "/bin/sh", args: ["-c", "curl -fsSL https://antigravity.google/cli | bash"] },
+  agyBuild: async () => {
+    const arch = process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "amd64" : null;
+    if (arch === null) return null;
+    if (process.platform === "darwin") return `darwin_${arch}`;
+    if (process.platform !== "linux") return null;
+    // musl told as the installer tells it, by its libc's files.
+    const there = (f: string) => access(f).then(() => true, () => false);
+    if ((await there("/lib/libc.musl-x86_64.so.1")) || (await there("/lib/libc.musl-aarch64.so.1"))) return null;
+    return `linux_${arch}`;
+  },
+  agyStaging: (env, url) => (env.HOME ? join(env.HOME, ".cache", "antigravity", "staging", url.includes(".tar.gz") ? "agy.tar.gz" : "agy") : null),
   /// In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a handover
   /// (this process is let go) and a restart (the service's processes are stopped).
   installerExt: "sh",
@@ -570,10 +582,12 @@ export const unix: Platform = {
       if (MACOS) {
         const level = (await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"])).stdout;
         if (trim(level) !== "2") return pressureOfLevel(level);
-        const mem = host.memory();
+        // Read without waiting: this is asked every few seconds exactly while the memory is short, when a process
+        // started takes longest (host.memory's three, each waited on, held the main thread).
+        const mem = await macMemory();
         return mem.known === false ? pressureOfLevel(level) : pressureOfLevel(level, mem.totalBytes - mem.usedBytes, mem.totalBytes);
       }
-      const info = readFileSync("/proc/meminfo", "utf8");
+      const info = await readFile("/proc/meminfo", "utf8");
       return pressureOfAvailable(fieldOrNull(info, "MemAvailable"), fieldOrNull(info, "MemTotal"));
     } catch {
       return null;

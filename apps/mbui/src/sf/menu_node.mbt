@@ -20,7 +20,10 @@
 /// it, lined up `along` it; `by_key`: opened by the keyboard (the focus on its first row); `keep_field`: opened by a
 /// finger with a field focused (kit's dropdown_menu: its input method left in place): the focus left in that field, what
 /// is typed still its (View::leaves_typing), every key, the wheel and every press the menu's as ever. `choose` with the item chosen, once,
-/// as it closes; `cancel` as it is closed unchosen. `shown`, `gone`: as dialog_layer_node's.
+/// as it closes; `cancel` as it is closed unchosen. `shown`, `gone`: as dialog_layer_node's. `side`: the side of what
+/// opened it it goes on (a submenu's beside its row: submenu_row_node). Not `modal` (a submenu's, as kit's
+/// dropdown_menu's `submenu`): what is under it its own as ever, a press outside its panel closing it as it goes down
+/// and going on to what it lands on; the arrow key back toward what opened it (away from `side`) closing it too.
 pub fn menu_node(
   parent : @view.View,
   open : () -> Bool,
@@ -37,6 +40,8 @@ pub fn menu_node(
   gone? : () -> Unit = fn() {  },
   extras? : (Int) -> MenuExtra = fn(_) { menu_no_extra },
   min_w? : Double = menu_w,
+  side? : @ui.Side = Bottom,
+  modal? : Bool = true,
 ) -> Unit {
   parent.show(
     open,
@@ -56,7 +61,7 @@ pub fn menu_node(
       let words_in = fn() { look().words }
       // (its rows that can be chosen, by their index: the one with the focus is lit; the keyboard moves the focus along
       // them, shown, the pointer onto one, unseen)
-      let rows : Map[Int, @view.View] = {}
+      let rows : Map[Int, @view.View] = Map([])
       // (the row of the rows' one stop of Tab's: the last that had the focus, else the first: Radix's roving focus)
       let current = @signals.signal(first_live(@signals.untracked(content), 0, 1), same=fn(a, b) { a == b })
       // (where Tab stops in its rows, as they are now: that one while it can still be chosen; else (made one not to be
@@ -99,25 +104,61 @@ pub fn menu_node(
       // (letters typed together, and when the last was)
       let typed = Ref("")
       let typed_at = Ref(-1.0e9)
+      // (its panel, once made, and what opened it: what a press outside it is outside of, where it is not modal)
+      let panel : Ref[@view.View?] = Ref(None)
+      let opener : Ref[@view.View?] = Ref(None)
       layer
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)
-      .modal(By(live))
+      .modal(By(fn() { modal && live() }))
       .held_back_goes_on()
       |> ignore
+      if !modal {
+        // (a press anywhere in the window outside its panel: closed as it goes down, the press what it lands on's as
+        // ever, at that moment)
+        layer.reacts(fn() { layer.window_downs() }, at_start=false, fn(_) {
+          let (x, y) = layer.window_down_point()
+          // (on its panel or on what it holds, or on what opened it (its own press its own): what a press there is for,
+          // as the tree is now)
+          let on = fn(v : @view.View?) {
+            match v {
+              Some(p) =>
+                match p.tree.target_at(x, y) {
+                  Pressed(id) | Dragged(id) => p.tree.holds(p.id(), id)
+                  _ => false
+                }
+              None => false
+            }
+          }
+          let inside = on(panel.val) || on(opener.val)
+          if @signals.untracked(live) && !inside {
+            cancel()
+          }
+        })
+      }
       if keep_field {
         // (what is typed the field's it leaves the focus in: kit's dropdown_menu's initial focus none)
         layer.leaves_typing() |> ignore
       }
+      // (not modal: the key back toward what opened it)
+      let back = match side {
+        Right => @ui.key_code_left
+        Left => @ui.key_code_right
+        _ => -1
+      }
+      if modal {
+        layer
+        // (a press outside its panel its own, nothing under it pressed: closing it as it goes down, as the old frame's
+        // menu is dismissed then; not modal, the press under it's, nothing said of presses on the layer)
+        .presses(Is(true))
+        .on_drag(fn(d) {
+          if d.kind == Down && @signals.untracked(live) {
+            cancel()
+          }
+        })
+        |> ignore
+      }
       layer
-      // (a press outside its panel its own, nothing under it pressed: closing it as it goes down, as the old frame's
-      // menu is dismissed then)
-      .presses(Is(true))
-      .on_drag(fn(d) {
-        if d.kind == Down && @signals.untracked(live) {
-          cancel()
-        }
-      })
       .on_key(fn(k) {
         if !@signals.untracked(live) {
           return false
@@ -125,6 +166,9 @@ pub fn menu_node(
         let now = @signals.untracked(lit)
         let items = @signals.untracked(content)
         if k.code == @ui.key_escape {
+          cancel()
+          true
+        } else if !modal && k.mods == 0 && k.code == back {
           cancel()
           true
         } else if keep_field && now < 0 {
@@ -162,7 +206,7 @@ pub fn menu_node(
           match (if k.mods == 0 || k.mods == @ui.mod_shift_key { typed_char(k.code) } else { None }) {
             Some(ch) => {
               // (a second's worth together: the same letter again moves on to the next it starts)
-              let s = if k.at - typed_at.val <= @kit.typeahead_ms { typed.val + ch.to_string() } else { ch.to_string() }
+              let s = if k.at < typed_at.val + @kit.typeahead_ms { typed.val + ch.to_string() } else { ch.to_string() }
               typed.val = s
               typed_at.val = k.at
               match typeahead_to(items, s, now) {
@@ -183,6 +227,7 @@ pub fn menu_node(
       |> ignore
       // (what opened it, where it is drawn: what its panel goes beside)
       let at = anchor(layer)
+      opener.val = Some(at)
       // (a column before every item's words where one has an icon or is one of a choice: the web's dropdown)
       let iconed = fn() { content().iter().any(fn(x) { x is Some(i) && i.chosen is None && i.icon != "" }) }
       let lead = fn() { iconed() || content().iter().any(fn(x) { x is Some(i) && i.chosen is Some(_) }) }
@@ -212,11 +257,12 @@ pub fn menu_node(
         items.length() > 0 && (items[items.length() - 1] is Some(i) && !i.heading)
       }
       layer.box(fn(p) {
+        panel.val = Some(p)
         p
-        .beside(at.id(), side=Bottom, along=view_along(along), offset~, padding=8.0)
+        .beside(at.id(), side~, along=view_along(along), offset~, padding=8.0)
         .min_width(Is(Some(min_w)))
-        .max_width(By(fn() { Some(layer.window().0 - 16.0) }))
-        .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))
+        .max_width(By(fn() { Some(over_room(layer).0 - 16.0) }))
+        .max_height(By(fn() { Some(dmax(0.0, over_room(layer).1 - 16.0)) }))
         // (small_panel: its padding, its rows reaching past it to stand concentric with its corners)
         .padding(
           By(fn() {
@@ -230,14 +276,13 @@ pub fn menu_node(
         .clips(Is(true))
         .alpha(By(fn() { look().alpha }))
         .scale(By(fn() { look().sx }), about=FromBeside)
-        .says(Is(Some(@view.said(Menu, label=title))))
+        .says(Is(Some(@view.said(Menu, label=title_plain(title)))))
         // (the focus its own as it opens, opened by the pointer: no key presses it; its rows lit as they have it; one of
         // the menu's two stops of Tab's, its rows the other, as kit's panel and roving group are)
         .focusable(Is(true), keys=0)
         // (a press on it its own: on what of it takes none (its padding, a heading, a line, a row not to be chosen),
         // nothing, not outside it)
-        .presses(Is(true))
-        .on_press(fn() {  })
+        |> ground_node
         |> ignore
         p.box(fn(body) {
           // (all it holds as far in as its look says, past the panel's own ground, edge and shadow: its rows, their
@@ -251,7 +296,7 @@ pub fn menu_node(
             // anew there; a row's words, icon, check and whether it can be chosen read again as they change, the row the
             // same, its focus kept)
             b.each(fn() { content().mapi(fn(i, x) { (i, menu_kind(x)) }) }, fn(k) { k }, fn(cell, k) {
-              let (i, kind) = @signals.untracked(fn() { k.get() })
+              let (i, kind) = k.untracked()
               let item = fn() {
                 match content().get(i) {
                   Some(Some(item)) => item
@@ -316,6 +361,7 @@ let menu_none : MenuItem = {
 /// A row of a menu (menu_row's look) in `b`: what `item()` is now, the `i`th; lit while it has the focus (its ground
 /// the pointer's or the keyboard's where that is shown or the pointer is on it); the pointer moving onto it gives it the
 /// focus, unseen; pressed, `go`. Its words, icon, check and whether it can be chosen as the item has them now. The row.
+#callsite(autofill(loc))
 fn menu_row_node(
   b : @view.View,
   item : () -> MenuItem,
@@ -327,10 +373,11 @@ fn menu_row_node(
   current : @signals.Signal[Int],
   stop : () -> Int,
   extra : MenuExtra,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let t = theme()
   let off = fn() { item().disabled }
-  b.box(fn(r) {
+  b.box(made_for=loc, fn(r) {
     r
     .row(Is(true))
     .lines_up(Is(Some(Middle)))
@@ -386,7 +433,7 @@ fn menu_row_node(
           }
         }
         col.each(fn() { if mark() == "" { [] } else { [mark()] } }, fn(m) { m }, fn(slot, m) {
-          let name = @signals.untracked(fn() { m.get() })
+          let name = m.untracked()
           if name == "\u{1}check" {
             icon_node(slot, "check", 14.0, By(fn() { library_theme().p.text })) |> ignore
           } else {
@@ -483,19 +530,30 @@ let menu_no_extra : MenuExtra = { note: "", value: "", mark: None }
 /// A heading among a menu's items: its words (`label()`) as far in as its rows' words
 /// (`past()`: past the columns before them where there are: a check's or an icon's, a mark's), small and muted, 6 over and
 /// 4 under it.
+#callsite(autofill(loc))
 fn menu_heading_node(
   b : @view.View,
   label : () -> String,
   past : () -> Double,
   reach : Double,
+  loc~ : SourceLoc,
 ) -> Unit {
-  b.box(fn(h) {
+  b.box(made_for=loc, fn(h) {
     h.padding(By(fn() { (text_in + past() + reach, 6.0, 10.0 + reach, 4.0) })) |> ignore
     h.box(fn(w) {
-      w
-      .words(By(label), look=toast_words_look(Meta, L4_75, 400, false))
-      .ink(By(fn() { @ui.tree_theme().color(Muted) }))
-      |> ignore
+      // (a part of it in the accent: title_accent.mbt)
+      if title_marked(@signals.untracked(label)) {
+        w
+        .words_runs(By(fn() { title_runs(label(), theme().p.accent_text) }))
+        .words_look(Is(toast_words_look(Meta, L4_75, 400, false)))
+        .ink(By(fn() { @ui.tree_theme().color(Muted) }))
+        |> ignore
+      } else {
+        w
+        .words(By(label), look=toast_words_look(Meta, L4_75, 400, false))
+        .ink(By(fn() { @ui.tree_theme().color(Muted) }))
+        |> ignore
+      }
     })
     |> ignore
   })
@@ -505,8 +563,9 @@ fn menu_heading_node(
 ///|
 /// A line between parts of a menu (menu_rule): the words' ink faintly, 1 high, 6 over and under it, as wide as its rows'
 /// grounds.
-fn menu_rule_node(b : @view.View, reach : Double) -> Unit {
-  b.box(fn(r) {
+#callsite(autofill(loc))
+fn menu_rule_node(b : @view.View, reach : Double, loc~ : SourceLoc) -> Unit {
+  b.box(made_for=loc, fn(r) {
     r.padding(Is((reach, 6.0, reach, 6.0))) |> ignore
     r.box(fn(l) { l.height(Is(Some(1.0))).ground(By(fn() { @ui.alpha(@ui.tree_theme().fg, 0.12) })) |> ignore }) |> ignore
   })
@@ -548,7 +607,7 @@ fn typeahead_to(items : Array[MenuItem?], typed : String, at : Int) -> Int {
   if n == 0 {
     return -1
   }
-  let first = typed.view(start_offset=0, end_offset=1).to_string()
+  let first = typed.exact_view(start=0, end=1).to_owned()
   let same = typed.iter().all(fn(ch) { ch.to_string() == first })
   let want = if same { first } else { typed }
   let from = if same { at + 1 } else if at < 0 { 0 } else { at }
@@ -574,8 +633,9 @@ fn view_along(a : @ui.Along) -> @view.Along {
 
 ///|
 /// What a menu goes beside at a place in the window (x, y, w, h: a point where w and h are 0), made in `layer`.
-pub fn fixed_anchor(layer : @view.View, at : (Double, Double, Double, Double)) -> @view.View {
-  layer.box(fn(a) {
+#callsite(autofill(loc))
+pub fn fixed_anchor(layer : @view.View, at : (Double, Double, Double, Double), loc~ : SourceLoc) -> @view.View {
+  layer.box(made_for=loc, fn(a) {
     let (x, y, w, h) = at
     a.width(Is(Some(w))).height(Is(Some(h))).offset(Is((x, y))) |> ignore
   })

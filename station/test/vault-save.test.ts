@@ -20,6 +20,7 @@ import { vaultTools } from "../src/vault/tool.ts";
 import { VaultStore } from "../src/vault/store.ts";
 import { STILLFAIL_SURFACE } from "../src/store/store.ts";
 import { isFor } from "../src/api/events.ts";
+import { withoutUseReader } from "./vault-no-reader.ts";
 
 const WS = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
 const VAULT = "v_01HZZZZZZZZZZZZZZZZZZZZZZZ";
@@ -80,10 +81,13 @@ function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] 
   let hidden = false;
   let onPost: (() => void) | null = null;
   let sessionWs: string | null = null;
+  // Who wrote in the session's chats, as creator references (`Store.participants`).
+  const people: string[] = [starter.toLowerCase()];
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: sessionWs, workspace: "/tmp", archivedAt: null } : null),
       starter: () => starter.toLowerCase(),
+      participants: (k: string) => new Map(k === "s1" ? [["s1", people]] : []),
       latestThread: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
       sessionThreadById: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
       withdrawCard: (_session: string, _thread: number, ts: string) => (withdrawn.push(ts), true),
@@ -104,8 +108,9 @@ function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] 
     signIn: async (session: string, d: { request: string; sites: string[]; cookies: string; until: number }) => void browser.signedIn.push([session, d]),
     extendSignIn: (session: string, request: string, until: number) => void browser.extended.push([session, request, until]),
   };
-  const make = (backfill?: { previousGone?: Promise<void> }) => new Secrets({ db: connection, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers, ...(backfill ? { backfill } : {}) });
-  return { db, hub, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; }, setSessionWs: (ws: string | null) => { sessionWs = ws; } };
+  // (a database in a file: the use index's work on this connection, no reader's process beside it; ./vault-no-reader.ts)
+  const make = (backfill?: { previousGone?: Promise<void> }) => new Secrets({ db: withoutUseReader(connection), vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers, ...(backfill ? { backfill } : {}) });
+  return { db, hub, vaults, plain, notified, people, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; }, setSessionWs: (ws: string | null) => { sessionWs = ws; } };
 }
 
 function requestWriteHook() {
@@ -300,6 +305,39 @@ test("a secret reask does not record a card decided during final old-card prepar
     await assert.rejects(reask, /no longer pending/);
     assert.equal(h.cards.length, 1, "a card for the decided request was not recorded");
   } finally { release.resolve(); rmSync(h.dir, { recursive: true, force: true }); }
+});
+
+test("a secret kept for and used by the person the agent names, who wrote in the chat; left out, the chat's starter", async () => {
+  // A chat started in Slack (its starter no still.fail account), bob writing in it from the still.fail app.
+  const h = harness(() => null, "slack:c:u1");
+  h.people.push("bob@x.com");
+  try {
+    const tools = vaultTools(h.secrets, () => h.dir);
+    const list = tools.find((t) => t.name === "secret_list")!, use = tools.find((t) => t.name === "secret_use")!, save = tools.find((t) => t.name === "secret_save")!;
+    await assert.rejects(save.run("s1", { name: "Kimi key", about: "Kimi 的 API key", kind: "token", reason: "keep it", value: "test-key", person: "carol@x.com" }), /carol@x\.com has not written in this chat: name one of the people who wrote in it from still\.fail: bob@x\.com/);
+    assert.equal(h.cards.length, 0);
+
+    await save.run("s1", { name: "Kimi key", about: "Kimi 的 API key", kind: "token", reason: "keep it", value: "test-key", person: "Bob@x.com" });
+    const request = h.cards[0]!.card.vault.request;
+    assert.equal(h.cards[0]!.card.assignee, "bob@x.com", "the card is bob's to decide");
+    assert.match(h.secrets.savedPlain(WS, null, "alice@x.com", { request }) as string, /only the person it is kept for/);
+    assert.notEqual(typeof h.secrets.savedPlain(WS, null, "bob@x.com", { request }), "string");
+
+    // His, not the starter's: listed and asked for only by naming him.
+    // (kept, this chat holds its grant either way)
+    const listed = async (args: Record<string, unknown>) => JSON.parse(await list.run("s1", args) as string).secrets.map((x: { name: string }) => x.name);
+    assert.deepEqual(await listed({}), []);
+    assert.deepEqual(await listed({ person: "bob@x.com" }), ["Kimi key"]);
+    await assert.rejects(use.run("s1", { item: "Kimi key", reason: "use it" }), /No secret named "Kimi key"/);
+    await use.run("s1", { item: "Kimi key", reason: "use it", command: "true", person: "bob@x.com" });
+    assert.equal(h.cards[1]!.card.assignee, "bob@x.com");
+
+    // Left out, it is the starter's as before.
+    await save.run("s1", { name: "Other", about: "另一个", kind: "token", reason: "keep it", value: "other" });
+    assert.equal(h.cards[2]!.card.assignee, "slack:c:u1");
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
 });
 
 test("a still-needed secret use can be asked again as the same request", async () => {
@@ -1562,6 +1600,173 @@ test("a request's changes are told to whom decides it: its owner, nobody without
     assert.deepEqual(told(request({})), ["alice"]);
     h.vaults.putVault({ ...w.vault, seq: 1, members: ["alice", "bob"] });
     assert.deepEqual(told(request({})), ["alice", "bob"]);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("an item's about: asked with the secret to keep, kept as its notes and its listing's about; secret_list says it", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    const about = "家里 UniFi 后台：先在 Studio 上开 8443 转发，再打开 https://127.0.0.1:8443/";
+    const asked = h.secrets.save("s1", { name: "UniFi 后台", about, kind: "token", reason: "post", value: "t-1", hosts: ["unifi.local"], cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.equal(r!.save!.about, about);
+    assert.match(h.cards[0]!.text, /说明：家里 UniFi 后台/);
+    assert.equal(h.cards[0]!.card.vault.about, about);
+    const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r!.id });
+    assert.ok(typeof kept !== "string");
+    assert.equal(kept.notes, about);
+    assert.equal(kept.listing!.about, about);
+    await decided(h, asked);
+    const list = vaultTools(h.secrets, () => h.dir).find((t) => t.name === "secret_list")!;
+    assert.equal(JSON.parse(await list.run("s1", {}) as string).secrets[0].about, about);
+    // secret_save asks for it.
+    const save = vaultTools(h.secrets, () => h.dir).find((t) => t.name === "secret_save")!;
+    await assert.rejects(save.run("s1", { name: "x", kind: "token", reason: "r", value: "v" }) as Promise<unknown>, /about is required/);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("an item renamed in the plain library: its card says what would change, its owner's approval writes it here, and it grants nothing", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    void h.secrets.save("s1", { name: "127.0.0.1 登录态", kind: "token", reason: "x", value: "t-1", hosts: ["127.0.0.1"], cwd: h.dir });
+    await tick();
+    const [saving] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.ok(typeof h.secrets.savedPlain(WS, null, "bob@x.com", { request: saving!.id }) !== "string");
+    await assert.rejects(h.secrets.describe("s1", { item: "127.0.0.1 登录态", reason: "r" }), /nothing to change/);
+    await assert.rejects(h.secrets.describe("s1", { item: "none", name: "x", reason: "r" }), /secret_list/);
+    const asked = h.secrets.describe("s1", { item: "127.0.0.1 登录态", name: "UniFi 后台登录态", about: "经 Studio 转发", reason: "认不出来" });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.deepEqual(r!.describe, { name: "UniFi 后台登录态", about: "经 Studio 转发", was: { name: "127.0.0.1 登录态", about: "" } });
+    const { text, card } = h.cards.at(-1)!;
+    assert.equal(text, "申请修改密钥「127.0.0.1 登录态」的名称与说明：认不出来\n\n名称改为：UniFi 后台登录态\n\n说明改为：经 Studio 转发");
+    assert.deepEqual(card.options.map((o: { label: string }) => o.label), ["确认修改", "保持不变"]);
+    assert.deepEqual(card.vault.describe, { name: "UniFi 后台登录态", about: "经 Studio 转发", wasAbout: "" });
+    // No grant of the item comes of it, nor anyone's but its owner's word.
+    assert.match(h.secrets.grantPlain(WS, null, "bob@x.com", { request: r!.id, scope: "once" })!, /grants nothing/);
+    assert.match(h.secrets.describedPlain(WS, null, "carol@x.com", { request: r!.id }) as string, /only the item's owner/);
+    const kept = h.secrets.describedPlain(WS, null, "bob@x.com", { request: r!.id });
+    assert.ok(typeof kept !== "string");
+    assert.deepEqual([kept.version, kept.name, kept.notes, kept.listing!.name, kept.listing!.about, kept.fields], [1, "UniFi 后台登录态", "经 Studio 转发", "UniFi 后台登录态", "经 Studio 转发", { value: "t-1" }]);
+    assert.match(await decided(h, asked), /Changed: the item i_\w+ is 「UniFi 后台登录态」 now, described as: 经 Studio 转发/);
+    assert.deepEqual(h.secrets.held("s1").filter((x) => x.request.id === r!.id), []);
+    assert.deepEqual(h.secrets.listings("s1").map((l) => [l.listing.name, l.listing.about]), [["UniFi 后台登录态", "经 Studio 转发"]]);
+    assert.deepEqual(await h.secrets.uses(WS, null, PLAIN, { sub: "bob", email: "bob@x.com" }), []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("an item of a vault renamed: decided by its vault's members, taken once the item here says so, never granted", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  h.vaults.putVault(w.vault);
+  h.vaults.putBox(w.cert(w.alice));
+  try {
+    const item = (version: number, name: string, about?: string): Item => signed(
+      { v: 1 as const, ws: WS, vault: VAULT, id: "i_01HZZZZZZZZZZZZZZZZZZZZZZZ", version, epoch: 0, ct: encryptWith(fill(4), Buffer.from("{}"), itemContext(WS, VAULT, "i_01HZZZZZZZZZZZZZZZZZZZZZZZ", version, 0), fill(5, 12)), listing: { name, kind: "browser" as const, modes: ["browser" as const], hosts: ["127.0.0.1"], ...(about ? { about } : {}) }, at: 1000 },
+      TAG.item, w.alice.signer,
+    );
+    h.vaults.putItem(item(0, "127.0.0.1 登录态"));
+    const asked = h.secrets.describe("s1", { item: "127.0.0.1 登录态", name: "UniFi 后台登录态", about: "经 Studio 转发", reason: "认不出来" });
+    await tick();
+    const [r] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.ok(r && r.describe && r.box === "" && r.vault === VAULT);
+    assert.equal(h.cards.at(-1)!.card.assignee, "alice@x.com");
+    assert.match(h.secrets.grant(w.state, "alice", { request: r.id } as never)!, /grants nothing/);
+    assert.match(h.secrets.described(w.state, "bob", { request: r.id })!, /vault's members/);
+    assert.match(h.secrets.described(w.state, "alice", { request: r.id })!, /bring its copy first/);
+    h.vaults.putItem(item(1, "UniFi 后台登录态", "经 Studio 转发"));
+    assert.equal(h.secrets.described(w.state, "alice", { request: r.id }), null);
+    assert.match(await decided(h, asked), /Changed: .*「UniFi 后台登录态」/);
+    // (a sign-in's request granted puts nothing into the chat's browser)
+    assert.deepEqual(h.browser.signedIn, []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("an item deleted from the plain library: its card names it, its owner's approval deletes it here, and it grants nothing", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    void h.secrets.save("s1", { name: "旧的管理员密码", kind: "token", reason: "x", value: "t-1", hosts: ["example.com"], cwd: h.dir });
+    await tick();
+    const [saving] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.ok(typeof h.secrets.savedPlain(WS, null, "bob@x.com", { request: saving!.id }) !== "string");
+    await assert.rejects(h.secrets.remove("s1", { item: "none", reason: "r" }), /secret_list/);
+    await assert.rejects(h.secrets.remove("s1", { item: "旧的管理员密码", reason: " " }), /reason is required/);
+    const asked = h.secrets.remove("s1", { item: "旧的管理员密码", reason: "登不上，换了新的" });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.deepEqual(r!.remove, { name: "旧的管理员密码" });
+    const { text, card } = h.cards.at(-1)!;
+    assert.equal(text, "申请删除密钥「旧的管理员密码」：登不上，换了新的");
+    assert.deepEqual(card.options.map((o: { label: string }) => o.label), ["删除", "保留"]);
+    assert.deepEqual(card.vault.remove, { name: "旧的管理员密码" });
+    assert.match(h.secrets.grantPlain(WS, null, "bob@x.com", { request: r!.id, scope: "once" })!, /grants nothing/);
+    assert.match(h.secrets.removedPlain(WS, "carol@x.com", { request: r!.id }) as string, /only the item's owner/);
+    const gone = h.secrets.removedPlain(WS, "bob@x.com", { request: r!.id });
+    assert.ok(typeof gone !== "string");
+    assert.deepEqual([gone.deleted, gone.version, gone.fields], [true, 1, {}]);
+    assert.match(await decided(h, asked), /Deleted: 「旧的管理员密码」 \(i_\w+\) is no longer in the vault/);
+    assert.deepEqual(h.secrets.listings("s1"), []);
+    assert.deepEqual(pendingOf(h.secrets, null, "bob@x.com"), []);
+    assert.deepEqual(await h.secrets.uses(WS, null, PLAIN, { sub: "bob", email: "bob@x.com" }), []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("an item of a vault deleted: decided by its vault's members, taken once the item here is deleted, never granted", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  h.vaults.putVault(w.vault);
+  h.vaults.putBox(w.cert(w.alice));
+  try {
+    const id = "i_01HZZZZZZZZZZZZZZZZZZZZZZZ";
+    h.vaults.putItem(signed(
+      { v: 1 as const, ws: WS, vault: VAULT, id, version: 0, epoch: 0, ct: encryptWith(fill(4), Buffer.from("{}"), itemContext(WS, VAULT, id, 0, 0), fill(5, 12)), listing: { name: "branded", kind: "token" as const, modes: ["env" as const], hosts: [] }, at: 1000 },
+      TAG.item, w.alice.signer,
+    ));
+    const asked = h.secrets.remove("s1", { item: "branded", reason: "登不上" });
+    await tick();
+    const [r] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.ok(r && r.remove && r.box === "" && r.vault === VAULT);
+    assert.equal(h.cards.at(-1)!.card.assignee, "alice@x.com");
+    assert.match(h.secrets.grant(w.state, "alice", { request: r.id } as never)!, /grants nothing/);
+    assert.match(h.secrets.removed(w.state, "bob", { request: r.id })!, /vault's members/);
+    assert.match(h.secrets.removed(w.state, "alice", { request: r.id })!, /bring its copy first/);
+    h.vaults.putItem(signed({ v: 1 as const, ws: WS, vault: VAULT, id, version: 1, epoch: 0, deleted: true as const, ct: "", at: 1001 }, TAG.item, w.alice.signer));
+    assert.equal(h.secrets.removed(w.state, "alice", { request: r.id }), null);
+    assert.match(await decided(h, asked), /Deleted: 「branded」/);
+    assert.deepEqual(pendingOf(h.secrets, w.state, "alice@x.com"), []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a request withdrawn by the agent that asked: its card closed, gone from its owner's waiting requests, nobody told", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    void h.secrets.save("s1", { name: "Office-Host-2 管理员登录", kind: "login", reason: "装 git", hosts: [], cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.ok(r);
+    const told = h.notified.length;
+    assert.throws(() => h.secrets.cancel("s2", r.id), /unknown session/);
+    assert.throws(() => h.secrets.cancel("s1", "r_none"), /No such request in this chat/);
+    assert.match(h.secrets.cancel("s1", r.id), /Withdrew request r_\w+/);
+    assert.deepEqual(pendingOf(h.secrets, null, "bob@x.com"), []);
+    assert.deepEqual(h.withdrawn, ["1"]);
+    assert.equal(h.notified.length, told);
+    assert.throws(() => h.secrets.cancel("s1", r.id), /no longer pending \(withdrawn\)/);
+    // (decided once withdrawn: nothing to approve)
+    assert.match(h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id, fields: { username: "u", password: "p" } }) as string, /withdrawn/);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }

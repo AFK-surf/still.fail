@@ -60,7 +60,7 @@ test("a_station_offers_its_own_models_says_which_are_borrowed_and_lists_what_oth
 
 /// A model control on the first station of `ws`, its core's store and records stood in for.
 function control(ws: J[], role: string) {
-  const values = new Map<string, unknown>([[`overview ws/${HERE}`, ws[0].overview], ["stations", ws]]);
+  const values = new Map<string, unknown>([[`overview ws/${HERE}`, ws[0].overview], ["stations", ws], ["stationsWhole", ws]]);
   const keyOf = (t: Topic) => (t.topic === "overview" ? `overview ${t.station}` : String(t.topic));
   const store: J = { get: (t: Topic) => values.get(keyOf(t)), watch: () => ({ drop() {} }), invalidate() {} };
   const data: J = { record: () => undefined, put() {}, shared: (t: Topic) => (t.topic === "workspace" ? { role } : undefined), mes: () => [] };

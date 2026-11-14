@@ -13,7 +13,7 @@ test "a phone's chats' list's top bar is one glass with the status bar's room ov
   let bands = t.drawn_rects().filter(fn(r) {
     r.0 == 0.0 && r.1 == 0.0 && r.2 == 390.0 && glass.iter().any(fn(g) { r.3 < g.3 })
   })
-  assert_eq((glass.length(), bands), (1, []), msg="the glass \{glass}")
+  assert_eq((glass.length(), bands), (1, []), msg="the glass \{Repr(glass)}")
 }
 
 ///|
@@ -25,7 +25,7 @@ test "the system status bar remains part of Home's glass" {
   let bands = t.drawn_rects().filter(fn(r) {
     r.0 == 0.0 && r.1 == 0.0 && r.2 == 390.0 && r.3 == 24.0
   })
-  assert_eq((glass.length(), bands), (1, []), msg="the glass \{glass}")
+  assert_eq((glass.length(), bands), (1, []), msg="the glass \{Repr(glass)}")
 }
 
 ///|
@@ -40,7 +40,7 @@ test "a made place's own top bar needs no ground over the status bar" {
   let bands = t.drawn_rects().filter(fn(r) {
     r.0 == 0.0 && r.1 == 0.0 && r.2 == 390.0 && r.3 == 24.0
   })
-  assert_eq((glass.length(), bands), (1, []), msg="the glass \{glass}")
+  assert_eq((glass.length(), bands), (1, []), msg="the glass \{Repr(glass)}")
 }
 
 ///|
@@ -54,5 +54,5 @@ test "a made page without its own top still covers the status bar with its groun
   let bands = t.drawn_rects().filter(fn(r) {
     r.0 == 0.0 && r.1 == 0.0 && r.2 == 390.0 && r.3 == 24.0
   })
-  assert_true(!bands.is_empty(), msg="the page's status-bar ground: \{bands}")
+  assert_true(!bands.is_empty(), msg="the page's status-bar ground: \{Repr(bands)}")
 }

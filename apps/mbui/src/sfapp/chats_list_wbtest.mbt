@@ -16,6 +16,16 @@ fn lists_tester(calls : Array[Made], w : Double, platform : Int, regular : Bool)
 }
 
 ///|
+/// The chat's menu up: its 分享… opened (复制会话链接, 接力到频道, 分享给其他 workspace, 分享图片, 在 Slack／飞书打开 in it),
+/// at rest.
+fn open_share(t : @ui.Tester) -> Unit {
+  t.tap_text("分享…")
+  t.frame()
+  let rest = @sf.presented_rest()
+  t.run_for(if rest > t.time() && rest < 1.0e12 { rest - t.time() } else { @ui.move_most_ms })
+}
+
+///|
 test "the chats' lists at each width and with either hand: its days and rows; a finger's 66 high, a mouse's 54, 2 apart but a finger's across a phone" {
   for case in one_page_cases {
     let (w, platform, regular, _) = case
@@ -51,14 +61,16 @@ test "a row's menu at each width and with either hand: held by a finger, right c
     t.frame()
     // not opened by the hold
     assert_false(app.nav.top() is Chat({ title: "夜里的构建又失败了", .. }), msg=at)
-    for item in ["重命名", "复制会话链接"] {
+    for item in ["重命名", "分享…"] {
       assert_true(t.find(item) is Some(_), msg="\{at}: \{item}")
     }
     assert_true(t.find("复制 session 文件路径") is None, msg=at)
     // 归档 with the chat's own state, not last (a sheet's last row is where a thumb going home lands)
     let (_, archive_y) = t.find("归档").unwrap()
-    let (_, link_y) = t.find("复制会话链接").unwrap()
-    assert_true(archive_y < link_y, msg="\{at}: 归档 at \{archive_y}, 复制会话链接 at \{link_y}")
+    let (_, share_y) = t.find("分享…").unwrap()
+    assert_true(archive_y < share_y, msg="\{at}: 归档 at \{archive_y}, 分享… at \{share_y}")
+    // (复制会话链接 in it, with the rest of what shares it)
+    open_share(t)
     t.tap_text("复制会话链接")
     assert_true(t.clipboard().has_prefix("[夜里的构建又失败了]("), msg=at)
   }
@@ -172,7 +184,7 @@ test "a mouse pointing at a row: its time and 归档 at its top right; a finger'
     } else {
       assert_true(t.query(Button, label="归档「夜里的构建又失败了」") is None, msg=at)
       let (x, y) = t.find("夜里的构建又失败了").unwrap()
-      t.move(x, y)
+      t.move_to(x, y)
       t.frame()
       match t.query(Button, label="归档「夜里的构建又失败了」") {
         Some(b) => {
@@ -184,6 +196,20 @@ test "a mouse pointing at a row: its time and 归档 at its top right; a finger'
       }
     }
   }
+}
+
+///|
+test "a row's 归档 right clicked: the row's menu, nothing archived" {
+  let calls : Array[Made] = []
+  let t = lists_tester(calls, 1280.0, 0, false)
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.move_to(x, y)
+  t.frame()
+  let (bx, by, bw, bh) = t.get(Button, label="归档「夜里的构建又失败了」").rect
+  t.right_click(bx + bw / 2.0, by + bh / 2.0)
+  // (what is pressed in a row asks for no menu of its own: the row's, as on its name)
+  assert_true(t.find("重命名") is Some(_))
+  assert_eq(named(calls, "chat.archive").length(), 0)
 }
 
 ///|
@@ -240,7 +266,7 @@ test "wide: rows pressed one after another, one chat open in place of the other;
       app.nav.pop() |> ignore
       t.draw()
       // (on the tape the rows are the sidebar's, pressed with it in use: the page the last one brought over sent back)
-      if @sfdesk.wide.tape && @sfdesk.wide.tape_at.get() != @sfdesk.TapePane::Side {
+      if @sfdesk.wide.tape.get() && @sfdesk.wide.tape_at.get() != @sfdesk.TapePane::Side {
         @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Side))
         t.draw()
         t.run_for(@ui.move_most_ms)

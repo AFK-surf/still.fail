@@ -11,8 +11,8 @@ type Cell = { ch: string; style: Style };
 
 const PLAIN: Style = {};
 
-/// The text as shown and its runs; `runs` absent when nothing in it is styled.
-export function terminal(text: string): { text: string; runs?: TermRun[] } {
+/// The lines as shown, each its cells.
+function cells(text: string): Cell[][] {
   const lines: Cell[][] = [];
   let line: Cell[] = [];
   let col = 0;
@@ -63,7 +63,12 @@ export function terminal(text: string): { text: string; runs?: TermRun[] } {
     else put(c);
   }
   if (line.length > 0 || lines.length > 0) lines.push(line);
+  return lines;
+}
 
+/// The text as shown and its runs; `runs` absent when nothing in it is styled.
+export function terminal(text: string): { text: string; runs?: TermRun[] } {
+  const lines = cells(text);
   const runs: TermRun[] = [];
   let styled = false;
   const add = (ch: string, s: Style) => {
@@ -80,6 +85,20 @@ export function terminal(text: string): { text: string; runs?: TermRun[] } {
   });
   const shown = runs.map((r) => r.text).join("");
   return styled ? { text: shown, runs } : { text: shown };
+}
+
+/// The text as shown a line at a time, each line its runs of one style (a line of no style one run of its words, an
+/// empty line none); none when it is empty.
+export function terminalLines(text: string): TermRun[][] {
+  return cells(text).map((cells) => {
+    const runs: TermRun[] = [];
+    for (const cell of cells) {
+      const last = runs.at(-1);
+      if (last && same(last, cell.style)) last.text += cell.ch;
+      else runs.push({ text: cell.ch, ...cell.style });
+    }
+    return runs;
+  });
 }
 
 function same(a: Style, b: Style): boolean {

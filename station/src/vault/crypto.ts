@@ -21,8 +21,11 @@ export type Vault = {
   /// last version so the stations that hold an older one are brought this one, not the older one back.
   deleted?: true;
 };
-/// How agents may ask for an item; `lasts`: the longest grant its owner gives (absent: as its vault says).
-export type Listing = { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string; lasts?: Scope };
+/// How agents may ask for an item; `lasts`: the longest grant its owner gives (absent: as its vault says); `about`: what
+/// it is and how it is used, in its owner's words (the item's notes, shown to agents with its name; never a secret).
+export type Listing = { name: string; kind: Kind; modes: Mode[]; hosts: string[]; env?: string; lasts?: Scope; about?: string };
+/// The most an item's `about` may be (its characters).
+export const ABOUT_MOST = 2000;
 export type Item = {
   v: 1; ws: string; vault: string; id: string; version: number; epoch: number; deleted?: true; ct: string;
   listing?: Listing; at: number; sig: Sig;
@@ -39,7 +42,9 @@ export const allows = (lasts: Scope | null | undefined, scope: Scope): boolean =
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
   timeout?: Timeout;
-  command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
+  command?: string; hosts?: string[]; box: string; at: number;
+  /// `withdrawn`: taken back by the agent that asked (secret_cancel) before anyone decided it.
+  status: "pending" | "granted" | "denied" | "expired" | "withdrawn";
   /// A request for an item of the plain library (`vault` is `plain`, no box): its owner's email, who decides it. A
   /// request to keep a secret (`save`): whose it is to be (whoever started the chat), who decides it.
   owner?: string;
@@ -57,11 +62,20 @@ export type Request = {
   /// 写回), sealed to each of its vault's members' devices set up (`saveContext` under its id): the app that grants this
   /// request writes them as the item's next version and grants those.
   renewal?: { id: string; sealed: Sealed[] };
+  /// An agent asking to rename an item or to say what it is (secret_describe 改名和说明): its name and about as they
+  /// are to be, and as they were when asked. Granted, the item's next version says so: written by the app that approves
+  /// it (a vault's), or here as its owner approves it (the plain library's). Never a grant of the item.
+  describe?: Describe;
+  /// An agent asking to delete an item (secret_delete 删除): its name when asked. Granted, the item is deleted: by the
+  /// app that approves it (a vault's, its device signing the deleted version), or here as its owner approves it (the
+  /// plain library's). Never a grant of the item.
+  remove?: { name: string };
 };
+export type Describe = { name: string; about: string; was: { name: string; about: string } };
 /// What an agent asks to keep: the item's listing, and the fields of it that are not secret (a login's account name, an
 /// SSH key's public half, a file's name), said on its card. `typed`: the secret is none the agent holds, but what the
 /// person types in (a file: picks) on the card (nothing of it here until then, nothing sealed).
-export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true };
+export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true; about?: string };
 export type Sealed = { device: string; box: string; secret: string };
 export type Grant = {
   v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; timeout?: Timeout;

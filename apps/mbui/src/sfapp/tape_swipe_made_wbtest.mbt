@@ -147,8 +147,8 @@ test "on the tape 更新日志 made once over 关于, a swipe from its edge: acr
   // (across and back where it began, let go there: taken by the stack's own back over 关于 (the tape not pulled), called
   // off, 更新日志 still on top)
   let made_back = back()
-  assert_eq(made_back, (false, 0, false, @sfdesk.TapePane::Page), msg="\{made_back}")
+  assert_eq(made_back, (false, 0, false, @sfdesk.TapePane::Page), msg="\{Repr(made_back)}")
   // (across: 关于 again)
   let made = across()
-  assert_eq(made, (-1, true, @sfdesk.TapePane::Page), msg="\{made}")
+  assert_eq(made, (-1, true, @sfdesk.TapePane::Page), msg="\{Repr(made)}")
 }

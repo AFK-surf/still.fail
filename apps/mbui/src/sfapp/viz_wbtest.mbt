@@ -66,6 +66,21 @@ fn view_rect(t : @ui.Tester, id : Int) -> (Double, Double, Double, Double)? {
 }
 
 ///|
+/// Where the 全屏 under the page of the view `id` is (its middle), by what a screen reader is told of it: the button so
+/// named whose middle lies under that page, within its width; None where none is (the page not on the screen).
+fn viz_full_at(t : @ui.Tester, id : Int) -> (Double, Double)? {
+  guard view_rect(t, id) is Some((x, y, w, h)) else { return None }
+  for b in t.all(Button, label=@sfbase.viz_tr("android-misc.viz.fullscreen")) {
+    let (bx, by, bw, bh) = b.rect
+    let (mx, my) = (bx + bw / 2.0, by + bh / 2.0)
+    if mx >= x && mx <= x + w && my >= y + h && my <= y + h + 44.0 {
+      return Some((mx, my))
+    }
+  }
+  None
+}
+
+///|
 test "two scoped copies of a visualization each own their native view" {
   new_run()
   let t = @ui.Tester::new(fn(c) {
@@ -233,9 +248,9 @@ test "under the page: the whole screen, its name and a close over it; back close
   let t = chat_tester("chat-viz")
   t.frame()
   let (page, _) = viz_views(t)
-  let (x, y, w, h) = view_rect(t, page).unwrap()
-  // the two 22 boxes under it, at its right: the whole screen, then beside
-  t.tap(x + w - 22.0 - 2.0 - 11.0, y + h + 2.0 + 11.0)
+  // the whole screen, under it (the first of the ways there: the whole screen, then beside)
+  let (fx, fy) = viz_full_at(t, page).unwrap()
+  t.tap(fx, fy)
   t.frame()
   assert_true(t.find("release.html") is Some(_))
   let full = opened_views(t, 2)
@@ -267,7 +282,7 @@ test "the whole window with the window's buttons in the app's top row (a Mac's):
     Some((x, _)) => assert_true(x > 16.0 + 54.0, msg="\{x}")
     None => fail("no way back")
   }
-  assert_true(name[0].1 > 16.0 + 54.0, msg="\{name[0]}")
+  assert_true(name[0].1 > 16.0 + 54.0, msg="\{Repr(name[0])}")
   t.tap_text(tr("common.back"))
   t.frame()
   t.frame()
@@ -359,7 +374,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   let (page, _) = viz_views(t)
   // as tall as it may be: the chat's page under all of what shows of it
   t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":5000}")
@@ -479,7 +494,7 @@ test "expanded fragments scroll while their inline copies grow with their conten
 
 ///|
 test "inline HTML is set in the faces the app is set in, a face still.fail keeps linked from its stylesheet" {
-  new_run()
+  fresh_app()
   // none chosen: the stylesheet's own (no font token at all, an empty one would stand in its place)
   let plain = viz_document("<p>文字</p>", None, false, 0xFFFFFFFFL)
   assert_false(plain.contains("--e-font-body:"))
@@ -495,7 +510,7 @@ test "inline HTML is set in the faces the app is set in, a face still.fail keeps
   // its origin let in for the stylesheet and the files it names, nothing else of it
   assert_true(doc.contains("fonts.googleapis.com https://app.still.fail;"))
   assert_true(doc.contains("fonts.gstatic.com https://app.still.fail;"))
-  new_run()
+  fresh_app()
 }
 
 ///|
@@ -543,7 +558,7 @@ test "a chat left keeps its pages, as the few left before it: gone back to, they
   let chat = key.unsafe_substring(start=0, end=key.length() - "release.html".length())
   let (station, session) = match chat.unsafe_substring(start=5, end=chat.length() - 1).split(":").collect() {
     [a, .. rest] => (a.to_owned(), rest.map(fn(v) { v.to_owned() }).join(":"))
-    _ => abort("no chat in \{key}")
+    _ => @halt.saying("no chat in \{key}")
   }
   viz_chat_left(station, session)
   assert_true(viz_frames.contains(key))

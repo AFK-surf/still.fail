@@ -18,11 +18,11 @@ fn desk_composer_tester(
     draft_picture: kept.unwrap_or(base.draft_picture),
     topic_read: fn(name, params) { over(name, base.topic(name, params).get().snapshot()) },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
     call_bytes: fn(name, params, bytes, done) {
-      calls.push({ name, params, bytes: Some(bytes), done, heard: None })
+      calls.push({ name, params, bytes: Some(bytes), done })
       (base.call_bytes)(name, params, bytes, done)
     },
   }
@@ -95,6 +95,31 @@ test "desk composer: typed words are the core's draft (composer.text); Enter sen
   assert_eq(sends.length(), 1)
   assert_eq(text(Some(sends[0].params), "text"), "先看第三项")
   assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").text.get(), "")
+}
+
+///|
+test "desk composer: ⌘Enter 发送 chosen in 快捷键 (prefs sendKey), Enter and ⇧Enter are new lines and ⌘Enter sends; Ctrl+Enter on Windows" {
+  for one in [(0, @ui.mod_cmd), (3, @ui.mod_ctrl)] {
+    let (platform, command) = one
+    let calls : Array[Made] = []
+    let (t, src) = desk_composer_tester(calls, platform~)
+    (src.call)("prefs.set", { "sendKey": "mod" }, fn(_) {  })
+    t.draw()
+    t.tap(450.0, 500.0 - 16.0 - 22.0)
+    assert_true(composer_focused())
+    t.type_text("先看第三项")
+    t.enter()
+    t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+    t.type_text("再看第四项")
+    t.frame()
+    assert_eq(named(calls, "chat.send").length(), 0, msg="platform \{platform}")
+    assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").text.get(), "先看第三项\n\n再看第四项")
+    t.key(@ui.key_code_enter, mods=command)
+    t.frame()
+    let sends = named(calls, "chat.send")
+    assert_eq(sends.length(), 1, msg="platform \{platform}")
+    assert_eq(text(Some(sends[0].params), "text"), "先看第三项\n\n再看第四项")
+  }
 }
 
 ///|
@@ -217,7 +242,7 @@ test "desk composer: the pointer moving over the `@` menu's chats chooses them; 
   let chosen = fn() raise { t.get(Button, label=b).selected }
   // moved onto it: chosen
   let (x, y, w, h) = t.get(Button, label=b).rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.frame()
   assert_eq(chosen(), Some(true))
   // the keys move the choice to another, the pointer resting where it was
@@ -226,7 +251,7 @@ test "desk composer: the pointer moving over the `@` menu's chats chooses them; 
   t.frame()
   assert_eq(chosen(), Some(false))
   // moved again over it: chosen again
-  t.move(x + w / 2.0 + 4.0, y + h / 2.0)
+  t.move_to(x + w / 2.0 + 4.0, y + h / 2.0)
   t.frame()
   assert_eq(chosen(), Some(true))
 }
@@ -384,7 +409,7 @@ test "desk composer: a file up after the page last heard of it goes once as Ente
     g["sent"] = Json::number(0.0)
     Json::object(g)
   })
-  guard now.value is Some(Object(v)) else { abort("no draft") }
+  guard now.value is Some(Object(v)) else { @halt.saying("no draft") }
   let before = v.copy()
   before["files"] = Json::array(going)
   before["uploading"] = Json::boolean(true)
@@ -455,7 +480,7 @@ test "desk composer: an image or a video sent while it goes up is among its mess
     g["sent"] = Json::number(1.0)
     Json::object(g)
   })
-  guard now.value is Some(Object(v)) else { abort("no draft") }
+  guard now.value is Some(Object(v)) else { @halt.saying("no draft") }
   let before = v.copy()
   before["files"] = Json::array(going)
   before["uploading"] = Json::boolean(true)
@@ -499,7 +524,7 @@ test "desk composer: an image or a video sent while it goes up is among its mess
 /// How many pictures a tester decoded (each at as many sizes as it was drawn at: a picture covering its tile, once its
 /// proportions are known, again at the size it is drawn).
 fn loaded_sources(t : @ui.Tester) -> Int {
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   for l in t.image_loads() {
     seen[l.0] = true
   }
@@ -529,7 +554,7 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
     as_(g)
     Json::object(g)
   })
-  guard now.value is Some(Object(v)) else { abort("no draft") }
+  guard now.value is Some(Object(v)) else { @halt.saying("no draft") }
   let before = v.copy()
   before["files"] = Json::array(files)
   heard.set(Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 }))
@@ -669,13 +694,13 @@ test "desk composer: a draft kept, read again as the app starts, shows its pictu
     }),
   )
   t.frame()
-  assert_true(asked.length() > 0 && asked.iter().all(fn(a) { a == "ws1/st1:s-c1 kept-1" }), msg="\{asked}")
+  assert_true(asked.length() > 0 && asked.iter().all(fn(a) { a == "ws1/st1:s-c1 kept-1" }), msg="\{Repr(asked)}")
   // (its picture, the one image drawn)
   assert_eq(loaded_sources(t), 1)
   // a tile, not a card naming it; the other file a card
   let words = t.words().map(fn(w) { w.0 })
-  assert_true(!words.iter().any(fn(w) { w.contains("照片") }), msg="\{words}")
-  assert_true(words.iter().any(fn(w) { w.contains("说明") }), msg="\{words}")
+  assert_true(!words.iter().any(fn(w) { w.contains("照片") }), msg="\{Repr(words)}")
+  assert_true(words.iter().any(fn(w) { w.contains("说明") }), msg="\{Repr(words)}")
 }
 
 ///|
@@ -803,7 +828,7 @@ fn strip_photos(t : @ui.Tester) -> Array[String] {
     // image N PX "SOURCE"
     let parts = line.split("\"").to_array()
     if line.has_prefix("image ") && parts.length() >= 2 && parts[1].has_prefix("content://") {
-      out.push(parts[1].to_string())
+      out.push(parts[1].to_owned())
     }
   }
   out
@@ -858,7 +883,7 @@ test "the composer growing a line as it is typed in draws none of its words over
     t.type_text("先看第三项")
     t.run_for(2.0 * @ui.move_most_ms)
     t.draw()
-    let (cx, cy) = t.locate("icon:arrow-up")[0]
+    let (_, cy) = t.locate("icon:arrow-up")[0]
     let half = @sf.theme().round.side / 2.0
     let over = fn() {
       t
@@ -871,7 +896,7 @@ test "the composer growing a line as it is typed in draws none of its words over
     // (words enough for a line more)
     t.type_text("，然后把第四项里每一个还没有人认领的条目都分给明天值班的同事，再把结果写进发布清单的最后一节里面")
     t.frame()
-    assert_true(t.text_runs().length() > lines, msg="no line more: \{t.text_runs()}")
+    assert_true(t.text_runs().length() > lines, msg="no line more: \{Repr(t.text_runs())}")
     assert_eq(over(), 0, msg="as it sets off, platform \{platform}")
     t.run_for(@ui.move_most_ms / 2.0)
     assert_eq(over(), 0, msg="half way, platform \{platform}")
@@ -971,7 +996,7 @@ test "the line a composer grows by comes out fading to its foot pixel by pixel, 
       let lowest = gs.fold(init=-1.0e9, fn(m, g) { if g.0 > m { g.0 } else { m } })
       for g in gs {
         if g.0 < lowest - 1.0 {
-          assert_true(g.3 <= 0.0 || g.0 + g.1 <= g.2 - g.3 + 0.001, msg="\{at}: a line that showed faded \{g}, platform \{platform}")
+          assert_true(g.3 <= 0.0 || g.0 + g.1 <= g.2 - g.3 + 0.001, msg="\{at}: a line that showed faded \{Repr(g)}, platform \{platform}")
         }
       }
       gs.iter().any(fn(g) { g.0 == lowest && g.3 > 0.0 })
@@ -1006,7 +1031,7 @@ test "on a phone a finger 3 off the send button, beside it or over it, sends: th
     let half = @sf.theme().round.side / 2.0
     t.tap(cx + off.0 * (half + 3.0), cy + off.1 * (half + 3.0))
     t.frame()
-    assert_eq(named(calls, "chat.send").length(), 1, msg="pressed \{off}")
+    assert_eq(named(calls, "chat.send").length(), 1, msg="pressed \{Repr(off)}")
   }
 }
 
@@ -1018,7 +1043,7 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -1098,7 +1123,7 @@ test "desk composer: where 抄送 copies to is said just before send in either s
   // (going with send, which stands 2 further in on one line: each concentric with its own corner, 8 in the capsule's
   // 24 and 10 in the box's 26, a card's)
   let moved = xs.filter(fn(x) { (x - xs[0]).abs() > 2.5 })
-  assert_true(moved.is_empty(), msg="went across: \{xs}")
+  assert_true(moved.is_empty(), msg="went across: \{Repr(xs)}")
 }
 
 ///|
@@ -1148,7 +1173,7 @@ test "desk composer: 抄送's menu has each thread's platform mark before its pl
     let before = row.filter(fn(b) { b.index < w.index })
     let after = row.filter(fn(b) { b.index > w.index })
     // one column before its words, its mark's: none empty where a check would go
-    assert_true(before.length() == 1 && draws(before[0].index), msg="\{place}: \{before.map(fn(b) { (b.kind, b.x, b.w) })}")
+    assert_true(before.length() == 1 && draws(before[0].index), msg="\{place}: \{Repr(before.map(fn(b) { (b.kind, b.x, b.w) }))}")
     // a ticked one's check at its end, only there
     assert_eq(after.iter().any(fn(b) { draws(b.index) }), place == "产品讨论", msg=place)
   }

@@ -28,13 +28,19 @@ fn test_window_corner(platform : Int) -> Double {
 ///|
 /// `mode` in window `win` (its name, size, platform and the size class its host says, "" none) in `lang`, a moment
 /// after it opens (what it opens with over), drawn: the corner and squeeze tests' (corners_wbtest.mbt); with `said`, what
-/// people, agents and stations wrote in it at its longest (squeeze_said_wbtest.mbt).
+/// people, agents and stations wrote in it at its longest (squeeze_said_wbtest.mbt); with `font_scale`, the system's
+/// size of words (words_large_wbtest.mbt); with `latin`, ASCII measured as a real face does; with `changing`, on the workspace of real size (real_size_wbtest.mbt).
 fn screen_in(
   mode : String,
   win : (String, Double, Double, Int, String),
   lang : String,
   said? : Bool = false,
+  changing? : @sfrealsize.RealSizeChanging? = None,
   dark? : Bool = false,
+  font_scale? : Double = 1.0,
+  moves_held? : Bool = true,
+  motion_judged? : Bool = true,
+  latin? : (FixedArray[Double], FixedArray[Double])? = None,
 ) -> @ui.Tester {
   let (_, w, h, platform, width) = win
   let src : Ref[Source?] = Ref(None)
@@ -43,9 +49,28 @@ fn screen_in(
     match src.val {
       Some(s) => s
       None => {
-        // (`said`: what people, agents and stations wrote in it at its longest: squeeze_said_wbtest.mbt)
-        let s = fixture_app(mode)
-        let s = if said { said_longest_source(s) } else { s }
+        let s = match changing {
+          // (`changing`: what the core sends each topic on a workspace of real size, as a device holds it and takes its
+          // changes: real_size_wbtest.mbt. What the mode puts up over its pages (a sheet, a panel) opened over it as
+          // well, reading what the pages read)
+          Some(c) => {
+            reset()
+            let s = c.source(@sffixture.fixture(mode))
+            open_fixture_over(mode, s)
+            s
+          }
+          None if said => {
+            // (`said`: what people, agents and stations wrote in it at its longest, and each figure the core writes at
+            // its widest: squeeze_said_wbtest.mbt. What the mode puts up over its pages (a panel, the agent's sheet)
+            // opened over that too, reading it: until 2026-11-14 they were opened over the fixture as it was, so the
+            // agent's sheet was never seen at its longest)
+            reset()
+            let s = said_longest_source(@sffixture.fixture(mode))
+            open_fixture_over(mode, s)
+            s
+          }
+          None => fixture_app(mode)
+        }
         src.val = Some(s)
         s
       }
@@ -60,12 +85,28 @@ fn screen_in(
     window_corner=test_window_corner(platform),
     // (the corner test says each screen's faults against its bar itself, all of them: none stops it at the first)
     corners_held=false,
+    // (`moves_held` false: how what moves goes frame to frame not judged, for the real size's sweep, which counts the
+    // frames it walks and does not look at them: real_size_wbtest.mbt says why it needs it)
+    words_over_held=moves_held,
     // (the device's language: the fixture's prefs say none; motion reduced, as a person may have it: what a screen
     // opens with at its end at once and a spinner held, so no frame is drawn between its first and the one measured,
     // none of which ever changed what fits: 576 screens' ten frames each were most of the sfapp run, 2026-10-25)
     // (`dark`: the app's dark theme, the fixture's prefs saying so: the contrast test's, contrast_wbtest.mbt)
     env=[("MBUI_LOCALE", lang), ("MBUI_REDUCE_MOTION", "1")] + (if dark { [("MBUI_DARK", "1")] } else { [] }),
   )
+  // (`motion_judged` false: how what moves goes not judged on its frames, the sweeps' (corners, contrast, squeeze_said,
+  // words_large): mbui's Tester::motion_unjudged says why and till when)
+  if !motion_judged {
+    t.motion_unjudged(true)
+  }
+  if font_scale != 1.0 {
+    t.set_font_scale(font_scale)
+  }
+  // (`latin`: each ASCII letter as a real face measures it, not the fake host's half an em: squeeze_said_wbtest.mbt's
+  // figures)
+  if latin is Some((regular, bold)) {
+    t.latin_advances(regular, bold)
+  }
   if width != "" {
     t.drive("system {\"size_class\":{\"width\":\"\{width}\",\"height\":\"medium\"}}\n") |> ignore
   }

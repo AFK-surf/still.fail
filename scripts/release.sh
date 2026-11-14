@@ -9,8 +9,9 @@
 # MBUI_VARIANT=stable: its installer stillfail-<version>-x64-win.exe in desktop/, not code-signed yet, its feeds
 # win/latest.json and stillfail.yml, below) and
 # `android` (the Android app: apps/mbui's in the Kotlin one's place, scripts/beta.sh build, MBUI_VARIANT=stable or
-# beta: its APK and latest.json, in android/). Their version is the
-# commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
+# beta: its APK and latest.json, in android/; still.fail's with its native library's symbols, symbols/android/). Their
+# version is the commits in the history, so a release is made from a new commit; the latest is put last, once its files
+# are there.
 #   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop and android only when named)
 #   release.sh promote [station]
 # --beta: to the test channel instead (cloud/src/install.ts): the station's tarballs in beta/ and station-beta.json; the
@@ -27,6 +28,10 @@
 # RELEASE_DIR=dir: into that directory instead of the bucket (the dev cloud serves them from dist/releases: cloud/test/dev.ts).
 # RELEASES=<url>: where the releases are read from, to see whether a Node is there already (still.fail cloud's; "" with
 # RELEASE_DIR: only that directory is looked in).
+# A feed put straight into the bucket (not into RELEASE_DIR, whose put makes them: .github/workflows/pipeline.yml deltas)
+# is put with the deltas from the builds before it (put_feed, scripts/release-deltas.ts; STILLFAIL_DELTAS_SECONDS: how
+# long they may take, 90 s), which never hold a release back. The Windows installer goes with its raw form (`--raw`,
+# <exe>.raw.zst: what later releases' deltas are made from), its hash in the signed words.
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 out=$(mktemp -d)
@@ -55,15 +60,59 @@ copy() {
   fi
 }
 
+# put <file> <name in the bucket> <content type>
+put() {
+  if [ -n "${RELEASE_DIR:-}" ]; then
+    mkdir -p "$RELEASE_DIR/$(dirname "$2")" && cp "$1" "$RELEASE_DIR/$2" && echo "put $2 in $RELEASE_DIR"
+  else
+    # (its failure returned: a caller that goes on without it, as the symbols' below, runs it outside set -e)
+    r2 put "$2" --file "$1" --content-type "$3" || return 1
+    echo "uploaded $2 ($(du -h "$1" | cut -f1))"
+  fi
+}
+
+# Where the releases are now, for the deltas from the builds before (monoid's: its own cloud's, below).
+deltas_from=${RELEASES:-https://app.still.fail/releases}
+# put_feed <file> <name in the bucket> <content type> [<a package's name in the bucket>=<its file>…]: a feed, after the
+# files it names. Into RELEASE_DIR as it is; into the bucket with the deltas to it from the builds before (made in a
+# directory of their own holding the feed and its packages: scripts/release-deltas.ts), put before it. Without them
+# (none made, or one not put) the feed is put as it was: a delta only spares a download.
+put_feed() {
+  feed_file=$1 feed_name=$2 feed_type=$3
+  shift 3
+  if [ -n "${RELEASE_DIR:-}" ]; then put "$feed_file" "$feed_name" "$feed_type"; return; fi
+  rm -rf "$out/deltas" "$out/deltas-made" && mkdir -p "$out/deltas/$(dirname "$feed_name")" "$out/deltas-made"
+  cp "$feed_file" "$out/deltas/$feed_name"
+  for package in "$@"; do
+    mkdir -p "$out/deltas/$(dirname "${package%%=*}")"
+    ln -s "${package#*=}" "$out/deltas/${package%%=*}" 2>/dev/null || cp "${package#*=}" "$out/deltas/${package%%=*}"
+  done
+  node "$root/scripts/release-deltas.ts" "$out/deltas" --into "$out/deltas-made" --releases "$deltas_from" \
+    --deadline "${STILLFAIL_DELTAS_SECONDS:-90}" || echo "release.sh: no deltas for $feed_name (scripts/release-deltas.ts failed)" >&2
+  whole=yes
+  for name in $(cd "$out/deltas-made" && find . -type f | sed 's|^\./||' | sort); do
+    [ "$name" != "$feed_name" ] || continue
+    case $name in *.zip) ctype=application/zip ;; *.tar.gz) ctype=application/gzip ;; *) ctype=application/octet-stream ;; esac
+    if r2 put "$name" --file "$out/deltas-made/$name" --content-type "$ctype"; then echo "uploaded $name ($(du -h "$out/deltas-made/$name" | cut -f1))"
+    else whole=""; echo "release.sh: $name not put: $feed_name is put without its deltas" >&2; fi
+  done
+  if [ -n "$whole" ] && [ -f "$out/deltas-made/$feed_name" ]; then put "$out/deltas-made/$feed_name" "$feed_name" "$feed_type"
+  else put "$feed_file" "$feed_name" "$feed_type"; fi
+  rm -rf "$out/deltas" "$out/deltas-made"
+}
+
 if [ "${1:-}" = promote ]; then
   shift
   for what in ${*:-station}; do
     case $what in
-      # The tarballs first, the feed that says they are out last.
+      # The tarballs first, the feed that says they are out last: the test channel's without its deltas (from the test
+      # channel's builds), with the deltas from the stable channel's own builds before it (put_feed).
       station)
         for platform in darwin-arm64 linux-x64 linux-arm64; do copy "beta/stillfail-station-$platform.tar.gz" "stillfail-station-$platform.tar.gz" application/gzip; done
         copy beta/stillfail-station-win32-x64.zip stillfail-station-win32-x64.zip application/zip
-        copy station-beta.json station.json application/json
+        if [ -n "${RELEASE_DIR:-}" ]; then cp "$RELEASE_DIR/station-beta.json" "$out/station.json"; else r2 get station-beta.json --file "$out/station.json"; fi
+        node -e 'const fs = require("fs"), f = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); delete f.deltas; fs.writeFileSync(process.argv[1], JSON.stringify(f) + "\n")' "$out/station.json"
+        put_feed "$out/station.json" station.json application/json
         ;;
       *) echo "promote what? only the station (the beta apps are apps of their own: release.sh desktop or android releases the stable ones), not $what" >&2; exit 2 ;;
     esac
@@ -77,6 +126,7 @@ fi
 product=stillfail
 if [ "${1:-}" = --product ]; then product=$2; shift 2; fi
 case $product in stillfail | monoid) ;; *) echo "release.sh: --product is stillfail or monoid, not $product" >&2; exit 2 ;; esac
+[ "$product" = stillfail ] || deltas_from=${RELEASES:-https://app.$product.build/releases}
 beta=""
 if [ "${1:-}" = --beta ]; then beta=yes; shift; fi
 platforms=${*:-darwin-arm64 linux-x64 linux-arm64 win32-x64}
@@ -95,16 +145,6 @@ for platform in $platforms; do
   fi
 done
 
-# put <file> <name in the bucket> <content type>
-put() {
-  if [ -n "${RELEASE_DIR:-}" ]; then
-    mkdir -p "$RELEASE_DIR/$(dirname "$2")" && cp "$1" "$RELEASE_DIR/$2" && echo "put $2 in $RELEASE_DIR"
-  else
-    r2 put "$2" --file "$1" --content-type "$3"
-    echo "uploaded $2 ($(du -h "$1" | cut -f1))"
-  fi
-}
-
 build=$(git -C "$root" rev-list --count HEAD)
 releases=${RELEASES-https://app.still.fail/releases}
 # Whether the releases have <name> already: in RELEASE_DIR, or where they are read from.
@@ -113,6 +153,18 @@ released() {
   { [ -n "${RELEASE_DIR:-}" ] && [ -f "$RELEASE_DIR/$1" ]; } || { [ -n "$releases" ] && curl -fs -r 0-0 -o /dev/null "$releases/$1"; }
 }
 [ -z "$(git -C "$root" status --porcelain)" ] || echo "note: the working tree has changes; the apps are numbered by the commit ($build) all the same" >&2
+
+# The station's native parts for each platform asked for side by side first, so station-bundle.sh finds them in the
+# cache: one after another, a stable release's (a day old, its parts gone from the CI Mac's cache) took 8 minutes of its
+# job's 10 (43460534865, 2026-11-13). One not got here is got (or built) there as before.
+for platform in $platforms; do
+  case $platform in desktop | desktop-win | android) continue ;; esac
+  parts="launcher mesh runner reader"
+  [ "$platform" = darwin-arm64 ] && parts="$parts helper"
+  [ "$platform" = win32-x64 ] && parts="$parts screen agent-desktop"
+  for part in $parts; do node "$root/scripts/native.ts" fetch "$part" "$platform" > /dev/null || : & done
+done
+wait
 
 for platform in $platforms; do
   case $platform in
@@ -163,12 +215,12 @@ for platform in $platforms; do
       zip="$product${beta:+-beta}-0.1.$build-arm64-mac.zip"
       put "$app_zip" "desktop/$zip" application/zip
       if [ -z "${RELEASE_DIR:-}" ]; then
-        work=${WORK:-"$mbui_cache/work"}
+        work=${WORK:-"$mbui_cache/tree/apps/mbui"}
         if [ "${MBUI_FRESH:-}" = 1 ]; then work="$root/apps/mbui"; fi
         sh "$root/scripts/release-put.sh" --clean-uploaded "desktop/$zip" "$work/out/mac/$product${beta:+-beta}-$build-arm64-mac.zip"
       fi
       sh "$root/scripts/mac-feeds.sh" "$app_zip" "$zip" "$build" "$out/mac-latest.json" "$out/mac.yml"
-      put "$out/mac-latest.json" "mac/${beta:+beta/}latest.json" application/json
+      put_feed "$out/mac-latest.json" "mac/${beta:+beta/}latest.json" application/json "desktop/$zip=$app_zip"
       # (electron-updater's, which moves an installed Electron app over: still.fail's alone had one)
       [ "$product" != stillfail ] || put "$out/mac.yml" "desktop/stillfail${beta:+-beta}-mac.yml" "text/yaml; charset=utf-8"
       ;;
@@ -199,12 +251,22 @@ for platform in $platforms; do
       # what is in it checked before anything is uploaded: the app it replaces (its id, its program), its build
       grep -qx "APP_ID=$id" "$setup_out/setup.env" && grep -qx "EXE=$program" "$setup_out/setup.env" &&
         grep -qx "VERSION=0.1.$build" "$setup_out/setup.env" || { echo "release.sh: $exe is not $id 0.1.$build: not released" >&2; cat "$setup_out/setup.env" >&2; exit 1; }
-      rm -f "$setup_out/$exe.sig"
-      node "$root/scripts/release-sign.ts" file "$setup_out/$exe" --kind stillfail-desktop-win --build "$build" ${RELEASE_DIR:+--unsigned-ok}
+      rm -f "$setup_out/$exe.sig" "$setup_out/$exe.raw" "$setup_out/$exe.raw.zst"
+      # its raw form (what it carries stored: setup.c --raw), what deltas to it make and later ones are made from; its hash
+      # in the signed words (the apps' core takes it from there alone), it beside the installer zstd'd (a few seconds of
+      # this job's: the deltas are made after, elsewhere). Without it the release goes out all the same, with no deltas.
+      raw=""
+      if "$setup_out/$exe" --raw "$setup_out/$exe.raw" && [ -s "$setup_out/$exe.raw" ]; then raw="$setup_out/$exe.raw"
+      else echo "release.sh: warning: $exe --raw made nothing: released without its raw form (no deltas to it)" >&2; fi
+      node "$root/scripts/release-sign.ts" file "$setup_out/$exe" --kind stillfail-desktop-win --build "$build" ${raw:+--raw "$raw"} ${RELEASE_DIR:+--unsigned-ok}
       put "$setup_out/$exe" "desktop/$exe" application/vnd.microsoft.portable-executable
       [ ! -f "$setup_out/$exe.sig" ] || put "$setup_out/$exe.sig" "desktop/$exe.sig" application/json
+      if [ -n "$raw" ]; then
+        node "$root/scripts/release-deltas.ts" --zst "$raw" "$raw.zst" && rm -f "$raw"
+        put "$raw.zst" "desktop/$exe.raw.zst" application/zstd
+      fi
       sh "$root/scripts/win-feeds.sh" "$setup_out/$exe" "desktop/$exe" "$build" "$setup_out/$exe.sig" "$out/win-latest.json" "$out/win.yml"
-      put "$out/win-latest.json" "win/${beta:+beta/}latest.json" application/json
+      put_feed "$out/win-latest.json" "win/${beta:+beta/}latest.json" application/json "desktop/$exe=$setup_out/$exe" ${raw:+"desktop/$exe.raw.zst=$raw.zst"}
       [ "$product" != stillfail ] || put "$out/win.yml" "desktop/stillfail${beta:+-beta}.yml" "text/yaml; charset=utf-8"
       ;;
     android)
@@ -246,7 +308,18 @@ for platform in $platforms; do
       put "$apk" "android/$name" application/vnd.android.package-archive
       printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/%s","sha256":"%s","size":%s}\n' \
         "$build" "$build" "$name" "$(shasum -a 256 "$apk" | cut -d' ' -f1)" "$(wc -c < "$apk" | tr -d ' ')" > "$out/latest.json"
-      put "$out/latest.json" "android/${beta:+beta/}latest.json" application/json
+      put_feed "$out/latest.json" "android/${beta:+beta/}latest.json" application/json "android/$name=$apk"
+      # Its libmbui.so's function symbols (beta.sh build: the library as linked, before the APK stripped it), to name the
+      # frames of its crash reports (scripts/crash-symbols.ts), kept 30 days (scripts/release-prune.ts; the owner,
+      # 2026-11-11) and never served (cloud/src/install.ts releaseType). Put after the feed, and never a reason to fail
+      # or hold back the release: a warning. still.fail's own app's only (monoid's: none made).
+      syms="$out/mbui/android/app-$variant.syms.xz"
+      if [ "$product" = stillfail ]; then
+        if [ ! -s "$syms" ]; then echo "release.sh: warning: no symbols of $name (beta.sh build made none)" >&2
+        elif ! put "$syms" "symbols/android/${name%.apk}.syms.xz" application/x-xz; then
+          echo "release.sh: warning: the symbols of $name were not put" >&2
+        fi
+      fi
       ;;
     *)
       sh "$root/scripts/station-bundle.sh" "$out/$platform" "$platform"
@@ -254,10 +327,12 @@ for platform in $platforms; do
       # Windows' a zip (install.ps1 opens it with Expand-Archive), its Node nodejs.org's own zip (node-dist.sh).
       if [ "$platform" = win32-x64 ]; then
         file="stillfail-station-$platform.zip"
+        station_files="${station_files:-} ${beta:+beta/}$file=$out/$file"
         (rm -f "$out/$file" && (cd "$out/$platform" && zip -qr "$out/$file" stillfail) && put "$out/$file" "${beta:+beta/}$file" application/zip) &
         node_file="node/node-v$(cat "$root/.node-version")-win-x64.zip"
       else
         file="stillfail-station-$platform.tar.gz"
+        station_files="${station_files:-} ${beta:+beta/}$file=$out/$file"
         (tar -czf "$out/$file" -C "$out/$platform" stillfail && put "$out/$file" "${beta:+beta/}$file" application/gzip) &
         node_file="node/node-v$(cat "$root/.node-version")-$platform.tar.gz"
       fi
@@ -282,5 +357,6 @@ for pid in ${putting:-}; do wait "$pid" || { echo "a station release was not put
 if [ -n "${station:-}" ]; then
   node "$root/scripts/release-sign.ts" station "$out/station.json" --build "$build" --commit "$(git -C "$root" rev-parse HEAD)" \
     --node "$(cat "$root/.node-version")" ${RELEASE_DIR:+--unsigned-ok} $signing
-  put "$out/station.json" "station${beta:+-beta}.json" application/json
+  # shellcheck disable=SC2086 # name=file pairs, one word each
+  put_feed "$out/station.json" "station${beta:+-beta}.json" application/json $station_files
 fi

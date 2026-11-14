@@ -97,7 +97,7 @@ test "文件 at the phone's stack's root: a station's row opened shows its place
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

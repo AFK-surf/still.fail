@@ -10,7 +10,7 @@ fn words_begun() -> (@ui.Tester, Double, Double) raise {
   marks_start()
   t.draw()
   let v = viewer.get().unwrap()
-  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (rx, ry, rw, rh) = v.zoom.rect(t.ctx()).unwrap()
   let (px, py) = (rx + rw / 3.0, ry + rh / 3.0)
   marking.tool = Words
   t.touch(0, px, py)
@@ -24,15 +24,15 @@ fn words_begun() -> (@ui.Tester, Double, Double) raise {
 test "marks' fields: words typed on the picture drawn there; the keyboard told them, its caret after them inside their field" {
   let (t, px, py) = words_begun()
   t.type_text("标注")
-  assert_true(t.text_runs().iter().any(fn(r) { r.text.contains("标注") }), msg="the words typed drawn: \{t.text_runs()}")
+  assert_true(t.text_runs().iter().any(fn(r) { r.text.contains("标注") }), msg="the words typed drawn: \{Repr(t.text_runs())}")
   assert_eq(t.ime(), (true, "标注", 2, 2), msg="the keyboard told the words, the caret after them")
   let (fx, fy, fw, fh) = t.get(TextField, label=pv("android-chat.marks.write")).rect
   let (x, y, _, h) = t.ime_rect()
-  assert_true(x > fx && x <= fx + fw && y >= fy && y + h <= fy + fh + 0.5, msg="the caret told inside its field: \{(x, y, h)} in \{(fx, fy, fw, fh)}")
+  assert_true(x > fx && x <= fx + fw && y >= fy && y + h <= fy + fh + 0.5, msg="the caret told inside its field: \{Repr((x, y, h))} in \{Repr((fx, fy, fw, fh))}")
   // (words begun with their line's middle where the finger lifts: their top 0.65 of their size over it)
   assert_true(
     (fx - px).abs() < 0.5 && (fy - (py - 0.65 * @sfbase.mark_text)).abs() < 0.5,
-    msg="its field where the words were begun: \{(fx, fy)} at \{(px, py)}",
+    msg="its field where the words were begun: \{Repr((fx, fy))} at \{Repr((px, py))}",
   )
   marks_leave()
 }
@@ -45,7 +45,7 @@ test "marks' fields: words on the picture, a press at their start: the caret put
   t.touch(0, fx + 1.0, fy + fh / 2.0)
   t.touch(2, fx + 1.0, fy + fh / 2.0)
   t.draw()
-  assert_eq(t.ime(), (true, "abcd", 0, 0), msg="the caret at their start: \{t.ime()}")
+  assert_eq(t.ime(), (true, "abcd", 0, 0), msg="the caret at their start: \{Repr(t.ime())}")
   marks_leave()
 }
 
@@ -86,7 +86,7 @@ test "marks' fields: a box's note, a line written and Enter: a new line in it, t
   // (in the field: it grows up from its foot, its top higher as the caret goes a line down in it)
   assert_true(y2 - fy2 >= y1 - fy1 + 20.0, msg="the caret told a line lower in it: \{y1 - fy1} then \{y2 - fy2}")
   assert_true(h2 >= h1 + 20.0, msg="the field a line taller: \{h1} then \{h2}")
-  assert_true(t.text_runs().iter().any(fn(r) { r.text == "二" }), msg="the second line drawn: \{t.text_runs()}")
+  assert_true(t.text_runs().iter().any(fn(r) { r.text == "二" }), msg="the second line drawn: \{Repr(t.text_runs())}")
   marks_leave()
 }
 
@@ -100,6 +100,6 @@ test "marks' fields: a box's note, a press at its start: the caret put there, to
   t.touch(0, fx + 1.0, fy + fh / 2.0)
   t.touch(2, fx + 1.0, fy + fh / 2.0)
   t.draw()
-  assert_eq(t.ime(), (true, "abcd", 0, 0), msg="the caret at its start: \{t.ime()}, pressed at \{(fx + 1.0, fy + fh / 2.0)}")
+  assert_eq(t.ime(), (true, "abcd", 0, 0), msg="the caret at its start: \{Repr(t.ime())}, pressed at \{Repr((fx + 1.0, fy + fh / 2.0))}")
   marks_leave()
 }

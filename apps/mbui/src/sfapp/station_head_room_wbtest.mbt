@@ -15,7 +15,7 @@ fn duo_station_page() -> @ui.Tester raise {
   app.nav.push_over(Setting(@settings.Route::Station("ws1/st1")))
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -25,9 +25,22 @@ fn duo_station_page() -> @ui.Tester raise {
 ///|
 test "a station's page in a panel of the tape, narrow: its head (its mark, its name, its ⋯) within the room its parts' choice stands in" {
   let t = duo_station_page()
-  // the parts' choice (概览 进程 …): the first thing under the head, in the page's room
-  guard t.semantics().iter().find_first(fn(s) { !s.hidden && s.role == @ui.Role::Group && s.label.has_prefix("概览") }) is Some(choice) else {
-    fail("no parts' choice")
+  // the parts' choice (概览 进程 …): the first thing under the head, in the page's room (the group its options are said
+  // in, 概览 its first)
+  let shown = t.semantics().filter(fn(s) { !s.hidden })
+  guard shown.iter().find_first(fn(s) { s.role == @ui.Role::Radio && s.label == "概览" }) is Some(first) else {
+    fail("no parts' choice: \{Repr(shown.map(fn(s) { (s.role, s.label) }))}")
+  }
+  guard shown
+    .iter()
+    .find_first(fn(s) {
+      s.role == @ui.Role::RadioGroup &&
+      s.rect.0 <= first.rect.0 &&
+      s.rect.1 <= first.rect.1 &&
+      first.rect.0 + first.rect.2 <= s.rect.0 + s.rect.2 &&
+      first.rect.1 + first.rect.3 <= s.rect.1 + s.rect.3
+    }) is Some(choice) else {
+    fail("no parts' choice around 概览 at \{Repr(first.rect)}")
   }
   let (cx, cy, cw, _) = choice.rect
   // its mark: the square button over the choice (pressed to pick the station's mark)

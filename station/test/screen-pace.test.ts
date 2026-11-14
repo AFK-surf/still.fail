@@ -47,6 +47,26 @@ test("a far link carries as many frames as a near one: they go while the oldest 
   assert.equal(p.send(10).length, START_UNACKED);
 });
 
+test("the pictures waiting in front of the link say so, without holding or lowering anything", () => {
+  const p = paced();
+  // None on the way, or the round trip not known: nothing waits.
+  assert.equal(p.pacer.backlogged(), false);
+  p.send(1);
+  p.at(20);
+  p.pacer.acked(1000);
+  p.send(2);
+  p.at(20 + 20 + QUEUE_MS);
+  assert.equal(p.pacer.backlogged(), false, "the round trip and the queue a view lets build");
+  p.at(20 + 20 + QUEUE_MS + 1);
+  assert.equal(p.pacer.backlogged(), true);
+  // Asking changed nothing of the pace (the rate, what may go): the same as before it was asked.
+  const rate = p.pacer.rate();
+  assert.equal(p.pacer.rate(), rate);
+  // Acknowledged: the queue gone.
+  p.pacer.acked(3000);
+  assert.equal(p.pacer.backlogged(), false);
+});
+
 test("a queue building stops the frames until an acknowledgement", () => {
   const p = paced();
   p.send(1);

@@ -10,7 +10,7 @@ const DAY = 86_400_000;
 function rig() {
   const emptied: string[] = [];
   const cold = {
-    isCold: () => false,
+    isCold: async () => false,
     restore: () => {},
     pack: () => {},
     holdsMore: async () => true,

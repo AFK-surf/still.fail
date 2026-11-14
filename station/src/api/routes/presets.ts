@@ -1,13 +1,19 @@
 // A workspace's presets (sessions/presets.ts): GET /presets lists them with the directories offered
 // for a new one; POST makes one, PUT /presets/:id changes it, DELETE removes it. Each member sees and changes their own
-// workspace's. Any of those changed, or the machine's repositories found after they were asked for, is told
-// (`presets`): the devices read them again. A chat is opened with one by POST /sessions `preset` (routes/hub.ts).
+// workspace's. POST /presets/clone clones a repository from git into the station's repository cache for them to pick
+// (sessions/clones.ts), answered at once; GET /presets lists those under way and failed (`clones`), DELETE
+// /presets/clones/:id stops or forgets one. Any of those changed, or the machine's repositories found after they were
+// asked for, is told (`presets`): the devices read them again. A chat is opened with one by POST /sessions `preset`
+// (routes/hub.ts).
 import { type Answer, type Request, error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { log } from "../../ops/log.ts";
+import { tr } from "../../ops/i18n.ts";
+import { readOnly } from "../../mesh/credential.ts";
 import { NoPreset, type Presets, type RepoIndex, candidates } from "../../sessions/presets.ts";
+import { type Clones, NoCloneUrl } from "../../sessions/clones.ts";
 
-export type PresetDeps = { presets: Presets; reposDir: () => string; index?: RepoIndex; changed?: () => void };
+export type PresetDeps = { presets: Presets; reposDir: () => string; index?: RepoIndex; clones?: Clones; changed?: () => void };
 
 function body(r: Request): unknown {
   try {
@@ -21,15 +27,41 @@ const wsOf = (r: Request) => r.viewer.workspace || null;
 
 const failed = (e: unknown): Answer => (e instanceof NoPreset ? error(404, e.message) : error(400, (e as Error).message));
 
-export const routes = ({ presets, reposDir, index, changed }: PresetDeps): Route[] => [
+export const routes = ({ presets, reposDir, index, clones, changed }: PresetDeps): Route[] => [
   {
     method: "GET",
     pattern: /^\/presets$/,
     handle: async (r: Request): Promise<Answer> => {
       const list = presets.list(wsOf(r));
-      return json(200, JSON.stringify({ presets: list, candidates: await candidates(reposDir(), list, (await index?.repos(changed)) ?? []) }));
+      return json(200, JSON.stringify({ presets: list, candidates: await candidates(reposDir(), list, (await index?.repos(changed)) ?? []), clones: clones?.list(wsOf(r)) ?? [] }));
     },
   },
+  ...(clones
+    ? [
+        {
+          method: "POST",
+          pattern: /^\/presets\/clone$/,
+          handle: async (r: Request): Promise<Answer> => {
+            if (readOnly(r.viewer)) return json(403, JSON.stringify({ error: tr(r.lang, "station.presets.clone.readOnly") }));
+            try {
+              const given = (body(r) as { url?: unknown } | null)?.url;
+              return json(200, JSON.stringify(await clones.start(wsOf(r), given, r.viewer.email, () => changed?.())));
+            } catch (e) {
+              return e instanceof NoCloneUrl ? json(400, JSON.stringify({ error: tr(r.lang, "station.presets.clone.invalid") })) : failed(e);
+            }
+          },
+        } as Route,
+        {
+          method: "DELETE",
+          pattern: /^\/presets\/clones\/([A-Za-z0-9_-]+)$/,
+          handle: async (r: Request, [id]: string[]): Promise<Answer> => {
+            if (readOnly(r.viewer)) return json(403, JSON.stringify({ error: tr(r.lang, "station.presets.clone.readOnly") }));
+            if (!clones.drop(wsOf(r), id!)) return error(404, `no clone ${id}`);
+            return json(200, JSON.stringify({ ok: true }));
+          },
+        } as Route,
+      ]
+    : []),
   {
     method: "POST",
     pattern: /^\/presets$/,

@@ -2,27 +2,63 @@
 // frame it is sent, before the core has it), by chat: what both frames' composers put in and both lists draw.
 
 ///|
-/// What was sent from each chat (its station and session, `\u{1}` between), not in the core's view yet.
-let local_sending : Map[String, Array[LocalSent]] = {}
+/// What was sent from each chat (its station and session, `\u{1}` between), not in the core's view yet: what reads it
+/// follows it (a chat's list made of nodes reads it as its keys, sending_now), each change of it told (`touched` where
+/// a chat's array of it is changed in place).
+// kept across runs: let go by sent_reset
+let local_sending : @sf.LiveMap[String, Array[LocalSent]] = @sf.LiveMap::new()
 
 ///|
-/// What was sent from chat `rk` and is not in its view yet, as its list takes it over.
+/// What was sent from chat `rk` and is not in its view yet, as its list takes it over: the chat's own array of it, which
+/// its writers change in place and then say so (sending_changed); where nothing was sent from it, an empty one of its
+/// own, kept nowhere (what reads it in a frame's build writes nothing: sending_kept makes the chat's on its first send).
 pub fn sending_of(rk : String) -> Array[LocalSent] {
-  match local_sending.get(rk) {
+  match @signals.untracked(fn() { local_sending.get(rk) }) {
+    Some(a) => a
+    None => []
+  }
+}
+
+///|
+/// Chat `rk`'s own array of what was sent from it (sending_of's), kept from its first send on.
+fn sending_kept(rk : String) -> Array[LocalSent] {
+  match @signals.untracked(fn() { local_sending.get(rk) }) {
     Some(a) => a
     None => {
       let a : Array[LocalSent] = []
-      local_sending[rk] = a
+      local_sending.set(rk, a)
       a
     }
   }
 }
 
 ///|
+/// What was sent from chat `rk` and is not in its view yet, as it is now, followed as it changes (a copy: read only).
+pub fn sending_now(rk : String) -> Array[LocalSent] {
+  match local_sending.get(rk) {
+    Some(a) => a.copy()
+    None => []
+  }
+}
+
+///|
+/// What was sent from a chat changed in place (sending_of's array: one pushed, one taken over, one gone).
+fn sending_changed() -> Unit {
+  local_sending.touched()
+}
+
+///|
 pub fn sent_reset() -> Unit {
   local_sending.clear()
+  sent_here_n.clear()
+  sent_here_made.clear()
   local_sent_n.val = 0
   sent_pictures.clear()
+  let told = sent_pictures_told.keys().to_array()
+  for k in told {
+    sent_picture_tell(k)
+  }
+  sent_pictures_told.clear()
 }
 
 ///|
@@ -41,6 +77,26 @@ pub(all) struct LocalSent {
 ///|
 let local_sent_n : Ref[Int] = { val: 0 }
 
+///|
+/// How many times something was sent from here into each chat (its station and session, `\u{1}` between): words
+/// (sent_local) or an answer picked on one of its cards that says something in it (sent_here_told). What its list made
+/// as nodes goes to its end for, from wherever it is read, as it is sent (the old list's: the composer's list_to_end, a
+/// card's end_asked).
+// kept across runs: let go by sent_reset
+let sent_here_n : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
+
+///|
+/// Something was sent from here into chat `rk` (sent_here_n).
+pub fn sent_here_told(rk : String) -> Unit {
+  sent_here_n.set(rk, @signals.untracked(fn() { sent_here_n.get(rk) }).unwrap_or(0) + 1)
+}
+
+///|
+/// How many times something was sent from here into chat `rk`, followed as it changes (sent_here_n).
+pub fn sent_here_count(rk : String) -> Int {
+  sent_here_n.get(rk).unwrap_or(0)
+}
+
 
 ///|
 pub fn local_sent(o : Outgoing) -> Bool {
@@ -51,7 +107,7 @@ pub fn local_sent(o : Outgoing) -> Bool {
 /// The rows of the view `v` there when words were sent: an outbox entry's, a message's, and the outbox entry it was
 /// (rows are keyed by it: row_keys).
 fn sent_before(v : ChatView) -> Map[String, Bool] {
-  let before : Map[String, Bool] = {}
+  let before : Map[String, Bool] = Map([])
   for o in v.outbox {
     before["o:" + o.id] = true
   }
@@ -117,9 +173,9 @@ fn going_up(going : Array[Json]) -> (Array[Json], Array[(String, Int, Int)]) {
 /// before the core has them (LocalSent), with its files up (`files`, each one put up from here naming its upload as the
 /// core's row will: file_key), those still going up (`going`: going_up) and what it quotes (`quotes`, as the core's row
 /// will have them), its words in the runs the core read them in (`runs`: refs_sent_runs). Its key, for what flies there
-/// (flight.mbt).
+/// (flight.mbt). `now`, the core's time (its source's): close under the viewer's own row before it while the core says
+/// it would be (sent_joins), as its row will say.
 pub fn sent_local(
-  c : @ui.Ctx,
   rk : String,
   v : ChatView?,
   words : String,
@@ -127,11 +183,13 @@ pub fn sent_local(
   going? : Array[Json] = [],
   quotes? : Array[Json] = [],
   runs? : Json? = None,
+  now~ : Double,
 ) -> String {
   local_sent_n.val += 1
   let id = "local:\{local_sent_n.val}"
   let (images, cards) = going_up(going)
-  sending_of(rk).push({
+  let joined = sent_joins(rk, v, now)
+  sending_kept(rk).push({
     row: {
       id,
       text: words,
@@ -140,27 +198,63 @@ pub fn sent_local(
       quotes: quotes.map(quote_of),
       state: "sending",
       error: "",
-      joined: false,
+      joined,
       followed: false,
       seq: -1.0,
       time: None,
       waits: if going.length() > 0 { @sf.t("common.uploading") } else { "" },
       progress: None,
       uploads: cards,
-      created_at: c.moment(),
-      final: false,
+      created_at: now,
+      refused: false,
     },
     // (a chat just made: none)
     before: match v {
       Some(v) => sent_before(v)
-      None => Map::new()
+      None => Map([])
     },
     newest: match v {
       Some(v) => v.messages.fold(init=-@double.infinity, fn(n, m) { if m.seq > n { m.seq } else { n } })
       None => -@double.infinity
     },
   })
+  sending_changed()
+  sent_here_told(rk)
   "o:" + id
+}
+
+///|
+/// Whether what is sent from chat `rk` now (`now`, the core's time; `v` its view) goes close under the row before it,
+/// that row's time under it alone: the viewer's own sent a moment ago, not in the view yet, or the view's last while
+/// the core says so (ChatView's `joins_until`). Laid out so the frame it is sent: told only by the core's row, which
+/// comes a round trip later (late, on a busy device), the list had gone up as far as a row standing apart takes it
+/// and came back down (the user, 2026-11-10: 「偶现发消息动效都会抖」).
+fn sent_joins(rk : String, v : ChatView?, now : Double) -> Bool {
+  if !sending_of(rk).is_empty() {
+    return true
+  }
+  match v {
+    Some({ joins_until: Some(till), .. }) => now <= till
+    _ => false
+  }
+}
+
+///|
+/// The rows `all` with what was sent from here and is not among them yet (`still`) put in at `at`, each as its row
+/// will be: one going close under the row before it (LocalSent's `joined`) has that row `followed`, its time under
+/// the new one, from the frame it is sent.
+fn sent_among(all : Array[Entry], keys : Array[String], at : Int, still : Array[LocalSent]) -> Unit {
+  for j, l in still {
+    all.insert(at + j, Out(l.row))
+    keys.insert(at + j, "o:" + l.row.id)
+    if l.row.joined && at + j > 0 {
+      match all[at + j - 1] {
+        Said(m) if !m.followed => all[at + j - 1] = Said({ ..m, followed: true })
+        Out(o) if !o.followed => all[at + j - 1] = Out({ ..o, followed: true })
+        _ => ()
+      }
+    }
+  }
 }
 
 ///|
@@ -168,7 +262,10 @@ pub fn sent_local(
 pub fn sent_local_gone(rk : String, key : String) -> Unit {
   let sending = sending_of(rk)
   match sending.search_by(fn(l) { "o:" + l.row.id == key }) {
-    Some(i) => sending.remove(i) |> ignore
+    Some(i) => {
+      sending.remove(i) |> ignore
+      sending_changed()
+    }
     None => ()
   }
 }
@@ -178,8 +275,49 @@ pub fn sent_local_gone(rk : String, key : String) -> Unit {
 /// The pictures of images sent from here, as they were picked: by station and the name
 /// it keeps the file under once up, or by the upload's id from when it starts going up (a message sent before it is up
 /// names it so: Attachment.upload). What their messages draw, rather than the likeness and then the station's thumbnail
-/// a round trip after the picture flew in; the bytes are kept for the run anyway (@ui.add_image).
-pub let sent_pictures : Map[String, String] = {}
+/// a round trip after the picture flew in; the bytes are kept for the run anyway (@ui.add_image). Written only by
+/// sent_picture_kept, which tells what a node of the window's tree read of it (sent_picture_told).
+let sent_pictures : Map[String, String] = Map([])
+
+///|
+/// What a node read of sent_pictures (sent_picture_told), by its key: told as that one is kept, made as one is first
+/// read so, let go as nothing reads it any more. The old views' reads (sent_picture) track nothing.
+// kept across runs: let go with sent_pictures (sent_reset)
+let sent_pictures_told : Map[String, @signals.Signal[Int]] = Map([])
+
+///|
+/// The picture an image sent from here was picked as, kept by `key` (sent_key's, or "upload\u{1}" and its upload's
+/// id): what reads it by a node told.
+pub fn sent_picture_kept(key : String, picture : String) -> Unit {
+  sent_pictures[key] = picture
+  sent_picture_tell(key)
+}
+
+///|
+fn sent_picture_tell(key : String) -> Unit {
+  match sent_pictures_told.get(key) {
+    Some(s) =>
+      if s.watched() {
+        s.set(s.untracked() + 1)
+      } else {
+        sent_pictures_told.remove(key)
+      }
+    None => ()
+  }
+}
+
+///|
+fn sent_picture_track(key : String) -> Unit {
+  let s = match sent_pictures_told.get(key) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(0)
+      sent_pictures_told[key] = s
+      s
+    }
+  }
+  s.get() |> ignore
+}
 
 ///|
 pub fn sent_key(station : String, path : String) -> String {
@@ -193,4 +331,14 @@ pub fn sent_picture(station : String, a : Attachment) -> String? {
     Some(k) => Some(k)
     None => if a.upload != "" { sent_pictures.get("upload\u{1}" + a.upload) } else { None }
   }
+}
+
+///|
+/// sent_picture read by a node of the window's tree: told as the picture is kept under either of its keys.
+pub fn sent_picture_told(station : String, a : Attachment) -> String? {
+  sent_picture_track(sent_key(station, a.path))
+  if a.upload != "" {
+    sent_picture_track("upload\u{1}" + a.upload)
+  }
+  sent_picture(station, a)
 }

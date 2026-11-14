@@ -1,5 +1,7 @@
 // feedback_send: a bug report about still.fail itself, sent to the still.fail team, for a
-// station on the stable channel. The report is made here as the Rust makes it; sending it is still.fail cloud's
+// station on the stable channel; feedback_reply: an answer on one, when the person it works for asks for it. The team's
+// replies are never given to an agent: they are shown to people in the app, beside the chat (cloud's
+// /v1/workspaces/<id>/feedback), and reach an agent only as a person hands one on (quoted in what they send). The report is made here as the Rust makes it; sending it is still.fail cloud's
 // (`send`, the cloud module's signed /v1/stations/feedback, not ported yet): until it is given, the agent is told the
 // report cannot be sent, as the Rust station says when it is not connected to cloud.
 import { createHash } from "node:crypto";
@@ -59,6 +61,30 @@ export const FEEDBACK_SEND = {
   },
 };
 
+export const FEEDBACK_REPLY = {
+  name: "feedback_reply",
+  description:
+    "Answer the still.fail team on a bug report this station sent (FB-<number>), when the person you work for asks you to (for example after handing you the team's reply): what they asked for, or what the person says. Only what that person agreed to send; it is kept with the report for the team and the chat's people to read.",
+  inputSchema: {
+    "type": "object",
+    "properties": {
+      "number": {
+        "type": "integer",
+        "description": "The report's number: 12 for FB-12."
+      },
+      "text": {
+        "type": "string",
+        "description": "Markdown: the answer (at most 8000 characters). No secrets."
+      }
+    },
+    "required": [
+      "number",
+      "text"
+    ],
+    "additionalProperties": false
+  },
+};
+
 /// What a report is about, as still.fail cloud takes it (cloud/src/feedback.ts).
 const AREAS = ["station", "web", "android", "desktop", "slack", "cloud", "unknown"];
 
@@ -89,8 +115,9 @@ export function report(session: SessionRow, args: Record<string, Json>, link: st
   return out;
 }
 
-/// `link`: a session's page on still.fail cloud; `send`: the report to cloud, its answer (`{number, duplicate?}`).
-export function feedbackTools(store: Store, link: (key: string) => string | null, send: () => ((report: Json) => Promise<Json>) | null): Tool[] {
+/// `link`: a session's page on still.fail cloud; `send`: the report to cloud, its answer (`{number, duplicate?}`);
+/// `reply`: an answer on one to cloud (`{number, text, session}`, its answer `{id}`).
+export function feedbackTools(store: Store, link: (key: string) => string | null, send: () => ((report: Json) => Promise<Json>) | null, reply: () => ((answer: Json) => Promise<Json>) | null = () => null): Tool[] {
   return [
     {
       ...FEEDBACK_SEND,
@@ -109,6 +136,26 @@ export function feedbackTools(store: Store, link: (key: string) => string | null
         const number = answer?.number;
         if (typeof number !== "number" || !Number.isInteger(number) || number < 0) throw new Error(`still.fail cloud answered without a number: ${JSON.stringify(answer)}`);
         return answer?.duplicate === true ? `This report was already sent as FB-${number}.` : `Sent to the still.fail team as FB-${number}.`;
+      },
+    },
+    {
+      ...FEEDBACK_REPLY,
+      run: async (key, args) => {
+        if (!store.getSession(key)) throw new Error("unknown session");
+        const number = args.number;
+        if (typeof number !== "number" || !Number.isInteger(number) || number < 1) throw new Error("number must be the report's number (12 for FB-12)");
+        const text = typeof args.text === "string" ? args.text.trim() : "";
+        if (text === "") throw new Error("text is required");
+        const sender = reply();
+        if (!sender) throw new Error("this station is not connected to still.fail cloud, so the answer cannot be sent; give the person the text to pass on themselves");
+        try {
+          await sender({ number, text, session: key });
+        } catch (error) {
+          const message = (error as Error).message;
+          if (message.includes("feedback_not_found")) throw new Error(`FB-${number} is not a report this station sent, so it cannot be answered from here`);
+          throw new Error(`the answer was not sent (${message}); give the person the text to pass on themselves`);
+        }
+        return `Sent to the still.fail team as a reply on FB-${number}.`;
       },
     },
   ];

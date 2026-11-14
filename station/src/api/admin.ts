@@ -7,6 +7,7 @@ import { join } from "node:path";
 import type { ConfigFile } from "../ops/config.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type ScreenHub, ScreenRefused } from "../screens/hub.ts";
+import { USER_TAB_ID } from "../screens/source.ts";
 import type { SimDebug } from "../screens/sim-debug.ts";
 import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
@@ -21,7 +22,6 @@ import { routes as accounts } from "./routes/accounts.ts";
 import { routes as xshare } from "./routes/xshare.ts";
 import { routes as hub, uploadPath } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
-import { routes as sandboxRoutes } from "./routes/sandbox.ts";
 import { routes as agentEnv } from "./routes/agent-env.ts";
 import { routes as networkSettings } from "./routes/network.ts";
 import { restarter } from "../ops/restart.ts";
@@ -32,7 +32,7 @@ import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
 import { connectRoutes } from "./routes/connects.ts";
 import { type Drive, stationDrive } from "../drive/drive.ts";
-import type { StationParts } from "../parts.ts";
+import type { CardChoice, StationParts } from "../parts.ts";
 import { HelperFiles } from "../helper/files.ts";
 import type { HelperApp } from "../helper/app.ts";
 import type { HelperGrants } from "../helper/grants.ts";
@@ -85,6 +85,8 @@ export type Tools = {
   /// The hub, the jobs and the rest of the agents' side, for what needs a session run, stopped or changed; none where
   /// there are no agents (tests of reads).
   agents?: AgentsParts;
+  /// The part whose own kind of options card `card` is (parts.ts `cardChoice`): who may choose on it, and what then.
+  cardChoice?(card: unknown): CardChoice | undefined;
 };
 
 /// What the admin API answers with besides the readers: the write side, once there.
@@ -130,7 +132,7 @@ export class Admin {
   constructor(readers: Readers, deps: AdminDeps = {}) {
     this.deps = deps;
     this.readers = readers;
-    this.host = deps.host ?? new Host(readers);
+    this.host = deps.host ?? new Host(readers.data);
     const agentsNow = () => (typeof deps.agents === "function" ? deps.agents() : deps.agents);
     const given = typeof deps.agents === "function" ? undefined : deps.agents;
     const config = deps.config ?? given?.config;
@@ -153,12 +155,12 @@ export class Admin {
       get agents() {
         return agentsNow();
       },
+      cardChoice: (card) => deps.parts?.cardChoiceOf(card),
     };
     this.tools = tools;
     this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools),
       ...(config ? networkSettings({ config, changed: () => deps.events?.overviewChanged(), ...(data !== undefined ? { restart: () => restarter(data) } : {}) }) : []),
       ...(config ? deviceTools({ config, changed: () => deps.events?.overviewChanged() }) : []),
-      ...(config ? sandboxRoutes({ config, changed: () => deps.events?.overviewChanged() }) : []),
       ...(cloud && data !== undefined ? workspaces({ cloud, data, changed: () => deps.events?.overviewChanged() }) : []),
       ...(config && data !== undefined
         ? drive({
@@ -187,8 +189,14 @@ export class Admin {
       ...(deps.screens
         ? [
             { method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) },
+            { method: "POST", pattern: /^\/screens\/browser$/, handle: async (r: Request) => openBrowserScreen(deps.screens!, r) },
             // A person closes one (a tab of the browser): it leaves the list as it goes (`screens` on the event stream).
             { method: "POST", pattern: /^\/screens\/([^/]+)\/close$/, handle: async (r: Request, [raw]: string[]) => closeScreen(deps.screens!, r, raw!) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/open-url$/, handle: async (r: Request, [raw]: string[]) => openScreenUrl(deps.screens!, r, raw!) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/reload$/, handle: async (r: Request, [raw]: string[]) => actScreen(deps.screens!, r, raw!, (id) => deps.screens!.reloadScreen(id)) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/back$/, handle: async (r: Request, [raw]: string[]) => actScreen(deps.screens!, r, raw!, (id) => deps.screens!.historyScreen(id, -1)) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/forward$/, handle: async (r: Request, [raw]: string[]) => actScreen(deps.screens!, r, raw!, (id) => deps.screens!.historyScreen(id, 1)) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/sleep$/, handle: async (r: Request, [raw]: string[]) => actScreen(deps.screens!, r, raw!, (id) => deps.screens!.sleepScreen(id)) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/end$/, handle: async (r: Request, [raw]: string[]) => screenViews(r, raw!, (id) => ({ ended: deps.screens!.endViews(id, byOf(r)) })) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/([^/]+)\/end$/, handle: async (r: Request, [raw, view]: string[]) => screenViews(r, raw!, (id) => (deps.screens!.endView(id, decodeURIComponent(view!), byOf(r)), {})) },
             { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/([^/]+)\/watch$/, handle: async (r: Request, [raw, view]: string[]) => screenViews(r, raw!, (id) => (deps.screens!.watchOnly(id, decodeURIComponent(view!)), {})) },
@@ -370,7 +378,7 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
       : []),
     ...(agents.updates ? updates({ updates: agents.updates }) : []),
     ...(agents.config ? agentEnv({ config: agents.config, changed: () => deps.events?.overviewChanged(), restart: () => agents.hub.everyChanged() }) : []),
-    ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir(), index: agents.hub.repoIndex, changed: () => deps.events?.presetsChanged() }) : []),
+    ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir(), index: agents.hub.repoIndex, clones: agents.hub.clones, changed: () => deps.events?.presetsChanged() }) : []),
     ...(agents.config ? contextSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.config ? diagnosticsSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.xshare ? xshare({ xshare: agents.xshare, store: deps.store }) : []),
@@ -400,9 +408,6 @@ function simActions(screens: ScreenHub) {
       }),
   });
   return [
-    route("open-url", async (d, { url }) => {
-      if (typeof url !== "string" || !(await d.openUrl(url))) throw new ScreenRefused(400, "station.screen.badUrl");
-    }),
     route("location", async (d, { at }) => {
       if ((at !== undefined && typeof at !== "string") || !(await d.location((at as string | undefined) ?? null))) throw new ScreenRefused(400, "station.screen.badPlace");
     }),
@@ -471,6 +476,10 @@ async function screenViews(r: Request, raw: string, act: (id: string) => unknown
 
 /// POST /screens/<id>/close: 404 no such screen, 405 one not closed from here (the desktop), 502 the browser refused.
 async function closeScreen(screens: ScreenHub, r: Request, raw: string): Promise<Answer> {
+  return actScreen(screens, r, raw, (id) => screens.closeScreen(id));
+}
+
+async function actScreen(screens: ScreenHub, r: Request, raw: string, act: (id: string) => Promise<void>): Promise<Answer> {
   let id: string;
   try {
     id = decodeURIComponent(raw);
@@ -478,10 +487,63 @@ async function closeScreen(screens: ScreenHub, r: Request, raw: string): Promise
     return error(404, tr(r.lang, "station.screen.notFound"));
   }
   try {
-    await screens.closeScreen(id);
+    await act(id);
     return json(200, "{}");
   } catch (e) {
     if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    return error(502, tr(r.lang, "station.screen.failed", { said: (e as Error).message }));
+  }
+}
+
+async function openBrowserScreen(screens: ScreenHub, r: Request): Promise<Answer> {
+  let url: unknown;
+  let id: unknown;
+  try {
+    ({ url, id } = JSON.parse(r.body.toString("utf8") || "{}") as { url?: unknown; id?: unknown });
+  } catch {
+    return error(400, tr(r.lang, "station.screen.badUrl"));
+  }
+  if (typeof url !== "string") return error(400, tr(r.lang, "station.screen.badUrl"));
+  // (the id the app made for it, so its view opened as it was pressed: `u_` and 12 hex digits)
+  if (id !== undefined && (typeof id !== "string" || !USER_TAB_ID.test(id))) return error(400, "id: u_ and 12 hex digits");
+  try {
+    const screen = await screens.openBrowser(url, id as string | undefined);
+    return json(200, JSON.stringify({ screen }));
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    return error(502, tr(r.lang, "station.screen.failed", { said: (e as Error).message }));
+  }
+}
+
+async function openScreenUrl(screens: ScreenHub, r: Request, raw: string): Promise<Answer> {
+  if (readOnly(r.viewer)) return error(403, "a read-only member does not open a link on a screen");
+  let id: string;
+  try {
+    id = decodeURIComponent(raw);
+  } catch {
+    return error(404, tr(r.lang, "station.screen.notFound"));
+  }
+  let url: unknown;
+  try {
+    url = (JSON.parse(r.body.toString("utf8") || "{}") as { url?: unknown }).url;
+  } catch {
+    return error(400, tr(r.lang, "station.screen.badUrl"));
+  }
+  const source = screens.get(id);
+  try {
+    if (typeof url !== "string") {
+      if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+      if (source.openUrl === undefined && source.debug === undefined) throw new ScreenRefused(405, "station.screen.noDebug");
+      throw new ScreenRefused(400, "station.screen.badUrl");
+    }
+    await screens.openUrl(id, url);
+    return json(200, "{}");
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    if (source?.debug !== undefined) {
+      const said = (e as Error).message.split("\n").map((l) => l.trim()).filter(Boolean).at(-1) ?? "";
+      return error(502, tr(r.lang, "station.screen.debugFailed", { said }));
+    }
     return error(502, tr(r.lang, "station.screen.failed", { said: (e as Error).message }));
   }
 }

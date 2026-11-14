@@ -43,6 +43,11 @@ test("a key is tried where its provider says whether it works", async () => {
   assert.equal(own.asked[0]!.url, "/v1/models");
   assert.equal((await checkProfile({ ...base, kind: "api-provider", via: { provider: "azure-openai" } })).detail, "请填写有效的接口地址（以 http 或 https 开头）");
   await own.close();
+  // A gateway's batch-only entries are not models a runtime can run.
+  const gateway = await provider(() => ({ status: 200, body: { data: [{ id: "anthropic/claude-opus-5.5" }, { id: "anthropic/claude-opus-5.5:batch" }] } }));
+  const listed = await checkProfile({ ...base, kind: "api-provider", key: "good", via: { provider: "custom", endpoint: `${gateway.base}/v1`, protocol: "chat_completions" } });
+  assert.deepEqual(listed.models, ["anthropic/claude-opus-5.5"]);
+  await gateway.close();
 });
 
 test("a subscription is checked by its runtime's own status command, in the profile's home", async () => {

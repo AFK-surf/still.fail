@@ -40,6 +40,9 @@ test("frequent_combos_name_the_runtime_only_where_the_model_runs_on_more_than_on
   assert.equal(combo.name, "DeepSeek V4.1 Flash");
   assert.equal(combo.runtimeText, "DeepSeek Harness");
   assert.equal(combo.effortText, "高");
+  // after its name in the panel the runtime's short name; its own control says the full one (the user, 2026-11-10:
+  // 「agent runtime 可以用缩写，比如 CC，DSH」)
+  assert.equal(combo.text, "DSH · 高");
 });
 
 test("frequent_combos_deduplicate_aliases_and_limit_visible_and_stored_history", () => {
@@ -79,6 +82,36 @@ test("frequent_combos_keep_speed_separate_and_restore_it_including_defaults", ()
   assert.equal(recordCombo(recordCombo([], { ...claude, fast: true }, 1), { ...claude, fast: false }, 2).length, 2);
   const other = { ...base, runtime: "dsh" };
   assert.equal(recordCombo(recordCombo([], { ...other, fast: true }, 1), { ...other, fast: false }, 2).length, 1);
+});
+
+// A combination used most is a configuration (the user, 2026-11-10: 「常用包括了思考深度和速度还有上下文长度」「是一种
+// 配置」): its context is part of it, each counted on its own.
+test("frequent_combos_are_configurations_each_context_and_effort_counted_on_its_own", () => {
+  const options = [
+    { model: "opus", name: "Opus", ids: ["opus"], runtimes: ["claude", "dsh"], efforts: { claude: ["low", "high"], dsh: ["high"] }, contexts: { claude: [500_000, 200_000], dsh: [] }, accounts: { claude: [], dsh: [] } },
+    { model: "far", name: "Far", ids: ["far"], runtimes: ["claude"], efforts: { claude: ["high"] }, availability: "borrowable" },
+  ];
+  const opus = { model: "opus", runtime: "claude", effort: "high" };
+  // (kept before context was: none, read as the whole window, counted with those of the whole window)
+  let history: J[] = [{ ...opus, fast: null, count: 2, last: 0 }];
+  const chats = [{ ...opus, context: null }, { ...opus, context: 200_000 }, { ...opus, context: 200_000 }, { ...opus, context: 200_000 }, { ...opus, effort: "low" }, { ...opus, context: 300_000 }, { model: "far", runtime: "claude", effort: "high" }, { ...opus, runtime: "dsh", context: null }];
+  chats.forEach((c, at) => {
+    history = recordCombo(history, c, at + 1);
+  });
+  assert.deepEqual(
+    history.filter((v) => v.model === "opus" && v.runtime === "claude" && v.effort === "high").map((v) => [v.context, v.count]).sort((a, b) => b[1] - a[1]),
+    [[200_000, 3], [null, 3], [300_000, 1]],
+  );
+  const current = resolve(options, { ...opus, context: 200_000 });
+  const combos = frequentCombos(history, options, current);
+  // (a context no longer offered, 300K, drops its entry; a model only another station has is left out)
+  assert.deepEqual(combos.map((c) => [c.effort, c.runtime, c.context]), [["high", "claude", 200_000], ["high", "claude", null], ["high", "dsh", null], ["low", "claude", null]]);
+  assert.deepEqual(combos.map((c) => c.text), ["CC · 高 · 200K", "CC · 高", "DSH · 高", "CC · 低"]);
+  assert.deepEqual(combos.map((c) => c.selected), [true, false, false, false]);
+  // fixed to one runtime: its own alone, the runtime not said
+  const fixed = frequentCombos(history, options, current, "claude");
+  assert.deepEqual(fixed.map((c) => c.runtime), ["claude", "claude", "claude"]);
+  assert.deepEqual(fixed.map((c) => c.text), ["高 · 200K", "高", "低"]);
 });
 
 test("speed_choices_preserve_false_and_follow_the_runtime", () => {
@@ -214,6 +247,19 @@ test("devin_is_offered_after_cursor_each_model_at_its_own_thinking_levels", () =
   const options = [{ model: "swe-2", runtimes: ["devin"], efforts: { devin: ["medium", "high", "max"] }, accounts: {} }];
   const r = resolve(options, { runtime: "devin", model: "swe-2", fast: true, effort: "high" });
   assert.deepEqual([r.runtime, r.fast, r.effort], ["devin", null, "high"]);
+  // A Devin Fusion sidekick combination resolves on the fly from its lead model's Devin option, keeping the lead's thinking levels.
+  const fusionResolved = resolve(list, { runtime: "devin", model: "fusion-claude-opus-5-5-sidekick-swe-2-medium", effort: "high" });
+  assert.deepEqual([fusionResolved.entry?.model, fusionResolved.entry?.name, fusionResolved.runtime, fusionResolved.effort], [
+    "fusion-claude-opus-5-5-sidekick-swe-2-medium",
+    "Opus 5.5 + SWE-2 (中)",
+    "devin",
+    "high",
+  ]);
+  const legacyFusion = resolve(list, { runtime: "devin", model: "fusion-claude-opus-5-5-max-sidekick-swe-2-medium" });
+  assert.deepEqual([legacyFusion.entry?.model, legacyFusion.effort], [
+    "fusion-claude-opus-5-5-sidekick-swe-2-medium",
+    "max",
+  ]);
   assert.equal(machineMeta({ runtime: "devin", cwd: "/tmp/x" }, 0).meta, "Devin · /tmp/x");
 });
 

@@ -5,6 +5,9 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
+// (still.fail's words over the base's own, which error.ts says: scripts/base.ts; the vault's files, which load this
+// one, have them by it)
+import "./i18n.ts";
 import * as form from "./lock-form.ts";
 import { hex, sha256, utf8 } from "./util.ts";
 
@@ -16,7 +19,8 @@ export type Head = { seq: number; hash: string; genesis: string };
 /// `entries`, what put it in the lock lately, for a station that has not heard of it yet (views/lock.ts `carried`).
 /// `person`: the chain of the person's own lock, where its member bound it in the workspace's (views/lock.ts
 /// `carriedPerson`).
-export type LockClaim = { device: string; proof: string; entries?: Entry[]; person?: Entry[] };
+/// `kind`, `label`: what the device is, for the station to list it for a lock's owner (station/src/mesh/seen-devices.ts).
+export type LockClaim = { device: string; proof: string; kind?: string; label?: string; entries?: Entry[]; person?: Entry[] };
 /// How much of the locks a hello brings at most (a station reads its first line up to 16 KiB).
 export const CARRY_BYTES = 12 * 1024;
 
@@ -56,6 +60,15 @@ export function lockClaim(secret: Uint8Array, ws: string, endpoint: string, host
   const signed = host?.ed25519Sign?.(secret, message);
   if (signed) return { device: hex(signed.publicKey), proof: hex(signed.signature) };
   return { device: hex(ed25519.getPublicKey(secret)), proof: hex(ed25519.sign(message, secret)) };
+}
+
+/// What signs with a device's base key and gives that key's public half: the mesh (mesh.ts `Mesh.sign`).
+export type DeviceSigns = { sign(message: Uint8Array): { publicKey: Uint8Array; signature: Uint8Array } };
+
+/// The device's claim for an endpoint (`lockClaim`), signed by what holds its base key.
+export function claimBy(device: DeviceSigns, ws: string, endpoint: string): LockClaim {
+  const signed = device.sign(endpointBytes(ws, endpoint));
+  return { device: hex(signed.publicKey), proof: hex(signed.signature) };
 }
 
 /// This app's signing key (`lock-signer`): an Ed25519 seed kept by the app, apart from the device key. Only an app keeps

@@ -23,10 +23,12 @@ fn image_tester(images : @sfbase.ChatImages, asked : Ref[Int], answer : (Int) ->
 }
 
 ///|
-/// The same, its picture asked by `ask` (told how far it has come, then its answer, when the test says).
+/// The same, its picture asked by `ask` (told how far it has come, then its answer, when the test says); `picture`
+/// another than line.png.
 fn image_tester_asking(
   images : @sfbase.ChatImages,
   ask : ((Json) -> Unit, (Result[(Json, Bytes?), Json]) -> Unit) -> Unit,
+  picture? : Attachment = { ..strip("line.png"), width: 800.0, height: 600.0 },
 ) -> @ui.Tester {
   new_run()
   let src : Source = {
@@ -40,7 +42,7 @@ fn image_tester_asking(
     "authorKind": "person",
     "author": "Mia",
     "text": "",
-    "attachments": [attachment_json({ ..strip("line.png"), width: 800.0, height: 600.0 }, "s-c1")],
+    "attachments": [attachment_json(picture, "s-c1")],
   })
   @ui.Tester::new(
     fn(c) {
@@ -64,7 +66,7 @@ fn image_tester_asking(
 ///|
 test "a chat's picture its station could not be reached for: 加载失败，点按重试, asked again when pressed" {
   let images = @sfbase.ChatImages::new()
-  let asked = Ref::new(0)
+  let asked = Ref(0)
   let t = image_tester(images, asked, fn(n) {
     if n == 1 {
       Err({ "code": "mesh", "message": "unreachable" })
@@ -87,7 +89,7 @@ test "a chat's picture its station could not be reached for: 加载失败，点�
 ///|
 test "a chat's picture its station has none of: 暂时无法预览, not asked again" {
   let images = @sfbase.ChatImages::new()
-  let asked = Ref::new(0)
+  let asked = Ref(0)
   let t = image_tester(images, asked, fn(_) { Err({ "code": "http_404", "message": "not found", "status": 404 }) })
   t.draw()
   t.draw()
@@ -104,7 +106,7 @@ test "a chat's picture its station has none of: 暂时无法预览, not asked ag
 ///|
 test "the pictures that failed for want of a station asked again once it is reached again, not while it stays so" {
   let images = @sfbase.ChatImages::new()
-  let asked = Ref::new(0)
+  let asked = Ref(0)
   let t = image_tester(images, asked, fn(_) { Err({ "code": "timeout", "message": "slow" }) })
   t.draw()
   t.draw()
@@ -127,7 +129,7 @@ test "the pictures that failed for want of a station asked again once it is reac
 test "a chat's pictures that failed for want of its station asked again as the chat is opened again" {
   new_run()
   let images = @sfbase.ChatImages::new()
-  let asked = Ref::new(0)
+  let asked = Ref(0)
   let src : Source = {
     ..fixture("chat"),
     file: fn(station, key, name) {
@@ -204,7 +206,7 @@ test "a chat's picture slow to come: the whole of what stands in for it breathin
   t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
   let shade = match @sf.video_shade {
     Data(v) => v
-    _ => abort("video_shade is a colour")
+    _ => @halt.saying("video_shade is a colour")
   }
   let breathing = fn() { t.cycles().filter(fn(s) { s.has_prefix("\{@sf.breath_ms.to_int()} ms") }).length() }
   // (nothing heard of it: no spinner over it in a pill of its own, which looked like a switch; it breathes)
@@ -216,4 +218,23 @@ test "a chat's picture slow to come: the whole of what stands in for it breathin
   t.run_for(@sf.dur_ms)
   t.draw()
   assert_eq(breathing(), 0)
+}
+
+///|
+test "a light screenshot slow to come stands apart from the page: what stands in for it held off it by the neutral ground, on none" {
+  let images = @sfbase.ChatImages::new()
+  // (the report's adb-chats.png: its field the page's colour, 246,243,240 on 244,243,240)
+  let hash = "PAgCAgBQN4aJy7s3lnBcKvU="
+  let shot = { ..strip("adb-chats.png"), width: 780.0, height: 2600.0, thumbhash: hash }
+  let t = image_tester_asking(images, fn(_, _) {  }, picture=shot)
+  t.draw()
+  t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
+  // (the neutral ground as this window's theme has it: what `bg=Neutral` draws)
+  let ground = t.ctx().color(Neutral)
+  assert_true((ground & 0xFFL) > 0L)
+  let waiting = t.image_nodes().filter(fn(i) { i.0.has_prefix("mem:wait-picture/\{hash}/") })
+  assert_true(waiting.length() > 0, msg="\{Repr(t.image_nodes())}")
+  assert_true(waiting.iter().all(fn(i) { i.0.has_suffix("/\{ground}/\{t.ctx().color(Bg)}") }), msg="\{Repr(waiting)}")
+  // (the ground in it: not under it as well)
+  assert_false(t.drawn_rects().iter().any(fn(r) { (r.4 & 0xFFFFFF00L) == (ground & 0xFFFFFF00L) }), msg="\{Repr(t.drawn_rects())}")
 }

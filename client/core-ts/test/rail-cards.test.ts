@@ -1,22 +1,28 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
+import { rowState } from "../src/present.ts";
 import { chatsCard, usageCard } from "../src/views/rail-cards.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
 const agent = (running: boolean): J => ({ key: "a", runtime: "claude", model: "claude-opus-5-5", process: running ? "running" : "cold", pending: 0 });
+// A row as the chats' list holds it (views.ts #chats): its `state` said of its agents, made or not; the card is given
+// how many of them run.
+const row = (...agents: J[]): J => ({ agents, state: rowState(agents) });
 const on = (d: number, h: number) => Date.UTC(2026, 9, d, h);
 const figures = (card: J) => card.stats.map((s: J) => [s.value, s.label, s.tone ?? ""]);
 
 test("对话's card: how many chats are at work, then those waiting for the viewer, gone wrong, unread, archived today", () => {
-  const rows = [{ agents: [agent(true)] }, { agents: [agent(false), agent(true)] }, { agents: [agent(false)] }];
-  const card = chatsCard(rows, { wait: 2, alert: 1, unread: 3 }, [on(26, 1), on(26, 9), on(25, 20)], on(26, 12), 0);
+  const rows = [row(agent(true)), row(agent(false), agent(true)), row(agent(false))];
+  const card = chatsCard(rows.filter((r) => r.state === "run").length, { wait: 2, alert: 1, unread: 3 }, [on(26, 1), on(26, 9), on(25, 20)], on(26, 12), 0);
   assert.equal(card.head, "2 个对话正在运行");
   assert.deepEqual(figures(card), [["2", "等你处理", "amber"], ["1", "出错", "red"], ["3", "未读", ""], ["2", "今天归档", ""]]);
+  // each opens the chats it counts: 待处理 lists the first three, the archive those archived
+  assert.deepEqual(card.stats.map((s: J) => s.go), ["attention", "attention", "attention", "archive"]);
   // none at work, none wanting anything: said so, nothing coloured
-  const quiet = chatsCard([{ agents: [agent(false)] }], null, [], on(26, 12), 0);
+  const quiet = chatsCard([row(agent(false))].filter((r) => r.state === "run").length, null, [], on(26, 12), 0);
   assert.equal(quiet.head, "暂无对话在运行");
   assert.deepEqual(quiet.stats.map((s: J) => s.tone ?? ""), ["", "", "", ""]);
 });

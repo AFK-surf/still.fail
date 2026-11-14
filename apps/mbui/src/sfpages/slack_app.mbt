@@ -37,7 +37,7 @@ priv struct SaDraft {
 ///|
 /// The groups `settings` (a Slack app's, as the core has them) turns on.
 fn sa_groups(settings : Json?) -> Map[String, Bool] {
-  let groups : Map[String, Bool] = {}
+  let groups : Map[String, Bool] = Map([])
   match field(settings, "groups") {
     Some(Object(m)) =>
       for g, v in m {
@@ -101,7 +101,7 @@ fn sa_draft_reset(d : SaDraft, settings : Json?) -> Unit {
 ///|
 /// What an app's look and permissions say of it, as the core takes its settings (the name in messages its name too).
 fn sa_settings_of(name : String, description : String, color : String, groups : Map[String, Bool], settings : Json?) -> Json {
-  let out : Map[String, Json] = {}
+  let out : Map[String, Json] = Map([])
   for g, v in groups {
     out[g] = Json::boolean(v)
   }
@@ -124,16 +124,16 @@ fn sa_settings(d : SaDraft, settings : Json?) -> Json {
 ///|
 /// The drafts, by their form; the folds open, by station/connect; icons made, each its own picture's key.
 // kept across runs: made as each form is first made; slack_app_reset empties it
-let sa_drafts : Map[String, SaDraft] = {}
+let sa_drafts : Map[String, SaDraft] = Map([])
 
 ///|
 // kept across runs: said by the fold's press; slack_app_reset empties it
-let sa_open : Map[String, Bool] = {}
+let sa_open : Map[String, Bool] = Map([])
 
 ///|
 /// What a form started from (its settings as text), by its key: a change there starts it again.
 // kept across runs: said as each form starts; slack_app_reset empties it
-let sa_started : Map[String, String] = {}
+let sa_started : Map[String, String] = Map([])
 
 ///|
 /// The forms whose permissions Slack wants approved (their install links), by station/connect.
@@ -285,7 +285,7 @@ fn config_token_dialog(core : Core, station : String) -> Unit {
 ///|
 /// What a configuration token form went through: why the station refused it ("" none).
 // kept across runs: said by its call's answer; slack_app_reset leaves it (keyed by the dialog's own key)
-let sa_token_errors : Map[String, String] = {}
+let sa_token_errors : Map[String, String] = Map([])
 
 ///|
 /// Adding a Slack workspace's app configuration token by its refresh token (ConfigTokenForm): three steps, each a
@@ -475,7 +475,7 @@ fn sa_form_node(
           let input = match input0 {
             Object(m) => {
               let m2 = Map::from_iter(m.iter())
-              let icon = @signals.untracked(fn() { d.icon.get() })
+              let icon = d.icon.untracked()
               if icon != "" {
                 m2["icon"] = str(icon)
               }
@@ -550,7 +550,7 @@ fn app_fields_node(
   let pick = fn(a : @sf.AppAvatar) {
     d.picked.set(a.id)
     d.upload.set("")
-    let bg = if @signals.untracked(fn() { d.colour_set.get() }) { @signals.untracked(fn() { d.color.get() }) } else { a.bg }
+    let bg = if d.colour_set.untracked() { d.color.untracked() } else { a.bg }
     colour(bg)
     draw(a, bg)
   }
@@ -569,18 +569,18 @@ fn app_fields_node(
     r.reacts(state, fn(s) {
       match (s, @signals.untracked(read)) {
         (1, Some(PixelsRead(w, h, pixels))) => {
-          let own = @signals.untracked(fn() { d.upload.get() }) != ""
+          let own = d.upload.untracked() != ""
           d.reading.set(("", 0, ""))
           if own {
             let icon = @sf.app_own_icon(w, h, pixels)
             let edge = @pixels.edge_colour(@sf.app_icon_px, @sf.app_icon_px, icon.pixels())
             d.upload_bg.set(edge)
             sa_icon_made(d, icon)
-            if !@signals.untracked(fn() { d.colour_set.get() }) {
+            if !d.colour_set.untracked() {
               colour(edge)
             }
           } else {
-            match find(@signals.untracked(fn() { d.picked.get() })) {
+            match find(d.picked.untracked()) {
               Some(a) =>
                 match @sf.app_avatar_icon(a, bg, w, h, pixels) {
                   Some(icon) => sa_icon_made(d, icon)
@@ -591,7 +591,7 @@ fn app_fields_node(
           }
         }
         (2, _) => {
-          let own = @signals.untracked(fn() { d.upload.get() }) != ""
+          let own = d.upload.untracked() != ""
           sa_icon_failed(d, @sf.t(if own { "web-pages.slackApp.readImageFailed" } else { "web-pages.slackApp.drawFailed" }))
         }
         _ => ()
@@ -624,11 +624,11 @@ fn app_fields_node(
   }
   // (typed in its colour's field: set by hand, what was picked drawn on it)
   k.reacts(fn() { d.hex_field.text().trim(chars=" ").to_owned() }, fn(typed) {
-    if typed != @signals.untracked(fn() { d.color.get() }) {
+    if typed != d.color.untracked() {
       d.color.set(typed)
       d.colour_set.set(true)
       if @sf.hex_color(typed) is Some(_) {
-        match find(@signals.untracked(fn() { d.picked.get() })) {
+        match find(d.picked.untracked()) {
           Some(a) => draw(a, typed)
           None => ()
         }
@@ -688,7 +688,7 @@ fn app_fields_node(
         |> ignore
         c.box(fn(h) {
           @sf.style_node(h, fn() { sa_hex }, in_row=true)
-          @sf.input_node(h, d.hex_field) |> ignore
+          @sf.input_node(h, d.hex_field, label=@sf.t("web-pages.slackApp.color")) |> ignore
         })
         |> ignore
         // what was picked's own colour, after one set by hand
@@ -707,7 +707,7 @@ fn app_fields_node(
             let bg = @signals.untracked(recommended)
             d.colour_set.set(false)
             colour(bg)
-            match find(@signals.untracked(fn() { d.picked.get() })) {
+            match find(d.picked.untracked()) {
               Some(a) => draw(a, bg)
               None => ()
             }
@@ -742,27 +742,18 @@ fn sa_avatar_picker_node(
       @sf.style_node(r, fn() { sa_picker_row })
       r.wraps(Is(Some(sa_tile_gap))) |> ignore
       r.each(fn() { all().map(fn(a) { a.id }) }, fn(id) { id }, fn(t, id) {
-        let id = @signals.untracked(fn() { id.get() })
+        let id = id.untracked()
         guard @signals.untracked(all).iter().find_first(fn(a) { a.id == id }) is Some(a) else { return }
         let label = if a.label.has_prefix("android-") { @sf.t(a.label) } else { a.label }
         let tile = t.box(fn(b) {
-          @sf.style_node(b, fn() { sa_tile })
           let on = fn() { d.picked.get() == a.id }
+          // (its edge: picked, sa_tile_on's; under the pointer, sa_tile_lit's, its hovered{border_color=FieldHover})
+          @sf.style_node(b, fn() { if on() { sa_tile_on } else if b.pointed() { sa_tile_lit } else { sa_tile } })
           b
           .width(By(fn() { Some(side()) }))
           .height(By(fn() { Some(side()) }))
           .ground(Is(@sf.hex_color(a.bg).unwrap_or(@sf.icon_fallback)))
           .clips(Is(true))
-          .edge(By(fn() {
-            let th = @ui.tree_theme()
-            if on() {
-              (2.0, th.color(Fg))
-            } else if b.pointed() {
-              (1.0, th.color(FieldHover))
-            } else {
-              (1.0, th.color(Line))
-            }
-          }))
           .says(By(fn() { Some(@view.said(Button, label~, selected=on())) }))
           |> ignore
           @sf.presses_node(b, fn() { pick(a) })
@@ -814,7 +805,7 @@ fn sa_permissions_node(k : @view.View, d : SaDraft, sections : () -> Array[Json]
         let said = fn() { @sf.t("web-pages.slackApp.permissions", args=[("on", on().to_string()), ("all", every().length().to_string())]) }
         l.box(fn(s) {
           @sf.style_node(s, fn() { sa_perms_summary }, in_row=true)
-          @sf.presses_node(s, fn() { d.perms.set(!@signals.untracked(fn() { d.perms.get() })) })
+          @sf.presses_node(s, fn() { d.perms.set(!d.perms.untracked()) })
           s.says(By(fn() { Some(@view.said(Button, label=said(), expanded=d.perms.get())) })) |> ignore
           @sf.icon_node(s, "chevron-right", cd_icon, By(fn() { @sf.theme().p.muted }), name_now=fn() {
             if d.perms.get() {
@@ -858,7 +849,7 @@ fn sa_permissions_node(k : @view.View, d : SaDraft, sections : () -> Array[Json]
               |> ignore
               let mut i = 0
               while i < groups.length() {
-                let row = groups[i:if i + 3 < groups.length() { i + 3 } else { groups.length() }].to_array()
+                let row = groups[i:if i + 3 < groups.length() { i + 3 } else { groups.length() }].to_owned()
                 s.box(fn(r) {
                   @sf.style_node(r, fn() { sa_perm_row })
                   for g in row {
@@ -1201,7 +1192,7 @@ fn sa_permissions(c : @ui.Ctx, d : SaDraft, sections : Array[Json]) -> Unit {
           |> ignore
           let mut i = 0
           while i < groups.length() {
-            let row = groups[i:if i + 3 < groups.length() { i + 3 } else { groups.length() }].to_array()
+            let row = groups[i:if i + 3 < groups.length() { i + 3 } else { groups.length() }].to_owned()
             c.box(style=sa_perm_row, fn() {
               for g in row {
                 sa_permission(c, d, Some(g))
@@ -1373,6 +1364,11 @@ let sa_picker_row : @ui.Style = @ui.css("row w=Full gap=S1_5")
 ///|
 // kept across runs: a value (no field of it changes)
 let sa_tile : @ui.Style = @ui.css("radius=Lg clip border=B1 border_color=Line align=ACenter justify=JCenter hovered{border_color=FieldHover}")
+
+///|
+/// A tile under the pointer (sa_tile's hovered, as a node takes it).
+// kept across runs: a value (no field of it changes)
+let sa_tile_lit : @ui.Style = sa_tile.then(@ui.css("border_color=FieldHover"))
 
 ///|
 // kept across runs: a value (no field of it changes)

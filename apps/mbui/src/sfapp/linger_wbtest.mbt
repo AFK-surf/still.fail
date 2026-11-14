@@ -1,5 +1,5 @@
-// An agent's activity staying a moment once its turn is over (chat.mbt chat_tick): on the time that
-// goes by, whatever page shows; while its messages still come out of its avatar it stays, its moment from the last.
+// An agent's activity once its answer comes (sfbase's chat_list.mbt chat_tick): it goes as the last of its messages
+// leaves its avatar, its turn over or not, whatever page shows; a turn over stays no moment after.
 
 ///|
 /// The fixture's chat open, on the frames' clock; words sent (its agent then at work, answering, its turn ending).
@@ -24,7 +24,7 @@ fn lingering() -> Int {
 }
 
 ///|
-test "its turn over while another page covers its chat: its moment goes by meanwhile, gone as the chat shows again" {
+test "its turn over while another page covers its chat: gone meanwhile, not there as the chat shows again" {
   let t = linger_core()
   // scrolled up: its answer just appears (nothing comes out of an avatar)
   t.run_for(fix_deliver_ms)
@@ -37,7 +37,7 @@ test "its turn over while another page covers its chat: its moment goes by meanw
   t.run_for(fix_turn_end_ms + 1000.0)
   t.back()
   t.draw()
-  // the chat shown again: its activity's moment went by under the page
+  // the chat shown again: its activity went under the page
   assert_eq(lingering(), 0)
   t.run_for(@ui.move_most_ms)
   assert_eq(lingering(), 0)
@@ -45,31 +45,36 @@ test "its turn over while another page covers its chat: its moment goes by meanw
 }
 
 ///|
-test "its answer out of its avatar past its activity's whole stay: it stays its moment from when the last is out" {
+test "its answer out of its avatar: its line goes as the answer leaves it, its turn over or not, no moment after" {
   let t = linger_core()
   let em = emits_of("ws1/st1\u{1}s-c1")
-  let mut turn_over_at = -1.0
-  let mut last_keep_at = -1.0
+  let mut ran = false
+  let mut out_at = -1.0
   let mut gone_at = -1.0
+  let mut turn_over_at = -1.0
   let end = t.time() + fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + 4000.0
   while t.time() < end {
     t.frame()
     let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
-    if rd.linger.length() > 0 && turn_over_at < 0.0 {
+    if !rd.running.is_empty() {
+      ran = true
+    } else if ran && turn_over_at < 0.0 {
       turn_over_at = t.time()
     }
-    if turn_over_at >= 0.0 && !emit_keeps(em).is_empty() {
-      last_keep_at = t.time()
+    if out_at < 0.0 && em.current is Some(turn) && turn.pose == Float {
+      out_at = t.time()
     }
-    if turn_over_at >= 0.0 && rd.linger.length() == 0 && gone_at < 0.0 {
+    // (its line in the list: running and not answered, or lingering)
+    let shown = rd.running.keys().any(fn(k) { !rd.answered.contains(k) }) || !rd.linger.is_empty()
+    if ran && !shown && gone_at < 0.0 {
       gone_at = t.time()
     }
   }
-  // its turn over while its answer was still coming out of its avatar, the way out longer than the whole stay
-  assert_true(turn_over_at >= 0.0 && last_keep_at > turn_over_at)
-  assert_true(emit_all_ms() > linger_ms)
-  // its moment from the last frame its answer was still coming: gone 600 ms on (the frame that reaches it)
-  let frame = 16.0
-  assert_true(gone_at >= last_keep_at + linger_ms && gone_at < last_keep_at + linger_ms + frame)
+  assert_true(ran && out_at >= 0.0 && turn_over_at >= 0.0)
+  // (2026-11-09 the user: its room closed on its own after the answer came took the list back the other way; the
+  // answer takes its place, in one way)
+  assert_eq(gone_at, out_at)
+  // its turn still going then (the fixture's ends after its answer)
+  assert_true(gone_at < turn_over_at)
   t.assert_idle()
 }

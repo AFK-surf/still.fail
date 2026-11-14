@@ -3,7 +3,7 @@
 
 ///|
 /// The fixture's chat open, its clock the test's; words sent and taken by the station (its agent then at work).
-fn emit_core(clock : Ref[Double]) -> @ui.Tester {
+fn emit_core(clock : Ref[Double], words~ : String = "看一下列表") -> @ui.Tester {
   new_run()
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
@@ -12,13 +12,13 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
-  t.type_text("看一下列表")
+  t.type_text(words)
   tap_send(t)
   // the station has it: in the chat, its agent at work
   fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   // (the station answers fix_answer_ms after it took them: that time passes on the page too, the words sent landed
-  // and the agent's line come in their turns meanwhile)
+  // and the agent's line come in meanwhile)
   t.run_for(fix_answer_ms)
   t
 }
@@ -36,7 +36,7 @@ fn emit_restore() -> Unit {
 
 ///|
 test "an answer said while its agent's activity shows waits, then comes out of its avatar: fold, float, spit, return" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   // at work: its activity
   assert_true(t.find("看一下列表") is Some(_))
@@ -57,7 +57,7 @@ test "an answer said while its agent's activity shows waits, then comes out of i
 
 ///|
 test "an answer taller than the window out of the avatar, the list at its end: read from its top, under the bar" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   // its agent at work, the list at its end: it says something long (in over its line), before the fixture's answer
   let first = "列表改成虚拟列表"
@@ -86,16 +86,20 @@ fn landing_faces(t : @ui.Tester) -> (Double, Double) raise {
   let rk = "ws1/st1\u{1}s-c1"
   let em = emits_of(rk)
   guard em.current is Some(turn) && turn.pose == Spit else {
-    fail("not landing: \{em.current.map(fn(c) { c.pose })}")
+    fail("not landing: \{Repr(em.current.map(fn(c) { c.pose }))}")
   }
-  let face = @motion.measured_rect(t.ctx(), "emit-avatar/" + rk + "/" + turn.agent).unwrap()
+  // (its line gone as the answer left it: where it was last drawn)
+  let face = match @motion.measured_rect(t.ctx(), "emit-avatar/" + rk + "/" + turn.agent) {
+    Some(r) => (r.0, r.1)
+    None => em.home.unwrap()
+  }
   let lands = @motion.measured_rect(t.ctx(), "emit-landing/" + rk + "/" + seq_s(turn.seq)).unwrap()
   (face.0, lands.0)
 }
 
 ///|
 test "an agent's picture in its line is where its answer's is, at the row's start: the flying one lands with no step aside" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
@@ -107,7 +111,7 @@ test "an agent's picture in its line is where its answer's is, at the row's star
 
 ///|
 test "the flying avatar goes where its answer comes in: where it was aimed on its way is where it lands, no jump as the answer comes out" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
   fix_clock_set(clock, clock.val + fix_answer_ms)
@@ -124,14 +128,14 @@ test "the flying avatar goes where its answer comes in: where it was aimed on it
       _ => ()
     }
   }
-  guard (aimed, landed) is (Some(a), Some(l)) else { fail("aimed \{aimed}, landed \{landed}") }
-  assert_true((a.0 - l.0).abs() < 0.5 && (a.1 - l.1).abs() < 0.5, msg="aimed at \{a}, landed at \{l}")
+  guard (aimed, landed) is (Some(a), Some(l)) else { fail("aimed \{Repr(aimed)}, landed \{Repr(landed)}") }
+  assert_true((a.0 - l.0).abs() < 0.5 && (a.1 - l.1).abs() < 0.5, msg="aimed at \{Repr(a)}, landed at \{Repr(l)}")
   emit_restore()
 }
 
 ///|
 test "with the reader scrolled up (not watched), an answer just appears" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   t.wheel(195.0, 400.0, -600.0)
   let em = emits_of("ws1/st1\u{1}s-c1")
@@ -145,7 +149,7 @@ test "with the reader scrolled up (not watched), an answer just appears" {
 
 ///|
 test "read up a little, the answer coming in under what is read comes where it is, its room opening: not there at once" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   t.wheel(195.0, 400.0, -120.0)
   t.run_for(@ui.move_most_ms)
@@ -155,7 +159,7 @@ test "read up a little, the answer coming in under what is read comes where it i
   let answer = fn() { t.words().filter(fn(w) { w.0.has_prefix("收到") }) }
   // (in view, as it sets out: nothing of it shown yet)
   guard answer() is [w, ..] else { fail("no answer in view") }
-  assert_true(w.5 < 1.0, msg="\{w}")
+  assert_true(w.5 < 1.0, msg="\{Repr(w)}")
   // in at last where the list has it: over nothing else (its words over no other's)
   t.run_for(emit_all_ms())
   guard answer() is [w, ..] else { fail("no answer in view") }
@@ -163,7 +167,7 @@ test "read up a little, the answer coming in under what is read comes where it i
   for o in t.words() {
     if o.0 != w.0 && o.5 > 0.0 {
       let apart = o.2 + o.4 <= w.2 + 0.5 || w.2 + w.4 <= o.2 + 0.5 || o.1 + o.3 <= w.1 + 0.5 || w.1 + w.3 <= o.1 + 0.5
-      assert_true(apart, msg="\{w} over \{o}")
+      assert_true(apart, msg="\{Repr(w)} over \{Repr(o)}")
     }
   }
   emit_restore()
@@ -171,12 +175,12 @@ test "read up a little, the answer coming in under what is read comes where it i
 
 ///|
 test "the answer coming in does not end its own motion: float, spit and return each played whole, the avatar drawn" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
-  let frames : Map[String, Int] = {}
+  let frames : Map[String, Int] = Map([])
   // frame by frame over its whole way out
   let end = t.time() + emit_all_ms()
   while t.time() < end {

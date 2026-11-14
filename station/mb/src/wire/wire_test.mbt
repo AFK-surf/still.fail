@@ -19,17 +19,24 @@ fn event(kind : Byte, id : Int64, rest : Bytes) -> Bytes {
 }
 
 ///|
-fn answer(error : String, json : String) -> Bytes {
-  let e = @utf8.encode(error)
+fn answer(error : String, json : String, carried? : Bytes) -> Bytes {
   let out = []
-  for i = 0; i < 8; i = i + 1 {
-    out.push(((e.length() >> (8 * i)) & 0xff).to_byte())
+  for part in [@utf8.encode(error), @utf8.encode(json)] {
+    for i = 0; i < 8; i = i + 1 {
+      out.push(((part.length() >> (8 * i)) & 0xff).to_byte())
+    }
+    for b in part {
+      out.push(b)
+    }
   }
-  for b in e {
-    out.push(b)
-  }
-  for b in @utf8.encode(json) {
-    out.push(b)
+  match carried {
+    Some(c) => {
+      out.push(b'\x01')
+      for b in c {
+        out.push(b)
+      }
+    }
+    None => out.push(b'\x00')
   }
   Bytes::from_array(out)
 }
@@ -39,15 +46,23 @@ test "the host's events are read as host.c writes them" {
   guard @wire.Event::read(event(b'\x01', 0L, b"ab\n")) is Input(data) else { fail("not input") }
   inspect(data.length(), content="3")
   guard @wire.Event::read(event(b'\x02', 0L, b"")) is End else { fail("not the end") }
-  guard @wire.Event::read(event(b'\x03', 0x0102030405L, answer("", "{\"id\":3}"))) is Answer(id, Ok(json)) else {
+  guard @wire.Event::read(event(b'\x03', 0x0102030405L, answer("", "{\"id\":3}"))) is Answer(id, Ok(json), None) else {
     fail("not an answer")
   }
   inspect(id, content="4328719365")
   inspect(json.stringify(), content="{\"id\":3}")
-  guard @wire.Event::read(event(b'\x03', 9L, answer("busy", ""))) is Answer(9L, Err(ShellError(e))) else {
+  guard @wire.Event::read(event(b'\x03', 9L, answer("busy", ""))) is Answer(9L, Err(ShellError(e)), None) else {
     fail("not an error")
   }
   inspect(e, content="busy")
+  // what an answer carries, bytes not UTF-8 among them
+  guard @wire.Event::read(event(b'\x03', 7L, answer("", "{}", carried=b"\xff\x00ab"))) is Answer(7L, Ok(_), Some(carried)) else {
+    fail("no bytes")
+  }
+  inspect(carried.length(), content="4")
+  guard @wire.Event::read(event(b'\x03', 7L, answer("", "{}", carried=b""))) is Answer(_, _, Some(empty)) && empty.length() == 0 else {
+    fail("no empty bytes")
+  }
   // cut short, or of a kind not known: nothing is made of it
   guard @wire.Event::read(event(b'\x03', 9L, b"\x40\x00")) is Other else { fail("read what was cut") }
   guard @wire.Event::read(b"\x01") is Other else { fail("read what was cut") }

@@ -42,6 +42,46 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     })
     |> ignore
   }
+  // the devices it dials (the core's rows: 2026-11-05, 「到底是哪个设备会弹出来呀？」) on a quiet card under the step's
+  // action, a device to a row, its mark (a phone, a computer) and which machine (the user, #4213, 2026-11-10: fewer
+  // words, and under the buttons, which matter more and are never pushed out by it); on 设置 › 安全's card its rows
+  // alone, from where the card's words start (a ground of their own in its foot corner would not follow it)
+  let devices = fn(list : Array[Json]) {
+    if list.is_empty() {
+      return
+    }
+    c.box(style=if in_card { lock_devices_carded } else { lock_devices }, fn() {
+      c.box(style=if in_card { lock_devices_rows } else { lock_devices_card }, fn() {
+        for d in list {
+          let d = Some(d)
+          c.box(style=lock_device, fn() {
+            @sf.icon(c, lock_device_icon(d), size=lock_device_glyph, color=@sf.theme().p.muted) |> ignore
+            c.box(style=@sf.pg_row_words, fn() { c.text(text(d, "nameText"), style=lock_device_name) |> ignore })
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  let dialled = items(pair, "approvers")
+  // (a step's action, its row, the button as wide as its words, then the devices the step is about; `in_card` the
+  // row reaches the card's foot corner where it is last, and only its sides, the words where the card's are, where the
+  // devices come under it)
+  let action = fn(list : Array[Json], button : () -> Unit) {
+    let reach = if !in_card {
+      lock_actions
+    } else if list.is_empty() {
+      lock_actions.then(@sf.foot_reach(@sf.button_height()))
+    } else {
+      lock_actions.then(@sf.over_foot_reach(@sf.button_height()))
+    }
+    c.box(style=reach, fn() { @sf.card_foot_words(on=in_card, button) }) |> ignore
+    devices(list)
+  }
+  let showing = dialled.filter(fn(d) { flag(Some(d), "showing") })
   if state == "code" || state == "wrong" || state == "checking" {
     note(@sf.t("web-pages.security.pairEnter"), false)
     let key = "lock-code/" + ws
@@ -58,13 +98,20 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     )
     if typed is Some(code) {
       (core.call)("lock.pairCode", { "workspace": Json::string(ws), "code": Json::string(code) }, fn(r) {
-        if r is Err(_) {
-          c.clear_code_field(key)
+        match r {
+          Err(_) => c.clear_code_field(key)
+          // (approved, but no station took it yet: its sentence said, the code cleared)
+          Ok(v) if @settings.pending_said(v) != "" => {
+            c.clear_code_field(key)
+            (core.say)(@settings.pending_said(v))
+          }
+          Ok(_) => ()
         }
       })
     }
     if checking {
       note(@sf.t("web-pages.security.pairChecking"), true)
+      devices(showing)
     } else {
       if state == "wrong" {
         // what the core says of it (the device showing the code may be gone); a core of before says nothing
@@ -80,29 +127,26 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
         "" => ()
         until => note(until, false)
       }
-      c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
-        @sf.card_foot_words(on=in_card, fn() {
-          @sf.button(c, @sf.t("web-pages.security.pairAgain"), key="lock-pair-again/" + ws, tone=Ghost, on_press=fn() {
-            c.clear_code_field(key)
-            @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.pairAgain"), [])
-          }) |> ignore
-        })
+      // (which of them show it)
+      action(showing, fn() {
+        @sf.button(c, @sf.t("web-pages.security.pairAgain"), key="lock-pair-again/" + ws, tone=Ghost, on_press=fn() {
+          c.clear_code_field(key)
+          @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.pairAgain"), [])
+        }) |> ignore
       })
-      |> ignore
     }
   } else if state == "finding" || asking {
     note(@sf.t("web-pages.security.pairFinding"), true)
     // asked again while it looks: the person opened a trusted device and nothing came up, so it looks again now
     // rather than once its dials run out (2026-11-06 the user: 「直接加个没收到重新申请的按钮」)
-    if !asking {
-      c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
-        @sf.card_foot_words(on=in_card, fn() {
-          @sf.button(c, @sf.t("web-pages.security.pairRetry"), key="lock-pair-retry/" + ws, tone=Ghost, on_press=fn() {
-            @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.pairRetry"), [])
-          }) |> ignore
-        })
+    if asking {
+      devices(dialled)
+    } else {
+      action(dialled, fn() {
+        @sf.button(c, @sf.t("web-pages.security.pairRetry"), key="lock-pair-retry/" + ws, tone=Ghost, on_press=fn() {
+          @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.pairRetry"), [])
+        }) |> ignore
       })
-      |> ignore
     }
   } else {
     match state {
@@ -114,15 +158,12 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
           false,
         )
     }
-    // (actions: its row, the button as wide as its words)
-    c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
-      @sf.card_foot_words(on=in_card, fn() {
-        @sf.button(c, @sf.t("web-pages.security.request"), key="lock-pair/" + ws, tone=Primary, on_press=fn() {
-          @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.request"), [])
-        }) |> ignore
-      })
+    // (none found: which they are, its note having said to open one)
+    action(if state == "none" { dialled } else { [] }, fn() {
+      @sf.button(c, @sf.t("web-pages.security.request"), key="lock-pair/" + ws, tone=Primary, on_press=fn() {
+        @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.request"), [])
+      }) |> ignore
     })
-    |> ignore
   }
 }
 
@@ -141,6 +182,52 @@ let lock_failed : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Da
 
 ///|
 let lock_spin : Double = 12.0
+
+///|
+/// The trusted devices it dials: their card's place, in the middle under the step's action.
+// kept across runs: a value (no field of it changes)
+let lock_devices : @ui.Style = @ui.css("w=Full align=ACenter")
+
+///|
+/// On 设置 › 安全's card: from where the card's words start.
+// kept across runs: a value (no field of it changes)
+let lock_devices_carded : @ui.Style = @ui.css("w=Full align=AStart")
+
+///|
+/// Their card: a quiet ground over whatever it is on (the page, 设置 › 安全's card), 16 and 12 in, its rows 12 apart;
+/// as wide as its rows, no wider than the steps (lock_devices_most, and the room there is).
+// kept across runs: a value (no field of it changes)
+let lock_devices_card : @ui.Style = @ui.css("px=S4 py=S3 gap=S3 radius=Xl bg=Tint").then(@ui.style(max_w=Fixed(lock_devices_most)))
+
+///|
+/// On 设置 › 安全's card: the rows, no ground of their own.
+// kept across runs: a value (no field of it changes)
+let lock_devices_rows : @ui.Style = @ui.css("gap=S3")
+
+///|
+let lock_devices_most : Double = 412.0
+
+///|
+/// A device's row: its mark, 12, which machine it is, from the card's start.
+// kept across runs: a value (no field of it changes)
+let lock_device : @ui.Style = @ui.css("row gap=S3 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let lock_device_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
+
+///|
+let lock_device_glyph : Double = 18.0
+
+///|
+/// A device's mark by what the core says it is (LockApprover `kind`): a phone, else a computer.
+fn lock_device_icon(d : Json?) -> String {
+  if text(d, "kind") == "phone" {
+    "phone"
+  } else {
+    "monitor"
+  }
+}
 
 ///|
 /// 发送批准请求's row (actions: 10 apart).

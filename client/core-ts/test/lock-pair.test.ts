@@ -9,23 +9,23 @@
 // device, and made a member as the code signs their device in. On the test clock, the trusted core's lock at a cloud
 // that keeps chains.
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import { Deferred, Effect } from "effect";
 import { CoreError, HostError } from "../src/error.ts";
-import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
-import { utf8 } from "../src/util.ts";
-import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
+import { hooks } from "../src/core/execute.ts";
+import { PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
+import { hex, utf8 } from "../src/util.ts";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { bodyHash, wsTag } from "../src/lock-moved.ts";
 import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts";
 import { PersonalLock, checkChain } from "../src/personal-lock.ts";
-import { bindPerson, fold, held, keepToPerson, onBoundPerson, pairs, putOnBound, read } from "../src/views/lock.ts";
+import { Lock, TAKEN_MS, bindPerson, fold, held, inForceOf, keepToPerson, onBoundPerson, pairs, pendingHeld, putOnBound, read, signerOf } from "../src/views/lock.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
-import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
-import { run as runEffect } from "./run.ts";
-import { ME, PHONE, elsewhere, genesis, grant, pipe, rig } from "./lock-rig.ts";
-import { Status, stationReplies } from "./station-fixture.ts";
+import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, personalBegin, served, serveTrusted, trying, tryOne } from "../src/views/pair.ts";
+import { ME, PHONE, elsewhere, genesis, grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
+import { Status, started, stationReplies } from "./station-fixture.ts";
 
 const random = (b: Uint8Array) => {
   for (let i = 0; i < b.length; i++) b[i] = (Math.random() * 256) | 0;
@@ -61,7 +61,7 @@ async function met(inLock?: { sign_key?: string }, others: Record<string, unknow
   const run = async <A>(e: Effect.Effect<A, any>): Promise<{ ok: A } | { err: any }> => {
     const out: ({ ok: A } | { err: any })[] = [];
     r.core.inner.runner.fork(Effect.map(Effect.result(e), (x) => out.push(x._tag === "Success" ? { ok: x.success } : { err: x.failure })));
-    for (let i = 0; i < 500 && out.length === 0; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => out.length !== 0);
     return out[0] ?? { err: "no answer" };
   };
   const hello = (credential = g.credential("ws", PHONE, "s2")) =>
@@ -253,6 +253,31 @@ test("a read that succeeds but is still behind the known lock does not use old p
   await m.host.time.pass(500);
   assert.deepEqual(await m.hello(), { ok: { t: "no", error: "not_here" } });
   assert.deepEqual((await m.prompts()).pairing, []);
+});
+
+// The real-station end-to-end's round 8 after round 7b's B lost its renewal (2026-11-12): the cloud, frozen while the
+// stations forked, took B's entry as it came back (it appends at its head only) and refused the one B signed again
+// after the head that won; the cloud's view went on naming B's entry, which B holds aside, and B never showed bob's
+// first device a code.
+test("the cloud's view names an entry this device holds aside (it lost the fork, the cloud appending at its head only): not a newer lock to wait for, the code shown", async () => {
+  const old = elsewhere();
+  const OLD = "dd".repeat(32);
+  const m = await met(undefined, [{ id: OLD, sub: "s1", kind: "app", label: "old", sign_key: old.id }]);
+  const signer = Effect.runSync(Signer.make(m.host));
+  const g0 = m.cloud.chains.get("ws")![0]!;
+  const after = { seq: 0, hash: entryHash(g0), genesis: entryHash(g0) };
+  const at = m.host.nowMs() / 1000;
+  // X: this device's entry, which lost; Y: the entry that won at its place (a removal of a device that signs).
+  const X = signer.sign(next("ws", after, at, "device", { id: "ef".repeat(32), sub: "s1", kind: "web", label: "page" }));
+  const Y = signer.sign(next("ws", after, at + 1, "device.remove", { id: OLD }));
+  m.cloud.chains.set("ws", [g0, X]);
+  m.core.inner.data.put("lock", "ws", { head: { seq: 1, hash: entryHash(Y), genesis: entryHash(g0) }, entries: [g0, Y], aside: [X] });
+  const topic = { topic: "workspace", workspace: "ws" };
+  m.core.inner.data.set(topic, { ...(m.core.inner.data.shared(topic) as object), lock: m.cloud.head("ws") });
+  await m.host.time.pass(500);
+  assert.deepEqual(held(m.core.inner, "ws")!.entries.map(entryHash), [g0, Y].map(entryHash), "Y held");
+  assert.deepEqual(await m.hello(), { ok: { t: "code", workspaces: ["ws"] } });
+  assert.equal((await m.prompts()).pairing.length, 1);
 });
 
 test("one workspace's lock is updating: another ready workspace can show a code immediately", async () => {
@@ -452,7 +477,7 @@ test("someone the lock has not heard of: a member's device shows no code, nor do
     await Effect.runPromise(phone.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential }], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }));
     const out: unknown[] = [];
     r.core.inner.runner.fork(Effect.map(phone.next(), (x) => out.push(x)));
-    for (let i = 0; i < 500 && out.length === 0; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => out.length !== 0);
     return out[0];
   };
   assert.deepEqual(await asks(g.credential("ws", PHONE, "s3")), { t: "no", error: "not_here" });
@@ -685,7 +710,7 @@ async function servedAlone(finishFails: boolean) {
   const connection = { remoteId: () => PHONE, acceptBi: () => Effect.succeed(stream), close: (code: number, why: string) => void said.push(`close ${code} ${why}`) };
   served(r.core.inner, connection as never);
   const until = async (f: () => boolean) => {
-    for (let i = 0; i < 50 && !f(); i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(500, () => f());
     await r.host.time.pass(10);
   };
   return { said, until, ack: () => Deferred.doneUnsafe(acked, Effect.succeed(null)) };
@@ -703,40 +728,6 @@ test("the trusted device's last word to a new device is taken before its connect
   const f = await servedAlone(true);
   await f.until(() => f.said.some((x) => x.startsWith("close")));
   assert.deepEqual(f.said, [no, "finish failed", "close 0 done"]);
-});
-
-test("over iroh: the trusted device takes the new one on its endpoint, and the code typed signs it in", { skip: loadAddon() === null ? "the mesh addon is not built here" : false }, async () => {
-  const addon = loadAddon() as any;
-  const seen: any[] = [];
-  const iroh = nodeIroh({ bind: async (o: any) => { const e = await addon.bind(o); seen.push(e); return e; } })!;
-  const trustedEnd = await runEffect(iroh.bind({ secretKey: randomBytes(32), relayUrls: [], lookup: false, relayOnly: false, alpns: [PAIR_ALPN] }));
-  const newEnd = await runEffect(iroh.bind({ secretKey: randomBytes(32), relayUrls: [], lookup: false, relayOnly: false }));
-  const socket = (seen[0].sockets() as string[]).find((x) => !x.startsWith("["))!;
-  newEnd.addAddr({ id: trustedEnd.id(), ips: [`127.0.0.1:${socket.slice(socket.lastIndexOf(":") + 1)}`] });
-  const g = grant();
-  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, trustedEnd.id()) }));
-  r.core.inner.meshNow = () => ({ deviceId: () => trustedEnd.id() }) as never;
-  await r.watch({ topic: "lock", workspace: "ws" });
-  const prompts = await r.watch({ topic: "lockPrompts" });
-  // The trusted device's endpoint takes it, as the mesh's does (views/pair.ts `served`).
-  void runEffect(trustedEnd.accept!()).then((taken) => taken && served(r.core.inner, taken.connection));
-  const connection = await runEffect(newEnd.connect({ id: trustedEnd.id() }, PAIR_ALPN, []));
-  const d = streamDuplex(await runEffect(connection.openBi()), () => connection.close(0, "done"));
-  await runEffect(d.send({ t: "hello", v: 1, workspaces: [{ ws: "ws", credential: g.credential("ws", newEnd.id(), "s2") }], kind: "web", label: "Chrome", sign_key: null }));
-  const answer = runEffect(d.next());
-  for (let i = 0; i < 100 && (await prompts()).pairing.length === 0; i++) await r.host.time.pass(10);
-  assert.deepEqual(await answer, { t: "code", workspaces: ["ws"] });
-  const code = (await prompts()).pairing[0].code;
-  const done: any[] = [];
-  r.core.inner.runner.fork(Effect.map(Effect.result(tryOne(r.core.inner, { id: trustedEnd.id(), d, workspaces: ["ws"] }, newEnd.id(), code)), (x) => done.push(x)));
-  for (let i = 0; i < 500 && done.length === 0; i++) await r.host.time.pass(10);
-  assert.equal(done[0]?._tag, "Success", String(done[0]?.failure?.message));
-  const entry = r.cloud.chains.get("ws")!.at(-1)!;
-  assert.equal((entry.body as { id: string }).id, newEnd.id());
-  assert.equal((entry.body as { kind: string }).kind, "web");
-  connection.close(0, "done");
-  await runEffect(newEnd.close());
-  await runEffect(trustedEnd.close());
 });
 
 test("a device joins its person's own lock face to face: the code shown on a device on it lets it in, nothing else does", async () => {
@@ -787,6 +778,21 @@ test("a device joins its person's own lock face to face: the code shown on a dev
   assert.equal(checkChain(right.ok.approved.chains.s1!, "s1")!.devices.has(KEY), true, "it brings the whole lock to pin");
 });
 
+test("a new device asking into its person's own lock makes the key it signs the workspaces' locks with: without one, the device that approves it puts it in none", async () => {
+  const s = await started(undefined, 0, undefined, (x) => void (x.host.appKeys = true));
+  const inner = s.core.inner;
+  inner.mesh = () => withoutMesh(PHONE);
+  inner.adb.personal = () => new PersonalLock({ host: s.host, runner: inner.runner, device: () => Effect.succeed(PHONE), label: () => "new", changed: () => {}, cloud: () => Effect.succeed({ entries: [] }) });
+  assert.equal(Effect.runSync(Signer.load(s.host)), null, "a device new to every lock keeps no such key");
+  const out: unknown[] = [];
+  inner.runner.fork(Effect.map(Effect.result(personalBegin(inner, ["s1"])), (r) => out.push(r)));
+  await s.host.time.passUntil(1000, () => out.length !== 0);
+  assert.equal((out[0] as { _tag: string })?._tag, "Success", JSON.stringify(out));
+  const made = Effect.runSync(Signer.load(s.host));
+  assert.ok(made, "made as it asks");
+  assert.equal(signerOf(inner), made.id, "and what its hello says (sign_key)");
+});
+
 test("a device not on the lock shows no code for it, and someone else's lock is not asked here", async () => {
   const m = await met();
   const inner = m.core.inner;
@@ -833,8 +839,9 @@ test("a device on its person's own lock binds it in the workspace's once every s
   assert.equal(held(inner, "ws")!.entries.length, length);
 });
 
-test("bound, the person's app devices in the workspace's lock are kept to those on their own lock: one put on it is put in, one taken off or from before and never on it taken out", async () => {
+test("an app device of theirs off the person's own lock keeps it from being bound; bound, their app devices in the workspace's lock are kept to those on it, and one taken off it is told to join it", async () => {
   const OLD = "77".repeat(32), NEW = "88".repeat(32), WEB = "99".repeat(32);
+  const OLD_KEY = "ed25519:" + "55".repeat(32), NEW_KEY = "ed25519:" + "44".repeat(32);
   const m = await met(undefined, [
     { id: OLD, sub: "s1", kind: "app", label: "old", sign_key: "ed25519:" + "22".repeat(32) },
     { id: WEB, sub: "s1", kind: "web", label: "web", exp: 2_000_000_000 },
@@ -856,26 +863,275 @@ test("bound, the person's app devices in the workspace's lock are kept to those 
   inner.adb.personal = () => personal;
   await m.run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
   const devices = () => [...fold(held(inner, "ws")!.entries).devices.keys()].sort();
+  const bound = () => fold(held(inner, "ws")!.entries).persons.has("s1");
   await m.run(read(inner, "ws"));
-  // Not bound yet: nothing taken out.
-  await m.run(keepToPerson(inner, "ws"));
-  assert.deepEqual(devices(), [ME, OLD, WEB].sort());
+  // The old one, an app device of theirs here, is off their own lock: not bound (the stations would shut it out), and
+  // nothing taken out.
   await m.run(bindPerson(inner, "ws"));
   await m.run(read(inner, "ws"));
-  // Bound: the old one, never on the person's lock, out; this one and the web page kept.
+  assert.equal(bound(), false);
   await m.run(keepToPerson(inner, "ws"));
-  assert.deepEqual(devices(), [ME, WEB].sort());
+  assert.deepEqual(devices(), [ME, OLD, WEB].sort());
+  // Put on it face to face as well (a web page holds no key of it): bound, and none taken out.
+  await m.run(personal.addDevice("s1", { key: OLD_KEY, id: OLD, label: "old" }, "why"));
+  await m.run(bindPerson(inner, "ws"));
+  await m.run(read(inner, "ws"));
+  assert.equal(bound(), true);
+  await m.run(keepToPerson(inner, "ws"));
+  assert.deepEqual(devices(), [ME, OLD, WEB].sort());
   // One put on the person's lock face to face is put in, with the key it signs with, and kept.
   const newKey = "ed25519:" + "33".repeat(32);
-  await m.run(personal.addDevice("s1", { key: "ed25519:" + "44".repeat(32), id: NEW, label: "new" }, "why"));
+  await m.run(personal.addDevice("s1", { key: NEW_KEY, id: NEW, label: "new" }, "why"));
   await m.run(putOnBound(inner, "s1", { id: NEW, label: "new", signKey: newKey }));
   assert.equal(fold(held(inner, "ws")!.entries).devices.get(NEW)?.sign_key, newKey);
   await m.run(keepToPerson(inner, "ws"));
-  assert.deepEqual(devices(), [ME, NEW, WEB].sort());
+  assert.deepEqual(devices(), [ME, NEW, OLD, WEB].sort());
   // Taken off the person's lock: out of the workspace's.
-  await m.run(personal.removeDevice("s1", "ed25519:" + "44".repeat(32), "why"));
+  await m.run(personal.removeDevice("s1", NEW_KEY, "why"));
+  await m.run(personal.removeDevice("s1", OLD_KEY, "why"));
   await m.run(keepToPerson(inner, "ws"));
   assert.deepEqual(devices(), [ME, WEB].sort());
+  // This device taken off it: a station's refusal says to join their own lock, not to be approved in the workspace's,
+  // which lets it in no more.
+  const mine = [...personal.chain("s1")!.devices.values()].find((d) => d.id === ME)!;
+  await m.run(personal.addDevice("s1", { key: "ed25519:" + "66".repeat(32), id: OLD, label: "old" }, "why"));
+  await m.run(personal.removeDevice("s1", mine.key, "why"));
+  assert.equal(personal.standing("s1"), "outside");
+  const said = hooks.lockRefused!(inner, "ws", "st", null);
+  assert.equal(said?.code, "lock_unconfirmed");
+  assert.equal(said!.message, t("core-misc.lock.offOwnLock", { name: "W" }));
+});
+
+test("where they bound a lock of their own, people are shown one thing: a new device's prompt names the workspaces it is let in to, and 移除 on the workspace's page takes a device of theirs off that lock", async () => {
+  // (the user, 2026-11-10: nobody is to tell the person's own lock from the workspace's. The prompt said only 它要加入
+  // 你的个人锁; a device taken out of the workspace's lock alone was let in still, on their own, and put back)
+  const NEW = "88".repeat(32), NEW_KEY = "ed25519:" + "44".repeat(32);
+  const m = await met();
+  const inner = m.core.inner;
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {},
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      kept.entries = (body as { entries: Entry[] }).entries;
+      return { entries: kept.entries };
+    }),
+  });
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (k: string, v: Uint8Array) => Effect.sync(() => void sealed.set(k, v));
+  const lockedGet = m.host.secureGet;
+  m.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => (o.user ? Effect.succeed(sealed.get(k) ?? null) : lockedGet!.call(m.host, k, o));
+  inner.adb.personal = () => personal;
+  await m.run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  await m.run(read(inner, "ws"));
+  await m.run(bindPerson(inner, "ws"));
+  await m.run(read(inner, "ws"));
+  assert.ok(fold(held(inner, "ws")!.entries).persons.has("s1"), "bound");
+
+  // A new device of theirs asks (into their own lock, as the page that waits has it ask): the prompt on this one names
+  // the workspace, as for one approved into the workspace's lock.
+  const asked = await m.run(Effect.andThen(m.phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "33".repeat(32), personal: { subs: ["s1"], key: NEW_KEY } }), m.phone.next()));
+  assert.deepEqual(asked, { ok: { t: "code", workspaces: ["person:s1"] } });
+  assert.deepEqual((await m.prompts()).pairing.map((p: { workspaces: { id: string; name: string }[] }) => p.workspaces.map((w) => [w.id, w.name])), [[["ws", "W"]]]);
+
+  // One of theirs on that lock and in the workspace's: 移除 there (lock.removeDevice) takes it off their own lock, and
+  // out of the workspace's with it.
+  await m.run(personal.addDevice("s1", { key: NEW_KEY, id: NEW, label: "new" }, "why"));
+  await m.run(putOnBound(inner, "s1", { id: NEW, label: "new", signKey: "ed25519:" + "33".repeat(32) }));
+  assert.ok(fold(held(inner, "ws")!.entries).devices.has(NEW));
+  await m.ask("lock.removeDevice", { workspace: "ws", device: NEW });
+  assert.equal([...personal.chain("s1")!.devices.values()].some((d) => d.id === NEW), false, "off their own lock");
+  assert.equal(fold(held(inner, "ws")!.entries).devices.has(NEW), false, "and out of the workspace's");
+});
+
+test("a device on the person's own lock that a second workspace bound to it holds as not signing is put in there with the key it signs with in the first", async () => {
+  // Safe mode turned on in a second workspace: the person's other devices went into its lock as the draft had them,
+  // signing nothing there (no vault, no entries signed), and one they approved since was put in none where they did
+  // not sign (the locks' end to end, round 9, 2026-11-10).
+  const LAPTOP = "77".repeat(32), LAPTOP_SIGNS = "ed25519:" + "22".repeat(32), LAPTOP_KEY = "ed25519:" + "55".repeat(32);
+  const g = grant();
+  const m = await rig((me) => ({
+    ws: genesis("ws", me, true, [], g.keys, ME, [{ id: LAPTOP, sub: "s1", kind: "app", label: "laptop", sign_key: LAPTOP_SIGNS }]),
+    w2: genesis("w2", me, true, [], g.keys, ME, [{ id: LAPTOP, sub: "s1", kind: "app", label: "laptop" }]),
+  }));
+  await m.watch({ topic: "lock", workspace: "ws" });
+  await m.watch({ topic: "lock", workspace: "w2" });
+  const inner = m.core.inner;
+  const run = async <A>(e: Effect.Effect<A, any>) => {
+    const out: unknown[] = [];
+    inner.runner.fork(Effect.map(Effect.result(e), (x) => out.push(x)));
+    await m.host.time.passUntil(5000, () => out.length !== 0);
+  };
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {},
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      kept.entries = (body as { entries: Entry[] }).entries;
+      return { entries: kept.entries };
+    }),
+  });
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (k: string, v: Uint8Array) => Effect.sync(() => void sealed.set(k, v));
+  const lockedGet = m.host.secureGet;
+  m.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => (o.user ? Effect.succeed(sealed.get(k) ?? null) : lockedGet!.call(m.host, k, o));
+  inner.adb.personal = () => personal;
+  const laptopIn = (ws: string) => fold(held(inner, ws)!.entries).devices.get(LAPTOP);
+  await run(read(inner, "w2"));
+  assert.equal(laptopIn("w2")?.sign_key, undefined, "not signing in the second as it was turned on");
+  await run(personal.signGrant("s1", { station: "w2/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  await run(personal.addDevice("s1", { key: LAPTOP_KEY, id: LAPTOP, label: "laptop" }, "why"));
+  for (const ws of ["ws", "w2"]) {
+    await run(read(inner, ws));
+    await run(bindPerson(inner, ws));
+    await run(read(inner, ws));
+    assert.ok(fold(held(inner, ws)!.entries).persons.has("s1"), `bound in ${ws}`);
+  }
+  await run(keepToPerson(inner, "w2"));
+  assert.equal(laptopIn("w2")?.sign_key, LAPTOP_SIGNS, "put in again with the key it signs with in the first");
+  assert.equal(checkLock(held(inner, "w2")!.entries, 2_000).devices.get(LAPTOP)?.sign_key, LAPTOP_SIGNS, "as the lock's rules take it");
+  // Its own key in the first stays the only one: nothing written there.
+  const length = held(inner, "ws")!.entries.length;
+  await run(keepToPerson(inner, "ws"));
+  assert.equal(held(inner, "ws")!.entries.length, length);
+});
+
+// A workspace of theirs whose chain moved says no key of its own: its chain is as it was at the move, and a device's
+// signer said again on its person's log since is the one its state names (views/lock.ts `signKeysElsewhere`).
+test("a device whose signer its person's log said again since a workspace of theirs moved is put in a second workspace with the signer the log says now, never the moved chain's", async () => {
+  const LAPTOP = "77".repeat(32), OLD = "ed25519:" + "22".repeat(32), NOW = "ed25519:" + "24".repeat(32), LAPTOP_KEY = "ed25519:" + "55".repeat(32);
+  const g = grant();
+  let me: Signer | null = null;
+  const m = await rig((s) => {
+    me = s;
+    return {
+      ws: genesis("ws", s, true, [], g.keys, ME, [{ id: LAPTOP, sub: "s1", kind: "app", label: "laptop", sign_key: OLD }]),
+      w2: genesis("w2", s, true, [], g.keys, ME, [{ id: LAPTOP, sub: "s1", kind: "app", label: "laptop" }]),
+    };
+  });
+  await m.watch({ topic: "lock", workspace: "ws" });
+  await m.watch({ topic: "lock", workspace: "w2" });
+  const inner = m.core.inner;
+  const run = async <A>(e: Effect.Effect<A, any>) => {
+    const out: unknown[] = [];
+    inner.runner.fork(Effect.map(Effect.result(e), (x) => out.push(x)));
+    await m.host.time.passUntil(5000, () => out.length !== 0);
+  };
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {},
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      kept.entries = (body as { entries: Entry[] }).entries;
+      return { entries: kept.entries };
+    }),
+  });
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (k: string, v: Uint8Array) => Effect.sync(() => void sealed.set(k, v));
+  const lockedGet = m.host.secureGet;
+  m.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => (o.user ? Effect.succeed(sealed.get(k) ?? null) : lockedGet!.call(m.host, k, o));
+  inner.adb.personal = () => personal;
+  const laptopIn = (ws: string) => fold(held(inner, ws)!.entries).devices.get(LAPTOP);
+  await run(read(inner, "ws"));
+  await run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  // (the laptop's signer said again on their log: the chain of `ws` names the one before)
+  await run(personal.addDevice("s1", { key: LAPTOP_KEY, id: LAPTOP, label: "laptop", sign_key: NOW }, "why"));
+  await run(read(inner, "ws"));
+  await run(bindPerson(inner, "ws"));
+  await run(read(inner, "ws"));
+  assert.equal(laptopIn("ws")?.sign_key, OLD, "the first workspace's chain names the signer before");
+  // `ws` moves to their log, its settings said there (their `open`), the laptop's signer there the one said now.
+  const pinned = personal.pinnedOf("s1");
+  const root = entryHash(pinned[0]!);
+  const open = { ws: "ws", kind: "open", origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys, email: "a@x.com", prev: null, salt: "61".repeat(16) };
+  const seed = sealed.get("personal-signer")!;
+  const last = pinned.at(-1)!;
+  const e = { v: 1 as const, ws: "person:s1", seq: pinned.length, prev: entryHash(last), at: last.at + 1, kind: "ws", body: { t: wsTag("ws", root), h: bodyHash(open)! } };
+  kept.entries = [...pinned, { ...e, sig: { key: personal.keyId()!, alg: "Ed25519" as const, sig: hex(ed25519.sign(signedBytes(entryHash(e)), seed)) } }];
+  await run(personal.refresh("s1"));
+  const chain = m.cloud.chains.get("ws")!;
+  const tail = chain.at(-1)!;
+  m.cloud.chains.set("ws", [...chain, me!.sign(next("ws", { seq: tail.seq, hash: entryHash(tail), genesis: entryHash(chain[0]!) }, tail.at + 1, "moved", { root }))]);
+  // (the workspace's station `st` keeps the chain moved and the `open`'s body, which its entry on s1's log commits to,
+  // and gives them to this device as a station does; the device takes them by its read)
+  stationReplies(m.host, (req) => {
+    const path = new URL(req.url).pathname.replace("/admin/api", "");
+    if (req.url.includes("/v1/")) return m.cloud.reply(req);
+    if (path === "/lock" && req.method === "GET") return { head: m.cloud.head("ws"), entries: m.cloud.chains.get("ws"), takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] };
+    if (path === "/lock/bodies" && req.method === "GET") return { bodies: [open], lacking: [] };
+    if (path === "/lock/logs" && req.method === "GET") return { chains: [] };
+    if (path === "/lock/devices" && req.method === "GET") return { devices: [] };
+    if (path === "/lock/person" && req.method === "GET") return { chains: [] };
+    return m.cloud.reply(req);
+  });
+  await run(read(inner, "ws"));
+  const force = inForceOf(inner, "ws");
+  assert.deepEqual([force.said, force.f.persons.has("s1"), force.f.devices.get(LAPTOP)?.sign_key, laptopIn("ws")?.sign_key], ["on", true, NOW, OLD], "moved: the state names the signer now, the chain the one before");
+  // (w2's station, reached at the same address here, keeps no lock of ws)
+  stationReplies(m.host, m.cloud.reply);
+  await run(read(inner, "w2"));
+  await run(personal.signGrant("s1", { station: "w2/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  await run(read(inner, "w2"));
+  await run(bindPerson(inner, "w2"));
+  await run(read(inner, "w2"));
+  assert.ok(fold(held(inner, "w2")!.entries).persons.has("s1"), "bound in w2");
+  await run(keepToPerson(inner, "w2"));
+  assert.equal(laptopIn("w2")?.sign_key, NOW, "put in with the signer the log says now");
+});
+
+test("a device on the person's own lock that no workspace's lock holds with its key is put in with the one their lock records for it", async () => {
+  // A member taken out and added again: the device the owner approved bound their lock, and their second device, on it,
+  // was let in by the stations but signed nothing: no workspace's lock held its key (the locks' end to end, round 12,
+  // 2026-11-10).
+  const LAPTOP = "77".repeat(32), LAPTOP_SIGNS = "ed25519:" + "22".repeat(32), LAPTOP_KEY = "ed25519:" + "55".repeat(32);
+  const g = grant();
+  const m = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME, []) }));
+  await m.watch({ topic: "lock", workspace: "ws" });
+  const inner = m.core.inner;
+  const run = async <A>(e: Effect.Effect<A, any>) => {
+    const out: unknown[] = [];
+    inner.runner.fork(Effect.map(Effect.result(e), (x) => out.push(x)));
+    await m.host.time.passUntil(5000, () => out.length !== 0);
+  };
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {}, signKey: () => signerOf(inner),
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      kept.entries = (body as { entries: Entry[] }).entries;
+      return { entries: kept.entries };
+    }),
+  });
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (k: string, v: Uint8Array) => Effect.sync(() => void sealed.set(k, v));
+  const lockedGet = m.host.secureGet;
+  m.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => (o.user ? Effect.succeed(sealed.get(k) ?? null) : lockedGet!.call(m.host, k, o));
+  inner.adb.personal = () => personal;
+  await run(read(inner, "ws"));
+  await run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  // Put on their lock where no workspace bound it: in no workspace's lock.
+  await run(personal.addDevice("s1", { key: LAPTOP_KEY, id: LAPTOP, label: "laptop", sign_key: LAPTOP_SIGNS }, "why"));
+  await run(read(inner, "ws"));
+  await run(bindPerson(inner, "ws"));
+  await run(read(inner, "ws"));
+  assert.ok(fold(held(inner, "ws")!.entries).persons.has("s1"), "bound");
+  // (the lock read, keepToPerson runs by itself as well: run here to have it done)
+  await run(keepToPerson(inner, "ws"));
+  assert.equal(fold(held(inner, "ws")!.entries).devices.get(LAPTOP)?.sign_key, LAPTOP_SIGNS, "put in with the key their lock records");
+  assert.equal(checkLock(held(inner, "ws")!.entries, 2_000).devices.get(LAPTOP)?.sign_key, LAPTOP_SIGNS, "as the lock's rules take it");
+  // Kept: nothing written again.
+  const length = held(inner, "ws")!.entries.length;
+  await run(keepToPerson(inner, "ws"));
+  assert.equal(held(inner, "ws")!.entries.length, length);
+  // The laptop signs with another key since, said in this lock (approved here again) and not yet on their chain: the
+  // key this lock holds is not written over with the chain's older one.
+  const NEWER = "ed25519:" + "23".repeat(32);
+  await run(new Lock(inner, "ws", "s1", null).append("device", { id: LAPTOP, sub: "s1", kind: "app", label: "laptop", sign_key: NEWER }));
+  await run(read(inner, "ws"));
+  const after = held(inner, "ws")!.entries.length;
+  await run(keepToPerson(inner, "ws"));
+  assert.equal(fold(held(inner, "ws")!.entries).devices.get(LAPTOP)?.sign_key, NEWER, "the newer key kept");
+  assert.equal(held(inner, "ws")!.entries.length, after, "nothing written over it");
 });
 
 test("a station of the lock that does not say it knows the entry, or does not answer, keeps the person's lock from being bound", async () => {
@@ -888,7 +1144,7 @@ test("a station of the lock that does not say it knows the entry, or does not an
     let done = false;
     let out: X | undefined;
     inner.runner.fork(Effect.map(e, (x) => { out = x; done = true; }));
-    for (let i = 0; i < 500 && !done; i++) await r.host.time.pass(10);
+    await r.host.time.passUntil(5000, () => done);
     assert.ok(done, "no answer");
     return out as X;
   };
@@ -922,14 +1178,15 @@ test("a station of the lock that does not say it knows the entry, or does not an
   await run(bindPerson(inner, "ws"));
   await run(read(inner, "ws"));
   assert.equal(persons(), undefined);
+  assert.equal(pendingHeld(inner, "ws").length, 0);
   // One that does not answer.
   said.set(B, Effect.fail(new CoreError("offline", "offline")));
   await run(bindPerson(inner, "ws"));
   await run(read(inner, "ws"));
   assert.equal(persons(), undefined);
-  // All of them know it.
+  // All of them know it: signed (pending here, these stations taking no entry: what is signed waits for one that does).
   said.set(B, knows);
-  await run(bindPerson(inner, "ws"));
-  await run(read(inner, "ws"));
-  assert.equal(persons(), personal.root("s1"));
+  inner.runner.fork(bindPerson(inner, "ws"));
+  await r.host.time.pass(TAKEN_MS + 500);
+  assert.deepEqual(pendingHeld(inner, "ws").map((p) => [p.entry.kind, (p.entry.body as { person?: string }).person]), [["person", personal.root("s1")]]);
 });

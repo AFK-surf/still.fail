@@ -2,7 +2,7 @@
 
 ///|
 test "15-drive-lend" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-lend"), seed~)
     f.open_page(@sfapp.Page::Files)
     f.see("个人收藏")

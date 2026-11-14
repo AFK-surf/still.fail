@@ -443,3 +443,22 @@ pub fn with_download_message(v : Json) -> Json {
     _ => v
   }
 }
+
+///|
+/// MBUI_FIXTURE=chat-download-on: chat-download's, its agent's long reply after the recording (the recording scrolled
+/// up under the chat's bar: flight_under_bar_wbtest.mbt).
+pub fn with_reply_after(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(msg(13, "agent", by_agent("anthropic", "claude", "s-c1"), long_reply, "刚刚", {}))
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}

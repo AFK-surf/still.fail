@@ -75,7 +75,8 @@ test("a session moved to another workspace while names are prepared is not shown
       prepareSessionChatNames: async (sessions: string[]) => {
         const preparation = new SessionChatPreparation();
         for (const session of sessions) while (!preparation.step(store.db, session).done) {}
-        store.db.prepare("UPDATE sessions SET ws='elsewhere' WHERE key='s'").run();
+        // Moved as the station moves a session to another workspace (the one way it is: `setSessionsWs`).
+        store.setSessionsWs("mine", "elsewhere");
       } };
     const accounts: any = { profilesView: () => [], loginsView: () => [], apiProviders: () => [], machineLogins: () => [],
       decisionModels: () => [], automaticDecisionsView: (_viewer: unknown, options: any) => ({

@@ -19,7 +19,7 @@ use iroh::address_lookup::{AddressLookup, AddressLookupBuilder, AddressLookupBui
 use iroh::endpoint::{Connection as IrohConnection, QuicTransportConfig, RecvStream, SendStream, presets::Minimal};
 use iroh::{Endpoint as IrohEndpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, SecretKey, Watcher};
 use n0_future::boxed::BoxStream;
-use napi::bindgen_prelude::Buffer;
+use napi::bindgen_prelude::{Buffer, Promise};
 use napi_derive::napi;
 use tokio::sync::Mutex;
 
@@ -344,12 +344,18 @@ impl Endpoint {
     }
 
     /// A connection to another endpoint (a peer station; a station, from a client), offering `alpn` and, for one from
-    /// before a rename, the `additional` ones too.
+    /// before a rename, the `additional` ones too. `given_up`: resolves once the caller no longer waits for it (its
+    /// own deadline passed), and the handshake is given up then (`dial`).
     #[napi]
-    pub async fn connect(&self, addr: Addr, alpn: Buffer, additional: Option<Vec<Buffer>>) -> napi::Result<Connection> {
+    pub async fn connect(&self, addr: Addr, alpn: Buffer, additional: Option<Vec<Buffer>>, given_up: Option<Promise<()>>) -> napi::Result<Connection> {
         let options = iroh::endpoint::ConnectOptions::new().with_additional_alpns(additional.unwrap_or_default().iter().map(|a| a.to_vec()).collect());
-        let connecting = self.inner.connect_with_opts(endpoint_addr(&addr)?, &alpn, options).await.map_err(failed)?;
-        let conn = connecting.await.map_err(failed)?;
+        let given_up = async move {
+            match given_up {
+                Some(promise) => drop(promise.await),
+                None => std::future::pending().await,
+            }
+        };
+        let conn = dial(&self.inner, endpoint_addr(&addr)?, &alpn, options, given_up).await.map_err(failed)?;
         Ok(Connection { inner: conn })
     }
 
@@ -391,6 +397,31 @@ impl Endpoint {
             task.abort();
         }
         self.inner.close().await;
+    }
+}
+
+/// A dial's handshake, given up as `given_up` resolves: its `Connecting` dropped, which closes it, so it sends no more
+/// Initials. The handshake is otherwise bounded only by the connection's idle timeout (CONNECTION_IDLE_MS): a dial its
+/// caller stopped waiting for (the app's after CONNECT_TIMEOUT_MS) went on retransmitting to every relay and address of
+/// the station for ten minutes, a dozen such filled the endpoint's queue of what it sends to that station and dropped
+/// what the connections that did come up sent, one of them came up tens of seconds late over a relay that answered
+/// once and stood dead for ten minutes, and the endpoint's close waited for all of them (2026-11-12, a station
+/// restarted while a device viewed its screen).
+async fn dial(
+    endpoint: &IrohEndpoint,
+    addr: EndpointAddr,
+    alpn: &[u8],
+    options: iroh::endpoint::ConnectOptions,
+    given_up: impl std::future::Future<Output = ()>,
+) -> anyhow::Result<IrohConnection> {
+    let handshake = async {
+        let connecting = endpoint.connect_with_opts(addr, alpn, options).await?;
+        anyhow::Ok(connecting.await?)
+    };
+    tokio::select! {
+        biased;
+        conn = handshake => conn,
+        () = given_up => Err(anyhow::anyhow!("given up")),
     }
 }
 
@@ -716,6 +747,45 @@ mod tests {
         fn into_address_lookup(self, _endpoint: &IrohEndpoint) -> Result<impl AddressLookup, AddressLookupBuilderError> {
             Err::<Nothing, _>(AddressLookupBuilderError::from_err("mdns", std::io::Error::other("no network")))
         }
+    }
+
+    /// What came to `socket` since it was last asked: datagrams, counted.
+    fn arrived(socket: &tokio::net::UdpSocket) -> usize {
+        let mut buf = [0u8; 2048];
+        let mut n = 0;
+        while socket.try_recv(&mut buf).is_ok() {
+            n += 1;
+        }
+        n
+    }
+
+    /// A dial whose caller gave up sends nothing more to the station, and the endpoint closes at once; one nobody gives
+    /// up goes on retransmitting its Initial until the connection's idle timeout (CONNECTION_IDLE_MS), and the endpoint's
+    /// close waits that long for it. On the test's clock (paused: it moves when nothing else can), a socket that takes
+    /// every datagram and answers none in place of the station.
+    #[tokio::test(start_paused = true)]
+    async fn a_dial_given_up_sends_no_more() {
+        let quiet = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let station = EndpointAddr::new(SecretKey::from_bytes(&[7; 32]).public()).with_ip_addr(quiet.local_addr().unwrap());
+        let endpoint = IrohEndpoint::builder(Minimal).relay_mode(RelayMode::Disabled).bind().await.unwrap();
+        let (give_up, given_up) = tokio::sync::oneshot::channel::<()>();
+        let dialing = tokio::spawn({
+            let endpoint = endpoint.clone();
+            async move { dial(&endpoint, station, b"test", iroh::endpoint::ConnectOptions::new(), async { drop(given_up.await) }).await }
+        });
+        // The app's CONNECT_TIMEOUT_MS: its Initial sent, and again as nothing answers.
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        assert!(arrived(&quiet) >= 2, "the dial sent its Initial and retransmitted it");
+        give_up.send(()).unwrap();
+        assert_eq!(dialing.await.unwrap().unwrap_err().to_string(), "given up");
+        // What its close sends, then nothing for the rest of the ten minutes.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        arrived(&quiet);
+        tokio::time::sleep(Duration::from_millis(CONNECTION_IDLE_MS.into())).await;
+        assert_eq!(arrived(&quiet), 0, "a dial given up went on sending");
+        let closing = tokio::time::Instant::now();
+        endpoint.close().await;
+        assert!(closing.elapsed() < Duration::from_secs(5), "the endpoint's close waited {:?}", closing.elapsed());
     }
 
     #[tokio::test]

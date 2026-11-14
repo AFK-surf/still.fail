@@ -136,13 +136,6 @@ export function resolveTyped(typed: string, stations: readonly Named[], from: { 
   return { station: s.station, abs, parent: ends ? abs : cut <= 0 ? "/" : abs.slice(0, cut), partial: ends ? "" : abs.slice(cut + 1) };
 }
 
-/// The stations with a drive (their overview says one; one from before the drive has none), this machine's (`here`)
-/// first, then as the workspace lists them.
-export function withDrive<S extends { station: string; overview?: unknown }>(stations: readonly S[], here: string | null): S[] {
-  const drives = stations.filter((s) => { const o = s.overview as { drive?: unknown } | null | undefined; return typeof o === "object" && o !== null && typeof o.drive === "object" && o.drive !== null; });
-  return here === null ? drives : [...drives].sort((a, b) => (a.station === here ? -1 : b.station === here ? 1 : 0));
-}
-
 // ── the files' page's tabs ──
 
 // As Finder's: each a folder of a station of the workspace, or two side by side (one of them in front: what the keys,

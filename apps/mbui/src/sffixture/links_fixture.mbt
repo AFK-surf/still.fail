@@ -7,28 +7,28 @@
 /// `?history=` alone; null for any other.
 pub fn fixture_link_parse(url : String) -> Json {
   let (path, query) = match url.find("?") {
-    Some(i) => (url.view(end_offset=i).to_string(), url.view(start_offset=i + 1).to_string())
+    Some(i) => (url.exact_view(end=i).to_owned(), url.exact_view(start=i + 1).to_owned())
     None => (url, "")
   }
-  let q : Map[String, String] = {}
+  let q : Map[String, String] = Map([])
   for kv in query.split("&") {
-    let kv = kv.to_string()
+    let kv = kv.to_owned()
     match kv.find("=") {
-      Some(i) => q[kv.view(end_offset=i).to_string()] = kv.view(start_offset=i + 1).to_string()
+      Some(i) => q[kv.exact_view(end=i).to_owned()] = kv.exact_view(start=i + 1).to_owned()
       None => ()
     }
   }
-  let o : Map[String, Json] = {}
+  let o : Map[String, Json] = Map([])
   let put = fn(k : String, v : String) { if v != "" { o[k] = Json::string(v) } }
   let after = fn(cut : String) -> Array[String]? {
     match path.find(cut) {
-      Some(i) => Some(path.view(start_offset=i + cut.length()).to_string().split("/").map(fn(v) { v.to_string() }).to_array())
+      Some(i) => Some(path.exact_view(start=i + cut.length()).to_owned().split("/").map(fn(v) { v.to_owned() }).to_array())
       None => None
     }
   }
   if path.contains("/invite") && url.contains("#") {
     put("opens", "invite")
-    put("token", url.view(start_offset=url.find("#").unwrap() + 1).to_string())
+    put("token", url.exact_view(start=url.find("#").unwrap() + 1).to_owned())
   } else if after("/o/") is Some(p) && p.length() >= 3 {
     put("opens", "item")
     put("workspace", p[0])

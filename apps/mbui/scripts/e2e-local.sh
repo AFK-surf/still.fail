@@ -13,6 +13,23 @@
 #   scripts/e2e-local.sh android    the same on an emulator of our own (AVD, EMU_PORT), with a screen recording
 #   scripts/e2e-local.sh ios        the same on an iOS simulator of our own (MBUI_IOS_DEVICE), recorded
 #   scripts/e2e-local.sh down       stops what `up` started
+#   scripts/e2e-local.sh locks      the locks end to end against what `up` started (e2e/locks.ts: alice's and
+#                                   bob's devices, apps and a web page, each still.fail's core in Node; it freezes
+#                                   and starts anew the station and the cloud, and enrolls a second station),
+#                                   pass/fail per step
+#   scripts/e2e-local.sh locks-all  up, locks, down (the side run's, scripts/side.sh locks); locks failed, what the run
+#                                   wrote is kept before down (`kept locks`)
+#   scripts/e2e-local.sh locks-moved-all  up, e2e/locks-moved.ts (a workspace's chain handed over to its people's own
+#                                   logs, and its acts after), down (scripts/side.sh locks-moved); kept as locks-all's.
+#                                   handed over by itself as A answers an ask for something else, nothing calling
+#                                   lock.handOver (E2E_HANDOVER=call: the call, as before HAND_OVER_FROM)
+#   scripts/e2e-local.sh rigs       a rig end to end against what `up` started (e2e/rigs.ts: a machine enrolled as
+#                                   alice's rig beside the test station, asked for, granted, used, taken back)
+#   scripts/e2e-local.sh rigs-all   up, rigs, down (the side run's, scripts/side.sh rigs); rigs failed, kept the same
+#   scripts/e2e-local.sh kept locks|rigs   what this run wrote, copied to $E2E_WORK/kept (emptied first, and by up):
+#                                   the cloud's and relay's logs, each station's (station, second, third, rig: its
+#                                   launcher's, its enrollment's, its data/logs, its kept locks of data/mesh), each
+#                                   device's record (devices/NAME.log); a file over 5 MB its last 5 MB
 #   scripts/e2e-local.sh snapshot NAME [CORE]   a starting point: the cloud's, the station's, the peer's and the app's
 #                                   core data (CORE) as they are now ($E2E_WORK/snapshots/NAME)
 #   scripts/e2e-local.sh restore NAME          back to it (the station and the cloud stopped, put back, started)
@@ -25,7 +42,8 @@
 #   scripts/e2e-local.sh android-unlock PIN   the system's prompt for the screen lock answered with PIN, once its field is up
 #   scripts/e2e-local.sh intruder-refused CMD…  e2e/peer.ts as a device the cloud signed in as alice and the lock never
 #                                   took in, asked CMD: INTRUDER REFUSED once the station refused it
-#   scripts/e2e-local.sh lock-state the security mode as the test station keeps it: LOCK, DEVICE lines, STATIONS
+#   scripts/e2e-local.sh lock-state [NAME]   the security mode as the test station keeps it (NAME: the station beside it
+#                                   of that name, second-station's): LOCK, DEVICE lines, STATIONS, PERSONS, PERSON lines
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
 #   scripts/e2e-local.sh android-installer    until the system's installer is the emulator's top activity, then back
@@ -33,6 +51,8 @@
 #   scripts/e2e-local.sh pins       whether alice keeps the test chat pinned (PINS 1 or 0)
 #   scripts/e2e-local.sh wait-chat WORDS   until the test station has a chat whose first words begin with WORDS
 #   scripts/e2e-local.sh freeze|thaw  the test station stopped where it is (SIGSTOP: as if its network went) or started anew
+#   scripts/e2e-local.sh cloud-freeze|cloud-thaw  the cloud stopped where it is (it answers nothing: down, or holding
+#                                   everything back) or let go on
 #   scripts/e2e-local.sh drive-seed TAG   the drive flows' folder in the test station's home (e2e-TAG)
 #   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
 #   scripts/e2e-local.sh drive-big TAG    the downloads' folder in it (e2e-TAG/大文件: 48 MB and a small file)
@@ -40,9 +60,15 @@
 #   scripts/e2e-local.sh drive-photo TAG [renamed]  the run's photo, as 18's upload or 19's rename left it
 #   scripts/e2e-local.sh android-stage FILE…  files to attach put where the app's provider serves them (a share's intent)
 #   scripts/e2e-local.sh android-gallery FILE…  files put in the emulator's gallery, the app let read it
-#   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
-#   scripts/e2e-local.sh second-station FILE   a second station enrolled with the command the app made (its log, FILE)
-#   scripts/e2e-local.sh second-down      that station stopped, its directory gone
+#   scripts/e2e-local.sh release-seed     a newer build of the app (the APK built again as build 2) and a delta to it
+#                                   from the installed one in the local cloud's releases
+#   scripts/e2e-local.sh second-station FILE [third|fourth] [bare]   a second station enrolled with the command the app
+#                                   made (its log, FILE); `third`, `fourth`: another beside it; `bare`: with its token
+#                                   alone, the lock's hash dropped (as the app's 添加这台 Mac enrolled one before #5545:
+#                                   in the workspace, not in its lock)
+#   scripts/e2e-local.sh second-down [third]   that station stopped, its directory gone
+#   scripts/e2e-local.sh second-stop [third]   that station stopped, its directory kept (its machine switched off)
+#   scripts/e2e-local.sh second-again [third]  that station started again on its directory, nothing enrolled
 #   scripts/e2e-local.sh connects [WORDS]   the test station's connects as its config has them (CONNECT id enabled=
 #                                       mode=), once a line has WORDS
 #   scripts/e2e-local.sh profiles [WORDS]   its profiles as its config has them (PROFILE id name), once a line has WORDS
@@ -117,7 +143,10 @@ sources() {
     git clone -q "$SF_SRC" $E
   fi
   if [ "$(git -C $E rev-parse HEAD)" != "$want" ]; then
-    git -C $E fetch -q origin && git -C $E -c advice.detachedHead=false checkout -q --detach $want
+    # (the revision wanted alone: a checkout that shares its repository with others has branches whose objects it may
+    # lack, and fetching them all fails; failed, the run stops, never going on with the revision before)
+    git -C $E fetch -q "$SF_SRC" HEAD || die "the source revision could not be fetched from $SF_SRC"
+    git -C $E -c advice.detachedHead=false checkout -q --detach $want || die "no source revision $want in $E"
     rm -f $WORK/stillfail.ready
   fi
   if [ "$(cat $WORK/stillfail.ready 2>/dev/null)" != "$want" ]; then
@@ -141,8 +170,11 @@ start_cloud() {
   rm -f "$RUN/cloud.ready"
   mkfifo "$RUN/cloud.ready"
   exec 9<> "$RUN/cloud.ready"
+  # (its sign-in limit 20 times the product's: every device of a run signs in from 127.0.0.1, nine with the moved
+  # rounds, and runs in a row share the minute and the day; the product's own and the deployed cloud's untouched)
   (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT PERSIST=$RUN/cloud-state \
-    AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} detach node "$D/waitfor.mjs" --tee $RUN/cloud.log \
+    LOGIN_LIMIT_TIMES=${E2E_LOGIN_LIMIT_TIMES:-20} \
+    AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} LOG_REQUESTS=1 detach node "$D/waitfor.mjs" --tee $RUN/cloud.log \
     --line 'READY still.fail cloud' --mark $RUN/cloud.ready -- pnpm exec tsx test/dev.ts 9>&- & echo $! > $RUN/cloud.pid)
   if ! IFS= read -r -t 120 ready <&9; then
     exec 9>&-
@@ -225,6 +257,8 @@ up() {
   for p in $PORT $((PORT + 1)) $((PORT + 2)) $((PORT + 3)) $((PORT + 4)) $((PORT + 5)) $RELAY_PORT; do
     listening $p && die "port $p is taken (E2E_PORT, E2E_RELAY): run down, or pick others"
   done
+  # (what a failed run before this one kept is not this one's)
+  rm -rf $KEPT
   sources
   # the relay: iroh-relay in dev mode (plain HTTP) on loopback, as still.fail's side tests run it
   cat > $RUN/relay.toml <<EOF
@@ -267,6 +301,9 @@ export STILLFAIL_TEST_HOST=1
 export STILLFAIL_DATA=$STATION/data
 export STILLFAIL_MESH_NATIVE=$(native mesh)
 export STILLFAIL_RUNNER=$(native runner)
+# the station's MoonBit program, as a release has it beside main.js: its readers and the front that keeps its iroh
+# endpoint across handovers (station/native/launcher/src/front.rs)
+export STILLFAIL_MB_READER=$(native reader)
 export FAKE_DUMP=$STATION/fake-claude.jsonl
 EOF
   (. $RUN/station-env.sh && node $E/station/dist/main.js enroll $ORIGIN $token --data $STATION/data >$RUN/enroll.log 2>&1) \
@@ -288,8 +325,9 @@ stop() {
     local pid=$(cat $RUN/$1.pid)
     # its process group: it and what it started (pnpm → tsx → node → workerd; the launcher → node → runner)
     kill -TERM -- -$pid 2>/dev/null || true
-    # (its end as the system tells it, mbui's scripts/chk logwait --pid: kqueue's; 5 s at most, then killed)
-    "$MBUI_DIR/scripts/chk" logwait --pid $pid --deadline 5 > /dev/null 2>&1
+    # (its end as the system tells it, mbui's scripts/chk logwait --pid: kqueue's; 5 s at most, then killed: its
+    # deadline passed is no failure, under set -e it ended `down` there and left the relay running, a run's each)
+    "$MBUI_DIR/scripts/chk" logwait --pid $pid --deadline 5 > /dev/null 2>&1 || true
     kill -9 -- -$pid 2>/dev/null || true
   fi
   rm -f $RUN/$1.pid
@@ -298,11 +336,11 @@ stop() {
 down() {
   # (the station's directory another run's: only what this run started, by its own pids)
   if held_by_other; then
-    stop second; stop station; stop cloud; stop relay
+    stop second; stop third; stop fourth; stop rig; stop station; stop cloud; stop relay
     say "down ($STATION left to the run of $(readlink "$HELD"))"
     return 0
   fi
-  second_down >/dev/null 2>&1 || true
+  for n in second third fourth rig; do second_down $n >/dev/null 2>&1 || true; done
   stop station
   # whatever of the test station is left (its node, runner): only processes on its own data directory
   pkill -f "$STATION/data" 2>/dev/null || true
@@ -333,6 +371,58 @@ down() {
 peer() {
   (. $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/peer-home; mkdir -p $HOME
    E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/peer E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
+}
+
+# e2e/locks.ts beside this run, from this directory (it says scripts/e2e-local.sh's words itself: freeze, thaw,
+# cloud-freeze, second-station, second-stop, second-again), its devices' data under $WORK/locks
+locks() {
+  (export E2E_HOME=$HOME; . $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/locks-home; mkdir -p $HOME
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/locks E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
+     E2E_RELAY=$RELAY_PORT node $ROOT/e2e/locks.ts </dev/null)
+}
+# e2e/locks-moved.ts the same way (a workspace's chain handed over to its people's own logs, and what is done in it
+# after), a run of its own on a fresh cloud and stations, its devices' data under $WORK/locks-moved
+locks_moved() {
+  (export E2E_HOME=$HOME; . $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/locks-moved-home; mkdir -p $HOME
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/locks-moved E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
+     E2E_RELAY=$RELAY_PORT node $ROOT/e2e/locks-moved.ts </dev/null)
+}
+# e2e/rigs.ts the same way (a rig enrolled beside the test station, asked for, granted, used, taken back), its devices'
+# data under $WORK/rigs
+rigs() {
+  (export E2E_HOME=$HOME; . $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/rigs-home; mkdir -p $HOME
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/rigs E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
+     E2E_RELAY=$RELAY_PORT node $ROOT/e2e/rigs.ts </dev/null)
+}
+
+# What a failed locks or rigs leaves to be read (the side run uploads it: .github/workflows/side.yml), copied before
+# down ends it all: the logs of this run, the cloud's, the relay's and each station's apart (side run 42815367472's
+# job's log had a device's handshake refused five times and did not say which process refused it), each device's
+# record of what its links did (e2e/device.ts), and the locks each station kept as they stood (public keys and signed
+# entries of the test accounts). Nothing else of the data directories: no database, keys, config or sealed values.
+# Only files written since this run's up (its auth-key), so another run's left in $WORK never pass for this one's. A
+# copy that fails is let be: what the run ended with is what it says.
+KEPT=$WORK/kept
+keep() {
+  [ -f "$1" ] && [ ! "$1" -ot $RUN/auth-key ] || return 0
+  mkdir -p "$(dirname "$KEPT/$2")" || return 0
+  if [ "$(wc -c < "$1" | tr -d ' ')" -gt 5242880 ]; then tail -c 5242880 "$1" > "$KEPT/$2"; else cp "$1" "$KEPT/$2"; fi
+}
+kept() {
+  local part=${1:?locks or rigs} n d f
+  rm -rf $KEPT && mkdir -p $KEPT || return 0
+  keep $RUN/cloud.log cloud.log
+  keep $RUN/relay.log relay.log
+  for n in station second third fourth rig; do
+    if [ $n = station ]; then d=$STATION; f=enroll; else d=$(more_dir $n); f=$n-enroll; fi
+    keep $RUN/$n.log $n/launcher.log
+    keep $RUN/$f.log $n/enroll.log
+    for f in "$d"/data/logs/*.log; do keep "$f" $n/logs/"$(basename "$f")"; done
+    keep "$d"/data/mesh/lock.json $n/mesh/lock.json
+    keep "$d"/data/mesh/person-chains.json $n/mesh/person-chains.json
+  done
+  for f in $WORK/$part/*/record.log; do keep "$f" devices/"$(basename "$(dirname "$f")")".log; done
+  say "kept $KEPT ($(find $KEPT -type f | wc -l | tr -d ' ') files)"
 }
 
 # a device the cloud signed in as alice on its own (what a cloud that is not to be trusted can do: mint her a credential)
@@ -373,19 +463,48 @@ peer_wait() {
   cat $RUN/peer-bg.out; grep -q "^PEER EXIT 0" $RUN/peer-bg.out
 }
 
-# the security mode as the test station keeps it (its lock.json, read by the station's own rules): LOCK on|off,
-# DEVICE <id> <person> <kind> own=<own> a line each, STATIONS n
+# the security mode as the test station keeps it (its lock.json, read by the station's own rules; NAME: that of the
+# station beside it so named, as second-station names them): LOCK on|off,
+# DEVICE <id> <person> <kind> own=<own> exp=<seconds, or -> a line each, STATIONS n, HEAD <its head's hash>,
+# PERSONS n, PERSON <person> <the
+# lock of their own bound> a line each; SAID and the devices whose latest `device` entry says the key they are or would
+# be on their person's own lock with (`person_key`, which the fold drops: read of the entries themselves), the first 12
+# hex digits of each
 lock_state() {
-  local f=$(find $STATION/data -name lock.json 2>/dev/null | head -1)
+  local at=$STATION
+  [ -z "${1:-}" ] || at=$(more_dir $1)
+  local f=$(find $at/data -name lock.json 2>/dev/null | head -1)
   [ -n "$f" ] || { echo "LOCK off"; return; }
   (cd $E/station && node --input-type=module -e "
 import { readFileSync } from 'node:fs';
-const { fold } = await import('./src/cloud/lock.ts');
+const { fold, state4Moved } = await import('./src/cloud/lock.ts');
 const j = JSON.parse(readFileSync(process.argv[1], 'utf8'));
-const s = fold(j.entries ?? j, null);
+const chain = fold(j.entries ?? j, null);
+let s = chain;
+if (chain.moved !== undefined && !chain.disabled) {
+  // (its chain moved to its people's logs: the state in force is the rules' of the logs and bodies this station keeps,
+  // read with the chain as it moved, by its clock, as station/src/cloud/state.ts forceOf makes it; LOCK says it on or
+  // off, MOVED the root and how)
+  const data = process.argv[1].replace(/\/mesh\/.*$/, '');
+  const read = (f, or) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return or; } };
+  const kept = read(data + '/mesh/person-chains.json', {});
+  const logs = Object.values(kept.chains ?? kept).filter((c) => Array.isArray(c));
+  const ws = (j.entries ?? j)[0].ws;
+  const bodies = (read(data + '/mesh/locks/' + ws + '.bodies.json', {}).bodies ?? []);
+  const f = state4Moved(ws, j.entries ?? j, logs, bodies, Math.floor(Date.now() / 1000));
+  s = { ...f.state, disabled: f.on !== 'on', seq: chain.seq, head: chain.head };
+  console.log('MOVED ' + chain.moved.slice(0, 12) + ' ' + f.on.replace(' ', '-') + ' logs=' + logs.length + ' bodies=' + bodies.length);
+}
 console.log(s.disabled ? 'LOCK off' : 'LOCK on ' + s.seq);
-for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' ' + (d.label ?? ''));
+for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' exp=' + (d.exp ?? '-') + ' ' + (d.label ?? ''));
 console.log('STATIONS ' + s.stations.size);
+console.log('HEAD ' + s.head);
+console.log('PERSONS ' + s.persons.size);
+for (const [sub, m] of s.members) console.log('MEMBER ' + sub + ' ' + (m?.role ?? m));
+for (const [sub, person] of s.persons) console.log('PERSON ' + sub + ' ' + String(person).slice(0, 12));
+const said = new Map();
+for (const e of (j.entries ?? j)) if (e?.kind === 'device' && typeof e.body?.id === 'string') said.set(e.body.id, typeof e.body.person_key === 'string');
+console.log(['SAID', ...[...said].filter(([, k]) => k).map(([id]) => id.slice(0, 12))].join(' '));
 " "$f")
 }
 
@@ -555,16 +674,33 @@ drive_media() {
   say "drive media $d"
 }
 
-# a newer build of the app in the local cloud's releases (the updates' flow, 49): the APK as built, as android/stillfail-2.apk,
-# and the feed's latest.json naming it (version code 2, 0.1.1; its sha256 and size), served by the dev cloud from the
-# clone's dist/releases; on the emulator, the app given leave to install apps (安装未知应用), as the person would
+# a newer build of the app in the local cloud's releases (the updates' flow, 49): the APK installed (E2E_APK, else the
+# debug build) built again as build 2 (mbui's scripts/apk: its dex and libraries kept, only its manifest linked again
+# with the new version code and the APK packed, repacked and signed: android/stillfail-2.apk), a delta from the
+# installed one to it (scripts/delta.ts make --old-apk: the manifest differs, so at least one deflated entry is inflated,
+# patched and deflated again by the device's own deflater, Delta.java), and the feed's latest.json naming both (version
+# code 2, 0.1.1; their sha256 and size, the delta's from build 1), served by the dev cloud from the clone's
+# dist/releases; on the emulator, the app given leave to install apps (安装未知应用), as the person would
 release_seed() {
-  local apk=$ROOT/android/app/build/outputs/apk/debug/app-debug.apk d=$E/dist/releases/android
+  local apk=${E2E_APK:-$ROOT/android/app/build/outputs/apk/debug/app-debug.apk} d=$E/dist/releases/android
   [ -f "$apk" ] || die "no APK built ($apk)"
-  mkdir -p $d && cp "$apk" $d/stillfail-2.apk
+  mkdir -p $d && rm -f $d/stillfail-2.apk*
+  # (the installed one's ABI and variant: the same app but for its version code)
+  local abi=$(unzip -Z1 "$apk" 'lib/*' 2>/dev/null | sed -n 's|^lib/\([^/]*\)/.*|\1|p' | head -1)
+  [ -z "${JAVA_HOME:-}" ] && [ -x /usr/libexec/java_home ] && export JAVA_HOME=$(/usr/libexec/java_home -v 20 2>/dev/null || /usr/libexec/java_home)
+  ANDROID_HOME=${ANDROID_HOME:-$HOME/Library/Android/sdk} "$MBUI_DIR/scripts/apk" build $ROOT/android/apk.json \
+    --variant ${VARIANT:-debug} --version-code 2 --version-name 0.1.1 ${abi:+--abi $abi} --out $d/stillfail-2.apk \
+    > $RUN/release-seed.log 2>&1 || { tail -20 $RUN/release-seed.log; die "the next build not made"; }
+  (cd $SF_SRC && node scripts/delta.ts make --old-apk "$apk" --new $d/stillfail-2.apk --out $d/stillfail-2.apk.from-1.delta \
+    --deflate-check none && node scripts/delta.ts info $d/stillfail-2.apk.from-1.delta > $RUN/release-seed-delta.json) \
+    >> $RUN/release-seed.log 2>&1 || { tail -20 $RUN/release-seed.log; die "no delta made"; }
+  node -e 'const i = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.exit(i.inflate.length > 0 && i.deflate.length > 0 ? 0 : 1)' \
+    $RUN/release-seed-delta.json || die "the delta inflates or deflates nothing ($RUN/release-seed-delta.json): the next build differs in no deflated entry"
   local sum=$(shasum -a 256 $d/stillfail-2.apk | cut -d' ' -f1) size=$(wc -c < $d/stillfail-2.apk | tr -d ' ')
   printf '{"versionCode":2,"versionName":"0.1.1","file":"android/stillfail-2.apk","sha256":"%s","size":%s}\n' $sum $size > $d/latest.json
-  say "release android/stillfail-2.apk ($size bytes, $sum) in $d"
+  node "$ROOT/e2e/feed-delta.mjs" $d/latest.json - 1 android/stillfail-2.apk.from-1.delta $d/stillfail-2.apk.from-1.delta >/dev/null ||
+    die "the feed not given its delta"
+  say "release android/stillfail-2.apk ($size bytes, $sum) and its delta from 1 ($(wc -c < $d/stillfail-2.apk.from-1.delta | tr -d ' ') bytes) in $d"
   local adb=${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb
   [ -n "${EMU_PORT:-}" ] && $adb -s emulator-$EMU_PORT shell appops set ${E2E_PKG:-dev.mbui.demo} REQUEST_INSTALL_PACKAGES allow && say "the app may install apps"
   return 0
@@ -572,29 +708,77 @@ release_seed() {
 
 # a second station (flow 80, adding one): enrolled with the token of the command the app made (the last
 # `ANSWER workspace.enroll` in the flow's log, FILE), its own data and HOME beside the first's ($STATION-b), started;
-# `second-down` stops it and takes its directory away
+# `second-down` stops it and takes its directory away. `bare` (after its name): the lock's hash the command names is
+# not given it, as the app's installer enrolled a station before #5545 (e2e/locks.ts round 17: in a locked workspace,
+# not in its lock)
 second_station() {
-  local token=$(grep 'ANSWER workspace.enroll ok' "${1:?the log of the flow}" | tail -1 | sed 's/.*"command":"\([^"]*\)".*/\1/' | awk '{print $NF}')
+  local cmd=$(grep 'ANSWER workspace.enroll ok' "${1:?the log of the flow}" | tail -1 | sed 's/.*"command":"\([^"]*\)".*/\1/')
+  # (a locked workspace's: the lock's hash after --lock, which it pins)
+  local lock=$(echo "$cmd" | sed -n 's/.*--lock \([0-9a-f]*\).*/\1/p')
+  [ "${3:-}" != bare ] || lock=
+  # (a rig's, e2e/rigs.ts: its person's own lock's hash after --rig; enrolled so, it starts as a rig)
+  local rig=$(echo "$cmd" | sed -n 's/.*--rig \([0-9a-f]*\).*/\1/p')
+  local token=$(echo "$cmd" | sed 's/ --lock [0-9a-f]*//; s/ --rig [0-9a-f]*//' | awk '{print $NF}')
   [ -n "$token" ] || die "no command made in $1"
-  local B=$STATION-b
-  second_down >/dev/null 2>&1
+  # (`third`, `fourth`: another beside it, of the same kind: its files under that name, its directory $STATION-<name>)
+  local n=${2:-second}
+  local B=$(more_dir $n)
+  second_down $n >/dev/null 2>&1
   mkdir -p $B/data $B/home $B/app/node/bin
+  # (its key chosen by the run, where it put one at $RUN/NAME.seed: so where its id sorts among the others' is the run's)
+  [ ! -f $RUN/$n.seed ] || { mkdir -p $B/data/mesh && cp $RUN/$n.seed $B/data/mesh/secret.key && chmod 600 $B/data/mesh/secret.key; }
   ln -s $E/station/dist $B/app/station
   ln -s "$(command -v node)" $B/app/node/bin/node
   echo '{"autoUpdate":false}' > $B/data/config.json
   (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && \
-    node $E/station/dist/main.js enroll $ORIGIN $token --data $B/data >$RUN/second-enroll.log 2>&1) \
-    || { cat $RUN/second-enroll.log; die "enrolling the second station failed"; }
-  (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && \
-    detach "$(native launcher)" run --app $B/app --data $B/data >$RUN/second.log 2>&1 & echo $! > $RUN/second.pid)
-  wait_for "[ -f $B/data/stillfail.db ]" 60 || { tail -20 $RUN/second.log; die "the second station did not start"; }
-  say "second station up ($(cat $RUN/second.pid)), enrolled"
+    node $E/station/dist/main.js enroll $ORIGIN $token ${lock:+--lock $lock} ${rig:+--rig $rig} --data $B/data >$RUN/$n-enroll.log 2>&1) \
+    || { cat $RUN/$n-enroll.log; die "enrolling the $n station failed"; }
+  more_launch $n
+  say "$n station up ($(cat $RUN/$n.pid)), enrolled: $(tr '\n' ' ' < $RUN/$n-enroll.log)"
 }
+# a station beside the test station's (NAME) started on its directory as start_station starts the first: up once its
+# launcher says a Node has taken over (its log $RUN/NAME.log, a minute at most), its pid in $RUN/NAME.pid
+more_launch() {
+  local n=$1 B=$(more_dir $1)
+  local launcher=$(native launcher)
+  rm -f "$RUN/$n.ready"
+  mkfifo "$RUN/$n.ready"
+  exec 9<> "$RUN/$n.ready"
+  (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && detach node "$D/waitfor.mjs" --tee "$RUN/$n.log" \
+    --line 'Node [0-9]+ has taken over' --mark "$RUN/$n.ready" -- \
+    "$launcher" run --app $B/app --data $B/data 9>&- >/dev/null 2>&1 & echo $! > $RUN/$n.pid)
+  if ! IFS= read -r -t 60 ready <&9; then
+    exec 9>&-
+    rm -f "$RUN/$n.ready"
+    tail -20 "$RUN/$n.log"
+    die "the $n station did not start"
+  fi
+  exec 9>&-
+  rm -f "$RUN/$n.ready"
+}
+# the directory of a station beside the test station's: the second's $STATION-b, another's $STATION-<name>
+more_dir() { [ "$1" = second ] && echo $STATION-b || echo $STATION-$1; }
 second_down() {
-  stop second
-  pkill -9 -f "$STATION-b/data" 2>/dev/null || true
-  rm -rf "$STATION-b"
-  say "second station down"
+  local n=${1:-second}
+  stop $n
+  pkill -9 -f "$(more_dir $n)/data" 2>/dev/null || true
+  rm -rf "$(more_dir $n)"
+  say "$n station down"
+}
+# that station's machine switched off: its processes ended as `stop` ends them, whatever is left on its data directory
+# too, its directory and data kept for `second-again`
+second_stop() {
+  local n=${1:-second}
+  stop $n
+  pkill -9 -f "$(more_dir $n)/data" 2>/dev/null || true
+  say "$n station stopped ($(more_dir $n) kept)"
+}
+# and switched on again: started on the same data as second_station starts it once enrolled, nothing enrolled
+second_again() {
+  local n=${1:-second}
+  [ -d "$(more_dir $n)/data" ] || die "no $n station to start again ($(more_dir $n)/data is not there)"
+  more_launch $n
+  say "$n station up again ($(cat $RUN/$n.pid))"
 }
 
 # the test station's connects as its config.json has them: CONNECT <id> enabled=<on> mode=<mode>, a line each
@@ -658,6 +842,9 @@ freeze() {
   kill -STOP $(station_tree $p)
   say "station frozen ($(station_tree $p | tr '\n' ' '))"
 }
+# the cloud frozen (it answers nothing, as one down or holding everything back), and let go on again
+cloud_freeze() { local p=$(cat $RUN/cloud.pid); kill -STOP $(station_tree $p); say "cloud frozen ($(station_tree $p | tr '\n' ' '))"; }
+cloud_thaw() { local p=$(cat $RUN/cloud.pid); kill -CONT $(station_tree $p); say "cloud thawed"; }
 # the station up again: the Node the launcher starts anew says so in its log once it is (main.ts's "station up": its
 # mesh and its parts made, the launcher told it is ready), what was written after FROM (a byte offset of the log)
 station_up_after() {
@@ -679,7 +866,7 @@ thaw() {
 }
 
 case "${1:-all}" in
-  install) sources; for n in iroh-relay mesh runner launcher; do native $n > /dev/null; done ;;
+  install) sources; for n in iroh-relay mesh runner launcher reader; do native $n > /dev/null; done ;;
   up) up ;;
   snapshot) shift; snapshot "$@" ;;
   restore) shift; restore "$@" ;;
@@ -692,7 +879,7 @@ case "${1:-all}" in
   peer-wait) peer_wait ;;
   intruder-refused) shift; intruder_refused "$@" ;;
   android-unlock) android_unlock "$2" ;;
-  lock-state) lock_state ;;
+  lock-state) shift; lock_state "$@" ;;
   android-pin) shift; android_pin "$@" ;;
   android-tap) shift; "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb" -s emulator-${EMU_PORT:-5586} shell input tap "$@" ;;
   sql) shift; sql "$@" ;;
@@ -706,6 +893,8 @@ case "${1:-all}" in
   android-ime) shift; android_ime "$@" ;;
   android-installer) android_installer ;;
   freeze) freeze ;;
+  cloud-freeze) cloud_freeze ;;
+  cloud-thaw) cloud_thaw ;;
   thaw) thaw ;;
   drive-seed) shift; drive_seed "$@" ;;
   drive-media) shift; drive_media "$@" ;;
@@ -716,10 +905,29 @@ case "${1:-all}" in
   android-gallery) shift; android_gallery "$@" ;;
   release-seed) release_seed ;;
   second-station) shift; second_station "$@" ;;
-  second-down) second_down ;;
+  second-down) shift; second_down "$@" ;;
+  second-stop) shift; second_stop "$@" ;;
+  second-again) shift; second_again "$@" ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   ios) shift; "$ROOT/e2e/run.sh" ios "$@" ;;
+  locks) locks ;;
+  locks-moved) locks_moved ;;
+  kept) shift; kept "$@" ;;
+  # (locks failed: what it leaves kept before the trap's down, and its status the run's)
+  locks-all)
+    trap down EXIT
+    up
+    locks || { rc=$?; kept locks || true; exit $rc; } ;;
+  locks-moved-all)
+    trap down EXIT
+    up
+    locks_moved || { rc=$?; kept locks-moved || true; exit $rc; } ;;
+  rigs) rigs ;;
+  rigs-all)
+    trap down EXIT
+    up
+    rigs || { rc=$?; kept rigs || true; exit $rc; } ;;
   all)
     trap down EXIT
     up

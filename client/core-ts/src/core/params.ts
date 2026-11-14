@@ -4,7 +4,7 @@ import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { isObject } from "../util.ts";
 
-export type Kind = "string" | "u64" | "u32" | "u16" | "bool" | "f64" | "value" | "pairs" | "values" | "close" | "strings";
+export type Kind = "string" | "u64" | "u32" | "u16" | "bool" | "f64" | "value" | "pairs" | "values" | "close" | "strings" | "u64s";
 /// `req`: must be there; `default`: its default when absent; `opt`: an Option (null when absent or null).
 export type Mode = "req" | "default" | "opt";
 export type Spec = [string, Kind, Mode][];
@@ -30,6 +30,7 @@ const EXPECT: Record<Kind, string> = {
   values: "a sequence",
   close: "a tuple of size 2",
   strings: "a sequence",
+  u64s: "a sequence",
 };
 
 class Bad extends Error {}
@@ -62,6 +63,9 @@ function check(v: unknown, kind: Kind): unknown {
     case "strings":
       if (!Array.isArray(v)) throw wrong();
       return v.map((s) => check(s, "string"));
+    case "u64s":
+      if (!Array.isArray(v)) throw wrong();
+      return v.map((n) => check(n, "u64"));
     case "pairs":
       if (!Array.isArray(v)) throw wrong();
       return v.map((pair) => {
@@ -91,6 +95,7 @@ function defaultOf(kind: Kind): unknown {
     case "pairs":
     case "values":
     case "strings":
+    case "u64s":
       return [];
     default:
       return null;

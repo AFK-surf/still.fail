@@ -73,6 +73,8 @@ pub fn fix_browse_with_drive(Fixture, Json?, String) -> Json?
 
 pub fn fix_candidates() -> Json
 
+pub let fix_card_replies : Array[Json]
+
 pub fn fix_chat(String) -> FixChat
 
 pub fn fix_chat_jobs() -> Json
@@ -95,6 +97,7 @@ pub fn fix_crowded_frequent() -> Json
 
 pub fn fix_crowded_model(String, String, String, String, Array[String]) -> Json
 
+pub let fix_core_for : @ref.Ref[Double]
 pub let fix_crowded_models : Array[String]
 
 pub let fix_ctx : @ref.Ref[@ui.Ctx?]
@@ -193,6 +196,10 @@ pub let fix_outside : Array[(String, String, Bool)]
 
 pub fn fix_own(Array[Json]) -> Array[Json]
 
+pub let fix_pace : @ref.Ref[(Double, Double, Double)]
+
+pub fn fix_pace_said(String, String) -> Unit
+
 pub let fix_phone : @ref.Ref[String]
 
 pub let fix_phone_link : @ref.Ref[String]
@@ -224,6 +231,8 @@ pub fn fix_relay_places() -> Json
 pub let fix_replied : Map[Int32, String]
 
 pub fn fix_runtime_of(String) -> String
+
+pub let fix_sent_for : @ref.Ref[Double]
 
 pub let fix_serial : @ref.Ref[Int32]
 
@@ -369,9 +378,15 @@ pub fn fixture_new_call(Fixture, String, Json) -> Result[Json, Json]?
 
 pub fn fixture_new_topic(Fixture, String) -> Json?
 
+pub fn fixture_outline(Fixture, Map[String, @json.Json]) -> @json.Json?
+
+pub fn fixture_outline_call(Fixture, String, @json.Json) -> Result[@json.Json, @json.Json]?
+
 pub fn fixture_pdf() -> Bytes
 
 pub fn fixture_peek((Json, Bytes?) -> Unit) -> Int32
+
+pub fn fixture_peek_picture(String, Json) -> Result[(Json, Bytes), Json]?
 
 pub let fixture_pictures : Map[String, (String, Bytes)]
 
@@ -439,6 +454,8 @@ pub let fx_key_actions : Array[(String, String, Array[String], Array[String], St
 
 pub fn fx_key_label(String, Bool) -> String
 
+pub let fx_key_unlisted : Array[String]
+
 pub fn fx_keys_of(Map[String, Array[String]], (String, String, Array[String], Array[String], String)) -> Array[String]
 
 pub let going_up_picture : Json
@@ -450,6 +467,10 @@ pub fn kept_chat(String, () -> Json) -> Json
 pub let kept_chats : Map[String, Json]
 
 pub fn last(String) -> Json
+
+pub fn listed_chats(Json) -> Json
+
+pub fn listed_row(Json) -> Json
 
 pub fn login_chat(String, String, Int32, station? : String, name? : String) -> Json
 
@@ -485,6 +506,14 @@ pub fn novel_text() -> String
 
 pub fn outgoing_json(String, Json, String, String) -> Json
 
+pub let outline_away_seq : Double
+
+pub fn outline_chat(String, around? : Bool) -> @json.Json
+
+pub let outline_long_away_seq : Double
+
+pub fn outline_mode(String) -> Bool
+
 pub let peeks_answer : String
 
 pub fn person(String, String, Bool) -> Json
@@ -502,6 +531,8 @@ pub fn preview_files() -> Array[(@sfbase.Attachment, () -> Bytes)]
 pub fn rich_chat(Int32) -> Json
 
 pub fn round_trip(@sfbase.Source, Double) -> @sfbase.Source
+
+pub fn round_trip_again(@sfbase.Source, Double, heard? : (String) -> Unit, late? : (String, Map[String, @json.Json]) -> Double) -> @sfbase.Source
 
 pub fn round_trip_by(@sfbase.Source, () -> Double) -> @sfbase.Source
 
@@ -547,6 +578,8 @@ pub let viz_answer : String
 
 pub fn webdemo_days() -> Array[Json]
 
+pub fn whole_row_in(Json?, String, String) -> Json?
+
 pub fn with_cache_cold(Json) -> Json
 
 pub fn with_cards(Fixture, Json, String) -> Json
@@ -568,6 +601,8 @@ pub fn with_message(Json, String) -> Json
 pub fn with_need(Json) -> Json
 
 pub fn with_none_shown(Json) -> Json
+
+pub fn with_reply_after(Json) -> Json
 
 pub fn with_sent(Json, String) -> Json
 
@@ -602,6 +637,8 @@ pub(all) struct FixChat {
   outbox : Array[Json]
   mut working : Double
   line : @ref.Ref[Int32]
+  mut turns : Int32
+  mut about : Int32
 }
 
 pub(all) struct FixDownload {
@@ -659,6 +696,7 @@ pub(all) struct Fixture {
   tabs_shown : Map[String, Json]
   sidebars : Map[String, Json]
   mut share_look : String
+  windows : Map[String, Int]
 }
 pub fn Fixture::changed(Self) -> Unit
 pub fn Fixture::changes(Self) -> Int32
@@ -677,6 +715,7 @@ pub(all) struct NewFix {
   mut reading : Int32
   mut crowded : Bool
   mut tall : Bool
+  mut unmarked : Bool
   mut preset : String
   presets : Array[Json]
   mut presets_late : Bool

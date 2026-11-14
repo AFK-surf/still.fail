@@ -49,6 +49,43 @@ let receive_hook : Ref[(() -> Unit)?] = { val: None }
 let wall_override : Ref[(() -> Double)?] = { val: None }
 
 ///|
+/// How many made-up cores have taken the engine's place (serve), the one serving now's number; 0: the engine's.
+let served_count : Ref[Int] = Ref(0)
+
+///|
+let serving : Ref[Int] = Ref(0)
+
+///|
+/// A made-up core in the engine's place (a test's: sffixture's round_trip_again), as a kept conversation takes it
+/// (Replay::attach): what the app's client sends goes to `send`, the client started anew; what it answers it gives
+/// `receive` as the engine's messages come. Its number, to tell whether it still serves (served). Till serve_end.
+pub fn serve(send : (String) -> Unit) -> Int {
+  served_count.val += 1
+  serving.val = served_count.val
+  transport.val = fn(s, _) { send(s) }
+  wall_override.val = None
+  receive_hook.val = None
+  client.reset()
+  serving.val
+}
+
+///|
+/// The number of the made-up core serving now (serve), 0 where the engine (or a kept conversation, Replay::attach) is
+/// the core: one serving no more says nothing to the client.
+pub fn served() -> Int {
+  serving.val
+}
+
+///|
+/// The engine is the core again, a made-up one done with (serve).
+pub fn serve_end() -> Unit {
+  if serving.val != 0 {
+    serving.val = 0
+    transport.val = engine_send
+  }
+}
+
+///|
 /// The app's client of its core.
 pub let client : Client = Client::new(
   fn(s) {
@@ -122,14 +159,14 @@ pub fn refresh_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
 }
 
 ///|
-/// Calls `name` (see Client::call); `bytes` beside it.
+/// Calls `name` (see Client::call); `bytes` beside it. No `on_done`: nobody reads its answer (Client::call).
 pub fn call(
   name : String,
   params? : Json = Json::object({}),
   bytes? : Bytes? = None,
-  on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
+  on_done? : (Result[Json, Json]) -> Unit,
 ) -> Unit {
-  client.call(name, params~, bytes~, on_done~) |> ignore
+  client.call(name, params~, bytes~, on_done?) |> ignore
 }
 
 ///|
@@ -150,9 +187,9 @@ pub fn stream(
   params? : Json = Json::object({}),
   bytes? : Bytes? = None,
   on_value~ : (Json, Bytes?) -> Unit,
-  on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
+  on_done? : (Result[Json, Json]) -> Unit,
 ) -> Int {
-  client.stream(name, params~, bytes~, on_value~, on_done~)
+  client.stream(name, params~, bytes~, on_value~, on_done?)
 }
 
 ///|
@@ -175,6 +212,20 @@ pub fn quiet(name : String, f : (Json) -> Bool) -> Unit {
 /// starts.
 pub fn unread(name : String) -> Unit {
   client.unread(name)
+}
+
+///|
+/// Whether call `name`'s answers are taken as they come (said or unread): for a test holding that a replay takes them as
+/// a device does (still.fail's sfreplay).
+pub fn taken_as_they_come(name : String) -> Bool {
+  client.taken_as_they_come(name)
+}
+
+///|
+/// The answer of call `name` changes only signals: taken as it comes, what read them is built again, nothing else
+/// (Client::said). Said once, as the app starts.
+pub fn said(name : String) -> Unit {
+  client.said(name)
 }
 
 ///|
@@ -243,9 +294,56 @@ pub fn fatal() -> String? {
 /// frame sees depends on frames, not on when the core's thread answered. A kept conversation given again (replay.mbt)
 /// comes this way too.
 pub fn receive(text : String, bytes : Bytes?) -> Unit {
+  // (for an id nothing holds: let be, unread)
+  if unheld(text) {
+    return
+  }
   let t0 = if perf_counts() { ffi_now() } else { -1.0 }
-  let msg = @json.parse(text) catch { _ => return }
-  let what = if t0 >= 0.0 { client.perf_name(msg) } else { "" }
+  // (how long it took, parsed and taken, by what it was (never what it said), for a hang it is in:
+  // @hostapi.work_part)
+  let name = Ref("?")
+  @hostapi.work_part(fn() { "core " + name.val }, fn() { receive_taken(text, bytes, t0, name) })
+}
+
+///|
+/// Whether message `text` is for an id nothing holds (Client::unheld): let be unread, a kept conversation's clock told
+/// it came all the same (receive_hook).
+fn unheld(text : String) -> Bool {
+  guard client.unheld(text) else { return false }
+  match receive_hook.val {
+    Some(f) => f()
+    None => ()
+  }
+  true
+}
+
+///|
+/// The messages let be unread since this was last asked, for ids nothing held, by what the ids were (`topic stations`,
+/// `call screen.view`; `?` one let go of longer ago), the most first: how many, their length in all
+/// (Client::unheld_said).
+pub fn unheld_said() -> Array[(String, Int, Int)] {
+  client.unheld_said()
+}
+
+///|
+/// The message receive_said read and left for the frame, with what it read of it: `receive`, handed the same text as
+/// the frame is built, reads it no second time.
+// kept across runs: taken by the `receive` it was left for, another's put in its place
+let parsed_left : Ref[(String, Json)?] = Ref(None)
+
+///|
+/// Message `text` parsed and taken (receive's), what it was said in `name`; its counts kept where `t0` (the record's
+/// clock as it came) is not below 0.
+fn receive_taken(text : String, bytes : Bytes?, t0 : Double, name : Ref[String]) -> Unit {
+  let msg = match parsed_left.val {
+    Some((t, m)) if physical_equal(t, text) => {
+      parsed_left.val = None
+      m
+    }
+    _ => @json.parse(text) catch { _ => return }
+  }
+  let what = client.perf_name(msg)
+  name.val = what
   take(msg, bytes)
   if t0 >= 0.0 {
     perf_in(what, text, bytes, ffi_now() - t0)
@@ -272,11 +370,11 @@ let probe_env : Ref[Int] = Ref(-1)
 /// on); and what the app asked of the core, by name, each its count. Said and begun again with each summary of the
 /// frames (perf_said).
 // kept across runs: the record's counts, taken by perf_said
-let perf_ins : Map[String, (Int, Int, Double)] = {}
+let perf_ins : Map[String, (Int, Int, Double)] = Map([])
 
 ///|
 // kept across runs: the record's counts, taken by perf_said
-let perf_outs : Map[String, Int] = {}
+let perf_outs : Map[String, Int] = Map([])
 
 ///|
 fn perf_in(what : String, text : String, bytes : Bytes?, ms : Double) -> Unit {
@@ -314,7 +412,7 @@ pub fn perf_said(span : Double) -> String {
   ins.sort_by(fn(a, b) { b.1.2.compare(a.1.2) })
   let outs = perf_outs.to_array()
   outs.sort_by(fn(a, b) { b.1.compare(a.1) })
-  let line = StringBuilder::new()
+  let line = StringBuilder()
   line.write_string("in (ms/count/KB, the 6 longest):")
   for i, e in ins {
     if i >= 6 {
@@ -341,21 +439,35 @@ pub fn perf_said(span : Double) -> String {
 /// answer nobody reads), before the frame decides what it does: what read the topic is built again, nothing else
 /// (@ui.on_message_said, "core"). Whether it was; else it is left for `receive`, as the frame is built.
 pub fn receive_said(text : String, bytes : Bytes?) -> Bool {
-  let t0 = if perf_counts() { ffi_now() } else { -1.0 }
-  let msg = @json.parse(text) catch { _ => return false }
-  match msg {
-    Object(m) if !m.contains("mbui_auth") &&
-      !m.contains("clocked") &&
-      (client.topic_said(m) || client.call_said(m)) => {
-      let what = if t0 >= 0.0 { client.perf_name(msg) } else { "" }
-      take(msg, bytes)
-      if t0 >= 0.0 {
-        perf_in(what, text, bytes, ffi_now() - t0)
-      }
-      true
-    }
-    _ => false
+  // (for an id nothing holds: taken as it comes, unread, nothing built for it)
+  if unheld(text) {
+    return true
   }
+  let t0 = if perf_counts() { ffi_now() } else { -1.0 }
+  // (how long it took, parsed and taken, by what it was, for a hang it is in: @hostapi.work_part; one left for
+  // `receive` is said parsed: taken there, read here)
+  let name = Ref("parsed")
+  @hostapi.work_part(fn() { "core " + name.val }, fn() {
+    let msg = @json.parse(text) catch { _ => return false }
+    match msg {
+      Object(m) if !m.contains("mbui_auth") &&
+        !m.contains("clocked") &&
+        (client.topic_said(m) || client.call_said(m)) => {
+        let what = client.perf_name(msg)
+        name.val = what
+        take(msg, bytes)
+        if t0 >= 0.0 {
+          perf_in(what, text, bytes, ffi_now() - t0)
+        }
+        true
+      }
+      _ => {
+        // (left for `receive`, which reads it no second time)
+        parsed_left.val = Some((text, msg))
+        false
+      }
+    }
+  })
 }
 
 ///|
@@ -499,11 +611,11 @@ fn web_auth_done(m : Map[String, Json]) -> Unit {
 /// A URL's query string, without its `?` (and without a `#fragment`).
 pub fn query_of(url : String) -> String {
   let q = match url.find("?") {
-    Some(i) => url.view(start_offset=i + 1)
+    Some(i) => url.exact_view(start=i + 1)
     None => return ""
   }
   match q.find("#") {
-    Some(j) => q.view(end_offset=j).to_owned()
+    Some(j) => q.exact_view(end=j).to_owned()
     None => q.to_owned()
   }
 }

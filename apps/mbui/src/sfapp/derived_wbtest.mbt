@@ -26,7 +26,7 @@ test "a topic's value is worked out once for each change the core pushes, howeve
   let worked = Ref(0)
   let made : @sfbase.Derived[Double] = @sfbase.Derived::new("counted", fn(v, _) {
     worked.val += 1
-    v.as_number().unwrap_or(0.0)
+    (if v is Number(n, ..) { Some(n) } else { None }).unwrap_or(0.0)
   })
   let seen = Ref(0.0)
   let t = @ui.Tester::new(fn(_) {
@@ -85,9 +85,9 @@ test "what is worked out of a topic and a signal of the page's is worked out aga
   let seen = Ref("")
   let t = @ui.Tester::new(fn(_) {
     for _ in 0..<3 {
-      seen.val = made.read("rows", fn(_) {
+      seen.val = made.read(src, "rows", fn(_) {
         worked.val += 1
-        let n = src.topic("counted", {}).get().value.unwrap().as_number().unwrap_or(0.0)
+        let n = (if src.topic("counted", {}).get().value.unwrap() is Number(n, ..) { Some(n) } else { None }).unwrap_or(0.0)
         "\{n.to_int()} \{only_io.get()}"
       })
     }
@@ -118,13 +118,13 @@ test "a computed of what was worked out of a topic follows the topic, the topic 
   let version = Ref(1)
   let changes = @signals.signal(1)
   let src = pushed_source(value, version, changes)
-  let inner : @sfbase.Derived[Double] = @sfbase.Derived::new("counted", fn(v, _) { v.as_number().unwrap_or(0.0) })
+  let inner : @sfbase.Derived[Double] = @sfbase.Derived::new("counted", fn(v, _) { (if v is Number(n, ..) { Some(n) } else { None }).unwrap_or(0.0) })
   let outer : @sfbase.Kept[String] = @sfbase.Kept::new()
   let worked = Ref(0)
   let seen = Ref("")
   let t = @ui.Tester::new(fn(_) {
     // (only the outer one read here: the topic is read by the inner one, in the outer's getter)
-    seen.val = outer.read("line", fn(_) {
+    seen.val = outer.read(src, "line", fn(_) {
       worked.val += 1
       "seen \{inner.read(src, {}).0.unwrap_or(0.0).to_int()}"
     })
@@ -480,7 +480,7 @@ test "a chat's page with nothing changed goes over none of its rows again; a mes
   t.frame()
   assert_false(physical_equal(rd.motion_keys, after_ask))
   t.run_for(@sf.enter_ms)
-  assert_true(rd.motion_keys.iter().any(fn(k) { k.has_suffix("m:t31") }), msg=rd.motion_keys.to_string())
+  assert_true(rd.motion_keys.iter().any(fn(k) { k.has_suffix("m:t31") }), msg=Repr(rd.motion_keys).to_string())
 }
 
 ///|

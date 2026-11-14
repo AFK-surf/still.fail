@@ -35,7 +35,7 @@ fn tn_tester(
   markdown_read.val = Some(read)
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(ui_theme_now)
-    root.show(fn() { first.get() }, fn(a) { table_node(a, fn() { tn_text }) })
+    root.show(at_once=true, fn() { first.get() }, fn(a) { table_node(a, fn() { tn_text }) })
     root.box(fn(b) { table_node(b, fn() { tn_text }) }) |> ignore
     @ui.old(root, fn(c) { presented(c) }).over(Is(true)) |> @ui.old_takes_own |> ignore
     presented_nodes(root)
@@ -172,7 +172,7 @@ fn tn_copied(tree : Bool) -> (String, String, Int?, Array[Array[String]], Array[
   }
   tt.draw()
   tt.draw()
-  tt.move(20.0, 15.0)
+  tt.move_to(20.0, 15.0)
   tt.run_for(@ui.move_most_ms)
   let pick = fn(item : String) raise {
     tt.act(Button, Activate, label=t("web-main.prose.copyTable"))
@@ -202,9 +202,9 @@ test "a table's copy key as nodes: its menu's Markdown, CSV and picture as an ol
   let ((w, h), drawn) = made.4[0]
   assert_true(
     old.0 != "" && old.1 != "" && made.4.length() == 1 && w > 300 && h > 0 && drawn.length() > 10,
-    msg="\{old.0} \{old.1} \{old.2} \{w}x\{h} \{drawn.length()}",
+    msg="\{old.0} \{old.1} \{Repr(old.2)} \{w}x\{h} \{drawn.length()}",
   )
-  assert_true(made.3.length() == 1 && made.3[0].contains("$18.75"), msg="\{made.3}")
+  assert_true(made.3.length() == 1 && made.3[0].contains("$18.75"), msg="\{Repr(made.3)}")
 }
 
 ///|
@@ -242,7 +242,7 @@ test "a table's menu open, its words changed and not read yet: its picture the t
     presented_nodes(root)
   })
   tt.draw()
-  tt.move(20.0, 15.0)
+  tt.move_to(20.0, 15.0)
   tt.run_for(@ui.move_most_ms)
   tt.act(Button, Activate, label=t("web-main.prose.copyTable"))
   tt.run_for(@ui.move_most_ms)
@@ -255,7 +255,7 @@ test "a table's menu open, its words changed and not read yet: its picture the t
   let drawn = tt.shot_drawn()
   assert_true(
     shots.length() == 1 && shots[0].contains("Opus 5.5") && drawn.length() == 1 && (drawn[0].0).0 > 0 && drawn[0].1.length() > 4,
-    msg="\{shots} \{drawn.map(fn(d) { (d.0, d.1.length()) })}",
+    msg="\{Repr(shots)} \{Repr(drawn.map(fn(d) { (d.0, d.1.length()) }))}",
   )
 }
 
@@ -267,10 +267,10 @@ test "a table's copy key with keyboard and mouse, as the app's host follows the 
   let keys = fn() { tt.all(Button, label=t("web-main.prose.copyTable")).length() }
   let none = keys()
   // (over the first table's words: its key alone)
-  tt.move(20.0, 15.0)
+  tt.move_to(20.0, 15.0)
   tt.run_for(@ui.move_most_ms)
   let over = keys()
-  tt.move(380.0, 390.0)
+  tt.move_to(380.0, 390.0)
   tt.run_for(@ui.move_most_ms)
   markdown_read.val = None
   assert_eq((none, over, keys()), (0, 1, 0))
@@ -358,8 +358,8 @@ test "a table shown, its reading pushed out of the texts read lately by others: 
   })
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(ui_theme_now)
-    root.show(fn() { first.get() }, fn(a) { table_node(a, fn() { tn_text }) })
-    root.show(fn() { second.get() }, fn(b) { table_node(b, fn() { tn_text }) })
+    root.show(at_once=true, fn() { first.get() }, fn(a) { table_node(a, fn() { tn_text }) })
+    root.show(at_once=true, fn() { second.get() }, fn(b) { table_node(b, fn() { tn_text }) })
     @ui.old(root, fn(c) { presented(c) }).over(Is(true)) |> @ui.old_takes_own |> ignore
     presented_nodes(root)
   })
@@ -379,7 +379,7 @@ test "a table shown, its reading pushed out of the texts read lately by others: 
   first.set(false)
   tt.draw()
   let other = tn_drawn("Opus 5.5")
-  tt.move(20.0, 15.0)
+  tt.move_to(20.0, 15.0)
   tt.run_for(@ui.move_most_ms)
   tt.act(Button, Activate, label=t("web-main.prose.copyTable"))
   tt.run_for(@ui.move_most_ms)

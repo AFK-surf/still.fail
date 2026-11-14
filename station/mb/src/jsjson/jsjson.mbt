@@ -413,10 +413,10 @@ fn ordered(entries : Array[(Array[Int], JValue)]) -> Array[(Array[Int], JValue)]
 }
 
 ///|
-fn write_pretty(out : StringBuilder, v : JValue, depth : Int) -> Unit {
+fn write_pretty(out : StringBuilder, v : JValue, depth : Int, width : Int) -> Unit {
   let pad = (d : Int) => {
     out.write_char('\n')
-    for _ in 0..<(d * 2) {
+    for _ in 0..<(d * width) {
       out.write_char(' ')
     }
   }
@@ -428,7 +428,7 @@ fn write_pretty(out : StringBuilder, v : JValue, depth : Int) -> Unit {
           out.write_char(',')
         }
         pad(depth + 1)
-        write_pretty(out, item, depth + 1)
+        write_pretty(out, item, depth + 1, width)
       }
       pad(depth)
       out.write_char(']')
@@ -442,7 +442,7 @@ fn write_pretty(out : StringBuilder, v : JValue, depth : Int) -> Unit {
         pad(depth + 1)
         quote(out, e.0)
         out.write_string(": ")
-        write_pretty(out, e.1, depth + 1)
+        write_pretty(out, e.1, depth + 1, width)
       }
       pad(depth)
       out.write_char('}')
@@ -454,8 +454,14 @@ fn write_pretty(out : StringBuilder, v : JValue, depth : Int) -> Unit {
 ///|
 /// The value as JSON.stringify(v, null, 2) writes it.
 pub fn stringify_pretty(v : JValue) -> String {
+  stringify_indent(v, 2)
+}
+
+///|
+/// The value as JSON.stringify(v, null, width) writes it.
+pub fn stringify_indent(v : JValue, width : Int) -> String {
   let out = StringBuilder::new()
-  write_pretty(out, v, 0)
+  write_pretty(out, v, 0, width)
   out.to_string()
 }
 

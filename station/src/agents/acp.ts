@@ -20,6 +20,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { LiveFromAcp, acpNamed, chars, type AcpLiveState } from "./live.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, type ProcessSnapshot, parseLine } from "./own-process.ts";
+import { profileModel } from "./profiles.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { runtimeLabel, stationTool, unreachable, uuid, type FailureReason, type OpenOptions, type PlanItem, type RuntimeKind, type TurnOutcome } from "./runtime.ts";
 
@@ -69,8 +70,8 @@ export function acpOutcome(answer: Json, classify: (text: string) => FailureReas
   return { kind: "completed" };
 }
 
-/// A call under way, as it started: its name (as the station names it: live.ts acpNamed) and its input.
-export type Call = { name: string; input: Json };
+/// A call under way, as it started: its name (as the station names it: live.ts acpNamed), its input and when it began.
+export type Call = { name: string; input: Json; startedAt?: number };
 /// A call done, and what it said.
 type Done = Call & { id: string; failed: boolean; text: string };
 
@@ -133,7 +134,7 @@ export class KeptTranscript {
     }
     if ((kind !== "tool_call" && kind !== "tool_call_update") || typeof update.toolCallId !== "string") return;
     this.flush(id);
-    if (done !== null) this.keep(id, { type: "tool", id: done.id, name: done.name, status: done.failed ? "error" : "completed", args: done.input, result: chars(done.text, 20_000) });
+    if (done !== null) this.keep(id, { type: "tool", id: done.id, name: done.name, status: done.failed ? "error" : "completed", ...(done.startedAt !== undefined ? { startedAt: done.startedAt } : {}), args: done.input, result: chars(done.text, 20_000) });
   }
 
   /// What was being said, written.
@@ -196,6 +197,8 @@ export abstract class AcpSession extends OwnProcessSession {
   protected updated(_update: Json): void {}
   /// The turn ends as `answer` says, before what is open of it ends.
   protected ending(_id: string, _answer: Json): void {}
+  /// A steering or superseded prompt's answer was ignored while the turn continues.
+  protected ignored(_id: string, _answer: Json): void {}
   /// What a message of the person's is given to it as.
   protected promptText(text: string): string {
     return text;
@@ -245,9 +248,13 @@ export abstract class AcpSession extends OwnProcessSession {
       return;
     }
     if (this.endsTurn(id)) {
-      // One put in the turn is answered with the turn (before or after its prompt's answer); one whose turn this station
-      // did not see the end of (taken up after a crash) ends the turn running now.
-      if (this.steering.delete(id)) return;
+      // One put in the turn is answered with the turn (before or after its prompt's answer), or replaced by a newer
+      // steering prompt (Antigravity CLI); one whose turn this station did not see the end of (taken up after a crash)
+      // ends the turn running now.
+      if (this.steering.delete(id)) {
+        this.ignored(id, message);
+        return;
+      }
       if (this.owner !== null && id !== this.owner) return;
       this.end(id, message);
       return;
@@ -301,7 +308,7 @@ export abstract class AcpSession extends OwnProcessSession {
     if ((kind !== "tool_call" && kind !== "tool_call_update") || id === null) return null;
     if (kind === "tool_call" && !this.calls.has(id)) {
       const [name, input] = acpNamed(update);
-      this.calls.set(id, { name, input });
+      this.calls.set(id, { name, input, startedAt: wall.now() });
     }
     const call = this.calls.get(id);
     if (call === undefined || (update.status !== "completed" && update.status !== "failed")) return null;
@@ -360,15 +367,30 @@ export abstract class AcpSession extends OwnProcessSession {
     return false;
   }
 
-  /// Into the running turn as a prompt of its own, read at the turn's next step and answered with it. Not when nothing
-  /// runs: it would be a turn of its own, which the station starts itself.
-  protected promptInto(text: string): boolean {
+  private injectPrompt(text: string, takeOver: boolean): boolean {
     if (this.turn.closed || !this.turn.busy || this.turn.aborting) return false;
     const id = `${STEER}${uuid()}`;
-    this.steering.add(id);
+    if (takeOver) {
+      if (this.owner !== null) this.steering.add(this.owner);
+      this.owner = id;
+    } else {
+      this.steering.add(id);
+    }
     this.transcript?.user(this.sessionId, text, true);
     this.proc.write(rpc(id, "session/prompt", { sessionId: this.sessionId, prompt: [{ type: "text", text: this.promptText(text) }] }));
     return true;
+  }
+
+  /// Into the running turn as a prompt of its own, read at the turn's next step and answered with it. Not when nothing
+  /// runs: it would be a turn of its own, which the station starts itself.
+  protected promptInto(text: string): boolean {
+    return this.injectPrompt(text, false);
+  }
+
+  /// Into the running turn as a prompt that takes ownership of it from the current prompt (the runtime answers the
+  /// superseded prompt immediately and answers this one when the turn finishes). Not when nothing runs.
+  protected promptTakeover(text: string): boolean {
+    return this.injectPrompt(text, true);
   }
 
   async abort() {
@@ -394,22 +416,28 @@ export abstract class AcpSession extends OwnProcessSession {
 
   /// What the station before had handled of its output when it crashed, read again silently: the session, whether a turn
   /// runs, what the turn had said and called so far.
-  replay(lines: Iterable<string>, resume: string | undefined) {
+  async replay(lines: AsyncIterable<string>, resume: string | undefined) {
     this.sessionId = resume ?? "";
     let open = false;
     let partial: Json[] = [];
-    for (const line of lines) {
+    for await (const line of lines) {
       const message = parseLine(this.kind, line);
       if (message === undefined) continue;
       if (message.id === OPEN) {
         open = true;
         if (typeof message.result?.sessionId === "string") this.sessionId = message.result.sessionId;
+        const configured = this.model;
+        if (message.result !== undefined) this.opened(message.result);
+        if (configured !== null) this.model = configured;
       } else if (open && message.method === "session/update" && (this.sessionId === "" || message.params?.sessionId === this.sessionId)) {
         const update = this.normalized(message.params?.update);
-        if (!turnStep(update)) continue;
-        this.turn.busy = true;
-        this.live.feed(update);
-        partial.push(update);
+        if (turnStep(update)) {
+          this.turn.busy = true;
+          this.live.feed(update);
+          partial.push(update);
+        } else if (this.turn.busy || update?.sessionUpdate === "usage_update") {
+          partial.push(update);
+        }
       } else if (this.endsTurn(message.id)) {
         this.turn.busy = false;
         this.live.ended();
@@ -417,11 +445,12 @@ export abstract class AcpSession extends OwnProcessSession {
       }
     }
     this.loading = false;
-    // What the running turn had said and called, as if heard now, nothing of it written again.
+    // What the running turn had said, called and used, as if heard now, nothing of it written again.
     const again = () => {
       for (const update of partial) {
         const done = this.track(update);
         this.transcript?.take(this.sessionId, update, done);
+        this.updated(update);
       }
     };
     if (this.transcript !== null) this.transcript.quietly(again);
@@ -512,9 +541,10 @@ export abstract class AcpDriver<S extends AcpSession> extends OwnProcessDriver<S
     return session;
   }
 
-  protected crashed(options: OpenOptions, lines: Iterable<string>, _info: RunnerInfo, events: Events): S {
+  protected async crashed(options: OpenOptions, lines: AsyncIterable<string>, _info: RunnerInfo, events: Events): Promise<S> {
     const session = this.session(options, events);
-    session.replay(lines, options.resume);
+    session.model = options.model ?? profileModel(options.profile) ?? session.model;
+    await session.replay(lines, options.resume);
     session.toolsUrl = options.mcpUrl;
     return session;
   }

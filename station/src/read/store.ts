@@ -427,8 +427,13 @@ export function getThread(s: Store, id: number): ThreadRow | null {
 }
 
 /// The threads a session is in, the one it joined last first (store.rs session_threads).
-export function sessionThreads(s: Store, session: string): ThreadRow[] {
-  return all(s, "SELECT t.* FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC", session).map(toThread);
+/// `surface`: only those there; `limit`: the first few.
+export function sessionThreads(s: Store, session: string, surface: string | null = null, limit = -1): ThreadRow[] {
+  const order = "ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT ?";
+  const rows = surface === null
+    ? all(s, `SELECT t.* FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ${order}`, session, limit)
+    : all(s, `SELECT t.* FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? AND t.surface = ? ${order}`, session, surface, limit);
+  return rows.map(toThread);
 }
 
 /// A page listing many chats asks for all their pending copy destinations together before constructing the views.
@@ -1830,7 +1835,7 @@ export function lastTurn(s: Store, key: string): TurnSummary | null {
 // ── jobs ──
 
 const toJob = (r: Json): JobRow => {
-  const { token: _, size: __, ...job } = rows.toJob(r);
+  const { token: _, sandbox: __, ...job } = rows.toJob(r);
   return job;
 };
 

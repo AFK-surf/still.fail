@@ -41,6 +41,10 @@ export function key(id: string): string {
   const digits = (s: string, k: number) => s.length === k && isDigits(s);
   if (n > 1 && digits(parts[n - 1]!, 8)) m = parts.slice(0, n - 1).join("-");
   else if (n > 3 && digits(parts[n - 3]!, 4) && digits(parts[n - 2]!, 2) && digits(parts[n - 1]!, 2)) m = parts.slice(0, n - 3).join("-");
+  if (m.startsWith("fusion-") && m.includes("-sidekick-")) {
+    const split = splitDevinFusion(m);
+    if (split !== null) m = split.model;
+  }
   return m + context;
 }
 
@@ -53,6 +57,90 @@ function stamp(s: string): boolean {
 /// Whether two spellings are one model.
 export function same(a: string, b: string): boolean {
   return a === b || key(a) === key(b);
+}
+
+const AGY_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+const DEVIN_LEVELS = ["low", "medium", "high", "xhigh", "max"];
+
+/// An Antigravity ACP tiered `modelId` (`gemini-4-carbon-high`, `claude-opus-5-5-medium`, `gpt-oss-120b-medium`) split
+/// into its base model and thinking level; null when `id` carries no trailing level.
+export function splitAgyTier(id: string): { model: string; effort: string } | null {
+  const trimmed = id.trim();
+  const effort = AGY_LEVELS.find((l) => trimmed.endsWith(`-${l}`) && trimmed.length > l.length + 1);
+  return effort === undefined ? null : { model: trimmed.slice(0, -effort.length - 1), effort };
+}
+
+/// A Devin Fusion model (`fusion-<lead>-sidekick-<side>` or legacy `fusion-<lead>-<effort>-sidekick-<side>`) split
+/// into its normalized `model` (`fusion-<lead>-sidekick-<side>`), `lead`, `side` and optional legacy `leadEffort`.
+export function splitDevinFusion(id: string): { model: string; lead: string; side: string; leadEffort: string | null } | null {
+  const trimmed = id.trim();
+  if (!trimmed.startsWith("fusion-")) return null;
+  const mark = "-sidekick-";
+  const at = trimmed.indexOf(mark, 7);
+  if (at <= 7 || at + mark.length >= trimmed.length) return null;
+  const rawLead = trimmed.slice(7, at);
+  const side = trimmed.slice(at + mark.length);
+  const leadEffort = DEVIN_LEVELS.find((l) => rawLead.endsWith(`-${l}`) && rawLead.length > l.length + 1) ?? null;
+  const lead = leadEffort === null ? rawLead : rawLead.slice(0, -leadEffort.length - 1);
+  return { model: `fusion-${lead}-sidekick-${side}`, lead, side, leadEffort };
+}
+
+/// A Devin Fusion lead id normalized by stripping any trailing thinking level (`gpt-6-sol-max` -> `gpt-6-sol`).
+export function devinFusionLead(lead: string): string {
+  const trimmed = lead.trim();
+  const eff = DEVIN_LEVELS.find((l) => trimmed.endsWith(`-${l}`) && trimmed.length > l.length + 1);
+  return eff === undefined ? trimmed : trimmed.slice(0, -eff.length - 1);
+}
+
+export const DEVIN_FUSION_LEADS: readonly string[] = [
+  "claude-opus-5-5",
+  "claude-opus-5-6",
+  "claude-sonnet-5-5",
+  "claude-sonnet-5-6",
+  "gemini-4-carbon",
+  "gemini-4.1-carbon",
+  "gpt-6-sol",
+  "gpt-6-luna",
+  "gpt-6.1-terra",
+];
+
+export const DEVIN_FUSION_SIDES: readonly string[] = [
+  "swe-2-medium",
+  "swe-2-high",
+  "swe-2-flash-xhigh",
+  "claude-sonnet-5-5-medium",
+  "claude-haiku-5-5-medium",
+  "gpt-6-luna-high",
+  "gpt-6.1-terra-high",
+  "gpt-5-6-sol-high",
+  "gpt-5-6-luna-high",
+  "glm-5-2",
+];
+
+/// Sidekick models Devin offers for `lead` (null when `lead` is not a Fusion lead model).
+export function devinFusionSidesFor(lead: string): readonly string[] | null {
+  const k = key(lead);
+  if (!DEVIN_FUSION_LEADS.includes(k)) return null;
+  if (k === "gpt-6-luna") return DEVIN_FUSION_SIDES.filter((s) => s !== "gpt-6-luna-high");
+  if (k === "gpt-6.1-terra") return DEVIN_FUSION_SIDES.filter((s) => s !== "gpt-6.1-terra-high");
+  return DEVIN_FUSION_SIDES;
+}
+
+const SIDE_EFFORTS: Record<string, string> = {
+  low: "低",
+  medium: "中",
+  high: "高",
+  xhigh: "超高",
+  max: "最高",
+};
+
+/// A Devin sidekick (`swe-2-medium`, `swe-2-flash-xhigh`, `glm-5-2`) formatted for a sidekick picker: `SWE-2 · 中`.
+export function sidekickName(side: string): string {
+  const k = key(side);
+  const eff = Object.keys(SIDE_EFFORTS).find((l) => k.endsWith(`-${l}`) && k.length > l.length + 1);
+  const core = eff === undefined ? k : k.slice(0, -eff.length - 1);
+  const coreName = namedOf(core) ?? side;
+  return eff === undefined ? coreName : `${coreName} · ${SIDE_EFFORTS[eff]!}`;
 }
 
 /// A model as people call it: Opus 5.5, GPT-6 Astra, o4 Mini; one whose family is not known here reads as spelled.
@@ -77,8 +165,10 @@ function oSeries(first: string): boolean {
 export const family = remembered(familyOf);
 function familyOf(id: string): string | null {
   const k = key(id);
-  const base = k.split("[")[0]!;
-  if (namedOf(base) === null) return null;
+  const rawBase = k.split("[")[0]!;
+  if (namedOf(rawBase) === null) return null;
+  const split = splitDevinFusion(rawBase);
+  const base = split !== null ? split.lead : rawBase;
   const words = base.split("-").filter((w) => w !== "");
   const first = words[0];
   if (first === undefined) return null;
@@ -120,11 +210,24 @@ function orderKeyOf(id: string): Readonly<{ rank: number; family: string; versio
   })();
   const k = key(id);
   const base = k.split("[")[0]!;
-  const version = base.split(/[^0-9]/).filter((n) => n !== "").map((n) => Number(n)).filter((n) => n <= 0xffffffff);
-  return { rank, family: f ?? "", version, key: k };
+  const split = splitDevinFusion(base);
+  const versionBase = split !== null ? split.lead : base;
+  const version = versionBase.split(/[^0-9]/).filter((n) => n !== "").map((n) => Number(n)).filter((n) => n <= 0xffffffff);
+  return { rank, family: f ?? "", version, key: split !== null ? `${split.lead}~${split.side}` : k };
 }
 
 function namedOf(base: string): string | null {
+  if (base.startsWith("fusion-")) {
+    const split = splitDevinFusion(base);
+    if (split !== null) {
+      const leadName = namedOf(split.lead) ?? split.lead;
+      const sideEff = Object.keys(SIDE_EFFORTS).find((l) => split.side.endsWith(`-${l}`) && split.side.length > l.length + 1);
+      const sideCore = sideEff === undefined ? split.side : split.side.slice(0, -sideEff.length - 1);
+      const sideName = namedOf(sideCore) ?? sideCore;
+      const sideDisplay = sideEff === undefined ? sideName : `${sideName} (${SIDE_EFFORTS[sideEff]!})`;
+      return `${leadName} + ${sideDisplay}`;
+    }
+  }
   const words = base.split("-").filter((w) => w !== "");
   const first = words[0];
   if (first === undefined) return null;
@@ -141,7 +244,8 @@ function namedOf(base: string): string | null {
   const parts = joined(words);
   const dashed = ["gpt", "glm", "swe"].includes(first) ? word(first) : null;
   if (dashed !== null && parts[1] !== undefined) {
-    return [`${dashed}-${parts[1]}`, ...parts.slice(2).map(word)].join(" ");
+    const second = parts[1] in BRANDS ? BRANDS[parts[1]]! : parts[1];
+    return [`${dashed}-${second}`, ...parts.slice(2).map(word)].join(" ");
   }
   const o = oSeries(first);
   const known = ["gpt", "glm", "codex", "deepseek", "qwen", "qwq", "gemini", "gemma", "kimi", "moonshot", "minimax", "grok", "mistral", "devstral", "codestral", "llama", "doubao", "hunyuan", "ernie", "nemotron", "muse", "adaptive"];
@@ -169,6 +273,7 @@ const BRANDS: Record<string, string> = {
 
 function word(w: string): string {
   if (w in BRANDS) return BRANDS[w]!;
+  if (/^[0-9]+(?:\.[0-9]+)?[bmk]$/.test(w)) return w.toUpperCase();
   const chars = [...w];
   if (chars.length === 0) return "";
   return chars[0]!.toUpperCase() + chars.slice(1).join("");

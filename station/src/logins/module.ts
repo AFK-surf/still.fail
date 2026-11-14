@@ -36,7 +36,7 @@ export const LoginsLive = Layer.effectDiscard(
     const loginLink = (session: string | null, id: string) => {
       const s = place();
       if (!s || !plane.spec().pages) return null;
-      const ws = (session ? store.getSession(session)?.ws : null) ?? s.workspace;
+      const ws = (session ? store.sessionWs(session) : null) ?? s.workspace;
       return `${s.origin}/w/${ws}/s/${s.station}/login/${encodeURIComponent(id)}`;
     };
     /// The logins whose agent was told they ask something (once a time they do).

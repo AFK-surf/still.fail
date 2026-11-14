@@ -7,7 +7,7 @@
 
 ///|
 /// The topics asked for, by their key: one subscription each, asked again the same every frame.
-let dumped : Map[String, Int] = {}
+let dumped : Map[String, Int] = Map([])
 
 ///|
 fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
@@ -142,7 +142,7 @@ let read_only : Bool = @ui.env("MBUI_READONLY") == "1"
 /// whatever page asks it.
 let read_only_calls : Array[String] = [
   "chat.older", "chat.newer", "chat.latest", "draft.get", "station.file", "station.file.part", "station.poster", "composer.picture",
-  "picture", "prefs.set", "drive.read", "drive.folders", "drive.refresh", "fonts.fetch", "fonts.file",
+  "picture", "link.preview.picture", "file.peek.picture", "prefs.set", "drive.read", "drive.folders", "drive.refresh", "fonts.fetch", "fonts.file",
   "fonts.keep", "fonts.preview", "fonts.share",
 ]
 
@@ -181,6 +181,11 @@ let core_source : @sfapp.Source = {
     if call_log {
       @hostapi.log("CALL \{name} \{logged(name, params)}")
     }
+    // (one whose answer nobody reads: none given to the core, its answer taken as it comes, building nothing)
+    if @sfbase.unread_answer(done) {
+      @core.call(name, params~)
+      return
+    }
     @core.call(name, params~, on_done=fn(r) {
       if call_log {
         match r {
@@ -198,6 +203,10 @@ let core_source : @sfapp.Source = {
     }
     if call_log {
       @hostapi.log("CALL \{name} \{logged(name, params)} with \{bytes.length()} bytes")
+    }
+    if @sfbase.unread_answer(done) {
+      @core.call(name, params~, bytes=Some(bytes))
+      return
     }
     @core.call(name, params~, bytes=Some(bytes), on_done=fn(r) {
       if call_log {
@@ -301,6 +310,10 @@ let core_source : @sfapp.Source = {
   release: fn(name, params) { @core.release_topic(name, params=@sfbase.core_topic_params(name, params)) },
   refresh: fn(name, params) { @core.refresh_topic(name, params=@sfbase.core_topic_params(name, params)) },
   read_only,
+  reads_ahead: fn() { true },
+  asks_devices: fn() { true },
+  asks_outline: fn() { true },
+  switches_ahead: fn() { true },
 }
 
 ///|
@@ -308,9 +321,9 @@ let core_source : @sfapp.Source = {
 /// localhost.example.com, 127.0.0.1.nip.io, a user's part before an @).
 fn local_cloud(url : String) -> Bool {
   let rest = if url.has_prefix("http://") {
-    url.view(start_offset=7).to_owned()
+    url.exact_view(start=7).to_owned()
   } else if url.has_prefix("https://") {
-    url.view(start_offset=8).to_owned()
+    url.exact_view(start=8).to_owned()
   } else {
     return false
   }
@@ -321,12 +334,12 @@ fn local_cloud(url : String) -> Bool {
       _ => ()
     }
   }
-  let authority = rest.view(end_offset=end).to_owned()
+  let authority = rest.exact_view(end=end).to_owned()
   if authority.contains("@") {
     return false
   }
   let host = match authority.rev_find(":") {
-    Some(i) => authority.view(end_offset=i).to_owned()
+    Some(i) => authority.exact_view(end=i).to_owned()
     None => authority
   }
   host == "127.0.0.1" || host == "localhost"
@@ -366,6 +379,15 @@ fn draw_svg(data : Bytes, px : Int) -> (Int, Int, FixedArray[Byte])? {
 
 ///|
 fn main {
+  // the name its native views are served under (stillfail-preview://svc/…, https://preview.stillfail.invalid/…): what
+  // a station's service keeps in a view is kept by that name's origin, and the web's preview frame speaks by it
+  // (cloud/src/preview.ts's stillfail-preview-*); sfbase's service_page.mbt reads its pages' addresses by it
+  @hostapi.set_site_name("stillfail")
+  // what the places open on, and the last few chats, are kept by the core's client as they are let go of, asked again
+  // with their version
+  @core.client.keep(@sfbase.topic_kept)
+  // (a chat list's first window told the core before the list is asked, each time it is; a chat's before the chat)
+  @core.client.tells_before(@sfbase.chats_told_before)
   // SVG pictures (a chat's .svg files) drawn by mbui's own SVG renderer, whatever the system decodes
   @ui.set_vector_pictures(draw_svg)
   // MBUI_PLATFORM=android: run as a phone's system has it (a test's trace recorded again on a Mac on the system its
@@ -390,10 +412,17 @@ fn main {
   if @ui.env("MBUI_CORE_TRACE") == "1" && local_cloud(cloud) {
     // (bytes over MBUI_CORE_TRACE_BYTES, scripts/trace make's MAX_BYTES, kept as their length alone)
     let bytes_max = @string.parse_int(@ui.env("MBUI_CORE_TRACE_BYTES")[:]) catch { _ => 16384 }
-    @core.trace_to(fn(line) { @hostapi.log("CORETRACE " + line) }, bytes_max~)
+    // (and to a scripted run, whose `answered` counts the core's answers as they come, read by the app or not)
+    @core.trace_to(
+      fn(line) {
+        @hostapi.log("CORETRACE " + line)
+        @ui.drive_heard(line)
+      },
+      bytes_max~,
+    )
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
     // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
-    let started : Map[String, Json] = {}
+    let started : Map[String, Json] = Map([])
     // (and where the host keeps downloads in a scripted run: what it says of a file kept, which the app tells the core)
     for name in @sfcore.started_by + ["MBUI_DOWNLOADS_DIR"] {
       let v = @sfcore.env_text(name)
@@ -401,13 +430,24 @@ fn main {
         started[name] = Json::string(v)
       }
     }
+    // (and what this app does that a replay's does only as its trace's app did: sfcore's trace_switches, all on)
+    for name in @sfcore.trace_switches {
+      started[name] = Json::string("1")
+    }
     @hostapi.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
-    // and which station this machine is, as its host says it (@ui.local_station: what the files' page lists first), for
-    // a replay's host to say the same
-    let local = @json.parse(@ui.local_station()) catch { _ => Json::null() }
-    @hostapi.log("CORETRACE " + ({ "host": { "localStation": local } } : Json).stringify())
+    // and which station this machine is, as the app's own native call says it (`local_station`: what the files' page
+    // lists first), for a replay's host to say the same
+    let own_station = @json.parse(@hostapi.app_said("local_station")) catch { _ => Json::null() }
+    @hostapi.log("CORETRACE " + ({ "host": { "localStation": own_station } } : Json).stringify())
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
     @ui.trace_views(fn(m) { @core.trace_note(m) })
+    // and what it gives the frames (the window's size and scale, the system and its settings), first as the first
+    // frame begins and again where it changes: a replay's Tester is made by it, never by defaults (src/sfreplay:
+    // Flow::start)
+    @ui.trace_settings(fn(m) { @core.trace_note(m) })
+    // and each frame's moment as its host gave it (`{"frame":T}`, beside the core's clock `w` as it began): where the
+    // run's display drew, for a replay's strict pass to draw there (src/sfreplay), not on a grid of its own
+    @ui.trace_frames(fn(t) { @core.trace_note({ "frame": Json::number(t) }) })
     // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input
     // went to the host (`"acted":true`), at the same clock: when the run took each step and when it acted, for a replay
     // to take it when the run did (src/core/replay.mbt: Replay::step_at)
@@ -419,12 +459,11 @@ fn main {
       @core.trace_note(m)
     })
   }
-  // (a remote screen's frames and sound, and its acknowledgements' answers, change nothing a frame reads: taken as they
-  // come, they build nothing, sfpages' screen.mbt)
-  @core.quiet("screen.view", @sfpages.screen_value_quiet)
-  for name in @sfpages.screen_unread_calls() {
-    @core.unread(name)
-  }
+  // (how what the core says is taken, the same in a replay: sfapp's core_taking)
+  @sfcore.listening.val = @sfapp.core_taking()
+  // (this machine's station changed, as its native call posts it, src/host/station_calls.h: the frame built again, its
+  // pages reading it anew)
+  @ui.on_message("local_station", fn(_, _) { () })
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.host_setup()
     @ui.run(@sf.product(), fn(c) {
@@ -444,7 +483,7 @@ fn main {
     // scripted runs: a chat opened by words in its title once Home lists it (MBUI_OPEN_CHAT), or by its station and
     // session at once (MBUI_OPEN_SESSION=<workspace>/<station>|<session>)
     @sfapp.open_titled.val = @ui.env("MBUI_OPEN_CHAT")
-    match @ui.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_string() }).to_array() {
+    match @ui.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_owned() }).to_array() {
       [station, session] =>
         @sfapp.open_chat({ station, session, title: "", station_name: "" })
       _ => ()
@@ -480,7 +519,8 @@ fn main {
   // (said with each summary of the frames into the device's performance record while it is kept: the core's
   // messages, the page shown, the screens open; @ui.perf_also)
   @ui.perf_also("core", @core.perf_said)
-  @ui.perf_also("page", fn(_) { @sfbase.page_kind(@sfbase.app.nav.top()) })
+  // (the page shown as the journal was told it, sfbase's shown_kind: what the hang reports say too)
+  @ui.perf_also("page", fn(_) { @ui.journal_shown() })
   @ui.perf_also("screens", @sfpages.screens_perf)
   @ui.run(
     @sf.product(),

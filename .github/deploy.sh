@@ -4,9 +4,12 @@
 # and a dropped connection ("fetch failed") tried again, up to three times.
 #   sh .github/deploy.sh [--dry-run] PART…
 # The secrets, each a file's content (none of them needed for --dry-run): CLOUDFLARE_API_TOKEN (without it, the
-# machine's own `wrangler login`), DEPLOY_KEYS_JSON (keys.json), GOOGLE_OAUTH_JSON (google-oauth.json), AXIOM_JSON,
-# VAPID_JSON, FCM_SERVICE_ACCOUNT_JSON, APNS_JSON (apns.json, the APNs key), POSTHOG_JSON, APPLE_JSON (apple.json, Sign in with Apple), REVIEW_ACCOUNTS_JSON
-# (review-accounts.json, App Store review's password sign-in), FEEDBACK_TOKEN (feedback-token, the feedback monitor's).
+# machine's own `wrangler login`), DEPLOY_KEYS_JSON (keys.json), GOOGLE_OAUTH_JSON (google-oauth.json), GCP_TELEMETRY_JSON (gcp-telemetry.json),
+# VAPID_JSON, FCM_SERVICE_ACCOUNT_JSON, APNS_JSON (apns.json, the APNs key), FCM_SERVICE_ACCOUNT_MORE_JSON and APNS_MORE_JSON
+# (the other product's apps' push credentials), POSTHOG_JSON, APPLE_JSON (apple.json, Sign in with Apple), REVIEW_ACCOUNTS_JSON
+# (review-accounts.json, App Store review's password sign-in), FEEDBACK_TOKEN (feedback-token, the feedback monitor's: reads bug reports and marks their status), GUEST_GOOGLE_OAUTH_JSON, FORWARD_TO and
+# FORWARD_SECRET (one cloud answering as the other product too: cloud/src/guests.ts), MOVING (any value: accounts moving
+# between clouds, cloud/src/move.ts).
 set -eu
 cd "$(dirname "$0")/.."
 pnpm install --frozen-lockfile --prefer-offline > /dev/null
@@ -18,14 +21,20 @@ umask 077
 put() { if [ -n "$2" ]; then printf '%s' "$2" > "$dir/$1"; fi; }
 put keys.json "${DEPLOY_KEYS_JSON:-}"
 put google-oauth.json "${GOOGLE_OAUTH_JSON:-}"
-put axiom.json "${AXIOM_JSON:-}"
+put gcp-telemetry.json "${GCP_TELEMETRY_JSON:-}"
 put vapid.json "${VAPID_JSON:-}"
 put fcm-service-account.json "${FCM_SERVICE_ACCOUNT_JSON:-}"
 put apns.json "${APNS_JSON:-}"
+put fcm-service-account-more.json "${FCM_SERVICE_ACCOUNT_MORE_JSON:-}"
+put apns-more.json "${APNS_MORE_JSON:-}"
 put posthog.json "${POSTHOG_JSON:-}"
 put apple.json "${APPLE_JSON:-}"
 put review-accounts.json "${REVIEW_ACCOUNTS_JSON:-}"
 put feedback-token "${FEEDBACK_TOKEN:-}"
+put guest-google-oauth.json "${GUEST_GOOGLE_OAUTH_JSON:-}"
+put forward-to "${FORWARD_TO:-}"
+put forward-secret "${FORWARD_SECRET:-}"
+put moving "${MOVING:-}"
 umask 022
 # (another cloud's builds apart: STILLFAIL_CLOUD, cloud/deploy.py CLOUDS)
 builds="$HOME/${STILLFAIL_CLOUD:-stillfail}-deploy/builds"

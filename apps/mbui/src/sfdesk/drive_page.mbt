@@ -88,8 +88,8 @@ fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit, t
     }
     match (value, error, count) {
       (Some(_), Some(e), _) =>
-        head_retry(c, @sf.t("android-misc.drive.stale", args=[("error", e)]), false, fn() { refresh_folder(c, src, at) })
-      (None, Some(e), _) => head_retry(c, e, true, fn() { refresh_folder(c, src, at) })
+        head_retry(c, @sf.t("android-misc.drive.stale", args=[("error", e)]), false, fn() { refresh_folder_told(c, src, at) })
+      (None, Some(e), _) => head_retry(c, e, true, fn() { refresh_folder_told(c, src, at) })
       (Some(v), None, Some(shown)) => {
         let count = shown +
           (if flag(Some(v), "truncated") { " · " + @sf.t("web-pages.drive.truncated") } else { "" })

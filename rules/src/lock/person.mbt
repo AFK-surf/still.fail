@@ -1,12 +1,34 @@
 // A person's own lock: a chain of the keys their app devices sign with, written only by a device
 // on it, the one thing a workspace's list and a phone's grant go back to. What station, cloud and devices all decide it
-// by; what takes keys is the caller's (`Crypto`), as for the workspace's lock.
+// by; what takes keys is the caller's (`Crypto`), as for the workspace's lock. Beside its app devices it holds their web
+// devices (`web`, `web.remove`: an id that signs nothing, for 31 days at most) and the commitments of the workspaces
+// they speak for (`ws {t, h}`: a tag and a body's hash, the body kept apart by its workspace alone, `body.mbt`), as
+// station/test/lock-roster4-model.ts has them (D1, D2; 2026-11-13).
 
 ///|
 pub(all) struct PersonDevice {
   key : String
   id : String
   label : String
+  /// The key the device signs a workspace's things with, unasked (a vault's versions, items and box certificates; a
+  /// workspace chain's entries): the last its entries on this log said for it, none where that said none or one that
+  /// is no ed25519 key id (never a refusal: a log folds as it did before this was read). Never the log's own `key`,
+  /// which is sealed for its person's presence and signs this log alone (the lead, 2026-11-13).
+  sign_key : String?
+  /// Every `sign_key` its entries said for it while it is on the log, in the order first said: a box certificate an
+  /// earlier one signed still counts where the vault's rules take any it had (vault.mbt `cert_ok`'s `ever`), as a
+  /// workspace chain keeps them (lock.mbt `add`). Begun anew where an entry gives the key another device id.
+  sign_keys : Array[String]
+}
+
+///|
+/// A web device on a person's lock: its id (a base key, signing nothing), the `at` of the entry that put it on and
+/// when it runs out. Whether it counts now is the keeper's clock's (`state4`).
+pub(all) struct PersonWeb {
+  id : String
+  label : String
+  at : Double
+  exp : Double
 }
 
 ///|
@@ -16,6 +38,7 @@ pub(all) struct Person {
   head : String
   seq : Double
   devices : Map[String, PersonDevice]
+  webs : Map[String, PersonWeb]
 }
 
 ///|
@@ -32,7 +55,11 @@ fn person_device(v : Json?, c : &Crypto) -> PersonDevice raise LockError {
   guard key.has_prefix("ed25519:") && c.valid_key_id(key) && is_hex32(id) else {
     raise Refused("a person's device signs with an ed25519 key, and goes by its base key")
   }
-  { key, id, label }
+  let sign_key = match text_of(field(v, "sign_key")) {
+    Some(k) if k.has_prefix("ed25519:") && c.valid_key_id(k) => Some(k)
+    _ => None
+  }
+  { key, id, label, sign_key, sign_keys: sign_key.map(fn(k) { [k] }).unwrap_or([]) }
 }
 
 ///|
@@ -41,37 +68,65 @@ pub fn fold_person(entries : Array[Json], sub : String, c : &Crypto) -> Person r
   if entries.length() == 0 {
     raise Refused("no lock")
   }
-  let devices : Map[String, PersonDevice] = Map([])
-  let mut head = ""
-  let mut genesis = ""
-  for i, e in entries {
-    let v = Some(e)
-    guard safe_num(field(v, "v")) == Some(1.0) && text_of(field(v, "ws")) == Some(person_ws(sub)) else {
-      raise Refused("an entry of another lock")
-    }
-    guard safe_int(field(v, "at")) is Some(_) else { raise Refused("at is unix seconds") }
-    let follows = match safe_int(field(v, "seq")) {
-      Some(seq) => i == 0 && seq.to_int64() == 0L || i > 0 && @history.follows(false, (i - 1).to_int64(), seq.to_int64())
-      None => false
-    }
-    let kept_on = i == 0 && field(v, "prev") is Some(Null) || i > 0 && text_of(field(v, "prev")) == Some(head)
-    guard follows && kept_on else { raise Refused("the entry does not follow this lock's head") }
-    let key = sig_key(e)
-    let b = field(v, "body")
-    let kind = text_of(field(v, "kind")).unwrap_or("")
-    let hash = entry_hash(e, c)
-    if i == 0 {
+  let mut p : Person? = None
+  for e in entries {
+    p = Some(person_step(p, e, sub, c))
+  }
+  p.unwrap()
+}
+
+///|
+/// The person's log with one more entry (`was`: none before its genesis); raises why it does not follow.
+fn person_step(was : Person?, e : Json, sub : String, c : &Crypto) -> Person raise LockError {
+  let v = Some(e)
+  guard safe_num(field(v, "v")) == Some(1.0) && text_of(field(v, "ws")) == Some(person_ws(sub)) else {
+    raise Refused("an entry of another lock")
+  }
+  guard safe_int(field(v, "at")) is Some(_) else { raise Refused("at is unix seconds") }
+  let follows = match (safe_int(field(v, "seq")), was) {
+    (Some(seq), None) => seq.to_int64() == 0L
+    (Some(seq), Some(w)) => @history.follows(false, w.seq.to_int64(), seq.to_int64())
+    (None, _) => false
+  }
+  let kept_on = match was {
+    None => field(v, "prev") is Some(Null)
+    Some(w) => text_of(field(v, "prev")) == Some(w.head)
+  }
+  guard follows && kept_on else { raise Refused("the entry does not follow this lock's head") }
+  let key = sig_key(e)
+  let b = field(v, "body")
+  let kind = text_of(field(v, "kind")).unwrap_or("")
+  let hash = entry_hash(e, c)
+  let devices : Map[String, PersonDevice] = match was {
+    None => Map([])
+    Some(w) => copy(w.devices)
+  }
+  let mut webs : Map[String, PersonWeb] = match was {
+    None => Map([])
+    Some(w) => w.webs
+  }
+  match was {
+    None => {
       guard kind == "genesis" && text_of(field(b, "sub")) == Some(sub) else { raise Refused("a lock starts with its genesis") }
       let first = person_device(field(b, "device"), c)
       guard first.key == key else { raise Refused("the genesis is signed by the device it names") }
       devices[first.key] = first
-      genesis = hash
-    } else {
+    }
+    Some(_) =>
       match kind {
         "device" => {
           guard @role.person_changes(devices.contains(key), false) else { raise Refused("not signed by a device on the lock") }
           let d = person_device(b, c)
-          devices[d.key] = d
+          // (its key on the log already: that device said again, its signer the one said now, those said before kept)
+          let had = match devices.get(d.key) {
+            Some(was) if was.id == d.id => was.sign_keys
+            _ => []
+          }
+          let sign_keys = match d.sign_key {
+            Some(k) if !had.contains(k) => [..had, k]
+            _ => had
+          }
+          devices[d.key] = { ..d, sign_keys }
         }
         "device.remove" => {
           guard text_of(field(b, "key")) is Some(gone) && devices.contains(gone) else { raise Refused("no such device") }
@@ -80,15 +135,41 @@ pub fn fold_person(entries : Array[Json], sub : String, c : &Crypto) -> Person r
           }
           devices.remove(gone)
         }
+        "ws" | "web" | "web.remove" => {
+          guard devices.contains(key) else { raise Refused("not signed by a device on the lock") }
+          let keys = match b {
+            Some(Object(m)) => m.keys().collect()
+            _ => []
+          }
+          let only = fn(want : Array[String]) { keys.length() == want.length() && want.iter().all(fn(k) { keys.contains(k) }) }
+          if kind == "ws" {
+            guard only(["t", "h"]) && is_id(field(b, "t")) && is_id(field(b, "h")) else { raise Refused("a statement is {t, h}") }
+          } else if kind == "web" {
+            guard only(["id", "label", "exp"]) && is_id(field(b, "id")) && text_of(field(b, "label")) is Some(label) && safe_int(field(b, "exp")) is Some(exp) else {
+              raise Refused("a web device is {id, label, exp}")
+            }
+            // (the only bound is the entry's own `at`: what its signer says the time is)
+            let at = safe_int(field(v, "at")).unwrap()
+            guard exp <= at + web_device_secs else { raise Refused("a web device lasts 31 days at most") }
+            webs = copy(webs)
+            let id = text_of(field(b, "id")).unwrap()
+            webs[id] = { id, label, at, exp }
+          } else {
+            guard only(["id"]) && is_id(field(b, "id")) else { raise Refused("a web device is taken off by its id") }
+            webs = copy(webs)
+            webs.remove(text_of(field(b, "id")).unwrap())
+          }
+        }
         _ => raise Refused("unknown entry kind " + kind)
       }
-    }
-    if !c.sig_valid(sig_of(e), hash, [], "", false) {
-      raise Refused("signature invalid")
-    }
-    head = hash
   }
-  { sub, genesis, head, seq: (entries.length() - 1).to_double(), devices }
+  if !c.sig_valid(sig_of(e), hash, [], "", false) {
+    raise Refused("signature invalid")
+  }
+  match was {
+    None => { sub, genesis: hash, head: hash, seq: 0.0, devices, webs }
+    Some(w) => { sub, genesis: w.genesis, head: hash, seq: w.seq + 1.0, devices, webs }
+  }
 }
 
 ///|

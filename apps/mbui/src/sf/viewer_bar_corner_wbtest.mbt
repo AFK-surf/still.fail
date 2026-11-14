@@ -25,7 +25,7 @@ fn back_pointed_faults(corner : Double) -> (Bool, Array[String]) {
   )
   t.draw()
   let (x, y, w, h) = t.rect_of("整理发布清单").unwrap()
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.frame()
   t.frame()
   let lit = t.drawn_rects().iter().any(fn(r) { r.4 == ink.hover && r.0 <= x && r.1 <= y && r.0 + r.2 >= x + w && r.1 + r.3 >= y + h })

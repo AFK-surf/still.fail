@@ -3,100 +3,47 @@
 // carries credentials, one JSON line each, answered with one JSON line (a later line renews); every other stream is
 // one request: a JSON head line `{method, path, headers}`, then the body until the stream finishes, answered by a
 // JSON head line `{status, headers}` and the response body.
+// The lines and the streams themselves are the mesh's wire and door (wire.ts, door.ts), which know nothing of what is
+// here: who is let in (the credentials still.fail cloud signs, the locks) and what a request is answered (the routes).
 import type { Admin } from "../api/admin.ts";
-import { type Answer, langOfCore, queryPairs } from "../api/request.ts";
-import { coreTooOld } from "../api/oldest.ts";
+import { langOfCore, queryPairs } from "../api/request.ts";
+import { BUILD_HEADER, COUNTED_FROM, buildOf, coreTooOld } from "../api/oldest.ts";
+import { MOVED_FROM_BUILD } from "../api/moved-from.ts";
+import { deviceBuildsOf } from "./device-builds.ts";
 import { tr } from "../ops/i18n.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
 import type { Accepted } from "../cloud/provider.ts";
-import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.ts";
-import { PersonChains } from "./person-chains.ts";
+import { type Admitted, managesStation, readOnly, revoked, verifyMemberOf } from "./credential.ts";
+import { SeenDevices } from "./seen-devices.ts";
+import { foldChain, takeChain } from "./person-sync.ts";
+import { AT_ODDS } from "./person-chains.ts";
+import { MarkRefusal, stationMarksOf } from "./station-marks.ts";
+import { WaysRefusal, setRelays, setWay, waysOf as workspaceWaysOf } from "./ways.ts";
 import { join } from "node:path";
-import { meshDir } from "../cloud/state.ts";
-import { type Entry, LockRefusal, admit, admitPerson, asEntry, fold, lowerRole, personFold } from "../cloud/lock.ts";
+import { FORK, NOT_GIVEN, meshDir, personChainsOf } from "../cloud/state.ts";
+import { hashOf } from "../cloud/log-keep.ts";
+import { type Entry, LockRefusal, admit, admitPerson, asEntry, endpointProof, fold, lowerRole, personFold } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerScreen } from "./screens.ts";
+import { pinBrought } from "./moved-pin.ts";
 import type { ScreenHub } from "../screens/hub.ts";
 import type { MemberAsk } from "../parts.ts";
 import { compressed } from "./compress.ts";
 import { Traces, parseParent, route } from "./traces.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
+import { type Admit, door } from "./door.ts";
+import { SLOW_REPLY_BYTES, pathsOf, slowly } from "./reply-watch.ts";
+import { type Asked, HOP, Reader, send, writeLine } from "./wire.ts";
 
 export const ALPN = Buffer.from("stillfail/admin/1");
 // Keep old clients admitted until protocol-2 clients have reached the stable channel.
 const MIN_CLIENT_PROTOCOL = 1;
-const MAX_HEAD = 16 * 1024;
-// Files sent to a session go through here: in parts of 16 MB at most, or whole up to 50 MB (clients before parts).
-const MAX_BODY = 64 * 1024 * 1024;
-/// A reply this long or longer whose bytes took more than SLOW_REPLY_MS to be taken in whole is said on the log (slowly).
-const SLOW_REPLY_BYTES = 256 * 1024;
-const SLOW_REPLY_MS = 5_000;
-/// Headers of one hop, not of what is relayed.
-const HOP = ["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host", "content-length"];
 
-/// One JSON line at a time from a stream, then the rest of it.
-export class Reader {
-  carry: Buffer = Buffer.alloc(0);
-  stream: Stream;
-  /// How long a line may be: the admin API's heads are small; the device tools' carry their bodies in it.
-  private maxLine: number;
-  constructor(stream: Stream, maxLine = MAX_HEAD) {
-    this.stream = stream;
-    this.maxLine = maxLine;
-  }
-
-  async line(): Promise<any | null> {
-    // A long line (the device tools') comes in many pieces: kept as they come, each looked through once.
-    let at = this.carry.indexOf(10);
-    if (at < 0) {
-      const parts = [this.carry];
-      let size = this.carry.length;
-      while (at < 0) {
-        if (size > this.maxLine) throw new Error("head too large");
-        const more = await this.stream.read();
-        if (more === null) {
-          if (size === 0) return null;
-          throw new Error("stream ended mid-line");
-        }
-        const found = more.indexOf(10);
-        if (found >= 0) at = size + found;
-        parts.push(more);
-        size += more.length;
-      }
-      this.carry = Buffer.concat(parts, size);
-    }
-    if (at > this.maxLine) throw new Error("head too large");
-    const line = this.carry.subarray(0, at);
-    this.carry = this.carry.subarray(at + 1);
-    return JSON.parse(line.toString());
-  }
-
-  async rest(): Promise<Buffer> {
-    const parts = [this.carry];
-    let size = this.carry.length;
-    for (let more = await this.stream.read(); more; more = await this.stream.read()) {
-      parts.push(more);
-      size += more.length;
-      if (size > MAX_BODY) throw new Error("request body too large");
-    }
-    return Buffer.concat(parts);
-  }
-
-  /// The rest as it comes, however long (a request passed on as it is: a module's).
-  async *chunks(): AsyncGenerator<Buffer> {
-    if (this.carry.length > 0) {
-      const first = this.carry;
-      this.carry = Buffer.alloc(0);
-      yield first;
-    }
-    for (let more = await this.stream.read(); more; more = await this.stream.read()) yield more;
-  }
-}
-
-export const writeLine = (stream: Stream, value: unknown) => stream.write(Buffer.from(JSON.stringify(value) + "\n"));
+/// The streams' framing (wire.ts), as those that speak this protocol have it of here.
+export { Reader, send, writeLine };
 
 /// A hello's `lock: {device, proof}`: the device's base key, and its signature saying this endpoint is its own.
 function lockProof(v: any): { base: string; proof: string } | undefined {
@@ -117,8 +64,9 @@ function brought(hello: any, cloud: Cloud, workspace: string, base: string | und
   const entries = raw.map(asEntry);
   if (entries.some((e) => e === null)) return false;
   const ws = joinedOf(cloud, workspace);
-  const state = cloud.locked(ws)?.state;
-  if (!state) return false;
+  // (onto the workspace's own chain, where it has not moved: nothing follows a `moved`)
+  const state = cloud.chain(ws)?.state;
+  if (!state || state.moved !== undefined) return false;
   const all = entries as Entry[];
   if (all[0]!.seq > state.seq + 1 || all.some((e, i) => i > 0 && e.seq !== all[i - 1]!.seq + 1)) return false;
   if (!all.some((e) => e.seq > state.seq && e.kind === "device" && (e.body as { id?: unknown } | null)?.id === base)) return false;
@@ -130,12 +78,39 @@ function brought(hello: any, cloud: Cloud, workspace: string, base: string | und
   }
 }
 
-/// The longest chain of each person's own lock this station heard, by the lock's genesis.
-const chains = new WeakMap<Cloud, PersonChains>();
-export function personChainsOf(cloud: Cloud): PersonChains {
-  let c = chains.get(cloud);
-  if (c === undefined) chains.set(cloud, (c = new PersonChains(join(meshDir(cloud.data), "person-chains.json"))));
-  return c;
+/// Where a workspace's chain moved and this station waits for what its state is made of (Cloud `locked`'s `waiting`):
+/// what a hello brings of it, the root's log (`lock.person`, its genesis the root) and statements' bodies
+/// (`lock.bodies`), taken as any are (the log by its rules, each body only against an entry kept that commits to it),
+/// whoever brings them: they let nobody in by themselves. Whether any was.
+function broughtForState(hello: any, cloud: Cloud, workspace: string): boolean {
+  const ws = joinedOf(cloud, workspace);
+  const root = cloud.chain(ws)?.state?.moved;
+  if (root === undefined || cloud.locked(ws)?.waiting !== true) return false;
+  let any = false;
+  const log = hello?.lock?.person;
+  if (Array.isArray(log) && log.length > 0 && log.length <= BROUGHT_MOST) {
+    try {
+      const { genesis, whose } = foldChain(log, null);
+      if (genesis === root) any = personChainsOf(cloud).take(genesis, whose, log, workspace, false).taken > 0 || any;
+    } catch {
+      // (not the root's log, or not one the rules take)
+    }
+  }
+  const bodies = hello?.lock?.bodies;
+  if (Array.isArray(bodies) && bodies.length > 0 && bodies.length <= BROUGHT_MOST) any = cloud.takeBodies(ws, bodies).taken > 0 || any;
+  return any;
+}
+
+/// The longest chain of each person's own lock this station heard, by the lock's genesis (cloud/state.ts, where a
+/// moved workspace's state is made of them).
+export { personChainsOf };
+
+/// The members' devices that came to this station, by workspace (seen-devices.ts).
+const seens = new WeakMap<Cloud, SeenDevices>();
+export function seenDevicesOf(cloud: Cloud): SeenDevices {
+  let s = seens.get(cloud);
+  if (s === undefined) seens.set(cloud, (s = new SeenDevices(join(meshDir(cloud.data), "seen-devices.json"))));
+  return s;
 }
 
 /// `ws` when it is a workspace the station joined, null for its home one (whose lock is the home's).
@@ -167,12 +142,153 @@ function leftOutFor(cloud: Cloud, hello: any, device: string, accepted?: Accepte
 
 /// What a hello this station refused (`e`, why) is answered: a lock's refusal with the code the device asks to be
 /// approved by and how far the lock goes here; a workspace left out for a lock, why (`lock_station`); else the reason.
-export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, accepted?: Accepted): Record<string, unknown> {
-  if (e instanceof LockRefusal) return { error: e.message, code: e.code, lock: lockHead(cloud, joinedOf(cloud, claimed(hello))) };
+/// `sub`: whose credential checked out, refused for the lock: told the chains of their own lock this station keeps, so a
+/// device of theirs not on it yet (a new one) finds the devices that may let it in with no cloud (a few, as fit in a line);
+/// and the last entries of the workspace's lock (`entries`), so one taken out of it hears so, with no cloud to read it of.
+export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, accepted?: Accepted, sub: string | null = null): Record<string, unknown> {
+  if (e instanceof LockRefusal) {
+    const chains = sub === null ? [] : personChainsOf(cloud).of(sub).map(([genesis, entries]) => ({ genesis, entries }));
+    const person = chains.length > 0 && JSON.stringify(chains).length <= REFUSAL_PERSON_BYTES ? { person: chains } : {};
+    const ws = joinedOf(cloud, claimed(hello));
+    const tail: Entry[] = [];
+    let bytes = 0;
+    for (const entry of sub === null ? [] : cloud.lockAfter(-1, ws).reverse()) {
+      bytes += JSON.stringify(entry).length;
+      if (bytes > REFUSAL_ENTRIES_BYTES) break;
+      tail.unshift(entry);
+    }
+    const out = sub === null ? null : toldOut(cloud, ws, device, hello);
+    const left = sub === null ? null : leftOf(cloud, ws, device, hello, sub);
+    return { error: e.message, code: e.code, lock: lockHead(cloud, ws), ...person, ...(tail.length > 0 ? { entries: tail } : {}), ...(out !== null ? { out } : {}), ...(left !== null ? { left } : {}) };
+  }
   const left = leftOutFor(cloud, hello, device, accepted);
   if (left !== null) return { error: LEFT_OUT[left], code: "lock_station", why: left };
   return { error: (e as Error).message };
 }
+
+/// How many devices a refusal names to ask at most (a line of a few KB).
+const APPROVERS_MOST = 16;
+
+/// What a device refused where `ws`'s chain moved is told when the state in force there does not name it (2026-11-14:
+/// such a device was given no logs and read the workspace as waiting for good, nobody to ask): that it is left out, and
+/// whom to ask, the base ids of the app devices that may let it in, `APPROVERS_MOST` at most: its person's own where
+/// the list names them (on the log that binds them: only those put a device of theirs on it), else the owners' and
+/// admins' (they say someone's first device's `member`). Nothing else of the list: a hint the device does not trust,
+/// dialling them as before a move, the device dialled checking everything itself (client/core-ts/src/views/pair.ts),
+/// so a station that names others only sends it where nobody lets it in. None while the station waits for the root's
+/// log or its `open` (it names nobody, so it cannot tell who is left out), while it is off (nobody is refused for it),
+/// where the chain did not move, or to a device the list names (refused for another reason). And `apps`, whether the
+/// list names an app device of its person's: a web page is approved there by its own person's app alone, so one with
+/// none is told to install one rather than ask owners who cannot approve it (client/core-ts/src/views/lock.ts
+/// `needsAppIn`; the owner, 2026-11-13: 「开了安全模式那就需要 app」). It says nothing of the list beyond the asking
+/// device's own person (whom `approvers` names already where they have one); a core from before reads `approvers` alone.
+function leftOf(cloud: Cloud, ws: string | null, device: string, hello: any, sub: string): { approvers: string[]; apps: boolean } | null {
+  if (cloud.chain(ws)?.state?.moved === undefined) return null;
+  const locked = cloud.locked(ws);
+  if (locked === null || locked.waiting === true || locked.state === null) return null;
+  const s = locked.state;
+  const proof = lockProof(hello?.lock);
+  const ids = [device, ...(proof && endpointProof(ws ?? cloud.home() ?? "", proof.base, device, proof.proof) ? [proof.base] : [])];
+  if (ids.some((id) => s.devices.has(id))) return null;
+  const named = s.members.has(sub);
+  const approvers = [...s.devices.values()]
+    .filter((d) => d.kind === "app" && (named ? d.sub === sub : ["owner", "admin"].includes(s.members.get(d.sub)?.role ?? "")))
+    .map((d) => d.id)
+    .slice(0, APPROVERS_MOST);
+  const apps = [...s.devices.values()].some((d) => d.kind === "app" && d.sub === sub);
+  return { approvers, apps };
+}
+
+/// How much of what took a device out a refusal tells at most.
+const REFUSAL_OUT_BYTES = 32 * 1024;
+
+/// What a device refused where `ws`'s chain moved is told of what took it out (the model's `admitsBefore`, as
+/// `Cloud.givenTo` gives it to a station): the removals whose subject's removals left out make the list name it again,
+/// with each one's `prev` chain, and the entries of the person logs that commit to them (each its log from the genesis),
+/// so that it can work out who took it out and when by the rules alone; nothing else of the workspace. By its endpoint,
+/// the base key its hello proves for it and the keys the logs kept put on with those; none where the list never named
+/// it, or names it now (refused for another reason), or where it would not fit a line.
+function toldOut(cloud: Cloud, ws: string | null, device: string, hello: any): { bodies: unknown[]; logs: { genesis: string; entries: Entry[] }[] } | null {
+  if (cloud.chain(ws)?.state?.moved === undefined) return null;
+  const proof = lockProof(hello?.lock);
+  const ids = new Set([device, ...(proof && endpointProof(ws ?? cloud.home() ?? "", proof.base, device, proof.proof) ? [proof.base] : [])]);
+  // (a removal took out the keys of its subject's log: those the logs kept here put on with these ids; and the key the
+  // chain as it moved named each with, for a device it carried)
+  const keys = new Set(ids);
+  for (const id of ids) {
+    const k = cloud.chain(ws)?.state?.devices.get(id)?.sign_key;
+    if (k !== undefined) keys.add(k);
+  }
+  for (const [, entries] of personChainsOf(cloud).every()) {
+    for (const e of entries) {
+      const d = (e.kind === "genesis" ? (e.body as any)?.device : e.kind === "device" ? e.body : null) as { id?: unknown; key?: unknown } | null;
+      if (typeof d?.id === "string" && ids.has(d.id) && typeof d.key === "string") keys.add(d.key);
+    }
+  }
+  const hashes = new Set<string>();
+  for (const k of keys) {
+    const given = cloud.givenTo(ws, k);
+    if (given === "all") return null;
+    for (const h of given) hashes.add(h);
+  }
+  if (hashes.size === 0) return null;
+  const kept = cloud.bodies(ws).all();
+  const bodies = [...hashes].flatMap((h) => (kept.has(h) ? [kept.get(h)] : []));
+  const logs: { genesis: string; entries: Entry[] }[] = [];
+  for (const [genesis, entries] of personChainsOf(cloud).every()) {
+    let last = -1;
+    entries.forEach((e, i) => {
+      if (e.kind === "ws" && hashes.has(String((e.body as { h?: unknown } | null)?.h))) last = i;
+    });
+    if (last >= 0) logs.push({ genesis, entries: entries.slice(0, last + 1) });
+  }
+  const out = { bodies, logs };
+  return JSON.stringify(out).length <= REFUSAL_OUT_BYTES ? out : null;
+}
+
+/// Whether a device's connection is given `ws`'s bodies and logs: let in by its lock (while on); while its people's
+/// logs say it is off, the connection was let in by the control plane's word alone, so only where the list made of the
+/// bodies names that very device as the lock's admission would (its base key's proof of the endpoint, and an app's
+/// person's log as kept here). A connection that brought no proof (`lock` on its hello) is given none while off. While
+/// the station waits for the root's log or its `open` (`waiting`) nobody is let in, and a connection let in before the
+/// chain moved, still open, is given none either.
+function givesDevice(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"]): boolean {
+  const locked = cloud.locked(ws);
+  if (locked !== null) return locked.waiting !== true;
+  const li = cloud.list(ws);
+  const s = li?.state;
+  if (!s || li!.waiting === true || s.moved !== undefined || cloud.chain(ws)?.state?.moved === undefined) return false;
+  try {
+    const who = { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof };
+    const { device } = admit(s, who, nowSecs());
+    if (device.kind === "app" && s.persons.has(viewer.sub)) {
+      const chain = personChainsOf(cloud).kept(s.persons.get(viewer.sub)!);
+      if (chain === null) return false;
+      admitPerson(s, who, chain);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/// How many bodies one request brings at most.
+const BODIES_MOST = 1024;
+
+/// Bodies a device of the viewer's workspace brings, taken as the rules take them (Cloud `takeBodies`): how many, and
+/// each not taken with why (as `off` says it of entries). Taken while the workspace is off too (a lock pinned: its
+/// chain): the root's next `open` puts it on again, and taking a body gives nobody anything.
+function bodiesTaken(cloud: Cloud, viewer: Admitted["viewer"], bodies: unknown[]): { taken: number; refused?: { hash: string | null; why: string }[] } {
+  const ws = viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
+  if (cloud.chain(ws) === null || bodies.length > BODIES_MOST) return { taken: 0, refused: bodies.slice(0, BODIES_MOST).map(() => ({ hash: null, why: "this workspace keeps no statements here" })) };
+  const t = cloud.takeBodies(ws, bodies);
+  return { taken: t.taken, ...(t.refused.length > 0 ? { refused: t.refused } : {}) };
+}
+
+/// How much of a person's own lock a refusal tells at most (a core reads a line of 64 KiB at most).
+const REFUSAL_PERSON_BYTES = 32 * 1024;
+/// How much of the workspace's lock (its last entries) a refusal tells at most.
+const REFUSAL_ENTRIES_BYTES = 16 * 1024;
 
 /// The workspace a hello's credential names, as it says (checked by verifyMember: only to say which lock refused it).
 function claimed(hello: any): string {
@@ -184,33 +300,102 @@ function claimed(hello: any): string {
   }
 }
 
+/// The build a request's headers say (api/oldest.ts `buildOf`), null for none.
+function buildSaid(headers: Record<string, unknown>): number | null {
+  const said = Object.entries(headers).find(([k]) => k.toLowerCase() === BUILD_HEADER)?.[1];
+  return buildOf(typeof said === "string" ? said : undefined);
+}
+
+/// A request of `viewer` with `headers`: the build it says kept by the device's id in the lock (device-builds.ts),
+/// where it has one. The build said (null: none).
+export function sawBuild(cloud: Cloud, viewer: Admitted["viewer"], headers: Record<string, unknown>): number | null {
+  const build = buildSaid(headers);
+  if (viewer.lockId !== undefined) deviceBuildsOf(cloud).saw(viewer.lockId, build, nowSecs());
+  return build;
+}
+
+/// Whether a core saying `build` is too old for its workspace here: its chain moved (`moved {root}` on the chain this
+/// station keeps) and the build a release's (COUNTED_FROM) under MOVED_FROM_BUILD, whose rules refuse that chain. One that
+/// says none is answered as `coreTooOld` answers it (a web page from before builds were said, or not loaded again since:
+/// told to update, every request of it was refused and nothing on it said why, 2026-11-10), and one under COUNTED_FROM
+/// (a development build's, an iOS app's TestFlight number) cannot be told apart.
+export function movedTooOld(cloud: Cloud, viewer: Admitted["viewer"], build: number | null): boolean {
+  if (build === null || build < COUNTED_FROM || build >= MOVED_FROM_BUILD) return false;
+  return typeof cloud.chain(joinedOf(cloud, viewer.workspace))?.state?.moved === "string";
+}
+
+/// The ids of the devices workspace `ws`'s lock here names (null: the home one): its chain's, and where it moved the
+/// state in force's too.
+function lockDeviceIds(cloud: Cloud, ws: string | null): Set<string> {
+  return new Set([...(cloud.chain(ws)?.state?.devices.keys() ?? []), ...(cloud.locked(ws)?.state?.devices.keys() ?? [])]);
+}
+
+/// The ids of the app devices on `sub`'s own log, as each chain of it kept here says (device-builds.ts).
+function personDeviceIds(cloud: Cloud, sub: string): Set<string> {
+  const out = new Set<string>();
+  for (const [, entries] of personChainsOf(cloud).of(sub)) {
+    try {
+      for (const d of personFold(entries, sub).devices) out.add(d.id);
+    } catch {
+      // (a chain that does not fold names none)
+    }
+  }
+  return out;
+}
+
 /// How far this station's lock goes in `ws` (the home workspace when null), for the device to bring it what it has
 /// more (null: no lock pinned there).
 export function lockHead(cloud: Cloud, ws: string | null = null): { seq: number; hash: string; genesis: string } | null {
-  const s = cloud.locked(ws)?.state;
+  // (the chain's own, moved or not: what a device brings it more of)
+  const s = cloud.chain(ws)?.state;
   return s ? { seq: s.seq, hash: s.head, genesis: s.genesis } : null;
 }
 
-/// GET /lock?after=<seq>: how far this station's lock goes and its entries after `after` (any member). POST /lock
-/// {entries}: more of the pinned lock, checked entry by entry; or, unpinned, a lock to pin, from its genesis: brought by
-/// its owner, on a device the genesis names (until then the control plane's word is what this station goes by, and the
-/// owner it names is who may turn the lock on).
+/// GET /lock?after=<seq>: how far this station's lock goes and its entries after `after` (any member): its active chain,
+/// with the hash of its entry at `after` (`after_hash`), for a device that holds another there to see it parted. POST
+/// /lock {entries}: more of the pinned lock, what goes on from its head; with `keep` (entries a station took already,
+/// `serves` says `forks`), each the rules take after a parent kept, also off the chain gone by (cloud/state.ts
+/// `keepLock`); or, unpinned, a lock to pin, from its genesis: brought by its owner, on a device the genesis names (until
+/// then the control plane's word is what this station goes by, and the owner it names is who may turn the lock on).
 /// The lock is the asker's workspace's (each workspace the station is in has its own).
+///
+/// What a POST is answered (an app from before calls an answer "taken" whose head is as far as its entry): the last entry
+/// brought on the active chain once taken, 200 `{taken, head}` as before; not going on from the head (not kept), or kept
+/// with `keep` but not on the chain (it lost at its parent, or hangs below one that did), 409 with the words of a fork
+/// as before; refused by the rules, as before (200 where others were taken, else 409 with why). `head` is the active
+/// chain's; `off`, for the core of next, says of each entry brought not on it why (`why`: `not on the head`, `refused`
+/// with the rules' `refusal`, `beaten` by `winner` at `step`, `below` one beaten, `under`, `no parent`), and whether it
+/// is kept aside (`kept`).
 export function lockRoute(cloud: Cloud, method: string, query: [string, string][], body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
   const ws = viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
   if (method === "GET") {
     const after = Number(query.find(([k]) => k === "after")?.[1] ?? -1);
     // (`takes`: the entry kinds this station knows beyond the first ones, for a device to ask before it writes one: an
     // entry it did not know, it would refuse, and every entry after)
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(Number.isSafeInteger(after) ? after : -1, ws), takes: ["person"] }];
+    // (`serves`: what a device has of this station rather than of the cloud: the person's own lock (/lock/person), the
+    // devices that came (/lock/devices), and the locks' changes told on its event stream (lock-events.ts))
+    const from = Number.isSafeInteger(after) ? after : -1;
+    const at = from >= 0 ? cloud.lockAfter(from - 1, ws)[0] : undefined;
+    const atHash = at !== undefined && at.seq === from ? { after_hash: hashOf(at) } : {};
+    // (`builds`: what build each device its lock names last ran, as seen here, device-builds.ts; given only to a device the
+    // lock let in, as admission let this one, and of a workspace with none, of nobody)
+    // (`carried`: a moved chain read as it moved beside its people's logs, cloud/lock.ts `state4Moved`, 2026-11-14: every
+    // reader must make the same state, so a core hands a chain over only once each of its stations says it)
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds", "carried"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
+  let keep = false;
+  let withState: { logs: unknown; bodies: unknown } = { logs: undefined, bodies: undefined };
   try {
     const said = JSON.parse(body.toString("utf8") || "{}");
+    withState = { logs: said?.logs, bodies: said?.bodies };
+    // (`keep`: what is brought was taken by another keeper already, a station the device read it of: kept as a station's
+    // would be, also off the chain gone by; else only what goes on from its head, cloud/state.ts `keepLock`)
+    keep = said?.keep === true;
     // A person's own lock as it stands now (a device taken off it), told by their device: the longest heard is what a
     // chain brought later is judged by.
-    if (Array.isArray(said?.person)) return personTold(cloud, ws, viewer, said.person);
+    if (Array.isArray(said?.person)) return personTold(cloud, ws, viewer, said.person, keep);
     const raw = said?.entries;
     entries = Array.isArray(raw) ? raw.map(asEntry) : [];
   } catch {
@@ -218,32 +403,168 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
   }
   if (entries.length === 0 || entries.some((e) => e === null)) return [400, { error: "entries: lock entries" }];
   try {
-    if (cloud.locked(ws) === null) {
+    if (cloud.chain(ws) === null) {
       if (viewer.role !== "owner") return [403, { error: "only the workspace's owner turns its lock on" }];
+      // A moved chain: by the same door, on the same condition read on its state in force (moved-pin.ts `pinBrought`).
+      if ((entries as Entry[]).some((e) => e.kind === "moved")) {
+        try {
+          pinBrought(cloud, ws, viewer.workspace || cloud.home() || "", entries as Entry[], withState.logs, withState.bodies, { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof }, cloud.state?.station ?? "");
+        } catch (e) {
+          return [403, { error: (e as Error).message }];
+        }
+        return [200, { taken: entries.length, head: lockHead(cloud, ws) }];
+      }
       // Brought by one of its owner's devices as the chain brought names them (one approved after the genesis too:
       // the owner takes a station in from the phone they approved since).
       const brought = fold(entries as Entry[], nowSecs());
       admit(brought, { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof }, nowSecs());
       if (brought.members.get(viewer.sub)?.role !== "owner") return [403, { error: "the lock is brought by its owner" }];
     }
-    const taken = cloud.takeLock(entries as Entry[], ws);
-    return [200, { taken, head: lockHead(cloud, ws) }];
+    const t = cloud.keepLock(entries as Entry[], ws, keep);
+    const head = lockHead(cloud, ws);
+    const off = t.off.length > 0 ? { off: t.off } : {};
+    const h = hashOf(entries.at(-1)!);
+    if (cloud.lockAfter(-1, ws).some((e) => hashOf(e) === h)) return [200, { taken: t.taken, head, ...off }];
+    const why = t.off.find((o) => o.hash === h)?.why;
+    // Kept, or the bound reached (cloud/log-keep.ts), but not on the chain: it lost its place.
+    if (why === "beaten" || why === "below" || why === "again") return [409, { error: FORK, head, ...off }];
+    if (t.taken > 0) return [200, { taken: t.taken, head, ...off }];
+    return [409, { error: t.refusal?.message ?? FORK, head, ...off }];
   } catch (e) {
     return [409, { error: (e as Error).message, head: lockHead(cloud, ws) }];
   }
 }
 
-function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"], chain: unknown[]): [number, unknown] {
+/// GET /ways: the asker's workspace's own relays and the ways turned off, as this station goes by them (`at` 0: as
+/// still.fail cloud kept them, none changed here yet). POST /ways: `{relays}` the whole list of its own relays, or
+/// `{way, on}` one way turned on or off; any member but a read-only one (mesh/ways.ts: nobody approves a relay).
+export function waysRoute(cloud: Cloud, method: string, body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
+  const ways = workspaceWaysOf(cloud);
+  const ws = viewer.workspace || cloud.home() || "";
+  if (method === "GET") return [200, ways.view(ws)];
+  if (method !== "POST") return [405, { error: "GET or POST" }];
+  if (readOnly(viewer)) return [403, { error: "read-only members cannot change this workspace's ways" }];
+  let said: any;
+  try {
+    said = JSON.parse(body.toString("utf8") || "{}");
+  } catch {
+    return [400, { error: "invalid JSON" }];
+  }
+  try {
+    const by = viewer.name || viewer.email || null;
+    if (Array.isArray(said?.relays)) return [200, setRelays(ways, ws, said.relays, by)];
+    if (typeof said?.way === "string" && typeof said?.on === "boolean") return [200, setWay(ways, ws, said.way, said.on)];
+    return [400, { error: "relays: a list of URLs, or way and on" }];
+  } catch (e) {
+    if (e instanceof WaysRefusal) return [e.message.startsWith("the last relay") ? 409 : 400, { error: e.message }];
+    throw e;
+  }
+}
+
+/// GET /station-marks: the names and marks this station keeps of the asker's workspace's stations, by id (mesh/
+/// station-marks.ts; one with none kept is as still.fail cloud lists it). PUT /station-mark: this station's own changed,
+/// `{name, emoji, icon}` (each left out stays as it was; "" takes an emoji or an icon away), by an owner or an admin.
+export function stationMarksRoute(cloud: Cloud, method: string, body: Buffer, viewer: Admitted["viewer"], own: boolean): [number, unknown] {
+  const marks = stationMarksOf(cloud);
+  const ws = viewer.workspace || cloud.home() || "";
+  if (!own) return method === "GET" ? [200, { marks: marks.of(ws) }] : [405, { error: "GET" }];
+  if (method !== "PUT") return [405, { error: "PUT" }];
+  if (!managesStation(viewer)) return [403, { error: "only the workspace's owners and admins change a station's name and icon" }];
+  let said: any;
+  try {
+    said = JSON.parse(body.toString("utf8") || "{}");
+  } catch {
+    return [400, { error: "invalid JSON" }];
+  }
+  if (said === null || typeof said !== "object") return [400, { error: "name, emoji, icon" }];
+  try {
+    // (where it keeps none yet, its name as the cloud lists it here; the device sends all three, so its emoji and icon)
+    const was = { name: cloud.membership(ws)?.name || cloud.state?.name || "", emoji: "", icon: "" };
+    return [200, marks.change({ name: said.name, emoji: said.emoji, icon: said.icon }, was)];
+  } catch (e) {
+    if (e instanceof MarkRefusal) return [400, { error: e.message }];
+    throw e;
+  }
+}
+
+function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"], chain: unknown[], keep = false): [number, unknown] {
   const pin = cloud.locked(ws)?.state?.persons.get(viewer.sub);
   if (pin === undefined) return [409, { error: "no lock of their own bound here" }];
   try {
     if (personFold(chain, viewer.sub).genesis !== pin) return [409, { error: "not the lock bound here" }];
-    const chains = personChainsOf(cloud);
-    chains.keep(pin, chains.newest(pin, viewer.sub, chain));
-    return [200, {}];
+    const t = takeChain(personChainsOf(cloud), chain, viewer.sub, viewer.workspace, keep);
+    const off = t.off.length > 0 ? { off: t.off } : {};
+    if (!t.on) return [409, { error: AT_ODDS, head: personHead(t.chain), ...off }];
+    return [200, { ...off }];
   } catch (e) {
     return [409, { error: (e as Error).message }];
   }
+}
+
+/// How far a person's chain gone by goes: its last entry's place and hash.
+const personHead = (chain: unknown[]) => ({ seq: chain.length - 1, hash: chain.length === 0 ? null : hashOf(chain.at(-1) as Entry) });
+
+/// GET /lock/person: the chains of the asker's own lock this station has (each begun anew, by its genesis, the chain it
+/// goes by), for the device to go on from the one it pinned. POST /lock/person {chain}: the chain as it stands now on the
+/// device (a device added or taken off), what goes on from the chain gone by (with `keep`, each entry the rules take
+/// after a parent kept, as POST /lock), and so told to the person's other devices and stations (person-sync.ts):
+/// answered `{genesis, length}` as before where its last entry is on the chain gone by; else 409 with the words of being
+/// at odds as before, `head` the chain gone by's and `off` why for each entry not on it (as POST /lock says them). GET /lock/devices: the members' devices that came to this station in the asker's
+/// workspace (everyone's for its owners and admins, else their own), as the cloud's GET /devices said them.
+export function lockPartRoute(cloud: Cloud, part: string, method: string, body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
+  if (part === "person") {
+    const chains = personChainsOf(cloud);
+    // (with what this station serves of the person's logs and the builds of the app devices on the asker's own log, as
+    // seen here: what their core reads before it writes a kind an older station or app refuses, device-builds.ts)
+    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
+    if (method !== "POST") return [405, { error: "GET or POST" }];
+    let said: any;
+    try {
+      said = JSON.parse(body.toString("utf8") || "{}");
+    } catch {
+      return [400, { error: "invalid JSON" }];
+    }
+    try {
+      const t = takeChain(chains, said?.chain, viewer.sub, viewer.workspace, said?.keep === true);
+      const off = t.off.length > 0 ? { off: t.off } : {};
+      // (the entries first, then the bodies of the statements among them: one answer)
+      const bodies = Array.isArray(said?.bodies) ? bodiesTaken(cloud, viewer, said.bodies) : {};
+      if (!t.on) return [409, { error: AT_ODDS, head: personHead(t.chain), ...off, ...bodies }];
+      return [200, { genesis: t.genesis, length: t.chain.length, ...off, ...bodies }];
+    } catch (e) {
+      return [409, { error: (e as Error).message }];
+    }
+  }
+  const ws = (part === "bodies" || part === "logs") && viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
+  if (part === "bodies") {
+    // (to a connection let in in this workspace alone: it is in its state, or, before its chain moved, in its chain)
+    if (method === "GET") {
+      if (!givesDevice(cloud, ws, viewer)) return [200, { bodies: [], lacking: [] }];
+      return [200, { bodies: [...cloud.bodies(ws).all().values()], lacking: cloud.lacking(ws) }];
+    }
+    if (method !== "POST") return [405, { error: "GET or POST" }];
+    let said: any;
+    try {
+      said = JSON.parse(body.toString("utf8") || "{}");
+    } catch {
+      return [400, { error: "invalid JSON" }];
+    }
+    if (!Array.isArray(said?.bodies) || said.bodies.length > BODIES_MOST) return [400, { error: "bodies: the statements' bodies" }];
+    return [200, bodiesTaken(cloud, viewer, said.bodies)];
+  }
+  if (part === "logs" && method === "GET") {
+    if (!givesDevice(cloud, ws, viewer)) return [200, { chains: [] }];
+    const chains = personChainsOf(cloud);
+    return [200, { chains: cloud.logsOf(ws).flatMap((genesis) => {
+      const entries = chains.kept(genesis);
+      return entries === null ? [] : [{ genesis, entries }];
+    }) }];
+  }
+  if (part === "devices" && method === "GET") {
+    const manages = viewer.role === "owner" || viewer.role === "admin";
+    return [200, { devices: seenDevicesOf(cloud).of(viewer.workspace, nowSecs(), viewer.sub, manages) }];
+  }
+  return [404, { error: "no such route" }];
 }
 
 /// With a lock pinned: the member admitted only on a device the lock names, with the lower of the lock's role and the
@@ -257,14 +578,18 @@ export function inLock(cloud: Cloud, admitted: Admitted, named: string, endpoint
   const locked = cloud.locked(ws);
   if (locked === null) return { ...admitted, viewer: { ...admitted.viewer, role: named } };
   if (locked.state === null) throw new LockRefusal("this station's workspace lock is broken; run `stillfail lock reset` on it");
+  // (moved to its people's logs, and the root's log or its `open` not here yet: nobody, until they come)
+  if (locked.waiting === true) throw new LockRefusal(NOT_GIVEN);
   const v = admitted.viewer;
   const { device, role } = admit(locked.state, { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof }, nowSecs());
-  if (device.kind === "app" && locked.state.persons.has(v.sub)) {
+  // (an app device the chain as it moved still says, its person's log never having put it on, `by` "chain": let in by
+  // the state, which no log it brings can say more of than the log kept here does)
+  if (device.kind === "app" && locked.state.persons.has(v.sub) && device.by !== "chain") {
     const person = onPersonalLock(cloud, admitted, named, endpoint, hello);
     if (person === null) throw new LockRefusal("this device goes by its person's own lock in this workspace, and it brought none");
     return person;
   }
-  return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
+  return { ...admitted, viewer: { ...v, role: lowerRole(role, named), lockId: device.id } };
 }
 
 /// inLock again for a connection already in (its lock or its person's changed): by its person's own lock where it is
@@ -287,6 +612,13 @@ export function inLockBringing(cloud: Cloud, admitted: Admitted, named: string, 
     return inLock(cloud, admitted, named, endpoint, hello);
   } catch (e) {
     if (!(e instanceof LockRefusal)) throw e;
+    if (broughtForState(hello, cloud, admitted.viewer.workspace)) {
+      try {
+        return inLock(cloud, admitted, named, endpoint, hello);
+      } catch (again) {
+        if (!(again instanceof LockRefusal)) throw again;
+      }
+    }
     if (brought(hello, cloud, admitted.viewer.workspace, admitted.viewer.lockDevice?.base)) {
       try {
         return inLock(cloud, admitted, named, endpoint, hello);
@@ -314,11 +646,23 @@ function onPersonalLock(cloud: Cloud, admitted: Admitted, named: string, endpoin
   const who = { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof };
   const chains = personChainsOf(cloud);
   const pin = state.persons.get(v.sub)!;
-  const newest = raw === undefined ? chains.kept(pin) : chains.newest(pin, v.sub, raw);
+  // Let in as the chain the rules choose among what is kept and what it brought says; what it brought is kept once it
+  // is in (a chain at odds that lost where it parts from the one kept, aside). A chain the rules find none in (not of
+  // the lock bound here) is judged as brought.
+  let newest: unknown[] | null = raw === undefined ? chains.kept(pin) : raw;
+  if (raw !== undefined) {
+    try {
+      foldChain(raw, v.sub);
+      const chosen = chains.chosen(pin, v.sub, raw);
+      if (chosen.length > 0) newest = chosen;
+    } catch {
+      // (judged as brought)
+    }
+  }
   if (newest === null) return null;
-  const { role } = admitPerson(state, who, newest);
-  chains.keep(pin, newest);
-  return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
+  const { role, device } = admitPerson(state, who, newest);
+  chains.keep(pin, raw ?? newest, v.workspace);
+  return { ...admitted, viewer: { ...v, role: lowerRole(role, named), lockId: device } };
 }
 
 export type Members = {
@@ -342,137 +686,146 @@ export type Members = {
   connected?: () => void;
 };
 
-/// One member's connection: the credential first, nothing served before it checks out; then a request a stream.
-export async function serve(m: Members, conn: Connection) {
+/// One member's connection: the credential first, nothing served before it checks out; then a request a stream. The
+/// streams are the door's (door.ts); who is let in and what is answered, `admission`'s.
+export function serve(m: Members, conn: Connection): Promise<void> {
   if (m.cloud.removed()) {
     conn.close(2, "station_removed");
-    throw new Error("station removed");
+    return Promise.reject(new Error("station removed"));
   }
   const device = conn.remoteId();
-  const first = await conn.acceptBi();
-  if (!first) return;
-  const credentials = new Reader(first);
-  const state = () => m.cloud.state!;
-  const hello = await credentials.line();
-  if (hello === null) throw new Error("no credential");
-  // Which device this is in the workspace's lock: its base key's proof for this endpoint, said once (cloud/lock.ts).
-  const proof = lockProof(hello?.lock);
-  // The role the credential names: the control plane's word, which the lock may lower but not raise.
-  let named = "";
-  const check = (line: any) => {
-    // Of any workspace the station is in: the viewer's is the one its requests are answered for.
-    const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
-    named = admitted.viewer.role;
-    if (proof) admitted.viewer.lockDevice = proof;
-    return inLockBringing(m.cloud, admitted, named, device, line);
-  };
-  let current: Admitted;
-  try {
-    current = check(hello);
-  } catch (e) {
-    await writeLine(first, refusalOf(m.cloud, hello, device, e, m.accepted?.())).catch(() => {});
-    await first.finish().catch(() => {});
-    wall.after(200, () => conn.close(1, e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused"));
-    throw e;
-  }
-  // How far its lock goes, when it has one (a device that has more brings it).
-  const head = lockHead(m.cloud, joinedOf(m.cloud, current.viewer.workspace));
-  const lan = m.lan?.() ?? [];
-  const tailnet = m.tailnet?.() ?? [];
-  await writeLine(first, { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}), ...(lan.length > 0 ? { lan } : {}), ...(tailnet.length > 0 ? { tailnet } : {}) });
-  // The dial's trace (the device's `mesh.connect`), said on both lines of the connection so the device's record of it
-  // and the station's are found together; and the way it came, then the ways it had when it ended (2026-10-30: a
-  // phone's handshake with dev-prod went through and nothing came after, and nothing here said what the station saw).
-  const trace = parseParent(typeof hello?.traceparent === "string" ? hello.traceparent : undefined)?.trace;
-  const opened = wall.now();
-  log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12), trace, via: conn.via() ?? "direct", ways: waysOf(conn) });
-  m.connected?.();
-  let lastWays = waysOf(conn);
-  void conn.closed().then((why) => {
-    const ways = waysOf(conn);
-    const traffic = conn.stats?.();
-    log.info("mesh", "a device's connection ended", {
-      device: device.slice(0, 12),
-      trace,
-      why,
-      lasted: wall.now() - opened,
-      ways: ways === "" ? lastWays : ways,
-      ...(traffic ? { rx: traffic.rxBytes, tx: traffic.txBytes } : {}),
-    });
-  }, () => {});
+  return door(conn, admission(m, device));
+}
 
-  // The connection ends when its credential runs out or is revoked, or the station leaves its workspace: checked on
-  // every change of the cloud's state, and when the credential runs out.
-  // Or the lock takes the device away (or lowers its member's role: the next request goes with the role it has now).
-  const gone = () => {
-    const of = m.cloud.membership(current.viewer.workspace);
-    if (m.cloud.removed() || of === null) conn.close(2, "station_removed");
-    else if (revoked(current, of.revocations)) conn.close(3, "credential_revoked");
-    else if (current.exp <= nowSecs()) conn.close(3, "credential_expired");
-    else {
-      try {
-        current = stillIn(m.cloud, current, named, device);
-        return false;
-      } catch {
-        conn.close(3, "lock_unconfirmed");
-      }
+/// Who the door lets in here (door.ts `Admit`): a member's device, by the credential its hello brings and the lock; with
+/// what its later lines (renewals) and its requests are answered, and what ends the connection meanwhile.
+function admission(m: Members, device: string): Admit {
+  return (hello, conn) => {
+    const state = () => m.cloud.state!;
+    // Which device this is in the workspace's lock: its base key's proof for this endpoint, said once (cloud/lock.ts).
+    const proof = lockProof(hello?.lock);
+    // A credential line checked: the member as the lock lets them in, and the role the credential names (the control
+    // plane's word, which the lock may lower but not raise). Nothing of the connection is set here: the two are taken
+    // together, once the lock let the member in, so a renewal refused leaves the connection as it was (2026-11-14: the
+    // role one named stayed, and a member of a workspace with no lock was its owner by a credential of another
+    // workspace of this station whose lock refused the device). `verified`: told whose credential checked out, before
+    // the lock is asked.
+    const check = (line: any, verified?: (sub: string) => void): { admitted: Admitted; named: string } => {
+      // Of any workspace the station is in: the viewer's is the one its requests are answered for.
+      const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
+      const named = admitted.viewer.role;
+      verified?.(admitted.viewer.sub);
+      if (proof) admitted.viewer.lockDevice = proof;
+      // Which devices came, for a lock's owner to name (seen-devices.ts): what it says of itself with its lock proof
+      // (`lock.kind`, `lock.label`), its base key.
+      // Its base key only as its proof for this endpoint holds (as the cloud checked it).
+      const base = proof && endpointProof(admitted.viewer.workspace, proof.base, device, proof.proof) ? proof.base : null;
+      seenDevicesOf(m.cloud).saw(nowSecs(), admitted.viewer, device, base, line?.lock ?? null);
+      const inIt = inLockBringing(m.cloud, admitted, named, device, line);
+      // (no lock of its workspace here: its base key, its id on its person's own log, as its proof holds)
+      return { admitted: inIt.viewer.lockId === undefined && base !== null ? { ...inIt, viewer: { ...inIt.viewer, lockId: base } } : inIt, named };
+    };
+    let current: Admitted;
+    let named: string;
+    // Whose credential checked out (refused then for the lock alone).
+    let whose: string | null = null;
+    try {
+      ({ admitted: current, named } = check(hello, (sub) => (whose = sub)));
+    } catch (e) {
+      return { refused: { line: refusalOf(m.cloud, hello, device, e, m.accepted?.(), whose), code: 1, reason: e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused", error: e } };
     }
-    return true;
-  };
-  // A credential's expiry is the cloud's word, in the machine's time.
-  let expiry: (() => void) | undefined;
-  const watchExpiry = () => {
-    expiry?.();
-    expiry = wall.after(Math.max(0, current.exp * 1000 - wall.now()) + 50, () => void (gone() || watchExpiry()));
-  };
-  watchExpiry();
-  const unlistenCloud = m.cloud.listen(gone);
-  const unlistenPersons = personChainsOf(m.cloud).listen(gone);
-  const unlisten = () => {
-    unlistenCloud();
-    unlistenPersons();
-  };
-  // Renewals on the credential stream.
-  (async () => {
-    for (let line = await credentials.line().catch(() => null); line !== null; line = await credentials.line().catch(() => null)) {
-      let reply;
-      try {
-        current = check(line);
+    // How far its lock goes, when it has one (a device that has more brings it).
+    const head = lockHead(m.cloud, joinedOf(m.cloud, current.viewer.workspace));
+    const lan = m.lan?.() ?? [];
+    const tailnet = m.tailnet?.() ?? [];
+    const line = { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}), ...(lan.length > 0 ? { lan } : {}), ...(tailnet.length > 0 ? { tailnet } : {}) };
+    // The ways it had as its last request came (said when it ends, where it has none left then).
+    let lastWays = "";
+
+    // The connection ends when its credential runs out or is revoked, or the station leaves its workspace: checked on
+    // every change of the cloud's state, and when the credential runs out.
+    // Or the lock takes the device away (or lowers its member's role: the next request goes with the role it has now).
+    const gone = () => {
+      const of = m.cloud.membership(current.viewer.workspace);
+      if (m.cloud.removed() || of === null) conn.close(2, "station_removed");
+      else if (revoked(current, of.revocations)) conn.close(3, "credential_revoked");
+      else if (current.exp <= nowSecs()) conn.close(3, "credential_expired");
+      else {
+        try {
+          current = stillIn(m.cloud, current, named, device);
+          return false;
+        } catch {
+          conn.close(3, "lock_unconfirmed");
+        }
+      }
+      return true;
+    };
+    // A credential's expiry is the cloud's word, in the machine's time.
+    let expiry: (() => void) | undefined;
+    const watchExpiry = () => {
+      expiry?.();
+      expiry = wall.after(Math.max(0, current.exp * 1000 - wall.now()) + 50, () => void (gone() || watchExpiry()));
+    };
+    let unlisten = () => {};
+    return {
+      line,
+      opened: () => {
+        // The dial's trace (the device's `mesh.connect`), said on both lines of the connection so the device's record of it
+        // and the station's are found together; and the way it came, then the ways it had when it ended (2026-10-30: a
+        // phone's handshake with dev-prod went through and nothing came after, and nothing here said what the station saw).
+        const trace = parseParent(typeof hello?.traceparent === "string" ? hello.traceparent : undefined)?.trace;
+        const opened = wall.now();
+        log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12), trace, via: conn.via() ?? "direct", ways: pathsOf(conn) });
+        m.connected?.();
+        lastWays = pathsOf(conn);
+        void conn.closed().then((why) => {
+          const ways = pathsOf(conn);
+          const traffic = conn.stats?.();
+          log.info("mesh", "a device's connection ended", {
+            device: device.slice(0, 12),
+            trace,
+            why,
+            lasted: wall.now() - opened,
+            ways: ways === "" ? lastWays : ways,
+            ...(traffic ? { rx: traffic.rxBytes, tx: traffic.txBytes } : {}),
+          });
+        }, () => {});
         watchExpiry();
-        reply = { ok: true, expires_at: current.exp };
-      } catch (e) {
-        reply = { error: (e as Error).message };
-      }
-      await writeLine(first, reply).catch(() => {});
-    }
-  })();
-
-  try {
-    for (let stream = await conn.acceptBi(); stream; stream = await conn.acceptBi()) {
-      if (gone()) return;
-      lastWays = waysOf(conn);
-      const viewer = { ...current.viewer, home: m.cloud.home() === current.viewer.workspace };
-      request(m, stream, viewer, conn).catch((e) => log.info("mesh", "request failed", { error: (e as Error).message }));
-    }
-  } finally {
-    expiry?.();
-    unlisten();
-  }
+        const unlistenCloud = m.cloud.listen(gone);
+        const unlistenPersons = personChainsOf(m.cloud).listen(gone);
+        unlisten = () => {
+          unlistenCloud();
+          unlistenPersons();
+        };
+      },
+      // Renewals on the credential stream (one that fails is answered why, by the door, and ends nothing).
+      renew: (line) => {
+        ({ admitted: current, named } = check(line));
+        watchExpiry();
+        return { ok: true, expires_at: current.exp };
+      },
+      stream: () => {
+        if (gone()) return null;
+        lastWays = pathsOf(conn);
+        const viewer = { ...current.viewer, home: m.cloud.home() === current.viewer.workspace };
+        return (asked) => answerAsked(m, asked, viewer, conn);
+      },
+      ended: () => {
+        expiry?.();
+        unlisten();
+      },
+    };
+  };
 }
 
 /// One request: to the admin API in this process.
-async function request(m: Members, raw: Stream, viewer: Admitted["viewer"], conn: Connection) {
-  const accepted = { wall: wall.now(), at: process.hrtime.bigint() };
-  const firstReader = new Reader(raw);
-  const head = await firstReader.line();
-  if (head === null) return;
+async function answerAsked(m: Members, { head, reader, stream: raw, accepted }: Asked, viewer: Admitted["viewer"], conn: Connection) {
   const method: string = typeof head.method === "string" ? head.method.toUpperCase() : "GET";
   const path: string = typeof head.path === "string" ? head.path : "";
   // A span of the caller's trace when it records one: from the stream's acceptance to its answer's last byte (an
   // event stream's, a socket's, a screen's view or a phone's offer: to its head). The admin API's goes under ours.
-  const traced = tracing(m.traces, head, method, path, conn.via(), accepted, raw, firstReader.carry.length);
+  const traced = tracing(m.traces, head, method, path, conn.via(), accepted, raw, reader.carry.length);
   const stream = traced.stream;
-  const reader = firstReader;
   reader.stream = stream;
   try {
     await answerRequest(m, stream, reader, head, method, path, viewer, conn);
@@ -547,6 +900,11 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   // A core older than this station answers (api/oldest.ts): told to update, whatever it asks.
   const asking: Record<string, unknown> = head.headers !== null && typeof head.headers === "object" ? head.headers : {};
   if (coreTooOld(asking)) return answer(426, { error: tr(langOfCore(asking as Record<string, string>), "station.admin.updateApp"), update: true });
+  // What build the device ran, kept by its id in the lock (device-builds.ts: written only as it rises or the day changes).
+  const build = sawBuild(m.cloud, viewer, asking);
+  // A core too old for a workspace whose chain moved (api/moved-from.ts): told to update, as one under OLDEST_CORE is,
+  // for that workspace's requests alone.
+  if (movedTooOld(m.cloud, viewer, build)) return answer(426, { error: tr(langOfCore(asking as Record<string, string>), "station.admin.updateApp"), update: true });
   // One a part answers itself (a phone lent to the agents, adb/link.ts): it says what the member may.
   const part = m.streams?.(head);
   if (part !== undefined) return part({ conn, viewer, head, stream, reader });
@@ -578,6 +936,22 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     const [status, said] = lockRoute(m.cloud, method, at < 0 ? [] : queryPairs(rest.slice(at + 1)), body, viewer);
     return answer(status, said);
   }
+  // The workspace's ways (mesh/ways.ts): read by its members' devices, changed from the app's 连接方式.
+  if ((at < 0 ? rest : rest.slice(0, at)) === "/ways") {
+    const [status, said] = waysRoute(m.cloud, method, body, viewer);
+    return answer(status, said);
+  }
+  // The stations' names and marks (mesh/station-marks.ts): read by its members' devices, this station's own changed.
+  const marksPath = at < 0 ? rest : rest.slice(0, at);
+  if (marksPath === "/station-marks" || marksPath === "/station-mark") {
+    const [status, said] = stationMarksRoute(m.cloud, method, body, viewer, marksPath === "/station-mark");
+    return answer(status, said);
+  }
+  const lockPart = /^\/lock\/(person|devices|bodies|logs)$/.exec(at < 0 ? rest : rest.slice(0, at));
+  if (lockPart) {
+    const [status, said] = lockPartRoute(m.cloud, lockPart[1]!, method, body, viewer);
+    return answer(status, said);
+  }
   // A device that stops reading or loses its connection no longer needs its pending reads. Do not cancel writes: their
   // effects and idempotency answers must be finished even when their caller goes away.
   const reads = method === "GET" || (method === "POST" && /^\/*(batch|changed\/(chats|threads|sessions))$/.test(at < 0 ? rest : rest.slice(0, at)));
@@ -600,95 +974,7 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   const ready = wall.now();
   await send(stream, sent);
   await stream.finish();
-  if (Buffer.isBuffer(sent.body) && sent.body.length >= SLOW_REPLY_BYTES) slowly(stream, conn, method, rest, sent.body.length, ready - asked, ready);
-}
-
-/// A large reply's bytes, once the device has taken them all in (acknowledged): said on the log when that took over
-/// SLOW_REPLY_MS, with how long it was made in (`made`) and the way it went (a relay or an address, its round trip, the
-/// packets sent and lost on it, and how much the station may send on it unacknowledged now and how often that was cut
-/// for loss), so a part of a video slow to come is seen here, the station's time apart from the way's. (Its stream told
-/// nothing as it was acknowledged until 2026-10-28, which this took for the device having stopped it: nothing was ever
-/// said, and a desktop app's images coming at 30 KB/s from a station for an hour left no word of how.) `ways` says every
-/// way the connection has, `*` the chosen one, with the packets sent on each while the reply went: a connection has a
-/// way through every relay (#2580), and with none chosen noq sends on all of them (2026-10-30: attachments at 11–50
-/// KB/s on a way of 70 ms, `way=?` on half of them, the chosen way alone not saying where the bytes went).
-function slowly(stream: Stream, conn: Connection, method: string, path: string, bytes: number, made: number, from: number) {
-  const before = sentOn(conn);
-  void stream.stopped().then((code) => {
-    const ms = wall.now() - from;
-    if (typeof code === "number" || ms < SLOW_REPLY_MS) return;
-    const paths = conn.paths?.() ?? [];
-    const way = paths.find((p) => p.selected);
-    const after = sentOn(conn);
-    const ways = paths.map((p, i) => {
-      const [key, sent] = after[i]!;
-      const was = before.find(([k]) => k === key)?.[1] ?? 0;
-      return `${p.selected ? "*" : ""}${key} ${p.rttMs == null ? "?" : `${Math.round(p.rttMs)}ms`} +${sent - was}/${p.lostPackets} cwnd=${p.cwnd ?? "?"}`;
-    });
-    log.info("mesh", "a reply went slowly", {
-      route: `${method} ${route(path.split("?")[0] ?? path)}`,
-      bytes,
-      made,
-      ms,
-      bytesPerSecond: Math.round((bytes / ms) * 1000),
-      device: conn.remoteId(),
-      way: way ? (way.relay ?? way.ip ?? "?") : "?",
-      rtt: way?.rttMs != null ? Math.round(way.rttMs) : null,
-      sent: way?.txPackets ?? null,
-      lost: way?.lostPackets ?? null,
-      cwnd: way?.cwnd ?? null,
-      cuts: way?.congestionEvents ?? null,
-      ways: ways.join(", "),
-    });
-  }, () => {});
-}
-
-/// Every way a connection has now, as a reply that went slowly says them: `*` the chosen one, its relay or address, round
-/// trip, packets sent and lost.
-function waysOf(conn: Connection): string {
-  return (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${p.rttMs == null ? "?" : `${Math.round(p.rttMs)}ms`} ${p.txPackets}/${p.lostPackets}`).join(", ");
-}
-
-/// The packets sent so far on each of a connection's ways, by a key unique among them (its relay or address, `#n` for
-/// its n-th way there).
-function sentOn(conn: Connection): [string, number][] {
-  const seen = new Map<string, number>();
-  return (conn.paths?.() ?? []).map((p) => {
-    const at = p.relay ?? p.ip ?? "?";
-    const n = seen.get(at) ?? 0;
-    seen.set(at, n + 1);
-    return [n ? `${at}#${n}` : at, p.txPackets];
-  });
-}
-
-/// An answer onto its stream: its head line, then its body. A body that is a stream (GET /events) ends when the caller
-/// stops reading or goes, even while nothing is being written to it, and is let go of however the writing ends: one
-/// whose head could not be written (the caller gone while its answer was being made) stayed a follower of the events
-/// for good, told everything into a queue nobody read. A whole body says its length, unless compressed (compress.ts: a
-/// client counts what it has read once decompressed): a chat's picture shows how far it has come by it
-/// (pengxiao, 2026-10-28: without it, one under the core's step for an unknown length showed 0 B until it was here).
-export async function send(stream: Stream, response: Answer) {
-  const head = { status: response.status, headers: response.headers };
-  if (Buffer.isBuffer(response.body)) {
-    const said = Object.keys(response.headers).some((k) => ["content-length", "content-encoding"].includes(k.toLowerCase()));
-    if (!said) head.headers = { ...response.headers, "content-length": String(response.body.length) };
-    await writeLine(stream, head);
-    await stream.write(response.body);
-    return;
-  }
-  const chunks = response.body[Symbol.asyncIterator]();
-  const end = () => void chunks.return?.();
-  stream.stopped().then(end, end);
-  try {
-    await writeLine(stream, head);
-    for (;;) {
-      const next = await chunks.next();
-      if (next.done) break;
-      await stream.write(next.value);
-    }
-  } finally {
-    end();
-  }
+  if (Buffer.isBuffer(sent.body) && sent.body.length >= SLOW_REPLY_BYTES) slowly(stream, conn, () => `${method} ${route(rest.split("?")[0] ?? rest)}`, sent.body.length, ready - asked, ready);
 }
 
 /// A WebSocket of a web service on this machine, for a preview's page (preview.ts `openSocket`): answered 101 once the

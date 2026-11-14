@@ -1,14 +1,15 @@
 // Renewing a Claude login without sending a prompt: under Claude Code's own locks (its
 // current one in the config directory and its legacy one beside it), read again once locked, and saved back where it
 // was (the keychain for the machine's login on macOS, else the file), never as a copy. Used for the machine profile's
-// token (the Claude driver's `machineToken`), for checking a profile and for reading a subscription's allowance. A login
-// that can no longer be renewed (none to renew it with, or its refresh token refused) is over: RenewRefused.
+// and a local subscription profile's token (the Claude driver's `machineToken` and `subscriptionToken`), for checking a
+// profile and for reading a subscription's allowance. A login that can no longer be renewed (none to renew it with, or
+// its refresh token refused) is over: RenewRefused.
 import { execFile, spawn } from "node:child_process";
-import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, realpathSync, rmdirSync, statSync, futimesSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { type FileHandle, mkdir, open, readFile, realpath, rmdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { type Env, readClaudeKeychain } from "../agents/machine-logins.ts";
-import { writePrivate } from "../agents/no-keychain.ts";
+import { takeBackMissing } from "../agents/no-keychain.ts";
+import { writePrivateSoon } from "../ops/files.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Lang, Said, stationLang, tr } from "../ops/i18n.ts";
 import { platform } from "../platform/index.ts";
@@ -25,9 +26,9 @@ const LOCK_STALE_MS = 60_000;
 const HEARTBEAT_MS = 5_000;
 
 /// The OAuth access token Claude Code keeps in this config directory's file.
-export function claudeToken(home: string): string | undefined {
+export async function claudeToken(home: string): Promise<string | undefined> {
   try {
-    const token = JSON.parse(readFileSync(join(home, ".credentials.json"), "utf8"))?.claudeAiOauth?.accessToken;
+    const token = JSON.parse(await readFile(join(home, ".credentials.json"), "utf8"))?.claudeAiOauth?.accessToken;
     return typeof token === "string" && token !== "" ? token : undefined;
   } catch {
     return undefined;
@@ -79,12 +80,21 @@ async function read(env: Env, home: string, machine: boolean, lang: Lang): Promi
       }
     }
   }
+  const file = join(home, ".credentials.json");
   let text: string;
   try {
     // Off the station's thread: six of these at once held it 1 s on a station short of memory (2026-11-03).
-    text = await readFile(join(home, ".credentials.json"), "utf8");
-  } catch {
-    throw new Said(tr(lang, "station.claudeAuth.noCredentials"));
+    text = await readFile(file, "utf8");
+  } catch (error) {
+    if (!machine && (error as NodeJS.ErrnoException).code === "ENOENT" && (await takeBackMissing(home))) {
+      try {
+        text = await readFile(file, "utf8");
+      } catch {
+        throw new Said(tr(lang, "station.claudeAuth.noCredentials"));
+      }
+    } else {
+      throw new Said(tr(lang, "station.claudeAuth.noCredentials"));
+    }
   }
   try {
     return { data: JSON.parse(text), keychain: false };
@@ -96,7 +106,7 @@ async function read(env: Env, home: string, machine: boolean, lang: Lang): Promi
 async function save(env: Env, home: string, c: Credentials, lang: Lang) {
   if (!c.keychain) {
     try {
-      writePrivate(join(home, ".credentials.json"), JSON.stringify(c.data));
+      await writePrivateSoon(join(home, ".credentials.json"), JSON.stringify(c.data));
       return;
     } catch {
       throw new Said(tr(lang, "station.claudeAuth.saveFailed"));
@@ -136,10 +146,10 @@ export async function claudeOAuthToken(env: Env, home: string | null, rejected: 
   const dir = home ?? join(homeOf(env), ".claude");
   const initial = await read(env, dir, machine, lang);
   if (usable(initial, rejected, lang, margin)) return access(initial, lang);
-  mkdirSync(dir, { recursive: true });
+  await mkdir(dir, { recursive: true });
   const current = await RefreshLock.acquire(join(dir, ".oauth_refresh.lock"), lang);
   try {
-    const legacy = await RefreshLock.acquire(`${realpathSync(dir)}.lock`, lang);
+    const legacy = await RefreshLock.acquire(`${await realpath(dir)}.lock`, lang);
     try {
       return await renew(env, dir, machine, rejected, endpoint, lang, margin);
     } catch (error) {
@@ -150,10 +160,10 @@ export async function claudeOAuthToken(env: Env, home: string | null, rejected: 
       }
       throw error;
     } finally {
-      legacy.release();
+      await legacy.release();
     }
   } finally {
-    current.release();
+    await current.release();
   }
 }
 
@@ -222,13 +232,14 @@ async function renew(env: Env, home: string, machine: boolean, rejected: string 
 }
 
 /// proper-lockfile-compatible mkdir locks, as Claude Code takes them: a 5 s heartbeat and a 60 s stale threshold. The
-/// directory is held open, so an owner from before cannot touch or remove a lock that replaced its own.
+/// directory is held open, so an owner from before cannot touch or remove a lock that replaced its own. Off the station's
+/// thread, its heartbeat too.
 export class RefreshLock {
   private path: string;
-  private fd: number;
+  private fd: FileHandle;
   private heartbeat: () => void;
 
-  private constructor(path: string, fd: number, heartbeat: () => void) {
+  private constructor(path: string, fd: FileHandle, heartbeat: () => void) {
     this.path = path;
     this.fd = fd;
     this.heartbeat = heartbeat;
@@ -238,19 +249,19 @@ export class RefreshLock {
     const deadline = wall.now() + LOCK_WAIT_MS;
     for (;;) {
       try {
-        mkdirSync(path);
+        await mkdir(path);
         break;
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw new Said(tr(lang, "station.claudeAuth.lockFailed"));
         let age = 0;
         try {
-          age = wall.now() - statSync(path).mtimeMs;
+          age = wall.now() - (await stat(path)).mtimeMs;
         } catch {
           continue;
         }
         if (age > LOCK_STALE_MS) {
           try {
-            rmdirSync(path);
+            await rmdir(path);
             continue;
           } catch (e) {
             if ((e as NodeJS.ErrnoException).code === "ENOENT") continue;
@@ -260,27 +271,21 @@ export class RefreshLock {
         await wall.sleep(100);
       }
     }
-    const fd = openSync(path, "r");
-    const heartbeat = wall.every(HEARTBEAT_MS, () => {
-      try {
-        const now = new Date(wall.now());
-        futimesSync(fd, now, now);
-      } catch {
-        heartbeat();
-      }
+    const fd = await open(path, "r");
+    const heartbeat = wall.every(HEARTBEAT_MS, () => { // timer: a heartbeat that keeps the lock
+      const now = new Date(wall.now());
+      fd.utimes(now, now).catch(() => heartbeat());
     });
     return new RefreshLock(path, fd, heartbeat);
   }
 
-  release() {
+  async release(): Promise<void> {
     this.heartbeat();
     try {
-      const held = fstatSync(this.fd);
-      const current = statSync(this.path);
-      if (held.dev === current.dev && held.ino === current.ino) rmdirSync(this.path);
+      const held = await this.fd.stat();
+      const current = await stat(this.path);
+      if (held.dev === current.dev && held.ino === current.ino) await rmdir(this.path);
     } catch {}
-    try {
-      closeSync(this.fd);
-    } catch {}
+    await this.fd.close().catch(() => undefined);
   }
 }

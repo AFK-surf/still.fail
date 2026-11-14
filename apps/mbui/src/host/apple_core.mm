@@ -1125,7 +1125,8 @@ int mb_core_screen_ack(double call, double ts) {
 }
 
 // What the shell did of remote screens since its caller last asked (`tap.views=… tap.video=… tap.direct.video=…
-// tap.audio=… tap.direct.audio=… tap.acks=… istream.read=… istream.write=…`: those read, those of them the app's host
+// tap.audio=… tap.direct.audio=… tap.audio.undecoded=… tap.audio.resumed=… tap.acks=… istream.read=… istream.write=…`:
+// those read, those of them the app's host
 // took itself rather than the app's queue, and the acks it sent itself, and how many reads of streams the core asked
 // meanwhile): whether the views are tapped (client/shell istream.tap) and their frames go straight to the decoder
 // (mb_core_route_media). Each caller (`who`: 0 MBUI_PROBE's timer below, 1 the iOS host's performance record,
@@ -1144,7 +1145,7 @@ extern "C" int mb_core_tap_line(int who, char *out, size_t n) {
     NSArray *a = [d[k] isKindOfClass:NSArray.class] ? d[k] : nil;
     return a.count ? [a[0] longLongValue] : 0;
   };
-  NSArray<NSString *> *taps = @[ @"tap.views", @"tap.video", @"tap.direct.video", @"tap.audio", @"tap.direct.audio", @"tap.acks", @"istream.read", @"istream.write" ];
+  NSArray<NSString *> *taps = @[ @"tap.views", @"tap.video", @"tap.direct.video", @"tap.audio", @"tap.direct.audio", @"tap.audio.undecoded", @"tap.audio.resumed", @"tap.acks", @"istream.read", @"istream.write" ];
   NSMutableString *line = [NSMutableString string];
   for (NSString *k in taps)
     [line appendFormat:@"%@%@=%lld", line.length ? @" " : @"", k, count(calls, k) - count(was[who], k)];

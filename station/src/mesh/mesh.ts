@@ -4,16 +4,23 @@
 import { Cause, Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
 import { stationLog } from "../ops/log-export.ts";
-import { AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
+import { AdminApi, ControlPlane, Events, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { PEER_ALPN, PEER_BYTES_ALPN, peerCall, servePeer } from "./peer.ts";
-import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
+import { DeviceRefused, PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
 import { followLock } from "./lock-sync.ts";
+import { followPersons } from "./person-sync.ts";
+import { tellLocks } from "./lock-events.ts";
+import { followMarks, stationMarksOf, tellMarks } from "./station-marks.ts";
+import { followWays, tellWays, waysOf } from "./ways.ts";
+import { personChainsOf } from "./serve.ts";
+import { deviceBuildsOf } from "./device-builds.ts";
 import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
 import { ALPN, serve } from "./serve.ts";
+import { accept } from "./accept.ts";
 import { congestionOf } from "./settings.ts";
 import { bindStation, type Endpoint } from "./native.ts";
 import { lanAddrs, tailnetAddrs } from "./lan.ts";
@@ -38,23 +45,38 @@ export const MeshLive = Layer.effectDiscard(
     const parts = yield* Parts;
     const config = yield* StationConfig;
     const screens = yield* ScreenRegistry;
+    const events = yield* Events;
     const run = Effect.gen(function* () {
       // Not in a workspace yet: on the mesh once `enroll` writes cloud.json.
       if (!cloud.state.state) yield* cloud.changes.pipe(Stream.filter(() => cloud.state.state !== null), Stream.runHead);
       // The launcher starts this process before stopping the old one. Its fixed UDP socket cannot be shared;
       // wait in this background fiber (not layer construction, which must signal ready to start the handover).
       // An unset address or port 0 gets a fresh port and can bind alongside the old process.
-      if (Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0) {
+      // (Kept by the front, the endpoint is bound once and stays: taken over as it is.)
+      if (!process.env.STILLFAIL_MESH_FRONT && Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0) {
         yield* Effect.promise(() => previous.gone);
       }
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
       // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
-      const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) })),
+      const bind = Effect.tryPromise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) }));
+      const acquire = Effect.acquireRelease(
+        bind,
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
       );
+      let endpoint = yield* acquire.pipe(Effect.catch((error) => {
+        // A front introduced during this handover has no endpoint yet: the old Node may still hold its fixed port.
+        // A front already holding the endpoint can bind at once, keeping its connections across the handover.
+        if (!process.env.STILLFAIL_MESH_FRONT || previous.pid === null || !(Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0)) return Effect.fail(error);
+        log.warn("mesh", "the front could not bind; trying again after the previous station exits", { error: String(error.cause ?? error) });
+        return Effect.succeed(null);
+      }));
+      if (!endpoint) {
+        // Wait outside acquireRelease's uninterruptible acquisition so shutdown never waits on the old process.
+        yield* Effect.promise(() => previous.exited);
+        endpoint = yield* acquire;
+      }
       log.info("mesh", "mesh listening", { station: endpoint.id(), workspace: cloud.state.state!.workspace_name, sockets: endpoint.sockets() });
       // The advanced network settings as they are saved, on the running endpoint (no restart needed).
       yield* Effect.acquireRelease(Effect.sync(() => applyNetwork(endpoint, config)), (off) => Effect.sync(off));
@@ -94,6 +116,35 @@ export const MeshLive = Layer.effectDiscard(
         Effect.sync(() => followLock(cloud.state, call)),
         (stop) => Effect.sync(stop),
       );
+      // Each person's own lock, kept level with the stations of the workspaces it was heard in (person-sync.ts), and
+      // the locks' changes told to the devices (lock-events.ts).
+      yield* Effect.acquireRelease(
+        Effect.sync(() => followPersons(cloud.state, personChainsOf(cloud.state), call)),
+        (stop) => Effect.sync(stop),
+      );
+      yield* Effect.acquireRelease(
+        Effect.sync(() => tellLocks(cloud.state, personChainsOf(cloud.state), (event, data, of, to) => events.tell(event, data, of, to))),
+        (stop) => Effect.sync(stop),
+      );
+      // The workspaces' ways (mesh/ways.ts): kept level with their other stations, and their changes told to the devices.
+      yield* Effect.acquireRelease(
+        Effect.sync(() => followWays(waysOf(cloud.state), call)),
+        (stop) => Effect.sync(stop),
+      );
+      yield* Effect.acquireRelease(
+        Effect.sync(() => tellWays(waysOf(cloud.state), (event, data, of, to) => events.tell(event, data, of, to))),
+        (stop) => Effect.sync(stop),
+      );
+      // The stations' names and marks (mesh/station-marks.ts): a copy kept by each station of a workspace, and their
+      // changes told to the devices.
+      yield* Effect.acquireRelease(
+        Effect.sync(() => followMarks(stationMarksOf(cloud.state), call)),
+        (stop) => Effect.sync(stop),
+      );
+      yield* Effect.acquireRelease(
+        Effect.sync(() => tellMarks(stationMarksOf(cloud.state), (event, data, of, to) => events.tell(event, data, of, to))),
+        (stop) => Effect.sync(stop),
+      );
       const connections = yield* FiberSet.make();
       // The mesh's spans, when the config turns traces on (read at start, as the Rust does).
       const traces = yield* Effect.acquireRelease(
@@ -103,6 +154,8 @@ export const MeshLive = Layer.effectDiscard(
       if (traces.enabled) traces.exportTo((spans) => Effect.runPromise(plane.traces(spans)));
       // The station's log, waiting since it started (ops/log-export.ts).
       stationLog.sendWith((body) => Effect.runPromise(plane.logs(body)));
+      // (the devices' builds kept in the store, made before the first request asks for them)
+      deviceBuildsOf(cloud.state, store);
       const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), streams: (head: any) => parts.streamOf(head), screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()), tailnet: () => tailnetAddrs(endpoint.sockets()), connected: () => parts.connected() };
       // The control plane's gateways: the device tools, as far as the station's own setting lets them.
       const device = yield* Effect.acquireRelease(
@@ -138,24 +191,24 @@ export const MeshLive = Layer.effectDiscard(
         }),
         ({ fibers }) => Effect.promise(() => fibers.close()),
       );
-      for (;;) {
-        const conn = yield* Effect.promise(() => endpoint.accept());
-        if (!conn) return;
-        storms.watch(conn);
-        if (conn.alpn().equals(ALPN)) void superseded.arrived(conn);
-        yield* FiberSet.run(
-          connections,
-          Effect.tryPromise(() =>
-            conn.alpn().equals(PEER_BYTES_ALPN) || conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
-            : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => side.forwarded(port) })
-            : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
-            : serve(members, conn),
-          ).pipe(
-            Effect.catch((e) => Effect.sync(() => log.info("mesh", "connection ended", { error: String((e as Error).cause ?? e) }))),
-            Effect.ensuring(Effect.sync(() => conn.close(0, "station stopping"))),
-          ),
-        );
-      }
+      // Its connections (accept.ts), each served by its protocol's own. Their fibers are of the set made above, before
+      // the traces, the device tools and the storms' watch: as the station stops they end after those have.
+      yield* accept(endpoint, {
+        connections,
+        arrived: (conn) => {
+          storms.watch(conn);
+          if (conn.alpn().equals(ALPN)) void superseded.arrived(conn);
+        },
+        serve: (conn) =>
+          conn.alpn().equals(PEER_BYTES_ALPN) || conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
+          : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, {
+              forwarded: (port) => side.forwarded(port),
+              device: (peer, workspace, session, device, probe) => side.device == null ? Promise.reject(new DeviceRefused(404, "no devices here yet")) : side.device(peer, workspace, session, device, probe),
+            })
+          : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
+          : serve(members, conn),
+        closing: "station stopping",
+      });
     });
     yield* Effect.forkScoped(Effect.scoped(run).pipe(Effect.tapCause((cause) => Effect.sync(() => {
       if (!Cause.hasInterruptsOnly(cause)) log.error("mesh", "mesh stopped", { error: Cause.pretty(cause) });

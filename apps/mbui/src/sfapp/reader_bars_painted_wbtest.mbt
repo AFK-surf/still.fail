@@ -43,7 +43,7 @@ test "a text read, tapped: its bars fade in as each frame is painted, nothing bu
   let ascending = seen.length() > 3 &&
     seen[0] >= 0.0 &&
     Array::makei(seen.length() - 1, fn(k) { seen[k] < seen[k + 1] }).iter().all(fn(b) { b })
-  assert_true(ascending, msg="\{seen}")
+  assert_true(ascending, msg="\{Repr(seen)}")
   assert_eq(alpha(), 1.0)
-  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{Repr(built)}")
 }

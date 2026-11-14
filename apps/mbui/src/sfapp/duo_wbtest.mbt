@@ -67,7 +67,7 @@ test "an iPhone Duo on its side: the places and the chat's actions handed to the
     // (the card pressed to bring it over: what shows of the page beside the sidebar in use)
     let card = s.label == "收起侧边栏"
     if !s.hidden && !card && s.role == @ui.Role::Button && s.label != "" && w > 0.0 && x + w > 951.0 - 84.0 + 0.5 {
-      fail("\{s.label} under the system's column: \{s.rect}")
+      fail("\{s.label} under the system's column: \{Repr(s.rect)}")
     }
   }
 }
@@ -130,10 +130,10 @@ test "a picture looked at on an iPhone Duo: the system's tabs put away, its acti
     // (the card pressed to bring it over: what shows of the page beside the sidebar in use)
     let card = s.label == "收起侧边栏"
     if !s.hidden && !card && s.role == @ui.Role::Button && s.label != "" && w > 0.0 && x + w > 951.0 - 84.0 + 0.5 {
-      fail("\{s.label} under the system's column: \{s.rect}")
+      fail("\{s.label} under the system's column: \{Repr(s.rect)}")
     }
   }
-  match viewer.get().unwrap().zoom.rect() {
+  match viewer.get().unwrap().zoom.rect(t.ctx()) {
     Some((x, _, w, _)) => assert_true(x + w <= 951.0 - 84.0 + 0.5)
     None => fail("no picture laid out")
   }
@@ -297,7 +297,7 @@ test "an iPhone Duo, folded or on its side: the composer's end concentric with t
     let at = (b.x - p.x, p.y + p.h - (b.y + b.h))
     assert_true(
       (at.0 - concentric).abs() < 0.01 && (at.1 - concentric).abs() < 0.01,
-      msg="\{size}: the capsule \{at} from the page's left and foot, concentric \{concentric}",
+      msg="\{Repr(size)}: the capsule \{Repr(at)} from the page's left and foot, concentric \{concentric}",
     )
     assert_eq(t.corner_faults(), [])
   }
@@ -319,14 +319,14 @@ test "an iPhone Duo, folded or on its side: the cards as far from the screen's f
     }
     guard composer_and_page(t) is Some((b, p)) else { fail("no composer in a page") }
     let near = fn(x : Double, y : Double) { (x - y).abs() < 0.05 }
-    assert_true(near(p.y + p.h, h - @sf.native_in), msg="\{size}: the page's foot at \{p.y + p.h}")
-    assert_true(near(b.h, a), msg="\{size}: the composer \{b.h} high")
-    assert_true(near(b.y + b.h / 2.0, ay + a / 2.0), msg="\{size}: the composer's middle at \{b.y + b.h / 2.0}")
+    assert_true(near(p.y + p.h, h - @sf.native_in), msg="\{Repr(size)}: the page's foot at \{p.y + p.h}")
+    assert_true(near(b.h, a), msg="\{Repr(size)}: the composer \{b.h} high")
+    assert_true(near(b.y + b.h / 2.0, ay + a / 2.0), msg="\{Repr(size)}: the composer's middle at \{b.y + b.h / 2.0}")
     let at = (b.x - p.x, p.y + p.h - (b.y + b.h))
-    assert_true(near(at.0, at.1), msg="\{size}: the composer \{at} from the page's side and foot")
-    assert_true(near(at.1, @ui.capsule_in(p.radii.3, b.h)), msg="\{size}: not concentric with \{p.radii.3}")
+    assert_true(near(at.0, at.1), msg="\{Repr(size)}: the composer \{Repr(at)} from the page's side and foot")
+    assert_true(near(at.1, @ui.capsule_in(p.radii.3, b.h)), msg="\{Repr(size)}: not concentric with \{p.radii.3}")
     // (the list's card beside it as round at its foot, the gap between them even)
-    assert_true(near(@sf.tape_side_corners()[2].radius(@ui.corner_roots()), p.radii.3), msg="\{size}: the list's foot corner")
+    assert_true(near(@sf.tape_side_corners()[2].radius(@ui.corner_roots()), p.radii.3), msg="\{Repr(size)}: the list's foot corner")
     assert_eq(t.corner_faults(), [])
   }
 }
@@ -476,7 +476,7 @@ test "an iPhone Duo on its side: a service alone in the side panel a card in it,
   let (r0, r1, r2, r3) = t.hole_corners()[0]
   assert_true(near(r3, @ui.concentric(p.radii.3, room)), msg="its foot left corner \{r3}, the panel's \{p.radii.3} \{room} out")
   // (the panel's foot corner the system's action's, rounder than the tape's: the page's not one radius all round)
-  assert_true(r3 > r0 + 1.0, msg="its corners \{(r0, r1, r2, r3)}")
+  assert_true(r3 > r0 + 1.0, msg="its corners \{Repr((r0, r1, r2, r3))}")
   assert_true(t.views().iter().any(fn(s) { s.has_prefix("place ") && s.contains(" round \{r0} \{r1} \{r2} \{r3}") }), msg="told the host each")
   assert_eq(t.corner_faults(), [])
 }
@@ -673,7 +673,7 @@ test "an iPhone Duo on its side: the side panel closed while in use slides off a
   t.run_for(@ui.move_most_ms / 2.0)
   // on its way: the page coming back, the panel's page still drawn, further right
   let holes = t.holes()
-  assert_eq(holes.length(), 1, msg="the panel's page as it goes (\{@sfdesk.wide.tape_at.get()})")
+  assert_eq(holes.length(), 1, msg="the panel's page as it goes (\{Repr(@sfdesk.wide.tape_at.get())})")
   assert_true(holes[0].0 > x0 + 100.0 && holes[0].0 < w, msg="from \{x0}, on its way at \{holes[0].0}")
   t.run_for(@ui.move_most_ms * 2.0)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
@@ -963,6 +963,8 @@ test "Duo chat menu covers sidebar glass until its exit finishes" {
 
 ///|
 test "Duo screen panels toggle through native events, switch without stacking and light the active action" {
+  // (控制中心 and 按键, the screen's panels in the system's bar since 2026-11-12: the rest is 控制中心's; the mode's
+  // action lit while driving, apart from them)
   new_run()
   let src = fixture("screen-live")
   open_fixture_over("screen-live", src)
@@ -970,14 +972,15 @@ test "Duo screen panels toggle through native events, switch without stacking an
   t.set_nav_able(true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   t.run_for(@ui.move_most_ms)
-  for id in ["center", "stats", "people"] {
+  let lit_panels = fn() { @sf.native_over.active.filter(fn(a) { a != "over/screen-mode" }) }
+  for id in ["center", "keys"] {
     t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-\{id}\",\"at\":[879,480,48,48]}")
     t.run_for(@ui.move_most_ms)
     let panels = t.semantics().filter(fn(s) { !s.hidden && s.role == @ui.Role::Dialog })
     assert_eq(panels.length(), 1)
     let (x, _, w, _) = panels[0].rect
     assert_true(x + w <= 867.0, msg="\{id}: panel \{x} + \{w}")
-    assert_eq(@sf.native_over.active, ["over/screen-\{id}"])
+    assert_eq(lit_panels(), ["over/screen-\{id}"])
     let bar = @json.parse(t.nav_said())
     let mut lit = false
     for group in items(Some(bar), "groups") {
@@ -987,10 +990,50 @@ test "Duo screen panels toggle through native events, switch without stacking an
     }
     assert_true(lit)
   }
-  t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-people\",\"at\":[879,480,48,48]}")
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-keys\",\"at\":[879,480,48,48]}")
   t.run_for(@ui.move_most_ms)
   assert_false(@sf.presenter_visible())
-  assert_eq(@sf.native_over.active, [])
+  assert_eq(lit_panels(), [])
+}
+
+///|
+test "an iPhone Duo turned upright with 控制中心 open from its column: the panel closes as the bars go across the top, not left where the item was; pressed there again it opens" {
+  // (the system says where an item is only as it is pressed: a panel opened at the column's item, kept on, would stay
+  // at the side the column was on)
+  new_run()
+  let src = fixture("screen-live")
+  open_fixture_over("screen-live", src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
+  t.set_nav_able(true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  t.run_for(@ui.move_most_ms)
+  let quick = @sf.t("web-pages.screen.quick")
+  let lit = fn() raise {
+    let mut on = false
+    for group in items(Some(@json.parse(t.nav_said())), "groups") {
+      for item in items(Some(group), "items") {
+        if text(Some(item), "id") == "over/screen-center" { on = flag(Some(item), "prominent") }
+      }
+    }
+    on
+  }
+  // on its side: 控制中心 pressed in the column
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-center\",\"at\":[879,480,48,48]}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(quick) is Some(_), msg="控制中心 open on its side")
+  assert_true(lit(), msg="控制中心 lit on its side")
+  // turned upright: the bars across the top, none down the side
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":59,\"bottom\":90,\"left\":0,\"right\":0}}")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_false(@sf.presenter_visible(), msg="the panel closed as the bars turned")
+  assert_false(t.find(quick) is Some(_), msg="控制中心's words gone as the bars turned")
+  assert_false(lit(), msg="控制中心 no longer lit")
+  // pressed again, at its item across the top
+  t.post(@hostapi.system_channel, "{\"nav\":\"over/screen-center\",\"at\":[700,8,44,44]}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(quick) is Some(_), msg="控制中心 open again upright")
+  assert_true(lit(), msg="控制中心 lit upright")
 }
 
 ///|
@@ -1093,7 +1136,7 @@ test "a picture looked at and marked on an iPhone Duo on its side: laid out clea
   assert_eq(@sf.native_clear(), 84.0)
   let clear = 951.0 - 84.0
   // (the picture in the middle of what is clear of the column)
-  let (x, _, w, _) = viewer.get().unwrap().zoom.rect().unwrap()
+  let (x, _, w, _) = viewer.get().unwrap().zoom.rect(t.ctx()).unwrap()
   assert_true((x + w / 2.0 - clear / 2.0).abs() < 0.5, msg="its middle \{x + w / 2.0}, what is clear's \{clear / 2.0}")
   t.post(@hostapi.system_channel, "{\"nav\":\"over/mark\"}")
   t.run_for(@ui.move_most_ms)
@@ -1103,7 +1146,7 @@ test "a picture looked at and marked on an iPhone Duo on its side: laid out clea
   assert_true(pressed.iter().any(fn(s) { s.label == pv("common.cancel") }), msg="取消 there")
   for s in pressed {
     let (bx, _, bw, _) = s.rect
-    assert_true(bx + bw <= clear + 0.5, msg="\{s.label} under the system's column: \{s.rect}")
+    assert_true(bx + bw <= clear + 0.5, msg="\{s.label} under the system's column: \{Repr(s.rect)}")
   }
 }
 
@@ -1117,10 +1160,10 @@ test "an iPhone Duo on its side: the sidebar's edge held by a finger that wander
   // goes as far as the finger from where it went down)
   t.press_at(x, 300.0)
   t.run_for(@ui.tap_indication_ms)
-  t.move(x + 6.0, 306.0)
+  t.move_to(x + 6.0, 306.0)
   t.run_for(@ui.long_press_ms)
-  t.move(x + 40.0, 306.0)
-  t.move(x + 60.0, 306.0)
+  t.move_to(x + 40.0, 306.0)
+  t.move_to(x + 60.0, 306.0)
   t.release(x + 60.0, 306.0)
   t.draw()
   assert_eq(@sfdesk.wide.side_w.get(), from + 60.0)
@@ -1128,9 +1171,9 @@ test "an iPhone Duo on its side: the sidebar's edge held by a finger that wander
   let x = x + 60.0
   t.press_at(x, 300.0)
   t.run_for(@ui.tap_indication_ms)
-  t.move(x + 12.0, 300.0)
+  t.move_to(x + 12.0, 300.0)
   t.run_for(@ui.long_press_ms)
-  t.move(x + 60.0, 300.0)
+  t.move_to(x + 60.0, 300.0)
   t.release(x + 60.0, 300.0)
   t.draw()
   assert_eq(@sfdesk.wide.side_w.get(), from + 60.0)
@@ -1203,9 +1246,9 @@ test "a picture looked at on an iPhone Duo over a page of its own actions there 
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is None, msg="closed")
   assert_true(t.nav_said().contains("lead/over/screen-close"), msg="the screen's again: \{t.nav_said()}")
-  // (as it said it last, under the picture: the one come on it in its line)
-  let people = nav_icon_of(t, "over/screen-people", field="title").unwrap_or("")
-  assert_true(people.contains("韩梅梅"), msg="the screen's as it said it last: \{people}")
+  // (as it said it last, under the picture: its panels' actions; who is on it is 控制中心's now)
+  assert_true(nav_icon_of(t, "over/screen-center") is Some(_), msg=t.nav_said())
+  assert_true(nav_icon_of(t, "over/screen-keys") is Some(_), msg=t.nav_said())
 }
 
 ///|
@@ -1224,7 +1267,7 @@ test "an iPhone Duo: the chat's … in the system's bars is a menu of the system
   let t = native_chat(951.0, 669.0, true, side=84.0)
   let said = t.nav_said()
   // (its rows as the page's menu has them: the chat's own group, a line, where else it goes; no line closing it)
-  for s in ["\"id\":\"page/chat/more/0\",\"title\":\"" + @sf.t("web-main.chat.rename") + "\"", "\"id\":\"-\"", @sf.t("web-main.chat.copyLink")] {
+  for s in ["\"id\":\"page/chat/more/0\",\"title\":\"" + @sf.t("web-main.chat.rename") + "\"", "\"id\":\"-\"", @sf.t("web-main.chat.share")] {
     if !said.contains(s) {
       fail("the chat's … handed holds no \{s}: \{said}")
     }
@@ -1328,7 +1371,7 @@ test "a new chat on an iPhone Duo: its 文件 among the page's actions in the sy
     @sfdesk.new_chat()
     t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() is NewChat, msg=at)
-    assert_true(@sfdesk.wide.tape, msg=at)
+    assert_true(@sfdesk.wide.tape.get(), msg=at)
     let files = @sf.t("web-pages.chat.files")
     assert_true(nav_icon_of(t, "page/new/files") is Some(_), msg="\{at}: the bars handed hold no 文件: \{t.nav_said()}")
     assert_true(said_at(t, files) is None, msg="\{at}: 文件 drawn on the page too")
@@ -1347,4 +1390,31 @@ test "a new chat where the stations lend their files, no system's bars: its 文�
   t.run_for(@ui.move_most_ms)
   assert_true(said_at(t, @sf.t("web-pages.chat.files")) is Some(_))
   assert_false(t.nav_said().contains("page/new/files"))
+}
+
+///|
+test "an iPhone Duo upright: a picture waiting in the composer, rounder than a card at the screen's foot, keeps a block's corners, standing in concentric with it" {
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=669.0, h=951.0, platform=1, window_corner=59.0, nav_able=true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":0}}")
+  t.run_for(@ui.move_most_ms)
+  // (the composer's corner concentric with the screen's: rounder than a card's)
+  let corner = @sf.composer_corner()
+  assert_true(corner > @sf.card_corner, msg="\{corner}")
+  // (each frame held to the corner rule: before, the picture stood 8 in as round as 31, a circle)
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_add(src, w, "ws1/st1", "新图片.png", png_head())
+  t.run_for(@ui.move_most_ms)
+  let picture = @sfbase.writing_pictures[text(Some(w.files.get()[0]), "id")]
+  let clips = t.drawn_image_clips()
+  let shown = t.drawn_instances().filter(fn(a) { a[5] == 4.0 }).mapi(fn(k, a) { (a, clips[k]) }).filter(fn(p) {
+    t.image_src(p.0[20].to_int()) == picture
+  })
+  assert_true(shown.length() > 0, msg="the picture waiting was not drawn")
+  for p in shown {
+    let (_, (r0, r1, r2, r3)) = p.1
+    assert_eq([r0, r1, r2, r3], [@sf.row_corner, @sf.row_corner, @sf.row_corner, @sf.row_corner])
+  }
 }

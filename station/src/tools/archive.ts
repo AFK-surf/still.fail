@@ -9,7 +9,7 @@ import type { Tool } from "./mcp.ts";
 export const ARCHIVE_POLICY = {
   name: "archive_policy",
   description:
-    "Read or change this station's archive policy: after an agent ends a turn all_done, a decision model reads the chat and picks one of the policy's options; the chat is recommended for archiving when that option counts as archive. The policy is the words the model is told (how to look at a chat); each option is a situation (name, one-line rubric) counted as archive or not. Without arguments, returns the current policy. Change it when a person says archive recommendations are wrong in a way the policy causes (an option counted the wrong way, a situation missing, a rubric unclear); when the model only picked the wrong option, say so and leave the policy. Give the whole new policy text and/or the whole list of options (keep each existing option's id; new ones may omit it); tell the person in the chat what you changed. People see who changed it, from which chat, and what.",
+    "Read or change this station's archive policy: after an agent ends a turn all_done, a decision model reads the chat and picks one of the policy's options; the chat is recommended for archiving when that option counts as archive. Each option is a situation counted as archive or not. Without arguments, returns the current policy. Change it when a person says archive recommendations are wrong in a way the policy causes; when the model only picked the wrong option, say so and leave the policy. Tell the person in the chat what you changed: people see who changed it, from which chat, and what.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -23,7 +23,7 @@ export const ARCHIVE_POLICY = {
         "items": {
           "type": "object",
           "properties": {
-            "id": { "type": "string", "description": "The option's id as read (lowercase letters, digits, _); omit for a new one." },
+            "id": { "type": "string", "description": "The option's id as read (lowercase letters, digits, _): keep each existing one's; omit for a new one." },
             "name": { "type": "string", "description": "A few words, in the language people use." },
             "rubric": { "type": "string", "description": "One line: when a chat is in this situation." },
             "archive": { "type": "boolean", "description": "Whether a chat in this situation is recommended for archiving." }

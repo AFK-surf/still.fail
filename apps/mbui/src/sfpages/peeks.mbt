@@ -2,7 +2,9 @@
 // RefChip's RefPreview; Hover.css.ts): a small card over it. A web link's as the core reads it from the link's station
 // (the `linkPreview` topic: GET /link-preview, kept, read again each time a card shows it): a page by its title, its
 // site and icon, its picture over them; a GitHub pull request or issue as GitHub says it: its state, where it is and
-// when it last changed, its title, who opened it and a few facts. A chat's as the workspace's list has it: its title,
+// when it last changed, its title, who opened it and a few facts. Its pictures come beside (@sfbase.link_picture,
+// peek_pictures.mbt), asked as the value is read; a card naming some shows once they are here, as it shows while it is
+// read till then. A chat's as the workspace's list has it: its title,
 // state and when it was last active, where it is, and the last thing said. Asked for as the pointer comes onto the
 // link, so the card mostly opens with it there.
 
@@ -62,10 +64,11 @@ pub fn web_peek(
   }
   let scope = "link-peek/" + id.to_string()
   let params = link_params(station, href)
-  peek_read(c, src, scope, "linkPreview", params, id, fn(read) {
+  // (its pictures asked as it is read, so that they are mostly here as its card opens)
+  peek_read(c, src, scope, "linkPreview", params, id, warm=fn(v) { @sfbase.link_pictures_here(src, station, href, v) |> ignore }, fn(read) {
     hover(c, scope, id, tile=peek == "", side~, fn() {
       read()
-      link_card(c, src, scope, params, href, words, peek~, copy=fn() { link_copy(c, href) })
+      link_card(c, src, scope, station, params, href, words, peek~, copy=fn() { link_copy(c, href) })
     })
     |> ignore
   })
@@ -75,7 +78,8 @@ pub fn web_peek(
 /// What card `scope` over `id` shows (`name` with `params`): read as the pointer comes onto `id` (Peeks.tsx Hover's
 /// `warm`) and while the card is drawn (`card`, given what it calls as it draws its body), let go of once neither, so
 /// the next time it shows it is read again (sync.ts `cardShown`: a pull request's checks move, a file is written).
-/// Held for as long as the app ran, it was read once: a pull request's card said its first checks for good.
+/// Held for as long as the app ran, it was read once: a pull request's card said its first checks for good. `warm`
+/// is given what it has read so far as the pointer is on `id` (a card's pictures asked as soon as it says them).
 fn peek_read(
   c : @ui.Ctx,
   src : Source,
@@ -83,11 +87,12 @@ fn peek_read(
   name : String,
   params : Map[String, Json],
   id : Int,
+  warm? : (Json?) -> Unit = fn(_) {  },
   card : (() -> Unit) -> Unit,
 ) -> Unit {
   let drawn = Ref(false)
   if c.hovered(id) {
-    ignore(@sfbase.hold(src, scope, name, params).get().snapshot())
+    warm(@sfbase.hold(src, scope, name, params).get().snapshot().value)
   }
   card(fn() { drawn.val = true })
   if !c.hovered(id) && !drawn.val {
@@ -117,11 +122,13 @@ fn link_params(station : String, href : String) -> Map[String, Json] {
 
 ///|
 /// The card (LinkCard): a pull request's or an issue's; else a page's tile (its picture over it where it has one);
-/// bars where a rich one's lines will be while it is read; `copy`, what is pressed to copy it, at its foot's end.
+/// bars where a rich one's lines will be while it is read, and while the pictures it names come (link_pictures_here);
+/// `copy`, what is pressed to copy it, at its foot's end.
 fn link_card(
   c : @ui.Ctx,
   src : Source,
   scope : String,
+  station : String,
   params : Map[String, Json],
   href : String,
   words : String,
@@ -130,12 +137,13 @@ fn link_card(
 ) -> Unit {
   let read = @sfbase.hold(src, scope, "linkPreview", params).get().snapshot()
   let v = match read.value {
-    Some(Object(_)) as v => v
+    Some(Object(_)) as v if @sfbase.link_pictures_here(src, station, href, v) => v
     _ => None
   }
+  let picture = fn(which) { @sfbase.picture_drawn(@sfbase.link_picture(src, station, href, v, which)) }
   match text(v, "kind") {
-    "github_pull_request" => change_card(c, v, true, copy)
-    "github_issue" => change_card(c, v, false, copy)
+    "github_pull_request" => change_card(c, v, true, copy, avatar=picture("avatar"))
+    "github_issue" => change_card(c, v, false, copy, avatar=picture("avatar"))
     _ =>
       if v is None && read.error is None && peek != "" {
         // (while it is read: a made-up one's, in its bones)
@@ -148,7 +156,7 @@ fn link_card(
           }), peek == "pull", fn() {  })
         })
       } else {
-        page_tile(c, href, words, if text(v, "kind") == "page" { v } else { None }, copy)
+        page_tile(c, href, words, if text(v, "kind") == "page" { v } else { None }, copy, icon=picture("icon"), picture=picture("image"))
       }
   }
 }
@@ -157,19 +165,19 @@ fn link_card(
 /// Where a link goes, as a card says it: its host and path (Peeks.tsx destination).
 fn destination(href : String) -> String {
   let rest = match href.find("://") {
-    Some(i) => href.view(start_offset=i + 3).to_owned()
+    Some(i) => href.exact_view(start=i + 3).to_owned()
     None => href
   }
   let rest = match rest.find("?") {
-    Some(i) => rest.view(end_offset=i).to_owned()
+    Some(i) => rest.exact_view(end=i).to_owned()
     None => rest
   }
   let rest = match rest.find("#") {
-    Some(i) => rest.view(end_offset=i).to_owned()
+    Some(i) => rest.exact_view(end=i).to_owned()
     None => rest
   }
   if rest.has_suffix("/") {
-    rest.view(end_offset=rest.length() - 1).to_owned()
+    rest.exact_view(end=rest.length() - 1).to_owned()
   } else {
     rest
   }
@@ -178,13 +186,22 @@ fn destination(href : String) -> String {
 ///|
 /// A page's tile: its icon in a 36 square on the hover's ground (GitHub's mark for a GitHub page,
 /// the globe for any other), 10 from its title (two lines at most, 500) over where it goes (its site's name before it,
-/// muted, one line); the page's picture over it, 16:9, where it has one.
-fn page_tile(c : @ui.Ctx, href : String, words : String, page : Json?, copy : () -> Unit) -> Unit {
+/// muted, one line); the page's picture over it, 16:9, where it has one (`icon`, `picture`: their images' keys, ""
+/// none).
+fn page_tile(
+  c : @ui.Ctx,
+  href : String,
+  words : String,
+  page : Json?,
+  copy : () -> Unit,
+  icon~ : String,
+  picture~ : String,
+) -> Unit {
   let t = @sf.theme()
   let tile = fn() {
     c.box(style=peek_tile, fn() {
       c.box(style=peek_thumb, fn() {
-        match @sf.data_image(text(page, "icon")) {
+        match icon {
           "" =>
             if href.has_prefix("https://github.com/") || href.contains(".github.com/") {
               github_mark(c, peek_thumb_mark, t.p.muted)
@@ -209,7 +226,7 @@ fn page_tile(c : @ui.Ctx, href : String, words : String, page : Json?, copy : ()
     })
     |> ignore
   }
-  match @sf.data_image(text(page, "image")) {
+  match picture {
     "" => tile()
     key =>
       c.box(style=peek_with_picture, fn() {
@@ -230,7 +247,8 @@ fn page_tile(c : @ui.Ctx, href : String, words : String, page : Json?, copy : ()
 /// A pull request's (`pr`) or an issue's card (PullRequestCard, IssueCard): its state in a tinted pill with GitHub's
 /// glyph for it, where it is (repository #n) and when it last changed, muted; its title, one line, 500; who opened it
 /// and a few facts (a pull request's size and files and how its checks stand; an issue's labels and comments).
-fn change_card(c : @ui.Ctx, v : Json?, pr : Bool, copy : () -> Unit) -> Unit {
+/// `avatar`: their picture's image's key, "" none.
+fn change_card(c : @ui.Ctx, v : Json?, pr : Bool, copy : () -> Unit, avatar? : String = "") -> Unit {
   let state = text(v, "state")
   c.box(style=peek_rich, fn() {
     c.box(style=peek_change_meta, fn() {
@@ -261,7 +279,7 @@ fn change_card(c : @ui.Ctx, v : Json?, pr : Bool, copy : () -> Unit) -> Unit {
       match field(v, "author") {
         Some(Object(_)) as a =>
           c.box(style=peek_person, fn() {
-            match @sf.data_image(text(a, "avatar")) {
+            match avatar {
               "" => c.box(style=peek_avatar, fn() {  }) |> ignore
               key => c.image(key, w=Px(peek_avatar_d), h=Px(peek_avatar_d), radius=peek_avatar_d / 2.0, bg=@sf.theme().p.hover) |> ignore
             }
@@ -460,10 +478,11 @@ fn file_peek(
     hovered_file.val = None
   }
   // (a tap opens the file itself: message.mbt open_named)
-  peek_read(c, src, scope, "filePeek", params, id, fn(read) {
+  // (its picture asked as it is read, as a link's are)
+  peek_read(c, src, scope, "filePeek", params, id, warm=fn(v) { @sfbase.file_peek_picture(src, station, session, path, line, v) |> ignore }, fn(read) {
     hover(c, scope, id, fn() {
       read()
-      file_card(c, src, scope, params, path)
+      file_card(c, src, scope, params, station, session, path, line)
     })
     |> ignore
   })
@@ -487,19 +506,32 @@ fn file_peek_params(station : String, session : String, path : String, line : In
 /// The card (FileCard), as the core reads the file (the `filePeek` topic): its head (its mark, name and when it was
 /// written, its whole path under them); a few of its lines, numbered, the one named marked; an image's picture; a
 /// directory's first entries; and its foot: how big it is (or how many entries), and its path to copy. Why not, read
-/// and refused; bars while it is read.
-fn file_card(c : @ui.Ctx, src : Source, scope : String, params : Map[String, Json], path : String) -> Unit {
+/// and refused; bars while it is read, and while the picture it names comes (@sfbase.file_peek_picture).
+fn file_card(
+  c : @ui.Ctx,
+  src : Source,
+  scope : String,
+  params : Map[String, Json],
+  station : String,
+  session : String,
+  path : String,
+  line : Int?,
+) -> Unit {
   let read = @sfbase.hold(src, scope, "filePeek", params).get().snapshot()
-  let v = match read.value {
-    Some(Object(_)) as v => v
-    _ => None
+  let (v, picture) = match read.value {
+    Some(Object(_)) as v =>
+      match @sfbase.file_peek_picture(src, station, session, path, line, v) {
+        "" => (None, "")
+        k => (v, @sfbase.picture_drawn(k))
+      }
+    _ => (None, "")
   }
   guard v is Some(_) else {
     match read.error {
       // (while it is read: a made-up file's, in its bones)
       None =>
         @sf.bones(c, fn() {
-          file_shown(c, Some({
+          file_shown(c, "", Some({
             "kind": "text",
             "name": Json::string(base_of(path)),
             "path": Json::string(path),
@@ -518,12 +550,13 @@ fn file_card(c : @ui.Ctx, src : Source, scope : String, params : Map[String, Jso
     }
     return
   }
-  file_shown(c, v)
+  file_shown(c, picture, v)
 }
 
 ///|
-/// A file as the core read it (`v`): its head, a few of its lines, its picture or its first entries, its foot.
-fn file_shown(c : @ui.Ctx, v : Json?) -> Unit {
+/// A file as the core read it (`v`): its head, a few of its lines, its picture (`picture`: its image's key, "" none) or
+/// its first entries, its foot.
+fn file_shown(c : @ui.Ctx, picture : String, v : Json?) -> Unit {
   let kind = text(v, "kind")
   let dir = kind == "dir"
   let lines = field(v, "lines")
@@ -541,7 +574,7 @@ fn file_shown(c : @ui.Ctx, v : Json?) -> Unit {
     match kind {
       "text" if items(lines, "text").length() > 0 => file_lines(c, lines, at, text(v, "name"))
       "image" =>
-        match @sf.data_image("data:" + text(field(v, "image"), "type") + ";base64," + text(field(v, "image"), "data")) {
+        match picture {
           "" => ()
           key => c.image(key, w=Fill(1.0), h=Px(peek_file_image_h), radius=peek_file_image_r, bg=@sf.theme().p.hover, fit=FitContain) |> ignore
         }
@@ -600,9 +633,9 @@ fn file_head(c : @ui.Ctx, name : String, dir : Bool, path : String, ago : String
 fn shown_path(path : String) -> String {
   for home in ["/Users/", "/home/"] {
     if path.has_prefix(home) {
-      let rest = path.view(start_offset=home.length()).to_owned()
+      let rest = path.exact_view(start=home.length()).to_owned()
       return match rest.find("/") {
-        Some(i) => "~" + rest.view(start_offset=i).to_owned()
+        Some(i) => "~" + rest.exact_view(start=i).to_owned()
         None => "~"
       }
     }
@@ -671,7 +704,7 @@ fn file_entries(c : @ui.Ctx, entries : Array[Json]) -> Unit {
           c.box(style=peek_file_entry, fn() {
             @sf.icon(c, if dir { "folder" } else { "file" }, size=peek_file_entry_icon, color=p.muted) |> ignore
             c.box(style=peek_ref, fn() {
-              mono(c, if dir { name.view(end_offset=name.length() - 1).to_owned() } else { name }, peek_file_code)
+              mono(c, if dir { name.exact_view(end=name.length() - 1).to_owned() } else { name }, peek_file_code)
             })
             |> ignore
           })
@@ -748,16 +781,16 @@ fn chat_named(src : Source, here : String, href : String) -> Named {
       _ =>
         match href.find("/chats/") {
           Some(i) => {
-            let id = href.view(start_offset=i + 7).to_owned()
+            let id = href.exact_view(start=i + 7).to_owned()
             let id = match id.find("?") {
-              Some(k) => id.view(end_offset=k).to_owned()
+              Some(k) => id.exact_view(end=k).to_owned()
               None => id
             }
             let id = match id.find("#") {
-              Some(k) => id.view(end_offset=k).to_owned()
+              Some(k) => id.exact_view(end=k).to_owned()
               None => id
             }
-            let id = if id.has_suffix("/") { id.view(end_offset=id.length() - 1).to_owned() } else { id }
+            let id = if id.has_suffix("/") { id.exact_view(end=id.length() - 1).to_owned() } else { id }
             if id == "" {
               NoChat
             } else {
@@ -775,10 +808,18 @@ fn chat_named(src : Source, here : String, href : String) -> Named {
 /// A reference to a chat (`href`) in a chat of station `here`: its card over it while the pointer rests on it, read as
 /// the pointer comes onto it and let go of once it has gone (peek_read); `linked`, the chat as its message says it.
 fn chat_peek(c : @ui.Ctx, src : Source, here : String, href : String, id : Int, linked : LinkedChat?) -> Unit {
-  if c.hovered(id) {
-    ignore(chat_named(src, here, href))
-  }
   let scope = "chat-peek/" + id.to_string()
+  if c.hovered(id) {
+    // (and its chat's whole row, for when it was last active: asked as the pointer comes onto it, as the card opens)
+    match chat_named(src, here, href) {
+      Chat(station, key, _, _) =>
+        match peek_listed(src, here, station, key) {
+          Some(i) if !@sfbase.whole_already(src, i) => @sfbase.hold(src, scope, "chatRow", @sfbase.whole_params(i.station, i.session)) |> ignore
+          _ => ()
+        }
+      _ => ()
+    }
+  }
   let drawn = Ref(false)
   hover(c, scope, id, fn() {
     drawn.val = true
@@ -829,20 +870,22 @@ fn chat_card(c : @ui.Ctx, src : Source, scope : String, here : String, href : St
       return
     }
   }
-  guard @sfbase.chats_of(src, @sfbase.workspace_of(here), "all").0 is Some(view) else {
+  guard @sfbase.chats_of(src, @sfbase.workspace_of(here), "all").0 is Some(_) else {
     chat_card_sample(c)
     return
   }
-  let mut found : ChatItem? = None
-  for d in view.days {
-    for i in d.items {
-      if found is None && i.station == station && (i.id == key || i.session == key) {
-        found = Some(i)
-      }
-    }
-  }
-  guard found is Some(item) else {
+  guard peek_listed(src, here, station, key) is Some(listed) else {
     c.text(@sf.t("web-main.chatRef.previewGone"), style=peek_note) |> ignore
+    return
+  }
+  // (when it was last active is its whole row's, asked as the pointer came onto the link: chat_peek)
+  let whole = if @sfbase.whole_already(src, listed) {
+    Some(listed)
+  } else {
+    @sfbase.whole_of_state(listed, @sfbase.hold(src, scope, "chatRow", @sfbase.whole_params(listed.station, listed.session)).get())
+  }
+  guard whole is Some(item) else {
+    chat_card_sample(c)
     return
   }
   let message = match (seq, item.thread) {
@@ -850,6 +893,21 @@ fn chat_card(c : @ui.Ctx, src : Source, scope : String, here : String, href : St
     _ => None
   }
   chat_card_of(c, item, item.station != here, history, message~)
+}
+
+///|
+/// The list's row of the chat `key` (its id, or its session) of station `station`, in the list of the workspace of
+/// station `here`: None while the list is read, or where it lists none such.
+fn peek_listed(src : Source, here : String, station : String, key : String) -> ChatItem? {
+  guard @sfbase.chats_of(src, @sfbase.workspace_of(here), "all").0 is Some(view) else { return None }
+  for d in view.days {
+    for i in d.items {
+      if i.station == station && (i.id == key || i.session == key) {
+        return Some(i)
+      }
+    }
+  }
+  None
 }
 
 ///|
@@ -1080,7 +1138,7 @@ let peek_add : @ui.TextStyle = @ui.text_style(size=Meta, color=Positive, wrap=fa
 let peek_del : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
-/// A state's pill: a capsule 8 (6 before its glyph) in, its glyph 4 from its name.
+/// A state's pill: 20 high, full corners to stand concentric in its card's corner, no horizontal pad at the left so
 // kept across runs: a value (no field of it changes)
 let peek_state : @ui.Style = @ui.css("row h=S5 gap=S1 pl=S1_5 pr=S2 radius=Full align=ACenter")
 

@@ -1,17 +1,23 @@
 #!/bin/bash
-# The desktop job's native parts and Moon build, started while it restores the tools and packages they do not need.
-# `ready` means the Moon toolchain and _build cache have been restored and source mtimes set. `wait` reports failures
+# The desktop job's native parts, Moon build and core bytecode, started while it restores what they do not need.
+# `ready` means the Moon toolchain and _build cache have been restored and source mtimes set; `packages` that the job's
+# pnpm install is over, the core's bytecode's own install waiting for it (one store, two installs at once lost files:
+# its pending file, made at the start, taken away). `wait` reports failures
 # before the usual release script signs or publishes anything; that script still does its own up-to-date build.
 set -eu
 dir="$RUNNER_TEMP/mac-prebuild"
 case "${1:-}" in
   start)
     mkdir -p "$dir"
+    : > "$dir/packages-pending"
     nohup bash "$0" work > "$dir/log" 2>&1 < /dev/null &
     echo "$!" > "$dir/pid"
     ;;
   ready)
     touch "$dir/ready"
+    ;;
+  packages)
+    rm -f "$dir/packages-pending"
     ;;
   wait)
     while [ ! -s "$dir/status" ]; do
@@ -50,8 +56,10 @@ case "${1:-}" in
     exe="$A/_build/native/release/build/stillfail/stillfail/stillfail.exe"
     [ ! -f "$exe" ] || [ ! "$A/out/core/aarch64-apple-darwin/libmbui_core.a" -nt "$exe" ] || touch "$A/src/stillfail/core_engine.m"
     export MOON_HOME="$RUNNER_TOOL_CACHE/moon-ci"
-    export PATH="$MOON_HOME/bin:$PATH" APP=stillfail MODE=release
-    bash "$MBUI_DIR/scripts/mac.sh" build
+    export PATH="$MOON_HOME/bin:$PATH" APP=stillfail MODE=release MBUI_PACKAGES_PENDING="$dir/packages-pending"
+    # The app's wrapper builds core.hbc beside the app. Leaving it until mac-app.sh bundled the app added 26 s after
+    # the compile and let a successful build time out during cleanup (42588746155, 2026-11-09).
+    bash "$A/scripts/mac.sh" build
     ;;
-  *) echo "usage: $0 start|ready|wait" >&2; exit 2 ;;
+  *) echo "usage: $0 start|ready|packages|wait" >&2; exit 2 ;;
 esac

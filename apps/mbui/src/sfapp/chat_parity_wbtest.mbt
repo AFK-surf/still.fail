@@ -9,7 +9,7 @@
 fn with_fields(v : Json, more : Array[(String, Json)]) -> Json {
   match v {
     Object(m) => {
-      let o : Map[String, Json] = {}
+      let o : Map[String, Json] = Map([])
       for k, x in m {
         o[k] = x
       }
@@ -66,7 +66,7 @@ fn edited_core(
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       done(Ok(answer(name)))
     },
   }
@@ -139,7 +139,7 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
   t.frame()
   let sent = named(calls, "chat.report")
   assert_eq(sent.length(), 1)
-  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
+  assert_eq(t.haptics()[felt:].to_owned(), [@ui.Confirm])
   assert_eq(number(Some(sent[0].params), "seq"), 9.0)
   assert_eq(number(Some(sent[0].params), "thread"), 7.0)
   assert_eq(text(Some(sent[0].params), "station"), "ws1/st1")
@@ -150,7 +150,7 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
 ///|
 test "an overload notice offers to cancel its retry at the notice" {
   let calls : Array[Made] = []
-  let retrying = Ref::new(true)
+  let retrying = Ref(true)
   let epoch = @signals.signal(0)
   let t = edited_core(
     calls,
@@ -315,7 +315,7 @@ test "an agent's link to an archived chat written bare: its title as the core sa
   assert_true(t.find(link) is None)
   assert_true(t.find("已归档") is None)
   let (x, y, w, h) = t.run_rects("旧的对话")[0]
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_true(t.find("已归档") is Some(_), msg="its card: that it is archived")
 }
@@ -360,14 +360,14 @@ test "a Slack user's name in a history: 这是我 binds them to the viewer (slac
   let t = edited_core(calls, "history", fn(name, v) {
     if name == "history" {
       // (that item alone: the steps open at their newest, and it in view)
-      with_fields(v, [("items", Json::array(items(Some(v), "items").map(slack_from)[:1].to_array()))])
+      with_fields(v, [("items", Json::array(items(Some(v), "items").map(slack_from)[:1].to_owned()))])
     } else {
       v
     }
   })
   t.tap_text("林小满")
   // its menu, the presenters' sheet with a finger, up
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("这是我") is Some(_), msg="its menu")
   t.tap_text("这是我")
   let sent = named(calls, "slack.identity")
@@ -393,6 +393,7 @@ test "the chat's menu: one from Slack or Feishu opens there" {
         v
       }
     })
+    open_share(t)
     t.tap_text(words)
     assert_true(t.opened().contains(url), msg=words)
   }
@@ -441,16 +442,16 @@ test "a station's failed update stays out of the chat bar even when its notice w
 fn words_node(t : @ui.Tester, s : String) -> (Double, Double)? {
   let want = " \"" + s + "\" "
   for l in t.dump().split("\n") {
-    let l = l.trim_start(chars=" ").to_string()
+    let l = l.trim_start(chars=" ").to_owned()
     if l.has_prefix("text ") && l.contains(want) {
       // "text x,y wxh \"…\" lines=n"
       let parts = l.split(" ").collect()
       let xy = parts[1].split(",").collect()
       let wh = parts[2].split("x").collect()
-      let x = dump_number(xy[0].to_string())
-      let y = dump_number(xy[1].to_string())
-      let w = dump_number(wh[0].to_string())
-      let h = dump_number(wh[1].to_string())
+      let x = dump_number(xy[0].to_owned())
+      let y = dump_number(xy[1].to_owned())
+      let w = dump_number(wh[0].to_owned())
+      let h = dump_number(wh[1].to_owned())
       return Some((x + w / 2.0, y + h / 2.0))
     }
   }
@@ -520,6 +521,6 @@ fn report_drawn(words : String) -> (Double, Double) {
 test "a failure the viewer may report, its words too long for the line: they are cut short before 上报, which is whole" {
   let short = report_drawn("这一轮没跑完")
   let long = report_drawn("本轮 agent 未在对话中回复，以下是它最后输出的文字，由 station 代为转发（并非它发出的消息），请留意")
-  assert_true(short.0 > 0.0 && short.1 > 0.0, msg="\{short}")
+  assert_true(short.0 > 0.0 && short.1 > 0.0, msg="\{Repr(short)}")
   assert_eq(long, short)
 }

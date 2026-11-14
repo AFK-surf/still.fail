@@ -13,7 +13,6 @@
 priv struct NcFlow {
   station : String
   form : String
-  resume : String
   app_id : @ui.Field
   app_secret : @ui.Field
   /// the line Comma's still.fail plugin shows, as typed
@@ -47,15 +46,14 @@ let nc_actions : Array[String] = [
 ]
 
 ///|
-/// A new connect on `station`, in a dialog (NewConnectDialog): from the start, or (`resume`) from a Slack app made
+/// A new connect on `station`, in a dialog (NewConnectDialog): from the start, or (`made_app`) from a Slack app made
 /// before. Its wizard is opened once the frame is built, and let go of as the dialog closes.
-pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : String, resume? : String = "") -> Unit {
+pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : String, made_app? : String = "") -> Unit {
   nc_made.val += 1
   let key = "new-connect/" + nc_made.val.to_string()
   let f : NcFlow = {
     station,
     form: "desk-connect-" + nc_made.val.to_string(),
-    resume,
     app_id: @ui.Field::new(),
     app_secret: @ui.Field::new(),
     comma_line: @ui.Field::new(),
@@ -90,7 +88,7 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
               ("form", str(f.form)),
               // (no `mobile`: one page draws the one flow, the web desktop's, on every screen; told it, the core's phone flow
               // asked for a step of its own (token) this page has not)
-              ("input", obj([("resume", if resume == "" { Json::null() } else { str(resume) })])),
+              ("input", obj([("resume", if made_app == "" { Json::null() } else { str(made_app) })])),
             ]),
             fn(r) {
               match r {
@@ -163,7 +161,7 @@ fn nc_step(
     nc_follow(src, core, here, f, view, v, back)
   }
   let own = if own == "" { f.pages.get(0).unwrap_or(text(v, "step")) } else { own }
-  nc_body(c, src, core, here, f, v, fn() { nc_close(core, f, shut) }, step=own)
+  nc_body(c, src, core, f, v, fn() { nc_close(core, f, shut) }, step=own)
 }
 
 ///|
@@ -206,7 +204,7 @@ fn nc_close(core : Core, f : NcFlow, shut : () -> Unit) -> Unit {
 fn nc_drop(core : Core, f : NcFlow) -> Unit {
   if !f.gone {
     f.gone = true
-    (core.call)("connect.flow.drop", obj([("station", str(f.station)), ("form", str(f.form))]), fn(_) {  })
+    (core.call)("connect.flow.drop", obj([("station", str(f.station)), ("form", str(f.form))]), @sfbase.answer_unread)
     for k in slack_token_forms.keys().to_array() {
       if k.has_prefix("flow/" + f.form) {
         slack_token_forms.remove(k)
@@ -265,9 +263,17 @@ fn nc_error(core : Core, f : NcFlow) -> String {
 }
 
 ///|
-/// The connect added: said, the dialog closed onto its page.
-fn nc_added(core : Core, f : NcFlow, id : String, close : () -> Unit, feishu : Bool) -> Unit {
-  (core.say)(@sf.t(if feishu { "web-pages.connect.feishu.added" } else { "web-pages.connect.added" }))
+/// The connect added: said (as its kind says it: `platform`), the dialog closed onto its page.
+fn nc_added(core : Core, f : NcFlow, id : String, close : () -> Unit, platform : String) -> Unit {
+  (core.say)(
+    @sf.t(
+      match platform {
+        "feishu" => "web-pages.connect.feishu.added"
+        "comma" => "web-pages.connect.added.comma"
+        _ => "web-pages.connect.added"
+      },
+    ),
+  )
   close()
   (core.push)(Connect(f.station, id))
 }
@@ -284,7 +290,6 @@ fn nc_body(
   c : @ui.Ctx,
   src : Source,
   core : Core,
-  here : Here,
   f : NcFlow,
   v : Json?,
   close : () -> Unit,
@@ -337,7 +342,9 @@ fn nc_body(
         }
       }
       "commaLine" | "done" if text(v, "platform") == "comma" => nc_comma_line(c, core, f, field(v, "comma"), error)
-      "feishuBind" | "commaBind" | "bind" => {
+      // (a Comma connect has one way, a session a Task: the station makes it so, and Comma has no threads to choose by)
+      "commaBind" => nc_models(c, src, core, f, v)
+      "feishuBind" | "bind" => {
         nc_models(c, src, core, f, v)
         @sf.field(c, @sf.t("web-pages.connect.mode"), fn() {
           let (m, r, by_thread) = mode_choices(c, "nc-mode/" + f.form, field(v, "modeWords"), text(v, "mode"), flag(v, "requireMention"), flag(v, "threads"))
@@ -761,7 +768,7 @@ fn nc_foot(
     "commaLine" | "done" if text(v, "platform") == "comma" => {
       cancel()
       next(@sf.t("web-pages.connect.addConnect"), !flag(field(v, "comma"), "ready"), busy, fn() {
-        nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, false) })
+        nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, "comma") })
       })
     }
     "feishuBind" => {
@@ -784,7 +791,7 @@ fn nc_foot(
       cancel()
       if flag(fe, "verified") {
         next(@sf.t("web-pages.connect.addConnect"), false, busy || flag(fe, "creating"), fn() {
-          nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, true) })
+          nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, "feishu") })
         })
       } else {
         next(@sf.t("web-pages.connect.feishu.verify"), !flag(fe, "canVerify"), busy, fn() { nc_act(core, f, "verify") })
@@ -815,7 +822,7 @@ fn nc_foot(
     }
     _ => {
       next(@sf.t("web-pages.connect.addConnect"), items(field(v, "pick"), "options").length() == 0, busy, fn() {
-        nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, false) })
+        nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, "slack") })
       })
     }
   }
@@ -843,7 +850,7 @@ fn nc_scan_foot(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, cancel : () ->
 fn nc_watch_added(core : Core, f : NcFlow, v : Json?, close : () -> Unit) -> Unit {
   if text(v, "step") == "done" && text(v, "platform") == "feishu" {
     match opt_text(field(v, "feishu"), "connect") {
-      Some(id) if !f.gone => nc_added(core, f, id, close, true)
+      Some(id) if !f.gone => nc_added(core, f, id, close, "feishu")
       _ => ()
     }
   }

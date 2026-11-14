@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import { Refused } from "../src/jobs/remote.ts";
-import { PEER_ALPN, PEER_BYTES_ALPN, member, peerCall, servePeer } from "../src/mesh/peer.ts";
+import { PEER_ALPN, PEER_BYTES_ALPN, member, peerCall, roster, servePeer } from "../src/mesh/peer.ts";
 import { NoBytes, bytesOf, withBytes } from "../src/mesh/bus.ts";
 import { oneBytes, readBytes, stopBytes } from "../src/mesh/files.ts";
 import { memoryMesh } from "./memory-mesh.ts";
@@ -336,4 +336,29 @@ test("a file goes after its request or its answer, as the other end takes it; a 
   } finally {
     await Promise.all([source.close(), target.close(), old.close()]);
   }
+});
+
+test("a station safe mode leaves out is refused saying why; one of no workspace of this station's as before", () => {
+  const locked = (ids: string[]) => ({ entries: [], state: { stations: new Set(ids), gateways: new Set() } });
+  // "ws" (home): the control plane lists st, A and W, the lock only st and A; "w2" (joined): st, B and C, its lock st and B.
+  const cloud = cloudOf("st", ["A"], [{ workspace: "w2", workspace_name: "W2", name: "st", peers: [{ id: "st" }, { id: "B" }, { id: "C" }], revocations: [] }]);
+  cloud.lock = locked(["st", "A"]);
+  cloud.planePeers = [{ id: "st" }, { id: "A" }, { id: "W" }];
+  cloud.joinedLocks = new Map([["w2", locked(["st", "B"])]]);
+  assert.equal(member(cloud, "A", null), "ws");
+  assert.equal(member(cloud, "B", null), "w2");
+  const unprotected = /not protected by its safe mode[\s\S]*not a bug[\s\S]*owner or admin[\s\S]*设置 → 安全[\s\S]*保护/;
+  assert.throws(() => member(cloud, "W", null), unprotected);
+  assert.throws(() => member(cloud, "W", "ws"), unprotected);
+  assert.throws(() => member(cloud, "C", "w2"), unprotected);
+  assert.throws(() => member(cloud, "C", null), unprotected);
+  const none = (e: unknown) => e instanceof Error && e.message === "peer is not another station in this workspace";
+  assert.throws(() => member(cloud, "Z", null), none);
+  assert.throws(() => member(cloud, "C", "ws"), none);
+  assert.throws(() => member(cloud, "st", null), none);
+  // The roster the transport answers says them apart.
+  assert.deepEqual(roster(cloud, "ws"), { workspace: "ws", stations: [{ id: "A" }], current: true, unprotected: [{ id: "W" }] });
+  assert.deepEqual(roster(cloud, "w2"), { workspace: "w2", stations: [{ id: "st" }, { id: "B" }], current: true, unprotected: [{ id: "C" }] });
+  cloud.lock = null;
+  assert.deepEqual(roster(cloud, "ws"), { workspace: "ws", stations: [{ id: "A" }], current: true });
 });

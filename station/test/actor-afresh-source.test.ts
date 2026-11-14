@@ -22,9 +22,11 @@ test("switching accounts looks up only the runtime source it is leaving", async 
     const moved = rig.hub.live.moved.bind(rig.hub.live);
     let beforeMove: number | undefined;
     rig.hub.live.moved = (session) => { beforeMove = visited; moved(session); };
+    // Ending the first turn also asks the live view to find its transcripts (read off the main thread, before the turn
+    // is said to be over). Measure the later account switch itself.
+    const ended = rig.hub.live.turnEnded.bind(rig.hub.live);
+    rig.hub.live.turnEnded = (session) => ended(session).then(() => { visited = 0; });
     first.end({ kind: "failed", reason: classifyResult("usage limit reached"), message: "usage limit reached" });
-    // Ending the first turn also asks the live view to find its transcripts. Measure the later account switch itself.
-    visited = 0;
     await settle();
     const second = rig.claude.last();
     assert.notEqual(second.options.profile.id, first.options.profile.id);

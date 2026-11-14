@@ -1,14 +1,33 @@
 // The tabs of the station's browser, as its DevTools tell of them (Target.setDiscoverTargets on the station's own
 // connection): listed to the agents, and each a screen source (`browser:<targetId>`) in the station's Screens while it
 // is there, saying the session that opened it (owners.ts) and closed from a person's app.
+import { ScreenRefused } from "../screens/hub.ts";
 import type { ClipType, ScreenSource, ScreenView, Screens, ViewOptions } from "../screens/source.ts";
 import { wall } from "../ops/fibers.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 import type { Owners } from "./owners.ts";
+import { addressOrSearch, siteOfBrowserUrl } from "./url.ts";
 import { TabView, viewportOf } from "./view.ts";
 
 /// `session`: the session that opened it, when known.
 export type TabInfo = { id: string; title: string; url: string; attached: boolean; session?: string };
+
+export type TargetSnapshot = {
+  targetId: string;
+  type?: string;
+  title?: string;
+  url?: string;
+  attached?: boolean;
+  openerId?: string;
+  browserContextId?: string;
+};
+
+export type UserTabHooks = {
+  targetCreated(info: TargetSnapshot): string | undefined;
+  targetInfoChanged(info: TargetSnapshot): boolean;
+  targetDestroyed(targetId: string): boolean;
+  refreshTitles(infos: TargetSnapshot[]): void;
+};
 
 /// What the tabs need of the browser.
 export type TabsParts = {
@@ -31,6 +50,8 @@ export type TabsParts = {
   usedTab?: (session: string, targetId: string) => void;
   /// Whether tab `targetId`'s context has a passkey of relying party `rpId` its authenticator signs (passkeys.ts).
   ownPasskey?: (targetId: string, rpId: string) => boolean;
+  /// Claims and tracks persistent user pages (`user-tabs.ts`) so they stay separate from agent tabs.
+  userTabs?: UserTabHooks;
 };
 
 /// Chrome tells of a tab's new address, not of its title, which the page sets after (Chrome 155): the titles are read
@@ -38,6 +59,12 @@ export type TabsParts = {
 const TITLES_AFTER_MS = [1000, 5000];
 /// How long a tab just created is waited for (`arrived`).
 const ARRIVE_MS = 3000;
+
+type ActiveView = {
+  targetId: string;
+  view: TabView;
+  children: Set<(screenId: string) => void>;
+};
 
 /// A tab as a screen source.
 class Tab implements ScreenSource {
@@ -56,6 +83,14 @@ class Tab implements ScreenSource {
 
   title(): string {
     return this.info.title || this.info.url;
+  }
+
+  site(): string | undefined {
+    return siteOfBrowserUrl(this.info.url);
+  }
+
+  address(): string {
+    return this.info.url;
   }
 
   size() {
@@ -82,6 +117,24 @@ class Tab implements ScreenSource {
     return this.#tabs.ownerOf(this.info.targetId);
   }
 
+  openUrl(rawUrl: string): Promise<void> {
+    const url = addressOrSearch(rawUrl);
+    if (url === null) throw new ScreenRefused(400, "station.screen.badUrl");
+    return this.#tabs.navigateTarget(this.info.targetId, url);
+  }
+
+  reload(): Promise<void> {
+    return this.#tabs.reloadTarget(this.info.targetId);
+  }
+
+  back(): Promise<void> {
+    return this.#tabs.historyTarget(this.info.targetId, -1);
+  }
+
+  forward(): Promise<void> {
+    return this.#tabs.historyTarget(this.info.targetId, 1);
+  }
+
   discard(): Promise<void> {
     return this.#tabs.closeTab(this.info.targetId);
   }
@@ -90,9 +143,10 @@ class Tab implements ScreenSource {
 export class Tabs {
   readonly #p: TabsParts;
   readonly #tabs = new Map<string, { tab: Tab; remove: () => void }>();
+  readonly #liveTargets = new Set<string>();
   /// The browser context of every target told of (pages, frames, workers): whose chat's it is (gate.ts).
   readonly #contexts = new Map<string, string>();
-  readonly #views = new Set<TabView>();
+  readonly #views = new Set<ActiveView>();
   #unlisten: () => void = () => {};
   #closed = false;
   /// Past the tabs that were there at start (told as created): what comes now is the browser being used.
@@ -121,7 +175,7 @@ export class Tabs {
     });
   }
 
-  /// Whether tab `targetId` is there.
+  /// Whether tab `targetId` is there (among the agent/station tabs).
   has(targetId: string): boolean {
     return this.#tabs.has(targetId);
   }
@@ -129,7 +183,7 @@ export class Tabs {
   /// Resolves once tab `targetId` is there (a tab just created: Chrome may answer before it tells of it), or after
   /// `ms` all the same.
   arrived(targetId: string, ms = ARRIVE_MS): Promise<void> {
-    if (this.#closed || this.#tabs.has(targetId)) return Promise.resolve();
+    if (this.#closed || this.#tabs.has(targetId) || this.#liveTargets.has(targetId)) return Promise.resolve();
     return new Promise((resolve) => {
       const stop = (this.#p.later ?? wall.after)(ms, () => done());
       const done = () => {
@@ -171,6 +225,73 @@ export class Tabs {
     await this.#p.cdp.send("Target.closeTarget", { targetId });
   }
 
+  /// Closes any live Chrome target `targetId` (used by `UserTabs` when sleeping or discarding).
+  async closeTarget(targetId: string): Promise<void> {
+    if (this.#closed) return;
+    await this.#p.cdp.send("Target.closeTarget", { targetId });
+  }
+
+  /// Closes any open `ScreenView`s attached to `targetId`.
+  closeViewsOf(targetId: string) {
+    for (const active of [...this.#views]) {
+      if (active.targetId === targetId) active.view.close();
+    }
+  }
+
+  /// Navigates a live target to `url`.
+  async navigateTarget(targetId: string, url: string): Promise<void> {
+    if (this.#closed || (!this.#tabs.has(targetId) && !this.#liveTargets.has(targetId))) {
+      throw new ScreenRefused(404, "station.screen.notFound");
+    }
+    const cdp = await this.#p.connect();
+    try {
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+      await cdp.send("Page.navigate", { url }, sessionId);
+    } finally {
+      cdp.close();
+    }
+    this.#titlesLater();
+    this.#p.activity();
+  }
+
+  /// Reloads a live target.
+  async reloadTarget(targetId: string): Promise<void> {
+    if (this.#closed || (!this.#tabs.has(targetId) && !this.#liveTargets.has(targetId))) {
+      throw new ScreenRefused(404, "station.screen.notFound");
+    }
+    const cdp = await this.#p.connect();
+    try {
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+      await cdp.send("Page.reload", {}, sessionId);
+    } finally {
+      cdp.close();
+    }
+    this.#titlesLater();
+    this.#p.activity();
+  }
+
+  /// Goes `delta` steps through a live target's history (-1 back, 1 forward), as a browser's arrows do; nothing where
+  /// its history has no page there.
+  async historyTarget(targetId: string, delta: number): Promise<void> {
+    if (this.#closed || (!this.#tabs.has(targetId) && !this.#liveTargets.has(targetId))) {
+      throw new ScreenRefused(404, "station.screen.notFound");
+    }
+    const cdp = await this.#p.connect();
+    try {
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+      const history = (await cdp.send("Page.getNavigationHistory", {}, sessionId)) as { currentIndex?: unknown; entries?: unknown };
+      const entries = Array.isArray(history.entries) ? (history.entries as { id?: unknown }[]) : [];
+      const at = typeof history.currentIndex === "number" ? history.currentIndex + delta : -1;
+      const entry = entries[at];
+      if (entry === undefined || typeof entry.id !== "number") return;
+      await cdp.send("Page.navigateToHistoryEntry", { entryId: entry.id }, sessionId);
+    } finally {
+      cdp.close();
+    }
+    this.#titlesLater();
+    this.#p.activity();
+  }
+
   /// How many views of the tabs are open.
   viewing(): number {
     return this.#views.size;
@@ -182,29 +303,54 @@ export class Tabs {
     this.#closed = true;
     this.#unlisten();
     for (const stop of this.#rereads.splice(0)) stop();
-    for (const view of [...this.#views]) view.close();
+    for (const active of [...this.#views]) active.view.close();
     for (const { remove } of this.#tabs.values()) remove();
     this.#tabs.clear();
+    this.#liveTargets.clear();
     for (const waiters of [...this.#awaited.values()]) for (const done of waiters) done();
   }
 
-  async open(tab: Tab, options: ViewOptions): Promise<ScreenView> {
+  open(tab: Tab, options: ViewOptions): Promise<ScreenView> {
+    if (this.#closed || !this.#tabs.has(tab.info.targetId)) return Promise.reject(new Error("This tab is closed."));
+    return this.openTarget(tab.info.targetId, options, {
+      sized: (size) => tab.sized(size),
+      used: () => {
+        const owner = this.ownerOf(tab.info.targetId);
+        if (owner) this.#p.usedTab?.(owner, tab.info.targetId);
+      },
+    });
+  }
+
+  async openTarget(
+    targetId: string,
+    options: ViewOptions,
+    hooks: { sized(size: { width: number; height: number }): void; used?(): void; ended?(): void },
+  ): Promise<ScreenView> {
     if (!options.codecs.includes("jpeg")) throw new Error("A tab of the station's browser is seen as JPEG frames, which this viewer does not take.");
-    if (this.#closed || !this.#tabs.has(tab.info.targetId)) throw new Error("This tab is closed.");
+    if (this.#closed) throw new Error("This tab is closed.");
     const cdp = await this.#p.connect();
     try {
-      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId: tab.info.targetId, flatten: true });
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+      const children = new Set<(screenId: string) => void>();
+      let active: ActiveView | null = null;
       const view: TabView = new TabView({
-        cdp, session: sessionId, targetId: tab.info.targetId, now: () => this.#p.now(),
-        ...(this.#p.ownPasskey ? { ownPasskey: (rpId: string) => this.#p.ownPasskey!(tab.info.targetId, rpId) } : {}),
-        sized: (size) => tab.sized(size),
-        used: () => { const owner = this.ownerOf(tab.info.targetId); if (owner) this.#p.usedTab?.(owner, tab.info.targetId); },
+        cdp, session: sessionId, targetId, now: () => this.#p.now(),
+        ...(this.#p.ownPasskey ? { ownPasskey: (rpId: string) => this.#p.ownPasskey!(targetId, rpId) } : {}),
+        sized: (size) => hooks.sized(size),
+        used: () => hooks.used?.(),
         ended: () => {
-          this.#views.delete(view);
+          if (active) this.#views.delete(active);
+          children.clear();
+          hooks.ended?.();
           this.#p.activity();
         },
       });
-      this.#views.add(view);
+      view.watchChild = (heard: (screenId: string) => void) => {
+        children.add(heard);
+        return () => children.delete(heard);
+      };
+      active = { targetId, view, children };
+      this.#views.add(active);
       this.#p.activity();
       await view.start(options);
       return view;
@@ -226,6 +372,16 @@ export class Tabs {
     switch (e.method) {
       case "Target.targetCreated":
         if (info?.type !== "page") return;
+        this.#liveTargets.add(info.targetId);
+        {
+          const claimed = this.#p.userTabs?.targetCreated(info);
+          if (claimed !== undefined) {
+            for (const done of this.#awaited.get(info.targetId) ?? []) done();
+            if (typeof info.openerId === "string") this.#notifyChild(info.openerId, claimed);
+            activity();
+            return;
+          }
+        }
         if (!this.#tabs.has(info.targetId)) {
           // A tab a page opened (a link to a new window, a popup) is its opener's session's.
           const opener = typeof info.openerId === "string" ? this.ownerOf(info.openerId) : undefined;
@@ -233,29 +389,50 @@ export class Tabs {
           const tab = new Tab(this, { targetId: info.targetId, title: info.title ?? "", url: info.url ?? "", attached: Boolean(info.attached) });
           const remove = this.#p.screens?.add(tab) ?? (() => {});
           this.#tabs.set(info.targetId, { tab, remove });
-          void this.#measure(tab);
+          void this.measureTarget(info.targetId, (s) => tab.sized(s), () => tab.size().width);
           for (const done of this.#awaited.get(info.targetId) ?? []) done();
+          if (typeof info.openerId === "string") this.#notifyChild(info.openerId, tab.id);
         }
         activity();
         return;
       case "Target.targetInfoChanged": {
+        if (info && this.#p.userTabs?.targetInfoChanged(info)) {
+          activity();
+          return;
+        }
         const known = info ? this.#tabs.get(info.targetId) : undefined;
         if (known === undefined) return;
         const before = known.tab.title();
+        const beforeUrl = known.tab.info.url;
         known.tab.info = { targetId: info.targetId, title: info.title ?? "", url: info.url ?? "", attached: Boolean(info.attached) };
-        if (known.tab.title() !== before) this.#retitled(known);
+        if (known.tab.title() !== before || known.tab.info.url !== beforeUrl) this.#retitled(known);
         activity();
         return;
       }
       case "Target.targetDestroyed": {
-        const known = this.#tabs.get(e.params.targetId);
+        const targetId = e.params?.targetId;
+        if (typeof targetId === "string") this.#liveTargets.delete(targetId);
+        if (typeof targetId === "string" && this.#p.userTabs?.targetDestroyed(targetId)) {
+          this.#contexts.delete(targetId);
+          activity();
+          return;
+        }
+        const known = this.#tabs.get(targetId);
         if (known === undefined) return;
-        this.#tabs.delete(e.params.targetId);
-        this.#contexts.delete(e.params.targetId);
-        this.#p.owners?.drop(e.params.targetId);
+        this.#tabs.delete(targetId);
+        this.#contexts.delete(targetId);
+        this.#p.owners?.drop(targetId);
         known.remove();
         activity();
         return;
+      }
+    }
+  }
+
+  #notifyChild(openerTargetId: string, childScreenId: string) {
+    for (const active of this.#views) {
+      if (active.targetId === openerTargetId) {
+        for (const heard of [...active.children]) heard(childScreenId);
       }
     }
   }
@@ -270,12 +447,15 @@ export class Tabs {
   async #titles() {
     if (this.#closed) return;
     const { targetInfos } = await this.#p.cdp.send("Target.getTargets").catch(() => ({ targetInfos: [] }));
-    for (const info of targetInfos ?? []) {
+    const infos: TargetSnapshot[] = Array.isArray(targetInfos) ? targetInfos : [];
+    this.#p.userTabs?.refreshTitles(infos);
+    for (const info of infos) {
       const known = this.#tabs.get(info.targetId);
-      if (known === undefined || (info.title ?? "") === known.tab.info.title) continue;
+      if (known === undefined || ((info.title ?? "") === known.tab.info.title && (info.url ?? known.tab.info.url) === known.tab.info.url)) continue;
       const before = known.tab.title();
+      const beforeUrl = known.tab.info.url;
       known.tab.info = { ...known.tab.info, title: info.title ?? "", url: info.url ?? known.tab.info.url };
-      if (known.tab.title() !== before) this.#retitled(known);
+      if (known.tab.title() !== before || known.tab.info.url !== beforeUrl) this.#retitled(known);
     }
   }
 
@@ -296,14 +476,14 @@ export class Tabs {
 
   /// A tab's size before a view says it: its viewport (what its frames show, not its window with the toolbar),
   /// read on a connection of its own (the browser's own attaches to no tab); its window's when that cannot be read.
-  async #measure(tab: Tab) {
+  async measureTarget(targetId: string, sized: (size: { width: number; height: number }) => void, currentWidth: () => number) {
     let cdp: Cdp | null = null;
     try {
       cdp = await this.#p.connect();
-      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId: tab.info.targetId, flatten: true });
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
       const viewport = viewportOf(await cdp.send("Page.getLayoutMetrics", {}, sessionId));
       if (viewport !== null) {
-        if (tab.size().width === 0) tab.sized(viewport);
+        if (currentWidth() === 0) sized(viewport);
         return;
       }
     } catch {
@@ -311,8 +491,8 @@ export class Tabs {
       cdp?.close();
     }
     try {
-      const { bounds } = await this.#p.cdp.send("Browser.getWindowForTarget", { targetId: tab.info.targetId });
-      if (tab.size().width === 0 && bounds?.width > 0) tab.sized({ width: bounds.width, height: bounds.height });
+      const { bounds } = await this.#p.cdp.send("Browser.getWindowForTarget", { targetId });
+      if (currentWidth() === 0 && bounds?.width > 0) sized({ width: bounds.width, height: bounds.height });
     } catch {}
   }
 }

@@ -138,22 +138,42 @@ export function connectEdits(deps: ConnectEditDeps) {
       };
       const model = kept("model");
       const effort = kept("effort");
-      const profile = kept("profile");
+      const listOf = (v: unknown): string[] | null => {
+        if (!Array.isArray(v)) return null;
+        const out = [...new Set(v.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim()))];
+        return out.length > 0 ? out : null;
+      };
+      const oldProfiles = listOf(oldBind?.profiles) ?? (typeof oldBind?.profile === "string" && oldBind.profile !== "" ? [oldBind.profile] : null);
+      const rawBindProfiles = get(bind, "profiles");
+      if (rawBindProfiles !== undefined && rawBindProfiles !== null && (!Array.isArray(rawBindProfiles) || rawBindProfiles.some((x) => typeof x !== "string"))) {
+        throw new Refused(400, "profiles must be a list of profile ids or null");
+      }
+      const [profileGiven, profileValue] = field(bind, "profile");
+      const profiles = rawBindProfiles !== undefined
+        ? listOf(rawBindProfiles)
+        : profileGiven
+          ? (profileValue !== null ? [profileValue] : null)
+          : !moved
+            ? oldProfiles
+            : null;
       if (moved) {
-        const profiles = (deps.hub()?.config() ?? hubConfig(raw, deps.data)).profiles.filter((p) => p.enabled !== false && p.runtimes.includes(runtime));
-        if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
-        if (model !== null && !profiles.some((p) => runs(p, model))) throw new Error(tr(lang, "station.session.noProfileForModel", { model, runtime: runtimeTitle(runtime) }));
+        const available = (deps.hub()?.config() ?? hubConfig(raw, deps.data)).profiles.filter((p) => p.enabled !== false && p.runtimes.includes(runtime));
+        if (available.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
+        if (model !== null && !available.some((p) => runs(p, model))) throw new Error(tr(lang, "station.session.noProfileForModel", { model, runtime: runtimeTitle(runtime) }));
       }
-      // The profile its sessions keep to (null: the pool's pick), one that runs its runtime and model.
-      if (profile !== null) {
-        // (as the hub has it: running what its check found too)
-        const p = (deps.hub()?.config() ?? hubConfig(raw, deps.data)).profiles.find((p) => p.id === profile);
-        if (!p || !p.runtimes.includes(runtime)) throw new Error(tr(lang, "station.profile.cannotRun", { profile, runtime }));
-        if (p.enabled === false && (moved || get(bind, "profile") !== undefined)) throw new Error(tr(lang, "station.profile.disabled", { profile: p.name }));
-        if (model !== null && !runs(p, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: p.name, model }));
+      // The profile(s) its sessions keep to (null: the pool's pick), each running its runtime and model.
+      if (profiles !== null) {
+        const allProfiles = (deps.hub()?.config() ?? hubConfig(raw, deps.data)).profiles;
+        const explicit = moved || rawBindProfiles !== undefined || get(bind, "profile") !== undefined;
+        for (const id of profiles) {
+          const p = allProfiles.find((x) => x.id === id);
+          if (!p || !p.runtimes.includes(runtime)) throw new Error(tr(lang, "station.profile.cannotRun", { profile: id, runtime }));
+          if (p.enabled === false && explicit) throw new Error(tr(lang, "station.profile.disabled", { profile: p.name }));
+          if (model !== null && !runs(p, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: p.name, model }));
+        }
       }
-      if (effort !== null && (moved || ["model", "effort", "profile"].some((f) => get(bind, f) !== undefined))) {
-        const allowed = deps.hub()?.accounts.modelEfforts(runtime, model, profile);
+      if (effort !== null && (moved || ["model", "effort", "profile", "profiles"].some((f) => get(bind, f) !== undefined))) {
+        const allowed = deps.hub()?.accounts.modelEfforts(runtime, model, profiles);
         if (allowed !== undefined && !allowed.includes(effort)) {
           throw new Error(tr(lang, "station.profile.efforts", { runtime, efforts: allowed.join(tr(lang, "station.list.separator")) }));
         }
@@ -179,16 +199,19 @@ export function connectEdits(deps: ConnectEditDeps) {
       const b: Json = { runtime };
       if (model !== null) b.model = model;
       if (effort !== null) b.effort = effort;
-      if (profile !== null) b.profile = profile;
+      if (profiles !== null && profiles.length === 1) b.profile = profiles[0]!;
+      else if (profiles !== null && profiles.length > 1) b.profiles = profiles;
       next.bind = b;
       // (checked before it is saved: a model its session cannot run is refused for both)
       const bound = hub !== undefined && oldBind !== null && next.mode === "single-session" ? hub.store.binding(id) : null;
       if (hub !== undefined && bound !== null) {
-        const run: SessionChange = moved ? { runtime, model, effort, profile } : {};
+        const profileChange = (): Partial<SessionChange> =>
+          profiles === null ? { profile: null, profiles: null } : profiles.length === 1 ? { profile: profiles[0]!, profiles } : { profiles };
+        const run: SessionChange = moved ? { runtime, model, effort, ...profileChange() } : {};
         const differs = (key: string) => !moved && (oldBind[key] ?? null) !== (b[key] ?? null);
         if (differs("model")) run.model = model;
         if (differs("model") || differs("effort")) run.effort = effort;
-        if (differs("profile")) run.profile = profile;
+        if (!moved && JSON.stringify(oldProfiles) !== JSON.stringify(profiles)) Object.assign(run, profileChange());
         if (Object.keys(run).length > 0) {
           hub.accounts.change(bound, run, lang);
           Object.assign(follow, { session: bound, run });

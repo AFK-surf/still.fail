@@ -7,7 +7,7 @@
 ///|
 /// Over chat `r`'s pane `pane` (its draft `draft`; `room`, what the composer keeps at its foot), after its composer:
 /// what is picked in its messages, what is carried over it.
-fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : Int, room : Double) -> Unit {
+fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, room : Double) -> Unit {
   @sfbase.pick_layer(c, list_key(r), bar_foot, room, @sfbase.mouse_picks(), fn(author, words, ts, role) {
     c.tell("pick/quote", fn() {
       writing_quote(src, writing(src, draft), {
@@ -82,17 +82,19 @@ fn composer_focus(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
 }
 
 ///|
-/// Esc in the open chat, after the frame's (`escape`: pressed, not taken by what the frame opened): to ⌘F's bar, then
-/// what is picked, then the side panel's tabs all closed (keymap.ts panel.close). Whether it took it.
-fn chat_escape(c : @ui.Ctx, src : Source, escape : Bool) -> Bool {
-  guard escape && app.nav.top() is Chat(r) else { return false }
+/// Esc in the open chat, after the frame's (not taken by what the frame opened), at its moment: to ⌘F's bar (the
+/// keyboard let go: `blur`), then what is picked, then the side panel's tabs all closed (keymap.ts panel.close), but
+/// where a file in the viewer is in front (sfbase's viewer_tab.mbt). Whether it took it.
+fn chat_escape(src : Source, blur : () -> Unit) -> Bool {
+  guard app.nav.top() is Chat(r) else { return false }
   if find_chat() != "" {
     find_forget()
-    c.blur()
+    blur()
   } else if @sfbase.pk.ts != "" {
     @sfbase.pick_clear()
-  } else if side_now(src, r).0.length() > 0 {
-    c.tell("chat/panel-close", fn() { side_change(src, r, "clear", None) })
+  } else if side_now(src, r).0.length() > 0 && @sfbase.view_tab_file(side_now(src, r).1) is None {
+    // (a file in the viewer in front stays: Escape is the whole window's preview's way out, not its tab's)
+    side_change(src, r, "clear", None)
   } else {
     return false
   }

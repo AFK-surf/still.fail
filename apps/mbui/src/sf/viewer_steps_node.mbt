@@ -10,6 +10,7 @@
 /// is at the moment that changes (at once with motion reduced), as far in as `shown` says of the node as it is drawn
 /// (the viewer's fade); taking a press while any of it shows. Pressed (its press let go on it), `go` (-1 the one before,
 /// 1 the one after) at that moment. Their tips in `tips`. The row's node.
+#callsite(autofill(loc))
 pub fn viewer_steps_node(
   parent : @view.View,
   before : () -> Bool,
@@ -19,8 +20,9 @@ pub fn viewer_steps_node(
   small : () -> Bool,
   go : (Int) -> Unit,
   tips : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(row) {
+  parent.box(made_for=loc, fn(row) {
     row
     .over(Is(true))
     .row(Is(true))
@@ -48,6 +50,7 @@ pub fn viewer_steps_node(
 
 ///|
 /// One way, in `b` (its slot, all of it): see viewer_steps_node.
+#callsite(autofill(loc))
 fn step_disc(
   b : @view.View,
   dir : Int,
@@ -58,6 +61,7 @@ fn step_disc(
   disc : () -> Double,
   go : (Int) -> Unit,
   tips : TipLayer,
+  loc~ : SourceLoc,
 ) -> Unit {
   // (where the hand is on it, as a box's hovered look has it: its ground)
   let hot = fn() {
@@ -96,7 +100,7 @@ fn step_disc(
   .on_press(fn() { go(dir) })
   |> ignore
   // (its chevron in its middle)
-  b.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+  b.box(made_for=loc, fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
   b.box(fn(i) {
     i
     .width(Is(Some(viewer_step_icon)))

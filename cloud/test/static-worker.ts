@@ -1,16 +1,16 @@
-// Only the test bundler imports this entry: a stand-in for the static Workers (ember-web, ember-admin, ember-preview),
+// Only the test bundler imports this entry: a stand-in for the static Workers (stillfail-web, stillfail-admin, stillfail-preview),
 // as Cloudflare serves their assets — by host (each on its new name and its old one), from its own
 // directory (ASSETS gets /<site>/<path>): the file (the web app's pages also at their address without .html), or the
 // site's index.html for any other path (the web app and the console), or its 404.html (the preview host). Only GET and
-// HEAD. The web app's old host redirects its pages to the new one first, as ember-web's own code does (src/web.ts). The
-// test channel's host (BETA_ORIGIN, ember-web-beta) is the web app's files through the same code. The share host
+// HEAD. The web app's old host redirects its pages to the new one first, as stillfail-web's own code does (src/web.ts). The
+// test channel's host (BETA_ORIGIN, stillfail-web-beta) is the web app's files through the same code. The share host
 // (SHARE_ORIGIN, stillfail-share) answers with the headers its _headers says (src/share.ts), read as Cloudflare reads
 // it: a path (or one ending in *), then its headers, indented.
 import { serveWeb } from "../src/web.ts";
 type StaticEnv = { ASSETS: Fetcher; PUBLIC_ORIGIN: string; ADMIN_ORIGIN: string; PREVIEW_ORIGIN: string; PUBLIC_ORIGIN_ALIASES: string; ADMIN_ORIGIN_ALIASES: string; PREVIEW_ORIGIN_ALIASES: string; BETA_ORIGIN: string };
 type Site = "web" | "admin" | "preview";
 
-const FRAME = /^\/_(stillfail|ember)\/frame$/, WORKER = /^\/_(stillfail|ember)\/sw\.js$/;
+const FRAME = /^\/_stillfail\/frame$/, WORKER = /^\/_stillfail\/sw\.js$/;
 
 export default {
   async fetch(request: Request, env: StaticEnv): Promise<Response> {

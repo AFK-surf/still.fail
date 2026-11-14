@@ -61,7 +61,7 @@ test "the bar: holding a place hides 令 or ＋, moving keeps it hidden, and let
     t.frame()
     t.run_for(held_frame_ms)
     assert_eq(disc_alpha(), 0L, msg="\{action} held")
-    t.move(x + 12.0, y)
+    t.move_to(x + 12.0, y)
     t.run_for(moved_frame_ms)
     assert_eq(disc_alpha(), 0L, msg="\{action} moved")
     t.release(x + 12.0, y)
@@ -145,7 +145,7 @@ test "the panel drawn up by a finger: the bar and the panel drawn up clear of th
   let rest = foot()
   t.press_at(xs[0], y)
   for i in 1..=20 {
-    t.move(xs[0], y - 64.0 * i.to_double() / 20.0)
+    t.move_to(xs[0], y - 64.0 * i.to_double() / 20.0)
   }
   t.run_for(@ui.move_most_ms)
   let held = foot()
@@ -194,20 +194,20 @@ test "the bar: hidden under a page pushed, back as it comes back" {
 test "the workspaces' sheet: drawn up to 94%, dragged down past 30% it closes" {
   let t = tester("home")
   t.tap_text("星火工作室")
-  sheet_rested(t, "sf-present")
+  presented_rested(t)
   assert_true((t.get(@ui.Role::Dialog).rect.3 - 844.0 * 0.7).abs() < 1.0)
   let (x, y) = t.find("切换 workspace").unwrap()
   t.drag(x, y, x, y - 200.0)
-  sheet_rested(t, "sf-present")
+  presented_rested(t)
   assert_true((t.get(@ui.Role::Dialog).rect.3 - 844.0 * 0.94).abs() < 1.0)
   // a tap on the grabber: half
   let (x, y) = t.find("切换 workspace").unwrap()
   t.tap(x, y - 30.0)
-  sheet_rested(t, "sf-present")
+  presented_rested(t)
   assert_true((t.get(@ui.Role::Dialog).rect.3 - 844.0 * 0.55).abs() < 1.0)
   let (x, y) = t.find("切换 workspace").unwrap()
   t.drag(x, y, x, y + 300.0)
-  sheet_rested(t, "sf-present")
+  presented_rested(t)
   assert_true(t.find("切换 workspace") is None)
   assert_true(!sheet_open())
 }
@@ -219,10 +219,21 @@ test "a sheet takes the drags on it: the list under it does not scroll" {
   let row = fn() { t.locate("=把旧的截图都换成新的").map(fn(p) { p.1 }) }
   let before = row()
   t.tap_text("星火工作室")
-  sheet_rested(t, "sf-present")
+  presented_rested(t)
   t.drag(195.0, 700.0, 195.0, 400.0)
   assert_eq(row(), before)
   assert_true(@sf.presenting())
+}
+
+///|
+/// Frames on to where what the presenters hold up as a sheet said it is at rest, whichever kind it is drawn as
+/// (@sf.presented_rest: its motions' ends, from their causes' moments and lengths).
+fn presented_rested(t : @ui.Tester) -> Unit {
+  t.draw()
+  let e = @sf.presented_rest()
+  if e > t.time() && e < 1.0e300 {
+    t.run_for(e - t.time())
+  }
 }
 
 ///|
@@ -275,7 +286,7 @@ let kbd_h : Double = 336.0
 /// On the frames' clock to where the sheet rests, as it says (@kit.sheet_rest: its springs and its scrim's fade):
 /// risen from below, a row is tapped where it is.
 fn run_to_sheet_rest(t : @ui.Tester) -> Unit raise {
-  let end = @kit.sheet_rest("sf-present")
+  let end = @sf.presented_rest()
   if end < 0.0 || end > 1.0e300 {
     fail("the sheet does not move (its rest: \{end})")
   }
@@ -294,7 +305,7 @@ test "a new chat: its station picked in the sheet, its model in the model's pane
   let (sx, sy) = t.find_last("Willow").unwrap()
   t.tap(sx, sy)
   assert_true(t.find("选择运行的 station") is Some(_))
-  run_to_sheet_rest(t)
+  presented_rested(t)
   let (mx, my) = t.find_last("Maple").unwrap()
   t.tap(mx, my)
   assert_true(!@sf.presented_open_of(@sf.last_presented()))
@@ -452,19 +463,19 @@ test "the bar drawn up clear of a finger as long as it has it: drawn up, further
   }
   t.press_at(xs[0], y)
   for i in 1..=20 {
-    t.move(xs[0], y - 64.0 * i.to_double() / 20.0)
+    t.move_to(xs[0], y - 64.0 * i.to_double() / 20.0)
   }
   let up = raised()
   for i in 1..=30 {
-    t.move(xs[0], y - 64.0 - 400.0 * i.to_double() / 30.0)
+    t.move_to(xs[0], y - 64.0 - 400.0 * i.to_double() / 30.0)
   }
   let further = raised()
   for i in 1..=30 {
-    t.move(xs[0], y - 464.0 + 464.0 * i.to_double() / 30.0)
+    t.move_to(xs[0], y - 464.0 + 464.0 * i.to_double() / 30.0)
   }
   let back = raised()
   for i in 1..=20 {
-    t.move(xs[0] + (xs[2] - xs[0]) * i.to_double() / 20.0, y)
+    t.move_to(xs[0] + (xs[2] - xs[0]) * i.to_double() / 20.0, y)
   }
   let along = raised()
   t.release(xs[2], y)
@@ -472,7 +483,7 @@ test "the bar drawn up clear of a finger as long as it has it: drawn up, further
   // a finger sliding along the bar alone, never drawing the panel up
   t.press_at(xs[0], y)
   for i in 1..=20 {
-    t.move(xs[0] + (xs[1] - xs[0]) * i.to_double() / 20.0, y)
+    t.move_to(xs[0] + (xs[1] - xs[0]) * i.to_double() / 20.0, y)
   }
   let sliding = raised()
   t.release(xs[1], y)
@@ -495,7 +506,7 @@ test "the bar held: more room above the finger in a taller window, bounded by th
     t.press_at(xs[0], y)
     if open {
       for i in 1..=20 {
-        t.move(xs[0], y - 64.0 * i.to_double() / 20.0)
+        t.move_to(xs[0], y - 64.0 * i.to_double() / 20.0)
       }
     } else {
       t.run_for(bar_hold_ms)
@@ -516,4 +527,200 @@ test "the bar held: more room above the finger in a taller window, bounded by th
   let (limited, top) = measure(180.0, true)
   assert_true(limited > 0.0 && limited < short)
   assert_true(top >= 7.5, msg="panel top: \{top}")
+}
+
+///|
+/// The three screens a new chat's stations open on: a phone's window with touch (a sheet from its foot), with keyboard
+/// and mouse, and a wide window with keyboard and mouse (a panel beside its station's control).
+// kept across runs: a value (no field of it changes)
+let ns_screens : Array[(Int, Bool)] = [(2, false), (0, false), (0, true)]
+
+///|
+/// A new chat over the fixture's workspace on a phone's window (390 by 844) started as `platform`, `wide` 1200 by 800;
+/// its station's control (Willow) pressed, its stations open and at rest. The calls made go in
+/// `calls`.
+fn ns_open(calls : Array[String], platform~ : Int, wide~ : Bool) -> @ui.Tester {
+  new_run()
+  @sf.presenters_reset()
+  let base = fixture("newchat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push(name + " " + params.stringify())
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
+  if wide {
+    t.resize(1200.0, 800.0)
+  }
+  open_mode("newchat")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  guard t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "Willow" && !s.hidden }).last() is Some(b) else {
+    @halt.saying("no Willow to press")
+  }
+  t.tap(b.rect.0 + b.rect.2 / 2.0, b.rect.1 + b.rect.3 / 2.0)
+  presented_rested(t)
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+/// Whether `words` are drawn (seen at all), the last of them where they are.
+fn ns_seen(t : @ui.Tester, words : String) -> (Double, Double, Double, Double)? {
+  t.words().filter(fn(w) { w.0 == words && w.5 > 0.0 }).last().map(fn(w) { (w.1, w.2, w.3, w.4) })
+}
+
+///|
+test "a new chat's stations on every screen: a row each under its title, Willow checked, each's state on its name's line and what is left of it and how it is reached under it; nothing of it has the focus as it opens, no input method" {
+  for s in ns_screens {
+    let (platform, wide) = s
+    let at = "platform \{platform} wide \{wide}"
+    let t = ns_open([], platform~, wide~)
+    let rows = t.semantics().filter(fn(n) { n.role == @ui.Role::Button && (n.label == "Willow" || n.label == "Maple") && !n.hidden }).filter(fn(n) { n.check is Some(_) })
+    assert_eq(rows.map(fn(n) { (n.label, n.check) }), [("Willow", Some(@ui.Check::On)), ("Maple", Some(@ui.Check::Off))], msg=at)
+    assert_false(t.focused() is Some(f) && rows.iter().any(fn(r) { r.label == f.label && r.rect == f.rect }), msg="\{at}: \{Repr(t.focused())}")
+    assert_false(t.ime().0, msg="\{at}: the input method up")
+    guard ns_seen(t, "选择运行的 station") is Some(title) else { fail("\{at}: no title") }
+    assert_true(rows[0].rect.1 > title.1 && rows[1].rect.1 > rows[0].rect.1 + rows[0].rect.3 - 0.5, msg="\{at}: \{Repr(rows.map(fn(r) { r.rect }))}")
+    // (Willow: 2 at work on its name's line, its figures and 直连 · 38 ms under it; Maple: 未连接)
+    for w in ["2 个运行中", "直连 · 38 ms", "未连接", "CPU", "内存", "磁盘"] {
+      assert_true(ns_seen(t, w) is Some(_), msg="\{at}: \{w}")
+    }
+    guard (ns_seen(t, "2 个运行中"), ns_seen(t, "直连 · 38 ms")) is (Some(busy), Some(net)) else { fail(at) }
+    assert_true(busy.1 < rows[0].rect.1 + 30.0 && net.1 > busy.1 && net.1 < rows[1].rect.1, msg="\{at}: \{Repr(busy)} \{Repr(net)}")
+  }
+}
+
+///|
+test "a new chat's stations on every screen, Maple pressed: picked (newChat.pick, once), closed, on its way out as high as it was, its rows and Willow's check shown all the way" {
+  for s in ns_screens {
+    let (platform, wide) = s
+    let at = "platform \{platform} wide \{wide}"
+    let calls : Array[String] = []
+    let t = ns_open(calls, platform~, wide~)
+    let size = fn() {
+      t.semantics().iter().find_first(fn(s) { s.role == @ui.Role::Dialog }).map(fn(s) { (s.rect.2, s.rect.3) })
+    }
+    guard size() is Some((was_w, was)) else { fail("\{at}: no panel") }
+    let drawn = fn(w : String) { t.words().iter().any(fn(x) { x.0 == w && x.5 > 0.0 }) }
+    guard t.semantics().filter(fn(n) { n.role == @ui.Role::Button && n.label == "Maple" && n.check is Some(_) && !n.hidden }).last() is Some(m) else {
+      fail("\{at}: no Maple")
+    }
+    let before = calls.length()
+    t.tap(m.rect.0 + m.rect.2 / 2.0, m.rect.1 + m.rect.3 / 2.0)
+    let mut n = 0
+    while @sf.presenter_visible() && n < 120 {
+      match size() {
+        Some(s) => {
+          let h = s.1 * was_w / s.0
+          assert_true((h - was).abs() <= 0.01, msg="\{at}: frame \{n} on its way out: \{h} high, \{was} before")
+        }
+        None => ()
+      }
+      for w in ["2 个运行中", "未连接", "直连 · 38 ms"] {
+        assert_true(drawn(w) || !drawn("选择运行的 station"), msg="\{at}: frame \{n} on its way out: \{w} not drawn")
+      }
+      t.frame()
+      n += 1
+    }
+    assert_false(@sf.presenter_visible(), msg="\{at}: gone")
+    assert_eq(calls[before:].to_owned().filter(fn(c) { c.has_prefix("newChat.pick") }), ["newChat.pick {\"station\":\"st2\",\"scope\":\"ws1\"}"], msg=at)
+  }
+}
+
+///|
+/// What is wrong with each station's row of where a new chat runs as `t` shows it (`at` says where): its name's line as
+/// high as its words, so the row's padding is as much over its name as under its last line (the old panel's), and its
+/// machine's chips in the middle of their line, between the name's foot and the line under them, their words inside
+/// them; "" where nothing is.
+fn ns_rows_wrong(t : @ui.Tester, at : String) -> String {
+  let all = t.words().filter(fn(w) { w.5 > 0.0 })
+  let title = @sf.t("android-chat.new.station.pick")
+  // (the panel's own words, painted after its title over the page's controls underneath)
+  let words = match all.search_by(fn(w) { w.0 == title }) {
+    Some(i) => all[i + 1:].to_owned()
+    None => all
+  }
+  let wrong : Array[String] = []
+  for name in ["Willow", "Maple"] {
+    guard t.semantics().filter(fn(n) { n.role == @ui.Role::Button && n.label == name && n.check is Some(_) && !n.hidden }).last() is Some(r) else {
+      wrong.push("\{at}: no row of \{name}")
+      continue
+    }
+    let (_, ry, _, rh) = r.rect
+    let inside = words.filter(fn(w) { w.2 >= ry - 0.01 && w.2 + w.4 <= ry + rh + 0.01 })
+    guard inside.iter().find_first(fn(w) { w.0 == name }) is Some(n) else {
+      wrong.push("\{at}: no \{name} in its row")
+      continue
+    }
+    let foot = n.2 + n.4
+    let under = inside.filter(fn(w) { w.2 > n.2 + 0.5 })
+    guard under.iter().find_first(fn(w) { w.0 == "CPU" }) is Some(chip) else {
+      wrong.push("\{at}: no chips under \{name}")
+      continue
+    }
+    let last = under.fold(init=chip, fn(a, w) { if w.2 > a.2 { w } else { a } })
+    let over_name = n.2 - ry
+    let under_last = ry + rh - (last.2 + last.4)
+    if (over_name - under_last).abs() > 0.01 {
+      wrong.push("\{at}: \{name}'s row \{over_name} over its name, \{under_last} under 「\{last.0}」")
+    }
+    let (above, below) = (chip.2 - foot, last.2 - (chip.2 + chip.4))
+    if above < -0.01 || (above - below).abs() > 0.01 {
+      wrong.push("\{at}: \{name}'s chips \{above} under its name's foot, \{below} over 「\{last.0}」")
+    }
+    // (its chip: the ground under its words, no taller than a line, the one round them where any is)
+    let ground = t
+      .drawn_rects()
+      .filter(fn(g) { g.3 < 30.0 && g.0 <= chip.1 && chip.1 < g.0 + g.2 && g.1 <= chip.2 + chip.4 && chip.2 < g.1 + g.3 })
+    if ground.is_empty() || ground.iter().all(fn(g) { chip.2 < g.1 - 0.01 || chip.2 + chip.4 > g.1 + g.3 + 0.01 }) {
+      wrong.push("\{at}: \{name}'s 「CPU」 \{chip.2}..\{chip.2 + chip.4} outside its chip (\{Repr(ground)})")
+    }
+  }
+  wrong.join("\n")
+}
+
+///|
+test "where a new chat runs, on every screen at the default size of words and on a phone at 1.3: each station's name's line as high as its words, its chips in the middle of their line and their words inside them" {
+  for s in ns_screens {
+    let (platform, wide) = s
+    let calls : Array[String] = []
+    let t = ns_open(calls, platform~, wide~)
+    assert_eq(ns_rows_wrong(t, "platform \{platform} wide \{wide}"), "")
+  }
+  guard corner_windows.search_by(w => w.0 == "phone") is Some(i) else { fail("no phone window in corner_windows") }
+  for lang in ["zh", "en"] {
+    let t = screen_in("newchat-station", corner_windows[i], lang, font_scale=1.3)
+    assert_eq(ns_rows_wrong(t, "phone \{lang} at 1.3"), "")
+  }
+}
+
+///|
+test "wide: a new chat's stations under a mouse have concentric corners in the panel and stay lit over a row's meter chips" {
+  let t = ns_open([], platform=0, wide=true)
+  t.host_says_finger(Some(false))
+  let rows = t.semantics().filter(fn(n) { n.role == @ui.Role::Button && (n.label == "Willow" || n.label == "Maple") && n.check is Some(_) && !n.hidden })
+  guard rows.length() == 2 else { fail("expected Willow and Maple rows") }
+  let same_box = fn(b : @ui.Laid, r : (Double, Double, Double, Double)) {
+    (b.x - r.0).abs() < 0.5 && (b.y - r.1).abs() < 0.5 && (b.w - r.2).abs() < 0.5 && (b.h - r.3).abs() < 0.5 && b.bg != 0L
+  }
+  let (wx, wy, ww, wh) = rows[0].rect
+  let (mx, my, mw, mh) = rows[1].rect
+  // Pointer on the bottom row (Maple): its hover ground is concentric with the small panel's corners.
+  t.move_to(mx + mw / 2.0, my + mh / 2.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  let lit_maple = t.boxes_held().filter(fn(b) { same_box(b, (mx, my, mw, mh)) })
+  assert_true(lit_maple.length() == 1 && (lit_maple[0].radius - @sf.row_corner).abs() < 0.5, msg="\{lit_maple.length()} maple lit")
+  // Pointer moved onto the CPU meter chip inside Willow: Willow's own hover ground stays lit across the whole row.
+  guard t.words().iter().find_first(fn(w) { w.0 == "CPU" && w.5 > 0.0 && w.2 >= wy && w.2 + w.4 <= wy + wh }) is Some((_, cx, cy, cw, ch, _)) else {
+    fail("no CPU chip in Willow")
+  }
+  t.move_to(cx + cw / 2.0, cy + ch / 2.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  let lit_willow = t.boxes_held().filter(fn(b) { same_box(b, (wx, wy, ww, wh)) })
+  assert_true(lit_willow.length() == 1 && (lit_willow[0].radius - @sf.row_corner).abs() < 0.5, msg="\{lit_willow.length()} willow lit")
 }

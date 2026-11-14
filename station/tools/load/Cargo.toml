@@ -18,9 +18,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"
 [workspace]
 
 [patch.crates-io]
-noq-proto = { git = "https://github.com/zzj3720/noq", rev = "d578f818ad7580c49691f26d5ccf8cc3afcc026a" }
+noq-proto = { git = "https://github.com/zzj3720/noq", rev = "76344e6eab7ae651ce524e4f329a2f283f69d7ab" }
 swarm-discovery = { path = "../../../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../../../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../../../vendor/noq-udp" }
-iroh = { git = "https://github.com/zzj3720/iroh", rev = "4607ae173cc50fcbc59ea3f72b96c0a0c9120df5" }
-iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "4607ae173cc50fcbc59ea3f72b96c0a0c9120df5" }
+iroh = { git = "https://github.com/zzj3720/iroh", rev = "cbb88bc4d070a4de6999799aada2b5f3dc5680f4" }
+iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "cbb88bc4d070a4de6999799aada2b5f3dc5680f4" }

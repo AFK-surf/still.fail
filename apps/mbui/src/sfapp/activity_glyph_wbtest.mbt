@@ -25,23 +25,46 @@ fn activity_glyph_alphas(t : @ui.Tester, words : String) -> Array[Int64] {
 }
 
 ///|
-test "activity: the first words of a newly seen turn arrive a glyph at a time" {
-  let t = linger_core()
-  t.run_for(fix_deliver_ms)
-  let at = turns_of("ws1/st1\u{1}s-c1").start_of("act:s-c1")
-  assert_true(at >= 0.0 && at < @double.infinity, msg="\{at}")
-  t.run_for(dmax(at - t.time(), 0.0) + @sfbase.glyph_line_in_ms / 2.0)
-  let alphas = activity_glyph_alphas(t, tr("android-chat.chat.working"))
-  assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{alphas}")
-  t.run_for(@ui.move_most_ms + @sfbase.glyph_line_in_ms)
-  let alphas = activity_glyph_alphas(t, tr("android-chat.chat.working"))
-  assert_true(alphas.length() > 1 && alphas.iter().all(fn(a) { a == alphas[0] }), msg="\{alphas}")
+/// How far apart the moments are that the working line is looked for at as its row comes in: a quarter of its words'
+/// way in.
+let activity_look_ms : Double = @sfbase.glyph_line_in_ms / 4.0
+
+///|
+/// How long after the turn is sent its working line is looked for: its flight, the list's way, its words' way in.
+let activity_comes_within_ms : Double = @sfbase.flight_ms + @ui.move_most_ms + @sfbase.glyph_line_in_ms
+
+///|
+/// The ink alphas of the working line's glyphs (activity_glyph_alphas) at the first of the moments a step apart
+/// (activity_look_ms, up to activity_comes_within_ms from now) that more than one of them is drawn and any is seen: as
+/// its row comes into the list, on whichever page the chat is made; none where it never is.
+fn activity_first_alphas(t : @ui.Tester, words : String) -> Array[Int64] {
+  let steps = (activity_comes_within_ms / activity_look_ms).ceil().to_int()
+  for _ in 0..<steps {
+    t.run_for(activity_look_ms)
+    let alphas = activity_glyph_alphas(t, words)
+    if alphas.length() > 1 && alphas.iter().any(fn(a) { a > 0L }) {
+      return alphas
+    }
+  }
+  []
 }
 
 ///|
-test "activity: a row reserved for later reveals its words in its own turn" {
+test "activity: the first words of a newly seen turn arrive a glyph at a time" {
+  let t = linger_core()
+  t.run_for(fix_deliver_ms)
+  // (as the line is first seen: some of its glyphs further in than others)
+  let alphas = activity_first_alphas(t, tr("android-chat.chat.working"))
+  assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{Repr(alphas)}")
+  t.run_for(@ui.move_most_ms + @sfbase.glyph_line_in_ms)
+  let alphas = activity_glyph_alphas(t, tr("android-chat.chat.working"))
+  assert_true(alphas.length() > 1 && alphas.iter().all(fn(a) { a == alphas[0] }), msg="\{Repr(alphas)}")
+}
+
+///|
+test "activity: a row whose coming is set for later reveals its words from then" {
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
@@ -52,13 +75,14 @@ test "activity: a row reserved for later reveals its words in its own turn" {
   tap_send(t)
   fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
-  // The row itself follows the flight's landing; the chat's turn and the row's reserved time are distinct.
-  let at = reading_of("ws1/st1\u{1}s-c1").rows.came("act:s-c1").unwrap()
-  assert_true(at > t.time(), msg="its turn is reserved for later: \{at}, now \{t.time()}")
+  // (its row comes later than now, where the words sent land: none of its words yet)
   let words = tr("android-chat.chat.working")
   assert_eq(activity_glyphs_shown(t, words), 0)
-  t.run_for(at - t.time() + @ui.move_most_ms + @sfbase.glyph_line_in_ms)
-  assert_true(activity_glyphs_shown(t, words) > 0, msg="the activity's words come in during its turn")
+  // as it comes, its words coming in from then: some of its glyphs further in than others
+  let alphas = activity_first_alphas(t, words)
+  assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{Repr(alphas)}")
+  t.run_for(@ui.move_most_ms + @sfbase.glyph_line_in_ms)
+  assert_true(activity_glyphs_shown(t, words) > 0, msg="the activity's words come in once it has come")
   emit_restore()
 }
 
@@ -107,10 +131,10 @@ test "activity: a step changes glyphs individually before the next step is whole
   // The next step is first held long enough to exclude one that vanishes during its own arrival.
   t.run_for(@sfbase.glyph_change_in_ms + @sfbase.glyph_change_in_ms / 2.0)
   let alphas = activity_glyph_alphas(t, activity_next_words)
-  assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{alphas}")
+  assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{Repr(alphas)}")
   t.run_for(@ui.move_most_ms + @sfbase.glyph_change_in_ms)
   let final_alphas = activity_glyph_alphas(t, activity_next_words)
-  assert_true(final_alphas.length() > 1 && final_alphas.iter().all(fn(a) { a == final_alphas[0] }), msg="\{final_alphas}")
+  assert_true(final_alphas.length() > 1 && final_alphas.iter().all(fn(a) { a == final_alphas[0] }), msg="\{Repr(final_alphas)}")
 }
 
 ///|
@@ -140,7 +164,7 @@ fn activity_glyphs_do_not_collide(before : String, next : String) -> Unit raise 
       for j in (i + 1)..<glyphs.length() {
         let a = glyphs[i]
         let b = glyphs[j]
-        assert_true(a.2 <= b.0 + 0.01 || b.2 <= a.0 + 0.01 || a.3 <= b.1 + 0.01 || b.3 <= a.1 + 0.01, msg="\{before} → \{next} at \{t.time()}: \{a} / \{b}")
+        assert_true(a.2 <= b.0 + 0.01 || b.2 <= a.0 + 0.01 || a.3 <= b.1 + 0.01 || b.3 <= a.1 + 0.01, msg="\{before} → \{next} at \{t.time()}: \{Repr(a)} / \{Repr(b)}")
       }
     }
   }

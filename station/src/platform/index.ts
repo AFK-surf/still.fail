@@ -28,16 +28,22 @@ export function treeOf(table: readonly ProcessInfo[]): { byPid: Map<number, Proc
   return { byPid, children };
 }
 
+/// What the host page says of the machine besides its CPUs' time (api/host.ts `hostInfo`).
+export type HostSample = {
+  memory: { totalBytes: number; usedBytes: number; swapUsedBytes: number | null; known?: boolean };
+  cpuModel: string;
+  uptimeSec: number;
+  osName: string;
+  /// This process's memory: its footprint on macOS, resident memory elsewhere.
+  ownRss: number;
+};
+
 /// How the host page says the machine (GET /host): memory, CPU, uptime, the OS.
 export type Host = {
   /// CPU time since boot, all CPUs together: (busy, total); none when it cannot be read.
   cpuTicks(): [busy: number, total: number] | null;
-  memory(): { totalBytes: number; usedBytes: number; swapUsedBytes: number | null; known?: boolean };
-  cpuModel(): string;
-  uptimeSec(): number;
-  osName(): string;
-  /// This process's memory: its footprint on macOS, resident memory elsewhere.
-  ownRss(): number;
+  /// The rest, read with commands and files not waited on: it is read on the main thread (api/host.ts).
+  sample(): Promise<HostSample>;
 };
 
 /// A Node release's build for one machine, as nodejs.org has it: `dist` (node-v<version>-<os>-<arch>), its `archive` in
@@ -51,6 +57,8 @@ export type Platform = {
   os: string;
   /// How the runtimes name a build's OS (darwin, linux, win32); none for another.
   buildOs: string | null;
+  /// Whether a file copied on a disk of this machine can be a clone of it, taking no room of its own (APFS: macOS).
+  clonesFiles: boolean;
 
   // Commands and their environment.
   /// An executable's file name (`stillfail-runner` → `stillfail-runner.exe` on Windows).
@@ -90,7 +98,7 @@ export type Platform = {
   /// Whether any process of the group is there.
   groupAlive(pgid: number): boolean;
   /// When `pid` started (ms), none when it is not running or cannot be read.
-  startTimeOf(pid: number): number | null;
+  startTimeOf(pid: number): Promise<number | null>;
   /// Whether a group lives on without its leader (a Unix group while any member does; a Windows job dies with it).
   groupOutlivesLeader: boolean;
   /// Memory of each group (kB).
@@ -148,12 +156,12 @@ export type Platform = {
   /// Whether the station says `leave` before letting go of a runner (a pipe has no closing of one side).
   runnerSaysLeave: boolean;
 
-  // The machine (read/host.ts).
+  // The machine (api/host.ts).
   host: Host;
 
   // The launcher (native/launcher), as the CLI and the station's own update reach it.
   /// Whether process `pid` is a station's launcher (pids get reused).
-  isLauncher(pid: number): boolean;
+  isLauncher(pid: number): Promise<boolean>;
   /// Asks the launcher `pid` to hand over to a new process, to drain, or to read the channel again: Unix's SIGUSR2,
   /// SIGUSR1, SIGHUP; on Windows, which has no signals, a line on its own pipe. Throws when it is not reached.
   askLauncher(pid: number, op: "handover" | "drain" | "hup"): Promise<void>;
@@ -163,6 +171,15 @@ export type Platform = {
   claudeInstall: How;
   /// How the Devin CLI is installed where it is not (its own installer, into ~/.local/bin).
   devinInstall: How;
+  /// How the Antigravity CLI is installed where it is not (its own installer: its binary into ~/.local/bin on macOS and
+  /// Linux, %LOCALAPPDATA%\\agy\\bin on Windows; it writes no shell profile).
+  agyInstall: How;
+  /// Which of the Antigravity CLI's builds that installer downloads here, as its manifests name it (darwin_arm64,
+  /// linux_amd64, windows_amd64…); null for one not measured here (a musl Linux's, Termux's, another architecture's).
+  agyBuild: () => Promise<string | null>;
+  /// Where that installer downloads build `url` before it checks it: ~/.cache/antigravity/staging (agy.tar.gz, or agy
+  /// where it is not a tarball), %LOCALAPPDATA%\antigravity\staging\agy.exe on Windows.
+  agyStaging: (env: Env, url: string) => string | null;
   /// The kind of the installer a release carries for this machine: bin/install.<lang>.<this> (scripts/installers.ts).
   installerExt: "sh" | "ps1";
   /// Starts `script` (the installer the running release carries, scripts/release-sign.ts) apart from the station, run

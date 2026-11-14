@@ -1,15 +1,17 @@
 // The model catalog (accounts/catalog.ts) as still.fail cloud says it, kept up to date by the models part
 // (models/module.ts): what the prices and the image check read, kept across a restart, asked for again with its ETag.
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { facts, learn } from "../src/accounts/catalog.ts";
 import { seesImages } from "../src/accounts/models.ts";
+import { Readers } from "../src/read/pool.ts";
 import { price, priceTable } from "../src/read/usage.ts";
 import { ModelCatalog } from "../src/models/module.ts";
 import { modelMakers } from "../src/api/overview.ts";
+import { Store } from "../src/store/store.ts";
 
 const MODELS = {
   "claude-haiku-5-5": { name: "Claude Haiku 5.5", input: ["text", "image"], cost: { input: 0.1, output: 0.5, cacheRead: 0.005 } },
@@ -106,5 +108,94 @@ test("the catalog is kept across a restart and asked for again with its ETag, by
     assert.equal(asked.length, 4);
   } finally {
     learn(null);
+  }
+});
+
+test("models a catalog names that the one before did not are told, none the first time", async () => {
+  const file = join(mkdtempSync(join(tmpdir(), "model-catalog-")), "model-catalog.json");
+  let models: Record<string, unknown> = MODELS;
+  let n = 0;
+  const get = async () => new Response(JSON.stringify({ models }), { headers: { etag: `"${++n}"` } });
+  const told: string[][] = [];
+  try {
+    const catalog = new ModelCatalog(file, () => "https://cloud.test", () => 0, get, (keys) => told.push(keys));
+    await catalog.refresh();
+    assert.deepEqual(told, []);
+    models = { ...MODELS, "claude-fable-5-2": { maker: "anthropic" } };
+    await catalog.refresh();
+    await catalog.refresh();
+    assert.deepEqual(told, [["claude-fable-5-2"]]);
+  } finally {
+    learn(null);
+  }
+});
+
+test("tiered Antigravity model ids fall back to their base model in facts, price and priceTable", () => {
+  try {
+    // Without the catalog, the station's own table still prices tiered ids.
+    assert.equal(price("claude-opus-5-5-medium")?.input, 4);
+    assert.equal(price("anthropic/claude-opus-5-5-medium[1m]")?.input, 4);
+
+    learn({
+      "gemini-4-hydrogen": { name: "Gemini 4 Hydrogen", input: ["text", "image"], cost: { input: 1.5, output: 7.5, cacheRead: 0.075 } },
+      "custom-model": { cost: { input: 1, output: 2 } },
+      "custom-model-high": { cost: { input: 3, output: 6 } },
+    });
+    assert.equal(facts("gemini-4-hydrogen-high")?.name, "Gemini 4 Hydrogen");
+    assert.deepEqual(price("google/gemini-4-hydrogen-high"), { input: 1.5, output: 7.5, cacheRead: 0.075 });
+    // An exact catalog entry ending with a tier word wins over stripping.
+    assert.deepEqual(price("custom-model-high"), { input: 3, output: 6, cacheRead: 3 });
+
+    const rows = (priceTable("en", ["gemini-4-hydrogen-high", "claude-opus-5-5-medium"]) as any).rows;
+    assert.ok(rows.some((r: any) => r.model === "gemini-4-hydrogen-high" && r.input === 1.5 && r.cacheRead === 0.075 && r.output === 7.5));
+    assert.ok(rows.some((r: any) => r.model === "claude-opus-5-5-medium" && r.input === 4 && r.cacheWrite === 5));
+  } finally {
+    learn(null);
+  }
+});
+
+test("reader workers see the main thread's model catalog and its updates when computing usage", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-catalog-worker-"));
+  const store = Store.open(join(dir, "stillfail.db"));
+  let readers: Readers | null = null;
+  try {
+    store.insertSession({ key: "s1", connect: "ember", runtime: "agy", profile: "agy", workspace: "/w", token: "s1", ws: "W", createdAt: 0, lastActiveAt: 0 });
+    const owner = { turn: null, thread: null, person: "p", profile: "agy" };
+    const call = (id: string, model: string) => ({
+      id, at: 60_000, model, subagent: false, fast: false,
+      input: 1_000_000, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 0, calls: 1, context: null, window: null,
+    });
+    store.recordUsage("/s1", { session: "s1", offset: 1, model: "gemini-4-hydrogen" }, "agy", [
+      [call("c1", "gemini-4-hydrogen"), owner],
+      [call("c2", "gemini-4-hydrogen-high"), owner],
+      [call("c3", "claude-opus-5-5-medium"), owner],
+    ]);
+    store.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+
+    readers = new Readers(dir, 1);
+    const readUsage = async () => JSON.parse(await readers!.read("usage", { from: "0", to: "120000", tz: "0", lang: "en", reading: false }, "en"));
+
+    const before = await readUsage();
+    assert.equal(before.rows.find((r: any) => r.model === "gemini-4-hydrogen").cost, null);
+    assert.equal(before.rows.find((r: any) => r.model === "gemini-4-hydrogen-high").cost, null);
+    assert.equal(before.rows.find((r: any) => r.model === "claude-opus-5-5-medium").cost, 4);
+
+    // Populate the catalog on the main thread while the worker is already alive.
+    learn({ "gemini-4-hydrogen": { cost: { input: 1.5, output: 7.5, cacheRead: 0.075 } } });
+    const after = await readUsage();
+    assert.equal(after.rows.find((r: any) => r.model === "gemini-4-hydrogen").cost, 1.5);
+    assert.equal(after.rows.find((r: any) => r.model === "gemini-4-hydrogen-high").cost, 1.5);
+    assert.ok(after.prices.rows.some((r: any) => r.model === "gemini-4-hydrogen-high" && r.input === 1.5 && r.output === 7.5));
+
+    // Subsequent catalog updates also propagate to the kept worker.
+    learn({ "gemini-4-hydrogen": { cost: { input: 2.5, output: 10, cacheRead: 0.1 } } });
+    const updated = await readUsage();
+    assert.equal(updated.rows.find((r: any) => r.model === "gemini-4-hydrogen").cost, 2.5);
+    assert.equal(updated.rows.find((r: any) => r.model === "gemini-4-hydrogen-high").cost, 2.5);
+  } finally {
+    learn(null);
+    readers?.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });

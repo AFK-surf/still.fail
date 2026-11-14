@@ -24,10 +24,10 @@ fn pick_at_point(n : Int, chosen : Ref[String], search? : Bool = true) -> @ui.Te
 ///|
 /// What is said of the pick now: the roles and labels of its rows, checked or not, and what has the focus.
 fn pick_said(t : @ui.Tester) -> String {
-  let rows = t.all(MenuItemRadio).map(fn(s) { "\{s.label}=\{s.check}" }) + t.all(MenuItem).map(fn(s) { s.label }) +
+  let rows = t.all(MenuItemRadio).map(fn(s) { "\{s.label}=\{@ui.some_text(s.check)}" }) + t.all(MenuItem).map(fn(s) { s.label }) +
     t.all(Button).filter(fn(s) { s.label.has_prefix("第") }).map(fn(s) { "button \{s.label}" })
   let f = t.focused().map(fn(s) { "\{s.role} \{s.label}" }).unwrap_or("none")
-  "rows \{rows} focus \{f} menus \{t.all(Menu).map(fn(s) { s.rect })}"
+  "rows \{@ui.list_text(rows)} focus \{f} menus \{@ui.list_text(t.all(Menu).map(fn(s) { s.rect }).map(@ui.rect_text))}"
 }
 
 ///|
@@ -69,19 +69,23 @@ test "pick, long, 大屏 keyboard and mouse: its search has the focus; 第11 typ
   let chosen = Ref("")
   let t = pick_at_point(@sf.pick_search_from + 4, chosen)
   println("PICKSAID long \{pick_said(t)} field \{t.field_words()}")
-  // (a dialog titled so, its search with the focus, each choice a button called by its words and its note)
+  // (a dialog titled so, its search with the focus, each choice a radio called by its words and its note, the chosen one on)
   let shape = (
     t.query(Dialog, label="选一个") is Some(_),
     t.focused().map(fn(s) { (s.role is TextField, s.label) }),
-    t.all(Button).filter(fn(s) { s.label.has_prefix("第") }).length(),
-    t.query(Button, label="第1项 最近用过") is Some(_),
+    t.all(MenuItemRadio).filter(fn(s) { s.label.has_prefix("第") }).length(),
+    t.query(MenuItemRadio, label="第1项 最近用过") is Some(_),
   )
   let all = (t.find("第2项") is Some(_), t.find("第11项") is Some(_))
   t.type_text("第11")
+  // (what no longer matches closing its room, gone once it has)
+  t.run_for(@ui.move_most_ms)
   let found = (t.find("第2项") is None, t.find("第11项") is Some(_), t.field_words())
   t.type_text("x")
+  t.run_for(@ui.move_most_ms)
   let none = t.find("没有匹配的结果") is Some(_)
   t.backspace()
+  t.run_for(@ui.move_most_ms)
   t.key(@ui.key_code_enter)
   t.frame()
   assert_eq(
@@ -109,13 +113,13 @@ test "pick, long, 大屏 keyboard and mouse: 30 choices, its list no taller than
   let chosen = Ref("")
   let t = pick_at_point(30, chosen)
   let (_, py, _, ph) = t.get(Dialog, label="选一个").rect
-  let (_, y1, _, _) = t.get(Button, label="第1项 最近用过").rect
+  let (_, y1, _, _) = t.get(MenuItemRadio, label="第1项 最近用过").rect
   let field = t.find("搜索")
   let (wx, wy) = (680.0, y1 + 120.0)
   t.wheel(wx, wy, 200.0)
   t.run_for(@ui.move_most_ms)
-  let (_, y1b, _, _) = t.get(Button, label="第1项 最近用过").rect
-  println("PICKSAID scroll panel \{py} \{ph} row1 \{y1} -> \{y1b} field \{field} -> \{t.find("搜索")}")
+  let (_, y1b, _, _) = t.get(MenuItemRadio, label="第1项 最近用过").rect
+  println("PICKSAID scroll panel \{py} \{ph} row1 \{y1} -> \{y1b} field \{Repr(field)} -> \{Repr(t.find("搜索"))}")
   assert_eq((ph <= @sf.pick_list_most + 80.0, y1b < y1, t.find("搜索") == field), (true, true, true))
 }
 
@@ -218,7 +222,7 @@ test "pick, long, 大屏 keyboard and mouse: 9 found in a window just tall enoug
       t.resize(1280.0, 464.0)
       t.run_for(@ui.move_most_ms)
     }
-    (t.get(Dialog, label="选一个").rect, t.get(Button, label="甲9").rect)
+    (t.get(Dialog, label="选一个").rect, t.get(MenuItemRadio, label="甲9").rect)
   }
   let (whole, grown) = (at(false), at(true))
   assert_eq(grown, whole)
@@ -237,7 +241,7 @@ test "pick, long, 大屏 keyboard and mouse: its last row whole at its list's fo
   let chosen = Ref("")
   let t = open(8, chosen)
   let (dx, dy, dw, dh) = t.get(Dialog, label="选一个").rect
-  let (_, ry, _, rh) = t.get(Button, label="第8项").rect
+  let (_, ry, _, rh) = t.get(MenuItemRadio, label="第8项").rect
   let list_foot = dy + dh - @sf.panel_pad
   let fits = (ry + rh - list_foot).abs() < 0.5
   t.tap(dx + dw / 2.0, list_foot - 1.0)

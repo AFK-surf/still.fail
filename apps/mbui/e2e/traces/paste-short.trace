@@ -1,5 +1,6 @@
 {"env":{"MBUI_CLOUD":"http://127.0.0.1:28840","MBUI_CORE_ACCOUNT":"{\"sub\":\"alice\",\"email\":\"alice@example.test\",\"name\":\"Name of alice\",\"picture\":\"\",\"access\":\"-\",\"refresh\":\"-\",\"accessExpires\":1794113625}","MBUI_DOWNLOADS_DIR":"/test-worktree/apps/mbui/out/e2e/mac/01-paste_short/downloads"}}
 {"host":{"localStation":null}}
+{"settings":{"w":390.0,"h":844.0,"scale":2,"platform":2,"pointing":1,"utc":0,"motion":0,"glass":0,"dark":0,"inset":0,"ime":0,"copy":0,"font":1,"from":"replay"}}
 {"out":{"id":1,"call":"client.device","params":{"client":"still.fail mbui","app":"android","model":""}},"w":1794113336749.995}
 {"out":{"id":2,"subscribe":{"topic":"prefs"},"keyed":true},"w":1794113336750.452}
 {"out":{"id":3,"subscribe":{"topic":"accounts"},"keyed":true},"w":1794113336750.594}

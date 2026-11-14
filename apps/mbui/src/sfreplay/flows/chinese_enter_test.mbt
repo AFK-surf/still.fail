@@ -4,7 +4,7 @@
 
 ///|
 test "04-chinese-enter" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     // (the run's first flow: its app gave the core the account it was started with, migrate)
     let f = @sfreplay.Flow::start(@sfreplay.trace("chinese-enter"), seed~)
     f.tap("端到端测试")

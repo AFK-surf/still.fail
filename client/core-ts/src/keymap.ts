@@ -40,6 +40,11 @@ export const ACTIONS: Record<string, Spec> = {
   "chat.screen": { group: "chat", keys: ["Mod+Shift+D"], typing: "yes" },
   "chat.latest": { group: "chat", keys: ["Mod+Down"], typing: "empty" },
   "chat.find": { group: "chat", keys: ["Mod+F"], typing: "yes" },
+  // the chat's outline: what people said in it, to go to one
+  "chat.outline": { group: "chat", keys: ["Mod+G"], typing: "yes" },
+  // the message a person said before (after) the one the chat's list is at (Alt+Up, Alt+Down are the chats')
+  "chat.said.prev": { group: "chat", keys: ["Alt+Shift+Up"], typing: "empty" },
+  "chat.said.next": { group: "chat", keys: ["Alt+Shift+Down"], typing: "empty" },
   "chat.archive": { group: "chat", keys: ["Mod+Shift+E"], typing: "yes" },
   "panel.close": { group: "chat", keys: ["Escape"], typing: "yes" },
   // the preview beside a folder's list, shown or not (as Finder's preview pane)
@@ -93,6 +98,25 @@ function keysOf(action: string, f: ReturnType<typeof facts>): string[] {
   return (f.desktop && spec.desktop ? [...spec.desktop, ...spec.keys] : spec.keys).map((b) => binding(b)!);
 }
 
+/// How a message is sent from the composer (the prefs' `sendKey`): Enter, ⇧Enter a new line (the default, none kept); or
+/// ⌘Enter (Ctrl+Enter elsewhere), Enter and ⇧Enter each a new line. Not changeable as the actions' keys are: these two.
+export const SEND_KEYS = ["enter", "mod"] as const;
+
+/// What the composer's keys are, the two ways to choose between and the keys that send and make a new line, in words.
+function sendView(prefs: unknown, mac: boolean): unknown {
+  const by = isObject(prefs) && prefs.sendKey === "mod" ? "mod" : "enter";
+  const send = label(by === "mod" ? "Mod+Enter" : "Enter", mac);
+  const newline = by === "mod" ? `${label("Enter", mac)} / ${label("Shift+Enter", mac)}` : label("Shift+Enter", mac);
+  const named = { enter: "Enter", mod: mac ? "⌘ Enter" : "Ctrl+Enter" };
+  return {
+    by,
+    choices: SEND_KEYS.map((k) => ({ by: k, name: t("web-main.shortcuts.sendWith", { keys: named[k] }) })),
+    send,
+    newline,
+    text: t("web-main.shortcuts.sendNote", { send, newline }),
+  };
+}
+
 /// The keymap as the prefs say it (`keymap`, of the `prefs` topic).
 export function view(prefs: unknown): unknown {
   const f = facts(prefs);
@@ -118,6 +142,7 @@ export function view(prefs: unknown): unknown {
     actions,
     // ⌃1…⌃9 on a Mac, Alt+1…9 elsewhere (Ctrl+digit is the browser's own tabs): not changeable.
     workspace: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => label(f.mac ? `Ctrl+${n}` : `Alt+${n}`, f.mac)),
+    send: sendView(prefs, f.mac),
   };
 }
 

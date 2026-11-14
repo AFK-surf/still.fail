@@ -7,7 +7,7 @@
 fn named_at(t : @ui.Tester, label : String) -> (Double, Double, Double, Double)? raise {
   let all = t.semantics().filter(fn(s) { !s.hidden && s.label == label && s.role is Button }).map(fn(s) { s.rect })
   if all.length() > 1 {
-    fail("\{all.length()} buttons named \{label}: \{all}")
+    fail("\{all.length()} buttons named \{label}: \{Repr(all)}")
   }
   all.get(0)
 }
@@ -146,4 +146,57 @@ test "a Windows window: the top row drags it on every page but for what is press
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
   t.run_for(@ui.move_most_ms)
   row_drags(t, "settings", 400.0)
+}
+
+///|
+/// `mode` in a Windows window `w` wide laid out Medium, its buttons the app's in its top row, the page come over on the
+/// tape: how far before minimize the last of the bar at the window's right, said as `last`, ends.
+fn tape_bar_short_of_keys(mode : String, last : String, w : Double) -> Double raise {
+  let src : Ref[Source?] = Ref(None)
+  let made = fn() {
+    match src.val {
+      Some(s) => s
+      None => {
+        let s = fixture_app(mode)
+        src.val = Some(s)
+        s
+      }
+    }
+  }
+  let t = @ui.Tester::new(
+    fn(c) { view(c, made()) },
+    tree=fn(root) { app_tree(made())(root) },
+    w~,
+    h=840.0,
+    platform=3,
+    window_corner=8.0,
+    window_inset=true,
+  )
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sfdesk.wide.tape.get(), msg="\{mode} at \{w}: not on the tape")
+  if !(@sfdesk.wide.tape_at.get() is Page) {
+    page_over(t, w)
+  }
+  guard named_at(t, "最小化") is Some((mx, _, _, _)) else { fail("\{mode} at \{w}: no minimize button") }
+  let at = t.semantics().filter(fn(s) { !s.hidden && s.label == last }).map(fn(s) { s.rect })
+  guard at is [(x, y, kw, kh)] && y + kh / 2.0 < @sf.window_keys_band + @sf.window_in else {
+    fail("\{mode} at \{w}: \{last} not one in the top row: \{Repr(at)}")
+  }
+  mx - (x + kw)
+}
+
+///|
+test "a Windows window laid out Medium: a settings page's bar made as nodes ends as far before the window's buttons as a chat's bar (连接, 用量, 归档建议)" {
+  // (the window's corner its tree's as the bar's node binds its end, not the old views' read where none builds: its
+  // last stood against their rule)
+  for w in [720.0, 600.0] {
+    let chat = tape_bar_short_of_keys("chat", "打开侧栏", w)
+    for page in [("settings-connects", "添加连接"), ("settings-usage", "7 天 30 天 累计"), ("settings-completion", "重新发现模型")] {
+      let short = tape_bar_short_of_keys(page.0, page.1, w)
+      assert_true(
+        (short - chat).abs() < 1.0e-9,
+        msg="\{page.0} at \{w}: \{page.1} ends \{short} before minimize, a chat's bar's last \{chat}",
+      )
+    }
+  }
 }

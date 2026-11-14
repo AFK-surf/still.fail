@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { withSocketTag } from "../cloud/src/previewSocket.ts";
 
-const TAG = '<script src="/_ember/socket.js"></script>';
+const TAG = '<script src="/_stillfail/socket.js"></script>';
 
 async function tagged(parts: string[]): Promise<string> {
   const bytes = parts.map((p) => new TextEncoder().encode(p));

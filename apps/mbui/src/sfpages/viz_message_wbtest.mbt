@@ -79,10 +79,10 @@ test "a mermaid chart the core makes is drawn as a picture in the theme's colour
       assert_eq(code, "graph TD; A-->B")
       assert_eq(colours.length(), 8)
       for _, v in colours {
-        guard v is String(hex) && hex.length() == 7 && hex.has_prefix("#") else { fail("a colour as #rrggbb: \{v}") }
+        guard v is String(hex) && hex.length() == 7 && hex.has_prefix("#") else { fail("a colour as #rrggbb: \{Repr(v)}") }
       }
     }
-    _ => fail("asked \{asked[0]}")
+    _ => fail("asked \{Repr(asked[0])}")
   }
   // drawn as a picture at its size as written (200 wide, in a column wider than that), and no page opened for it
   assert_true(t.image_loads().length() > 0)

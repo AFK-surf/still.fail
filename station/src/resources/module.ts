@@ -1,6 +1,6 @@
 // What of this machine still.fail uses (resources/watch.ts), as a part of the station (parts.ts): looked at while a
 // page asks; GET /resources.
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -12,6 +12,7 @@ import { loadMesh } from "../mesh/native.ts";
 import { platform } from "../platform/index.ts";
 import { Agents } from "../sessions/agents.ts";
 import { Parts, Paths, Store } from "../services.ts";
+import { linuxUsage } from "./linux.ts";
 import { ResourceWatch } from "./watch.ts";
 
 /// The desktop app's bundle ids begin so (fail.still.desktop, fail.still.desktop.beta, …: apps/mbui's, in the Electron
@@ -61,10 +62,10 @@ export function parseNettop(text: string): Map<number, { in: number; out: number
 
 /// Whether this process's parent is its launcher (stillfail-station), not a shell or launchd, whose all under it is not
 /// the station's.
-function launcher(): boolean {
+async function launcher(): Promise<boolean> {
   if (process.ppid <= 1) return false;
   try {
-    return basename(execFileSync("ps", ["-o", "comm=", "-p", String(process.ppid)], { encoding: "utf8" }).trim()).startsWith("stillfail");
+    return basename((await run("ps", ["-o", "comm=", "-p", String(process.ppid)], { encoding: "utf8" })).stdout.trim()).startsWith("stillfail");
   } catch {
     return false;
   }
@@ -75,14 +76,16 @@ export const ResourcesLive = Layer.effectDiscard(
     const { data } = yield* Paths;
     const store = yield* Store;
     const { hub } = yield* Agents;
-    // What processes used is read on macOS only; elsewhere there is nothing to look at.
-    if (platform.os !== "macos") {
+    // What processes used is read on macOS and Linux; elsewhere (Windows) there is nothing to look at.
+    const linux = platform.os === "linux";
+    if (platform.os !== "macos" && !linux) {
       (yield* Parts).routes((tools) => resourceRoutes(tools, null));
       return;
     }
     const mesh = loadMesh();
     const isApp = appBundles();
     const whose = runnerSessions(store, (runners) => hub.runnerNameSessions(runners));
+    const underLauncher = yield* Effect.promise(() => launcher());
     const watch = yield* Effect.acquireRelease(
       Effect.sync(() => new ResourceWatch({
         clock: hub.clock,
@@ -91,13 +94,13 @@ export const ResourcesLive = Layer.effectDiscard(
         // A chat's own directory, not where it works (a repository people also work in).
         places: () => store.liveSessions().flatMap((s) => (s.workspace && s.workspace !== "/" && s.workspace !== homedir() ? [{ dir: s.workspace, session: s.key }] : [])),
         placesInArguments: (lines) => hub.sessionsInArguments(lines, homedir()),
-        usage: (pids) => (typeof mesh.processUsage === "function" ? mesh.processUsage(pids) : pids.map(() => null)),
-        // Every process's, once: some 20 ms.
-        traffic: async () => parseNettop((await run("nettop", ["-P", "-L", "1", "-x", "-J", "bytes_in,bytes_out", "-n"], { maxBuffer: 16 << 20, timeout: 5000 })).stdout),
+        usage: (pids) => (linux ? linuxUsage(pids) : typeof mesh.processUsage === "function" ? mesh.processUsage(pids) : pids.map(() => null)),
+        // Every process's, once: some 20 ms. Linux has none to read without root.
+        ...(linux ? {} : { traffic: async () => parseNettop((await run("nettop", ["-P", "-L", "1", "-x", "-J", "bytes_in,bytes_out", "-n"], { maxBuffer: 16 << 20, timeout: 5000 })).stdout) }),
         runners: () => runnersWithSessions(data, whose),
         jobs: () => watchedJobs(store, hub.processJobLookup()),
         isApp,
-        self: [process.pid, ...(launcher() ? [process.ppid] : [])],
+        self: [process.pid, ...(underLauncher ? [process.ppid] : [])],
       })),
       (w) => Effect.promise(() => w.close()),
     );

@@ -21,7 +21,13 @@ if [ $APP = coredemo ] || [ $APP = stillfail ]; then
     # again)
     exe=$A/_build/native/${MODE:-release}/build/stillfail/$APP/$APP.exe
     [ ! -f "$exe" ] || [ ! "$A/out/core/aarch64-apple-darwin/libmbui_core.a" -nt "$exe" ] || touch "$A/src/$APP/core_engine.m"
-    bash "$D/core.sh" hermes apple > "$A/out/core/hermes.log" 2>&1 &
+    # (MBUI_PACKAGES_PENDING: a file the caller takes away once its own pnpm install is over, its going waited for before
+    # the bytecode's bundle installs the core's packages into the same store: the release's Mac job restored and
+    # installed the store while this ran, and pnpm found a package it was importing gone, ERR_PNPM_ENOENT, main 426cefb1,
+    # 42592023024)
+    { [ -z "${MBUI_PACKAGES_PENDING:-}" ] || "$MBUI_DIR/scripts/chk" logwait --gone "$MBUI_PACKAGES_PENDING" --deadline 300 \
+        || exit 1
+      bash "$D/core.sh" hermes apple; } > "$A/out/core/hermes.log" 2>&1 &
     hbc=$!
   fi
   export MB_CORE_BUNDLE=${MB_CORE_BUNDLE:-$A/out/core/core.hbc}

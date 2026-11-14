@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/damage"
+
+// Values
+pub let stream_tex_base : Double
+
+pub let view_tex_base : Double
+
+// Errors
+
+// Types and methods
+pub struct Damage {
+  // private fields
+}
+pub fn Damage::forget(Self) -> Unit
+pub fn Damage::group_drop(Self, Int32) -> Unit
+pub fn Damage::group_set(Self, Int32, FixedArray[Double], Int32) -> Unit
+pub fn Damage::moved(Self, FixedArray[Double], Int32, Double, Double, Double, Double, Double, Double, Array[Int32], known? : Array[(Double, Double, Double, Double)]) -> Array[(Double, Double, Double, Double)]?
+pub fn Damage::new() -> Self
+pub fn Damage::next(Self, FixedArray[Double], Int32, Double, Double, Double, Double, Double, Double, groups? : Bool, known? : Array[(Double, Double, Double, Double)]) -> Array[(Double, Double, Double, Double)]
+pub fn Damage::occlude(Self, FixedArray[Double], Int32, Double, Double) -> (FixedArray[Double], Int32)
+pub fn Damage::occlude_moved(Self, FixedArray[Double], Int32, Double, Double, Array[Int32]) -> (FixedArray[Double], Int32)?
+pub fn Damage::step(Self) -> (Double, Double)?
+pub fn Damage::tell(Self, Bool) -> Unit
+pub fn Damage::telling(Self) -> Bool
+pub fn Damage::told(Self) -> String
+pub fn Damage::why(Self) -> Int32
+
+// Type aliases
+
+// Traits

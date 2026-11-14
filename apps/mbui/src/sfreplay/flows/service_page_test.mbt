@@ -7,7 +7,7 @@
 
 ///|
 test "47-service-page" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("service-page"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
@@ -21,11 +21,11 @@ test "47-service-page" {
     f.see_n(2, "网页开好了 201409")
     // the chat's jobs: its sheet raised
     f.tap("icon:web")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.see("服务")
     // the service: its page pushed, the site view loading it
     f.tap("在线")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("=e2e-web")
     // the page as the site view asks for it through the core (station.preview): its HTML, its stylesheet, its data
     f.answered("station.preview", 3)
@@ -42,15 +42,15 @@ test "47-service-page" {
     f.gone("/b.html")
     // its size from the bar's ⋯ (a phone's, its one row under the page), in the presenters' sheet
     f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.tap("页面尺寸")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.tap("手机")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     // left by its bar's 对话 (the system's back would step the page back first while it has a page behind it, as the
     // view says: service_link_wbtest.mbt)
     f.tap("=对话")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("网页开好了 201409")
     f.end()
   })

@@ -18,16 +18,17 @@ priv struct DropTo {
   reveal : Bool
   /// the file is an app to install on the device once it is there (`screen.install`)
   install : Bool
-} derive(Eq)
+}
 
 ///|
 /// A part of the screen (0..1 of its width and height): its left, top, width, height.
+#derive(Eq)
 priv struct Part {
   x : Double
   y : Double
   w : Double
   h : Double
-} derive(Eq)
+}
 
 ///|
 /// A config's part of the screen (`region`), when it says one.
@@ -143,6 +144,8 @@ priv struct ScreenSess {
   mut passkey_run : @hostapi.PasskeyRun?
   mut passkey_note : String
   mut passkey_id : String
+  /// a child browser popup opened from this tab while driving (`childOpened` / `childScreen`), to open over it once built
+  mut child_screen : String?
 }
 
 ///|
@@ -222,6 +225,7 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         passkey_run: None,
         passkey_note: "",
         passkey_id: "",
+        child_screen: None,
       }
       screens_open[key] = s
       s
@@ -342,7 +346,7 @@ fn ScreenSess::own_stream(self : ScreenSess) -> Unit {
 /// A call nobody waits for (`screen.ack`): sent in order with the rest, its
 /// answer (or error) let go.
 fn screen_tell(src : Source, name : String, params : Map[String, Json]) -> Unit {
-  (src.call)(name, Json::object(params), fn(_) {  })
+  (src.call)(name, Json::object(params), @sfbase.answer_unread)
 }
 
 ///|
@@ -452,6 +456,18 @@ fn ScreenSess::clip_types(self : ScreenSess) -> Array[String] {
 /// The device's clipboard is pasted into the screen (`screen.clipboard`): driving it, and the station carries some.
 fn ScreenSess::pastes(self : ScreenSess) -> Bool {
   self.clip_types().iter().any(fn(t) { t == "text" || t == "png" })
+}
+
+///|
+/// Whether this viewer drives a browser screen whose station supports URL navigation (`screen.openUrl` / `screen.reload`).
+fn ScreenSess::opens_url(self : ScreenSess) -> Bool {
+  self.driving() && flag(self.state, "openUrl")
+}
+
+///|
+/// Whether this screen is one of the station's user-opened browser pages (`browser:u_<id>`).
+fn ScreenSess::user_tab(self : ScreenSess) -> Bool {
+  flag(self.state, "userTab") || self.screen.has_prefix("browser:u_")
 }
 
 ///|
@@ -738,7 +754,11 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     "maxHeight": Json::number(mh.to_double()),
   }
   asks_into(params, quality, fps)
-  if @ui.stream_audio_here() { params["audio"] = Json::string("pcm_s16le") }
+  if @ui.stream_audio_here() {
+    params["audio"] = Json::string("pcm_s16le")
+    // (muted here: the station sends none from the start, `screen.sound`)
+    if self.audio_muted.untracked() { params["sound"] = Json::boolean(false) }
+  }
   // Shown by the system's video layer (its frames tagged colours honoured, a wide-gamut screen's shown as wide): the
   // Mac's desktop sent in Display P3; the app's canvas (a faded or ended view's picture) has it converted to sRGB.
   if @ui.stream_layers_here() { params["gamut"] = Json::string("p3") }
@@ -833,7 +853,9 @@ fn ScreenSess::control(self : ScreenSess, src : Source, on : Bool) -> Unit {
 ///|
 /// Input for the station (`screen.input`): only while this viewer drives it.
 fn ScreenSess::input(self : ScreenSess, src : Source, input : Json) -> Unit {
-  if !self.input_goes() {
+  // (which of a desktop's windows it shows goes looking too: the view's own)
+  let window = text(Some(input), "t") == "window"
+  if !(self.input_goes() || (window && self.call != 0 && self.heard)) {
     return
   }
   screen_tell(src, "screen.input", { "view": Json::string(self.view), "input": input })
@@ -985,12 +1007,34 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
       if number(self.state, "watchOnly") != number(Some(s), "watchOnly") {
         self.wants_control = Some(false)
       }
+      // taken by someone else as it drove, or taken from people by this view's 接管: said once each (a view opened again
+      // starts its counts anew, none said)
+      let names = fn(key) { strings(Some(s), key).join(@sf.t("web-main.list.separator")) }
+      if number(Some(s), "taken") > number(self.state, "taken") {
+        let by = names("takenBy")
+        toast_later(
+          if by == "" {
+            @sf.t("android-misc.screen.taken")
+          } else {
+            @sf.t("android-misc.screen.takenBy", args=[("names", by)])
+          },
+        )
+      }
+      if number(Some(s), "took") > number(self.state, "took") {
+        toast_later(@sf.t("android-misc.screen.took", args=[("names", names("tookFrom"))]))
+      }
+      if number(Some(s), "childOpened") > number(self.state, "childOpened") {
+        let next = text(Some(s), "childScreen")
+        if next != "" && next != self.screen {
+          self.child_screen = Some(next)
+        }
+      }
       self.state = Some(s)
       self.heard = true
       if moved {
         self.pointer_moved()
       } else {
-        self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+        self.said.set(self.said.untracked() + 1)
       }
     }
     _ => ()
@@ -1162,7 +1206,11 @@ let clip_png_max : Int = 8 * 1024 * 1024
 
 ///|
 fn ScreenSess::toggle_audio(self : ScreenSess) -> Unit {
-  let muted = !@signals.untracked(fn() { self.audio_muted.get() })
+  let muted = !self.audio_muted.untracked()
   self.audio_muted.set(muted)
   if muted { match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () } }
+  // Muted, the station sends the view no sound till it is on again.
+  if self.call != 0 {
+    screen_tell(self.src, "screen.sound", { "view": Json::string(self.view), "on": Json::boolean(!muted) })
+  }
 }

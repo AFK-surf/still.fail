@@ -6,9 +6,10 @@
 // start. Their text is src/skills/*.md (with the scripts some bring in src/skills/<name>/), read from there when running from source and from dist/skills/ (copied there by
 // the build) when bundled.
 import { closeSync, existsSync, linkSync as hardLinkSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { lstat, mkdir, readdir, readlink, realpath, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
-import { linkSync } from "../ops/links.ts";
+import { link, linkSync } from "../ops/links.ts";
 import { log } from "../ops/log.ts";
 import { within } from "../ops/paths.ts";
 import { sharedTranscripts, transcriptDir } from "../read/transcript.ts";
@@ -38,10 +39,10 @@ export const agentHomes = (agentHome: string): string[] => [agentHome, ...entrie
 
 /// The skills the station brings, by directory name: about its own tools, so they are rewritten at every start and
 /// change with the station (the team's own skills sit beside them).
-const BUILTIN_SKILLS = ["stillfail-chats", "stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-browser", "stillfail-login", "stillfail-vault", "stillfail-cron", "stillfail-github-ci"];
+export const BUILTIN_SKILLS = ["stillfail-chats", "stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-browser", "stillfail-login", "stillfail-vault", "stillfail-cron", "stillfail-github-ci", "stillfail-retire"];
 /// When to offer a bug report to the still.fail team: only from a station on the stable channel, beside the
 /// `feedback_send` tool; gone from one on the test channel (the team's own).
-const FEEDBACK_SKILL = "stillfail-feedback";
+export const FEEDBACK_SKILL = "stillfail-feedback";
 
 /// Where the skills' text is.
 const skillsSource = (): URL => (import.meta.url.endsWith(".ts") ? new URL("../skills/", import.meta.url) : new URL("./skills/", import.meta.url));
@@ -58,10 +59,17 @@ function onlySkill(dir: string): boolean {
   }
 }
 
+/// The skills of the deployment the station runs in (`STILLFAIL_SITE_SKILLS`: a directory of them, each `<name>/SKILL.md`
+/// and what it brings), when it names one: a machine that runs the station as part of itself (a Monoid Machine) tells
+/// its agents about itself this way. None by default.
+export const siteSkills = (env: NodeJS.ProcessEnv = process.env): string | null => env.STILLFAIL_SITE_SKILLS || null;
+
 /// Writes the station's own skills into the shared skills directory; `feedback`: the stillfail-feedback skill too
-/// (else it is taken away, unless someone added to it).
-export function writeBuiltinSkills(agentHome: string, feedback: boolean) {
+/// (else it is taken away, unless someone added to it); `site`: the deployment's skills linked beside them
+/// (`linkSiteSkills`).
+export function writeBuiltinSkills(agentHome: string, feedback: boolean, site: string | null = siteSkills()) {
   const [, skills] = agentHomePaths(agentHome);
+  if (site !== null) linkSiteSkills(skills, site);
   if (!feedback && onlySkill(join(skills, FEEDBACK_SKILL))) rmSync(join(skills, FEEDBACK_SKILL), { recursive: true, force: true });
   for (const name of feedback ? [...BUILTIN_SKILLS, FEEDBACK_SKILL] : BUILTIN_SKILLS) {
     const text = builtinSkill(name);
@@ -81,6 +89,27 @@ export function writeBuiltinSkills(agentHome: string, feedback: boolean) {
       } catch {}
       if (had === null || !had.equals(body)) writeFileSync(at, body, { mode: 0o755 });
     }
+  }
+}
+
+/// Links each of the deployment's skills (the entries of directory `site`) into `skills`, an agent home's, where they
+/// change with the deployment: not copied, as the station's own are, since the deployment may write them after the
+/// station started (the facts of the machine it runs on) and keeps them read-only. One is linked whether its SKILL.md is
+/// there yet or not (a session takes only the skills that have one, `sessionSkills`); a link to one gone from `site` is
+/// taken away; a skill of the same name the team has is left as it is, and said once.
+export function linkSiteSkills(skills: string, site: string) {
+  const names = entries(site).filter((name) => !name.startsWith("."));
+  mkdirSync(skills, { recursive: true }); // sync: at the start and as the config changes, as the station's own skills are written
+  for (const entry of entries(skills)) if (!names.includes(entry) && linksInto(join(skills, entry), site)) rmSync(join(skills, entry), { force: true }); // sync: as above
+  for (const name of names) {
+    const [at, target] = [join(skills, name), join(site, name)];
+    if (linksTo(at, target)) continue;
+    if (lstatSync(at, { throwIfNoEntry: false }) !== undefined) { // sync: as above
+      if (!leftAlone.has(at)) log.warn("agent_home", "a team's skill has the name of one the deployment brings: the team's kept", { skill: name, path: at });
+      leftAlone.add(at);
+      continue;
+    }
+    linkSync(target, at, { junction: true }); // sync: as above
   }
 }
 
@@ -153,18 +182,32 @@ export const SKILL_HOMES = [join(".claude", "skills"), join(".agents", "skills")
 
 /// Links the skills of a session's workspace (`skills`, its agent home's) into the directory it runs in (`workspace`),
 /// where its runtime loads them as its own (SKILL_HOMES), as a preset's folders' are (presets.ts `keepCopy`); a link to
-/// one gone is taken away. One of the same name there already (a preset's) is left.
-export function sessionSkills(workspace: string, skills: string) {
-  const names = entries(skills).filter((n) => existsSync(join(skills, n, "SKILL.md")));
+/// one gone is taken away. One of the same name there already (a preset's) is left. Off the station's thread: each
+/// session's process opened looked at every skill's file and link there, waiting on the disk.
+export async function sessionSkills(workspace: string, skills: string): Promise<void> {
+  const names: string[] = [];
+  for (const name of await entriesSoon(skills)) if (await there(join(skills, name, "SKILL.md"))) names.push(name);
   for (const home of SKILL_HOMES) {
     const dir = join(workspace, home);
-    for (const entry of entries(dir)) if (!names.includes(entry) && linksInto(join(dir, entry), skills)) rmSync(join(dir, entry), { force: true });
+    for (const entry of await entriesSoon(dir)) if (!names.includes(entry) && await linksIntoSoon(join(dir, entry), skills)) await rm(join(dir, entry), { force: true });
     if (names.length === 0) continue;
-    mkdirSync(dir, { recursive: true });
+    await mkdir(dir, { recursive: true });
     for (const name of names) {
       const at = join(dir, name);
-      if (!existsSync(at) && !isLink(at)) linkSync(join(skills, name), at, { junction: true });
+      if (!(await there(at)) && (await lstat(at).catch(() => null)) === null) await link(join(skills, name), at, { junction: true });
     }
+  }
+}
+
+const entriesSoon = (dir: string): Promise<string[]> => readdir(dir).catch(() => []);
+const there = (path: string): Promise<boolean> => stat(path).then(() => true, () => false);
+async function linksIntoSoon(path: string, dir: string): Promise<boolean> {
+  try {
+    if (!(await lstat(path)).isSymbolicLink()) return false;
+    if (dirname(await readlink(path)) === dir) return true;
+    return dirname(await realpath(path)) === (await realpath(dir));
+  } catch {
+    return false;
   }
 }
 

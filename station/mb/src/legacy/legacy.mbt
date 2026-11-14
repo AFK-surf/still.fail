@@ -691,7 +691,7 @@ pub fn decision_session_repair_step(db : @sql.Db) -> Bool raise {
 // The agent-message time lookup (legacy-agent-build.ts).
 
 ///|
-fn has_legacy_agent(db : @sql.Db) -> Bool raise {
+pub fn has_legacy_agent(db : @sql.Db) -> Bool raise {
   if !exists(db, "table", "legacy_agent_meta") {
     return false
   }

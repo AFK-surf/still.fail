@@ -1,6 +1,6 @@
 // 本机 Station (apps/desktop/src/main.ts localStation), one page in every frame: this
 // machine's station whoever runs it (the service the installer made, a process started by hand), as the system says
-// it (@ui.local_station), shown as a workspace's stations are: its dot, its name and
+// it (its native call `local_station`), shown as a workspace's stations are: its dot, its name and
 // how it is, 启动 where it is stopped, its menu (停止 or 启动, 重启, 更新到最新版, 打开日志, its data shown); under
 // them who runs it, its version, its workspace, its data, in lines as the room has them; the installer's progress and
 // what went wrong in it. None here: 添加这台 Mac where the app adds one. (The phone's copy, its rows a list each, is
@@ -19,8 +19,8 @@ pub fn local_station_node(
   width? : () -> Double,
 ) -> Unit {
   // (what the host says of it, as it said it last: a signal of that input, read again at each moment it is asked)
-  let host : @signals.Signal[String] = @signals.signal(@ui.local_station(), same=fn(a, b) { a == b })
-  let asked = fn() { host.set(@ui.local_station()) }
+  let host : @signals.Signal[String] = @signals.signal(@hostapi.app_said("local_station"), same=fn(a, b) { a == b })
+  let asked = fn() { host.set(@hostapi.app_said("local_station")) }
   fn again(at : Double) -> Unit {
     v.at_moment(at + @settings.local_read_ms, later=true, fn() {
       asked()
@@ -56,6 +56,35 @@ pub fn local_station_node(
 }
 
 ///|
+/// 添加这台 Mac in the card's foot corner while `adds` (it asks the cloud for this workspace's token and runs the
+/// installer with it, how far shown on this page).
+fn local_add_foot_node(
+  k : @view.View,
+  core : Core,
+  adds : () -> Bool,
+  pc : Bool,
+  asked : () -> Unit,
+) -> Unit {
+  k.show(adds, fn(f) {
+    f.box(fn(a) {
+      @sf.style_node(a, fn() { vt_actions.then(@sf.foot_across(@sf.button_height())) })
+      @sf.button_node(
+        a,
+        fn() { @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }) },
+        fn() {
+          (core.local_install)(true)
+          asked()
+        },
+        tone=Primary,
+        card_words=true,
+      )
+      |> ignore
+    })
+    |> ignore
+  })
+}
+
+///|
 /// None here (no data): the installer at work where it is, else that there is none; what went wrong; 添加这台 Mac (it
 /// downloads one, joins it and runs it as a service) in the card's foot corner where the app adds one.
 fn local_none_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, asked : () -> Unit) -> Unit {
@@ -71,44 +100,35 @@ fn local_none_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, aske
       }
     })
     local_failed_node(k, s)
-    k.show(adds, fn(f) {
-      f.box(fn(a) {
-        @sf.style_node(a, fn() { vt_actions.then(@sf.foot_across(@sf.button_height())) })
-        @sf.button_node(
-          a,
-          fn() { @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }) },
-          fn() {
-            (core.local_install)(true)
-            asked()
-          },
-          tone=Primary,
-          card_words=true,
-        )
-        |> ignore
-      })
-      |> ignore
-    })
+    local_add_foot_node(k, core, adds, pc, asked)
   }) })
 }
 
 ///|
 /// The station's card (StationCards card): its head (its dot, its name and how it is, 启动 where it is stopped and can
-/// be, its ⋯), its facts, the installer's progress, what went wrong.
+/// be, its ⋯), its facts, the installer's progress, what went wrong, and 添加这台 Mac where unattached or removed.
 fn local_card_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, asked : () -> Unit) -> Unit {
   let doing = fn() { text(s(), "doing") }
   let working = fn() { doing() != "" }
   let running = fn() { text(s(), "runner") != "none" }
+  let adds = fn() {
+    if doing() != "" || !@settings.local_station_managed() {
+      return false
+    }
+    let ws = field(s(), "workspace")
+    !(ws is Some(Object(_))) || flag(ws, "removed")
+  }
   let act = fn(a : String) {
     let now = @signals.untracked(s)
     match a {
       "update" => (core.local_install)(false)
       "start" => local_start(core, now)
-      _ => @ui.local_station_act(a)
+      _ => @hostapi.app_tell("local_station_act", a)
     }
     asked()
   }
   b.box(fn(k) {
-    @sf.style_node(k, fn() { ls_card })
+    @sf.style_node(k, fn() { if adds() { ls_card.then(@sf.foot_pad(@sf.button_height())) } else { ls_card } })
     k.box(fn(head) {
       @sf.style_node(head, fn() { ls_head }, in_row=false)
       @sf.state_dot_node(head, fn() { if working() { "busy" } else if running() { "online" } else { "offline" } })
@@ -143,6 +163,7 @@ fn local_card_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, aske
       local_past_dot_node(p, fn(u) { local_progress_node(u, s, doing) })
     })
     k.show(fn() { text(s(), "failed") != "" }, fn(p) { local_past_dot_node(p, fn(u) { local_failed_node(u, s) }) })
+    local_add_foot_node(k, core, adds, pc, asked)
   })
   |> ignore
 }
@@ -250,7 +271,7 @@ fn local_facts(s : Json?, pc : Bool) -> Array[String] {
     // stopped: its service's; with none, nothing runs it (this app runs none of its own)
     _ => if service { service_name(s) } else { "" }
   }
-  let place = if workspace is None {
+  let place = if !(workspace is Some(Object(_))) {
     @sf.t("web-pages.localStation.noWorkspace")
   } else {
     let ws = match text(workspace, "name") {
@@ -323,7 +344,7 @@ fn local_startable(s : Json?) -> Bool {
 /// 启动 the station here (local_startable): its service started, else the installer without a token.
 fn local_start(core : Core, s : Json?) -> Unit {
   if field(s, "service") is Some(_) {
-    @ui.local_station_act("start")
+    @hostapi.app_tell("local_station_act", "start")
   } else {
     (core.local_install)(false)
   }
@@ -334,10 +355,17 @@ fn local_start(core : Core, s : Json?) -> Unit {
 /// stations' row) and is not running, but can be started from here (stopped, or being started, installed or updated):
 /// 启动 offered for it there, not a try at reaching it again. None for any other.
 pub fn local_stopped(address : String) -> Json? {
+  local_stopped_in(address, @hostapi.app_said("local_station"))
+}
+
+///|
+/// The station here as `said` (the host's words for it) has it, where it is the station at `address` and is not running
+/// but can be started from here (local_stopped's).
+fn local_stopped_in(address : String, said : String) -> Json? {
   if address == "" || address != this_machine() {
     return None
   }
-  let s = match @ui.local_station() {
+  let s = match said {
     "" => return None
     j => try Some(@json.parse(j)) catch { _ => return None }
   }

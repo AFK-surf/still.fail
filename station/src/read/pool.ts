@@ -9,6 +9,8 @@
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
+import { catalog } from "../accounts/catalog.ts";
+import { tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
@@ -39,6 +41,7 @@ import { LAST_MESSAGE_PENDING, LEGACY_EDITS_PENDING, LEGACY_SAID_PENDING, PAGE_L
 import { HttpError } from "./views.ts";
 import { MbReader, type ReaderLike, mbReaderBinary } from "./mb-reader.ts";
 import { wall } from "../ops/fibers.ts";
+import { roots as machineRoots } from "./machine.ts";
 import type { CardEditPage, CardMessagePage } from "../store/card-outbox.ts";
 
 /// How long a reader with nothing to do is kept.
@@ -47,7 +50,7 @@ const IDLE_MS = 60_000;
 const SLOW_MS = 2_000;
 
 /// `held`: the read it is answering, if any.
-type Slot = { worker: ReaderLike; held: Asked | null; idle?: () => void; retiring?: boolean };
+type Slot = { worker: ReaderLike; held: Asked | null; idle?: () => void; retiring?: boolean; catalogVersion: number };
 
 /// A read in line or being answered: when it was asked and when a reader took it, and the reader it is best read in (a
 /// session's history, where its reading stands in memory).
@@ -83,7 +86,7 @@ const cancelled = () => new HttpError(503, "read cancelled");
 /// including new kinds not yet classified, leave room for these, and these go before them: a slow transcript or resource
 /// snapshot can block just as a slow aggregate can. A machine sample (api/host.ts), one job, and the jobs up without
 /// their chats are interactive too; jobs with their chats (an older device's, the sidebar made for it) are a bulk read.
-const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "openedChatSaid", "chatHistoryMessages", "historyPendingCard", "stateQuestion", "statePendingCard", "deliveryCardState", "host", "hostTicks", "job"]);
+const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "openedChatSaid", "chatHistoryMessages", "historyPendingCard", "stateQuestion", "statePendingCard", "deliveryCardState", "job"]);
 
 /// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
 /// older clients, so it remains in the background until that request is paged end to end.
@@ -111,7 +114,30 @@ function filling(op: string, args: unknown): boolean {
 const PAGES = new Set(["timeline", "machineSessions"]);
 /// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
 /// program is there; every other read is a worker's.
-const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile"]);
+const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage"]);
+/// The reads of this machine's own Claude Code and Codex sessions: the MoonBit reader is told where they are kept, from
+/// this process's environment (read/machine.ts `roots`), as the worker reads it.
+const MACHINE = new Set(["machineSessions", "machineSession"]);
+/// The reads that say who someone is in the station's words (read/views.ts `creator`, `authorNames`: the local page, its
+/// admin), and go by the time of day (a share used lately, a card answered lately): the MoonBit reader keeps no words
+/// and its clock is no wall's, so it is given these in the language asked, and the time as the read is asked.
+/// A thread's pages (`entries`, `letters`) are given the words of their refusals too; notices, a file's and an unnamed chat's.
+const WORDED = new Set(["sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage"]);
+const argsLang = (args: unknown): Ask["lang"] | undefined => {
+  const lang = (args as { lang?: unknown } | null)?.lang;
+  return lang === "zh" || lang === "en" ? lang : undefined;
+};
+const wordsIn = (op: string, lang: Ask["lang"]) => ({
+  localPage: tr(lang, "station.creator.localPage"), admin: tr(lang, "station.author.admin"),
+  ...(op === "entries" || op === "letters" ? {
+    notInteger: Object.fromEntries(["after", "before", "from", "to"].map((name) => [name, tr(lang, "station.admin.notInteger", { name })])),
+    fromAndTo: tr(lang, "station.admin.fromAndTo"),
+  } : {}),
+  ...(op === "turnNotices" || op === "saidNotices" ? { file: tr(lang, "station.notice.file"), untitled: tr(lang, "station.chat.untitled") } : {}),
+  ...(op === "usage" ? { priceNote: tr(lang, "station.usage.priceNote") } : {}),
+  ...(op === "outflowChats" || op === "openJobs" || op === "resourceChats" || op === "usage" ? { untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage") } : {}),
+  ...(op === "chats" || op === "chatRows" ? { untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage"), quotedOnly: tr(lang, "station.chat.quotedOnly") } : {}),
+});
 
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
@@ -195,7 +221,7 @@ export class Readers {
     // A reader's heap stays small: what it builds is answered and dropped.
     const worker: ReaderLike = (line === this.log || line === this.moved) && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
       : new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
-    const slot: Slot = { worker, held: null };
+    const slot: Slot = { worker, held: null, catalogVersion: 0 };
     const begun = wall.now();
     worker.on("message", (answer: Answer | Ready) => {
       // How long a reader took to start: a read given it as it starts waits on that (one read of 1.9 s took 18 s on
@@ -626,7 +652,12 @@ export class Readers {
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
     const home = session !== null ? this.homes.get(session) : undefined;
-    const ask: Ask = { id: this.next++, op, args, lang, names: [], processes: [], clientKeys: [] };
+    const given = line !== this.moved ? args
+      : MACHINE.has(op) ? { ...(args as object), roots: machineRoots() }
+      // (the usage page says its words in the language its args name, as read/ops-usage.ts reads it)
+      : WORDED.has(op) ? { ...(args as object), words: wordsIn(op, op === "usage" ? argsLang(args) ?? lang : lang), now: wall.now() }
+      : args;
+    const ask: Ask = { id: this.next++, op, args: given, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
       let finished = false;
       const done = () => { finished = true; signal?.removeEventListener("abort", abort); };
@@ -704,6 +735,12 @@ export class Readers {
     asked.ask.names = [...this.names];
     asked.ask.processes = [...this.processes()];
     asked.ask.clientKeys = [...this.clientKeys()];
+    // (the MoonBit reader's prices are the catalog's as well: read/usage.ts `price`)
+    const current = catalog();
+    if (slot.catalogVersion !== current.version) {
+      asked.ask.catalog = current.models;
+      slot.catalogVersion = current.version;
+    }
     slot.worker.postMessage(asked.ask);
   }
 

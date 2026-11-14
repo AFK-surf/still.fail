@@ -50,17 +50,21 @@ tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"
 [build-dependencies]
 napi-build = "2"
 
+[dev-dependencies]
+# The test's clock (`start_paused`): what a dial sends over ten minutes, counted in no time.
+tokio = { version = "1", features = ["test-util"] }
+
 # A workspace of its own: not part of mesh/ or client/.
 [workspace]
 
 # As mesh/ has them (vendor/README.md).
 [patch.crates-io]
-noq-proto = { git = "https://github.com/zzj3720/noq", rev = "d578f818ad7580c49691f26d5ccf8cc3afcc026a" }
+noq-proto = { git = "https://github.com/zzj3720/noq", rev = "76344e6eab7ae651ce524e4f329a2f283f69d7ab" }
 swarm-discovery = { path = "../../../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../../../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../../../vendor/noq-udp" }
-iroh = { git = "https://github.com/zzj3720/iroh", rev = "fddee95da13c92e0ff700d64fc47f474b4d2a62c" }
-iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "fddee95da13c92e0ff700d64fc47f474b4d2a62c" }
+iroh = { git = "https://github.com/zzj3720/iroh", rev = "cbb88bc4d070a4de6999799aada2b5f3dc5680f4" }
+iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "cbb88bc4d070a4de6999799aada2b5f3dc5680f4" }
 
 [profile.release]
 strip = true

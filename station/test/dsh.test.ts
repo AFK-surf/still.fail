@@ -5,7 +5,7 @@
 // turn's end told once.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -15,6 +15,8 @@ import { BRIDGE, DshDriver, classifyFailure, dshSetup } from "../src/agents/dsh.
 import { dshRoute, profileEnv, profileRuntimes } from "../src/agents/profiles.ts";
 import type { AgentSession, OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { allLeft } from "../src/agents/runner.ts";
+import { learn } from "../src/accounts/catalog.ts";
+import { Said, stationLang, tr } from "../src/ops/i18n.ts";
 import { readTimeline, transcriptPath } from "../src/read/transcript.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -113,9 +115,10 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     const byId = Object.fromEntries(run.patch.map((p: { id: string }) => [p.id, p]));
     // dsh's ACP server off, the station's driver in, by its path.
     assert.deepEqual(byId.acp, { id: "acp", disabled: true });
-    // The station's tools by dsh's own MCP client, the session's token read from the environment (not in the file).
+    // The station's tools by dsh's own MCP client, the session's token read from the environment (not in the file); the
+    // driver told which entry they are (it opens no session before that one is up: test/dsh-bridge.test.ts).
     assert.deepEqual(run.patch.find((p: { insert?: unknown }) => p.insert).insert, [
-      { id: "stillfail-bridge", name: BRIDGE },
+      { id: "stillfail-bridge", name: BRIDGE, config: { tools: "stillfail-tools" } },
       {
         id: "stillfail-tools", name: "@deepseek-ai/dsh-mcp-client",
         config: { transport: "streamable-http", serverName: "stillfail", url: o.mcpUrl, headers: { Authorization: "!!js 'Bearer ' + process.env.STILLFAIL_MCP_TOKEN" }, failOnStartupError: true },
@@ -193,6 +196,9 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     assert.equal(classifyFailure("UNKNOWN", 'turn failed: 401: {"message":"Upstream request failed: Invalid credential"}'), "auth");
     assert.equal(classifyFailure("MISSING_CREDENTIAL", "the route's key resolves to nothing"), "auth");
     assert.equal(classifyFailure("QUOTA", "insufficient balance"), "rate_limit");
+    // FB-17: pi-ai's own words when the provider gave none; a provider's own under the same code.
+    assert.equal(classifyFailure("CONTEXT_WINDOW_EXCEEDED", 'pi-ai detected context overflow for model "openai/claude-opus-5-5"'), "context");
+    assert.equal(classifyFailure("CONTEXT_WINDOW_EXCEEDED", "400 upstream said no"), "context");
     // A prompt dsh refuses starts no turn: it ends at once.
     await session.prompt("refuse");
     await until(ended(4));
@@ -257,6 +263,21 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     await assert.rejects(session.prompt("x"), /closed/);
   });
 
+  test("an open dsh refuses for the station's tools is said in the station's words, with what to do, not as the network's", async () => {
+    const d = driver();
+    const o = options();
+    writeFileSync(`${o.dump}.notools`, "");
+    const refused = await d.open(o, () => {}).then(() => null, (error: unknown) => error);
+    // The station's own words (what a chat is told as they are): never classified by the reason under them, which
+    // read as the model provider's connection.
+    assert.ok(refused instanceof Said, String(refused));
+    assert.equal(refused.message, tr(stationLang(), "station.dsh.noTools"));
+    // The process it started is not left running: the same driver opens the next session.
+    rmSync(`${o.dump}.notools`);
+    const next = await d.open(o, () => {});
+    await next.dispose();
+  });
+
   test("a session is resumed by its id in a new process; one dsh does not have is refused before it starts", async () => {
     const d = driver();
     const o = options();
@@ -293,7 +314,10 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
       };
       const agent = { session: { id: "s1" }, ...(process.env.FAKE_OLD ? {} : { model }) };
       const handle = (op, options) => (said({ [op]: options.agentOptions ?? null }), { agent, dispose: async () => {} });
-      apply({ on() {}, agents: { resume: async (o) => handle("resume", o), create: async (o) => handle("create", o) } });
+      // The station's tools up already (what the plugin does until they are: test/dsh-bridge.test.ts).
+      const up = { state: 2, await: async () => up };
+      const loader = { await: async () => {}, entries: () => [{ options: { id: "stillfail-tools" }, fiber: up }] };
+      apply({ on() {}, loader, agents: { resume: async (o) => handle("resume", o), create: async (o) => handle("create", o) } }, { tools: "stillfail-tools" });
       process.stdout.on("data", (d) => said({ answer: JSON.parse(String(d)) }));
     `;
     const run = (open: Record<string, unknown>, env: Record<string, string> = {}) => {
@@ -404,5 +428,20 @@ describe("what a profile runs DeepSeek Harness on", () => {
     assert.deepEqual(models("deepseek-v4.1-flash"), [{ id: "deepseek-v4.1-flash", input: ["text", "image"] }]);
     assert.deepEqual(models("deepseek-v4-pro"), [{ id: "deepseek-v4-pro" }], "a model not known to read images is left text only");
     assert.deepEqual(models("anthropic/claude-sonnet-5"), [{ id: "anthropic/claude-sonnet-5", input: ["text", "image"] }], "however the profile spells it");
+  });
+
+  test("a model dsh is started on takes its window and most output from the model catalog", () => {
+    // FB-17: pi-ai took Opus 5.5 behind a gateway for a 256K model (its default before dsh 0.2.2) and failed the turn.
+    const route = dshRoute(profile({ kind: "api-provider", provider: "custom", key: "k", endpoint: "https://gateway.example/v1", protocol: "chat_completions" }));
+    const models = (model: string) => dshSetup(route, model, undefined, "", "/h", "r", "http://127.0.0.1:1/mcp").patch.find((p) => p.id === "llm-pi-ai").config.providers.stillfail.models;
+    learn({ "claude-opus-5-5": { context: 1_000_000, output: 128_000 }, "small-model": { context: 32_000, output: 32_000 }, "no-window": { output: 8_000 } });
+    try {
+      assert.deepEqual(models("openai/claude-opus-5-5"), [{ id: "openai/claude-opus-5-5", input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 }], "however the profile spells it");
+      assert.deepEqual(models("small-model"), [{ id: "small-model", contextWindow: 32_000 }], "an output that fills the window is left to pi-ai");
+      assert.deepEqual(models("no-window"), [{ id: "no-window" }], "no window known: pi-ai's own");
+      assert.deepEqual(models("unknown-model"), [{ id: "unknown-model" }]);
+    } finally {
+      learn(null);
+    }
   });
 });

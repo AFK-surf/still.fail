@@ -25,6 +25,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 
 mod adb;
+mod keep;
 
 const MDNS_SERVICE: &str = "stillfail";
 
@@ -247,7 +248,8 @@ struct Halves {
 /// once as the core's progress of the view's call (`{id, value}`, the bytes beside it: what screens.ts says of them),
 /// so they go through neither the core's JS nor its thread; the rest (its state, a clipboard, what is not one of them)
 /// kept, as they came, for the core's next read, with a video frame's head alone the first time one comes after a
-/// config (what tells the core the picture is live).
+/// config (what tells the core the picture is live). Sound that comes as Opus (a view asked it: client/core-ts mesh.ts
+/// `decodesOpus`) is decoded here, each packet into the 20 ms of PCM16 the hosts play, and said to the app as PCM.
 struct ScreenTap {
     /// the app's call the view is (its progress' id)
     call: u64,
@@ -257,6 +259,10 @@ struct ScreenTap {
     out: Vec<u8>,
     /// a video frame's head given the core since the last config
     told_video: bool,
+    /// the view's sound is Opus (its config said so): what decodes it, and the capture time the next packet follows
+    /// on from (0: none decoded since it was made)
+    opus: Option<Box<opus_rs::OpusDecoder>>,
+    opus_next: u64,
 }
 
 const FRAME_CONFIG: u8 = 1;
@@ -265,8 +271,21 @@ const FRAME_AUDIO_CONFIG: u8 = 5;
 const FRAME_AUDIO: u8 = 6;
 /// A frame longer than this is no frame (screen-frames.ts MAX_FRAME): left to the core, which says so.
 const FRAME_MAX: usize = 64 * 1024 * 1024;
+/// A packet of sound as the hosts play it: 960 frames of interleaved stereo PCM16 (20 ms at 48 kHz); the longest Opus
+/// packet (RFC 6716 3.2.1).
+const PCM_PACKET: usize = 3840;
+const OPUS_MAX: usize = 1275;
+/// A packet's capture time this far (µs) from where the last one ended still follows on from it: half a packet (the
+/// sources that encode Opus give each packet of a run its time 20 ms on from the last exactly: the Helper's
+/// AudioPackets, stillfail-screen's Runs); one further is after a gap (packets left out before the round trip was
+/// known, while muted, silence not sent), decoded by a decoder made anew, as its encoder was.
+const OPUS_SLACK: u64 = 10_000;
 
 impl ScreenTap {
+    fn new(call: u64) -> Self {
+        ScreenTap { call, pending: Vec::new(), out: Vec::new(), told_video: false, opus: None, opus_next: 0 }
+    }
+
     /// What came next: its whole frames said or kept.
     fn take(&mut self, chunk: &[u8], tell: &dyn Tell) {
         // (whole frames read where they came, not copied first; what is left of one kept)
@@ -332,22 +351,66 @@ impl ScreenTap {
                 }
                 true
             }
-            FRAME_AUDIO if body.len() == 3848 => {
+            FRAME_AUDIO if body.len() > 8 && (if self.opus.is_some() { body.len() <= 8 + OPUS_MAX } else { body.len() == 8 + PCM_PACKET }) => {
                 let ts = u64::from_be_bytes(body[..8].try_into().unwrap());
+                let mut decoded = [0u8; PCM_PACKET];
+                let pcm = match &mut self.opus {
+                    None => &body[8..],
+                    Some(decoder) => {
+                        if self.opus_next != 0 && ts.abs_diff(self.opus_next) > OPUS_SLACK {
+                            match opus_rs::OpusDecoder::new(48_000, 2) {
+                                Ok(fresh) => **decoder = fresh,
+                                Err(_) => return true,
+                            }
+                            tally("tap.audio.resumed");
+                        }
+                        let mut samples = [0f32; PCM_PACKET / 2];
+                        // (one that does not decode to 20 ms is none: the sound goes on with the next, its decoder made
+                        // anew; a panic of the decoder on bytes the station sent is that too, not the end of the view)
+                        let packet = &body[8..];
+                        let decoded_n = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| decoder.decode(packet, PCM_PACKET / 4, &mut samples)));
+                        match decoded_n {
+                            Ok(Ok(n)) if n * 4 == PCM_PACKET => self.opus_next = ts + 20_000,
+                            _ => {
+                                self.opus_next = 0;
+                                if let Ok(fresh) = opus_rs::OpusDecoder::new(48_000, 2) {
+                                    **decoder = fresh;
+                                }
+                                tally("tap.audio.undecoded");
+                                return true;
+                            }
+                        }
+                        for (i, v) in samples.iter().enumerate() {
+                            let v = if v.is_finite() { (v.clamp(-1.0, 1.0) * 32767.0).round() as i16 } else { 0 };
+                            decoded[i * 2..i * 2 + 2].copy_from_slice(&v.to_le_bytes());
+                        }
+                        &decoded[..]
+                    }
+                };
                 let n = MEDIA_SEQ.fetch_add(1, Ordering::Relaxed);
-                if tell.media(id, FRAME_AUDIO, false, n, ts, &body[8..]) {
+                if tell.media(id, FRAME_AUDIO, false, n, ts, pcm) {
                     tally("tap.direct.audio");
                 } else {
                     let text = format!(r#"{{"id":{id},"value":{{"audio":{{"ts":{ts},"n":{n}}}}}}}"#);
-                    tell.say(text.as_bytes(), Some(&body[8..]));
+                    tell.say(text.as_bytes(), Some(pcm));
                 }
                 tally("tap.audio");
                 true
             }
             FRAME_AUDIO_CONFIG => {
                 let Ok(c) = serde_json::from_slice::<Value>(body) else { return false };
-                if c.get("codec").and_then(Value::as_str) != Some("pcm_s16le") || c.get("sampleRate").and_then(Value::as_f64) != Some(48000.0) || c.get("channels").and_then(Value::as_f64) != Some(2.0) {
+                let codec = c.get("codec").and_then(Value::as_str);
+                if !matches!(codec, Some("pcm_s16le" | "opus")) || c.get("sampleRate").and_then(Value::as_f64) != Some(48000.0) || c.get("channels").and_then(Value::as_f64) != Some(2.0) {
                     return false;
+                }
+                // (the app is told PCM either way: what it plays is what is said from here)
+                self.opus = None;
+                self.opus_next = 0;
+                if codec == Some("opus") {
+                    match opus_rs::OpusDecoder::new(48_000, 2) {
+                        Ok(decoder) => self.opus = Some(Box::new(decoder)),
+                        Err(_) => return false,
+                    }
                 }
                 // (seen by the host first: no packet taken there until the app has taken this)
                 tell.media(id, FRAME_AUDIO_CONFIG, false, MEDIA_SEQ.fetch_add(1, Ordering::Relaxed), 0, &[]);
@@ -419,13 +482,35 @@ fn base64_decode(s: &str) -> Option<Vec<u8>> {
 /// first asked for.
 type Accepted = Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Connection>>>>;
 
+/// What an endpoint keeps beside iroh's own: the connections whose handshakes are done (`iroh.accept`); a station's
+/// keepers on relays it is not home on (`iroh.keep`), and those it is home on (bound with); the next connections to come
+/// held unanswered, not even their handshake (`iroh.holdIncoming`), and those held.
+#[derive(Default)]
+struct Kept {
+    accepted: Accepted,
+    keepers: Mutex<HashMap<String, tokio::task::JoinHandle<()>>>,
+    homes: Vec<RelayUrl>,
+    held: Mutex<(u32, Vec<iroh::endpoint::Incoming>)>,
+}
+
+/// A socket's halves as the shell keeps them (`Handle::Tcp`).
+type SocketRead = Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>;
+type SocketWrite = Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>;
+
+/// A stream carried whole into a socket (`istream.pipe`): each piece of it as a frame, its length (4 bytes, big-endian)
+/// then its bytes; its end, or what failed it (the frame's tag, then the words' length and the words), as one of these.
+const PIPE_END: u32 = 0xFFFF_FFFE;
+const PIPE_FAILED: u32 = 0xFFFF_FFFD;
+/// A frame no longer than this (the longest a read gives, and what the other side sends).
+const PIPE_MOST: u32 = 1 << 20;
+
 #[derive(Clone)]
 enum Handle {
     Response(Arc<tokio::sync::Mutex<reqwest::Response>>),
     Ws { incoming: Arc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<Result<String, String>>>>, outgoing: tokio::sync::mpsc::UnboundedSender<String> },
     /// A socket to the device's own port, or a station's session on the phone's adb (`adb.open`).
     Tcp { read: Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>, write: Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>> },
-    Endpoint(Endpoint, Accepted),
+    Endpoint(Endpoint, Arc<Kept>),
     Conn(Connection),
     /// A connection that closed, let go (its state, its streams), with what the core may still ask of it.
     Gone { remote: String, reason: Value, stats: Value },
@@ -433,8 +518,45 @@ enum Handle {
     /// leaves a dial still under way on it asking its relays as it fails (mesh.ts `link`), as the station's addon answers.
     Unbound { id: String },
     IStream(Arc<Halves>),
+    /// A socket listening on this machine (`tcp.listen`, `unix.listen`): what a station's program serves (station/mb).
+    Listener(Arc<Listener>),
     /// A zstd stream being taken apart (`zstd.open`).
     Unzstd(Arc<Mutex<Unzstd>>),
+}
+
+/// A listening socket: TCP on this machine's loopback (one bound here, or one a launcher bound and handed down by its
+/// descriptor), or a Unix socket by its path.
+enum Listener {
+    Tcp(tokio::net::TcpListener),
+    #[cfg(unix)]
+    Unix(tokio::net::UnixListener),
+}
+
+impl Listener {
+    /// The next connection, as a socket read and written as `tcp.open`'s are, and who it came from.
+    async fn accept(&self) -> Result<(Handle, String), String> {
+        fn halves<R, W>(read: R, write: W) -> Handle
+        where
+            R: tokio::io::AsyncRead + Send + Unpin + 'static,
+            W: tokio::io::AsyncWrite + Send + Unpin + 'static,
+        {
+            Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) }
+        }
+        match self {
+            Listener::Tcp(l) => {
+                let (stream, peer) = l.accept().await.map_err(err)?;
+                let _ = stream.set_nodelay(true);
+                let (read, write) = stream.into_split();
+                Ok((halves(read, write), peer.to_string()))
+            }
+            #[cfg(unix)]
+            Listener::Unix(l) => {
+                let (stream, _) = l.accept().await.map_err(err)?;
+                let (read, write) = stream.into_split();
+                Ok((halves(read, write), String::new()))
+            }
+        }
+    }
 }
 
 /// A zstd stream being taken apart, a piece at a time as the core is given them: libzstd's streaming decoder (frames
@@ -601,6 +723,31 @@ fn storage_path(dir: &std::path::Path, key: &str) -> PathBuf {
     dir.join(name)
 }
 
+/// A file to write a kept value in (`storage.set`: the partial one, renamed over the value once written). On Unix
+/// its user's alone whatever the process's umask (0600, less what the umask takes of that): a value kept is a
+/// device's key among others, and was readable by whomever the umask let (0644 under most), unless the program had
+/// set the whole process's umask for it. What a crash left there is taken away first and the file made only if none
+/// is there, so its mode is the one it is made with (none is set after: a filesystem may refuse that, where writing
+/// did not fail before) and nothing is written through a link left in its place. One shell writes its values one
+/// at a time (the disk thread). Two processes writing one key at once, which no program does, each write a file of
+/// their own, and one of them fails (here, or at its rename), where their bytes went into one file before.
+fn create_private(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    #[cfg(unix)]
+    {
+        match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+            _ => {}
+        }
+        let mut options = std::fs::OpenOptions::new();
+        std::os::unix::fs::OpenOptionsExt::mode(options.write(true).create_new(true), 0o600);
+        options.open(path)
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::File::create(path)
+    }
+}
+
 fn headers_of(response: &reqwest::Response) -> Value {
     Value::Array(response.headers().iter().map(|(k, v)| json!([k.as_str(), String::from_utf8_lossy(v.as_bytes())])).collect())
 }
@@ -611,6 +758,69 @@ fn str_of<'a>(v: &'a Value, k: &str) -> Result<&'a str, String> {
 
 fn id_of(v: &Value) -> Result<u64, String> {
     v.get("id").and_then(Value::as_u64).ok_or_else(|| "missing id".to_string())
+}
+
+/// The connections' transport (the station's addon's `transport`): the congestion controller named, Cubic or BBR (opt
+/// in), each with a 256 KiB initial window; each path kept alive each second and given up after 3 s of silence, so one
+/// connection goes on through another relay as one goes; a link kept 10 minutes in silence (an app frozen in the
+/// background past iroh's 30 s came back to every link timed out).
+fn transport(congestion: &str) -> Result<QuicTransportConfig, String> {
+    let controller: Arc<dyn noq_proto::congestion::ControllerFactory + Send + Sync> = match congestion {
+        "cubic" => {
+            let mut config = noq_proto::congestion::CubicConfig::default();
+            config.initial_window(256 * 1024);
+            Arc::new(config)
+        }
+        "bbr" => {
+            let mut config = noq_proto::congestion::Bbr3Config::default();
+            config.initial_window(256 * 1024);
+            Arc::new(config)
+        }
+        _ => return Err("congestion: expected cubic or bbr".into()),
+    };
+    Ok(QuicTransportConfig::builder()
+        .congestion_controller_factory(controller)
+        .default_path_keep_alive_interval(std::time::Duration::from_secs(1))
+        .default_path_max_idle_timeout(std::time::Duration::from_secs(3))
+        .max_idle_timeout(Some(iroh::endpoint::VarInt::from_u32(10 * 60_000).into()))
+        .build())
+}
+
+/// A way of finding stations (mDNS, the DHT) that could not be made leaves a station's endpoint without it, said, as
+/// the station's addon has it: mDNS binds UDP 5353, which fails with no network up yet or the port held by another
+/// program, and the endpoint failing left the station off the mesh until it was restarted.
+#[derive(Debug)]
+struct Optional<B>(&'static str, B);
+
+#[derive(Debug)]
+struct Unmade<L>(Option<L>);
+
+impl<B: iroh::address_lookup::AddressLookupBuilder> iroh::address_lookup::AddressLookupBuilder for Optional<B> {
+    fn into_address_lookup(self, endpoint: &Endpoint) -> Result<impl iroh::address_lookup::AddressLookup, iroh::address_lookup::AddressLookupBuilderError> {
+        Ok(Unmade(match self.1.into_address_lookup(endpoint) {
+            Ok(lookup) => Some(lookup),
+            Err(error) => {
+                eprintln!("mesh: stations not found through {}: {error:#}", self.0);
+                None
+            }
+        }))
+    }
+}
+
+impl<L: iroh::address_lookup::AddressLookup> iroh::address_lookup::AddressLookup for Unmade<L> {
+    fn publish(&self, data: &iroh::address_lookup::EndpointData) {
+        if let Some(lookup) = &self.0 {
+            lookup.publish(data);
+        }
+    }
+
+    fn resolve(&self, endpoint_id: EndpointId) -> Option<n0_future::boxed::BoxStream<Result<iroh::address_lookup::Item, iroh::address_lookup::Error>>> {
+        self.0.as_ref().and_then(|lookup| lookup.resolve(endpoint_id))
+    }
+}
+
+fn bytes_of(b: &'static [u8]) -> bytes::Bytes {
+    bytes::Bytes::from_static(b)
 }
 
 fn relay_url(url: &str) -> Result<RelayUrl, String> {
@@ -632,12 +842,15 @@ fn endpoint_addr(addr: &Value) -> Result<EndpointAddr, String> {
 
 fn close_info(error: &iroh::endpoint::ConnectionError) -> Value {
     use iroh::endpoint::ConnectionError;
-    match error {
+    let mut info = match error {
         ConnectionError::ApplicationClosed(close) => json!({ "kind": "application", "reason": String::from_utf8_lossy(&close.reason) }),
         ConnectionError::LocallyClosed => json!({ "kind": "local", "reason": "" }),
         ConnectionError::TimedOut => json!({ "kind": "timeout", "reason": "" }),
         other => json!({ "kind": "other", "reason": other.to_string() }),
-    }
+    };
+    // (and in words, as the station's addon says it: its `closed`)
+    info["text"] = json!(error.to_string());
+    info
 }
 
 impl Handle {
@@ -651,6 +864,7 @@ impl Handle {
             Handle::Gone { .. } => "gone",
             Handle::Unbound { .. } => "unbound",
             Handle::IStream(_) => "stream",
+            Handle::Listener(_) => "listener",
             Handle::Unzstd(_) => "unzstd",
         }
     }
@@ -786,6 +1000,162 @@ impl Inner {
         }
     }
 
+    /// A stream given to the Unix socket at `path` (`istream.hand`): connected, `head` written, carried.
+    async fn hand(self: &Arc<Self>, id: u64, halves: Arc<Halves>, path: &str, head: &[u8]) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            let socket = match tokio::net::UnixStream::connect(path).await {
+                Ok(socket) => socket,
+                Err(e) => {
+                    self.reset_stream(id).await;
+                    return Err(err(e));
+                }
+            };
+            {
+                use std::os::fd::AsRawFd;
+                // A stream's pieces written a megabyte ahead of the other side's reads (a Unix socket's own is 8 KiB
+                // on macOS): fewer turns of both for what a stream carries.
+                let size: libc::c_int = 1 << 20;
+                // SAFETY: setsockopt on a socket this function holds, with an int it reads.
+                unsafe { libc::setsockopt(socket.as_raw_fd(), libc::SOL_SOCKET, libc::SO_SNDBUF, (&size as *const libc::c_int).cast(), std::mem::size_of::<libc::c_int>() as libc::socklen_t) };
+            }
+            let (read, mut write) = socket.into_split();
+            if let Err(e) = write.write_all(head).await {
+                self.reset_stream(id).await;
+                return Err(err(e));
+            }
+            let read: SocketRead = Arc::new(tokio::sync::Mutex::new(Box::new(read)));
+            let write: SocketWrite = Arc::new(tokio::sync::Mutex::new(Box::new(write)));
+            self.pipe(id, halves, read, write).await;
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (id, halves, path, head);
+            Err("Unix sockets are Unix's".into())
+        }
+    }
+
+    /// A stream ended at once both ways, and let go (`istream.reset`'s).
+    async fn reset_stream(&self, id: u64) {
+        if let Some(Handle::IStream(halves)) = self.drop_handle(id) {
+            let _ = halves.reset.send(true);
+            if let Some(send) = halves.send.lock().await.as_mut() {
+                let _ = send.reset(0u32.into());
+            }
+            if let Some(recv) = halves.recv.lock().await.as_mut() {
+                let _ = recv.stop(0u32.into());
+            }
+        }
+    }
+
+    /// A stream carried whole into a socket, both ways (`istream.pipe`, which says how), till both ways are done.
+    async fn pipe(&self, id: u64, halves: Arc<Halves>, read: SocketRead, write: SocketWrite) {
+        let down = async {
+            let mut write = write.lock().await;
+            let mut reset = halves.reset.subscribe();
+            let mut buf = vec![0u8; 4 + 256 * 1024];
+            loop {
+                if *reset.borrow() {
+                    break;
+                }
+                let read = {
+                    let mut recv = halves.recv.lock().await;
+                    // (one way: nothing comes)
+                    let Some(recv) = recv.as_mut() else { break };
+                    tokio::select! {
+                        read = recv.read(&mut buf[4..]) => read,
+                        _ = reset.changed() => break,
+                    }
+                };
+                let frame: &[u8] = match read {
+                    Ok(Some(n)) => {
+                        buf[..4].copy_from_slice(&(n as u32).to_be_bytes());
+                        &buf[..4 + n]
+                    }
+                    Ok(None) => {
+                        halves.ended.store(true, Ordering::Relaxed);
+                        let _ = write.write_all(&PIPE_END.to_be_bytes()).await;
+                        break;
+                    }
+                    Err(e) => {
+                        let words = e.to_string();
+                        let mut failed = PIPE_FAILED.to_be_bytes().to_vec();
+                        failed.extend((words.len() as u32).to_be_bytes());
+                        failed.extend(words.as_bytes());
+                        let _ = write.write_all(&failed).await;
+                        break;
+                    }
+                };
+                if write.write_all(frame).await.is_err() {
+                    break;
+                }
+            }
+            let _ = write.shutdown().await;
+        };
+        let up = async {
+            let mut read = read.lock().await;
+            let mut reset = halves.reset.subscribe();
+            let mut head = [0u8; 4];
+            let mut buf = Vec::new();
+            let mut written_end = false;
+            let finished = loop {
+                if *reset.borrow() {
+                    break false;
+                }
+                let ok = tokio::select! {
+                    r = read.read_exact(&mut head) => r.is_ok(),
+                    _ = reset.changed() => break false,
+                };
+                if !ok {
+                    break false;
+                }
+                let n = u32::from_be_bytes(head);
+                if n == PIPE_END {
+                    break true;
+                }
+                if n > PIPE_MOST {
+                    break false;
+                }
+                buf.resize(n as usize, 0);
+                let ok = tokio::select! {
+                    r = read.read_exact(&mut buf) => r.is_ok(),
+                    _ = reset.changed() => break false,
+                };
+                if !ok {
+                    break false;
+                }
+                let mut send = halves.send.lock().await;
+                let Some(send) = send.as_mut() else { break false };
+                let sent = tokio::select! {
+                    r = send.write_all(&buf) => r.is_ok(),
+                    _ = reset.changed() => false,
+                };
+                if !sent {
+                    // (reset by either end: the socket's frames go nowhere now)
+                    written_end = true;
+                    break false;
+                }
+            };
+            if !written_end && !*reset.borrow() {
+                let mut send = halves.send.lock().await;
+                if let Some(send) = send.as_mut() {
+                    if finished {
+                        let _ = send.finish();
+                    } else {
+                        let _ = send.reset(0u32.into());
+                    }
+                }
+            }
+            halves.finished.store(true, Ordering::Relaxed);
+        };
+        tokio::join!(down, up);
+        // Let go once both ways are done, unless its sending half is still to be asked when it is acknowledged.
+        if halves.recv.lock().await.is_some() {
+            self.istream_done(id, &halves);
+        }
+    }
+
     fn request(&self, a: &Value, body: Option<Vec<u8>>) -> Result<reqwest::RequestBuilder, String> {
         let method = reqwest::Method::from_bytes(str_of(a, "method")?.as_bytes()).map_err(err)?;
         let mut builder = self.http.lock().unwrap().request(method, str_of(a, "url")?);
@@ -830,7 +1200,7 @@ impl Inner {
                 let out = z.take(&input)?;
                 Ok(Answer::bytes(json!({ "whole": z.whole }), out))
             }
-            "stream.close" | "ws.close" | "tcp.close" | "zstd.close" => {
+            "stream.close" | "ws.close" | "tcp.close" | "zstd.close" | "listen.close" => {
                 // Dropping the response, the socket's sender (its task ends) or the halves closes it.
                 self.drop_handle(id_of(&a)?);
                 Ok(Answer::json(json!({})))
@@ -867,7 +1237,7 @@ impl Inner {
                     // Synced through the handle it was written with: Windows syncs only a handle that may write (one
                     // opened again to read, as this did, failed every storage.set there).
                     let partial = path.with_extension("partial");
-                    let mut file = std::fs::File::create(&partial).map_err(err)?;
+                    let mut file = create_private(&partial).map_err(err)?;
                     std::io::Write::write_all(&mut file, &value).and_then(|()| file.sync_all()).map_err(err)?;
                     drop(file);
                     std::fs::rename(&partial, &path).map_err(err)?;
@@ -927,6 +1297,65 @@ impl Inner {
                 let id = self.keep(Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) });
                 Ok(Answer::json(json!({ "id": id })))
             }
+            // A socket to serve (station/mb's programs): a launcher's, handed down by its descriptor (`fd`, Unix), or one
+            // bound here on 127.0.0.1 (`port`, 0 for any free one); its port said. Only this machine's: no other address.
+            "tcp.listen" => {
+                let listener = match a.get("fd").and_then(Value::as_i64) {
+                    #[cfg(unix)]
+                    Some(fd) => {
+                        use std::os::fd::FromRawFd;
+                        // SAFETY: the descriptor was handed to this process to serve, and is taken over once here.
+                        let std = unsafe { std::net::TcpListener::from_raw_fd(fd as i32) };
+                        std.set_nonblocking(true).map_err(err)?;
+                        tokio::net::TcpListener::from_std(std).map_err(err)?
+                    }
+                    #[cfg(not(unix))]
+                    Some(_) => return Err("a socket handed down by its descriptor is Unix's".into()),
+                    None => {
+                        let port = a.get("port").and_then(Value::as_u64).unwrap_or(0) as u16;
+                        tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(err)?
+                    }
+                };
+                let port = listener.local_addr().map_err(err)?.port();
+                Ok(Answer::json(json!({ "id": self.keep(Handle::Listener(Arc::new(Listener::Tcp(listener)))), "port": port })))
+            }
+            // A Unix socket to serve at `path` (one there before is replaced).
+            "unix.listen" => {
+                #[cfg(unix)]
+                {
+                    let path = str_of(&a, "path")?;
+                    let _ = std::fs::remove_file(path);
+                    let listener = tokio::net::UnixListener::bind(path).map_err(err)?;
+                    Ok(Answer::json(json!({ "id": self.keep(Handle::Listener(Arc::new(Listener::Unix(listener)))) })))
+                }
+                #[cfg(not(unix))]
+                Err("Unix sockets are Unix's".into())
+            }
+            // Two sockets carried into each other, both ways, here (each side's end said to the other as it comes),
+            // answered once both ways ended: what a station's program passes on whole, with no step of its own per piece.
+            "tcp.pipe" => {
+                let ids = a.get("ids").and_then(Value::as_array).ok_or("missing ids")?;
+                let id = |i: usize| ids.get(i).and_then(Value::as_u64).ok_or_else(|| "missing ids".to_string());
+                let (one, two) = (self.drop_handle(id(0)?), self.drop_handle(id(1)?));
+                let (Some(Handle::Tcp { read: r1, write: w1 }), Some(Handle::Tcp { read: r2, write: w2 })) = (one, two) else {
+                    return Err("not two tcp connections".into());
+                };
+                async fn carry(from: Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>, to: Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>) -> u64 {
+                    let (mut from, mut to) = (from.lock().await, to.lock().await);
+                    let n = tokio::io::copy(&mut *from, &mut *to).await.unwrap_or(0);
+                    let _ = to.shutdown().await;
+                    n
+                }
+                let (there, back) = tokio::join!(carry(r1, w2), carry(r2, w1));
+                Ok(Answer::json(json!({ "there": there, "back": back })))
+            }
+            // The next connection to a listening socket: a socket read and written as `tcp.open`'s are (`tcp.read`,
+            // `tcp.write`, `tcp.end`, `tcp.close`), and who it came from.
+            "tcp.accept" => {
+                let Handle::Listener(listener) = self.handle(id_of(&a)?)? else { return Err("not a listening socket".into()) };
+                let (conn, peer) = listener.accept().await?;
+                Ok(Answer::json(json!({ "id": self.keep(conn), "peer": peer })))
+            }
             "tcp.read" => {
                 let Handle::Tcp { read, .. } = self.handle(id_of(&a)?)? else { return Err("not a tcp connection".into()) };
                 let mut buf = vec![0u8; 64 * 1024];
@@ -969,20 +1398,36 @@ impl Inner {
             // As the station's addon takes them: handshakes side by side, each on its own, so one never finished (a
             // device gone half way) holds up no other; one that fails is skipped.
             "iroh.accept" => {
-                let (endpoint, accepted) = match self.handle(id_of(&a)?)? {
-                    Handle::Endpoint(endpoint, accepted) => (endpoint, accepted),
+                let (endpoint, kept) = match self.handle(id_of(&a)?)? {
+                    Handle::Endpoint(endpoint, kept) => (endpoint, kept),
                     Handle::Unbound { .. } => return Ok(Answer::json(json!({ "end": true }))),
                     _ => return Err("not an endpoint".into()),
                 };
-                let mut accepted = accepted.lock().await;
+                let mut accepted = kept.accepted.lock().await;
                 let done = accepted.get_or_insert_with(|| {
                     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+                    let kept = kept.clone();
                     tokio::spawn(async move {
                         while let Some(incoming) = endpoint.accept().await {
+                            {
+                                let mut held = kept.held.lock().unwrap();
+                                if held.0 > 0 {
+                                    held.0 -= 1;
+                                    held.1.push(incoming);
+                                    continue;
+                                }
+                            }
                             let tx = tx.clone();
                             tokio::spawn(async move {
-                                if let Ok(conn) = incoming.await {
-                                    let _ = tx.send(conn);
+                                // One whose handshake fails is said, where it came from and how long it took (the
+                                // station's addon's, which says why).
+                                let from = incoming.remote_addr();
+                                let started = std::time::Instant::now();
+                                match incoming.await {
+                                    Ok(conn) => {
+                                        let _ = tx.send(conn);
+                                    }
+                                    Err(error) => eprintln!("mesh: a connection's handshake failed from {from:?} after {} ms: {error:#}", started.elapsed().as_millis()),
                                 }
                             });
                         }
@@ -1024,7 +1469,10 @@ impl Inner {
                 let endpoint = {
                     let mut handles = self.handles.lock().unwrap();
                     match handles.get(&id) {
-                        Some(Handle::Endpoint(endpoint, _)) => {
+                        Some(Handle::Endpoint(endpoint, kept)) => {
+                            for (_, task) in kept.keepers.lock().unwrap().drain() {
+                                task.abort();
+                            }
                             let endpoint = endpoint.clone();
                             handles.insert(id, Handle::Unbound { id: hex::encode(endpoint.id().as_bytes()) });
                             Some(endpoint)
@@ -1090,7 +1538,7 @@ impl Inner {
                 if self.say.lock().unwrap().is_none() {
                     return Ok(Answer::json(json!({ "tapped": false })));
                 }
-                let mut tap = ScreenTap { call, pending: Vec::new(), out: Vec::new(), told_video: false };
+                let mut tap = ScreenTap::new(call);
                 tap.take(&bytes.unwrap_or_default(), &**self);
                 *halves.tap.lock().unwrap() = Some(tap);
                 tally("tap.views");
@@ -1217,6 +1665,170 @@ impl Inner {
                 }
                 Ok(Answer::json(json!({})))
             }
+            // A station's endpoint (station/mb's front, which keeps it for the station's Node: the addon's `Endpoint`).
+            "iroh.online" | "iroh.insertRelay" | "iroh.removeRelay" | "iroh.publicRelays" | "iroh.keep" | "iroh.setCongestion" | "iroh.holdIncoming" => {
+                let (endpoint, kept) = match self.handle(id_of(&a)?)? {
+                    Handle::Endpoint(endpoint, kept) => (endpoint, kept),
+                    Handle::Unbound { .. } => return Err("the endpoint is closed".into()),
+                    _ => return Err("not an endpoint".into()),
+                };
+                match op {
+                    // Once it is on its home relay (at once with relays off).
+                    "iroh.online" => endpoint.online().await,
+                    "iroh.insertRelay" => {
+                        let url = relay_url(str_of(&a, "url")?)?;
+                        endpoint.insert_relay(url.clone(), Arc::new(iroh::RelayConfig::from(url))).await;
+                    }
+                    "iroh.removeRelay" => {
+                        endpoint.remove_relay(&relay_url(str_of(&a, "url")?)?).await;
+                    }
+                    // iroh's own public relays: added while none of still.fail's answers, removed once one does.
+                    "iroh.publicRelays" => {
+                        let on = a.get("on").and_then(Value::as_bool).unwrap_or(false);
+                        for config in iroh::defaults::prod::default_relay_map().relays::<Vec<_>>() {
+                            if on {
+                                endpoint.insert_relay(config.url.clone(), config.clone()).await;
+                            } else {
+                                endpoint.remove_relay(&config.url).await;
+                            }
+                        }
+                    }
+                    // On exactly these relays besides those it is home on: a keeper for each new one, those of relays no
+                    // longer named stopped.
+                    "iroh.keep" => {
+                        let mut relays: Vec<RelayUrl> = a.get("urls").and_then(Value::as_array).into_iter().flatten().map(|u| relay_url(u.as_str().unwrap_or_default())).collect::<Result<_, _>>()?;
+                        relays.retain(|r| !kept.homes.contains(r));
+                        let urls: Vec<String> = relays.iter().map(ToString::to_string).collect();
+                        let mut keepers = kept.keepers.lock().unwrap();
+                        keepers.retain(|url, task| {
+                            let named = urls.contains(url);
+                            if !named {
+                                task.abort();
+                            }
+                            named
+                        });
+                        for relay in relays {
+                            let endpoint = endpoint.clone();
+                            keepers.entry(relay.to_string()).or_insert_with(|| tokio::spawn(keep::keep(endpoint, relay)));
+                        }
+                    }
+                    // The controller of the connections made from now on.
+                    "iroh.setCongestion" => endpoint.set_transport_config(transport(str_of(&a, "congestion")?)?),
+                    // The next `n` connections coming never answered, not even their handshake (tests: a device whose way
+                    // here is gone).
+                    _ => kept.held.lock().unwrap().0 = a.get("n").and_then(Value::as_u64).unwrap_or(0) as u32,
+                }
+                Ok(Answer::json(json!({})))
+            }
+            // Whether the other end is still there: asked with a datagram (which a live end acknowledges at once) a few
+            // times within `within` ms, true as soon as anything is heard from it (the addon's `answers`, which says why).
+            "conn.answers" => {
+                let conn = match self.handle(id_of(&a)?)? {
+                    Handle::Conn(conn) => conn,
+                    Handle::Gone { .. } => return Ok(Answer::json(json!(false))),
+                    _ => return Err("not a connection".into()),
+                };
+                let within = std::time::Duration::from_millis(a.get("within").and_then(Value::as_u64).unwrap_or(0));
+                let heard = conn.stats().udp_rx.datagrams;
+                let deadline = std::time::Instant::now() + within;
+                let mut ask = std::time::Instant::now();
+                let answers = loop {
+                    if conn.close_reason().is_some() {
+                        break false;
+                    }
+                    if conn.stats().udp_rx.datagrams > heard {
+                        break true;
+                    }
+                    let now = std::time::Instant::now();
+                    if now >= deadline {
+                        break false;
+                    }
+                    if now >= ask {
+                        match conn.send_datagram(bytes_of(&[0])) {
+                            Ok(()) => {}
+                            Err(iroh::endpoint::SendDatagramError::ConnectionLost(_)) => break false,
+                            Err(_) => break true,
+                        }
+                        ask = now + within / 3;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                };
+                Ok(Answer::json(json!(answers)))
+            }
+            // A Unix socket on this machine, read and written as `tcp.open`'s is.
+            "unix.open" => {
+                #[cfg(unix)]
+                {
+                    let (read, write) = tokio::net::UnixStream::connect(str_of(&a, "path")?).await.map_err(err)?.into_split();
+                    let id = self.keep(Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) });
+                    Ok(Answer::json(json!({ "id": id })))
+                }
+                #[cfg(not(unix))]
+                Err("Unix sockets are Unix's".into())
+            }
+            // A stream carried whole into a socket (`to`, taken), both ways, here: what comes on it written to the socket
+            // in frames (PIPE_END its end, PIPE_FAILED what failed it), and the frames the socket sends written on it, its
+            // PIPE_END finishing it; the socket ending without one resets it. What the station's Node reads and writes of
+            // a stream the front keeps for it (station/mb's front), none of it through the front's program. Answered once
+            // both ways are done; `istream.stopped` and `istream.reset` are asked of the stream meanwhile as before.
+            "istream.pipe" => {
+                let id = id_of(&a)?;
+                let Handle::IStream(halves) = self.handle(id)? else { return Err("not a stream".into()) };
+                let to = a.get("to").and_then(Value::as_u64).ok_or("missing to")?;
+                let Some(Handle::Tcp { read, write }) = self.drop_handle(to) else { return Err("not a socket".into()) };
+                self.pipe(id, halves, read, write).await;
+                Ok(Answer::json(json!({})))
+            }
+            // A stream given to the Unix socket at `path`: a connection to it, `bytes` written first (what tells the
+            // other side which stream it is), then the stream carried into it as `istream.pipe` carries it.
+            "istream.hand" => {
+                let id = id_of(&a)?;
+                let Handle::IStream(halves) = self.handle(id)? else { return Err("not a stream".into()) };
+                self.hand(id, halves, str_of(&a, "path")?, &bytes.unwrap_or_default()).await?;
+                Ok(Answer::json(json!({})))
+            }
+            // Each stream the other end of a connection opens, given as it comes to the Unix socket at `path` as
+            // `istream.hand` gives one, its head the connection's id and the stream's (8 bytes each, big-endian), a 2
+            // and the stream's index on the connection (QUIC's, 8 bytes): each is handed by a task of its own, so their
+            // sockets come to the other side in any order, which puts them back in the order they were opened by it
+            // (a device's credential stream is its first; 2026-11-13, its requests came first and were refused as
+            // one). A 0 there and no index: a front from before. Kept as a stream here meanwhile
+            // (`istream.stopped`, `istream.reset`). Answered once the connection is gone.
+            // What station/mb's front gives its Node, with no step of the program's for each stream.
+            "conn.hand" => {
+                let on = id_of(&a)?;
+                let path = str_of(&a, "path")?.to_string();
+                let Handle::Conn(conn) = self.handle(on)? else { return Ok(Answer::json(json!({}))) };
+                while let Ok((mut send, mut recv)) = conn.accept_bi().await {
+                    if !matches!(self.handle(on), Ok(Handle::Conn(_))) {
+                        let _ = send.reset(0u32.into());
+                        let _ = recv.stop(0u32.into());
+                        break;
+                    }
+                    let index = recv.id().index();
+                    let halves = Arc::new(Halves {
+                        conn: on,
+                        ended: false.into(),
+                        finished: false.into(),
+                        send: tokio::sync::Mutex::new(Some(send)),
+                        recv: tokio::sync::Mutex::new(Some(recv)),
+                        reset: tokio::sync::watch::channel(false).0,
+                        tap: Mutex::default(),
+                    });
+                    let id = self.keep(Handle::IStream(halves.clone()));
+                    let mut head = on.to_be_bytes().to_vec();
+                    head.extend(id.to_be_bytes());
+                    head.push(2);
+                    head.extend(index.to_be_bytes());
+                    let (inner, path) = (self.clone(), path.clone());
+                    tokio::spawn(async move {
+                        if let Err(e) = inner.hand(id, halves, &path, &head).await {
+                            eprintln!("mesh: a stream not given: {e}");
+                        }
+                    });
+                }
+                Ok(Answer::json(json!({})))
+            }
             other => Err(format!("no operation {other}")),
         }
     }
@@ -1256,13 +1868,12 @@ impl Inner {
     async fn bind(self: &Arc<Self>, a: &Value, key: Vec<u8>) -> Done {
         let bytes: [u8; 32] = key.as_slice().try_into().map_err(|_| "the key is not 32 bytes".to_string())?;
         let key = SecretKey::from_bytes(&bytes);
+        let key_again = key.clone();
         let relays: Vec<RelayUrl> = a.get("relayUrls").and_then(Value::as_array).into_iter().flatten().map(|u| relay_url(u.as_str().unwrap_or_default())).collect::<Result<_, _>>()?;
         let entries: Vec<(RelayUrl, RelayUrl)> = a.get("relayEntries").and_then(Value::as_array).into_iter().flatten().map(|e| Ok((relay_url(str_of(e, "entry")?)?, relay_url(str_of(e, "relay")?)?))).collect::<Result<_, String>>()?;
         let relay_map = iroh::RelayMap::from_iter(relays.iter().map(|relay| {
             iroh::RelayConfig::from(relay.clone()).with_entries(entries.iter().filter(|(_, target)| target == relay).map(|(entry, _)| entry.clone()))
         }));
-        let mut cubic = noq_proto::congestion::CubicConfig::default();
-        cubic.initial_window(256 * 1024);
         let alpns: Vec<Vec<u8>> = a.get("alpns").and_then(Value::as_array).into_iter().flatten().map(|x| hex::decode(x.as_str().unwrap_or_default()).map_err(err)).collect::<Result<_, _>>()?;
         let mut builder = Endpoint::builder(Minimal)
             .secret_key(key)
@@ -1272,16 +1883,11 @@ impl Inner {
             // connection to a station goes through every relay it is on, and on through another as one goes (the
             // station's mesh addon: PATH_KEEP_ALIVE, PATH_IDLE).
             .home_on_every_relay()
-            .transport_config(
-                QuicTransportConfig::builder()
-                    .congestion_controller_factory(Arc::new(cubic))
-                    .default_path_keep_alive_interval(std::time::Duration::from_secs(1))
-                    .default_path_max_idle_timeout(std::time::Duration::from_secs(3))
-                    // A link kept 10 minutes in silence, as the station's (its CONNECTION_IDLE_MS): the app frozen in the
-                    // background past iroh's 30 s came back to every link timed out.
-                    .max_idle_timeout(Some(iroh::endpoint::VarInt::from_u32(10 * 60_000).into()))
-                    .build(),
-            );
+            .transport_config(transport(a.get("congestion").and_then(Value::as_str).unwrap_or("cubic"))?);
+        // Where a station listens (its config's fixed port); any free port when not said.
+        if let Some(addr) = a.get("bindAddr").and_then(Value::as_str) {
+            builder = builder.bind_addr(addr.parse::<std::net::SocketAddr>().map_err(err)?).map_err(err)?;
+        }
         if a.get("relayOnly").and_then(Value::as_bool).unwrap_or(false) {
             builder = builder.clear_ip_transports();
         }
@@ -1290,9 +1896,15 @@ impl Inner {
             builder = builder
                 .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
                 .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).no_publish());
+        } else if a.get("discovery").and_then(Value::as_bool).unwrap_or(false) {
+            // A station's: found on the LAN by mDNS and by its relay through the DHT, both announced (the station's
+            // addon's `bind`), each left out, said, where it cannot be made (mDNS's port held, no network yet).
+            builder = builder
+                .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE)))
+                .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).secret_key(key_again)));
         }
         let endpoint = builder.bind().await.map_err(err)?;
-        Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint, Accepted::default())) })))
+        Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint, Arc::new(Kept { homes: relays.clone(), ..Kept::default() }))) })))
     }
 
     /// An account's database: opened, a statement run, its rows, closed, its file removed.
@@ -1321,12 +1933,16 @@ impl Inner {
                 sqls.insert(id, (path, conn));
                 Ok(json!({ "id": id }))
             }
-            // A database another process keeps (the station's, by its path) and writes as well: never made here, never
-            // held for this process alone, waited for `wait` ms when it is busy.
+            // A database another process keeps (the station's, by its path) and writes as well: never made here (but with
+            // `create`), never held for this process alone, waited for `wait` ms when it is busy.
             "sql.attach" => {
                 let path = PathBuf::from(str_of(a, "path")?);
                 let wait = a.get("wait").and_then(Value::as_u64).unwrap_or(0);
-                let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+                let mut flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+                // `create`: one of the program's own, made where it is not (station/mb src/replica's export.db).
+                if a.get("create").and_then(Value::as_bool).unwrap_or(false) {
+                    flags |= rusqlite::OpenFlags::SQLITE_OPEN_CREATE;
+                }
                 let conn = rusqlite::Connection::open_with_flags(&path, flags).map_err(err)?;
                 conn.busy_timeout(std::time::Duration::from_millis(wait)).map_err(err)?;
                 conn.set_prepared_statement_cache_capacity(256);
@@ -1399,6 +2015,11 @@ impl Inner {
     }
 
     fn run_sync(&self, op: &str, a: &Value) -> Result<Value, String> {
+        // Whether a screen view's Opus sound is decoded here (ScreenTap): only where its tap says to the app, so the
+        // core asks the station for Opus only then (client/core-ts hosts/bridge.ts `opus`), else PCM.
+        if op == "tap.opus" {
+            return Ok(json!(self.say.lock().unwrap().is_some()));
+        }
         if op == "fetch.cancel" {
             let pending = self.fetches.lock().unwrap().remove(&id_of(a)?);
             return Ok(json!(pending.is_some_and(|cancel| cancel.send(()).is_ok())));
@@ -1422,11 +2043,19 @@ impl Inner {
         // A directory's names, with their kinds as the directory says them (`types`: [name, "file" | "dir" | "link" |
         // "other"], links not followed), in Node's readdirSync's order (libuv sorts them by their bytes, but on Windows);
         // null when it cannot be read.
+        // `disk`: in the order the file system gives them (Node's opendirSync, Rust's read_dir), an entry that does not
+        // read ending the list rather than failing it (station/src/read/machine.ts `readDir`).
         if op == "fs.readdir" {
             let Ok(entries) = std::fs::read_dir(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let disk = a.get("disk").and_then(Value::as_bool).unwrap_or(false);
             let mut out: Vec<(String, &str)> = Vec::new();
             for entry in entries {
-                let Ok(entry) = entry else { return Ok(Value::Null) };
+                let Ok(entry) = entry else {
+                    if disk {
+                        break;
+                    }
+                    return Ok(Value::Null);
+                };
                 let kind = match entry.file_type() {
                     Ok(t) if t.is_symlink() => "link",
                     Ok(t) if t.is_dir() => "dir",
@@ -1435,7 +2064,7 @@ impl Inner {
                 };
                 out.push((entry.file_name().to_string_lossy().into_owned(), kind));
             }
-            if !cfg!(windows) {
+            if !cfg!(windows) && !disk {
                 out.sort_by(|x, y| x.0.as_bytes().cmp(y.0.as_bytes()));
             }
             let types = a.get("types").and_then(Value::as_bool).unwrap_or(false);
@@ -1507,8 +2136,174 @@ impl Inner {
             let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
             return Ok(json!(String::from_utf8_lossy(body)));
         }
+        // What a link points to, as Node's readlinkSync gives it; null when the path is no link or cannot be read.
+        if op == "fs.readlink" {
+            return Ok(std::fs::read_link(str_of(a, "path")?).map_or(Value::Null, |p| json!(p.to_string_lossy())));
+        }
+        // A file from byte `from` to its end, decoded as Buffer.toString("utf8") does (what is not UTF-8 replaced, a byte
+        // order mark kept); null when it does not open.
+        if op == "fs.from" {
+            use std::io::{Read, Seek, SeekFrom};
+            let Ok(mut file) = std::fs::File::open(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let from = a.get("from").and_then(Value::as_u64).unwrap_or(0);
+            let mut bytes = Vec::new();
+            if file.seek(SeekFrom::Start(from)).is_err() || file.read_to_end(&mut bytes).is_err() {
+                return Ok(Value::Null);
+            }
+            return Ok(json!(String::from_utf8_lossy(&bytes)));
+        }
+        // A file's lines as Rust's BufRead::lines with map_while(Result::ok) reads them (station/src/read/machine.ts
+        // `lines`): without their "\n" or "\r\n", each decoded strictly with a leading byte order mark dropped, ending at
+        // the first that is not UTF-8 or at a read that fails; at most `limit`. A line longer than `max` bytes (its "\n"
+        // counted) is read as "". None when the file does not open: an empty list.
+        if op == "fs.lines" {
+            use std::io::Read;
+            let Ok(mut file) = std::fs::File::open(str_of(a, "path")?) else { return Ok(json!([])) };
+            let limit = a.get("limit").and_then(Value::as_u64).map_or(usize::MAX, |n| n as usize);
+            let max = a.get("max").and_then(Value::as_u64).map_or(usize::MAX, |n| n as usize);
+            let mut out: Vec<Value> = Vec::new();
+            let mut pending: Vec<u8> = Vec::new();
+            let mut over = false;
+            // Whether more are wanted.
+            let take = |line: &[u8], over: &mut bool, out: &mut Vec<Value>| -> bool {
+                if *over {
+                    *over = false;
+                    out.push(json!(""));
+                    return out.len() < limit;
+                }
+                let mut line = line;
+                if line.last() == Some(&b'\n') {
+                    line = &line[..line.len() - 1];
+                }
+                if line.last() == Some(&b'\r') {
+                    line = &line[..line.len() - 1];
+                }
+                let body = line.strip_prefix(b"\xef\xbb\xbf").unwrap_or(line);
+                match std::str::from_utf8(body) {
+                    Ok(text) => out.push(json!(text)),
+                    Err(_) => return false,
+                }
+                out.len() < limit
+            };
+            let mut chunk = vec![0u8; 1 << 16];
+            loop {
+                let n = match file.read(&mut chunk) {
+                    Ok(n) => n,
+                    Err(_) => return Ok(Value::Array(out)),
+                };
+                if n == 0 {
+                    break;
+                }
+                let mut start = 0;
+                let keep = |part: &[u8], pending: &mut Vec<u8>, over: &mut bool| {
+                    if *over {
+                        return;
+                    }
+                    if pending.len() + part.len() > max {
+                        *over = true;
+                        pending.clear();
+                    } else {
+                        pending.extend_from_slice(part);
+                    }
+                };
+                while let Some(nl) = chunk[start..n].iter().position(|&b| b == b'\n').map(|i| start + i) {
+                    keep(&chunk[start..=nl], &mut pending, &mut over);
+                    let line = std::mem::take(&mut pending);
+                    start = nl + 1;
+                    if !take(&line, &mut over, &mut out) {
+                        return Ok(Value::Array(out));
+                    }
+                }
+                if start < n {
+                    keep(&chunk[start..n], &mut pending, &mut over);
+                }
+            }
+            if !pending.is_empty() || over {
+                take(&pending, &mut over, &mut out);
+            }
+            return Ok(Value::Array(out));
+        }
+        // What the station's programs write (station/mb src/replica, as station/src/replica/export.ts writes): `text`
+        // as a whole file at `path`, zstd's frame of it with `zstd` (level 3, as Node's zstdCompressSync), written beside
+        // it, synced and renamed into place, its folders made; the SHA-256 of the bytes written and how many.
+        if op == "fs.write" {
+            use sha2::Digest;
+            use std::io::Write;
+            let path = PathBuf::from(str_of(a, "path")?);
+            let text = str_of(a, "text")?.as_bytes();
+            let bytes = if a.get("zstd").and_then(Value::as_bool).unwrap_or(false) { zstd::encode_all(text, 3).map_err(err)? } else { text.to_vec() };
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir).map_err(err)?;
+            }
+            let mut random = [0u8; 4];
+            getrandom::fill(&mut random).map_err(err)?;
+            let tmp = PathBuf::from(format!("{}.{}.{}.tmp", path.display(), std::process::id(), hex::encode(random)));
+            let written = (|| {
+                let mut file = std::fs::File::create(&tmp)?;
+                file.write_all(&bytes)?;
+                file.sync_all()
+            })();
+            if let Err(e) = written.and_then(|_| std::fs::rename(&tmp, &path)) {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(err(e));
+            }
+            return Ok(json!({ "sha256": hex::encode(sha2::Sha256::digest(&bytes)), "size": bytes.len() }));
+        }
+        // A file's SHA-256 (hex), read a MiB at a time; null when it does not open.
+        if op == "fs.hash" {
+            use sha2::Digest;
+            use std::io::Read;
+            let Ok(mut file) = std::fs::File::open(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let mut hash = sha2::Sha256::new();
+            let mut buf = vec![0u8; 1 << 20];
+            loop {
+                let n = file.read(&mut buf).map_err(err)?;
+                if n == 0 {
+                    break;
+                }
+                hash.update(&buf[..n]);
+            }
+            return Ok(json!(hex::encode(hash.finalize())));
+        }
+        // A folder and those it is in, made where they are not (mkdirSync's `recursive`).
+        if op == "fs.mkdir" {
+            std::fs::create_dir_all(str_of(a, "path")?).map_err(err)?;
+            return Ok(Value::Null);
+        }
+        // What is at `path` let go, a folder with all it holds with `recursive`; nothing there is no failure (rmSync's
+        // `force`).
+        if op == "fs.remove" {
+            let path = PathBuf::from(str_of(a, "path")?);
+            let recursive = a.get("recursive").and_then(Value::as_bool).unwrap_or(false);
+            let gone = match std::fs::symlink_metadata(&path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(e),
+                Ok(m) if m.is_dir() && recursive => std::fs::remove_dir_all(&path),
+                Ok(m) if m.is_dir() => std::fs::remove_dir(&path),
+                Ok(_) => std::fs::remove_file(&path),
+            };
+            return gone.map(|_| Value::Null).map_err(err);
+        }
+        if op == "fs.rename" {
+            std::fs::rename(str_of(a, "from")?, str_of(a, "to")?).map_err(err)?;
+            return Ok(Value::Null);
+        }
+        if op == "fs.copy" {
+            std::fs::copy(str_of(a, "from")?, str_of(a, "to")?).map_err(err)?;
+            return Ok(Value::Null);
+        }
+        // `bytes` random bytes (hex), from the system's source.
+        if op == "crypto.random" {
+            let mut bytes = vec![0u8; a.get("bytes").and_then(Value::as_u64).unwrap_or(0).min(1024) as usize];
+            getrandom::fill(&mut bytes).map_err(err)?;
+            return Ok(json!(hex::encode(bytes)));
+        }
         if op == "fs.read" {
-            let Ok(bytes) = std::fs::read(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let Ok(mut bytes) = std::fs::read(str_of(a, "path")?) else { return Ok(Value::Null) };
+            // `zstd`: a file that is zstd's frames, read as what they hold (a copy's batch: station/mb src/replica).
+            if a.get("zstd").and_then(Value::as_bool).unwrap_or(false) {
+                bytes = zstd::decode_all(bytes.as_slice()).map_err(err)?;
+            }
             if a.get("strict").and_then(Value::as_bool).unwrap_or(false) {
                 let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
                 return Ok(std::str::from_utf8(body).map_or(Value::Null, |s| json!(s)));
@@ -1563,7 +2358,13 @@ impl Inner {
                 e.address_lookup().map_err(err)?.add(iroh::address_lookup::MemoryLookup::from_endpoint_info([addr]));
                 Ok(Value::Null)
             }
+            ("iroh.sockets", Handle::Endpoint(e, _)) => Ok(json!(e.bound_sockets().iter().map(ToString::to_string).collect::<Vec<_>>())),
+            ("iroh.sockets", Handle::Unbound { .. }) => Ok(json!([])),
+            // How it runs now: "relay", "direct", or null while none is chosen.
+            ("conn.via", Handle::Conn(c)) => Ok(c.paths().iter().find(|p| p.is_selected()).map(|p| json!(if p.is_relay() { "relay" } else { "direct" })).unwrap_or(Value::Null)),
+            ("conn.via", Handle::Gone { .. }) => Ok(Value::Null),
             ("iroh.relayStatus", Handle::Endpoint(e, _)) => Ok(Value::Array(e.home_relay_status().get().iter().map(|s| json!({ "url": s.url().to_string(), "connected": s.is_connected(), "access": s.access_url().to_string() })).collect())),
+            ("conn.alpn", Handle::Conn(c)) => Ok(json!(hex::encode(c.alpn()))),
             ("conn.remoteId", Handle::Conn(c)) => Ok(json!(hex::encode(c.remote_id().as_bytes()))),
             ("conn.closeReason", Handle::Conn(c)) => Ok(c.close_reason().map(|e| close_info(&e)).unwrap_or(Value::Null)),
             ("conn.paths", Handle::Conn(c)) => Ok(Value::Array(
@@ -1577,13 +2378,19 @@ impl Inner {
                         };
                         // Packets sent and lost on this way alone: the connection's counts take in every way it tried.
                         let stats = p.stats();
-                        json!({ "id": p.id().to_string(), "selected": p.is_selected(), "relay": relay, "ip": ip, "rttMs": stats.same_path_rtt.map(|rtt| rtt.as_secs_f64() * 1000.0), "txPackets": stats.udp_tx.datagrams, "lostPackets": stats.lost_packets })
+                        json!({ "id": p.id().to_string(), "selected": p.is_selected(), "relay": relay, "ip": ip, "rttMs": stats.same_path_rtt.map(|rtt| rtt.as_secs_f64() * 1000.0), "txPackets": stats.udp_tx.datagrams, "lostPackets": stats.lost_packets, "cwnd": stats.cwnd, "congestionEvents": stats.congestion_events })
                     })
                     .collect(),
             )),
+            // What went over it since it opened (the addon's `stats`, which says what each is for).
             ("conn.stats", Handle::Conn(c)) => {
                 let s = c.stats();
-                Ok(json!({ "rxBytes": s.udp_rx.bytes, "txBytes": s.udp_tx.bytes }))
+                let data = |f: &iroh::endpoint::FrameStats| f.stream + f.datagram + f.crypto;
+                Ok(json!({
+                    "rxBytes": s.udp_rx.bytes, "txBytes": s.udp_tx.bytes, "rxPackets": s.udp_rx.datagrams, "txPackets": s.udp_tx.datagrams,
+                    "rxPings": s.frame_rx.ping, "txPings": s.frame_tx.ping, "rxAckRequests": s.frame_rx.immediate_ack, "txAckRequests": s.frame_tx.immediate_ack,
+                    "rxAcks": s.frame_rx.acks + s.frame_rx.path_acks, "txAcks": s.frame_tx.acks + s.frame_tx.path_acks, "rxData": data(&s.frame_rx), "txData": data(&s.frame_tx),
+                }))
             }
             ("conn.remoteId", Handle::Gone { remote, .. }) => Ok(json!(remote)),
             ("conn.closeReason", Handle::Gone { reason, .. }) => Ok(reason),
@@ -1619,7 +2426,10 @@ impl Shell {
 
     fn start_waiting(dir: PathBuf, complete: Complete, ctx: *mut c_void, open_wait: std::time::Duration) -> std::io::Result<Shell> {
         std::fs::create_dir_all(&dir)?;
-        let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(2).thread_name("stillfail-shell").enable_all().build()?;
+        // Two threads in an app; a station's program says how many it is to have (STILLFAIL_SHELL_THREADS: the station's
+        // front, whose threads carry every byte of the station's iroh, its addon's on as many as the machine has cores).
+        let threads = std::env::var("STILLFAIL_SHELL_THREADS").ok().and_then(|n| n.parse::<usize>().ok()).filter(|n| *n > 0).unwrap_or(2);
+        let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(threads).thread_name("stillfail-shell").enable_all().build()?;
         let (jobs, queue) = mpsc::channel::<Job>();
         std::thread::Builder::new().name("stillfail-disk".into()).spawn(move || {
             for job in queue {
@@ -1638,7 +2448,10 @@ impl Shell {
     pub fn call(&self, id: u64, op: String, json: &[u8], bytes: Option<Vec<u8>>) {
         let inner = self.inner.clone();
         let args: Value = serde_json::from_slice(json).unwrap_or(Value::Null);
-        let cancelled = if op == "fetch" {
+        // A fetch, and a dial's handshake (iroh.connect): given up when the core cancels the call, its connection dropped,
+        // which closes it (a dial left going retransmitted its Initial for the connection's whole idle timeout: the
+        // station addon's `dial`, station/native/mesh/src/lib.rs).
+        let cancelled = if op == "fetch" || op == "iroh.connect" {
             let (cancel, cancelled) = tokio::sync::oneshot::channel();
             inner.fetches.lock().unwrap().insert(id, cancel);
             Some(cancelled)
@@ -1905,7 +2718,7 @@ mod tests {
     #[test]
     fn a_tapped_screen_says_its_picture_and_sound_and_keeps_the_rest_for_the_core() {
         let told = Told::default();
-        let mut tap = ScreenTap { call: 7, pending: Vec::new(), out: Vec::new(), told_video: false };
+        let mut tap = ScreenTap::new(7);
         let (wire, core) = screen_wire();
         // cut anywhere
         for piece in wire.chunks(7) {
@@ -1930,7 +2743,7 @@ mod tests {
         // as it came whole, or a frame cut across two pieces: the same
         for cut in [wire.len(), wire.len() - 3] {
             let told = Told::default();
-            let mut again = ScreenTap { call: 7, pending: Vec::new(), out: Vec::new(), told_video: false };
+            let mut again = ScreenTap::new(7);
             again.take(&wire[..cut], &told);
             again.take(&wire[cut..], &told);
             assert_eq!((told.said.lock().unwrap().len(), &again.out, again.pending.len()), (4, &core, 0));
@@ -1941,7 +2754,7 @@ mod tests {
     fn what_the_host_takes_of_a_tapped_screen_is_not_said() {
         // the host decodes and plays the frames and the sound itself: only the config said, the core's kept the same
         let told = Told { takes: vec![FRAME_VIDEO, FRAME_AUDIO], ..Told::default() };
-        let mut tap = ScreenTap { call: 3, pending: Vec::new(), out: Vec::new(), told_video: false };
+        let mut tap = ScreenTap::new(3);
         let (wire, core) = screen_wire();
         tap.take(&wire, &told);
         let said = told.said.into_inner().unwrap();
@@ -1951,13 +2764,74 @@ mod tests {
         assert_eq!(tap.out, core);
     }
 
-    static ANSWERS: StdMutex<Vec<(u64, String, String, Option<Vec<u8>>)>> = StdMutex::new(Vec::new());
-    static ANSWERED: Condvar = Condvar::new();
+    /// The first 80 ms of a tone (440 Hz and 1250 Hz on the left, 660 Hz on the right, 0.3 and 0.1 of full scale) as the
+    /// Mac's helper encodes it (AudioToolbox, 64 kbit/s): one Opus packet each 20 ms.
+    const TONE_OPUS: [&str; 4] = [
+            "fc7efcfac83adf72422eb70639fd4e7994094ff81dca24140fcda72ab2837dafcb307757fd6f158807f14e5e02ba87d108d7bd98511d4749ba09a54029f42122017d75bb3f223221c5fca7b5cd5d7ea2a96148eb32fcc8e81946df99d205a49cd119fd285e189d81b698fe1eb8a4cea59aa6b594d60479250ecd7fcc39e8231dde329ac910ad059cc974b3dc9f2151d605aa2169f84ff7e1dbc00263e2c45f6243d8dad8ff115909f7c119fc6f003690930e4f7b70a549bf3fb41999da21cfa221cfa7445c5eea9f2dea8d6e4752a3a16abe4752a77619af9e3f8443068d0e8f4b3b67e429ea271c65f49d1280a1f826b8a6e4235d037e42f70b1b3def726cd85c5675900040f45954157bb1fed63d34848eb0c9061d95fa530354ab8f281430570d47f20f2e1ce4b8379de776c5758efa3b17e75eb7df13019e2eb8127e",
+            "fcf01f552abac40cb85b1b9c453ab1c5c0efde6ee2a4abc433f8c758944a04de36245ed4673c74936b45224cd6674e8e979829b7673b8ee8d5faae9dfb85461dc85db4fcfe1ca13bf53a8e7d455427f10b9283f4e3969eaca97907055f74b4f3c68af224684fcea74a70759c10ce055a78da40cfe736edb1f06af2e1516d9c9b0596688961e12b253da1eb5255a67bb07d1b5bd61e2b25abbaab1cc4eed48e12cce89ccbf893d75f050cbf06e645c0d5cc8e",
+            "fcf0533d61b4ccf9c20a05dd48d2b7a632b6b587bf7509d2330cbf4df6837f3fff1a8f72494cb696db3b4f99658c1997d9a4ad792c6ad90573eb04a8ba81ea16e73fe342e66946a731490469fd67f67cb28038aab73f603d03c51d9eba899826c31d1240e44aeb48a68649472d543c2b233cdd6908a1968506aaaa461321ac70e71855735019314fde063951e507e1f33e5883ba01f68ff0e094dde1ec8e",
+            "fced3cd57d7aa6a3555bbe8628998d7798b5f24ff8b642112c57c81112f8b2b55d3d49112fd2e45042ae08e20c311cc5d634041eb70f9edee772340f4c0c4b37067ffc0378b1e7934408b5f67f1c18a2704671798a125eadce7ee7f6372126813aa7441d008cf744241e40631cbed650ac8ed66b3172863ef769665807743a9e63409d45846a5361e3926ce68773ceb4a34ff103e65fda8b9c924ae4d77c8e",
+    ];
 
-    extern "C" fn complete(_: *mut c_void, id: u64, json: *const u8, jl: usize, e: *const u8, el: usize, b: *const u8, bl: usize, has: u8) {
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    }
+
+    #[test]
+    fn a_tapped_screens_opus_sound_is_said_as_the_pcm_it_decodes_to() {
+        let told = Told::default();
+        let mut tap = ScreenTap::new(4);
+        let mut wire = frame(FRAME_AUDIO_CONFIG, br#"{"codec":"opus","sampleRate":48000,"channels":2}"#);
+        for (i, packet) in TONE_OPUS.iter().enumerate() {
+            let mut body = ((i as u64 + 1) * 20_000).to_be_bytes().to_vec();
+            body.extend(unhex(packet));
+            wire.extend(frame(FRAME_AUDIO, &body));
+        }
+        // one that is no Opus packet: left out, the sound going on with the next
+        let mut broken = 100_000u64.to_be_bytes().to_vec();
+        broken.extend_from_slice(&[0xff; 3]);
+        wire.extend(frame(FRAME_AUDIO, &broken));
+        // after a gap (and the packet not decoded): decoded by a decoder made anew
+        let mut after = 1_000_000u64.to_be_bytes().to_vec();
+        after.extend(unhex(TONE_OPUS[1]));
+        wire.extend(frame(FRAME_AUDIO, &after));
+        for piece in wire.chunks(13) {
+            tap.take(piece, &told);
+        }
+        let said = told.said.into_inner().unwrap();
+        // the app is told PCM: what it plays is the decoded sound
+        assert_eq!(said[0].0, json!({ "id": 4, "value": { "audioConfig": { "codec": "pcm_s16le", "sampleRate": 48000, "channels": 2 } } }));
+        let packets: Vec<&Vec<u8>> = said[1..].iter().map(|s| s.1.as_ref().unwrap()).collect();
+        assert_eq!(packets.iter().map(|p| p.len()).collect::<Vec<_>>(), vec![PCM_PACKET; 5]);
+        assert_eq!(said[1..].iter().map(|s| s.0["value"]["audio"]["ts"].as_u64().unwrap()).collect::<Vec<_>>(), vec![20_000, 40_000, 60_000, 80_000, 1_000_000]);
+        // past the decoder's start, the tone: the left about 0.22 of full scale (RMS), the right about 0.21
+        let rms = |p: &[u8], ch: usize| {
+            let v: Vec<f64> = p.chunks_exact(4).map(|f| i16::from_le_bytes([f[ch * 2], f[ch * 2 + 1]]) as f64 / 32768.0).collect();
+            (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64).sqrt()
+        };
+        let (left, right) = (rms(packets[3], 0), rms(packets[3], 1));
+        assert!((0.19..0.26).contains(&left) && (0.18..0.25).contains(&right), "{left} {right}");
+        assert!(tap.out.is_empty(), "nothing of it the core's");
+    }
+
+    /// The answers of every test's shells, each told by its test (the shell's `ctx`, the test's thread's tag) and its id:
+    /// ids alike in tests run at once were taken by either (94_001, a dial's test's and a listening socket's, 2026-11-12).
+    static ANSWERS: StdMutex<Vec<(usize, u64, String, String, Option<Vec<u8>>)>> = StdMutex::new(Vec::new());
+    static ANSWERED: Condvar = Condvar::new();
+    static TAGS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
+    thread_local! {
+        static TAG: usize = TAGS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// What a shell started on this test's thread is given to say whose its answers are.
+    fn ctx() -> *mut c_void {
+        TAG.with(|t| *t as *mut c_void)
+    }
+
+    extern "C" fn complete(ctx: *mut c_void, id: u64, json: *const u8, jl: usize, e: *const u8, el: usize, b: *const u8, bl: usize, has: u8) {
         let s = |p: *const u8, l: usize| if l == 0 { String::new() } else { String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(p, l) }).into_owned() };
         let bytes = (has != 0).then(|| if bl == 0 { Vec::new() } else { unsafe { std::slice::from_raw_parts(b, bl) }.to_vec() });
-        ANSWERS.lock().unwrap().push((id, s(json, jl), s(e, el), bytes));
+        ANSWERS.lock().unwrap().push((ctx as usize, id, s(json, jl), s(e, el), bytes));
         ANSWERED.notify_all();
     }
 
@@ -1985,10 +2859,11 @@ mod tests {
 
     /// The answer to `id`, once it comes (however long that takes).
     fn answer(id: u64) -> (String, String, Option<Vec<u8>>) {
+        let tag = TAG.with(|t| *t);
         let mut answers = ANSWERS.lock().unwrap();
         loop {
-            if let Some(i) = answers.iter().position(|a| a.0 == id) {
-                let (_, j, e, b) = answers.remove(i);
+            if let Some(i) = answers.iter().position(|a| a.0 == tag && a.1 == id) {
+                let (_, _, j, e, b) = answers.remove(i);
                 return (j, e, b);
             }
             answers = ANSWERED.wait(answers).unwrap();
@@ -1996,10 +2871,96 @@ mod tests {
     }
 
     #[test]
+    fn serves_a_listening_socket_bound_here_handed_down_or_unix() {
+        use std::io::{Read, Write};
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().join("shell"), complete, ctx()).unwrap();
+        let call = |id: u64, op: &str, a: Value, bytes: Option<Vec<u8>>| {
+            shell.call(id, op.into(), a.to_string().as_bytes(), bytes);
+            let (json, error, bytes) = answer(id);
+            assert_eq!(error, "", "{op}");
+            (serde_json::from_str::<Value>(&json).unwrap(), bytes)
+        };
+        // Each socket: a connection taken, what it sent read, an answer written, the end said.
+        let serve = |base: u64, listener: u64, connect: &dyn Fn() -> Box<dyn ReadWrite>| {
+            let mut client = connect();
+            client.write_all(b"ping").unwrap();
+            let (accepted, _) = call(base, "tcp.accept", json!({ "id": listener }), None);
+            let conn = accepted["id"].as_u64().unwrap();
+            let (_, got) = call(base + 1, "tcp.read", json!({ "id": conn }), None);
+            assert_eq!(got.unwrap(), b"ping");
+            call(base + 2, "tcp.write", json!({ "id": conn }), Some(b"pong".to_vec()));
+            call(base + 3, "tcp.end", json!({ "id": conn }), None);
+            let mut back = Vec::new();
+            client.read_to_end(&mut back).unwrap();
+            assert_eq!(back, b"pong");
+        };
+        // bound here, on 127.0.0.1, its port said
+        let (bound, _) = call(96_001, "tcp.listen", json!({ "port": 0 }), None);
+        let port = bound["port"].as_u64().unwrap() as u16;
+        serve(96_010, bound["id"].as_u64().unwrap(), &|| Box::new(std::net::TcpStream::connect(("127.0.0.1", port)).unwrap()));
+        #[cfg(unix)]
+        {
+            use std::os::fd::IntoRawFd;
+            // one a launcher bound and handed down by its descriptor
+            let launcher = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = launcher.local_addr().unwrap().port();
+            let (handed, _) = call(96_020, "tcp.listen", json!({ "fd": launcher.into_raw_fd() }), None);
+            assert_eq!(handed["port"].as_u64().unwrap() as u16, port);
+            serve(96_030, handed["id"].as_u64().unwrap(), &|| Box::new(std::net::TcpStream::connect(("127.0.0.1", port)).unwrap()));
+            // a Unix socket, by its path (one left there before replaced)
+            let path = dir.path().join("front.sock");
+            std::fs::write(&path, "left").unwrap();
+            let (unix, _) = call(96_040, "unix.listen", json!({ "path": path.display().to_string() }), None);
+            let p = path.clone();
+            serve(96_050, unix["id"].as_u64().unwrap(), &move || Box::new(std::os::unix::net::UnixStream::connect(&p).unwrap()));
+        }
+    }
+
+    #[test]
+    fn pipes_two_sockets_into_each_other() {
+        use std::io::{Read, Write};
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().join("shell"), complete, ctx()).unwrap();
+        let call = |id: u64, op: &str, a: Value| {
+            shell.call(id, op.into(), a.to_string().as_bytes(), None);
+            let (json, error, _) = answer(id);
+            assert_eq!(error, "", "{op}");
+            serde_json::from_str::<Value>(&json).unwrap()
+        };
+        let front = call(95_001, "tcp.listen", json!({ "port": 0 }));
+        let target = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = std::net::TcpStream::connect(("127.0.0.1", front["port"].as_u64().unwrap() as u16)).unwrap();
+        let accepted = call(95_002, "tcp.accept", json!({ "id": front["id"] }));
+        let opened = call(95_003, "tcp.open", json!({ "port": target.local_addr().unwrap().port() }));
+        let (mut server, _) = target.accept().unwrap();
+        shell.call(95_004, "tcp.pipe".into(), json!({ "ids": [accepted["id"], opened["id"]] }).to_string().as_bytes(), None);
+        client.write_all(b"hello").unwrap();
+        client.shutdown(std::net::Shutdown::Write).unwrap();
+        let mut got = Vec::new();
+        server.read_to_end(&mut got).unwrap();
+        assert_eq!(got, b"hello", "carried there, and its end");
+        server.write_all(b"back").unwrap();
+        drop(server);
+        let mut back = Vec::new();
+        client.read_to_end(&mut back).unwrap();
+        assert_eq!(back, b"back", "carried back, and its end");
+        let (json, error, _) = answer(95_004);
+        assert_eq!(error, "");
+        assert_eq!(serde_json::from_str::<Value>(&json).unwrap(), json!({ "there": 5, "back": 4 }));
+        // the sockets are the pipe's now: not the shell's to read
+        shell.call(95_005, "tcp.read".into(), json!({ "id": accepted["id"] }).to_string().as_bytes(), None);
+        assert_ne!(answer(95_005).1, "");
+    }
+
+    trait ReadWrite: std::io::Read + std::io::Write {}
+    impl<T: std::io::Read + std::io::Write> ReadWrite for T {}
+
+    #[test]
     fn cancelling_a_fetch_closes_the_socket_while_headers_or_body_are_stalled() {
         for (id, body) in [(93_001, false), (93_002, true)] {
             let dir = TempDir::new();
-            let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+            let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
             let (listener, addr) = shell.runtime.block_on(async {
                 let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
                 let addr = listener.local_addr().unwrap();
@@ -2029,13 +2990,63 @@ mod tests {
         }
     }
 
+    /// A dial the core gave up (its opening ended: client/core-ts mesh.ts) is cancelled here as a fetch is: its
+    /// handshake dropped, which closes it (what that stops, the Initial sent again for ten minutes, the station addon's
+    /// `a_dial_given_up_sends_no_more` counts), and the endpoint closes at once.
+    #[test]
+    fn cancelling_a_dial_drops_its_handshake() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
+        // A station that never answers: a socket that takes what comes.
+        let quiet = shell.runtime.block_on(tokio::net::UdpSocket::bind("127.0.0.1:0")).unwrap();
+        shell.call(94_001, "iroh.bind".into(), serde_json::to_vec(&json!({ "relayUrls": [], "alpns": [] })).unwrap().as_slice(), Some(vec![3; 32]));
+        let endpoint = serde_json::from_str::<Value>(&answer(94_001).0).unwrap()["id"].clone();
+        let station = json!({ "id": hex::encode(SecretKey::from_bytes(&[7; 32]).public().as_bytes()), "ips": [quiet.local_addr().unwrap().to_string()] });
+        shell.call(94_002, "iroh.connect".into(), serde_json::to_vec(&json!({ "id": endpoint, "addr": station })).unwrap().as_slice(), Some(b"test".to_vec()));
+        // Its Initial came: the dial is under way.
+        shell.runtime.block_on(quiet.recv(&mut [0u8; 2048])).unwrap();
+        let cancel = || serde_json::from_slice::<Value>(&shell.call_sync("fetch.cancel", serde_json::to_vec(&json!({ "id": 94_002 })).unwrap().as_slice())).unwrap();
+        assert_eq!(cancel(), json!({ "value": true }));
+        assert_eq!(answer(94_002).1, "cancelled");
+        assert_eq!(cancel(), json!({ "value": false }));
+        shell.call(94_003, "iroh.close".into(), serde_json::to_vec(&json!({ "id": endpoint })).unwrap().as_slice(), None);
+        assert_eq!(answer(94_003).1, "");
+    }
+
     #[test]
     fn keeps_files_and_records_as_client_ffi_does() {
         let dir = TempDir::new();
-        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
         shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![1, 2, 3]));
         assert_eq!(answer(1).1, "");
         assert!(dir.path().join("device").exists());
+        // A value kept is its user's alone, whatever the process's umask (0644 by the umask of most, before): made
+        // so, and one written over a file from before, or over a partial one a crash left, is made so too.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = |name: &str| std::fs::metadata(dir.path().join(name)).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode("device"), 0o600);
+            std::fs::set_permissions(dir.path().join("device"), std::fs::Permissions::from_mode(0o644)).unwrap();
+            std::fs::write(dir.path().join("device.partial"), b"left").unwrap();
+            std::fs::set_permissions(dir.path().join("device.partial"), std::fs::Permissions::from_mode(0o644)).unwrap();
+            shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![1, 2, 3]));
+            assert_eq!(answer(1).1, "");
+            assert_eq!(mode("device"), 0o600);
+            assert!(!dir.path().join("device.partial").exists());
+            // A partial one left that is a link to somewhere is taken away, never written through: what it led to
+            // is as it was, and the value is a file of its own.
+            std::fs::write(dir.path().join("elsewhere"), b"another's").unwrap();
+            std::os::unix::fs::symlink(dir.path().join("elsewhere"), dir.path().join("device.partial")).unwrap();
+            shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![4, 5]));
+            assert_eq!(answer(1).1, "");
+            assert_eq!(std::fs::read(dir.path().join("elsewhere")).unwrap(), b"another's");
+            assert_eq!(std::fs::read(dir.path().join("device")).unwrap(), vec![4, 5]);
+            assert!(std::fs::symlink_metadata(dir.path().join("device")).unwrap().file_type().is_file());
+            assert_eq!(mode("device"), 0o600);
+            shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![1, 2, 3]));
+            assert_eq!(answer(1).1, "");
+        }
         shell.call(2, "storage.get".into(), br#"{"key":"device"}"#, None);
         assert_eq!(answer(2).2, Some(vec![1, 2, 3]));
         shell.call(3, "storage.get".into(), br#"{"key":"a/b"}"#, None);
@@ -2064,7 +3075,7 @@ mod tests {
     #[test]
     fn takes_zstd_apart_a_piece_at_a_time() {
         let dir = TempDir::new();
-        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
         // A reply as a station compresses it (two frames, as a stream flushed twice sends them, and a JSON reply),
         // given in pieces cut anywhere.
         let first: Vec<u8> = (0..40_000).map(|i| format!("{{\"seq\":{i}}},")).collect::<String>().into_bytes();
@@ -2118,7 +3129,7 @@ mod tests {
         // the station's own connection, in WAL, holding it while the shell's is open beside it
         let station = rusqlite::Connection::open(&path).unwrap();
         station.execute_batch("PRAGMA journal_mode = WAL; CREATE TABLE t (k TEXT, n INTEGER); INSERT INTO t VALUES ('a', 1);").unwrap();
-        let shell = Shell::start(dir.path().join("shell"), complete, std::ptr::null_mut()).unwrap();
+        let shell = Shell::start(dir.path().join("shell"), complete, ctx()).unwrap();
         let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
         let at = serde_json::to_string(&path.display().to_string()).unwrap();
         let id = sync("sql.attach", &format!(r#"{{"path":{at},"wait":0}}"#))["value"]["id"].as_u64().unwrap();
@@ -2135,9 +3146,46 @@ mod tests {
     }
 
     #[test]
+    fn writes_hashes_and_moves_the_station_programs_files() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().join("shell"), complete, ctx()).unwrap();
+        let sync = |op: &str, a: Value| -> Value { serde_json::from_slice(&shell.call_sync(op, a.to_string().as_bytes())).unwrap() };
+        let at = |p: &str| dir.path().join(p).display().to_string();
+        // written whole, its folders made, nothing left beside it; zstd's frame of it read back as what it holds
+        let plain = sync("fs.write", json!({ "path": at("a/b/plain.txt"), "text": "中\n" }));
+        use sha2::Digest;
+        assert_eq!(plain["value"]["sha256"], json!(hex::encode(sha2::Sha256::digest("中\n".as_bytes()))));
+        assert_eq!(plain["value"]["size"], json!(4));
+        assert_eq!(std::fs::read(dir.path().join("a/b/plain.txt")).unwrap(), "中\n".as_bytes());
+        let packed = sync("fs.write", json!({ "path": at("a/packed.zst"), "text": "x".repeat(1000), "zstd": true }));
+        let bytes = std::fs::read(dir.path().join("a/packed.zst")).unwrap();
+        assert!(bytes.len() < 100);
+        assert_eq!(packed["value"], json!({ "sha256": hex::encode(sha2::Sha256::digest(&bytes)), "size": bytes.len() }));
+        assert_eq!(sync("fs.read", json!({ "path": at("a/packed.zst"), "zstd": true }))["value"], json!("x".repeat(1000)));
+        assert_eq!(std::fs::read_dir(dir.path().join("a")).unwrap().count(), 2);
+        assert_eq!(sync("fs.hash", json!({ "path": at("a/b/plain.txt") }))["value"], plain["value"]["sha256"]);
+        assert_eq!(sync("fs.hash", json!({ "path": at("none") }))["value"], Value::Null);
+        // copied, renamed, a folder made, then let go with what it holds; nothing there is no failure
+        assert_eq!(sync("fs.copy", json!({ "from": at("a/b/plain.txt"), "to": at("a/copy.txt") }))["value"], Value::Null);
+        assert_eq!(sync("fs.rename", json!({ "from": at("a/copy.txt"), "to": at("a/moved.txt") }))["value"], Value::Null);
+        assert_eq!(std::fs::read(dir.path().join("a/moved.txt")).unwrap(), "中\n".as_bytes());
+        assert_eq!(sync("fs.mkdir", json!({ "path": at("c/d") }))["value"], Value::Null);
+        assert!(dir.path().join("c/d").is_dir());
+        assert!(sync("fs.remove", json!({ "path": at("a") }))["error"].is_string());
+        assert_eq!(sync("fs.remove", json!({ "path": at("a"), "recursive": true }))["value"], Value::Null);
+        assert!(!dir.path().join("a").exists());
+        assert_eq!(sync("fs.remove", json!({ "path": at("a") }))["value"], Value::Null);
+        assert_eq!(sync("crypto.random", json!({ "bytes": 4 }))["value"].as_str().unwrap().len(), 8);
+        // a database of the program's own, made with `create`
+        assert!(sync("sql.attach", json!({ "path": at("own.db") }))["error"].is_string());
+        assert!(sync("sql.attach", json!({ "path": at("own.db"), "create": true }))["value"]["id"].is_u64());
+        assert!(dir.path().join("own.db").exists());
+    }
+
+    #[test]
     fn keeps_an_accounts_database() {
         let dir = TempDir::new();
-        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
         let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
         let id = sync("sql.open", r#"{"name":"account-a"}"#)["value"]["id"].as_u64().unwrap();
         assert!(dir.path().join("databases/account-a.db").exists());
@@ -2160,8 +3208,8 @@ mod tests {
     #[test]
     fn a_window_of_its_own_finds_an_accounts_database_held_busy_at_once() {
         let dir = TempDir::new();
-        let app = Shell::start_waiting(dir.path().to_path_buf(), complete, std::ptr::null_mut(), DB_WAIT).unwrap();
-        let window = Shell::start_waiting(dir.path().to_path_buf(), complete, std::ptr::null_mut(), std::time::Duration::ZERO).unwrap();
+        let app = Shell::start_waiting(dir.path().to_path_buf(), complete, ctx(), DB_WAIT).unwrap();
+        let window = Shell::start_waiting(dir.path().to_path_buf(), complete, ctx(), std::time::Duration::ZERO).unwrap();
         let sync = |shell: &Shell, op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
         assert!(sync(&app, "sql.open", r#"{"name":"account-a"}"#)["value"]["id"].is_u64());
         // held by the app's run: busy, said at once (not after DB_WAIT)
@@ -2176,7 +3224,7 @@ mod tests {
     #[test]
     fn signs_with_an_ed25519_seed() {
         let dir = TempDir::new();
-        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
         let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
         // RFC 8032's test 2
         let signed = sync("ed25519.sign", r#"{"seed":"4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb","message":"72"}"#);
@@ -2191,7 +3239,7 @@ mod tests {
     #[test]
     fn checks_ed25519_and_p256_signatures() {
         let dir = TempDir::new();
-        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
         let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
         // RFC 8032's test 2; then the message changed
         let ed = |message: &str| sync("crypto.verify", &format!(r#"{{"alg":"Ed25519","key":"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c","signature":"92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00","message":"{message}"}}"#));
@@ -2222,7 +3270,7 @@ mod tests {
     #[test]
     fn dht_said() {
         let dir = TempDir::new();
-        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
         let said = |keep: bool| shell.inner.run_sync("dht.said", &json!({ "keep": keep })).unwrap();
         assert_eq!(said(false), json!({ "lines": [], "dropped": 0 }));
         assert_eq!(said(true), json!({ "lines": [], "dropped": 0 }));
@@ -2231,11 +3279,11 @@ mod tests {
     #[test]
     fn answers_of_a_closed_endpoint() {
         let dir = TempDir::new();
-        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
         let inner = shell.inner.clone();
         shell.runtime.block_on(async move {
             let endpoint = Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).bind().await.unwrap();
-            let id = inner.keep(Handle::Endpoint(endpoint.clone(), Accepted::default()));
+            let id = inner.keep(Handle::Endpoint(endpoint.clone(), Arc::default()));
             inner.run("iroh.close", json!({ "id": id }), None).await.unwrap();
             // A dial on it failing after another was bound in its place asks it still (the app's core died of "no handle 3").
             assert_eq!(inner.run_sync("iroh.endpointId", &json!({ "id": id })).unwrap(), json!(hex::encode(endpoint.id().as_bytes())));
@@ -2247,10 +3295,82 @@ mod tests {
         });
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn pipes_a_stream_into_a_socket_in_frames() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
+        let inner = shell.inner.clone();
+        shell.runtime.block_on(async move {
+            let alpn = b"stillfail/test".to_vec();
+            let bind = |alpns: Vec<Vec<u8>>| Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).alpns(alpns).bind();
+            let (a, b) = (bind(vec![]).await.unwrap(), bind(vec![alpn.clone()]).await.unwrap());
+            let port = b.bound_sockets().iter().find(|s| s.is_ipv4()).unwrap().port();
+            let addr = endpoint_addr(&json!({ "id": hex::encode(b.id().as_bytes()), "ips": [format!("127.0.0.1:{port}")] })).unwrap();
+            let taking = b.clone();
+            let taken = tokio::spawn(async move { taking.accept().await.unwrap().await.unwrap() });
+            let id = inner.keep_conn(a.connect(addr, &alpn).await.unwrap());
+            let theirs = taken.await.unwrap();
+            let stream = inner.run("conn.openBi", json!({ "id": id }), None).await.unwrap().json["id"].as_u64().unwrap();
+            let (ours, node) = tokio::net::UnixStream::pair().unwrap();
+            let (read, write) = ours.into_split();
+            let socket = inner.keep(Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) });
+            let piping = {
+                let inner = inner.clone();
+                tokio::spawn(async move { inner.run("istream.pipe", json!({ "id": stream, "to": socket }), None).await })
+            };
+            // what the socket's side writes, in frames, its end finishing the stream
+            let (mut node_read, mut node_write) = node.into_split();
+            let sent: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+            let mut framed = Vec::new();
+            for piece in sent.chunks(70_000) {
+                framed.extend((piece.len() as u32).to_be_bytes());
+                framed.extend(piece);
+            }
+            framed.extend(PIPE_END.to_be_bytes());
+            node_write.write_all(&framed).await.unwrap();
+            let (mut send, mut recv) = theirs.accept_bi().await.unwrap();
+            assert_eq!(recv.read_to_end(1 << 20).await.unwrap(), sent);
+            // what comes on the stream, read in frames by the socket's side, then its end
+            send.write_all(b"back").await.unwrap();
+            send.finish().unwrap();
+            let mut got = Vec::new();
+            node_read.read_to_end(&mut got).await.unwrap();
+            let mut want = 4u32.to_be_bytes().to_vec();
+            want.extend(b"back");
+            want.extend(PIPE_END.to_be_bytes());
+            assert_eq!(got, want);
+            piping.await.unwrap().unwrap();
+
+            // the socket ending without its end resets the stream; the other end's reset is said as what failed it
+            let stream = inner.run("conn.openBi", json!({ "id": id }), None).await.unwrap().json["id"].as_u64().unwrap();
+            let (ours, node) = tokio::net::UnixStream::pair().unwrap();
+            let (read, write) = ours.into_split();
+            let socket = inner.keep(Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) });
+            let piping = {
+                let inner = inner.clone();
+                tokio::spawn(async move { inner.run("istream.pipe", json!({ "id": stream, "to": socket }), None).await })
+            };
+            let (mut node_read, mut node_write) = node.into_split();
+            node_write.write_all(&[0, 0, 0, 1, 7]).await.unwrap();
+            let (mut send, mut recv) = theirs.accept_bi().await.unwrap();
+            let mut one = [0u8; 1];
+            recv.read_exact(&mut one).await.unwrap();
+            drop(node_write);
+            assert!(recv.read_to_end(1024).await.is_err());
+            send.reset(5u32.into()).unwrap();
+            let mut got = Vec::new();
+            node_read.read_to_end(&mut got).await.unwrap();
+            assert_eq!(&got[..4], &PIPE_FAILED.to_be_bytes());
+            assert!(String::from_utf8_lossy(&got[8..]).contains('5'), "{}", String::from_utf8_lossy(&got[8..]));
+            piping.await.unwrap().unwrap();
+        });
+    }
+
     #[test]
     fn lets_a_closed_connection_and_its_streams_go() {
         let dir = TempDir::new();
-        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
         let inner = shell.inner.clone();
         shell.runtime.block_on(async move {
             let alpn = b"stillfail/test".to_vec();
@@ -2277,12 +3397,46 @@ mod tests {
             // Let go, its stream with it; what the core asks after still answers.
             assert!(matches!(inner.handle(id), Ok(Handle::Gone { .. })));
             assert!(inner.handle(stream).is_err());
-            assert_eq!(inner.run_sync("conn.closeReason", &json!({ "id": id })).unwrap(), json!({ "kind": "application", "reason": "bye" }));
+            assert_eq!(inner.run_sync("conn.closeReason", &json!({ "id": id })).unwrap(), json!({ "kind": "application", "reason": "bye", "text": "closed by peer: bye (code 7)" }));
             assert_eq!(inner.run_sync("conn.remoteId", &json!({ "id": id })).unwrap(), remote);
             assert_eq!(inner.run_sync("conn.paths", &json!({ "id": id })).unwrap(), json!([]));
-            assert_eq!(inner.run("conn.closed", json!({ "id": id }), None).await.unwrap().json, json!({ "kind": "application", "reason": "bye" }));
+            assert_eq!(inner.run("conn.closed", json!({ "id": id }), None).await.unwrap().json, json!({ "kind": "application", "reason": "bye", "text": "closed by peer: bye (code 7)" }));
             assert!(inner.run("conn.openBi", json!({ "id": id }), None).await.is_err());
             assert_eq!(inner.run("conn.acceptBi", json!({ "id": id }), None).await.unwrap().json, json!({ "end": true }));
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn closing_a_connection_stops_a_half_open_piped_socket() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, ctx()).unwrap();
+        let inner = shell.inner.clone();
+        shell.runtime.block_on(async move {
+            let alpn = b"stillfail/test".to_vec();
+            let bind = |alpns: Vec<Vec<u8>>| Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).alpns(alpns).bind();
+            let (a, b) = (bind(vec![]).await.unwrap(), bind(vec![alpn.clone()]).await.unwrap());
+            let port = b.bound_sockets().iter().find(|s| s.is_ipv4()).unwrap().port();
+            let addr = endpoint_addr(&json!({ "id": hex::encode(b.id().as_bytes()), "ips": [format!("127.0.0.1:{port}")] })).unwrap();
+            let taking = b.clone();
+            let taken = tokio::spawn(async move { taking.accept().await.unwrap().await.unwrap() });
+            let id = inner.keep_conn(a.connect(addr, &alpn).await.unwrap());
+            let theirs = taken.await.unwrap();
+            let stream = inner.run("conn.openBi", json!({ "id": id }), None).await.unwrap().json["id"].as_u64().unwrap();
+            let (ours, node) = tokio::net::UnixStream::pair().unwrap();
+            let (read, write) = ours.into_split();
+            let socket = inner.keep(Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) });
+            let piping = {
+                let inner = inner.clone();
+                tokio::spawn(async move { inner.run("istream.pipe", json!({ "id": stream, "to": socket }), None).await })
+            };
+            let (mut _node_read, mut node_write) = node.into_split();
+            node_write.write_all(&[0, 0, 0, 1, 9]).await.unwrap();
+            let _peer = theirs.accept_bi().await.unwrap();
+            // Even while Node keeps its Unix socket open, closing the connection ends the pipe.
+            theirs.close(0u32.into(), b"bye");
+            piping.await.unwrap().unwrap();
+            assert!(inner.handle(stream).is_err());
         });
     }
 }

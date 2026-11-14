@@ -20,7 +20,7 @@ pub(all) struct NativeBars {
 }
 
 ///|
-// kept across runs: rail_native.mbt says it again each frame, native_bars_reset as the app begins anew
+// kept across runs: rail_native.mbt says it again each frame; native_bars_reset as a run begins (run_begin)
 pub let native_bars : NativeBars = {
   on: @signals.signal(false, same=fn(a, b) { a == b }),
   side: @signals.signal(0.0, same=fn(a, b) { a == b }),
@@ -69,17 +69,6 @@ pub fn native_clear() -> Double {
 }
 
 ///|
-/// How much of the window's foot the system's tabs take across it (upright: the safe area's foot, the home indicator's
-/// line with them), what is over the window's whole keeps clear of (a toast); 0 where they are not there.
-pub fn native_foot() -> Double {
-  if native_bars.on.get() && native_bars.side.get() == 0.0 {
-    @ui.system_bars().bottom
-  } else {
-    0.0
-  }
-}
-
-///|
 /// How high a capsule across a card's foot stands beside the system's action at the column's foot (iOS 27's prominent
 /// tab, an iPhone Duo's round one: @ui.system_nav_action): as high as it, so the two are one row (the user, 2026-10-28:
 /// 输入框跟右边的对上); None where there is none (every other device, upright, none said).
@@ -102,7 +91,7 @@ pub fn native_capsule_h() -> Double? {
 /// Whether it is another than the last frame's (what was kept of the cards, drawn cut by their corners, is drawn anew).
 /// `keyboard`: how far it is up; the corner it left, kept for what stays as it was under it (pane_foot_rest).
 pub fn native_foot_set(foot : Double, keyboard? : Double = 0.0) -> Bool {
-  let was = @signals.untracked(fn() { native_foot_made.get() })
+  let was = native_foot_made.untracked()
   let made = match (native_capsule_h(), @ui.system_nav_action()) {
     (Some(h), Some((_, y, _, _))) => {
       let d = foot - (y + h)
@@ -134,12 +123,12 @@ fn native_foot_corner_now(r : Double) -> Bool {
 }
 
 ///|
-// kept across runs: said by native_foot_set as the frame lays out the cards, None as the app begins anew; a signal,
+// kept across runs: said by native_foot_set as the frame lays out the cards, None as a run begins; a signal,
 // told only as it changes: what is drawn round by it (the page's panel, a node of the window's tree's) follows it
 let native_foot_made : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
 
 ///|
-// kept across runs: said by native_foot_set while no keyboard is up, None as the app begins anew
+// kept across runs: said by native_foot_set while no keyboard is up, None as a run begins (native_bars_reset)
 let native_foot_rest : Ref[Double?] = Ref(None)
 
 ///|
@@ -205,14 +194,14 @@ pub(all) struct NativeOver {
 }
 
 ///|
-// kept across runs: put back as what said it is gone (native_over_gone), native_bars_reset as the app begins anew
+// kept across runs: put back as what said it is gone (native_over_gone), native_bars_reset as a run begins (run_begin)
 pub let native_over : NativeOver = { up: false, title: "", acts: [], active: [], alive: fn() { false } }
 
 ///|
 /// One of what has said it is up over the whole window (native_over_up): what it said, kept as it said it while it is
 /// alive, by what said it (`owner`) and how high over the rest it is (`over`: the viewer over the pages it is opened
 /// from).
-struct NativeClaim {
+priv struct NativeClaim {
   over : Int
   /// when it was said, in the order of all said (native_said_n): of two as high, the one said last handed
   said : Int

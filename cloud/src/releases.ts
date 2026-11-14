@@ -15,8 +15,8 @@ type Range = { start: number; end: number };
 /** Reads that would be more than this many are made from ranges further apart, reading the bytes between. */
 const MAX_READS = 40;
 
-/** A file named by its version (a build's zip or installer and its blockmap, an apk, a Node, a module's package, a face's, the site's film) never changes; the rest do (the feeds, the station's). */
-const VERSIONED = /^fonts\/|-[0-9.]+-(arm64-mac\.zip|x64-win\.exe)(\.blockmap)?$|^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$|-[0-9]+\.apk$|^node\/node-v[0-9.]+-[a-z0-9-]+\.tar\.gz(\.sha256)?$|^modules\/[a-z][a-z0-9]*\/[a-z][a-z0-9]*-0\.1\.[0-9]+(-[a-z0-9-]+)?\.tar\.gz$|^site\/film-[a-z]+-[0-9]+\.mp4$/;
+/** A file named by its version (a build's zip or installer and its blockmap, raw form and deltas, an apk and its deltas, a Linux build's deltas, a Node, a module's package, a face's, the site's film) or by its content (the station's archives kept under their own names, their deltas) never changes; the rest do (the feeds, the station's). */
+export const VERSIONED = /^fonts\/|-[0-9.]+-(arm64-mac\.zip|x64-win\.exe)(\.blockmap|\.raw\.zst|\.from-[0-9]+\.delta)?$|^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$|-[0-9]+\.apk(\.from-[0-9]+\.delta)?$|^linux\/stillfail-mbui-[0-9]+-(x64|arm64)-linux\.tar\.gz\.from-[0-9]+\.delta$|^station\/archive\/(stable|beta)\/[0-9]+-[0-9a-f]{64}-|^node\/node-v[0-9.]+-[a-z0-9-]+\.tar\.gz(\.sha256)?$|^modules\/[a-z][a-z0-9]*\/[a-z][a-z0-9]*-0\.1\.[0-9]+(-[a-z0-9-]+)?\.tar\.gz$|^site\/film-[a-z]+-[0-9]+\.mp4$/;
 
 /** What the response of another cloud's releases (RELEASES_UPSTREAM) says that is passed on. */
 const PASSED = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "cache-control"];

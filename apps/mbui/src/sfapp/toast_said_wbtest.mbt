@@ -93,7 +93,7 @@ test "a toast held and moved across slowly: its 撤销 where it is drawn, presse
   }
   t.release(x + 10.0 + toast_held_by, y + h / 2.0)
   let back = t.query(Button, label="撤销").unwrap().rect
-  assert_eq((held.0 - at_rest.0, pressed, back == at_rest, t.query(Status, label="已归档「夜里的构建又失败了」") is Some(_)), (toast_held_by, true, true, true), msg="\{at_rest} \{held} \{back}")
+  assert_eq((held.0 - at_rest.0, pressed, back == at_rest, t.query(Status, label="已归档「夜里的构建又失败了」") is Some(_)), (toast_held_by, true, true, true), msg="\{Repr(at_rest)} \{Repr(held)} \{Repr(back)}")
 }
 
 ///|
@@ -122,5 +122,5 @@ test "a toast with its 撤销 coming in: its 撤销's ground faded as the toast'
     (Some(g), Some(u)) => (u.to_double() - g.to_double() * 0.15).abs() <= 1.0
     _ => false
   }
-  assert_true(as_faded, msg="\{toast} \{undo}")
+  assert_true(as_faded, msg="\{Repr(toast)} \{Repr(undo)}")
 }

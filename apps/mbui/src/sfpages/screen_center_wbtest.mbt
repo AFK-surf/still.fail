@@ -1,6 +1,8 @@
-// 控制中心 (screen_center_node.mbt) as it stood with an old body (recorded off @sf.panel's, 2026-11-09), made of nodes
-// in the panel its presenter gives it: on 小屏 a sheet from the foot, keyboard and mouse beside its button, each word
-// and each thing to press where it was, scrolled to its foot too, and while only looking.
+// 控制中心 (screen_center_node.mbt) made of nodes in the panel its presenter gives it: on 小屏 a sheet from the foot,
+// keyboard and mouse beside its button, each word and each thing to press where it is (recorded 2026-11-12: 快捷操作,
+// 画面 and its foot, no keys), and while only looking; each tile there only where it applies and what it does; a 画面
+// row's choices; and the whole of it in the window, nothing scrolled, on a phone, an iPhone Duo either way and a
+// computer's window.
 
 ///|
 fn center_half(x : Double) -> Double {
@@ -42,51 +44,66 @@ fn center_said_off(t : @ui.Tester, want : Array[(String, String, Double, Double,
 }
 
 ///|
-/// The rig live, driving a station that changes its 缩放 and its 分辨率, 控制中心 opened and at rest.
-fn center_opened(r : ScreenRig) -> Unit {
-  r.live()
+/// The state of a desktop driven with all of 控制中心 there: the clipboard both ways, files taken, its 缩放 and 分辨率
+/// changed by its station, another on it, another view of it.
+fn center_all_said(r : ScreenRig, control? : Bool = true) -> Unit {
   let scale : Json = { "percent": 100.0, "recommended": 150.0, "steps": [100.0, 125.0, 150.0, 175.0] }
   let resolution : Json = {
     "width": 1920.0,
     "height": 1080.0,
     "modes": [{ "width": 1920.0, "height": 1080.0 }, { "width": 1280.0, "height": 720.0 }],
   }
-  r.state("live", more={ "scale": scale, "resolution": resolution })
+  r.state(
+    "live",
+    control~,
+    clipboard=["text", "png"],
+    drop={ "folder": "/Users/alice/Downloads", "reveal": true },
+    more={ "scale": scale, "resolution": resolution, "otherViews": [{ "id": "view-2" }] },
+  )
+}
+
+///|
+/// The rig live, driving a station that changes its 缩放 and its 分辨率, 控制中心 opened and at rest.
+fn center_opened(r : ScreenRig) -> Unit {
+  r.live()
+  center_all_said(r)
   open_center(r)
   r.t.run_for(@ui.move_most_ms)
 }
 
 ///|
-test "控制中心 on 小屏: a sheet from the foot, each word and each thing to press where its old body had it" {
+test "控制中心 on 小屏: a sheet from the foot, each word and each thing to press where it is" {
   let r = screen_rig()
   center_opened(r)
   assert_eq(center_words_off(r.t, center_phone_words) + center_said_off(r.t, center_phone_said), [])
-  // scrolled on to its foot
-  r.t.wheel(195.0, 600.0, 3000.0)
-  r.t.run_for(@ui.move_most_ms)
-  assert_eq(center_words_off(r.t, center_phone_foot), [])
+  assert_eq(r.t.audit(), [])
+  // no keys: they are 按键's
+  assert_true(r.t.find(tr("web-pages.screen.combos")) is None)
+  assert_true(r.t.find("F5") is None)
   shut(r)
   screen_done(r.t)
 }
 
 ///|
-test "控制中心 with keyboard and mouse: beside its button, each word and each thing to press where its old body had it" {
+test "控制中心 with keyboard and mouse: beside its button, each word and each thing to press where it is; no 触控板 (the mouse is the screen's pointer)" {
   let r = screen_rig(w=1280.0, h=800.0, platform=0)
   center_opened(r)
   assert_eq(center_words_off(r.t, center_wide_words) + center_said_off(r.t, center_wide_said), [])
+  assert_true(r.t.find(tr("android-misc.screen.trackpad")) is None)
+  assert_eq(r.t.audit(), [])
   shut(r)
   screen_done(r.t)
 }
 
 ///|
-test "控制中心 while only looking: none of driving's, the rest where its old body had it" {
+test "控制中心 while only looking: none of driving's, the rest where it is" {
   let r = screen_rig()
   r.live()
-  r.state("live", control=false)
+  center_all_said(r, control=false)
   open_center(r)
   r.t.run_for(@ui.move_most_ms)
   assert_eq(center_words_off(r.t, center_looking_words), [])
-  assert_true(r.t.find(tr("web-pages.screen.combos")) is None)
+  assert_true(r.t.find(tr("android-misc.screen.trackpad")) is None)
   shut(r)
   screen_done(r.t)
 }
@@ -104,7 +121,7 @@ fn center_said_at(t : @ui.Tester, role : String, label : String) -> (Double, Dou
 }
 
 ///|
-test "控制中心 follows what it shows as it is told: the time seen, the sound, 鼠标左右键" {
+test "控制中心 follows what it shows as it is told: the time seen, the sound" {
   let r = screen_rig()
   r.live()
   open_center(r)
@@ -116,322 +133,349 @@ test "控制中心 follows what it shows as it is told: the time seen, the sound
   r.t.run_for(second_ms)
   assert_true(seen() != was)
   assert_true(center_said_at(r.t, "Button", seen()) is Some(_))
-  // the sound come as this device plays it: its row, saying it is muted as it is
+  // the sound come as this device plays it: its tile, saying it is muted as it is
   assert_true(r.t.find(tr("web-pages.drive.player.mute")) is None)
   r.sess().audio_ready.set(true)
-  r.t.draw()
+  r.t.run_for(@ui.move_most_ms)
   assert_true(center_said_at(r.t, "Button", tr("web-pages.drive.player.mute")) is Some(_))
   r.sess().audio_muted.set(true)
   r.t.draw()
   assert_true(center_said_at(r.t, "Button", tr("web-pages.drive.player.unmute")) is Some(_))
-  // 鼠标左右键 turned off: kept on the device, the switch says so
-  let (x, y) = center_said_at(r.t, "Switch", tr("web-pages.screen.mouseButtons")).unwrap()
-  r.t.tap(x, y)
-  r.t.draw()
-  assert_eq(r.ui().mouse_set.get(), Some(false))
-  let set = r.told("prefs.set").filter(fn(p) { field(Some(p), "screenMouse") is Some(_) })
-  assert_eq(set.length(), 1)
-  assert_eq(text(Some(set[0]), "screenMouse"), "off")
   shut(r)
   screen_done(r.t)
 }
 
 ///|
-// kept across runs: the recording, never written
-let center_phone_words : Array[(String, Double, Double, Double, Double)] = [
-    ("控制中心", 24.0, 79.5, 64.0, 24.0),
-    ("组合键", 26.0, 119.5, 338.0, 18.0),
-    ("开始菜单", 55.5, 182.5, 48.0, 16.0),
-    ("切换窗口", 171.0, 182.5, 48.0, 16.0),
-    ("显示桌面", 286.5, 182.5, 48.0, 16.0),
-    ("任务管理器", 49.5, 254.5, 60.0, 16.0),
-    ("关闭窗口", 171.0, 254.5, 48.0, 16.0),
-    ("截图", 298.5, 254.5, 24.0, 16.0),
-    ("常用键", 26.0, 291.5, 338.0, 18.0),
-    ("F1", 45.0, 331.5, 12.0, 16.0),
-    ("F2", 102.5, 331.5, 12.0, 16.0),
-    ("F3", 160.0, 331.5, 12.0, 16.0),
-    ("F4", 218.0, 331.5, 12.0, 16.0),
-    ("F5", 275.5, 331.5, 12.0, 16.0),
-    ("F6", 333.0, 331.5, 12.0, 16.0),
-    ("F7", 45.0, 383.5, 12.0, 16.0),
-    ("F8", 102.5, 383.5, 12.0, 16.0),
-    ("F9", 160.0, 383.5, 12.0, 16.0),
-    ("F10", 215.0, 383.5, 18.0, 16.0),
-    ("F11", 272.5, 383.5, 18.0, 16.0),
-    ("F12", 330.0, 383.5, 18.0, 16.0),
-    ("Del", 42.0, 435.5, 18.0, 16.0),
-    ("Home", 96.5, 435.5, 24.0, 16.0),
-    ("End", 157.0, 435.5, 18.0, 16.0),
-    ("PgUp", 212.0, 435.5, 24.0, 16.0),
-    ("PgDn", 269.5, 435.5, 24.0, 16.0),
-    ("鼠标左右键", 24.0, 496.5, 286.0, 22.0),
-    ("连接", 62.0, 557.5, 210.0, 20.0),
-    ("00:00:01", 282.0, 558.5, 52.0, 18.0),
-    ("画质", 26.0, 595.5, 338.0, 18.0),
-    ("自动", 56.0, 629.0, 28.0, 19.5),
-    ("流畅", 139.5, 629.0, 28.0, 19.5),
-    ("高清", 223.0, 629.0, 28.0, 19.5),
-    ("原画", 306.5, 629.0, 28.0, 19.5),
-    ("随窗口", 26.0, 661.5, 338.0, 18.0),
-    ("帧率", 26.0, 685.5, 338.0, 18.0),
-    ("自动", 42.0, 719.0, 28.0, 19.5),
-    ("120", 101.0, 719.0, 21.0, 19.5),
-    ("90", 160.0, 719.0, 14.0, 19.5),
-    ("60", 216.0, 719.0, 14.0, 19.5),
-    ("30", 271.5, 719.0, 14.0, 19.5),
-    ("15", 327.0, 719.0, 14.0, 19.5),
-    ("随网络调整", 26.0, 751.5, 338.0, 18.0),
-    ("缩放", 26.0, 775.5, 338.0, 18.0),
-    ("100%", 56.0, 809.0, 28.0, 19.5),
-    ("125%", 139.5, 809.0, 28.0, 19.5),
-    ("150%", 223.0, 809.0, 28.0, 19.5),
-    ("175%", 306.5, 809.0, 28.0, 19.5),
-    ("150%（推荐）", 26.0, 841.5, 338.0, 18.0),
-    ("分辨率", 26.0, 865.5, 338.0, 18.0),
-    ("1920×1080（推荐）", 52.0, 899.0, 119.0, 19.5),
-    ("1280×720", 250.5, 899.0, 56.0, 19.5),
-    ("1920×1080 最贴合这块屏幕（推荐）", 26.0, 931.5, 338.0, 18.0),
-    ("全屏", 62.0, 961.5, 296.0, 20.0),
-    ("断开", 62.0, 1007.5, 296.0, 20.0),
-  ]
+/// Whether 控制中心's tile named `label` is there.
+fn center_tile(r : ScreenRig, label : String) -> Bool {
+  center_said_at(r.t, "Button", label) is Some(_)
+}
+
+///|
+test "控制中心's 快捷操作: each tile there only where it applies" {
+  let r = screen_rig()
+  r.live(others=[])
+  open_center(r)
+  // a tab of a browser that takes no paste nor files, no sound come: 全屏 and 触控板 alone
+  assert_true(center_tile(r, tr("android-misc.screen.full")))
+  assert_true(center_tile(r, tr("android-misc.screen.trackpad")))
+  for absent in ["web-pages.screen.paste", "android-misc.screen.sendFile", "web-pages.drive.player.mute", "web-pages.screen.window"] {
+    assert_false(center_tile(r, tr(absent)), msg=absent)
+  }
+  shut(r)
+  // the clipboard both ways and files taken, its sound come: those too
+  r.live(others=[], clipboard=["text"], drop={ "folder": "/Users/alice/Downloads", "reveal": true })
+  r.sess().audio_ready.set(true)
+  open_center(r)
+  for present in ["android-misc.screen.full", "web-pages.screen.paste", "android-misc.screen.sendFile", "web-pages.drive.player.mute", "android-misc.screen.trackpad"] {
+    assert_true(center_tile(r, tr(present)), msg=present)
+  }
+  shut(r)
+  // only looking: no 触控板, nothing to paste into
+  r.state("live", control=false, others=[], clipboard=["text"])
+  open_center(r)
+  assert_false(center_tile(r, tr("android-misc.screen.trackpad")))
+  assert_false(center_tile(r, tr("web-pages.screen.paste")))
+  assert_true(center_tile(r, tr("android-misc.screen.full")))
+  shut(r)
+  screen_done(r.t)
+}
+
+///|
+test "控制中心's tiles: 全屏, 粘贴 and 发送文件 close it as they act; 静音 and 触控板 keep it open, lit while on" {
+  let r = screen_rig()
+  r.live(others=[], clipboard=["text"], drop={ "folder": "/Users/alice/Downloads", "reveal": true })
+  r.sess().audio_ready.set(true)
+  open_center(r)
+  // 静音: lit, said pressed, 控制中心 open still; again, not
+  r.tap_label(tr("web-pages.drive.player.mute"))
+  r.t.draw()
+  assert_true(r.sess().audio_muted.get())
+  assert_eq(pressed_of(r, tr("web-pages.drive.player.unmute")), Some(true))
+  assert_true(@sf.presenting())
+  r.tap_label(tr("web-pages.drive.player.unmute"))
+  r.t.draw()
+  assert_eq(pressed_of(r, tr("web-pages.drive.player.mute")), Some(false))
+  // 触控板 (a page of a browser: direct at first): lit as it is chosen, told the core, open still; again, off
+  assert_eq(pressed_of(r, tr("android-misc.screen.trackpad")), Some(false))
+  r.tap_label(tr("android-misc.screen.trackpad"))
+  r.t.draw()
+  assert_eq(pressed_of(r, tr("android-misc.screen.trackpad")), Some(true))
+  assert_true(r.told("prefs.set").last() is Some(Object(o)) && o.get("screenTouch") == Some(Json::null()))
+  assert_true(@sf.presenting())
+  r.tap_label(tr("android-misc.screen.trackpad"))
+  r.t.draw()
+  assert_eq(pressed_of(r, tr("android-misc.screen.trackpad")), Some(false))
+  assert_eq(text(r.told("prefs.set").last(), "screenTouch"), "direct")
+  r.t.run_for(@sf.toast_ms)
+  // 粘贴: closed as the clipboard is read
+  r.t.clipboard_gives("hello")
+  r.tap_label(tr("web-pages.screen.paste"))
+  r.t.draw()
+  assert_false(@sf.presenting())
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  assert_eq(r.told("screen.clipboard").length(), 1)
+  // 发送文件: closed as the picker opens
+  open_center(r)
+  r.tap_label(tr("android-misc.screen.sendFile"))
+  r.t.draw()
+  assert_false(@sf.presenting())
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  // 全屏: closed, the screen alone
+  open_center(r)
+  r.tap_label(tr("android-misc.screen.full"))
+  r.t.draw()
+  assert_false(@sf.presenting())
+  assert_true(r.ui().full.get())
+  r.t.run_for(@sf.later_ms)
+  to_sheet_rest(r.t)
+  screen_done(r.t)
+}
+
+///|
+test "a 画面 row: pressed, its choices beside it with what each means, the one now checked; one chosen kept, the row saying it" {
+  let r = screen_rig()
+  r.live()
+  open_center(r)
+  let quality = tr("web-pages.screen.quality")
+  assert_true(center_said_at(r.t, "Button", quality + " " + tr("web-pages.screen.quality.auto")) is Some(_))
+  r.tap_label(quality + " " + tr("web-pages.screen.quality.auto"))
+  r.t.run_for(@ui.move_most_ms)
+  to_sheet_rest(r.t)
+  // each with what it means: 720p under 流畅
+  assert_true(r.t.find(tr("web-pages.screen.qualityHint.smooth")) is Some(_))
+  assert_true(r.t.find(tr("web-pages.screen.quality.original")) is Some(_))
+  r.t.tap_text(tr("web-pages.screen.quality.smooth"))
+  r.t.run_for(@ui.move_most_ms)
+  to_sheet_rest(r.t)
+  let set = r.told("prefs.set").filter(fn(p) { field(Some(p), "screenQuality") is Some(_) })
+  assert_eq(set.length(), 1)
+  assert_eq(text(Some(set[0]), "screenQuality"), "smooth")
+  // 控制中心 open still, its row saying what is chosen now
+  assert_true(@sf.presenting())
+  assert_true(center_said_at(r.t, "Button", quality + " " + tr("web-pages.screen.quality.smooth")) is Some(_))
+  shut(r)
+  screen_done(r.t)
+}
+
+///|
+/// Whether 控制中心 is whole in a window `h` high: its title and 断开 (its last row) in it, 断开 inside the panel, nothing
+/// of it scrolled away; what is not, said.
+fn center_whole(r : ScreenRig, h : Double) -> String {
+  let ss = r.t.semantics().filter(fn(s) { !s.hidden })
+  let leave = ss.iter().find_first(fn(s) { s.label == tr("web-pages.screen.leave") && s.role is Button })
+  let panel = ss.iter().find_first(fn(s) { s.role is Dialog && s.label == tr("web-pages.screen.panel") })
+  // (a sheet says no panel of its own: the window's foot its)
+  let (py, ph) = match panel {
+    Some(p) => (p.rect.1, p.rect.3)
+    None => (0.0, h)
+  }
+  match (leave, r.t.rect_of(tr("web-pages.screen.panel"))) {
+    (Some(l), Some((_, ty, _, _))) => {
+      let (_, ly, _, lh) = l.rect
+      if ty < 0.0 || py < -0.5 || ly + lh > py + ph + 0.5 || py + ph > h + 0.5 {
+        "title at \{ty}, panel \{py} + \{ph}, 断开 \{ly} + \{lh}, window \{h}"
+      } else {
+        ""
+      }
+    }
+    _ => "not found: 断开 \{leave is Some(_)}"
+  }
+}
+
+///|
+test "控制中心 whole, nothing scrolled, with all it can hold: on 小屏, on an iPhone Duo on its side and upright, its system bars on, and in a computer's window" {
+  // 小屏
+  let r = screen_rig()
+  r.live()
+  center_all_said(r)
+  r.sess().audio_ready.set(true)
+  open_center(r)
+  r.t.run_for(@ui.move_most_ms)
+  assert_eq(center_whole(r, 844.0), "")
+  shut(r)
+  screen_done(r.t)
+  // an iPhone Duo, by its system bar's 控制中心
+  for pose in [(951.0, 669.0, 84.0), (669.0, 951.0, 0.0)] {
+    let (w, h, side) = pose
+    let r = screen_rig(w~, h~, platform=1)
+    r.live()
+    center_all_said(r)
+    r.sess().audio_ready.set(true)
+    @sf.native_bars.on.set(true)
+    @sf.native_bars.side.set(side)
+    @sf.native_over_clear()
+    r.t.run_for(@ui.move_most_ms)
+    native_pressed(r, "over/screen-center")
+    assert_eq(center_whole(r, h), "", msg="\{w}×\{h}")
+    assert_eq(r.t.audit(), [], msg="\{w}×\{h}")
+    shut(r)
+    screen_done(r.t)
+  }
+  // a computer's window
+  let r = screen_rig(w=1280.0, h=800.0, platform=0)
+  r.live()
+  center_all_said(r)
+  r.sess().audio_ready.set(true)
+  open_center(r)
+  r.t.run_for(@ui.move_most_ms)
+  assert_eq(center_whole(r, 800.0), "")
+  shut(r)
+  screen_done(r.t)
+}
+
+///|
+/// What of tiles `first` .. `last` (the first and the last of a row of them, by their names) does not stand on the edges
+/// of the group label `label` over them (its words as wide as the panel's words go: the rows' words and chevrons end
+/// there too).
+fn tiles_edges_off(r : ScreenRig, label : String, first : String, last : String) -> String {
+  let said = fn(name : String) {
+    r.t.semantics().iter().find_first(fn(s) { !s.hidden && s.role is Button && s.label == name }).map(fn(s) { s.rect })
+  }
+  match (r.t.rect_of(label), said(first), said(last)) {
+    (Some((lx, _, lw, _)), Some((fx, _, _, _)), Some((tx, _, tw, _))) =>
+      if (fx - lx).abs() > 0.5 || (tx + tw - (lx + lw)).abs() > 0.5 {
+        "\{label} \{lx}..\{lx + lw}, tiles \{fx}..\{tx + tw}"
+      } else {
+        ""
+      }
+    _ => "not found: \{label}, \{first}, \{last}"
+  }
+}
+
+///|
+test "the tiles stand on the panel's words' edges, its labels' and rows': 控制中心's and 按键's, on 小屏 and in a computer's window" {
+  for win in [(390.0, 844.0, 2), (1280.0, 800.0, 0)] {
+    let (w, h, platform) = win
+    let r = screen_rig(w~, h~, platform~)
+    r.live()
+    center_all_said(r)
+    open_center(r)
+    r.t.run_for(@ui.move_most_ms)
+    assert_eq(
+      tiles_edges_off(r, tr("web-pages.screen.quick"), tr("android-misc.screen.full"), tr("android-misc.screen.sendFile")),
+      "",
+      msg="\{w}",
+    )
+    // (a row's chevron ends where the label's words do)
+    let label = r.t.rect_of(tr("web-pages.screen.picture")).unwrap()
+    let row = r.t.semantics().iter().find_first(fn(s) { !s.hidden && s.role is Button && s.label.has_prefix(tr("web-pages.screen.quality")) }).unwrap().rect
+    let (_, _, cw, _) = r.t.rect_of(tr("web-pages.screen.quick")).unwrap()
+    assert_true(label.0 + label.2 <= row.0 + row.2 && cw > 0.0, msg="\{w}")
+    shut(r)
+    if platform == 2 {
+      open_keys(r)
+    } else {
+      open_keys(r, combos=true)
+    }
+    let first = tr("web-pages.screen.combo.start")
+    let last = tr("web-pages.screen.combo.desktop")
+    if platform == 2 {
+      assert_eq(tiles_edges_off(r, tr("web-pages.screen.combos"), first, last), "", msg="\{w}")
+      assert_eq(tiles_edges_off(r, tr("web-pages.screen.commonKeys"), "F1", "F6"), "", msg="\{w}")
+    }
+    assert_eq(r.t.audit(), [], msg="\{w}")
+    shut(r)
+    screen_done(r.t)
+  }
+}
 
 ///|
 // kept across runs: the recording, never written
-let center_phone_foot : Array[(String, Double, Double, Double, Double)] = [
-    ("控制中心", 24.0, 79.5, 64.0, 24.0),
-    ("组合键", 26.0, -100.0, 338.0, 18.0),
-    ("开始菜单", 55.5, -37.0, 48.0, 16.0),
-    ("切换窗口", 171.0, -37.0, 48.0, 16.0),
-    ("显示桌面", 286.5, -37.0, 48.0, 16.0),
-    ("任务管理器", 49.5, 35.0, 60.0, 16.0),
-    ("关闭窗口", 171.0, 35.0, 48.0, 16.0),
-    ("截图", 298.5, 35.0, 24.0, 16.0),
-    ("常用键", 26.0, 72.0, 338.0, 18.0),
-    ("F1", 45.0, 112.0, 12.0, 16.0),
-    ("F2", 102.5, 112.0, 12.0, 16.0),
-    ("F3", 160.0, 112.0, 12.0, 16.0),
-    ("F4", 218.0, 112.0, 12.0, 16.0),
-    ("F5", 275.5, 112.0, 12.0, 16.0),
-    ("F6", 333.0, 112.0, 12.0, 16.0),
-    ("F7", 45.0, 164.0, 12.0, 16.0),
-    ("F8", 102.5, 164.0, 12.0, 16.0),
-    ("F9", 160.0, 164.0, 12.0, 16.0),
-    ("F10", 215.0, 164.0, 18.0, 16.0),
-    ("F11", 272.5, 164.0, 18.0, 16.0),
-    ("F12", 330.0, 164.0, 18.0, 16.0),
-    ("Del", 42.0, 216.0, 18.0, 16.0),
-    ("Home", 96.5, 216.0, 24.0, 16.0),
-    ("End", 157.0, 216.0, 18.0, 16.0),
-    ("PgUp", 212.0, 216.0, 24.0, 16.0),
-    ("PgDn", 269.5, 216.0, 24.0, 16.0),
-    ("鼠标左右键", 24.0, 277.0, 286.0, 22.0),
-    ("连接", 62.0, 338.0, 210.0, 20.0),
-    ("00:00:01", 282.0, 339.0, 52.0, 18.0),
-    ("画质", 26.0, 376.0, 338.0, 18.0),
-    ("自动", 56.0, 409.0, 28.0, 19.5),
-    ("流畅", 139.5, 409.0, 28.0, 19.5),
-    ("高清", 223.0, 409.0, 28.0, 19.5),
-    ("原画", 306.5, 409.0, 28.0, 19.5),
-    ("随窗口", 26.0, 442.0, 338.0, 18.0),
-    ("帧率", 26.0, 466.0, 338.0, 18.0),
-    ("自动", 42.0, 499.0, 28.0, 19.5),
-    ("120", 101.0, 499.0, 21.0, 19.5),
-    ("90", 160.0, 499.0, 14.0, 19.5),
-    ("60", 216.0, 499.0, 14.0, 19.5),
-    ("30", 271.5, 499.0, 14.0, 19.5),
-    ("15", 327.0, 499.0, 14.0, 19.5),
-    ("随网络调整", 26.0, 532.0, 338.0, 18.0),
-    ("缩放", 26.0, 556.0, 338.0, 18.0),
-    ("100%", 56.0, 589.0, 28.0, 19.5),
-    ("125%", 139.5, 589.0, 28.0, 19.5),
-    ("150%", 223.0, 589.0, 28.0, 19.5),
-    ("175%", 306.5, 589.0, 28.0, 19.5),
-    ("150%（推荐）", 26.0, 622.0, 338.0, 18.0),
-    ("分辨率", 26.0, 646.0, 338.0, 18.0),
-    ("1920×1080（推荐）", 52.0, 679.0, 119.0, 19.5),
-    ("1280×720", 250.5, 679.0, 56.0, 19.5),
-    ("1920×1080 最贴合这块屏幕（推荐）", 26.0, 712.0, 338.0, 18.0),
-    ("全屏", 62.0, 742.0, 296.0, 20.0),
+let center_phone_words : Array[(String, Double, Double, Double, Double)] = [
+    ("控制中心", 24.0, 175.0, 64.0, 24.0),
+    ("快捷操作", 26.0, 215.0, 338.0, 18.0),
+    ("全屏", 67.5, 276.0, 24.0, 16.0),
+    ("粘贴", 183.0, 276.0, 24.0, 16.0),
+    ("发送文件", 286.5, 276.0, 48.0, 16.0),
+    ("触控板", 61.5, 348.0, 36.0, 16.0),
+    ("画面", 26.0, 385.0, 338.0, 18.0),
+    ("画质", 32.0, 417.0, 266.0, 20.0),
+    ("自动", 308.0, 418.0, 26.0, 18.0),
+    ("帧率", 32.0, 461.0, 266.0, 20.0),
+    ("自动", 308.0, 462.0, 26.0, 18.0),
+    ("缩放", 32.0, 505.0, 266.0, 20.0),
+    ("100%", 308.0, 506.0, 26.0, 18.0),
+    ("分辨率", 32.0, 549.0, 233.5, 20.0),
+    ("1920×1080", 275.5, 550.0, 58.5, 18.0),
+    ("连接", 62.0, 669.0, 210.0, 20.0),
+    ("00:00:01", 282.0, 670.0, 52.0, 18.0),
+    ("控制 · 李雷也在看", 26.0, 701.0, 338.0, 18.0),
+    ("断开其他连接（1）", 62.0, 731.0, 296.0, 20.0),
     ("断开", 62.0, 788.0, 296.0, 20.0),
   ]
 
 ///|
 // kept across runs: the recording, never written
 let center_wide_words : Array[(String, Double, Double, Double, Double)] = [
-    ("控制中心", 992.0, 20.0, 264.0, 20.0),
-    ("组合键", 992.0, 50.0, 264.0, 18.0),
-    ("开始菜单", 1011.5, 113.0, 44.0, 16.0),
-    ("切换窗口", 1102.0, 113.0, 44.0, 16.0),
-    ("显示桌面", 1192.5, 113.0, 44.0, 16.0),
-    ("任务管理器", 1006.0, 185.0, 55.0, 16.0),
-    ("关闭窗口", 1102.0, 185.0, 44.0, 16.0),
-    ("截图", 1203.5, 185.0, 22.0, 16.0),
-    ("常用键", 992.0, 222.0, 264.0, 18.0),
-    ("F1", 1005.0, 262.0, 11.0, 16.0),
-    ("F2", 1050.5, 262.0, 11.0, 16.0),
-    ("F3", 1096.0, 262.0, 11.0, 16.0),
-    ("F4", 1141.0, 262.0, 11.0, 16.0),
-    ("F5", 1186.5, 262.0, 11.0, 16.0),
-    ("F6", 1232.0, 262.0, 11.0, 16.0),
-    ("F7", 1005.0, 314.0, 11.0, 16.0),
-    ("F8", 1050.5, 314.0, 11.0, 16.0),
-    ("F9", 1096.0, 314.0, 11.0, 16.0),
-    ("F10", 1138.5, 314.0, 16.5, 16.0),
-    ("F11", 1184.0, 314.0, 16.5, 16.0),
-    ("F12", 1229.0, 314.0, 16.5, 16.0),
-    ("Del", 1002.5, 366.0, 16.5, 16.0),
-    ("Home", 1045.0, 366.0, 22.0, 16.0),
-    ("End", 1093.0, 366.0, 16.5, 16.0),
-    ("PgUp", 1135.5, 366.0, 22.0, 16.0),
-    ("PgDn", 1181.0, 366.0, 22.0, 16.0),
-    ("鼠标左右键", 982.0, 408.0, 232.0, 20.0),
-    ("连接", 1028.0, 444.0, 140.0, 20.0),
-    ("00:00:01", 1178.0, 445.5, 48.0, 17.0),
-    ("画质", 992.0, 478.0, 264.0, 18.0),
-    ("自动", 1007.0, 513.0, 26.0, 18.0),
-    ("流畅", 1059.0, 513.0, 26.0, 18.0),
-    ("高清", 1111.0, 513.0, 26.0, 18.0),
-    ("原画", 1163.0, 513.0, 26.0, 18.0),
-    ("随窗口", 992.0, 546.0, 264.0, 18.0),
-    ("帧率", 992.0, 570.0, 264.0, 18.0),
-    ("自动", 1007.0, 605.0, 26.0, 18.0),
-    ("120", 1059.0, 605.0, 19.5, 18.0),
-    ("90", 1105.5, 605.0, 13.0, 18.0),
-    ("60", 1146.0, 605.0, 13.0, 18.0),
-    ("30", 1186.5, 605.0, 13.0, 18.0),
-    ("15", 1227.0, 605.0, 13.0, 18.0),
-    ("随网络调整", 992.0, 638.0, 264.0, 18.0),
-    ("缩放", 992.0, 662.0, 264.0, 18.0),
-    ("100%", 1007.0, 697.0, 26.0, 18.0),
-    ("125%", 1059.0, 697.0, 26.0, 18.0),
-    ("150%", 1111.0, 697.0, 26.0, 18.0),
-    ("175%", 1163.0, 697.0, 26.0, 18.0),
-    ("150%（推荐）", 992.0, 730.0, 264.0, 18.0),
-    ("分辨率", 992.0, 754.0, 264.0, 18.0),
-    ("1920×1080（推荐）", 1007.0, 789.0, 110.5, 18.0),
-    ("1280×720", 1166.5, 789.0, 52.0, 18.0),
-    ("1920×1080 最贴合这块屏幕（推荐）", 992.0, 822.0, 264.0, 18.0),
-    ("全屏", 1028.0, 848.0, 222.0, 20.0),
-    ("断开", 1028.0, 886.0, 222.0, 20.0),
+    ("控制中心", 992.0, 56.0, 264.0, 20.0),
+    ("快捷操作", 992.0, 86.0, 264.0, 18.0),
+    ("全屏", 1022.5, 147.0, 22.0, 16.0),
+    ("粘贴", 1113.0, 147.0, 22.0, 16.0),
+    ("发送文件", 1192.5, 147.0, 44.0, 16.0),
+    ("画面", 992.0, 184.0, 264.0, 18.0),
+    ("画质", 998.0, 212.0, 194.0, 20.0),
+    ("自动", 1202.0, 213.5, 24.0, 17.0),
+    ("帧率", 998.0, 248.0, 194.0, 20.0),
+    ("自动", 1202.0, 249.5, 24.0, 17.0),
+    ("缩放", 998.0, 284.0, 194.0, 20.0),
+    ("100%", 1202.0, 285.5, 24.0, 17.0),
+    ("分辨率", 998.0, 320.0, 164.0, 20.0),
+    ("1920×1080", 1172.0, 321.5, 54.0, 17.0),
+    ("连接", 1028.0, 392.0, 140.0, 20.0),
+    ("00:00:01", 1178.0, 393.5, 48.0, 17.0),
+    ("控制 · 李雷也在看", 992.0, 420.0, 264.0, 18.0),
+    ("断开其他连接（1）", 1028.0, 446.0, 222.0, 20.0),
+    ("断开", 1028.0, 495.0, 222.0, 20.0),
   ]
 
 ///|
 // kept across runs: the recording, never written
 let center_looking_words : Array[(String, Double, Double, Double, Double)] = [
-    ("控制中心", 24.0, 472.0, 64.0, 24.0),
-    ("连接", 62.0, 518.0, 210.0, 20.0),
-    ("00:00:01", 282.0, 519.0, 52.0, 18.0),
-    ("画质", 26.0, 556.0, 338.0, 18.0),
-    ("自动", 56.0, 589.0, 28.0, 19.5),
-    ("流畅", 139.5, 589.0, 28.0, 19.5),
-    ("高清", 223.0, 589.0, 28.0, 19.5),
-    ("原画", 306.5, 589.0, 28.0, 19.5),
-    ("随窗口", 26.0, 622.0, 338.0, 18.0),
-    ("帧率", 26.0, 646.0, 338.0, 18.0),
-    ("自动", 42.0, 679.0, 28.0, 19.5),
-    ("120", 101.0, 679.0, 21.0, 19.5),
-    ("90", 160.0, 679.0, 14.0, 19.5),
-    ("60", 216.0, 679.0, 14.0, 19.5),
-    ("30", 271.5, 679.0, 14.0, 19.5),
-    ("15", 327.0, 679.0, 14.0, 19.5),
-    ("随网络调整", 26.0, 712.0, 338.0, 18.0),
-    ("全屏", 62.0, 742.0, 296.0, 20.0),
+    ("控制中心", 24.0, 335.0, 64.0, 24.0),
+    ("快捷操作", 26.0, 375.0, 338.0, 18.0),
+    ("全屏", 67.5, 436.0, 24.0, 16.0),
+    ("画面", 26.0, 473.0, 338.0, 18.0),
+    ("画质", 32.0, 505.0, 266.0, 20.0),
+    ("自动", 308.0, 506.0, 26.0, 18.0),
+    ("帧率", 32.0, 549.0, 266.0, 20.0),
+    ("自动", 308.0, 550.0, 26.0, 18.0),
+    ("连接", 62.0, 669.0, 210.0, 20.0),
+    ("00:00:01", 282.0, 670.0, 52.0, 18.0),
+    ("只看 · 李雷也在看", 26.0, 701.0, 338.0, 18.0),
+    ("断开其他连接（1）", 62.0, 731.0, 296.0, 20.0),
     ("断开", 62.0, 788.0, 296.0, 20.0),
   ]
 
 ///|
 // kept across runs: the recording, never written
 let center_phone_said : Array[(String, String, Double, Double, Double, Double)] = [
-    ("Button", "开始菜单", 26.0, 145.5, 107.5, 64.0),
-    ("Button", "切换窗口", 141.5, 145.5, 107.5, 64.0),
-    ("Button", "显示桌面", 256.5, 145.5, 107.5, 64.0),
-    ("Button", "任务管理器", 26.0, 217.5, 107.5, 64.0),
-    ("Button", "关闭窗口", 141.5, 217.5, 107.5, 64.0),
-    ("Button", "截图", 256.5, 217.5, 107.5, 64.0),
-    ("Button", "F1", 26.0, 317.5, 49.5, 44.0),
-    ("Button", "F2", 83.5, 317.5, 49.5, 44.0),
-    ("Button", "F3", 141.5, 317.5, 49.5, 44.0),
-    ("Button", "F4", 199.0, 317.5, 49.5, 44.0),
-    ("Button", "F5", 256.5, 317.5, 49.5, 44.0),
-    ("Button", "F6", 314.5, 317.5, 49.5, 44.0),
-    ("Button", "F7", 26.0, 369.5, 49.5, 44.0),
-    ("Button", "F8", 83.5, 369.5, 49.5, 44.0),
-    ("Button", "F9", 141.5, 369.5, 49.5, 44.0),
-    ("Button", "F10", 199.0, 369.5, 49.5, 44.0),
-    ("Button", "F11", 256.5, 369.5, 49.5, 44.0),
-    ("Button", "F12", 314.5, 369.5, 49.5, 44.0),
-    ("Button", "Del", 26.0, 421.5, 49.5, 44.0),
-    ("Button", "Home", 83.5, 421.5, 49.5, 44.0),
-    ("Button", "End", 141.5, 421.5, 49.5, 44.0),
-    ("Button", "PgUp", 199.0, 421.5, 49.5, 44.0),
-    ("Button", "PgDn", 256.5, 421.5, 49.5, 44.0),
-    ("Switch", "鼠标左右键", 322.0, 485.5, 44.0, 44.0),
-    ("Button", "连接 00:00:01", 16.0, 545.5, 358.0, 44.0),
-    ("Radio", "自动", 28.0, 623.5, 83.5, 30.0),
-    ("Radio", "流畅", 111.5, 623.5, 83.5, 30.0),
-    ("Radio", "高清", 195.0, 623.5, 83.5, 30.0),
-    ("Radio", "原画", 278.5, 623.5, 83.5, 30.0),
-    ("Radio", "自动", 28.0, 713.5, 55.5, 30.0),
-    ("Radio", "120", 83.5, 713.5, 55.5, 30.0),
-    ("Radio", "90", 139.5, 713.5, 55.5, 30.0),
-    ("Radio", "60", 195.0, 713.5, 55.5, 30.0),
-    ("Radio", "30", 250.5, 713.5, 55.5, 30.0),
-    ("Radio", "15", 306.5, 713.5, 55.5, 30.0),
-    ("Radio", "100%", 28.0, 803.5, 83.5, 30.0),
-    ("Radio", "125%", 111.5, 803.5, 83.5, 30.0),
-    ("Radio", "150%", 195.0, 803.5, 83.5, 30.0),
-    ("Radio", "175%", 278.5, 803.5, 83.5, 30.0),
-    ("Radio", "1920×1080（推荐）", 28.0, 893.5, 167.0, 30.0),
-    ("Radio", "1280×720", 195.0, 893.5, 167.0, 30.0),
-    ("Button", "全屏", 16.0, 949.5, 358.0, 44.0),
-    ("Button", "断开", 16.0, 995.5, 358.0, 44.0),
+    ("Button", "全屏", 26.0, 239.0, 107.5, 64.0),
+    ("Button", "粘贴", 141.5, 239.0, 107.5, 64.0),
+    ("Button", "发送文件", 256.5, 239.0, 107.5, 64.0),
+    ("Button", "触控板", 26.0, 311.0, 107.5, 64.0),
+    ("Button", "画质 自动", 16.0, 405.0, 358.0, 44.0),
+    ("Button", "帧率 自动", 16.0, 449.0, 358.0, 44.0),
+    ("Button", "缩放 100%", 16.0, 493.0, 358.0, 44.0),
+    ("Button", "分辨率 1920×1080", 16.0, 537.0, 358.0, 44.0),
+    ("Button", "连接 00:00:01", 16.0, 657.0, 358.0, 44.0),
+    ("Button", "断开其他连接（1）", 16.0, 719.0, 358.0, 44.0),
+    ("Button", "断开", 16.0, 776.0, 358.0, 44.0),
   ]
 
 ///|
 // kept across runs: the recording, never written
 let center_wide_said : Array[(String, String, Double, Double, Double, Double)] = [
-    ("Button", "开始菜单", 992.0, 76.0, 82.5, 64.0),
-    ("Button", "切换窗口", 1082.5, 76.0, 82.5, 64.0),
-    ("Button", "显示桌面", 1173.5, 76.0, 82.5, 64.0),
-    ("Button", "任务管理器", 992.0, 148.0, 82.5, 64.0),
-    ("Button", "关闭窗口", 1082.5, 148.0, 82.5, 64.0),
-    ("Button", "截图", 1173.5, 148.0, 82.5, 64.0),
-    ("Button", "F1", 992.0, 248.0, 37.5, 44.0),
-    ("Button", "F2", 1037.5, 248.0, 37.5, 44.0),
-    ("Button", "F3", 1082.5, 248.0, 37.5, 44.0),
-    ("Button", "F4", 1128.0, 248.0, 37.5, 44.0),
-    ("Button", "F5", 1173.5, 248.0, 37.5, 44.0),
-    ("Button", "F6", 1218.5, 248.0, 37.5, 44.0),
-    ("Button", "F7", 992.0, 300.0, 37.5, 44.0),
-    ("Button", "F8", 1037.5, 300.0, 37.5, 44.0),
-    ("Button", "F9", 1082.5, 300.0, 37.5, 44.0),
-    ("Button", "F10", 1128.0, 300.0, 37.5, 44.0),
-    ("Button", "F11", 1173.5, 300.0, 37.5, 44.0),
-    ("Button", "F12", 1218.5, 300.0, 37.5, 44.0),
-    ("Button", "Del", 992.0, 352.0, 37.5, 44.0),
-    ("Button", "Home", 1037.5, 352.0, 37.5, 44.0),
-    ("Button", "End", 1082.5, 352.0, 37.5, 44.0),
-    ("Button", "PgUp", 1128.0, 352.0, 37.5, 44.0),
-    ("Button", "PgDn", 1173.5, 352.0, 37.5, 44.0),
-    ("Switch", "鼠标左右键", 1230.0, 400.0, 36.0, 36.0),
-    ("Button", "连接 00:00:01", 982.0, 436.0, 284.0, 36.0),
-    ("Radio", "自动", 995.0, 507.0, 50.0, 30.0),
-    ("Radio", "流畅", 1047.0, 507.0, 50.0, 30.0),
-    ("Radio", "高清", 1099.0, 507.0, 50.0, 30.0),
-    ("Radio", "原画", 1151.0, 507.0, 50.0, 30.0),
-    ("Radio", "自动", 995.0, 599.0, 50.0, 30.0),
-    ("Radio", "120", 1047.0, 599.0, 43.5, 30.0),
-    ("Radio", "90", 1092.5, 599.0, 38.5, 30.0),
-    ("Radio", "60", 1133.0, 599.0, 38.5, 30.0),
-    ("Radio", "30", 1174.0, 599.0, 38.5, 30.0),
-    ("Radio", "15", 1214.5, 599.0, 38.5, 30.0),
-    ("Radio", "100%", 995.0, 691.0, 50.0, 30.0),
-    ("Radio", "125%", 1047.0, 691.0, 50.0, 30.0),
-    ("Radio", "150%", 1099.0, 691.0, 50.0, 30.0),
-    ("Radio", "175%", 1151.0, 691.0, 50.0, 30.0),
-    ("Radio", "1920×1080（推荐）", 995.0, 783.0, 134.5, 30.0),
-    ("Radio", "1280×720", 1131.5, 783.0, 121.5, 30.0),
-    ("Button", "全屏", 982.0, 840.0, 284.0, 36.0),
-    ("Button", "断开", 982.0, 878.0, 284.0, 36.0),
+    ("Button", "全屏", 992.0, 110.0, 82.5, 64.0),
+    ("Button", "粘贴", 1082.5, 110.0, 82.5, 64.0),
+    ("Button", "发送文件", 1173.5, 110.0, 82.5, 64.0),
+    ("Button", "画质 自动", 982.0, 204.0, 284.0, 36.0),
+    ("Button", "帧率 自动", 982.0, 240.0, 284.0, 36.0),
+    ("Button", "缩放 100%", 982.0, 276.0, 284.0, 36.0),
+    ("Button", "分辨率 1920×1080", 982.0, 312.0, 284.0, 36.0),
+    ("Button", "连接 00:00:01", 982.0, 384.0, 284.0, 36.0),
+    ("Button", "断开其他连接（1）", 982.0, 438.0, 284.0, 36.0),
+    ("Button", "断开", 982.0, 487.0, 284.0, 36.0),
   ]

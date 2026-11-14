@@ -109,7 +109,8 @@ export class DriveKept {
         CREATE TABLE IF NOT EXISTS saved (id TEXT PRIMARY KEY, at TEXT NOT NULL, size INTEGER NOT NULL, type TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS upload (id TEXT PRIMARY KEY, json TEXT NOT NULL, at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS origin (id TEXT PRIMARY KEY, json TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS wanted (id TEXT PRIMARY KEY, kind TEXT NOT NULL, size INTEGER NOT NULL);`);
+        CREATE TABLE IF NOT EXISTS wanted (id TEXT PRIMARY KEY, kind TEXT NOT NULL, size INTEGER NOT NULL);
+        CREATE INDEX IF NOT EXISTS kept_read ON kept (kind, used);`);
         return (this.#sql = opened.success);
       } catch {
         return (this.#sql = null);
@@ -303,16 +304,20 @@ export class DriveKept {
       const found: (Unfinished & { used: number })[] = [];
       const wanted = new Map(sql.all("SELECT id, kind, size FROM wanted").map((r) => [String(r[0]), { kind: String(r[1]), size: Number(r[2]) }] as const));
       for (const kind of kinds) {
-        const rows = sql.all("SELECT k.id, k.mtime, k.size, k.used FROM kept k WHERE k.kind = ?", [kind]);
+        // Only those that may be listed are read, they and their parts (read since `since`, or asked for), not every
+        // file of the kind: a chat's are never let go by themselves, and all of them read each time held the core
+        // 0.26 s in Hermes at 100 000 parts, two or three times for each pref set and each part read (2026-11-11).
+        const those = "SELECT id FROM kept WHERE kind = ? AND used >= ? UNION SELECT k.id FROM kept k JOIN wanted w ON w.id = k.id WHERE k.kind = ?";
+        const rows = sql.all(`SELECT id, mtime, size, used FROM kept WHERE id IN (${those})`, [kind, since, kind]);
         const parts = new Map<string, [number, number][]>();
-        for (const r of sql.all("SELECT p.id, p.at, p.length FROM part p JOIN kept k ON k.id = p.id WHERE k.kind = ? ORDER BY p.id, p.at", [kind])) {
+        for (const r of sql.all(`SELECT id, at, length FROM part WHERE id IN (${those}) ORDER BY id, at`, [kind, since, kind])) {
           const id = String(r[0]);
           let of = parts.get(id);
           if (of === undefined) parts.set(id, (of = []));
           of.push([Number(r[1]), Number(r[2])]);
         }
-        let total = 0;
-        for (const of of parts.values()) for (const [, length] of of) total += length;
+        // (all that is kept of the kind, listed or not: what its bound is held against; a kind with none is not summed)
+        const total = Number.isFinite(this.#most[kind]) ? Number(sql.all("SELECT COALESCE(SUM(p.length), 0) FROM part p JOIN kept k ON k.id = p.id WHERE k.kind = ?", [kind])[0]?.[0] ?? 0) : 0;
         const seen = new Set<string>();
         for (const r of rows) {
           const [id, mtime, size, used] = [String(r[0]), Number(r[1]), Number(r[2]), Number(r[3])];

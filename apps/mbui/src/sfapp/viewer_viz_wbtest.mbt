@@ -23,11 +23,8 @@ fn viz_chat() -> (@ui.Tester, (Double, Double)?, (Double, Double)?) {
     [p, ..] => Some(p)
     [] => None
   }
-  // (the two 22 boxes under its page, at its right: the whole screen, then beside)
-  let full = match view_rect(t, viz_views(t).0) {
-    Some((x, y, w, h)) => Some((x + w - 22.0 - 2.0 - 11.0, y + h + 2.0 + 11.0))
-    None => None
-  }
+  // (the whole screen, under its page: viz_full_at)
+  let full = viz_full_at(t, viz_views(t).0)
   (t, picture, full)
 }
 
@@ -36,7 +33,7 @@ fn viz_chat() -> (@ui.Tester, (Double, Double)?, (Double, Double)?) {
 fn both_seen(picture : (Double, Double)?, full : (Double, Double)?) -> ((Double, Double), (Double, Double)) raise {
   match (picture, full) {
     (Some(p), Some(f)) => (p, f)
-    _ => fail("not both on the screen: the picture \{picture}, the visualization's 全屏 \{full}")
+    _ => fail("not both on the screen: the picture \{Repr(picture)}, the visualization's 全屏 \{Repr(full)}")
   }
 }
 

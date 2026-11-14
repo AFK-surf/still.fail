@@ -1,7 +1,6 @@
 // What agents do in their own conversations (the Rust station's hub.rs: chat_post, chat_state, chat_history, slack_api and
 // what they rest on): post (with files and a card, ending the turn or not), record how the turn ends, read a thread,
 // and call Slack as their bot. What a tool says of the turn reaches its session's actor, in turn with the rest.
-import { fetchFiles, keyPart, sandboxed, stationPath } from "../agents/sandbox.ts";
 import { mkdirSync, rmSync } from "node:fs";
 import { copyFile, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
@@ -9,6 +8,7 @@ import { PlaceRefused } from "../ops/places.ts";
 import { wall } from "../ops/fibers.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
+import { isSlackWrite } from "../tools/mcp.ts";
 import { LegacyEditsUnavailable, makeStore as makeReadStore, statePendingCard as readStatePendingCard, stateQuestion as readStateQuestion } from "../read/store.ts";
 import { iso } from "../read/transcript.ts";
 import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
@@ -18,7 +18,6 @@ import {
   type Args,
   MAX_WAIT_SECONDS,
   MIN_WAIT_SECONDS,
-  WRITES,
   aboutTs,
   cardArg,
   cardSaid,
@@ -34,6 +33,7 @@ import {
   stateArg,
 } from "./args.ts";
 import { type ChatSurface, callApi } from "./chat.ts";
+import { threadsToldOf } from "./afresh.ts";
 import type { Hub } from "./hub.ts";
 import { shownFacts } from "./image-size.ts";
 import { dir as thumbsDir, keep } from "../drive/thumbs.ts";
@@ -203,11 +203,15 @@ async function recordPendingForTurn(hub: Hub, key: string, actor: SessionActor, 
   }
 }
 
+/// The threads what a state is about is looked for in (`about`, the pending card): the recent ones, which hold what an
+/// agent answers and asks, however many threads its session joined.
+const recentThreadIds = (hub: Hub, key: string) => hub.store.recentSessionThreads(key).threads.map((t) => t.thread.id);
+
 /// A thread of this session the agent named with to=, and how the session posts there.
 export function target(hub: Hub, key: string, to: Json): SessionThread {
   if (hub.store.getSession(key) === null) throw new Error("unknown session");
   const known = () => {
-    const threads = hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs));
+    const threads = threadsToldOf(hub, key);
     return threads.length === 0 ? "none yet" : threads.join(", ");
   };
   if (typeof to !== "string" || to.trim() === "") throw new Error(`to is required: the thread attribute of the message you are answering. This session's threads: ${known()}`);
@@ -220,34 +224,6 @@ export function target(hub: Hub, key: string, to: Json): SessionThread {
 
 /// The most a file an agent attaches is (attach, peer-files.ts MAX_SENT).
 const MOST_ATTACHED = 50 * 1024 * 1024;
-
-/// While the station runs things in sandboxes (agents/sandbox.ts): a message's files (`files`, and with `links` the
-/// local links in `text`) named as the station names them (not by where the data directory's link leads in the
-/// sandbox), and brought here from the session's sandbox when only it has them, before anything here looks for them.
-export async function fromSandbox(hub: Hub, key: string, args: Args, links: boolean): Promise<Args> {
-  const data = hub.config().dataDir;
-  const row = hub.store.getSession(key);
-  if (!row || !sandboxed(data)) return args;
-  const full = (given: string) => stationPath(data, isAbsolute(given) ? given : join(row.workspace, given));
-  let next = args;
-  const wanted: string[] = [];
-  if (Array.isArray(args.files)) {
-    const files = args.files.map((f) => full(jsString(f)));
-    wanted.push(...files);
-    next = { ...next, files };
-  }
-  if (links && typeof args.text === "string") {
-    let text = args.text;
-    for (const { destination, path } of namedLocalPaths(text)) {
-      const station = stationPath(data, path);
-      wanted.push(station);
-      if (station !== path) text = text.split(`](<${destination}>`).join(`](<${station}>`).split(`](${destination}`).join(`](${station.includes(" ") ? `<${station}>` : station}`);
-    }
-    next = { ...next, text };
-  }
-  await fetchFiles(data, keyPart(key), wanted);
-  return next;
-}
 
 /// Whether `staged` may have something to copy: files named, or (with `links`) a local link into a folder macOS
 /// protects, on a Mac.
@@ -315,19 +291,12 @@ export async function staged(hub: Hub, key: string, args: Args, links: boolean):
 }
 
 /// Copies files the agent attaches into the session's uploads (`into`'s, when it sends them to that session), so the
-/// message keeps them even if the originals change, and measures images so pages can hold their place. Ones that are
-/// only in the session's sandbox (its agent runs there, agents/sandbox.ts) are brought here first.
+/// message keeps them even if the originals change, and measures images so pages can hold their place.
 export async function attach(hub: Hub, key: string, paths: string[], into: string = key): Promise<Attachment[]> {
   const row = hub.store.getSession(key);
   const target = into === key ? row : hub.store.getSession(into);
   if (!row || !target) throw new Error("unknown session");
   if (paths.length > 10) throw new Error("at most 10 files per message");
-  const data = hub.config().dataDir;
-  if (sandboxed(data)) {
-    // Named as the agent sees them there, and brought here from there when only it has them.
-    paths = paths.map((given) => stationPath(data, isAbsolute(given) ? given : join(row.workspace, given)));
-    await fetchFiles(data, keyPart(key), paths);
-  }
   const dir = join(target.workspace, "uploads");
   mkdirSync(dir, { recursive: true });
   // Copied off the station's thread: a large file, or one read back from disk on a machine short of memory, held it
@@ -339,7 +308,7 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
     try {
       meta = await stat(path);
     } catch {
-      throw new Error(sandboxed(hub.config().dataDir) ? `no such file, here or in this session's sandbox: ${given}` : `no such file: ${given}`);
+      throw new Error(`no such file: ${given}`);
     }
     if (!meta.isFile()) throw new Error(`not a file: ${given}`);
     if (meta.size > 50 * 1024 * 1024) throw new Error(`too large (over 50 MB): ${given}`);
@@ -365,6 +334,9 @@ export async function chatPost(hub: Hub, key: string, args: Args, held: Held = {
     const ts = typeof args.withdraw === "string" && args.withdraw.trim() !== "" ? args.withdraw : null;
     if (ts === null) throw new Error("withdraw must be your question's message ts");
     const thread = target(hub, key, args.to);
+    // A vault request's card closed alone would leave the request waiting in its owner's 密钥: it is withdrawn whole.
+    const vault = (store.cardAt(thread.thread.id, ts) as { vault?: { request?: unknown } } | null)?.vault;
+    if (typeof vault?.request === "string") throw new Error(`That card is the vault request ${vault.request}: withdraw it with secret_cancel {request: "${vault.request}"}, which closes its card too.`);
     if (!store.withdrawCard(key, thread.thread.id, ts)) throw new Error("withdraw must name your own message with a card in this conversation");
     return "Withdrew the answer card; its message is kept. Continue your work and record the appropriate ending state.";
   }
@@ -652,7 +624,7 @@ async function intoOpening(hub: Hub, key: string, chat: ChatSurface, thread: Thr
 /// What a state recorded with chat_state is about: the message `about` names (by its ts, in one of the session's
 /// threads); else for need_help, the card still pending in its chats (the latest, if several).
 function stateAbout(hub: Hub, key: string, kind: DeclaredState, args: Args): [number, number, string] | null {
-  const threads = hub.store.sessionThreads(key);
+  const threads = hub.store.recentSessionThreads(key).threads;
   const ts = aboutTs(args);
   if (ts !== null) {
     for (const t of threads) {
@@ -702,10 +674,10 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
   const questionTurn = questionActor?.currentTurnId() ?? null;
   let about: [number, number, string] | null;
   if (checkingQuestion) {
-    about = await questionForAbout(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts);
+    about = await questionForAbout(hub, key, () => recentThreadIds(hub, key), ts);
     if (about === null) throw new Error(`about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`);
   } else if (checkingDefault) {
-    about = await pendingForState(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id));
+    about = await pendingForState(hub, key, () => recentThreadIds(hub, key));
   } else about = stateAbout(hub, key, kind, args);
   if (kind.kind === "need_help" && about === null && args.kind !== "block") {
     throw new Error(NEED_VISIBLE_QUESTION);
@@ -713,13 +685,13 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
   if (checkingQuestion) {
     if (questionActor && questionTurn !== null &&
       (hub.actors.get(key) !== questionActor || about === null || !await recordQuestionForTurn(hub, key, questionActor,
-        questionTurn, kind, words, about, watch, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts,
+        questionTurn, kind, words, about, watch, () => recentThreadIds(hub, key), ts,
         `about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`)))
       throw new Error("the turn ended while checking its question; its state was not recorded");
   } else if (checkingDefault) {
     if (questionActor && questionTurn !== null &&
       !await recordPendingForTurn(hub, key, questionActor, questionTurn, kind, words, about, watch,
-        () => hub.store.sessionThreads(key).map((t) => t.thread.id), args.kind !== "block"))
+        () => recentThreadIds(hub, key), args.kind !== "block"))
       throw new Error("the turn ended while checking its question; its state was not recorded");
   } else {
     const actor = actorOf(hub, key);
@@ -784,7 +756,7 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
     const name = (await chat?.userName?.(m.author)) ?? null;
     if (name !== null) names.set(m.author, name);
   }
-  const cards = new Map<number, { card: Json; pending: boolean }>();
+  const cards = new Map<number, { card: Json; pending: boolean; chose?: { by: string; option: string } }>();
   for (const e of hub.store.messagePageEntries(thread.id, messages.map((m) => m.n))) {
     if (e.kind !== "message") continue;
     const card = e.card ?? (e.options != null ? { type: "options", options: e.options } : null);
@@ -794,6 +766,11 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
     const pending = hub.historyPendingCard ? await hub.historyPendingCard(thread.id) : hub.store.pendingCard(thread.id)?.[0].n;
     const current = pending == null ? undefined : cards.get(pending);
     if (current) current.pending = true;
+    // A choice that closed a card sent no message: said on the card, as nothing else in the thread says it.
+    for (const [n, c] of hub.store.cardChoices(thread.id, [...cards.keys()])) {
+      const name = (await chat?.userName?.(c.by)) ?? null;
+      cards.get(n)!.chose = { by: name !== null ? `${name} (${c.by})` : c.by, option: c.option };
+    }
   }
   return formatHistory(messages, thread.surface, threadAddress(thread.channel, thread.threadTs), key, names, cards);
 }
@@ -839,7 +816,7 @@ export async function slackApi(hub: Hub, key: string, method: string, params: Re
   const channel = textOf("channel") ?? textOf("channel_id");
   const surface = hub.surface(connect);
   // A write lands in a thread: the one named, the one its message is in, or (a new message) the one it starts.
-  const write = WRITES.some((w) => method.startsWith(w));
+  const write = isSlackWrite(method);
   const named = textOf("thread_ts");
   const about = textOf("ts") ?? textOf("timestamp");
   let threadTs: string | null = null;

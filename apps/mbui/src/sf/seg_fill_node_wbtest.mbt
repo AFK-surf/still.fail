@@ -109,7 +109,7 @@ test "a narrow page's choice as nodes too narrow for its options side by side, d
       let drawn = @ui.view_tree().unwrap().drawn()
       for j, l in labels {
         if j != k {
-          assert_true(!drawn.iter().any(fn(d) { d.words == l }), msg="\{case}: a pick, \{l} not drawn")
+          assert_true(!drawn.iter().any(fn(d) { d.words == l }), msg="\{Repr(case)}: a pick, \{l} not drawn")
         }
       }
       try {

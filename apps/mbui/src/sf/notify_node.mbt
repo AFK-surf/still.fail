@@ -27,6 +27,7 @@ pub(all) enum IconMark {
 /// make it, 200 high, 28 under it, `w` across (its ground's gradient worked out for it): the banner (`title`, `body`)
 /// where `banner` says one comes, the app's icon (the picture `icon`) among others with what it carries (`mark`). Read
 /// out a picture said `label`.
+#callsite(autofill(loc))
 pub fn notify_preview_node(
   parent : @view.View,
   look : NoticeLook,
@@ -37,8 +38,9 @@ pub fn notify_preview_node(
   mark : () -> IconMark,
   icon : String,
   label : () -> String,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(room) {
+  parent.box(made_for=loc, fn(room) {
     room.padding(Is((0.0, 0.0, 0.0, notify_preview_foot))) |> ignore
     room.box(fn(v) {
       v
@@ -114,6 +116,7 @@ pub fn notify_preview_node(
 /// a phone's at most, 32 at least from the preview's sides and 20 under its top, as high as the preview (its foot out
 /// of it); its frame 6 round its screen; on the screen the status bar, its camera, the home screen's first row of
 /// icons, the banner across the top over them. The preview round it the card's ground.
+#callsite(autofill(loc))
 fn notify_device_node(
   v : @view.View,
   w : () -> Double,
@@ -123,6 +126,7 @@ fn notify_device_node(
   body : () -> String,
   mark : () -> IconMark,
   icon : String,
+  loc~ : SourceLoc,
 ) -> Unit {
   let device_w = fn() {
     let room = w() - 2.0 * notify_device_side
@@ -135,7 +139,7 @@ fn notify_device_node(
     }
   }
   v.ground(By(fn() { @ui.tree_theme().color(Card) })).row(Is(true)).lies_along(Is(Middle)).lines_up(Is(Some(Start))) |> ignore
-  v.box(fn(frame) {
+  v.box(made_for=loc, fn(frame) {
     frame
     .margin(Is((0.0, notify_device_top, 0.0, 0.0)))
     .width(By(fn() { Some(device_w()) }))
@@ -230,14 +234,16 @@ fn notify_device_node(
 /// A banner (banner): the app's icon, the chat's title with when, what it says in two lines at most; 12 by 10 in, 10
 /// between the icon and the words, 16 round, on what floats, a soft shadow; 320 across, or (`across`) as wide as its
 /// room up to 400.
+#callsite(autofill(loc))
 fn notify_banner_node(
   parent : @view.View,
   title : () -> String,
   body : () -> String,
   icon : String,
   across~ : Bool,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     b
     .row(Is(true))
     .padding(Is((notify_banner_x, notify_banner_y, notify_banner_x, notify_banner_y)))
@@ -276,7 +282,15 @@ fn notify_banner_node(
 /// Apps' icons in a row (icons_with_mine's): two of the line's grey (`corner` round), then the app's own with its mark
 /// (the number in a red capsule at its top right corner, or the system's red dot a little over it), then another;
 /// `side` square each.
-fn notify_icons_node(parent : @view.View, side : Double, corner : () -> Double, mark : () -> IconMark, icon : String) -> Unit {
+#callsite(autofill(loc))
+fn notify_icons_node(
+  parent : @view.View,
+  side : Double,
+  corner : () -> Double,
+  mark : () -> IconMark,
+  icon : String,
+  loc~ : SourceLoc,
+) -> Unit {
   let other = fn(p : @view.View) {
     p.box(fn(o) {
       o
@@ -290,7 +304,7 @@ fn notify_icons_node(parent : @view.View, side : Double, corner : () -> Double, 
   }
   other(parent)
   other(parent)
-  parent.box(fn(mine) {
+  parent.box(made_for=loc, fn(mine) {
     mine.width(Is(Some(side))).height(Is(Some(side))) |> ignore
     notify_app_icon_node(mine, side, icon)
     mine.show(fn() { mark() is Count(_) }, fn(m) {
@@ -354,8 +368,9 @@ fn notify_icons_node(parent : @view.View, side : Double, corner : () -> Double, 
 
 ///|
 /// The app's own icon (app_icon's: the picture `icon`, `side` square, 22% round: Md).
-fn notify_app_icon_node(parent : @view.View, side : Double, icon : String) -> Unit {
-  parent.box(fn(i) {
+#callsite(autofill(loc))
+fn notify_app_icon_node(parent : @view.View, side : Double, icon : String, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(i) {
     i
     .width(Is(Some(side)))
     .height(Is(Some(side)))
@@ -371,8 +386,15 @@ fn notify_app_icon_node(parent : @view.View, side : Double, icon : String) -> Un
 ///|
 /// The preview's ground (gradient's, as a node): the web's linear-gradient(150deg, blue-bg, accent-bg) worked out for a
 /// box `w` by `h`, over all of `parent`, `corner` round.
-fn notify_gradient_node(parent : @view.View, w : () -> Double, h : () -> Double, corner : () -> Double) -> Unit {
-  parent.box(fn(g) {
+#callsite(autofill(loc))
+fn notify_gradient_node(
+  parent : @view.View,
+  w : () -> Double,
+  h : () -> Double,
+  corner : () -> Double,
+  loc~ : SourceLoc,
+) -> Unit {
+  parent.box(made_for=loc, fn(g) {
     g
     .over(Is(true))
     .radius(By(corner))
@@ -387,8 +409,9 @@ fn notify_gradient_node(parent : @view.View, w : () -> Double, h : () -> Double,
 
 ///|
 /// The ways of telling side by side (way_tiles: 10 apart, as wide as they share), made by `tiles`.
-pub fn way_tiles_node(parent : @view.View, tiles : (@view.View) -> Unit) -> Unit {
-  parent.box(fn(r) {
+#callsite(autofill(loc))
+pub fn way_tiles_node(parent : @view.View, tiles : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(r) {
     r.row(Is(true)).gap(Is(notify_tiles_gap)) |> ignore
     tiles(r)
   })
@@ -407,6 +430,7 @@ pub(all) enum WayPicture {
 /// (`state`); while `action` says the system has to allow it first, ringed in red, its picture marked, a red capsule
 /// across its foot saying so; `busy`, a spinner in their place. On, ringed in the accent. Pressed, `press`; read out a
 /// button named `name`, pressed while on.
+#callsite(autofill(loc))
 pub fn way_tile_node(
   parent : @view.View,
   look : NoticeLook,
@@ -417,9 +441,10 @@ pub fn way_tile_node(
   action : () -> String,
   busy : () -> Bool,
   press : () -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
   let lit = fn() { on() && action() == "" }
-  parent.box(fn(t) {
+  parent.box(made_for=loc, fn(t) {
     t
     .grow(Is(1.0))
     .basis(Is(Some(0.0)))
@@ -528,7 +553,8 @@ pub fn way_tile_node(
             .lies_along(Is(Middle))
             .ground(By(fn() { @ui.tree_theme().color(Danger) }))
             |> ignore
-            words_node(m, fn() { "!" }, fn() { notify_alert_words }) |> ignore
+            // (part of the mark: at its size whatever the system's size of words)
+            mark_words_node(m, fn() { "!" }, fn() { notify_alert_words }) |> ignore
           })
           |> ignore
         })
@@ -566,8 +592,9 @@ pub fn way_tile_node(
 
 ///|
 /// What `make` makes in the middle of `parent`'s width.
-fn middle_of(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
-  parent.box(fn(m) {
+#callsite(autofill(loc))
+fn middle_of(parent : @view.View, make : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(m) {
     m.row(Is(true)).lies_along(Is(Middle)) |> ignore
     make(m)
   })
@@ -576,8 +603,16 @@ fn middle_of(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
 
 ///|
 /// A block of a tile's picture: `w` across (None: as wide as the column it is in), `h` high, `corner` round, of `ink`.
-fn notify_pic_block(parent : @view.View, w : Double?, h : Double, corner : @ui.Radius, ink : @ui.Color) -> Unit {
-  parent.box(fn(b) {
+#callsite(autofill(loc))
+fn notify_pic_block(
+  parent : @view.View,
+  w : Double?,
+  h : Double,
+  corner : @ui.Radius,
+  ink : @ui.Color,
+  loc~ : SourceLoc,
+) -> Unit {
+  parent.box(made_for=loc, fn(b) {
     b
     .height(Is(Some(h)))
     .radius(By(fn() { @ui.tree_theme().corner(corner) }))
@@ -595,8 +630,9 @@ fn notify_pic_block(parent : @view.View, w : Double?, h : Double, corner : @ui.R
 ///|
 /// The kinds of thing told of on a card (kinds_card: 20 at the sides, 6 over and under), its rows made by `rows`, apart
 /// by their room.
-pub fn kinds_card_node(parent : @view.View, rows : (@view.View) -> Unit) -> Unit {
-  parent.box(fn(k) {
+#callsite(autofill(loc))
+pub fn kinds_card_node(parent : @view.View, rows : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(k) {
     k
     .padding(Is((card_pad, notify_kinds_y, card_pad, notify_kinds_y)))
     .radius(By(fn() { @ui.tree_theme().corner(Xl3) }))
@@ -611,6 +647,7 @@ pub fn kinds_card_node(parent : @view.View, rows : (@view.View) -> Unit) -> Unit
 /// A kind of thing that happens (KindRow, kind_row's): its `title`, what tells of it (`sum`) at that line's end, a
 /// chevron turned down while `open`; what it is (`note`) under it across the row. Pressed, `toggle`; read out a button
 /// named `title`, expanded while open. Opened, its ways (`ways` makes them: 4 apart, 14 in and under).
+#callsite(autofill(loc))
 pub fn kind_row_node(
   parent : @view.View,
   title : () -> String,
@@ -619,8 +656,9 @@ pub fn kind_row_node(
   open : () -> Bool,
   toggle : () -> Unit,
   ways : (@view.View) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(head) {
+  parent.box(made_for=loc, fn(head) {
     head
     .padding(Is((0.0, notify_kind_y, 0.0, notify_kind_y)))
     .gap(Is(notify_kind_lines))
@@ -660,8 +698,14 @@ pub fn kind_row_node(
 ///|
 /// A way of a kind (WayRow, way_switch's): its `title` at the start, `control` made at the end, 32 high at least, 12
 /// apart.
-pub fn way_row_node(parent : @view.View, title : () -> String, control : (@view.View) -> Unit) -> Unit {
-  parent.box(fn(r) {
+#callsite(autofill(loc))
+pub fn way_row_node(
+  parent : @view.View,
+  title : () -> String,
+  control : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> Unit {
+  parent.box(made_for=loc, fn(r) {
     r.row(Is(true)).min_height(Is(Some(notify_way_least))).gap(Is(notify_kind_gap)).lines_up(Is(Some(Middle))) |> ignore
     r.box(fn(t) {
       t.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore

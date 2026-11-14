@@ -10,14 +10,23 @@ import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { CARD_OCCUPIED, cardPlace, postCard } from "../sessions/card-place.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 
-export type Scope = "hour" | "chat";
-export const SCOPES: Scope[] = ["hour", "chat"];
-/// How long a scope lasts at most (seconds): `chat` until the chat is archived, 30 days at the latest.
-export const LASTS: Record<Scope, number> = { hour: 3600, chat: 30 * 86400 };
+/// How long a grant lasts (2026-11-10: a device's timeouts, idle or fixed, as a vault's): `hour` fixed an hour, `idle`
+/// until the chat has used the phone for nothing for an hour, `eight` fixed eight hours, `chat` until the chat is
+/// archived. Every card offers all four (its owner's 默认最长授权, which capped them, went: 2026-11-11).
+export type Scope = "hour" | "idle" | "eight" | "chat";
+export const SCOPES: Scope[] = ["hour", "idle", "eight", "chat"];
+/// How long a scope lasts at most (seconds): `chat` and `idle` 30 days at the latest.
+export const LASTS: Record<Scope, number> = { hour: 3600, idle: 30 * 86400, eight: 8 * 3600, chat: 30 * 86400 };
+/// An idle grant ends once its chat has used the phone for nothing this long (ms).
+export const IDLE_FOR_MS = 3600_000;
 const SCOPE_WORDS: Record<Scope, { label: string; detail: string }> = {
   hour: { label: "本对话 1 小时内", detail: "1 小时内这个对话的 agent 可以用这台手机" },
+  idle: { label: "闲置 1 小时后失效", detail: "这个对话 1 小时不用这台手机就失效，最长 30 天" },
+  eight: { label: "本对话 8 小时内", detail: "8 小时内这个对话的 agent 可以用这台手机" },
   chat: { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
 };
+/// Whether `s` is a scope.
+export const isScope = (s: unknown): s is Scope => SCOPES.includes(s as Scope);
 
 /// The most a grant's signature takes (bytes of JSON).
 const SIGNED_MAX = 4096;
@@ -61,6 +70,7 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS adb_requests (
 );
 CREATE INDEX IF NOT EXISTS adb_requests_by_owner ON adb_requests (owner, status);
 CREATE INDEX IF NOT EXISTS adb_requests_by_session ON adb_requests (session, status);
+-- (each owner's 默认最长授权 of before, read no longer: kept, as the schema only goes forward)
 CREATE TABLE IF NOT EXISTS adb_lasts (
   owner TEXT PRIMARY KEY,
   lasts TEXT NOT NULL,
@@ -226,6 +236,11 @@ export class PhoneGrants {
       this.#end(r, (r.exp ?? 0) <= this.#secs() ? "授权已到期" : "对话已归档");
       return false;
     }
+    // (an idle one: since it was last used, or granted)
+    if (r.scope === "idle" && (r.lastUsedAt ?? (r.exp! - LASTS.idle) * 1000) + IDLE_FOR_MS <= this.#d.now()) {
+      this.#end(r, "闲置超时");
+      return false;
+    }
     return true;
   }
 
@@ -254,22 +269,6 @@ export class PhoneGrants {
     return this.#load("SELECT body FROM adb_requests WHERE status = 'granted'").filter((r) => this.#live(r));
   }
 
-  /// The longest `owner` lets a grant last (their 默认最长授权, as their app last said it): `chat` until they say.
-  lastsOf(owner: string): Scope {
-    const row = this.#d.db.prepare("SELECT lasts FROM adb_lasts WHERE owner = ?").get(owner.toLowerCase()) as { lasts: string } | undefined;
-    return row?.lasts === "hour" ? "hour" : "chat";
-  }
-
-  /// `owner`'s 默认最长授权 set (`at`: when, on their device: the latest wins across their devices and stations).
-  setLasts(owner: string, lasts: unknown, at: unknown): string | null {
-    if (lasts !== "hour" && lasts !== "chat") return "lasts: hour or chat";
-    const when = typeof at === "number" && Number.isFinite(at) ? Math.floor(at) : this.#d.now();
-    this.#d.db
-      .prepare("INSERT INTO adb_lasts (owner, lasts, at) VALUES (?, ?, ?) ON CONFLICT (owner) DO UPDATE SET lasts = excluded.lasts, at = excluded.at WHERE excluded.at >= adb_lasts.at")
-      .run(owner.toLowerCase(), lasts, when);
-    return null;
-  }
-
   /// The person a session works for: whoever started its chat.
   starter(session: string): string | null {
     return this.#d.hub.store.starter(session);
@@ -277,14 +276,15 @@ export class PhoneGrants {
 
   /// phone_use: a grant of this session's already live, or a request asked in its chat: not waited for (the agent's turn
   /// goes on with the chat), its decision told to the session (#settle).
-  async ask(session: string, reason: string, reask = false, signal?: AbortSignal): Promise<PhoneRequest> {
+  /// `of`: whose phone (any member's, device_use: 设备, 2026-11-10); none, the person the chat's agent works for.
+  async ask(session: string, reason: string, reask = false, signal?: AbortSignal, of?: string): Promise<PhoneRequest> {
     signal?.throwIfAborted();
-    const held = this.held(session)[0];
+    const owner = of?.toLowerCase() ?? this.starter(session);
+    if (owner === null) throw new Refused("this chat has no person who started it: nobody to lend a phone");
+    const held = this.held(session).find((r) => r.owner === owner);
     if (held !== undefined) return held;
     if (reason.trim() === "") throw new Refused("say why you need the phone (reason)");
-    const owner = this.starter(session);
-    if (owner === null) throw new Refused("this chat has no person who started it: nobody to lend a phone");
-    const pending = this.#load("SELECT body FROM adb_requests WHERE session = ? AND status = 'pending' ORDER BY rowid LIMIT 1", session)[0];
+    const pending = this.#load("SELECT body FROM adb_requests WHERE session = ? AND owner = ? AND status = 'pending' ORDER BY rowid LIMIT 1", session, owner)[0];
     // A still-joined original chat already proves the session has a chat. A reused request does not need to choose
     // the latest one: a reasked card goes back to its original place. Older requests may not record that place.
     const original = pending?.thread == null ? null : this.#d.hub.store.sessionThreadById(session, pending.thread);
@@ -299,7 +299,7 @@ export class PhoneGrants {
           signal?.throwIfAborted();
           if (this.#ended(session)) throw new Refused("this chat is archived or gone");
           // A request, a grant, or a new delivery may have arrived while the old order was prepared.
-          return this.ask(session, reason, reask, signal);
+          return this.ask(session, reason, reask, signal, of);
         }
         thread = found;
       } else thread = this.#d.hub.store.latestThread(session);
@@ -319,7 +319,7 @@ export class PhoneGrants {
         if (current === null) throw new Refused("the phone request is no longer pending");
         if (current.status !== "pending") return current;
         if (this.#ended(session)) throw new Refused("this chat is archived or gone");
-        return this.ask(session, reason, reask, signal);
+        return this.ask(session, reason, reask, signal, of);
       }
       if (place?.state === "other") throw new Refused(CARD_OCCUPIED);
       if (place?.state === "none") {
@@ -368,14 +368,18 @@ export class PhoneGrants {
 
   async #post(session: string, thread: SessionThread, r: PhoneRequest, requireEmpty = false, signal?: AbortSignal): Promise<string | null> {
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
-    const text = [`申请调试你的手机：${r.reason}`, ...(stillfail ? [] : ["请在 still.fail 安卓 app 中批准。"])].join("\n\n");
-    // The scopes its owner allows (their 默认最长授权), the longest recommended.
-    const lasts = this.lastsOf(r.owner);
-    const scopes = SCOPES.slice(0, SCOPES.indexOf(lasts) + 1);
+    // (asked of someone the chat's agent does not work for: they are named, so the chat sees whose phone it asks)
+    const starter = this.#d.hub.store.starter(session)?.toLowerCase() ?? null;
+    const whose = starter === r.owner ? "你的手机" : `${r.owner} 的手机`;
+    const text = [`申请调试${whose}：${r.reason}`, ...(stillfail ? [] : ["请在 still.fail 安卓 app 中批准。"])].join("\n\n");
+    // Every scope, idle an hour recommended (`lasts`: `chat`, all of them, as an app from before reads it).
+    const scopes = SCOPES;
+    const best = "idle";
+    const lasts = "chat";
     const card = stillfail
       ? {
           type: "options",
-          options: [...scopes.map((s, i) => ({ ...SCOPE_WORDS[s], ...(i === scopes.length - 1 ? { recommended: true } : {}) })), { label: "拒绝", detail: "通知 agent 已拒绝" }],
+          options: [...scopes.map((s) => ({ ...SCOPE_WORDS[s], ...(s === best ? { recommended: true } : {}) })), { label: "拒绝", detail: "通知 agent 已拒绝" }],
           assignee: r.owner,
           // The request as the app draws it; its outcome added once decided.
           adb: { request: r.id, reason: r.reason, lasts },
@@ -435,13 +439,14 @@ export class PhoneGrants {
     if (r === null || this.#workspace(r) !== workspace) return "no such request";
     if (r.owner !== email.toLowerCase()) return "only the person the chat's agent works for decides its requests";
     if (r.status !== "pending") return `the request is ${r.status} already`;
-    if (scope !== null && !SCOPES.includes(scope)) return "scope: hour or chat";
-    if (scope !== null && SCOPES.indexOf(scope) > SCOPES.indexOf(this.lastsOf(email))) return "longer than your 默认最长授权 allows";
+    if (scope !== null && !SCOPES.includes(scope)) return "scope: hour, idle, eight or chat";
     if (scope !== null && this.#ended(r.session)) return "the chat is archived";
     if (scope === null) this.#settle(r, "denied");
     else {
       r.scope = scope;
       r.exp = this.#secs() + LASTS[scope];
+      // (an idle grant counts from now)
+      if (scope === "idle") r.lastUsedAt = Math.floor(this.#d.now());
       const s = signed as PhoneRequest["signed"] | undefined;
       if (s != null && typeof s === "object" && JSON.stringify(s).length <= SIGNED_MAX) r.signed = { body: s.body, sig: s.sig };
       this.#settle(r, "granted");
@@ -476,8 +481,9 @@ export class PhoneGrants {
   /// The chat's agent is done with the phone (`phone_use {done: true}`): its grant, or a request still asked, ends as
   /// one taken back does, and its phone stops being lent for this chat. The ended requests; the agent is not told of
   /// them again, the tool's answer says so.
-  release(session: string): PhoneRequest[] {
-    const ended = this.#bySession(session).filter((r) => this.#live(r));
+  /// `owner`: that person's phone alone (none: every one).
+  release(session: string, owner?: string): PhoneRequest[] {
+    const ended = this.#bySession(session).filter((r) => (owner === undefined || r.owner === owner.toLowerCase()) && this.#live(r));
     for (const r of ended) this.#end(r, "agent 已交还", undefined, false);
     return ended;
   }
@@ -526,12 +532,26 @@ export function linkSaid(r: PhoneRequest): string {
 export function said(r: PhoneRequest): string {
   switch (r.status) {
     case "granted":
-      return `Your request ${r.id} to debug ${r.owner}'s phone was granted (${r.scope === "hour" ? "for an hour" : "until this chat is archived"}). Call phone_use again for how to reach it.${r.link === undefined || r.link === "connected" ? "" : ` ${linkSaid(r)}`}`;
+      return `Your request ${r.id} to debug ${r.owner}'s phone was granted (${scopeSaid(r.scope)}). Call phone_use again for how to reach it.${r.link === undefined || r.link === "connected" ? "" : ` ${linkSaid(r)}`}`;
     case "denied":
       return `Your request ${r.id} to debug ${r.owner}'s phone was refused${r.why ? ` (${r.why})` : ""}.`;
     case "ended":
       return `Your grant ${r.id} of ${r.owner}'s phone ended (${r.why ?? "ended"}): adb no longer reaches it.`;
     default:
       return `Your request ${r.id} to debug ${r.owner}'s phone waits for them to approve it on the card in your chat. ${UNDECIDED}`;
+  }
+}
+
+/// How long a grant lasts, in words an agent reads.
+export function scopeSaid(scope: Scope | undefined): string {
+  switch (scope) {
+    case "hour":
+      return "for an hour";
+    case "idle":
+      return "until this chat has used it for nothing for an hour";
+    case "eight":
+      return "for eight hours";
+    default:
+      return "until this chat is archived";
   }
 }

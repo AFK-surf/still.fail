@@ -67,3 +67,26 @@ test("a previously closed card stays closed even after a later message", () => {
     assert.equal(store.closeCard("person", thread, 1, "yes"), true);
   } finally { store.close(); }
 });
+
+test("the choices a session has not been told are read by their index, the oldest first, and only its own", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const thread = store.openThread("ember", "CHAT", "choices", null, null).id;
+    const put = db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at,card) VALUES (?,?,?,?,?,?,?,?,?)");
+    for (let n = 1; n <= 3; n++) {
+      put.run(thread, n, "message", `card-${n}`, "agent", n === 2 ? "b" : "a", `choose ${n}`, n, card);
+      assert.equal(store.closeCard("person", thread, n, "yes"), true);
+    }
+    assert.deepEqual(store.untoldCardChoices("a").map((c) => [c.n, c.ts, c.where, c.question, c.by, c.option]), [
+      [1, "card-1", ["CHAT", "choices"], "choose 1", "person", "yes"], [3, "card-3", ["CHAT", "choices"], "choose 3", "person", "yes"],
+    ]);
+    assert.deepEqual(store.untoldCardChoices("a", 1).map((c) => c.n), [1]);
+    const plan = db.prepare("EXPLAIN QUERY PLAN SELECT thread, n, ts, viewer, option, at FROM card_choices INDEXED BY card_choices_untold WHERE session = ? AND told_at IS NULL ORDER BY at LIMIT ?").all("a", 20);
+    assert.ok(plan.every((row: any) => /USING INDEX card_choices_untold \(session=\?\)/.test(row.detail) && !/TEMP B-TREE/.test(row.detail)), JSON.stringify(plan));
+    store.markCardChoicesTold("a", [{ thread, n: 1 }]);
+    store.markCardChoicesTold("a", [{ thread, n: 2 }]);
+    assert.deepEqual(store.untoldCardChoices("a").map((c) => c.n), [3]);
+    assert.deepEqual(store.untoldCardChoices("b").map((c) => c.n), [2], "another session's choice is not marked through this one");
+    assert.deepEqual([...store.cardChoices(thread, [1, 2, 3, 4]).keys()], [1, 2, 3]);
+  } finally { store.close(); }
+});

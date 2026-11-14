@@ -9,7 +9,6 @@
 import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import { isWatch, remoteOwner } from "../jobs.ts";
-import * as present from "../present.ts";
 import * as model from "../shapes/model.ts";
 import { arr as arrU, get as getU } from "../util.ts";
 import { GROUPS, groupTitle } from "./profiles.ts";
@@ -21,11 +20,13 @@ const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
 
-/// A station as the card reads it: up or not, its chats' rows as listed, when each of its archived chats was archived,
-/// its jobs (the tasks other stations' chats run on it among them), the tasks other stations' chats ran on it (when
-/// each began, and whose session: its usage's `remoteRuns`), its chats' calls (its usage's `rows`: by day, chat,
-/// profile and model).
-export type FleetStation = { station: string; online: boolean; rows: J[]; archived: number[]; jobs: J[]; runs: { at: number; session: string }[]; calls: J[] };
+/// A station as the card reads it: up or not; of its chats as listed, whether one was last active today (`today`), the
+/// ids of those whose agents are at work (their rows' state `run`), the chat a session is in (its own, else one it takes
+/// part in, as the station names a session's chat; null: none, `""` one with no id); when each of its archived chats
+/// was archived (from a week before on); its jobs (the tasks other stations' chats run on it among them), the tasks
+/// other stations' chats ran on it (when each began, and whose session: its usage's `remoteRuns`), its chats' calls
+/// (its usage's `rows`: by day, chat, profile and model).
+export type FleetStation = { station: string; online: boolean; today: boolean; running: string[]; chatOf: (session: string) => string | null; archived: number[]; jobs: J[]; runs: { at: number; session: string }[]; calls: J[] };
 
 /// How many of a kind's models are said one by one when it has more than one past them, the rest together.
 const MODELS_NAMED = 3;
@@ -121,10 +122,9 @@ export function fleetView(stations: FleetStation[], profiles: J[], usage: J, now
     archived.push(...s.archived);
     runs.push(...s.runs);
     if (s.archived.some(today) || s.runs.some((r) => today(r.at))) used.add(s.station);
-    for (const row of s.rows) {
-      if (today(get(row, "lastActiveAt"))) used.add(s.station);
-      if (present.rowState(arr(get(row, "agents"))) !== "run") continue;
-      chats.add(`${s.station}\n${str(get(row, "id")) ?? ""}`);
+    if (s.today) used.add(s.station);
+    for (const id of s.running) {
+      chats.add(`${s.station}\n${id}`);
       used.add(s.station);
     }
   }
@@ -135,9 +135,7 @@ export function fleetView(stations: FleetStation[], profiles: J[], usage: J, now
       const home = owner && online.find((o) => o.station === owner.station);
       if (!owner || !home) continue;
       // its chat as its station lists it: the session's own, or one it takes part in; else the session alone
-      const row = home.rows.find((r) => get(r, "session") === owner.session) ??
-        home.rows.find((r) => arr(get(r, "agents")).some((a) => get(a, "key") === owner.session));
-      chats.add(`${home.station}\n${row ? (str(get(row, "id")) ?? "") : owner.session}`);
+      chats.add(`${home.station}\n${home.chatOf(owner.session) ?? owner.session}`);
       used.add(home.station).add(s.station);
     }
   }

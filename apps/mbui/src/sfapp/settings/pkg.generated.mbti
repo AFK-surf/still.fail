@@ -17,9 +17,9 @@ pub fn action_asked_done() -> Unit
 
 pub fn action_pressed(@ui.Ctx, @json.Json?, String, in_field? : Bool) -> Bool
 
-pub fn adb_asking() -> Bool
 
-pub fn adb_lend(String, String) -> Unit
+
+pub fn adb_do(Core, String, station? : String) -> Unit
 
 pub fn adb_lend_view(@json.Json?, String) -> @json.Json?
 
@@ -27,15 +27,19 @@ pub fn adb_lends(@json.Json?) -> Array[@json.Json]
 
 pub fn adb_phone_said(String) -> Unit
 
-pub fn adb_ready(@ui.Ctx) -> AdbReady
+pub fn adb_step_at(@ui.Ctx, Core, String) -> AdbStep?
 
 pub fn adb_texts() -> @json.Json
+
+pub fn adb_turn(Core, Bool) -> Unit
 
 pub let all_places : Array[String]
 
 pub let answered_fade_ms : Double
 
 pub fn answered_in_place(@ui.Ctx, String, (Bool, Array[@text.Run])?, () -> Unit) -> Unit
+
+pub fn answered_in_place_node(@view.View, () -> (Bool, Array[@text.Run])?, (@view.View) -> Unit) -> Unit
 
 pub fn appearance(@json.Json?) -> String
 
@@ -44,6 +48,8 @@ pub fn ask(String, String, String, String, (String) -> Unit, hint? : String, sec
 pub fn ask_action(String) -> Unit
 
 pub fn ask_outcome(@ui.Ctx, Bool, Array[@text.Run], inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
+
+pub fn ask_outcome_node(@view.View, () -> Bool, () -> Array[@text.Run], () -> Bool, history? : ((@view.View) -> Unit)?) -> Unit
 
 pub fn avatar(@ui.Ctx, Core, String, String, Double, picture? : String) -> Unit
 
@@ -110,6 +116,10 @@ pub fn fixture_changed() -> Unit
 
 pub fn fixture_desk() -> String
 
+pub fn fixture_draft_changed() -> Unit
+
+pub fn fixture_draft_followed() -> Unit
+
 pub fn fixture_elevation(@json.Json?) -> Unit
 
 pub fn fixture_followed() -> Unit
@@ -124,7 +134,13 @@ pub fn fixture_page(String) -> String
 
 pub fn fixture_pair_ended() -> String
 
+pub fn fixture_retire_preview() -> @json.Json
+
+pub let fixture_retire_asked : Array[(String, @json.Json)]
+
 pub fn fixture_profiles() -> Array[@json.Json]
+
+pub fn fixture_prompts_now(pairing~ : Bool, more? : Bool, key_ask~ : Bool, giving? : Bool) -> Unit
 
 pub fn fixture_topic(String, String, Map[String, @json.Json]) -> @json.Json?
 
@@ -192,7 +208,7 @@ pub fn local_machine_pc() -> Bool
 
 pub let local_read_ms : Double
 
-pub fn local_station_addable() -> Bool
+pub fn local_station_addable_in(String, Array[String]) -> Bool
 
 pub fn local_station_managed() -> Bool
 
@@ -244,23 +260,24 @@ pub fn opt_text(@json.Json?, String) -> String?
 
 pub fn page(@ui.Ctx, Core, Here, Route, root? : Bool, top? : Double) -> Unit
 
-pub fn panels_frame(Core) -> Unit
+pub fn panels_frame(Core, String) -> Unit
 
 pub fn pending_login(Core, String, String) -> @json.Json?
 
-pub fn personal_lock_page(@ui.Ctx, Core) -> Unit
 
 pub fn phone_card(@ui.Ctx, Core?, String, String, String, Bool, lasts? : String, who? : String?, ended? : (String, String, String)?, how? : () -> Unit) -> Unit
+
+pub fn phone_card_node(@view.View, Core?, String, () -> PhoneCard, how? : () -> Unit) -> Unit
 
 pub fn phone_lends(@ui.Ctx) -> Bool
 
 pub fn phone_link(Core?, String, String) -> String
 
-pub fn phone_outcome(@ui.Ctx, String, String, String, inline? : Bool, link? : String, paired_here? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
+pub fn phone_outcome(@ui.Ctx, String, String, String, inline? : Bool, link? : String, step_here? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
+
+pub fn phone_outcome_node(@view.View, () -> String, () -> String, () -> String, () -> String, () -> Bool, history? : ((@view.View) -> Unit)?) -> Unit
 
 pub fn phone_outcome_words(String, String, String) -> String
-
-pub fn phone_steps(Core?, String, request? : String) -> Route
 
 pub fn place_action(Core, Here, String) -> ((@sf.Beside) -> Unit)?
 
@@ -281,6 +298,10 @@ pub fn recovery_words_changed() -> Unit
 pub let recovery_words_turned : @signals.Signal[Int32]
 
 pub fn reset() -> Unit
+
+pub fn rig_card_node(@view.View, Core?, String, () -> RigCard, lock? : () -> Unit) -> Unit
+
+pub fn rig_outcome_node(@view.View, () -> String, () -> String, () -> Bool, () -> (String, Int32), () -> Bool, history? : ((@view.View) -> Unit)?) -> Unit
 
 pub fn role_label(String) -> String
 
@@ -322,7 +343,11 @@ pub let station_parts : @sf.LiveMap[String, String]
 
 pub fn station_peek_card(@ui.Ctx, String) -> Unit
 
+pub fn station_peek_card_node(@view.View, String, () -> Int32) -> Unit
+
 pub fn station_peek_part(@ui.Ctx, String) -> Unit
+
+pub fn station_peek_part_node(@view.View, String, () -> Int32) -> Unit
 
 pub fn station_via(@json.Json?) -> String
 
@@ -348,15 +373,25 @@ pub fn vault_act(Core, String, String, Array[(String, @json.Json)], String, done
 
 pub fn vault_actions(@ui.Ctx, Core, String, String, Bool, who? : String?) -> Unit
 
+pub fn vault_actions_node(@view.View, Core, () -> String, () -> String, () -> Bool, who? : () -> String?) -> Unit
+
 pub fn vault_ask(@ui.Ctx, Core, String, String, Asked, Bool, who? : String?, extra? : (() -> Unit)?) -> Unit
 
 pub fn vault_ask_details(@ui.Ctx, Asked) -> Unit
 
+pub fn vault_ask_details_node(@view.View, () -> Asked) -> Unit
+
 pub fn vault_ask_words(@ui.Ctx, Asked) -> Unit
+
+pub fn vault_ask_words_node(@view.View, () -> Asked) -> Unit
 
 pub fn vault_card(@ui.Ctx, Core, String, String, Asked, Answer, ended? : (String, String)?) -> Unit
 
+pub fn vault_card_node(@view.View, Core, () -> String, () -> String, () -> Asked, () -> Answer, () -> (String, String)?) -> Unit
+
 pub fn vault_foot(@ui.Ctx, Core, String, String, Answer, Bool, typed? : Typed?, timeout_kind? : String, timeout_seconds? : Int32, extra? : (() -> Unit)?, foot? : Bool) -> Unit
+
+pub fn vault_foot_node(@view.View, Core, () -> String, () -> String, () -> Answer?, () -> Bool, () -> Typed?, () -> (String, Int32), foot~ : Bool) -> Unit
 
 pub fn vault_hosts(Map[String, String]) -> Array[String]
 
@@ -369,6 +404,8 @@ pub let vault_lasts : Array[String]
 pub fn vault_menu_open() -> String
 
 pub fn vault_outcome(@ui.Ctx, Asked, String, String, inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
+
+pub fn vault_outcome_node(@view.View, () -> Asked, () -> String, () -> String, () -> Bool, history? : ((@view.View) -> Unit)?) -> Unit
 
 pub fn vault_outcome_words(Asked, String, String) -> Array[@text.Run]
 
@@ -407,12 +444,12 @@ pub fn you(@ui.Ctx, String) -> Unit
 // Errors
 
 // Types and methods
-#derive(Eq)
-pub(all) enum AdbReady {
-  AdbUnknown
-  AdbLends
-  AdbLacks(String)
-  AdbCannot(String)
+pub(all) struct AdbStep {
+  title : String
+  sub : String
+  go : String
+  doing : String
+  act : String
 }
 
 #derive(Eq, Show)
@@ -504,10 +541,33 @@ pub(all) struct NewProfile {
   error : @signals.Signal[String]
 }
 
+#derive(Eq)
+pub(all) struct PhoneCard {
+  request : String
+  reason : String
+  lasts : String
+  mine : Bool
+  who : String?
+  ended : (String, String, String)?
+}
+
 pub(all) struct Read {
   value : @json.Json?
   error : @json.Json?
   version : Int32
+}
+
+#derive(Eq)
+pub(all) struct RigCard {
+  request : String
+  name : String
+  reason : String
+  timeout : (String, Int32)
+  ask : @json.Json
+  mine : Bool
+  who : String?
+  device : String
+  ended : (Bool, String)?
 }
 
 #derive(Eq)
@@ -532,7 +592,6 @@ pub(all) enum Route {
   Usage
   Archive
   AdbShare(String)
-  PersonalLock
   NewProfile(String)
   ProfileAccount(String)
   VaultItems

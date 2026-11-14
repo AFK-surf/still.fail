@@ -10,7 +10,7 @@ let over_chat : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页�
 /// fixture does.
 fn over_source(answered : @signals.Signal[Bool], also? : Array[(ChatRef, @signals.Signal[Bool])] = []) -> Source {
   let base = fixture("chat")
-  let held : Map[String, @signals.Signal[Bool]] = {}
+  let held : Map[String, @signals.Signal[Bool]] = Map([])
   for a in [(over_chat, answered), ..also] {
     held[Json::object(chat_params(a.0)).stringify()] = a.1
   }
@@ -83,8 +83,8 @@ fn over_same(late : Double?, ats : Array[Double]) -> Unit raise {
     let stepped = over_seen(late, every, at)
     let once = over_seen(late, [8.0].filter(fn(f) { f < at }), at)
     let jumped = over_seen(late, [], at)
-    assert_eq(once, stepped, msg="at \{at}: one frame just after: \{once} stepped \{stepped}")
-    assert_eq(jumped, stepped, msg="at \{at}: none: \{jumped} stepped \{stepped}")
+    assert_eq(once, stepped, msg="at \{at}: one frame just after: \{Repr(once)} stepped \{Repr(stepped)}")
+    assert_eq(jumped, stepped, msg="at \{at}: none: \{Repr(jumped)} stepped \{Repr(stepped)}")
     // (back the stack's: the chat over it off, the page under it on top, still in use)
     assert_eq((stepped.2, stepped.3, stepped.4), ("s-c1", 2, true), msg="at \{at}: back")
   }
@@ -291,7 +291,7 @@ fn over_left(frames : Bool) -> (Double, Double, String) raise {
     _ => "other"
   }
   // (what stands then, for what is said of it when it is not as it should be)
-  let stands = "\{top} \{app.nav.depth()} over \{app.nav.top_over()} \{@sfdesk.wide.tape_at.get()} at \{t1 - t0}"
+  let stands = "\{top} \{app.nav.depth()} over \{Repr(app.nav.top_over())} \{Repr(@sfdesk.wide.tape_at.get())} at \{t1 - t0}"
   (before, over_x(t, third_chat.title), stands)
 }
 

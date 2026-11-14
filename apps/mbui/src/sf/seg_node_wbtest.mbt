@@ -140,14 +140,14 @@ test "a choice of a few as nodes short of room: its track as wide as the room, i
     msg="its pick open, over it",
   )
   let items = t.semantics().filter(fn(s) { !s.hidden && (s.role == MenuItemRadio || s.role == MenuItem) })
-  assert_eq(items.map(fn(s) { (s.label, s.check) }), [("预览", Some(@ui.Check::On)), ("源码", Some(@ui.Check::Off))], msg="its pick: \{items}")
+  assert_eq(items.map(fn(s) { (s.label, s.check) }), [("预览", Some(@ui.Check::On)), ("源码", Some(@ui.Check::Off))], msg="its pick: \{Repr(items)}")
   let (x, y, w, h) = items[1].rect
   t.tap(x + w / 2.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(
     (said, seg_shown(t, Button).map(fn(s) { (s.label, s.expanded) })),
     ([1], [("源码", Some(false))]),
-    msg="源码 picked, its pick shut: \{said} \{seg_shown(t, Button)} \{t.semantics().filter(fn(s) { s.role == Button })}",
+    msg="源码 picked, its pick shut: \{Repr(said)} \{Repr(seg_shown(t, Button))} \{Repr(t.semantics().filter(fn(s) { s.role == Button }))}",
   )
   // (the room back: side by side, 源码 on, Tab's stop)
   room.set(400.0)
@@ -193,7 +193,7 @@ test "a choice of a few as nodes short of room, its words made smaller to fit (t
   // (room for their words at 0.8 of their size with the least either side: less than whole, more than the smallest)
   let inner = 0.8 * 2.0 * words + 4.0 * segmented_least
   let f = fitted(c, ["预览", "源码"], inner, theme().t.ui, 500, segmented_in, segmented_least)
-  guard f.fit is Smaller(k) else { fail("not made smaller: \{f.fit}") }
+  guard f.fit is Smaller(k) else { fail("not made smaller: \{Repr(f.fit)}") }
   room.set(inner + 2.0 * segmented_pad + segmented_gap)
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -206,14 +206,14 @@ test "a choice of a few as nodes short of room, its words made smaller to fit (t
     let least = choice_words_w(c, r.label, size * k, weight=if r.check == Some(@ui.Check::On) { 500 } else { 400 })
     assert_true(
       drawn.length() == 1 && drawn[0].3 >= least - 0.5 && drawn[0].1 >= ox - 0.5 && drawn[0].1 + drawn[0].3 <= ox + ow + 0.5,
-      msg="\{r.label} whole in its option \{r.rect}, \{least} at \{k}: \{drawn}",
+      msg="\{r.label} whole in its option \{Repr(r.rect)}, \{least} at \{k}: \{Repr(drawn)}",
     )
   }
   // (the thumb: the theme's lifted, as high as an option, where the chosen one is and as wide)
   let thumb = t.drawn_rects().filter(fn(d) { d.4 == @ui.tree_theme().lifted && d.3 == segmented_h })
   let on = radios.filter(fn(s) { s.check == Some(@ui.Check::On) })
   assert_eq(on.map(fn(s) { s.label }), ["源码"])
-  assert_eq(thumb.map(fn(d) { (d.0, d.2) }), [(on[0].rect.0, on[0].rect.2)], msg="the thumb under 源码: \{thumb}")
+  assert_eq(thumb.map(fn(d) { (d.0, d.2) }), [(on[0].rect.0, on[0].rect.2)], msg="the thumb under 源码: \{Repr(thumb)}")
 }
 
 ///|

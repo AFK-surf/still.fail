@@ -10,12 +10,22 @@ their still.fail app. What the card can take, by what the command does:
 
 - **Device code** (a page and a code): every client, the web and phones included. Prefer it where the tool has one.
 - **Page with a code to paste back** (the command asks for "the verification code" after printing a page, or says
-  "copy the code and paste it below"): every client; call `login {id, paste: true}` and the person pastes it on the
-  card. Do not answer that prompt yourself.
+  "copy the code and paste it below"): every client; call `login {id, paste: true}` (only after its page to open) and
+  the person pastes it on the card, which types it at the prompt with Enter. Do not answer that prompt yourself.
 - **Loopback** (the page comes back to `localhost:<port>` here): the desktop and Android apps only; a person on the
   web cannot finish it.
 - **A page to open** (the command polls by itself): every client.
 - **A password or token typed in the terminal**: nobody; it is refused. Use another way, or say it cannot be done here.
+
+How it goes: you drive the command. Each answer shows its screen (the page and the code hidden) and what it waits
+for; answer its prompts yourself with `login {id, input}` or `key` (enter, up, down, tab, ctrl-c…), taking the tool's
+defaults or what the task needs, and ask the person in the chat only if you truly cannot decide. Where it asks whether
+to also set up git credentials or keep the token in a keychain (or has a flag for it), take the answer that leaves the
+OS keychain alone: nobody here can answer a keychain dialog. Once the answer says the person's browser step is ready
+(a code or a page), `chat_post` with card `{"type": "login", "login": "<id>"}` (with `"station"`, the key the answer
+gives, for another station's login) and a sentence saying who should log in to what on this station and why, without
+the link (the card opens the page), and end need_human; for Slack and Feishu see skill stillfail-chats. `login {id}`
+alone says how it stands, with `cancel: true` ends it. When it ends you get a station notice and the card closes.
 
 Which command, as tested:
 
@@ -38,7 +48,7 @@ Before starting:
 
 - Check whether it is already logged in (`gh auth status`, `gcloud auth list`, `aws sts get-caller-identity`,
   `az account show`, `npm whoami`…). Say who it is logged in as; start a login only if another account is wanted or it
-  has expired.
+  has expired. More scopes on a login already there are asked the same way (`gh auth refresh -s workflow`).
 - A tool not listed: take its device-code option if it has one (`--device`, `--device-code`, `--use-device-code`),
   else its default browser login.
 - The agents' own runtimes (Claude Code, Codex) are signed in from the station's accounts page, not with this tool.

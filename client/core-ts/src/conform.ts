@@ -3,7 +3,8 @@
 // naming the field ("items[0].since: invalid type: …"), as serde_path_to_error says it.
 import { SHAPES } from "./shapes/schema.ts";
 import type { Ty } from "./shapes/dsl.ts";
-import { shaped } from "./util.ts";
+import { shaped, shapedAs } from "./util.ts";
+import { walked } from "./work.ts";
 
 export type { Field, Shape, Ty } from "./shapes/dsl.ts";
 
@@ -96,11 +97,39 @@ export function defaultOf(ty: Ty): unknown {
   return {};
 }
 
+/// Whether `v` already went out as `ty` (output.ts, views.ts `asShaped`), to go as it went: not one a view shaped as
+/// another struct (`shapedAs`), which is shaped as this one.
+function wentOut(v: unknown, ty: Ty): boolean {
+  if (v === null || typeof v !== "object" || !shaped.has(v)) return false;
+  const as = shapedAs.get(v);
+  return as === undefined || as === ty;
+}
+
+/// What a value a view shaped as one struct was made as another, by that one (`fit`): made once while it is the same.
+const reshaped = new WeakMap<object, Map<string, unknown>>();
+
+/// What `v` goes out as through struct `ty`, made beside it once and kept with it (`shapedBeside`), else undefined.
+export function keptShape(v: unknown, ty: Ty): unknown {
+  return v !== null && typeof v === "object" && typeof ty === "string" ? beside.get(v)?.get(ty) : undefined;
+}
+
+/// `out`, what `v` goes out as through struct `ty`, made beside it (views.ts: a chat list's row, as it was kept beside
+/// its record, db/kept.ts KEPT.listRow): taken as it is where `v` goes out as `ty` (output.ts), neither shaped nor
+/// walked again, and marked as gone out. `v` itself is not marked: it goes out otherwise elsewhere (a search's ChatItem).
+export function shapedBeside(v: object, ty: string, out: object): void {
+  let by = beside.get(v);
+  if (by === undefined) beside.set(v, (by = new Map()));
+  by.set(ty, out);
+  shaped.add(out);
+  shapedAs.set(out, ty);
+}
+const beside = new WeakMap<object, Map<string, unknown>>();
+
 function walk(v: unknown, ty: Ty, path: string): unknown {
+  if (typeof ty === "object" && "opt" in ty) return v === null || v === undefined ? null : walk(v, ty.opt, path);
   // What already went out through its shape (output.ts) is as it went.
-  if (v !== null && typeof v === "object" && shaped.has(v)) return v;
+  if (wentOut(v, ty)) return v;
   if (typeof ty === "object") {
-    if ("opt" in ty) return v === null || v === undefined ? null : walk(v, ty.opt, path);
     if ("vec" in ty) {
       if (!Array.isArray(v)) throw new Wrong(path, `invalid type: ${unexpected(v)}, expected a sequence`);
       return v.map((item, i) => walk(item, ty.vec, at(path, i)));
@@ -172,6 +201,47 @@ function walk(v: unknown, ty: Ty, path: string): unknown {
   return out;
 }
 
+/// What a value is put through as shape `ty` is, as a key (its length and two FNV-1a hashes): of every shape it
+/// reaches, as declared (src/shapes/schema.ts) of what conform reads (not their words for people or the clients'
+/// types), so another whenever one of them is declared otherwise. What a verdict on whether a value fits is kept by
+/// (views.ts OVERVIEW_FIT).
+export function shapeKey(ty: Ty): string {
+  const reached = new Map<string, unknown>();
+  const reach = (t: Ty): void => {
+    if (typeof t !== "string") {
+      if ("opt" in t) reach(t.opt);
+      else if ("vec" in t) reach(t.vec);
+      else if ("map" in t) reach(t.map);
+      else for (const x of t.tuple) reach(x);
+      return;
+    }
+    const shape = SHAPES[t];
+    if (shape === undefined || reached.has(t)) return;
+    if (shape.kind === "struct") {
+      reached.set(t, [shape.default, shape.fields.map((f) => [f.name, f.ty, f.default, f.skipNone])]);
+      for (const f of shape.fields) reach(f.ty);
+    } else if (shape.kind === "enum") reached.set(t, [shape.values, shape.default]);
+    else {
+      reached.set(t, [shape.tag, shape.content, shape.variants]);
+      for (const v of Object.values(shape.variants)) reach(v);
+    }
+  };
+  reach(ty);
+  return textKey(JSON.stringify([ty, [...reached]]));
+}
+
+/// A text as a short key: its length and two FNV-1a hashes of it.
+export function textKey(text: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x01000193 ^ text.length;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193);
+    b = Math.imul(b ^ c, 0x0100019d);
+  }
+  return `${text.length}.${(a >>> 0).toString(36)}.${(b >>> 0).toString(36)}`;
+}
+
 /// The value through the shape `ty`, or why not (`path: what`).
 export function conform(ty: Ty, value: unknown): { ok: unknown } | { error: string } {
   return conformTy(ty, value);
@@ -198,11 +268,27 @@ const has = Object.prototype.hasOwnProperty;
 
 /// `walk` for a value that fits, making the same value: every topic's every change goes through it whole, and walking
 /// it (a path written for every field, every object's keys sorted) was much of what the core did on a phone
-/// (2026-10-19). Anything that does not fit is MISFIT, for `walk` to say.
+/// (2026-10-19). Anything that does not fit is MISFIT, for `walk` to say. What went out as it is, or was made of the
+/// very object as this shape before (`shapedBeside`, `reshaped`), is taken with one lookup by the object, nothing of it
+/// walked (`same`); `fitted` counts what is walked.
 function fit(v: unknown, ty: Ty): unknown {
-  if (v !== null && typeof v === "object" && shaped.has(v)) return v;
+  if (typeof ty === "object" && "opt" in ty) return v === null || v === undefined ? null : fit(v, ty.opt);
+  if (wentOut(v, ty)) {
+    walked.same++;
+    return v;
+  }
+  if (typeof ty === "string" && v !== null && typeof v === "object") {
+    // (one with what it goes out as made beside it: as it was made)
+    const made = beside.get(v)?.get(ty);
+    // (one a view shaped as another struct: as this one once, kept as it went out)
+    const kept = made ?? (shaped.has(v) ? reshaped.get(v)?.get(ty) : undefined);
+    if (kept !== undefined) {
+      walked.same++;
+      return kept;
+    }
+  }
+  walked.fitted++;
   if (typeof ty === "object") {
-    if ("opt" in ty) return v === null || v === undefined ? null : fit(v, ty.opt);
     if ("vec" in ty) {
       if (!Array.isArray(v)) throw MISFIT;
       const out = new Array(v.length);
@@ -250,6 +336,8 @@ function fit(v: unknown, ty: Ty): unknown {
     if (typeof tag !== "string" || !has.call(shape.variants, tag) || !(shape.content in obj)) throw MISFIT;
     return { [shape.tag]: tag, [shape.content]: fit(obj[shape.content], shape.variants[tag]) };
   }
+  // (one a view shaped as another struct: made as this one once, kept as it went out)
+  const other = shaped.has(obj);
   const out: Record<string, unknown> = {};
   for (const f of shape.fields) {
     let value: unknown;
@@ -259,6 +347,13 @@ function fit(v: unknown, ty: Ty): unknown {
     else throw MISFIT;
     if (value === null && f.skipNone) continue;
     out[f.name] = value;
+  }
+  if (other) {
+    let by = reshaped.get(obj);
+    if (by === undefined) reshaped.set(obj, (by = new Map()));
+    by.set(ty, out);
+    shaped.add(out);
+    shapedAs.set(out, ty);
   }
   return out;
 }

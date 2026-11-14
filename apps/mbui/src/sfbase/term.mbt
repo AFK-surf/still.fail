@@ -20,7 +20,7 @@ let term_dark : Array[Int64] = [
 pub fn term_color(c : String, dark : Bool) -> Int64 {
   if c.has_prefix("#") && c.length() == 7 {
     let mut v = 0L
-    for ch in c.view(start_offset=1) {
+    for ch in c.exact_view(start=1) {
       let d = match ch {
         '0'..='9' => ch.to_int() - '0'.to_int()
         'a'..='f' => ch.to_int() - 'a'.to_int() + 10
@@ -51,45 +51,72 @@ pub fn term_color(c : String, dark : Bool) -> Int64 {
 }
 
 ///|
-/// A job's output in its styles a line at a time: each run in its colours, bold, italic and
-/// underlined as said; a dim one its colour (or the words') faded.
-pub fn term_lines(runs : Array[Json], ink : Int64, dark : Bool) -> Array[Array[@ui.Run]] {
-  let out : Array[Array[@ui.Run]] = [[]]
+/// A line of a job's output in its styles: each run in its colours, bold, italic and underlined as said; a dim one its
+/// colour (or the words') faded; an empty line a run to stand in for its words.
+pub fn term_line(runs : Array[Json], ink : Int64, dark : Bool) -> Array[@ui.Run] {
+  let out : Array[@ui.Run] = []
   for r in runs {
     let rv = Some(r)
+    let words = text(rv, "text")
+    if words == "" {
+      continue
+    }
     let fg = term_color(text(rv, "fg"), dark)
     let color = if flag(rv, "dim") { @sf.alpha(if fg != 0L { fg } else { ink }, 0.6) } else { fg }
     let bg = term_color(text(rv, "bg"), dark)
-    let pieces = text(rv, "text").split("\n").map(fn(p) { p.to_owned() }).to_array()
-    for k, piece in pieces {
-      if k > 0 {
-        out.push([])
-      }
-      if piece != "" {
-        out[out.length() - 1].push(
-          @ui.span(
-            piece,
-            mono=true,
-            color~,
-            bg~,
-            weight=if flag(rv, "bold") { 600 } else { 0 },
-            italic=flag(rv, "italic"),
-            underline=flag(rv, "underline"),
-          ),
-        )
-      }
-    }
+    out.push(
+      @ui.span(
+        words,
+        mono=true,
+        color~,
+        bg~,
+        weight=if flag(rv, "bold") { 600 } else { 0 },
+        italic=flag(rv, "italic"),
+        underline=flag(rv, "underline"),
+      ),
+    )
   }
-  // (an empty line still one: a run to stand in for its words)
-  out.map(fn(l) { if l.length() == 0 { [@ui.span(" ", mono=true)] } else { l } })
+  if out.length() == 0 {
+    [@ui.span(" ", mono=true)]
+  } else {
+    out
+  }
 }
 
+///|
+/// A line of a job's output as it is drawn: its number (the core's `n`, the key it is drawn by), the line as the core
+/// gave it (the same JSON while it is unchanged: the core's keyed ops keep it), its runs (term_line).
+pub(all) struct TermLine {
+  n : Int
+  line : Json
+  runs : Array[@ui.Run]
+}
 
 ///|
-/// Job `job`'s output on `station`, its last `lines` lines as the core's `jobLog` topic gives them, a line at a time:
-/// in a terminal's colours where the core says them (its `runs`: term_lines, on `ink`, `dark` or not), else as words;
-/// worked out once for each version of it and each ink (a computed: derived.mbt). None while it has not been read; none
-/// where the job wrote nothing.
+/// A job's output a line at a time, the oldest first.
+pub(all) struct TermLines {
+  lines : Array[TermLine]
+}
+
+///|
+/// The line numbered `n`, if it is there: where its numbers, one after another, put it, else looked for.
+pub fn TermLines::at(self : TermLines, n : Int) -> TermLine? {
+  guard self.lines.length() > 0 else { return None }
+  let i = n - self.lines[0].n
+  if i >= 0 && i < self.lines.length() && self.lines[i].n == n {
+    return Some(self.lines[i])
+  }
+  for l in self.lines {
+    if l.n == n {
+      return Some(l)
+    }
+  }
+  None
+}
+
+///|
+/// Job `job`'s output on `station`, its last `lines` lines as the core's `jobLog` topic gives them, each by its number,
+/// in a terminal's colours (job_output_of), held for the station's jobs (hold). None while it has not been read.
 pub fn job_output_lines(
   src : Source,
   station : String,
@@ -97,40 +124,37 @@ pub fn job_output_lines(
   lines : Double,
   ink : Int64,
   dark : Bool,
-) -> Array[Array[@ui.Run]]? {
+) -> TermLines? {
   let params : Map[String, Json] = {
     "station": Json::string(station),
     "job": Json::string(job),
     "lines": Json::number(lines),
   }
   guard hold(src, jobs_scope(station), "jobLog", params).get().value is Some(Object(_)) else { return None }
-  job_ink.set(ink)
-  job_dark.set(dark)
-  Some(
-    job_outputs.read(Json::object(params).stringify(), fn(_) {
-      let v = src.topic("jobLog", params).get().value
-      let words = text(v, "text")
-      let runs = items(v, "runs")
-      if words == "" {
-        []
-      } else if runs.length() > 0 {
-        term_lines(runs, job_ink.get(), job_dark.get())
-      } else {
-        words.split("\n").map(fn(l) { [@ui.span(l.to_owned(), mono=true)] }).to_array()
-      }
-    }),
-  )
+  Some(job_output_of(src, params, ink, dark))
 }
 
 ///|
-/// Each job's output as its lines' runs (job_output_lines), and the ink they were coloured on.
+/// The core's `jobLog` asked with `params` a line at a time, each by its number, in a terminal's colours (term_line, on
+/// `ink`, `dark` or not). Each line's runs are worked out as it comes and kept while it is the same line (the same JSON:
+/// the core's keyed ops keep a line they do not touch), so a line more works out that line alone (a computed for each
+/// output and ink: derived.mbt). Read where the topic is held.
+pub fn job_output_of(src : Source, params : Map[String, Json], ink : Int64, dark : Bool) -> TermLines {
+  let key = Json::object(params).stringify() + "\u{1}" + ink.to_string() + "\u{1}" + dark.to_string()
+  job_outputs.read(src, key, fn(was) {
+    let v = src.topic("jobLog", params).get().value
+    let made = items(v, "lines").map(fn(l) {
+      let n = number(Some(l), "n").to_int()
+      match was.bind(fn(w) { w.at(n) }) {
+        Some(t) if physical_equal(t.line, l) => t
+        _ => { n, line: l, runs: term_line(items(Some(l), "runs"), ink, dark) }
+      }
+    })
+    { lines: made }
+  })
+}
+
+///|
+/// Each job's output as its lines (job_output_of), by the ink they were coloured on.
 // kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
-let job_outputs : Kept[Array[Array[@ui.Run]]] = Kept::new()
-
-///|
-// kept across runs: a page's ink, set each time an output is read (the same ink tells nothing)
-let job_ink : @signals.Signal[Int64] = @signals.signal(0L, same=fn(a, b) { a == b })
-
-///|
-// kept across runs: as job_ink
-let job_dark : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+let job_outputs : Kept[TermLines] = Kept::new()

@@ -8,6 +8,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import * as rules from "../../../../rules/js/rules.js";
 import { CoreError } from "../error.ts";
 import { type Entry, signedBytes } from "../lock.ts";
+import type { Chain } from "../lock-keep.ts";
 import { hex, utf8 } from "../util.ts";
 import { fromB64url } from "./crypto.ts";
 import { ed25519Ok, p256Ok } from "./verified.ts";
@@ -90,10 +91,26 @@ export function signerIn(s: Checked, key: string, now: number | null): { sub: st
   return rules.signer_js(r, key, now);
 }
 
+/// The lock's chain among `entries` (any order, branching) from its genesis of hash `root`, by the rules' fork choice
+/// with votes by role, each entry checked as a station checks it (rules/src/lock/chain.mbt `lock_chain`; the station's
+/// `lockChain`, station/src/cloud/lock.ts). Throws why there is none.
+export function lockChain(entries: Entry[], root: string): Chain {
+  const out = rules.lock_chain_js(entries, root, "roles", null, crypto);
+  if ("error" in out) throw new Error(out.error);
+  return { at: out.at, hashes: out.hashes, off: out.off };
+}
+
 /// The lock its entries make, each checked as a station checks it; throws why not. `now` (unix seconds): signing
 /// devices that ran out sign no more.
 export function checkLock(entries: Entry[], now: number): Checked {
-  const out = rules.fold_held_js(entries, now, crypto);
+  return checkedOf(rules.fold_held_js(entries, now, crypto));
+}
+
+/// A lock as the rules give it (`{state, rules}`: a chain folded, `fold_held_js`, or the state a moved workspace's
+/// people's logs make, `state4_js`, src/lock-moved.ts `inForce`, which is in the shape of a folded chain's), the rules'
+/// own object kept for it (`signerIn`), as station/src/cloud/lock.ts `taken` makes a station's of either; throws why
+/// there is none.
+export function checkedOf(out: any): Checked {
   if ("error" in out) return refuse(out.error);
   const t = out.state;
   const s: Checked = {

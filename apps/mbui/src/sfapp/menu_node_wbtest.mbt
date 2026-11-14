@@ -89,7 +89,7 @@ test "大屏, keyboard and mouse, a short window: a menu taller than it: its pan
     Some((_, y, _, h)) => y >= py - 0.5 && y + h <= py + ph + 0.5
     None => false
   }
-  assert_eq((within, seen), (true, true), msg="panel \{(px, py, pw, ph)} last \{last}")
+  assert_eq((within, seen), (true, true), msg="panel \{Repr((px, py, pw, ph))} last \{Repr(last)}")
 }
 
 ///|
@@ -109,7 +109,7 @@ test "大屏, keyboard and mouse, a short window: a menu taller than it, the poi
   t.run_for(@ui.move_most_ms)
   // (the pointer brought onto its third item, and left there)
   let (rx, ry, rw, rh) = t.query(MenuItem, label="第2项").unwrap().rect
-  t.move(rx + rw / 2.0, ry + rh / 2.0)
+  t.move_to(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@ui.move_most_ms)
   t.key(@ui.key_code_end)
   t.run_for(@ui.move_most_ms)
@@ -123,7 +123,7 @@ test "大屏, keyboard and mouse, a short window: a menu taller than it, the poi
   t.key(@ui.key_code_enter)
   t.key(@ui.key_code_enter)
   t.run_for(@ui.move_most_ms)
-  assert_eq((focused, seen, chosen), (Some("第29项"), true, [29]), msg="panel \{py} \{ph} last \{last}")
+  assert_eq((focused, seen, chosen), (Some("第29项"), true, [29]), msg="panel \{py} \{ph} last \{Repr(last)}")
 }
 
 ///|
@@ -190,7 +190,7 @@ test "大屏, keyboard and mouse, a short window: a menu taller than it, the poi
   t.run_for(@ui.move_most_ms)
   let (rx, ry, rw, rh) = t.query(MenuItem, label="第2项").unwrap().rect
   let (x, y) = (rx + rw / 2.0, ry + rh / 2.0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@ui.move_most_ms)
   t.key(@ui.key_code_end)
   t.run_for(@ui.move_most_ms)
@@ -204,7 +204,7 @@ test "大屏, keyboard and mouse, a short window: a menu taller than it, the poi
       x + 3.0 >= sx && x + 3.0 < sx + sw && y >= sy && y < sy + sh
     })
     .map(fn(s) { s.label })
-  t.move(x + 3.0, y)
+  t.move_to(x + 3.0, y)
   t.run_for(@ui.move_most_ms)
   let moved = t.focused().map(fn(s) { s.label })
   t.key(@ui.key_code_enter)
@@ -214,7 +214,7 @@ test "大屏, keyboard and mouse, a short window: a menu taller than it, the poi
   assert_eq(
     (after_end, under != Some("第29项") && under is Some(_), moved == under, chosen),
     (Some("第29项"), true, true, [want]),
-    msg="under \{under} moved \{moved}",
+    msg="under \{Repr(under)} moved \{Repr(moved)}",
   )
 }
 
@@ -273,7 +273,7 @@ fn menu_field_said(t : @ui.Tester) -> String {
 test "大屏, touch: a menu presented over the message field typed in, a finger then moved onto one of its items, Escape or Enter; or Down, then a letter's key: the focus, the keyboard and the words the field's throughout, Enter choosing nothing, Escape closing the menu, as the old menu" {
   let t = menu_over_typed_field()
   let (x, y) = t.find("二项").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@ui.move_most_ms)
   let a_on = menu_field_said(t)
   t.key(@ui.key_escape)
@@ -281,7 +281,7 @@ test "大屏, touch: a menu presented over the message field typed in, a finger 
   let a_esc = menu_field_said(t)
   let t = menu_over_typed_field()
   let (x, y) = t.find("二项").unwrap()
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@ui.move_most_ms)
   t.key(@ui.key_code_enter)
   t.run_for(@ui.move_most_ms)
@@ -316,9 +316,9 @@ test "大屏, touch: a menu presented over the message field typed in, then a mo
   let onto = fn(t : @ui.Tester) {
     t.host_says_finger(Some(false))
     let (x, y) = t.find("二项").unwrap()
-    t.move(x - 10.0, y)
+    t.move_to(x - 10.0, y)
     t.run_for(@ui.move_most_ms)
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@ui.move_most_ms)
   }
   let t = open_over()
@@ -357,7 +357,7 @@ fn menu_of_three(chosen : Array[Int]) -> @ui.Tester {
 /// What has the focus (a menu by its role alone), whether a menu is open, and what was chosen.
 fn menu_keys_said(t : @ui.Tester, chosen : Array[Int]) -> String {
   let f = t.focused().map(fn(s) { if s.role is Menu { "Menu" } else { "\{s.role} \{s.label}" } }).unwrap_or("none")
-  "\{f} open=\{@sf.presenting()} chosen=\{chosen}"
+  "\{f} open=\{@sf.presenting()} chosen=\{@ui.list_text(chosen)}"
 }
 
 ///|

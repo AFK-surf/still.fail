@@ -1,4 +1,4 @@
-# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
+# mbui (libs/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The renderer's pixels ("Pixel references belong to one machine"): a Tester's draw list drawn
 # offscreen on macos-ci (mbui's runner there, label mbui-render), against its reference (goldens/render/macos-ci-*.png) to
 # the byte, on the macOS and GPU the references were made on (goldens/render/macos-ci.txt). The pictures drawn are the
@@ -7,37 +7,37 @@ name: mbui-render
 on:
   pull_request:
     paths:
-      - "apps/mbui/mbui/src/host/apple_render.m"
-      - "apps/mbui/mbui/src/host/apple_text.m"
-      - "apps/mbui/mbui/src/render/**"
-      - "apps/mbui/mbui/src/damage/**"
-      - "apps/mbui/mbui/src/ui/drawlist.mbt"
-      - "apps/mbui/mbui/src/ui/scene.mbt"
-      - "apps/mbui/mbui/src/ui/line.mbt"
-      - "apps/mbui/mbui/tools/chk/pictures.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
-      - "apps/mbui/mbui/src/ui/smooth.mbt"
-      - "apps/mbui/mbui/src/host/corner*"
-      - "apps/mbui/mbui/src/host/contained.h"
-      - "apps/mbui/mbui/goldens/render/**"
-      - "apps/mbui/mbui/scripts/render_offscreen.sh"
+      - "libs/mbui/src/host/apple_render.m"
+      - "libs/mbui/src/host/apple_text.m"
+      - "libs/mbui/src/render/**"
+      - "libs/mbui/src/damage/**"
+      - "libs/mbui/src/ui/drawlist.mbt"
+      - "libs/mbui/src/ui/scene.mbt"
+      - "libs/mbui/src/ui/line.mbt"
+      - "libs/mbui/tools/chk/pictures.mbt"
+      - "libs/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
+      - "libs/mbui/src/ui/smooth.mbt"
+      - "libs/mbui/src/host/corner*"
+      - "libs/mbui/src/host/contained.h"
+      - "libs/mbui/goldens/render/**"
+      - "libs/mbui/scripts/render_offscreen.sh"
       - ".github/workflows/mbui-render.yml"
   push:
     branches: [main]
     paths:
-      - "apps/mbui/mbui/src/host/apple_render.m"
-      - "apps/mbui/mbui/src/host/apple_text.m"
-      - "apps/mbui/mbui/src/render/**"
-      - "apps/mbui/mbui/src/damage/**"
-      - "apps/mbui/mbui/src/ui/drawlist.mbt"
-      - "apps/mbui/mbui/src/ui/scene.mbt"
-      - "apps/mbui/mbui/src/ui/line.mbt"
-      - "apps/mbui/mbui/tools/chk/pictures.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
-      - "apps/mbui/mbui/src/ui/smooth.mbt"
-      - "apps/mbui/mbui/src/host/corner*"
-      - "apps/mbui/mbui/src/host/contained.h"
-      - "apps/mbui/mbui/goldens/render/**"
+      - "libs/mbui/src/host/apple_render.m"
+      - "libs/mbui/src/host/apple_text.m"
+      - "libs/mbui/src/render/**"
+      - "libs/mbui/src/damage/**"
+      - "libs/mbui/src/ui/drawlist.mbt"
+      - "libs/mbui/src/ui/scene.mbt"
+      - "libs/mbui/src/ui/line.mbt"
+      - "libs/mbui/tools/chk/pictures.mbt"
+      - "libs/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
+      - "libs/mbui/src/ui/smooth.mbt"
+      - "libs/mbui/src/host/corner*"
+      - "libs/mbui/src/host/contained.h"
+      - "libs/mbui/goldens/render/**"
   workflow_dispatch:
 
 concurrency:
@@ -49,7 +49,7 @@ jobs:
   offscreen:
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
     # (a machine of ours: never a fork's pull request)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, mbui-render]
@@ -61,9 +61,10 @@ jobs:
         run: scripts/render_offscreen.sh
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: render
-          path: apps/mbui/mbui/out/render/
+          path: libs/mbui/out/render/
       - name: The macOS and the GPU the references were made on
         run: |
           for k in system gpu; do

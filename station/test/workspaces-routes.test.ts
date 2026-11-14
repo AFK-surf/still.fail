@@ -209,10 +209,7 @@ test("a viewer's event streams carry only their workspace's changes", async () =
     r.store.insertJob(job("jb", c.b.key));
     const readers: any = {
       read: async (op: string, args: any) => {
-        if (op === "chats") return "[]";
         if (op === "summary") return JSON.stringify({ key: args.key });
-        if (op === "thread") return JSON.stringify({ id: args.id });
-        if (op === "threadViews") return JSON.stringify(args.viewers.map(() => ({ id: args.id })));
         if (op === "job") return JSON.stringify({ id: args.id });
         throw new Error(op);
       },
@@ -244,9 +241,9 @@ test("a viewer's event streams carry only their workspace's changes", async () =
       { type: "sessionRemoved", key: "gone-old", ws: null },
     ]) listener(change);
     await settle();
-    const told = (s: ReturnType<typeof reader>) => s.got.map((e) => `${e.event} ${e.data.key ?? e.data.id}`).sort();
-    assert.deepEqual(told(ofHome), [`session ${c.w.key}`, "session-removed gone-old", `thread ${c.old.thread}`, `thread-view ${c.old.thread}`].sort());
-    assert.deepEqual(told(ofJoined), [`session ${c.b.key}`, "session-removed gone-b", `thread ${c.b.thread}`, `thread-view ${c.b.thread}`, "job jb", "job-removed jb", "thread-removed 99"].sort());
+    const told = (s: ReturnType<typeof reader>) => s.got.filter((e) => e.event !== "made").map((e) => `${e.event} ${e.data.key ?? e.data.id}`).sort();
+    assert.deepEqual(told(ofHome), [`session ${c.w.key}`, "session-removed gone-old", `thread ${c.old.thread}`].sort());
+    assert.deepEqual(told(ofJoined), [`session ${c.b.key}`, "session-removed gone-b", `thread ${c.b.thread}`, "job jb", "job-removed jb", "thread-removed 99"].sort());
     await ofHome.close();
     await ofJoined.close();
   } finally {

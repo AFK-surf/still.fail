@@ -3,13 +3,14 @@
 // how long it is allowed a choice beside them that starts at the longest (`adb.decide` on the chat's station). Only the
 // viewer's own request is answered; elsewhere a line says whose it is. Decided, a line says how it went. What it
 // keeps between frames (its menu, the length picked, the answer under way) is the vault card's, keyed `phone/<id>`.
-// Answered on the phone itself while it lacks something to be lent (Developer options, Wi-Fi, Wireless debugging the
-// app cannot turn on, its 共享调试 switch off), it says what first and 查看步骤 takes the place of 允许: allowed then,
-// nothing could reach it.
+// Allowed on the phone itself, its 共享调试 switch is turned on with it; what the phone still lacks is a card under the
+// line once granted (decision.mbt), each step done from there (2026-11-11: it said 需要先… and 查看步骤 took 允许's
+// place, a settings page away, and back again for pairing). Only what cannot be allowed here at all takes 允许 away:
+// this device not approved yet (查看步骤: settings' 共享调试 is that step), a station from before signatures.
 
 ///|
 /// The request's card while it waits: its words, and its answer where it is the viewer's (`mine`) and a core is there.
-/// `how`: the 共享调试 page opened, where this phone lacks something first.
+/// `how`: settings' 共享调试 opened, where this device is to be approved first.
 pub fn phone_card(
   c : @ui.Ctx,
   core : Core?,
@@ -48,8 +49,8 @@ fn phone_row(core : Core, request : String) -> Json? {
 }
 
 ///|
-/// Its answer: 允许 (for the length chosen), 拒绝, and the length's menu; on a phone that lacks something first, what,
-/// and 查看步骤 (`how`) in 允许's place.
+/// Its answer: 允许 (for the length chosen), 拒绝, and the length's menu; where it cannot be allowed here yet, why, and
+/// 查看步骤 (`how`) in 允许's place for a device to be approved.
 fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, lasts : String, how : () -> Unit) -> Unit {
   // (a device with no adb of its own, a computer's: the grant is for the person's phone, lent as it is ready)
   let row = phone_row(core, request)
@@ -57,19 +58,20 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
   let lacks = if flag(row, "oldStation") {
     Some(tr("android-misc.personal.updateStation"))
   } else if flag(row, "join") {
-    // (no lock of the person's own on this device: not allowed here until it has one, its page a tap away)
-    Some(tr("android-misc.personal.open"))
-  } else { match adb_ready(c) {
-    AdbLacks(step) => Some(step)
-    // (a phone whose 共享调试 is off lends to no chat: turned on first, on its page)
-    AdbLends if !flag((core.topic)("adbShare", Map([])).get().value, "on") => Some(tr("android-misc.adb.step.on"))
-    _ => None
-  } }
-  // (up to its owner's 默认最长授权, starting at the longest)
-  let scopes = if lasts == "hour" { ["hour"] } else { ["hour", "chat"] }
+    // (this device not approved by the person's trusted devices, or theirs set up again elsewhere: not allowed here
+    // until it is, settings' 共享调试 a tap away; with none yet, 允许 as anywhere: allowing begins them)
+    Some(tr("android-misc.adb.ask.approve"))
+  } else {
+    None
+  }
+  // (on a phone whose 共享调试 is off: turned on as it is allowed, as its switch turns it on)
+  let turn_on = phone_lends(c) && !flag((core.topic)("adbShare", Map([])).get().value, "on")
+  // (every length, starting at an hour unused: a device's timeouts, 2026-11-10; a station from before offered an hour
+  // alone where its owner's 默认最长授权 said so)
+  let scopes = if lasts == "hour" { ["hour"] } else { ["hour", "idle", "eight", "chat"] }
   let scope = match vault_picked.get("phone/" + request) {
     Some(s) if scopes.contains(s) => s
-    _ => scopes[scopes.length() - 1]
+    _ => if scopes.contains("idle") { "idle" } else { scopes[scopes.length() - 1] }
   }
   let on = [("station", station), ("request", request)]
   let pending = vault_pending.get("phone/" + request)
@@ -80,8 +82,10 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
       return
     }
     vault_pending["phone/" + request] = yes
-    // (Wireless debugging the app may turn on itself: on as it is allowed, as a lending from the page does)
-    if yes {
+    // (Wireless debugging the app may turn on itself: on as it is allowed, as the switch turned on does)
+    if yes && turn_on {
+      adb_turn(core, true)
+    } else if yes {
       adb_switch_on()
     }
     let params : Array[(String, Json)] = [("station", str(station)), ("request", str(request))]
@@ -104,9 +108,9 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
     None => ()
   }
   @sf.ask_buttons(c, fn() {
-    if lacks is Some(_) {
-      @sf.button(c, if flag(row, "join") { tr("android-misc.personal.open") } else { tr("android-misc.adb.ask.how") }, key="phone/" + request + "/how", tone=Primary, on_press=how)
-    } else {
+    if flag(row, "join") {
+      @sf.button(c, tr("android-misc.adb.ask.how"), key="phone/" + request + "/how", tone=Primary, on_press=how)
+    } else if lacks is None {
       @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under, on_press=fn() { decide(true) })
     }
     @sf.button(c, tr("android-settings.vault.act.deny"), key="phone/" + request + "/no", tone=Ghost, busy=pending == Some(false), disabled=under, on_press=fn() { decide(false) })
@@ -137,9 +141,10 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
 /// How a request ended, in a line: a dot (green while granted) and 已允许调试手机 · 本对话内, 已拒绝调试手机, or why it
 /// ended (已收回, 对话已归档, 授权已到期); laid as vault_outcome's (`inline`: by the message's picture). Granted, how
 /// its station's adb holds the phone (`link`, phone_link's; "": not said, as from a station before it did): green only
-/// once it is connected, and while the station waits to be paired with it, elsewhere than on the phone (`paired_here`
-/// false: on the phone its pairing is a card of its own, decision.mbt's) that it is paired on the phone (2026-10-30:
-/// approved, its station not paired, the card said 已允许 and nothing more, and its page could not be found).
+/// once it is connected, and while the station waits to be paired with it, elsewhere than on the phone that it is paired
+/// on the phone (2026-10-30: approved, its station not paired, the card said 已允许 and nothing more, and its page could
+/// not be found). `step_here`: on the phone, a card under the line says what is left to do (decision.mbt's), so the
+/// line says no more than what was allowed.
 pub fn phone_outcome(
   c : @ui.Ctx,
   status : String,
@@ -147,15 +152,20 @@ pub fn phone_outcome(
   why : String,
   inline? : Bool = true,
   link? : String = "",
-  paired_here? : Bool = false,
+  step_here? : Bool = false,
   history? : (String, (Int) -> Unit)? = None,
 ) -> Unit {
   let granted = status == "granted"
   let words = phone_outcome_words(status, scope, why)
-  let linked = if granted && link != "" { words + " · " + phone_link_words(link) } else { words }
+  // (on the phone, a step left: its card under the line says so, the line not again, 2026-11-11)
+  let linked = if granted && link != "" && !step_here {
+    words + " · " + phone_link_words(link)
+  } else {
+    words
+  }
   ask_outcome(c, granted && (link == "" || link == "connected"), [@ui.span(linked)], inline~, history~)
   // (elsewhere than on the phone: where it is paired, under the line's words where they start)
-  if granted && link == "unpaired" && !paired_here {
+  if granted && link == "unpaired" && !step_here {
     c.box(style=if inline { ask_ended_past } else { ask_ended_at }, fn() {
       c.text(tr("android-misc.adb.ask.link.onPhone"), style=@sf.ask_note) |> ignore
     })
@@ -190,31 +200,9 @@ pub fn phone_link(core : Core?, station : String, said : String) -> String {
 }
 
 ///|
-/// Where a request's 查看步骤 takes the person: settings' 共享调试 while the phone's switch is off (it is turned on
-/// there), else the 共享调试 of the chat's station (`station`), which says what is next for it, pairing with it too
-/// (2026-10-30: it opened settings' page, which has nothing of any station, its pairing nowhere to be found).
-pub fn phone_steps(core : Core?, station : String, request? : String = "") -> Route {
-  match core {
-    Some(core) if flag(phone_row(core, request), "join") => PersonalLock
-    Some(core) if flag((core.topic)("adbShare", Map([])).get().value, "on") => AdbShare(station)
-    _ => AdbShare("")
-  }
-}
-
-///|
-/// Whether this device lends its own adb (a phone that has what it takes, or will once a step is done): where a
-/// request's pairing card opens its station's 共享调试.
-pub fn phone_lends(c : @ui.Ctx) -> Bool {
-  match adb_ready(c) {
-    AdbLends | AdbLacks(_) => true
-    _ => false
-  }
-}
-
-///|
 /// How a request ended, in words (phone_outcome's).
 pub fn phone_outcome_words(status : String, scope : String, why : String) -> String {
-  let scope = if scope == "hour" { "hour" } else { "chat" }
+  let scope = if scope == "hour" || scope == "idle" || scope == "eight" { scope } else { "chat" }
   match status {
     "granted" => fill("android-misc.adb.ask.granted", [("scope", tr("android-settings.vault.scope." + scope))])
     "denied" if why == "" => tr("android-misc.adb.ask.denied")

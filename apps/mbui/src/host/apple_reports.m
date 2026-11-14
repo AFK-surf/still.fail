@@ -457,6 +457,22 @@ static void sf_handled(NSString *type, NSString *value, NSString *reason) {
   });
 }
 
+/// What the window thread found (mbui's src/ui/journal.mbt): a hang, or what the app did while shown, sent at once as
+/// `name` with the JSON's fields as its properties (Android's Crashes.hang).
+static void sf_hang(NSString *json, NSString *name) {
+  if (!sf_has_key()) return;
+  double at = floor(NSDate.date.timeIntervalSince1970 * 1000);
+  dispatch_async(reports_queue, ^{
+    NSDictionary *said = sf_dict([NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil]);
+    if (!said) return;
+    NSString *account = signed_in ?: sf_string(state_read()[@"account"]) ?: @"ios-anonymous";
+    NSMutableDictionary *p = [sf_here() mutableCopy];
+    [p addEntriesFromDictionary:said];
+    sf_send(@[ @{@"event" : name, @"distinct_id" : account, @"uuid" : NSUUID.UUID.UUIDString.lowercaseString,
+              @"timestamp" : sf_iso(at), @"properties" : p} ]);
+  });
+}
+
 static NSString *sf_ns_string(moonbit_string_t s) {
   return [NSString stringWithCharacters:(const unichar *)s length:(NSUInteger)Moonbit_array_length(s)];
 }
@@ -502,6 +518,15 @@ int32_t mb_stillfail_tell(moonbit_string_t what_, moonbit_string_t a_, moonbit_s
   // what the UI was asked that it could not do as asked, its category (Android's Crashes.uiFault)
   if ([what isEqual:@"ui_fault"]) {
     sf_handled(@"UiFault", sf_ns_string(a_), @"ui_fault");
+    return 0;
+  }
+  // the window thread's hang, and what the app did while shown as it is hidden, as JSON (sf_hang)
+  if ([what isEqual:@"hang"]) {
+    sf_hang(sf_ns_string(a_), @"ui_hang");
+    return 0;
+  }
+  if ([what isEqual:@"hang_summary"]) {
+    sf_hang(sf_ns_string(a_), @"ui_hang_summary");
     return 0;
   }
   return 0;

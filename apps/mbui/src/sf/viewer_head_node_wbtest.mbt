@@ -88,9 +88,9 @@ fn head_drawn(tt : @ui.Tester) -> (Array[String], (Double, Double, Double, Doubl
     line
     .split(" ")
     .map(fn(v) {
-      match number_of(v.to_string()) {
+      match number_of(v.to_owned()) {
         Some(d) => ((d * 1000000.0).round() / 1000000.0).to_string()
-        None => v.to_string()
+        None => v.to_owned()
       }
     })
     .collect()
@@ -145,13 +145,13 @@ fn head_alike(name : String, tools : Array[String], steps : Array[(String, (Head
   let new = head_run(false, name, tools, steps)
   for i, n in new {
     let o = old[i]
-    assert_eq(n.2, o.2, msg="\{n.0}: its ×, new \{n.2} old \{o.2}")
+    assert_eq(n.2, o.2, msg="\{n.0}: its ×, new \{Repr(n.2)} old \{Repr(o.2)}")
     // (where they differ first, said so)
     let at = (0).until(if n.1.length() > o.1.length() { n.1.length() } else { o.1.length() }).find_first(fn(k) {
       n.1.get(k) != o.1.get(k)
     })
     match at {
-      Some(k) => fail("\{n.0}: new [\{k}] \{n.1.get(k)} old \{o.1.get(k)}; \{n.1.length()} drawn, old \{o.1.length()}")
+      Some(k) => fail("\{n.0}: new [\{k}] \{Repr(n.1.get(k))} old \{Repr(o.1.get(k))}; \{n.1.length()} drawn, old \{o.1.length()}")
       None => ()
     }
   }
@@ -198,7 +198,7 @@ test "the floating head as nodes never narrower once open: tools gone, a shorter
 fn head_alpha(drawn : Array[String]) -> Double {
   match drawn {
     [first, ..] =>
-      match first.split(" ").map(fn(v) { v.to_string() }).to_array() {
+      match first.split(" ").map(fn(v) { v.to_owned() }).to_array() {
         [.., last] => number_of(last).unwrap_or(-1.0)
         _ => -1.0
       }
@@ -230,7 +230,7 @@ test "the floating head as nodes going as it sleeps and coming as it wakes, from
 fn glyph_clips_right(t : @ui.Tester, top : Double, bottom : Double) -> Array[(Double, Double)] {
   let out = []
   for line in t.drawlist().split("\n") {
-    let f = line.split(" ").map(fn(v) { v.to_string() }).to_array()
+    let f = line.split(" ").map(fn(v) { v.to_owned() }).to_array()
     if f.length() >= 21 && f[0] == "i" && f[6] == "1" {
       match (number_of(f[1]), number_of(f[2]), number_of(f[19])) {
         (Some(x), Some(y), Some(r)) if y >= top && y <= bottom => out.push((x, r))
@@ -248,7 +248,7 @@ fn glyph_clips_right(t : @ui.Tester, top : Double, bottom : Double) -> Array[(Do
 fn narrow_head(old : Bool) -> (Array[((Double, Double, Double, Double), Array[String])], Bool, Array[(Double, Double)], Double) raise {
   let name = "a-very-long-name-of-a-picture.png"
   let tools = ["edit", "copy", "download"]
-  let tt = head_tester(HeadState::new(name, tools), old, w=196.0)
+  let tt = head_tester(HeadState::new(name, tools), old, w=190.0)
   let rects = []
   for icon in tools + ["close"] {
     let label = if icon == "close" { t("web-main.preview.closeKey") } else { head_label(icon) }
@@ -274,7 +274,7 @@ test "the floating head as nodes with next to no room for its name: what is draw
   assert_true(glyphs.length() > 0, msg="something of the name drawn")
   for g in glyphs {
     let (x, right) = g
-    assert_true(right <= first + 0.01, msg="a glyph at \{x} cut at \{right}, past the first tool at \{first}: \{glyphs}")
+    assert_true(right <= first + 0.01, msg="a glyph at \{x} cut at \{right}, past the first tool at \{first}: \{Repr(glyphs)}")
   }
 }
 
@@ -297,7 +297,7 @@ test "the floating head as nodes at the system's size of words, changed once mad
     new.get(k) != old.get(k)
   })
   match at {
-    Some(k) => fail("bigger words: new [\{k}] \{new.get(k)} old \{old.get(k)}; \{new.length()} drawn, old \{old.length()}")
+    Some(k) => fail("bigger words: new [\{k}] \{Repr(new.get(k))} old \{Repr(old.get(k))}; \{new.length()} drawn, old \{old.length()}")
     None => ()
   }
   assert_true(new != head_scaled(false, 1.0), msg="bigger than at 1")
@@ -311,7 +311,7 @@ test "the floating head as nodes never narrower once open: the system's size of 
   t.draw()
   t.draw()
   let grown = head_drawn(t).1
-  assert_true(grown.0 > x0.0, msg="bigger words: wider (its × further right) \{grown} \{x0}")
+  assert_true(grown.0 > x0.0, msg="bigger words: wider (its × further right) \{Repr(grown)} \{Repr(x0)}")
   t.set_font_scale(1.0)
   t.draw()
   t.draw()
@@ -325,7 +325,7 @@ test "the floating head as nodes never narrower once open: a longer name then a 
   let framed = head_run(false, "photo.png", ["copy"], [("longer", long, 0.0), ("shorter", short, 0.0)])
   let unframed = head_run(false, "photo.png", ["copy"], [("longer", long, -1.0), ("shorter", short, 0.0)])
   assert_eq(unframed[unframed.length() - 1].2, framed[framed.length() - 1].2, msg="its ×, no frame between, as with one")
-  assert_true(framed[2].2.0 > framed[0].2.0, msg="wider than as made: \{framed[2].2} \{framed[0].2}")
+  assert_true(framed[2].2.0 > framed[0].2.0, msg="wider than as made: \{Repr(framed[2].2)} \{Repr(framed[0].2)}")
 }
 
 ///|
@@ -334,7 +334,7 @@ test "the floating head as nodes never narrower once open: tools added, then tak
   let fewer = fn(s : HeadState) { s.tools.set(["copy"]) }
   let framed = head_run(false, "photo.png", ["copy"], [("more", more, 0.0), ("fewer", fewer, 0.0)])
   let unframed = head_run(false, "photo.png", ["copy"], [("more", more, -1.0), ("fewer", fewer, 0.0)])
-  assert_true(framed[1].2.0 > framed[0].2.0, msg="more tools: wider \{framed[1].2} \{framed[0].2}")
+  assert_true(framed[1].2.0 > framed[0].2.0, msg="more tools: wider \{Repr(framed[1].2)} \{Repr(framed[0].2)}")
   assert_eq(framed[2].2, framed[1].2, msg="fewer, a frame between: as wide as with them")
   assert_eq(unframed[unframed.length() - 1].2, framed[2].2, msg="fewer, no frame between: the same")
 }

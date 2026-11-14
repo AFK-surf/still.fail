@@ -7,9 +7,10 @@
 // The context goes when its chat is archived or deleted, and with Chrome when Chrome ends (idle, a crash): a chat asking
 // again then has a new one, its sign-ins still granted put in again. The default context is the station's own, for the
 // tabs it opens itself (a login's page), no chat's.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Fibers } from "../ops/fibers.ts";
+import { PrivateFile } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { type BrowserOptions, type BrowserStatus, StationBrowser } from "./browser.ts";
 import type { GateParts } from "./gate.ts";
@@ -35,6 +36,7 @@ export class Browsers {
   /// Each chat's context, by session, in the Chrome at `#ws`.
   #contexts = new Map<string, string>();
   #ws: string | null = null;
+  #file: PrivateFile | null = null;
   /// Contexts being made, by session: asked again meanwhile, the same one.
   readonly #making = new Map<string, Promise<string>>();
   /// The sign-ins put into each chat's context and not taken out yet, by session; their timers by request.
@@ -283,23 +285,23 @@ export class Browsers {
     this.#timers.clear();
     await this.station.close();
     await this.#fibers.close();
+    // What the next station process takes up: written down before this one lets go.
+    await this.#file?.written();
   }
 
   #read(): Kept | null {
     try {
-      const v = JSON.parse(readFileSync(join(this.#dir, "contexts.json"), "utf8"));
+      const v = JSON.parse(readFileSync(join(this.#dir, "contexts.json"), "utf8")); // sync: once, as it is made
       return typeof v?.ws === "string" && v.contexts && typeof v.contexts === "object" ? v : null;
     } catch {
       return null;
     }
   }
 
+  /// What is kept in memory, written down off the station's thread (the latest only).
   #write() {
-    try {
-      mkdirSync(this.#dir, { recursive: true });
-      writeFileSync(join(this.#dir, "contexts.json"), JSON.stringify({ ws: this.#ws ?? "", contexts: Object.fromEntries(this.#contexts), signedIn: Object.fromEntries(this.#signedIn) } satisfies Kept, null, 2) + "\n");
-    } catch (e) {
-      log.warn("browser", "the chats' contexts could not be written down", { error: (e as Error).message });
-    }
+    this.#file ??= new PrivateFile(join(this.#dir, "contexts.json"));
+    void this.#file.write(JSON.stringify({ ws: this.#ws ?? "", contexts: Object.fromEntries(this.#contexts), signedIn: Object.fromEntries(this.#signedIn) } satisfies Kept, null, 2) + "\n")
+      .catch((e) => log.warn("browser", "the chats' contexts could not be written down", { error: (e as Error).message }));
   }
 }

@@ -125,11 +125,44 @@ test "an unsubscription matched by what it names" {
   let c = r.client()
   let a = c.subscribe("threads", params={ "station": "a" })
   let b = c.subscribe("threads", params={ "station": "b" })
-  // `a` is asked again but not yet let go of `b`: the value waits
-  assert_eq(r.deliver(), 0)
   c.unsubscribe(b)
   assert_eq(r.deliver(), 1)
   assert_eq(a.value.unwrap().stringify(), "[1]")
+  assert_eq(r.diverged().length(), 0)
+  assert_eq(r.unmade().length(), 0)
+}
+
+///|
+test "an unsubscription not made again yet holds back nothing after it; a subscription or a call not made again holds its own" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":3,"subscribe":{"topic":"threads","station":"a"},"keyed":true},"w":1}
+    #|{"out":{"id":4,"subscribe":{"topic":"threads","station":"b"},"keyed":true},"w":2}
+    #|{"out":{"id":4,"unsubscribe":true},"w":3}
+    #|{"in":{"id":3,"value":[1]},"w":5}
+    #|{"out":{"id":5,"subscribe":{"topic":"threads","station":"c"},"keyed":true},"w":6}
+    #|{"in":{"id":5,"value":[2]},"w":7}
+    #|{"in":{"id":3,"value":[3]},"w":8}
+  ))
+  let c = r.client()
+  let a = c.subscribe("threads", params={ "station": "a" })
+  let b = c.subscribe("threads", params={ "station": "b" })
+  // `b` still held here (let go of later than the run did): what came for `a` after the run let it go comes all the same
+  assert_eq(r.deliver(), 1)
+  assert_eq(a.value.unwrap().stringify(), "[1]")
+  // `c` not asked again: its own value waits, and what came after it with it
+  assert_eq(r.deliver(), 0)
+  assert_true(r.waiting().unwrap().contains("unsubscribe") || r.waiting().unwrap().contains("\"c\""))
+  let cs = c.subscribe("threads", params={ "station": "c" })
+  assert_eq(r.deliver(), 2)
+  assert_eq(cs.value.unwrap().stringify(), "[2]")
+  assert_eq(a.value.unwrap().stringify(), "[3]")
+  // the unsubscription is the run's all the same: not made, it is listed
+  assert_eq(r.unmade().length(), 1)
+  c.unsubscribe(b)
+  assert_eq(r.unmade().length(), 0)
+  // and said: made after the 3 messages the run had after it
+  assert_eq(r.late_unsubs().length(), 1)
+  assert_eq(r.late_unsubs()[0].1, 3)
   assert_eq(r.diverged().length(), 0)
 }
 
@@ -283,12 +316,36 @@ test "an ask the run's timing made, dropped with what came for it" {
 }
 
 ///|
+test "a watch the run let go of and asked again, both dropped: what came for it before stays, the watch goes on" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":1,"subscribe":{"topic":"a"},"keyed":true}}
+    #|{"in":{"id":1,"value":1},"w":10}
+    #|{"out":{"id":1,"unsubscribe":true}}
+    #|{"out":{"id":2,"subscribe":{"topic":"a"},"keyed":true}}
+    #|{"in":{"id":2,"value":1},"w":11}
+    #|{"out":{"id":3,"subscribe":{"topic":"b"},"keyed":true}}
+    #|{"in":{"id":3,"value":2},"w":12}
+  ))
+  assert_eq(r.drop("{\"id\":1,\"unsubscribe\":true}"), 1)
+  assert_eq(r.drop("{\"id\":2,\"subscribe\""), 1)
+  let c = r.client()
+  let a = c.subscribe("a")
+  assert_eq(r.deliver(), 1)
+  assert_eq(a.value.map(fn(v) { v.stringify() }), Some("1"))
+  let b = c.subscribe("b")
+  assert_eq(r.deliver(), 1)
+  assert_eq(b.value.map(fn(v) { v.stringify() }), Some("2"))
+  assert_eq(r.left(), 0)
+  assert_eq(r.unmade().length(), 0)
+}
+
+///|
 test "the bytes the run sent beside a call are the test's to give again" {
-  let r = @core.Replay::parse(
+  let r = @core.Replay::parse((
     #|CORETRACE {"out":{"id":3,"call":"station.upload.part","params":{"name":"a.jpg","offset":0}},"w":10,"b":"ffd8ff"}
     #|CORETRACE {"in":{"id":3,"ok":{"have":3}},"w":20}
     #|CORETRACE {"out":{"id":4,"call":"station.upload.part","params":{"name":"b.pdf","offset":0}},"w":30}
-    ,
+    ),
   )
   assert_eq(r.sent_bytes("station.upload.part", "name", "a.jpg"), Some(b"\xff\xd8\xff"))
   assert_eq(r.sent_bytes("station.upload.part", "name", "b.pdf"), None)
@@ -330,6 +387,42 @@ test "at the run's pace: a call's answer measured from its ask made again, the n
   assert_eq(r.next_due(), Some(750.0))
   assert_eq(r.deliver(now=750.0), 1)
   assert_eq(r.left(), 0)
+}
+
+///|
+test "at the run's pace: a value after an unsubscription not made again yet comes on time; one after a subscription not made again waits" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":3,"subscribe":{"topic":"chats"},"keyed":true},"w":1000}
+    #|{"out":{"id":5,"subscribe":{"topic":"status"},"keyed":true},"w":1010}
+    #|{"out":{"id":5,"unsubscribe":true},"w":1100}
+    #|{"in":{"id":3,"value":[1]},"w":1200}
+    #|{"out":{"id":6,"subscribe":{"topic":"doing"},"keyed":true},"w":1300}
+    #|{"in":{"id":6,"value":[2]},"w":1350}
+  ))
+  let now : Ref[Double] = { val: 0.0 }
+  r.clock(fn() { now.val })
+  r.pace(@core.AsRun(1.0))
+  let c = r.client()
+  let chats = c.subscribe("chats")
+  let status = c.subscribe("status")
+  // `status` still held (let go of later than the run did): the value of `chats` 190 ms after `status` was asked
+  // again, as the run had it, not held till it is let go of
+  assert_eq(r.next_due(), Some(190.0))
+  assert_eq(r.deliver(now=189.0), 0)
+  assert_eq(r.deliver(now=190.0), 1)
+  assert_eq(chats.value.unwrap().stringify(), "[1]")
+  // `doing` not asked again: its value waits for it, whenever
+  assert_eq(r.next_due(), None)
+  now.val = 400.0
+  let doing = c.subscribe("doing")
+  assert_eq(r.next_due(), Some(450.0))
+  assert_eq(r.deliver(now=450.0), 1)
+  assert_eq(doing.value.unwrap().stringify(), "[2]")
+  // let go of at last: made, and said late, after the 2 messages the run had after it
+  c.unsubscribe(status)
+  assert_eq(r.unmade().length(), 0)
+  assert_eq(r.late_unsubs().length(), 1)
+  assert_eq(r.late_unsubs()[0].1, 2)
 }
 
 ///|
@@ -412,9 +505,9 @@ test "at the run's pace, its steps taken when it took them: each from the event 
 
 ///|
 test "step_of: the line as the drive took it" {
-  assert_eq(step_of("now noticed 出错 · "), Some("noticed 出错 ·"))
-  assert_eq(step_of("tap =保存"), Some("tap 保存"))
-  assert_eq(step_of("wait 1500"), None)
+  assert_eq(@core.step_of("now noticed 出错 · "), Some("noticed 出错 ·"))
+  assert_eq(@core.step_of("tap =保存"), Some("tap 保存"))
+  assert_eq(@core.step_of("wait 1500"), None)
 }
 
 ///|
@@ -473,16 +566,169 @@ test "at the run's pace, a step that acts taken when its input went, what came b
 
 ///|
 test "frame_period: the run's frames as its host's lines space them, two lines a frame" {
-  let r = @core.Replay::parse(
+  let r = @core.Replay::parse((
     #|{"info":{"view":1,"at":[0]},"w":1000.0}
     #|{"info":{"view":1,"at":[0]},"w":1000.3}
     #|{"info":{"view":1,"at":[16]},"w":1016.5}
     #|{"info":{"view":1,"at":[16]},"w":1016.8}
     #|{"info":{"view":1,"at":[33]},"w":1033.25}
     #|{"info":{"view":1,"at":[900]},"w":1900.0}
-    ,
+    ),
   )
   // (the pause before the last left out)
   assert_eq(r.frame_period(), Some(16.625))
   assert_eq(@core.Replay::parse(paced).frame_period(), None)
+}
+
+///|
+test "the changelog asked for its news alone is answered by an older tape's whole, and a tab's first changes asked after it too" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":7,"subscribe":{"topic":"changelog"},"keyed":true}}
+    #|{"in":{"id":7,"value":{"tabs":[{"part":"android"}],"news":{"build":"0.1.1310"}}},"w":1}
+  ))
+  let c = r.client()
+  // (the chats' list's card: its news alone)
+  let news = c.subscribe("changelog", params={ "news": true })
+  assert_eq(r.deliver(), 1)
+  assert_eq(news.value.unwrap().stringify(), "{\"tabs\":[{\"part\":\"android\"}],\"news\":{\"build\":\"0.1.1310\"}}")
+  // (the changelog's page opened after, its tab in view's first changes: the whole, what came for the tape's one so far)
+  let whole = c.subscribe("changelog", params={ "limit": 30 })
+  r.deliver() |> ignore
+  assert_eq(whole.value.unwrap().stringify(), news.value.unwrap().stringify())
+  // (another tab chosen: the same, every tab's days in it)
+  let tab = c.subscribe("changelog", params={ "part": "station", "limit": 30 })
+  r.deliver() |> ignore
+  assert_eq(tab.value.unwrap().stringify(), news.value.unwrap().stringify())
+  // (the page left: its asks let go of, no ask of the run's; the card's goes on)
+  c.unsubscribe(tab)
+  c.unsubscribe(whole)
+  assert_eq(r.fuzzy().length(), 0)
+  assert_eq(r.diverged(), [])
+}
+
+///|
+/// A run from before the stations' rows: it asked them brief (a chat naming its station), then whole (a list), letting
+/// the brief go, then with a drive only (the files), between its other asks; values and a delta came for them.
+let whole_stations : String =
+  #|{"out":{"id":1,"subscribe":{"topic":"accounts"},"keyed":true}}
+  #|{"in":{"id":1,"value":{"a":1}},"w":10}
+  #|{"out":{"id":2,"subscribe":{"topic":"stations","scope":"w","brief":true},"keyed":true}}
+  #|{"in":{"id":2,"value":[{"station":"w/a","name":"A","online":true}]},"w":20}
+  #|{"out":{"id":3,"call":"chat.send","params":{"text":"hi"}}}
+  #|{"in":{"id":3,"ok":{}},"w":30}
+  #|{"out":{"id":4,"subscribe":{"topic":"stations","scope":"w"},"keyed":true}}
+  #|{"out":{"id":2,"unsubscribe":true}}
+  #|{"in":{"id":4,"value":[{"station":"w/a","name":"A","online":true,"overview":{"profiles":[]}}]},"w":40}
+  #|{"in":{"id":4,"delta":[{"path":[0,"name"],"set":"A2"}]},"w":50}
+  #|{"out":{"id":5,"subscribe":{"topic":"stations","scope":"w","drive":true},"keyed":true}}
+  #|{"in":{"id":5,"value":[]},"w":60}
+  #|{"out":{"id":4,"unsubscribe":true}}
+  #|{"out":{"id":5,"unsubscribe":true}}
+
+///|
+test "a run from before the stations' rows: its stations the replay's own, the app's ask given the richest so far" {
+  let r = @core.Replay::parse(whole_stations)
+  r.keep_stations()
+  let c = r.client()
+  // (the run's stations and their unsubscriptions made from the start: only its other asks are to be made again)
+  assert_eq(r.unmade().length(), 2)
+  let accounts = c.subscribe("accounts")
+  let p : Map[String, Json] = { "scope": "w" }
+  // asked before any came: given the brief, as it comes; then the call holds back what came after it in the run
+  let before = c.subscribe("stations", params=p)
+  assert_eq(r.deliver(), 2)
+  assert_eq(accounts.value.unwrap().stringify(), "{\"a\":1}")
+  assert_eq(before.value.unwrap().stringify(), "[{\"station\":\"w/a\",\"name\":\"A\",\"online\":true}]")
+  assert_eq(r.waiting(), Some("{\"id\":3,\"call\":\"chat.send\",\"params\":{\"text\":\"hi\"}}"))
+  c.call("chat.send", params={ "text": "hi" }, on_done=fn(_) {  }) |> ignore
+  // the answer, then the whole (richer than the brief): given whole
+  assert_eq(r.deliver(at_most=2), 2)
+  assert_eq(
+    before.value.unwrap().stringify(),
+    "[{\"station\":\"w/a\",\"name\":\"A\",\"online\":true,\"overview\":{\"profiles\":[]}}]",
+  )
+  c.unsubscribe(before)
+  // asked between: given the whole at once, and again as its delta comes
+  let between = c.subscribe("stations", params=p)
+  assert_eq(r.deliver(at_most=1), 1)
+  assert_eq(
+    between.value.unwrap().stringify(),
+    "[{\"station\":\"w/a\",\"name\":\"A2\",\"online\":true,\"overview\":{\"profiles\":[]}}]",
+  )
+  assert_eq(between.version, 2)
+  // with a drive only, poorer than the whole: nothing changes, nothing is given
+  assert_eq(r.deliver(), 1)
+  assert_eq(between.version, 2)
+  c.unsubscribe(between)
+  // asked after: the whole as it stands
+  let after = c.subscribe("stations", params=p)
+  assert_eq(r.deliver(), 0)
+  assert_eq(after.value.unwrap().stringify(), between.value.unwrap().stringify())
+  c.unsubscribe(after)
+  assert_eq(r.left(), 0)
+  assert_eq(r.unmade(), [])
+  assert_eq(r.diverged(), [])
+  assert_eq(r.fuzzy(), [])
+}
+
+///|
+test "a run with the stations' rows: its stations matched as any topic, a whole one never given for a brief" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":2,"subscribe":{"topic":"stations","scope":"w","brief":true},"keyed":true}}
+    #|{"in":{"id":2,"value":[{"station":"w/a"}]},"w":20}
+    #|{"out":{"id":4,"subscribe":{"topic":"station","scope":"w","station":"w/a"},"keyed":true}}
+    #|{"in":{"id":4,"value":{"station":"w/a"}},"w":30}
+  ))
+  let c = r.client()
+  // asked as the run asked it: matched, answered
+  let one = c.subscribe("station", params={ "scope": "w", "station": "w/a" })
+  // another way of asking the stations than the run's: the run's next of its name, said
+  let rows = c.subscribe("stations", params={ "scope": "w" })
+  assert_eq(r.fuzzy().length(), 1)
+  assert_true(r.fuzzy()[0].contains("\"scope\":\"w\"}"))
+  assert_eq(r.deliver(), 2)
+  assert_eq(one.value.unwrap().stringify(), "{\"station\":\"w/a\"}")
+  assert_eq(rows.value.unwrap().stringify(), "[{\"station\":\"w/a\"}]")
+  // let go of and asked again, neither of which the run did: no copy of the run's given, where it went apart
+  c.unsubscribe(rows)
+  c.subscribe("stations", params={ "scope": "w", "x": true }) |> ignore
+  assert_eq(r.diverged().length(), 2)
+}
+
+///|
+/// A run that unsubscribed a moment after its step (`tap`), asked as it took it and answered 2 ms after: the step
+/// taken here later than the run's moment, the unsubscription made here before it.
+let late_step : String =
+  #|CORETRACE {"out":{"id":7,"subscribe":{"topic":"accounts"},"keyed":true},"w":900}
+  #|CORETRACE {"in":{"id":7,"value":[]},"w":1000}
+  #|CORETRACE {"step":"tap 端到端测试","w":1100}
+  #|CORETRACE {"out":{"id":8,"subscribe":{"topic":"chat"},"keyed":true},"w":1100.5}
+  #|CORETRACE {"out":{"id":7,"unsubscribe":true},"w":1101}
+  #|CORETRACE {"in":{"id":8,"value":{}},"w":1102}
+  #|CORETRACE {"step":"until 发消息","w":1110}
+
+///|
+test "at the run's pace, a step taken later than the run's moment: all after it later by as much, whatever was made again sooner" {
+  let r = @core.Replay::parse(late_step)
+  let now : Ref[Double] = { val: 0.0 }
+  r.clock(fn() { now.val })
+  r.pace(@core.AsRun(1.0))
+  let c = r.client()
+  let acc = c.subscribe("accounts")
+  now.val = 100.0
+  assert_eq(r.deliver(now=100.0), 1)
+  // the unsubscription the run made after its step, made here before it
+  now.val = 150.0
+  c.unsubscribe(acc)
+  assert_eq(r.step_at("tap 端到端测试"), Some(200.0))
+  // the step taken 5 ms after the run's moment for it (its screen later here)
+  now.val = 205.0
+  assert_true(r.step_taken("tap 端到端测试"))
+  c.subscribe("chat") |> ignore
+  // what came 2 ms after the step in the run comes 2 ms after it here, not timed from the unsubscription made sooner
+  // (151: before the step that asked for it)
+  assert_eq(r.next_due(), Some(207.0))
+  // and the run's next step 10 ms after the step as it was taken here, never before it (wide-newline's came 9.6 ms
+  // before its tap)
+  assert_eq(r.step_at("until 发消息"), Some(215.0))
 }

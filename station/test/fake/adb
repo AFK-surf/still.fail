@@ -1,12 +1,13 @@
 #!/bin/sh
 # The fake adb (adb.mjs), found as the real one is: by name on PATH. What needs no socket (`get-state`, `shell`,
-# `disconnect`, an unknown ask) is answered here as adb.mjs would, without a node starting; the rest, and any argument
+# `disconnect`, an unknown ask) is answered here as adb.mjs would, without a node starting; the rest (`tcpip` too), and any argument
 # that would need escaping in its `calls` line, goes to adb.mjs.
 to_node() { exec node "$(dirname "$0")/adb.mjs" "$@"; }
 for a in "$@"; do
   case $a in *[!A-Za-z0-9._:@=+,/-]* | "") to_node "$@" ;; esac
 done
 case $1 in connect | pair) to_node "$@" ;; esac
+if [ "$3" = tcpip ]; then to_node "$@"; fi
 if [ "$1" = -s ] && [ $# -lt 3 ]; then to_node "$@"; fi
 if [ "$1" = disconnect ] && [ $# -lt 2 ]; then to_node "$@"; fi
 

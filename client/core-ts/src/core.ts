@@ -21,12 +21,13 @@ import { chatDerive } from "./views/views.ts";
 import { Doing, FAILED_SHOWN_MS, heavy } from "./doing.ts";
 import { DriveKept } from "./drive-kept.ts";
 import { CoreError, asCoreError, failedIn } from "./error.ts";
-import type { Host } from "./host.ts";
+import { HEDGE, type Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import { markdown } from "./markdown.ts";
 import { AHEAD_AFTER_MS, MdAhead } from "./md-ahead.ts";
 import * as prefs from "./prefs.ts";
 import { Beside, parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
+import { TRACES } from "./route.ts";
 import { laterSleep, Runner } from "./runtime.ts";
 import { stationId } from "./station/addr.ts";
 import { Status, Waited } from "./status.ts";
@@ -44,7 +45,8 @@ import { Composers, install as installComposer } from "./composer.ts";
 import { StationsSync } from "./station/sync.ts";
 import { StationTopics } from "./station/topics.ts";
 import type { StationWire } from "./station/wire.ts";
-import { meshWire, type Mesh } from "./mesh.ts";
+import type { Mesh } from "./mesh.ts";
+import { credentialsFor, meshWire } from "./station/mesh-wire.ts";
 import type { Iroh } from "./iroh.ts";
 import { ViewCalls } from "./views/calls.ts";
 import { Attend } from "./attend.ts";
@@ -55,13 +57,17 @@ import type { Choose } from "./choose.ts";
 import { installChoose } from "./choose-calls.ts";
 import { install as installShareIn } from "./share-in.ts";
 import { Changelog } from "./changelog.ts";
+import { FeedbackReplies } from "./feedback-replies.ts";
 import { FontFiles } from "./font-files.ts";
 import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
+import { Rigs } from "./rigs.ts";
+import { Devices } from "./devices.ts";
+import { Signer } from "./lock.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { bindPerson, keepToPerson, lockSeen, tellStations } from "./views/lock.ts";
+import { answersOf, asked, bindPerson, enrolled, inForceOf, keepToPerson, lockSeen, movedBySelf, movedHere, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, takeOffBound, tellStations, tookOrRefused, withBound } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -70,11 +76,13 @@ import * as publish from "./views/publish.ts";
 import * as lockCalls from "./views/lock.ts";
 import * as pairing from "./views/pair.ts";
 import * as vaultCalls from "./views/vault.ts";
+import * as waysCalls from "./views/ways-stations.ts";
+import * as stationMarkCalls from "./views/station-marks.ts";
 import * as transferCalls from "./views/transfers.ts";
 import * as browseCalls from "./views/browse.ts";
 import * as downloads from "./views/downloads.ts";
 import * as fill from "./fill.ts";
-import { get, isObject } from "./util.ts";
+import { get, isObject, sha256 } from "./util.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
 export const CREDENTIAL_KEY = "credential";
@@ -136,6 +144,10 @@ export class Inner {
   changelog!: Changelog;
   forms!: Forms;
   adb!: Adb;
+  /// The workspaces' rigs (rigs.ts).
+  rigs!: Rigs;
+  /// The workspaces' devices (devices.ts).
+  devices!: Devices;
   viewCalls!: ViewCalls;
   /// This device's downloads of chats' files (views/downloads.ts).
   downloads!: downloads.Downloads;
@@ -170,16 +182,16 @@ export class Core {
     return Effect.gen(function* () {
       inner.wakes = new Wakes();
       // Everything the core asks of the host is given up or opened again when a UI comes back (wake.ts).
-      inner.host = new WakingHost(host, inner.wakes);
+      inner.host = new WakingHost(host, inner.wakes, HEDGE);
       inner.driveKept = new DriveKept(inner.host);
       // (the files kept for messages left behind a week)
       inner.runner.fork(inner.driveKept.dropOldUploads());
       brand.setTestChannel(inner.host.testChannel());
       brand.setCloud(inner.host.cloudOrigin());
       fonts.setOrigin(inner.host.cloudOrigin(), inner.host.testChannel());
-      inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
+      inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE, TRACES);
       spentClock(() => inner.host.monotonicMs());
-      // A failure let go of is a span of its own: Axiom has it though nothing waited on it.
+      // A failure let go of is a span of its own: Cloud Trace has it though nothing waited on it.
       inner.runner.onIgnored = (what, error) => {
         const span = inner.tracer.root("ignored", Kind.Internal);
         span.set("stillfail.ignored", what);
@@ -257,6 +269,8 @@ export class Core {
       lockCalls.install(inner);
       pairing.install(inner);
       vaultCalls.install(inner);
+      waysCalls.install(inner);
+      stationMarkCalls.install(inner);
       transferCalls.install(inner);
       browseCalls.install(inner);
       downloads.install(inner);
@@ -264,11 +278,12 @@ export class Core {
       inner.attention = new Attention(inner, yield* Attend.load(inner.host));
       inner.router.owners.push(inner.attention);
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
+      inner.router.attends = (topic) => topic.topic === "chat";
       inner.attention.install();
       inner.choose = installChoose(inner);
       installShareIn(inner);
       inner.forms = installForms(inner);
-      const asks = new Asks(inner.host, (from, to) => inner.changelog.brings(from, to));
+      const asks = new Asks(inner.host, (from, to) => inner.changelog.brings(from, to), (address) => inner.views?.stationNow(address) ?? address);
       asks.follow(inner.accounts);
       // A release may be out (still.fail cloud said one is, or its events socket opened again: what it said while closed
       // is not said again): the newest of each feed read again when next asked, and the app told (the `releases`
@@ -286,7 +301,7 @@ export class Core {
         runner: inner.runner,
         store: inner.store,
         mesh: () => inner.mesh(),
-        credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, inner.meshNow()?.deviceId() ?? null, inner.meshNow()?.lockClaim(workspace, device) ?? null),
+        credentials: credentialsFor(inner, () => inner.meshNow()),
         relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
         off: (workspace) => inner.cloudSync.workspaceOff(workspace),
         part: (station, key, name, offset, length) => inner.stations.requests.filePart(station, key, name, offset, length, null, undefined, undefined, undefined, true),
@@ -297,16 +312,30 @@ export class Core {
           cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
           device: () => Effect.map(inner.mesh(), (m) => m.deviceId()),
           label: () => prefs.deviceName(inner.data) ?? "",
+          signKey: () => signerOf(inner),
+          ...ownLockEnv(inner),
           changed: () => {
             inner.adb.touched();
+            inner.rigs?.touched();
             for (const [ws] of inner.workspaces.owned()) {
               lockSeen(inner).touch(`lock ${ws}`);
               inner.runner.fork(bindPerson(inner, ws));
               inner.runner.fork(keepToPerson(inner, ws));
+              inner.runner.fork(ownLockFor(inner, ws));
+              refusedAgain(inner, ws);
+              // (handed over by itself once a station took all it said: views/lock.ts `movedBySelf`)
+              inner.runner.fork(movedBySelf(inner, ws));
+              // (where its chain moved, the state in force made anew of the person's log now, the vaults following it:
+              // views/lock.ts `inForceOf`, whether or not anything shown reads it)
+              if (movedHere(inner, ws)) inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => void inForceOf(inner, ws)))));
             }
           },
           told: (sub, chain) => tellStations(inner, sub, chain),
+          stations: personalStations(inner),
+          asked: () => asked(inner),
         }),
+        // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
+        tookOff: (sub, id, removal) => Effect.andThen(vaultCalls.levelVaultsOf(inner, sub, id), withBound(inner, sub, Effect.tap(removal, () => takeOffBound(inner, sub, id)))),
         subOf: (workspace) => inner.workspaces.owner(workspace),
         subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),
         pair: {
@@ -317,16 +346,72 @@ export class Core {
         },
       });
       handlers.adb = (_i, call) => inner.adb.run((call as Extract<Call, { kind: "adb" }>).call);
+      // The workspaces' rigs (a station that only runs tasks), as their stations say them; what their person signs for them.
+      inner.rigs = new Rigs({
+        host: inner.host,
+        store: inner.store,
+        personal: () => inner.adb.personal(),
+        subOf: (workspace) => inner.workspaces.owner(workspace),
+        view: (workspace) => inner.data.shared({ topic: "workspace", workspace }),
+        call: (station, method, path, body) => inner.stations.requests.call(station, method, path, body, { quiet: true }),
+        cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
+        first: (asks, at) => answersOf(inner, asks, tookOrRefused, at),
+        lock: {
+          locked: (workspace) => signsAs(inner, workspace).locked,
+          enrolled: (sub, workspace, made) => enrolled(inner, sub, workspace, made),
+          signsAs: (workspace) => signsAs(inner, workspace).as,
+          signAdd: (_workspace, bytes) =>
+            Effect.flatMap(Signer.load(inner.host), (signer) =>
+              signer === null ? Effect.fail(new CoreError("lock_no_signer", t("core-misc.rig.notSigner"))) : Effect.succeed({ key: signer.id, sig: signer.signBytes(bytes) })),
+        },
+        sha256,
+      });
+      handlers.rig = (_i, call) => inner.rigs.run((call as Extract<Call, { kind: "rig" }>).call);
+      // (read whole as a station is first read; after that its `rigs` event says each change, a stream that was away
+      // told the last of them as it goes on)
+      inner.stations.also.push({ read: (address) => inner.rigs.read(address), event: (address, name, data) => inner.rigs.heard(address, name, data) });
+      // The workspaces' devices: the whole stations' own, the rigs' (as the rigs say them), the phones lent to stations.
+      inner.devices = new Devices({
+        host: inner.host,
+        store: inner.store,
+        rigs: () => inner.rigs,
+        personal: () => inner.adb.personal(),
+        subOf: (workspace) => inner.workspaces.owner(workspace),
+        emailOf: (workspace) => {
+          const sub = inner.workspaces.owner(workspace);
+          return sub === null ? null : (inner.accounts.list().find((a) => a.sub === sub)?.email ?? null);
+        },
+        view: (workspace) => inner.data.shared({ topic: "workspace", workspace }),
+        call: (station, method, path, body) => inner.stations.requests.call(station, method, path, body, { quiet: true }),
+      });
+      handlers.device = (_i, call) => inner.devices.run((call as Extract<Call, { kind: "device" }>).call);
+      inner.stations.also.push({ read: (address) => inner.devices.read(address), event: (address, name, data) => inner.devices.heard(address, name, data) });
       // This person's chats' grants of their phone, as each station says them.
       inner.stations.also.push({ read: (address) => inner.adb.readGrants(address), event: (address, name, data) => (name === "adb-grant" ? inner.adb.heard(address, data) : undefined), resume: true });
       handlers.ask = (_i, call) => asks.run((call as Extract<Call, { kind: "ask" }>).ask, inner.accounts);
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
       inner.router.owners.push(inner.changelog);
+      const feedbackReplies = new FeedbackReplies(inner.host, inner.data, (workspace) => inner.workspaces.owner(workspace));
+      inner.router.owners.push(feedbackReplies);
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
+      handlers.feedbackDismiss = (_i, call) => {
+        const c = call as Extract<Call, { kind: "feedbackDismiss" }>;
+        return Effect.sync(() => (feedbackReplies.dismiss(c.workspace, c.id, c.reply), null));
+      };
       handlers.historyTool = (_i, call) => {
         const c = call as Extract<Call, { kind: "historyTool" }>;
         // Markdown read here for the clients that draw its tree (markdown.ts), as everywhere else.
-        const withMd = (parts: ToolPart[]) => parts.map((part) => (part.kind === "markdown" ? { ...part, md: markdown(part.text) } : part));
+        const withMd = (parts: ToolPart[]) =>
+          parts.map((part) => {
+            if (part.kind === "markdown") return { ...part, md: markdown(part.text) };
+            if (part.kind === "fields") {
+              return {
+                ...part,
+                rows: part.rows.map((r) => (r.form === "long" ? { ...r, md: markdown(r.value) } : r)),
+              };
+            }
+            return part;
+          });
         return Effect.sync(() => ({
           call: withMd(toolCall(c.name, c.call, c.said, t)),
           result: c.result === null ? null : withMd(toolResult(c.name, c.call, c.result, c.failed, t)),
@@ -472,9 +557,9 @@ export class Core {
     const inner = this.inner;
     switch (message.kind) {
       case "subscribe":
-        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true);
+        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true, message.from, message.have);
       case "unsubscribe":
-        return inner.store.unsubscribe(client, message.id);
+        return inner.store.unsubscribe(client, message.id, message.keep === true);
       case "cancel": {
         const key = `${client}/${message.id}`;
         const fiber = inner.calls.get(key);

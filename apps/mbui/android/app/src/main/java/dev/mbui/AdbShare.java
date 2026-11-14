@@ -8,7 +8,6 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.RemoteInput;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -31,15 +30,16 @@ import java.util.Map;
  * This phone's adb, lent to a station's agents (as it is):
  * Wireless debugging's ports found on the phone (DNS-SD: AdbPorts) and given to the core (`adb.share`), which offers
  * them to the station and carries what its agents' adb sends. A foreground service (AdbShareService) holds the app up
- * meanwhile and says so, with 停止. While the pairing dialog is open its code is read off it (AdbCodeReader, where the
- * person turned that on), else a second notification pops up over it with a field for the code.
+ * meanwhile and says so, with 停止. While the pairing dialog is open a second notification pops up over it with a field
+ * for the code.
  *
- * The app's 共享调试 page (src/sfapp/settings/station_parts.mbt adb_page) asks through mbui's native calls
+ * The app's 共享调试 page and a chat's card of the phone (src/sfapp/settings/station_parts.mbt adb_settings, phone_ask.mbt)
+ * ask through mbui's native calls
  * (@ui.native_call; dev.mbui.Natives), put here as the app starts (StillfailApp):
- *   adb.phone    what the phone has for it: {supported, developer, wireless, wifi, canSwitch, reads}; said again
- *                by itself on "native:adb.phone" as Wireless debugging is switched and as the app comes back
- *   adb.open     {what: "wireless", beside} Developer options at Wireless debugging (beside the app, split), or
- *                {what: "reader"} Accessibility at AdbCodeReader
+ *   adb.phone    what the phone has for it: {supported, developer, wireless, wifi, canSwitch, switchRefused}; said
+ *                again by itself on "native:adb.phone" as Wireless debugging is switched and as the app comes back
+ *   adb.open     {what: "wireless", beside} Developer options at Wireless debugging (beside the app, split),
+ *                {what: "about"} About phone (where Developer options are turned on), {what: "wifi"} Wi-Fi
  *   adb.switch   Wireless debugging turned on by the app, where adb.grant let it: {on}
  *   adb.start    {station, name, texts}: lent to `station`'s agents (`name`, for the notification); `texts` the
  *                notifications' words (the app's own: src/sfapp/settings/strings.mbt)
@@ -52,11 +52,9 @@ final class AdbShare {
     static final String GRANTS = "*grants";
     static final String NAME = "name";
     static final String CODE = "code";
-    static final String PORT = "port";
     static final String START = "dev.mbui.adb.START";
     static final String STOP = "dev.mbui.adb.STOP";
     static final String PAIR = "dev.mbui.adb.PAIR";
-    static final String READ = "dev.mbui.adb.READ";
     private static final String CHANNEL = "adb";
     /** What the share's notification opens tapped: settings' 共享调试 page (src/sfbase/notices.mbt open_notice). */
     private static final String OPENS_PAGE = "settings:adb:";
@@ -137,30 +135,29 @@ final class AdbShare {
         }
     }
 
-    /** Whether the person turned on AdbCodeReader (Accessibility), which fills the pairing code in by itself. */
-    static boolean reads(Context c) {
-        String on = Settings.Secure.getString(c.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        if (on == null) return false;
-        ComponentName reader = new ComponentName(c, AdbCodeReader.class);
-        for (String s : on.split(":")) {
-            if (reader.equals(ComponentName.unflattenFromString(s))) return true;
-        }
-        return false;
+    /** About phone, where Developer options are turned on (its build number tapped seven times); Settings without it. */
+    static void openAbout(Context c) {
+        open(c, Settings.ACTION_DEVICE_INFO_SETTINGS);
     }
 
-    /** Accessibility's settings, at AdbCodeReader's row where Settings lights it up. */
-    static void openReader(Context c) {
-        String reader = new ComponentName(c, AdbCodeReader.class).flattenToString();
-        Bundle args = new Bundle();
-        args.putString(":settings:fragment_args_key", reader);
-        Intent i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                .putExtra(":settings:fragment_args_key", reader).putExtra(":settings:show_fragment_args", args);
+    /** Wi-Fi's settings. */
+    static void openWifi(Context c) {
+        open(c, Settings.ACTION_WIFI_SETTINGS);
+    }
+
+    private static void open(Context c, String action) {
         try {
-            c.startActivity(i);
+            c.startActivity(new Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         } catch (Exception e) {
             c.startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         }
     }
+
+    /**
+     * The phone refused the station's grant of WRITE_SECURE_SETTINGS (MIUI, ColorOS: until a switch of Developer options
+     * is on; the core's `adb_grant_refused`), as last asked this run (AdbShareService): 开启无线调试 says which switch.
+     */
+    static volatile boolean switchRefused;
 
     /** What the phone has for it, as adb.phone answers and "native:adb.phone" says. */
     static JSONObject phone(Context c) {
@@ -171,7 +168,7 @@ final class AdbShare {
             j.put("wireless", wirelessOn(c));
             j.put("wifi", onWifi(c));
             j.put("canSwitch", canSwitch(c));
-            j.put("reads", reads(c));
+            j.put("switchRefused", switchRefused && !canSwitch(c));
         } catch (Exception e) {
             Host.log("adb: " + e);
         }
@@ -183,27 +180,6 @@ final class AdbShare {
         Native.post("native:adb.phone", phone(c).toString());
     }
 
-    /** The pairing port announced for this app's share while its code is wanted (the service says): AdbCodeReader's. */
-    static volatile int pairingPort = -1;
-    /** Told as pairingPort changes (AdbCodeReader looks again: the dialog is often open before its port is found). */
-    static volatile Runnable onPairingPort;
-
-    static void setPairingPort(int port) {
-        if (pairingPort == port) return;
-        pairingPort = port;
-        Runnable r = onPairingPort;
-        if (r != null) new Handler(Looper.getMainLooper()).post(r);
-    }
-
-    /** The code AdbCodeReader read off the dialog at `port`, to pair with (the service, once per dialog). */
-    static void read(Context c, String code, int port) {
-        try {
-            c.startService(new Intent(c, AdbShareService.class).setAction(READ).putExtra(CODE, code).putExtra(PORT, port));
-        } catch (Exception e) {
-            Host.log("adb: " + e);
-        }
-    }
-
     /** The native calls put for the app, and the phone said again as it changes; once, as the app starts. */
     static void install(Application app) {
         Context c = app.getApplicationContext();
@@ -211,7 +187,9 @@ final class AdbShare {
         Natives.put("adb.open", (params, reply) -> {
             try {
                 JSONObject p = new JSONObject(params);
-                if ("reader".equals(p.optString("what"))) openReader(c);
+                String what = p.optString("what");
+                if ("about".equals(what)) openAbout(c);
+                else if ("wifi".equals(what)) openWifi(c);
                 else openWireless(c, p.optBoolean("beside", false));
                 reply.ok("{}");
             } catch (Exception e) {
@@ -298,7 +276,7 @@ final class AdbShare {
                 tellPhone(c);
             }
         });
-        // back from Settings (Developer options, Accessibility): what may have changed there
+        // back from Settings (Developer options, About phone, Wi-Fi): what may have changed there
         app.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
             @Override
             public void onActivityResumed(Activity a) {
@@ -542,7 +520,7 @@ final class AdbShare {
         PendingIntent pair = PendingIntent.getService(c, 2, new Intent(c, AdbShareService.class).setAction(PAIR),
                 PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         RemoteInput input = new RemoteInput.Builder(CODE).setLabel(t("android-misc.adb.code")).build();
-        String text = said != null ? said : reads(c) ? t("android-misc.adb.pair.auto") : t("android-misc.adb.typeCode");
+        String text = said != null ? said : t("android-misc.adb.typeCode");
         return new Notification.Builder(c, PAIR_CHANNEL)
                 .setSmallIcon(c.getApplicationInfo().icon)
                 .setColor(ACCENT)
@@ -571,7 +549,7 @@ final class AdbShare {
         }
         if ("unpaired".equals(adb)) {
             if (!view.has("pairPort") || view.isNull("pairPort")) return t("android-misc.adb.notPaired");
-            return reads(c) ? t("android-misc.adb.pair.auto") : t("android-misc.adb.pair.popped");
+            return t("android-misc.adb.pair.popped");
         }
         if ("off".equals(adb)) return t("android-misc.adb.off");
         String m = view.optString("message", "");

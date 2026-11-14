@@ -14,10 +14,11 @@ pub fn svc(key : String, args? : Array[(String, String)] = []) -> String {
 
 ///|
 /// A size the page is laid out at (null height: as high as the preview leaves it at its scale).
+#derive(Eq)
 pub(all) struct Viewport {
   width : Int
   height : Int?
-} derive(Eq)
+}
 
 ///|
 /// The sizes offered.
@@ -38,7 +39,8 @@ pub(all) struct ServicePage {
   mut port : Int
   /// the service's cookies, by name (kept here: sent along with each request)
   cookies : Map[String, String]
-  mut viewport : Viewport?
+  /// what it is laid out at (none: as the room is), a signal: what is made once (its sizes' panel) follows it
+  viewport : @signals.Signal[Viewport?]
   mut restarting : Bool
   /// requests under way: the core's call for each
   calls : @sf.LiveMap[Int, Int]
@@ -54,15 +56,15 @@ pub(all) struct ServicePage {
   /// Preview.kt StageState), moved by a finger on it (the toolbar's 移动), where it was drawn last, the stage's fingers,
   /// when the ground was last tapped
   view : @kit.Zoom
-  mut moving : Bool
+  /// moved by a finger on its canvas in place of used, a signal as `viewport` is
+  moving : @signals.Signal[Bool]
   mut placed : Placed?
   mut hold : StageHold?
   /// its name and its chat's agent (marks go into that chat's draft: none, nothing to mark for), its marks
   mut name : String
   mut session : String
   marks : PageMarks
-  /// a size being typed (the sizes sheet's 自定义): put once its field is let go of; its two fields' words
-  mut custom_typing : Bool
+  /// the two fields' words of a size being typed (the sizes' 自定义)
   custom_w : @ui.Field
   custom_h : @ui.Field
 }
@@ -93,7 +95,7 @@ pub fn size_kept(v : Viewport?) -> Json {
 ///|
 /// A size the core kept (size_kept's), within the sizes a page can take; None for none, or one that does not read.
 pub fn size_of_kept(s : String) -> Viewport? {
-  let parts = s.split("x").map(fn(x) { x.to_string() }).to_array()
+  let parts = s.split("x").map(fn(x) { x.to_owned() }).to_array()
   let num = fn(x : String) -> Int? {
     if x.length() > 4 {
       None
@@ -137,14 +139,17 @@ pub fn service_page_for(station : String, job : String, prefs? : Json? = None) -
         site: None,
         port: 0,
         cookies: {},
-        viewport: match svc_viewports.get(key) {
-          Some(v) => v
-          None =>
-            match field(field(prefs, "previewSizes"), key) {
-              Some(String(s)) => size_of_kept(s)
-              _ => None
-            }
-        },
+        viewport: @signals.signal(
+          match svc_viewports.get(key) {
+            Some(v) => v
+            None =>
+              match field(field(prefs, "previewSizes"), key) {
+                Some(String(s)) => size_of_kept(s)
+                _ => None
+              }
+          },
+          same=fn(a, b) { a == b },
+        ),
         restarting: false,
         calls: @sf.LiveMap::from({}),
         asked: 0,
@@ -153,13 +158,12 @@ pub fn service_page_for(station : String, job : String, prefs? : Json? = None) -
         address: @ui.Field::new(),
         link: page_link_new(),
         view: stage_zoom(),
-        moving: false,
+        moving: @signals.signal(false, same=fn(a, b) { a == b }),
         placed: None,
         hold: None,
         name: "",
         session: "",
         marks: page_marks_new(),
-        custom_typing: false,
         custom_w: @ui.Field::new(),
         custom_h: @ui.Field::new(),
       }
@@ -211,7 +215,7 @@ pub fn service_serve(src : Source, p : ServicePage, req : @ui.SiteRequest, reply
     @ui.log("service: the page asks \{req.verb} \{req.path}")
   }
   let bare = match req.path.find("?") {
-    Some(i) => req.path.view(end_offset=i).to_owned()
+    Some(i) => req.path.exact_view(end=i).to_owned()
     None => req.path
   }
   if bare == page_js_path {
@@ -249,7 +253,7 @@ pub fn service_serve(src : Source, p : ServicePage, req : @ui.SiteRequest, reply
         None => ""
       }
       let base = match kind.find(";") {
-        Some(i) => kind.view(end_offset=i).to_owned()
+        Some(i) => kind.exact_view(end=i).to_owned()
         None => kind
       }
       let mime = base.trim().to_owned().to_lower()
@@ -475,16 +479,16 @@ pub fn service_unanswered(sink : Sink, path : String, status : Int, words : Stri
 /// emptied or expired one left out).
 pub fn cookie_jar(header : String, set : Array[(String, String)]) -> String {
   let names : Array[String] = []
-  let values : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
   for one in header.split(";") {
     let one = one.trim().to_owned()
     match one.find("=") {
       Some(i) if i > 0 => {
-        let k = one.view(end_offset=i).to_owned()
+        let k = one.exact_view(end=i).to_owned()
         if !values.contains(k) {
           names.push(k)
         }
-        values[k] = one.view(start_offset=i + 1).to_owned()
+        values[k] = one.exact_view(start=i + 1).to_owned()
       }
       _ => ()
     }
@@ -492,13 +496,13 @@ pub fn cookie_jar(header : String, set : Array[(String, String)]) -> String {
   for h in set {
     for one in split_cookies(h.1) {
       let first = match one.find(";") {
-        Some(i) => one.view(end_offset=i).to_owned()
+        Some(i) => one.exact_view(end=i).to_owned()
         None => one
       }
       match first.find("=") {
         Some(i) if i > 0 => {
-          let k = first.view(end_offset=i).to_owned().trim().to_owned()
-          let v = first.view(start_offset=i + 1).to_owned().trim().to_owned()
+          let k = first.exact_view(end=i).to_owned().trim().to_owned()
+          let v = first.exact_view(start=i + 1).to_owned().trim().to_owned()
           let lower = one.to_lower()
           if v == "" || lower.contains("max-age=0") || lower.contains("expires=thu, 01 jan 1970") {
             values.remove(k)
@@ -522,13 +526,13 @@ pub fn cookie_jar(header : String, set : Array[(String, String)]) -> String {
 pub fn service_keep_cookie(p : ServicePage, header : String) -> Unit {
   for one in split_cookies(header) {
     let first = match one.find(";") {
-      Some(i) => one.view(end_offset=i).to_owned()
+      Some(i) => one.exact_view(end=i).to_owned()
       None => one
     }
     match first.find("=") {
       Some(i) if i > 0 => {
-        let k = first.view(end_offset=i).to_owned().trim().to_owned()
-        let v = first.view(start_offset=i + 1).to_owned().trim().to_owned()
+        let k = first.exact_view(end=i).to_owned().trim().to_owned()
+        let v = first.exact_view(start=i + 1).to_owned().trim().to_owned()
         let lower = one.to_lower()
         // one that has expired is let go
         if v == "" || lower.contains("max-age=0") || lower.contains("expires=thu, 01 jan 1970") {
@@ -582,17 +586,17 @@ pub fn service_redirect(path : String, location : String) -> Result[String, Stri
   let loc = location
   let (base_path, _) = split_query(path)
   if loc.has_prefix("http://") || loc.has_prefix("https://") {
-    let rest = loc.view(start_offset=if loc.has_prefix("https://") { 8 } else { 7 }).to_owned()
+    let rest = loc.exact_view(start=if loc.has_prefix("https://") { 8 } else { 7 }).to_owned()
     let (host, tail) = match rest.find("/") {
-      Some(i) => (rest.view(end_offset=i).to_owned(), rest.view(start_offset=i).to_owned())
+      Some(i) => (rest.exact_view(end=i).to_owned(), rest.exact_view(start=i).to_owned())
       None =>
         match rest.find("?") {
-          Some(i) => (rest.view(end_offset=i).to_owned(), "/" + rest.view(start_offset=i).to_owned())
+          Some(i) => (rest.exact_view(end=i).to_owned(), "/" + rest.exact_view(start=i).to_owned())
           None => (rest, "/")
         }
     }
     let bare = match host.find(":") {
-      Some(i) => host.view(end_offset=i).to_owned()
+      Some(i) => host.exact_view(end=i).to_owned()
       None => host
     }
     if bare != "localhost" && bare != "127.0.0.1" && bare != "preview.stillfail.invalid" && bare != "svc" {
@@ -617,13 +621,13 @@ pub fn service_redirect(path : String, location : String) -> Result[String, Stri
   }
   // a scheme of its own (mailto:, javascript:…): no path of the service's
   match loc.find(":") {
-    Some(i) if !loc.view(end_offset=i).contains("/") && !loc.view(end_offset=i).contains("?") =>
+    Some(i) if !loc.exact_view(end=i).contains("/") && !loc.exact_view(end=i).contains("?") =>
       return Err(svc("android-chat.web.badRedirect", args=[("location", location)]))
     _ => ()
   }
   // relative to the path's folder
   let dir = match base_path.rev_find("/") {
-    Some(i) => base_path.view(end_offset=i + 1).to_owned()
+    Some(i) => base_path.exact_view(end=i + 1).to_owned()
     None => "/"
   }
   let (lp, lq) = split_query(loc)
@@ -634,7 +638,7 @@ pub fn service_redirect(path : String, location : String) -> Result[String, Stri
 /// A path and its query ("?…", or "").
 pub fn split_query(path : String) -> (String, String) {
   match path.find("?") {
-    Some(i) => (path.view(end_offset=i).to_owned(), path.view(start_offset=i).to_owned())
+    Some(i) => (path.exact_view(end=i).to_owned(), path.exact_view(start=i).to_owned())
     None => (path, "")
   }
 }
@@ -643,7 +647,7 @@ pub fn split_query(path : String) -> (String, String) {
 /// A link without its fragment (#…: the page's own, never asked of the service).
 pub fn no_fragment(s : String) -> String {
   match s.find("#") {
-    Some(i) => s.view(end_offset=i).to_owned()
+    Some(i) => s.exact_view(end=i).to_owned()
     None => s
   }
 }
@@ -652,7 +656,7 @@ pub fn no_fragment(s : String) -> String {
 /// A path from the root with its `.` and `..` segments taken out (RFC 3986 remove_dot_segments, as URI.resolve does).
 pub fn dots_out(path : String) -> String {
   let out : Array[String] = []
-  let parts = path.split("/").map(fn(v) { v.to_string() }).to_array()
+  let parts = path.split("/").map(fn(v) { v.to_owned() }).to_array()
   for i, seg in parts {
     let last = i == parts.length() - 1
     if i == 0 {
@@ -753,7 +757,7 @@ pub fn size_of(s : String) -> Int? {
 ///|
 /// Digits only, four at most (a size typed).
 pub fn size_digits(s : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut n = 0
   for ch in s {
     if ch >= '0' && ch <= '9' && n < 4 {

@@ -70,18 +70,31 @@ const lowestBit = (bits: number) => bits & -bits;
 
 const keyOp = (key: Key, down: boolean): WinOp => ({ op: "key", scan: key.scan, ext: key.ext === true, vk: key.vk ?? 0, down });
 
-/// One view's input as it goes: which buttons and modifiers are held, the wheel's part of a notch not sent yet.
+/// One view's input as it goes: which buttons and modifiers are held, where the pointer was last, the wheel's part of a
+/// notch not sent yet.
 export class WinInput {
   #buttons = 0;
   /// Modifier keys pressed and not let go (their codes).
   #held = new Set<string>();
+  #at = { x: 0, y: 0 };
   #wheel = { x: 0, y: 0 };
+
+  /// What lets go of all this view holds down: its buttons at the pointer's last place, then its modifier keys.
+  release(): WinOp[] {
+    const ops: WinOp[] = [];
+    for (const bit of [1, 2, 4]) if ((this.#buttons & bit) !== 0) ops.push({ op: "mouse", type: "up", x: this.#at.x, y: this.#at.y, button: BUTTON_OF_BIT[bit]! });
+    for (const code of this.#held) ops.push(keyOp(KEYS[code]!, false));
+    this.#buttons = 0;
+    this.#held.clear();
+    return ops;
+  }
 
   ops(e: ScreenInput): WinOp[] {
     switch (e.t) {
       case "pointer": {
         const before = this.#buttons;
         this.#buttons = e.buttons & 7;
+        this.#at = { x: e.x, y: e.y };
         if (e.kind === "move") return [{ op: "mouse", type: "move", x: e.x, y: e.y, button: 0 }];
         if (e.kind === "down") {
           const bit = lowestBit(this.#buttons & ~before) || 1;

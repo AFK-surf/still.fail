@@ -21,12 +21,48 @@ pub fn runtime_label(rt : String) -> String {
 }
 
 ///|
+/// A runtime's short label in capsules and compact pills (RUNTIME_SHORT).
+pub fn runtime_short(rt : String) -> String {
+  match rt {
+    "claude" => "CC"
+    "codex" => "Codex"
+    "dsh" => "DSH"
+    "grok" => "GROK"
+    "cursor" => "Cursor"
+    "devin" => "Devin"
+    "hermes" => "Hermes"
+    "agy" => "AGY"
+    _ => rt
+  }
+}
+
+///|
 /// The online stations of the workspace, as `stations` has them.
 fn online_stations(core : Core, here : Here, only? : String = "") -> Array[Json] {
   match stations_of(core, here).value {
     Some(Array(a)) =>
       a.filter(fn(s) { flag(Some(s), "online") && (only == "" || text(Some(s), "station") == only) })
     _ => []
+  }
+}
+
+///|
+/// The machine logins offered on the workspace's stations, as its `profiles` says them (`machineLogins`: each station
+/// up whose overview is read and offers one, in the stations' order, with its name and those logins), the list the
+/// Profile place opens on: nothing asked of each station for them.
+pub fn profiles_offers(profiles : Json?) -> Array[(Json, Array[Json])] {
+  items(profiles, "machineLogins").map(fn(e) {
+    let e = Some(e)
+    (obj([("station", str(text(e, "station"))), ("name", str(text(e, "stationName")))]), items(e, "logins"))
+  })
+}
+
+///|
+/// The machine logins station `station` offers, as the workspace's `profiles` says them (profiles_offers).
+pub fn profiles_offers_of(profiles : Json?, station : String) -> Array[Json] {
+  match profiles_offers(profiles).iter().find_first(fn(o) { text(Some(o.0), "station") == station }) {
+    Some(o) => o.1
+    None => []
   }
 }
 
@@ -45,15 +81,6 @@ fn open_pick_station(stations : Array[Json], go : (String) -> Unit, from~ : @sf.
 }
 
 ///|
-/// A variable being edited (EnvRow): its row, the name and value typed, what a secret saved before shows masked, and
-/// the name it had.
-priv struct EnvRow {
-  row : Int
-  masked : String?
-  original : String?
-}
-
-///|
 /// What a sign-in's sheet keeps while it is up: the code typed (by the sign-in's id), whether its link was copied, the
 /// command to run by hand shown.
 priv struct LoginState {
@@ -69,15 +96,16 @@ let login_state : LoginState = { copied: {}, manual: {}, error: {}, seen: {} }
 
 ///|
 /// The accounts a station machine's own Claude Code and Codex are signed in with that no profile uses yet
-/// (MachineLoginOffers), `s` the station as `stations` has it: one kept where the station reads it used as it is
-/// (`profile.useMachineLogin`), one it cannot signed in again for still.fail (`go_new`), a refused one only said so. A
-/// section of the page it is on (its title a section's, its rows a list card's, as the page's others), titled by the
-/// station it is on (the workspace's page has a section each station: the same account signed in on two is in both);
-/// `inset`, on a page of its own room (a new profile's sheet): its title and card that far in.
-fn machine_login_offers(c : @ui.Ctx, core : Core, s : Json?, go_new : (String) -> Unit, inset? : Double) -> Array[() -> Unit] {
+/// (MachineLoginOffers), `s` the station (its address and name), `logins` those its overview has: one kept where the
+/// station reads it used as it is (`profile.useMachineLogin`), one it cannot signed in again for still.fail
+/// (`go_new`), a refused one only said so. A section of the page it is on (its title a section's, its rows a list
+/// card's, as the page's others), titled by the station it is on (the workspace's page has a section each station: the
+/// same account signed in on two is in both); `inset`, on a page of its own room (a new profile's sheet): its title and
+/// card that far in.
+fn machine_login_offers(c : @ui.Ctx, core : Core, s : Json?, logins : Array[Json], go_new : (String) -> Unit, inset? : Double) -> Array[() -> Unit] {
   let t = @sf.theme()
   let station = text(s, "station")
-  let offers = items(field(s, "overview"), "machineLogins").filter(fn(l) { flag(Some(l), "offered") })
+  let offers = logins.filter(fn(l) { flag(Some(l), "offered") })
   if offers.length() == 0 {
     return []
   }
@@ -108,11 +136,12 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, s : Json?, go_new : (String) -
             let blocked = text(field(lv, "quota"), "state") == "blocked"
             let busy = is_doing(core, ["profile.useMachineLogin"], [("station", station), ("runtime", rt)])
             list_row(c, fn() {
-              @sf.provider_logo(c, rt, "subscription", 18.0, "")
-              // what it is and using it on its first line; how it is signed in, what is wrong and its allowance under
-              // them, each as wide as its words (lines of their own)
+              // its mark, what it is and using it on its first line (the mark on that line, never centred on the row's
+              // lines: the user, 2026-11-14); how it is signed in, what is wrong and its allowance under them, each as
+              // wide as its words (lines of their own)
               @sf.row_lines(c, fn() {
                 c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
+                  @sf.provider_logo(c, rt, "subscription", 18.0, "")
                   c.text(runtime_label(rt), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
                   let plan = text(lv, "planText")
                   if plan != "" {

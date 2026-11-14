@@ -13,6 +13,8 @@ export type FeishuMessage = {
   topic: string | null;
   /// The topic's first message, for replying in it.
   root: string | null;
+  /// The message it replies to (quotes), or null.
+  parent: string | null;
   id: string;
   user: string;
   text: string;
@@ -138,6 +140,7 @@ export function messageOf(event: Json, bot: string): FeishuMessage | null {
     chat,
     topic: topic === "" ? null : topic,
     root: text(m?.root_id) || null,
+    parent: text(m?.parent_id) || null,
     id,
     user,
     text: said,

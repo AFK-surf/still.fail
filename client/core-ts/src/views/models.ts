@@ -7,7 +7,8 @@ import * as jobs from "../jobs.ts";
 import * as present from "../present.ts";
 import * as model from "../shapes/model.ts";
 import * as reasoning from "../shapes/reasoning.ts";
-import { arr as arrU, equal, get as getU } from "../util.ts";
+import { arr as arrU, equal, get as getU, isObject } from "../util.ts";
+import { work } from "../work.ts";
 import { profileServes } from "./profile-scope.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -26,7 +27,11 @@ const runs = (p: J, runtime: string) => arr(get(p, "runtimes")).some((r) => r ==
 /// series); none from a station older than it, or for a model the catalog does not name.
 const madeBy = (overview: J, ids: Iterable<string>): J => {
   const said = get(overview, "modelMakers");
-  for (const id of ids) if (get(said, id) !== undefined) return get(said, id);
+  for (const id of ids) {
+    if (get(said, id) !== undefined) return get(said, id);
+    const lead = model.devinFusionLead(id);
+    if (lead !== null && get(said, lead) !== undefined) return get(said, lead);
+  }
   return null;
 };
 /// A model's maker and series: as the catalog says, its series as still.fail names it first (Opus, not Claude Opus).
@@ -63,8 +68,12 @@ export function attention(overview: J, session: J, now: number): J[] {
       const name = str(get(p, "name")) ?? "";
       out.push({ kind: "account", text: state === "login" ? t("core-views.attention.login", { name }) : t("core-views.attention.key_refused", { name }) });
     }
-    if (get(get(p, "quota"), "state") === "ok") {
-      for (const w of arr(get(get(p, "quota"), "windows"))) {
+    const quota = quotaFor(get(p, "quota"), str(get(session, "model")) ?? str(get(p, "model")));
+    if (get(quota, "state") === "ok") {
+      const wins = arr(get(quota, "windows"));
+      const marks = format.windowMarks(wins.map((w) => format.windowName(str(get(w, "label")) ?? "")));
+      for (let i = 0; i < wins.length; i++) {
+        const w = wins[i]!;
         const used = typeof get(w, "usedPercent") === "number" ? w.usedPercent : 0;
         const left0 = 100 - used;
         if (left0 > LOW_LEFT) continue;
@@ -76,7 +85,7 @@ export function attention(overview: J, session: J, now: number): J[] {
           kind: "quota",
           text: t("core-views.attention.quota_left", { label, left }),
           more: until !== null ? format.refillsIn(until, now) : null,
-          quota: { left, mark: format.windowMark(label)[0], level: left <= 10 ? "red" : "amber", until },
+          quota: { left, mark: marks[i]![0], level: left <= 10 ? "red" : "amber", until },
         });
       }
     }
@@ -159,8 +168,12 @@ export function contextSteps(overview: J, runtime: string, ids: Iterable<string>
 /// Model `m`'s whole context window (spelled as any of `ids`), as its station's model catalog says it; null, not said.
 export function contextWindow(overview: J, ids: Iterable<string>): number | null {
   let window: number | null = null;
+  const windows = get(get(overview, "contextCaps"), "windows");
   for (const id of ids) {
-    const w = get(get(get(overview, "contextCaps"), "windows"), id);
+    const w = get(windows, id) ?? (() => {
+      const lead = model.devinFusionLead(id);
+      return lead !== null ? get(windows, lead) : undefined;
+    })();
     if (typeof w === "number") window = Math.max(window ?? 0, w);
   }
   return window;
@@ -178,20 +191,28 @@ function profileEfforts(profile: J, runtime: string, m: string | null): string[]
 
 /// The model's own reasoning level on `runtime` (its account's, `profile`, else the first account's that says one),
 /// where the runtime says one.
-export function effortDefault(overview: J, runtime: string, m: string | null, profile: string | null): string | null {
+export function effortDefault(overview: J, runtime: string, m: string | null, profile: string | readonly string[] | null): string | null {
   if (m === null) return null;
+  const allow = typeof profile === "string" ? [profile] : profile;
   const said = (p: J): string | null => {
     const levels = get(get(get(p, "check"), "modelEffortDefaults"), runtime);
     if (levels === undefined || levels === null || typeof levels !== "object") return null;
-    const found = Object.entries(levels as Record<string, unknown>).find(([id]) => model.same(id, m));
+    const base = runtime === "agy" ? (model.splitAgyTier(m)?.model ?? m) : runtime === "devin" ? (model.devinFusionLead(m) ?? m) : m;
+    const found = Object.entries(levels as Record<string, unknown>).find(([id]) => model.same(id, m) || (base !== m && model.same(id, base)));
     return found !== undefined && typeof found[1] === "string" ? found[1] : null;
   };
-  const profiles = profilesOf(overview).filter((p) => runs(p, runtime) && (profile === null || get(p, "id") === profile));
+  const profiles = profilesOf(overview).filter((p) => runs(p, runtime) && (allow === null || allow.includes(get(p, "id"))));
   for (const p of profiles) {
     const level = said(p);
     if (level !== null) return level;
   }
   return null;
+}
+
+/// The reasoning levels shared by a chosen subset of `PickProfile` rows on `runtime`.
+export function subsetEfforts(accounts: J[], runtime: string): string[] {
+  const lists = accounts.map((a) => arr(get(a, "efforts")).filter((x): x is string => typeof x === "string")).filter((xs) => xs.length > 0);
+  return reasoning.common(lists, runtime);
 }
 
 /// What its accounts share. One that has reported no levels (its check not done, or failed) is not known to lack any, so
@@ -204,16 +225,23 @@ function commonEfforts(profiles: J[], runtime: string, m: string | null): string
 }
 
 function profilesRunning(overview: J, runtime: string, m: string | null, current: string | null, now: number): J[] {
+  const base =
+    runtime === "agy" && m !== null
+      ? (model.splitAgyTier(m)?.model ?? m)
+      : runtime === "devin" && m !== null
+        ? (model.devinFusionLead(m) ?? m)
+        : m;
   const profiles = profilesOf(overview)
     .filter((p) => runs(p, runtime))
-    .filter((p) => m === null || arr(get(p, "models")).some((x) => typeof x === "string" && model.same(x, m)));
+    .filter((p) => m === null || arr(get(p, "models")).some((x) => typeof x === "string" && (model.same(x, m) || (base !== null && base !== m && model.same(x, base)))));
   return profileLines(profiles, runtime, m, current, now);
 }
 
 function profileLines(profiles: J[], runtime: string, m: string | null, current: string | null, now: number): J[] {
   return profiles.map((p) => {
     const id = str(get(p, "id")) ?? "";
-    const spent = spentUntil(p);
+    const quota = quotaFor(get(p, "quota"), m ?? str(get(p, "model")));
+    const spent = spentUntil(quota);
     const line: J = {
       id,
       name: get(p, "name") ?? id,
@@ -222,8 +250,8 @@ function profileLines(profiles: J[], runtime: string, m: string | null, current:
       efforts: profileEfforts(p, runtime, m),
       kind: get(get(p, "access"), "kind") ?? null,
       runtime: get(p, "runtime") ?? null,
-      quota: get(p, "quota") ?? null,
-      quotaLine: quotaLine(get(p, "quota")),
+      quota: quota ?? null,
+      quotaLine: quotaLine(quota),
     };
     if (typeof get(p, "providerMark") === "string") line.mark = p.providerMark;
     return line;
@@ -241,10 +269,10 @@ export function servingIn(overview: J, workspace: string, joined: boolean): J {
 
 /// The models the station can run, each with the runtimes it runs on.
 export function models(overview: J, now: number): J[] {
+  work.models++;
   const on = new Map<string, { runtimes: Set<string>; backs: (number | null)[]; ids: Set<string>; profiles: Map<string, J[]> }>();
   for (const p of profilesOf(overview)) {
     const rts = [...new Set(arr(get(p, "runtimes")).filter((r): r is string => typeof r === "string"))];
-    const back = spentUntil(p);
     const keys = new Set<string>();
     for (const m of arr(get(p, "models"))) {
       if (typeof m !== "string") continue;
@@ -258,7 +286,7 @@ export function models(overview: J, now: number): J[] {
       entry.ids.add(m);
       if (!keys.has(k)) {
         keys.add(k);
-        entry.backs.push(back);
+        entry.backs.push(spentUntil(quotaFor(get(p, "quota"), m)));
         for (const r of rts) {
           let profiles = entry.profiles.get(r);
           if (!profiles) {
@@ -300,9 +328,34 @@ export function spentView(until: number, now: number): J {
   return { until: at, text: back !== null ? t("core-views.spent.until", { back }) : t("core-views.spent.text"), back };
 }
 
-/// When a profile whose quota has a window used up can run again; null when nothing of it is used up.
-export function spentUntil(profile: J): number | null {
-  const quota = get(profile, "quota");
+/// An allowance as it holds for model `m`: the windows `m` has to itself (`scoped`: Fable's week) with the account's,
+/// the other models' left out, so one of them used up or running low is said of that model alone; `m` not known, the
+/// account's alone.
+export function quotaFor(quota: J, m: string | null): J {
+  if (quota === null || typeof quota !== "object" || Array.isArray(quota)) return quota;
+  const baseWins = arr(get(quota, "windows"));
+  const hasGroupScope = m !== null && baseWins.some((w) => {
+    const s = str(get(w, "scope"));
+    return s === "gemini" || s === "3p";
+  });
+  const groupKey = m !== null ? model.key(m) : "";
+  const groupWant = groupKey.startsWith("gemini") || groupKey.startsWith("gemma") ? "gemini" : "3p";
+  const groupFiltered = hasGroupScope ? baseWins.filter((w) => {
+    const s = str(get(w, "scope"));
+    return s === undefined || s === null || s === groupWant;
+  }) : baseWins;
+  if (!Array.isArray(get(quota, "scoped"))) {
+    return groupFiltered.length !== baseWins.length ? { ...quota, windows: groupFiltered } : quota;
+  }
+  const { scoped, ...rest } = quota;
+  const family = m !== null ? model.family(m)?.toLowerCase() : undefined;
+  const own = family === undefined ? [] : scoped.filter((w: J) => str(get(w, "scope"))?.toLowerCase() === family);
+  return { ...rest, windows: [...groupFiltered, ...own] };
+}
+
+/// When an allowance (quotaFor's, of the model asked about) with a window used up can be run on again; null when
+/// nothing of it is used up.
+export function spentUntil(quota: J): number | null {
   if (get(quota, "state") !== "ok") return null;
   const full = arr(get(quota, "windows"))
     .filter((w) => typeof get(w, "usedPercent") === "number" && w.usedPercent >= 100)
@@ -407,15 +460,13 @@ export function borrowable(stations: J, here: string, have: J[], runtime: string
   const self = all.find((s) => s.station === here);
   if (self === undefined || self.joined) return [];
   const taken = new Set(have.map((o) => model.key(str(get(o, "model")) ?? "")));
-  const ownHere = new Set(allProfilesOf(self.overview).flatMap((p) => (typeof get(get(p, "share"), "id") === "string" ? [p.share.id] : [])));
+  const ownHere = copiesHere(self.overview);
   const out: J[] = [];
   for (const s of all) {
     if (s.station === here || !s.online || s.joined || get(s.overview, "sharing") !== true) continue;
     for (const p of profilesOf(s.overview)) {
+      if (!lent(p, ownHere)) continue;
       const share = get(p, "share");
-      if (get(share, "role") === "user") continue;
-      // Shared with this station already: its copy is on its way (or here, and its models with it).
-      if (typeof get(share, "id") === "string" && ownHere.has(share.id)) continue;
       const lone = { ...s.overview, profiles: [p] };
       for (const o of models(lone, now)) {
         if (runtime !== null && !arr(o.runtimes).includes(runtime)) continue;
@@ -449,6 +500,34 @@ export function borrowable(stations: J, here: string, have: J[], runtime: string
     }
   }
   return out.sort((a, b) => model.compareOrder(model.key(a.model), model.key(b.model)));
+}
+
+/// The shares a station has copies of (its overview's profiles' `share.id`): what another station lends it already.
+const copiesHere = (overview: J): Set<string> => new Set(allProfilesOf(overview).flatMap((p) => (typeof get(get(p, "share"), "id") === "string" ? [p.share.id] : [])));
+
+/// Whether profile `p` (an enabled one) of another station would be lent to one with copies `ownHere`: its own, not a
+/// copy it borrows itself, and not shared with that one already (its copy on its way, or there and its models with it).
+const lent = (p: J, ownHere: Set<string>): boolean => {
+  const share = get(p, "share");
+  return get(share, "role") !== "user" && !(typeof get(share, "id") === "string" && ownHere.has(share.id));
+};
+
+/// Whether `borrowable` would offer station `here` any model at all, of any runtime (`borrowable(…, here, [], null,
+/// …).length > 0`), as a yes or no: `stations` as a list has them (StationRow: up or not, joined or not, their overview
+/// as a row has it, none where it is not read or cannot be here), each one's whole overview read of `overviewOf`; some
+/// other station up, of this workspace, shares and has a profile it would lend that runs one, `here` being one of this
+/// workspace's own. Each walked as it is; none of their models made, no station read whole (new-chat-lends.test.ts
+/// holds the two the same).
+export function lends(stations: J, here: string, overviewOf: (station: string) => J): boolean {
+  const all = arr(stations).filter((s) => typeof get(s, "station") === "string" && typeof get(s, "id") === "string");
+  const self = all.find((s) => s.station === here);
+  if (self === undefined || get(self, "joined") === true) return false;
+  const ownHere = copiesHere(overviewOf(here));
+  return all.some((s) => {
+    if (s.station === here || get(s, "online") !== true || get(s, "joined") === true || !isObject(get(s, "overview"))) return false;
+    const o = overviewOf(s.station);
+    return get(o, "sharing") === true && profilesOf(o).some((p) => lent(p, ownHere) && arr(get(p, "models")).some((m) => typeof m === "string"));
+  });
 }
 
 const isShared = (share: J) => typeof get(share, "id") === "string" && get(share, "role") === "host";

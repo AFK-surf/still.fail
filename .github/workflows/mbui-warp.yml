@@ -1,4 +1,4 @@
-# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
+# mbui (libs/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # WARP 1.0.21 (Microsoft.Direct3D.WARP, NuGet) put in the Actions cache once: what render-windows draws with
 # (.github/actions/warp), the runner image's own WARP aside. A new version is a new key here and the references made
 # again with it in the same PR.

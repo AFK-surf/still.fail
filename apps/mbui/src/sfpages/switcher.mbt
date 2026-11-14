@@ -77,6 +77,9 @@ priv struct Finder {
   lines : @signals.Signal[Array[FindLine]]
   picks : @signals.Signal[Array[Int]]
   mut to_top : Bool
+  /// how many times ↑ ↓ chose a line (Ctx::on_key's), and as of which the line chosen was last brought into view
+  keyed : @signals.Signal[Int]
+  mut keyed_shown : Int
   /// the `search` topic read last (its params), let go of as the next words are read or the search closes: one read
   /// and kept is shown to the core, which asks its stations again with each change of theirs (each a search of the
   /// machine's files there)
@@ -99,12 +102,14 @@ let finder : Finder = {
   lines: @signals.signal([]),
   picks: @signals.signal([]),
   to_top: false,
+  keyed: @signals.signal(0, same=fn(a, b) { a == b }),
+  keyed_shown: 0,
   held: None,
 }
 
 ///|
 /// How the search read last is let go of as the search closes.
-let finder_leave : Ref[(() -> Unit)?] = Ref::new(None)
+let finder_leave : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
 fn finder_reset() -> Unit {
@@ -142,6 +147,8 @@ pub fn finder_cleared() -> Unit {
   finder.kept_of.set((-1, "", ""))
   finder.failed.set(false)
   finder.to_top = false
+  finder.keyed.set(0)
+  finder.keyed_shown = 0
 }
 
 ///|
@@ -196,7 +203,7 @@ pub fn finder_back() -> Bool {
 /// Enter: the line chosen opened where it is shown chosen (`close` first, where the frame closes the search as one
 /// opens).
 pub fn finder_enter(close : () -> Unit) -> Unit {
-  match finder.picks.get().get(@signals.untracked(fn() { finder.chosen.get() })) {
+  match finder.picks.get().get(finder.chosen.untracked()) {
     Some(k) if finder.chosen_shown => finder_go(finder.lines.get()[k], close)
     _ => ()
   }
@@ -464,7 +471,7 @@ pub fn finder_list(
   let f = @sf.theme().chat_list
   // (the words as the field has them, followed: built again as they are typed, whatever field it is)
   finder_typed(finder.field.text())
-  let query = finder.query.trim(chars=" \t\n\r\u{3000}").to_string()
+  let query = finder.query.trim(chars=" \t\n\r\u{3000}").to_owned()
   let typed = query != ""
   let commands = commands_of(c, src, query, offered)
   let view = search_of(src, w.id, query)
@@ -484,20 +491,25 @@ pub fn finder_list(
   // (chosen by the keys where the screen has them: shown so, Enter opens it)
   finder.chosen_shown = f.keys
   // (read by the rows it shows in, not by what builds them: the rows alone built again as it changes)
-  let mut chosen = @signals.untracked(fn() { finder.chosen.get() })
+  let mut chosen = finder.chosen.untracked()
   if chosen >= picks.length() {
     chosen = if picks.length() > 0 { picks.length() - 1 } else { 0 }
   }
-  let mut keyed = false
-  if c.key_pressed(@ui.key_code_down, in_field=true) && chosen < picks.length() - 1 {
-    chosen += 1
-    keyed = true
-  }
-  if c.key_pressed(@ui.key_code_up, in_field=true) && chosen > 0 {
-    chosen -= 1
-    keyed = true
-  }
   finder.chosen.set(chosen)
+  // ↑ ↓ choose a line, each as it comes to the field with the focus, before it sees it (Ctx::on_key); the line chosen
+  // by them brought into view as it is built after
+  let count = picks.length()
+  c.on_key(c.focused_id(), fn(code, mods) {
+    guard mods == 0 && (code == @ui.key_code_down || code == @ui.key_code_up) else { return false }
+    let at = finder.chosen.get() + (if code == @ui.key_code_down { 1 } else { -1 })
+    if at >= 0 && at < count {
+      finder.chosen.set(at)
+      finder.keyed.set(finder.keyed.get() + 1)
+    }
+    true
+  })
+  let keyed = finder.keyed.get() != finder.keyed_shown
+  finder.keyed_shown = finder.keyed.get()
   let key = "switcher/list"
   if keyed {
     match picks.get(chosen) {

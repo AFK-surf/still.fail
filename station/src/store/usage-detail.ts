@@ -1,6 +1,6 @@
 // Detailed usage distributions. The finest buckets preserve the exact time of a call while combining calls with the
 // same dimensions; coarser buckets let a read cover a long interval without visiting each finer bucket.
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, StatementSync } from "node:sqlite";
 import type { InWorkspace } from "./rows.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import { compactCoverageSince, hasCompactUsage } from "./usage-compact.ts";
@@ -297,8 +297,35 @@ export function installIncrementalUsageTotals(db: DatabaseSync): void {
 
 /// A session total is complete if the total existed before the upgrade, or the new source saw no earlier calls of it.
 export function usageTotalsComplete(db: DatabaseSync, session: string): boolean {
-  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get()) return true;
-  return (db.prepare("SELECT done FROM usage_totals_source_sessions WHERE session = ?").get(session) as { done: number } | undefined)?.done === 1;
+  if (!incrementalTotals(db)) return true;
+  return (totalsStatement(db, "SELECT done FROM usage_totals_source_sessions WHERE session = ?").get(session) as { done: number } | undefined)?.done === 1;
+}
+
+/// Whether the totals were made incremental by the upgrade (schema.ts): decided once, as the schema migrated when the
+/// store opened, and never changed after (the table is made then or never, and not dropped). Learned once a connection,
+/// not at each usage record.
+function incrementalTotals(db: DatabaseSync): boolean {
+  let known = incremental.get(db);
+  if (known === undefined) {
+    known = totalsStatement(db, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get() !== undefined;
+    incremental.set(db, known);
+  }
+  return known;
+}
+const incremental = new WeakMap<DatabaseSync, boolean>();
+/// The upgrade decided it on this connection (schema.ts `addUsageTotals`): asked again.
+export function incrementalTotalsDecided(db: DatabaseSync): void {
+  incremental.delete(db);
+}
+
+/// usageTotalsComplete's statements, each prepared once a connection (it is asked at every usage record and summary).
+const totalsStatements = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
+function totalsStatement(db: DatabaseSync, sql: string): StatementSync {
+  let kept = totalsStatements.get(db);
+  if (kept === undefined) totalsStatements.set(db, (kept = new Map()));
+  let statement = kept.get(sql);
+  if (statement === undefined) kept.set(sql, (statement = db.prepare(sql)));
+  return statement;
 }
 
 type State = { after_at: number | null; after_rowid: number | null; end_at: number | null; end_rowid: number | null; done: number };

@@ -28,6 +28,10 @@ iroh-mdns-address-lookup = "=0.4.0"
 iroh-mainline-address-lookup = "=0.5.0"
 # Its DHT, for what its socket and lookups went through (`dht.said`: vendor/n0-mainline's `stillfail`).
 n0-mainline = "=0.6.0"
+# The type of what an address lookup resolves (`Unmade`), as iroh names it.
+n0-future = "0.3"
+# A datagram that asks whether a connection's other end is still there (`conn.answers`).
+bytes = "1"
 noq-proto = { version = "1", default-features = false }
 # The lock's and the vault's signatures checked here (`crypto.verify`) by formally verified implementations (Cryspen's
 # libcrux: HACL*'s Ed25519 and P-256, proved in F*), not the core's JS (@noble's), and off Hermes' slow arithmetic.
@@ -35,6 +39,14 @@ libcrux-ed25519 = { version = "=0.0.10", default-features = false }
 libcrux-ecdsa = { version = "=0.0.9", default-features = false }
 # A station's replies are decompressed here, off the core's JS thread (zstd.*).
 zstd = { version = "0.13", default-features = false }
+# What the station's programs write and hash (fs.write, fs.hash) and draw at random (crypto.random).
+sha2 = "0.10"
+getrandom = "0.3"
+# A screen view's sound asked as Opus (ScreenTap), decoded here into the PCM every host plays, one decoder for every
+# platform (the hosts' own differ, and Windows may have none). Pure Rust, a port of libopus 1.6: on the Mac's helper's
+# packets 20 µs a packet on an M5 Max and within 84 dB of AudioToolbox's own decode (opus-decoder 0.1.1, the same to
+# 92 dB, took 1.8 ms a packet; 2026-11-12).
+opus-rs = "=0.1.42"
 # The phone's own adb session (src/adb.rs): pairing with its adbd and the TLS it speaks, on rustls with ring as here.
 libadb = { version = "=0.7.0", default-features = false, features = ["tokio", "pairing", "host-keys"] }
 embedded-io-async = "0.6"

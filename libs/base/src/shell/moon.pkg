@@ -1,0 +1,11 @@
+import {
+  "mbui/effect",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+}
+
+options(
+  // One shell a target (shell.mbt): the Rust shell natively, a page's own on js.
+  targets: { "shell_native.mbt": [ "native" ], "shell_js.mbt": [ "js" ], "shell_js_wbtest.mbt": [ "js" ] },
+  "native-stub": ["shell.c"],
+)

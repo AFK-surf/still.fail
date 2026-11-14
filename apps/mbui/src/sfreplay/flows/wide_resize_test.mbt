@@ -4,7 +4,7 @@
 
 ///|
 test "66-wide-resize" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("wide-resize"), seed~, platform=0)
     f.see("端到端测试")
     f.resize(1280.0, 800.0)
@@ -21,7 +21,7 @@ test "66-wide-resize" {
     f.see("窗口变窄后发出 082939")
     f.gone("正在发送")
     // the bottom bar's own motion (gone under the page pushed, its ball) to its declared end
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

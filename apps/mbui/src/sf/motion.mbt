@@ -4,7 +4,7 @@
 // Those the framework makes are mbui's, named there and in the table (kit's pop_in, dialog_in, switch_ms,
 // progress_ms, media's; @motion's springs; ui's pages pushed); motion as data is mbui's (@motion, Ctx::move_state:
 // the web's moveState). What moves (a shape, the composer to another page, a state moved) is a Move as long as its
-// way is far (@ui.move_ms, @motion.move), never a length of its own.
+// way is far (@ui.move_ms, @motion.moved), never a length of its own.
 //
 // Every motion is set off by its cause, never found by comparing frames (the user, 2026-10-25: 「我感觉现在有不少动
 // 效 bug 是因为用了类似 css 的"过渡"效果，而没有准确地去控制什么时候应该去哪，而是直接检测差值」): a difference
@@ -38,9 +38,10 @@ pub let waiting_in : @motion.Trans = @motion.trans(fade=0.0, dy=enter_rise, spec
 
 ///|
 /// A page over the whole window, a picture to share: faded in over 140 ms on
-/// the ease-out; gone by kit's pop_out, as a dialog.
+/// the ease-out, its ground first, whole before its words begin over what it is put over (ground_first: none of the
+/// page's words over the chat's under it); gone by kit's pop_out, as a dialog.
 // kept across runs: a value (no field of it changes)
-pub let window_page_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(140.0, ease=Out))
+pub let window_page_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(140.0, ease=Out), ground_first=true)
 
 ///|
 /// The composer's hint, gone at once as words sent leave its field, back once they are out of it (madeChat.css.ts:

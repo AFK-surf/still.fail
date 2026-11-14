@@ -1,0 +1,35 @@
+# 小屏, a finger, on `home`'s chats: Home made again while measured, its list a screenful of rows made in one frame
+# (the first screen is made before `log measure`, as Tester::new's first frame; `home`'s scrolls make few rows): the
+# bottom bar to 文件 and back to 会话 (Home made anew as it comes back), the workspace switched to 个人 (none of these
+# chats there) and back to 星火工作室 (its rows made anew), the filter to 我参与的 and back to 全部会话 (another list
+# each time). What a phone's hangs at the bar's and the workspace's switch are (`ui_hang`: ~1,000 made, ~1,300 laid).
+timeout 20000
+until 整理发布清单
+until 今天
+wait 500
+log measure
+tap icon:folder
+until =文件
+wait 900
+tap icon:chats
+until 整理发布清单
+wait 900
+tap1 星火工作室
+wait 700
+tap 个人
+gone 整理发布清单
+wait 900
+tap1 个人
+wait 700
+tap 星火工作室
+until 整理发布清单
+wait 900
+tap icon:filter
+until 我参与的
+tap 我参与的
+wait 900
+tap icon:filter
+until 全部会话
+tap 全部会话
+wait 900
+exit

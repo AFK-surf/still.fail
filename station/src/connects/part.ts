@@ -11,7 +11,7 @@ import { log } from "../ops/log.ts";
 import { Agents } from "../sessions/agents.ts";
 import type { ChatSurface } from "../sessions/chat.ts";
 import { INTERNAL_CONNECT } from "../sessions/internal.ts";
-import { ControlPlane, Events, Paths, StationConfig, Store } from "../services.ts";
+import { ControlPlane, Events, Paths, Readers, StationConfig, Store } from "../services.ts";
 import { showEnded } from "./card-ends.ts";
 import type { ConnectState, Connection, EntryEdit } from "./connections.ts";
 import type { ConnectsOptions } from "./connects.ts";
@@ -54,11 +54,12 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
     const events = yield* Events;
     const cloud = (yield* ControlPlane).state;
     const agents = yield* Agents;
+    const readers = yield* Readers;
     const { hub } = agents;
     const connects = yield* Effect.acquireRelease(
       Effect.sync(() =>
         make({
-          data, store, config, receive: (connect, event) => agents.receive(connect, event), models: (connect) => hub.modelsFor(connect), bound: () => agents.taken() && agents.bound(),
+          data, store, config, receive: (connect, event) => agents.receive(connect, event), models: (connect) => hub.modelsFor(connect), modelsFirst: (connect, user) => hub.modelsFirst(connect, user), bound: () => agents.taken() && agents.bound(),
           inWorkspace: (ws) => ws === null || cloud.membership(ws) !== null,
         }),
       ),
@@ -115,7 +116,10 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
           for (const c of connects.connects()) {
             if (learned.has(c.id) || connects.state(c.id)?.state !== "connected") continue;
             learned.add(c.id);
-            for (const t of store.recentConnectPeople(c.id, 200)) learn(t.thread, t.people);
+            // Read by a reader: it goes through the station's threads by when they were said.
+            void readers.read("recentConnectPeople", { connect: c.id, limit: 200 }, "zh")
+              .then((text) => { for (const t of JSON.parse(text) as { thread: number; people: string[] }[]) learn(t.thread, t.people); })
+              .catch((error) => log.warn(own.kind, "the people of a connect's recent chats not learned", { connect: c.id, error: (error as Error).message }));
           }
         }),
       ),

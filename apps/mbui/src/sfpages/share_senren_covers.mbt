@@ -10,7 +10,7 @@
 /// picture's top fades into); where the cover lines start (`lines_top`); her words' keys under shareSenren.: her name
 /// and title's (`who`), her line's and her issue's (`own`), and the cover lines between the feature and the live one
 /// (what each is, what it says).
-struct SrCover {
+priv struct SrCover {
   look : String
   art : String
   ink : Int64
@@ -218,7 +218,7 @@ fn gh_args(fleet : Json?) -> Array[(String, String)] {
   let month = match sr_days(fleet) {
     [.., last] =>
       match last.0.find("/") {
-        Some(i) => last.0.view(end_offset=i).to_owned()
+        Some(i) => last.0.exact_view(end=i).to_owned()
         None => ""
       }
     _ => ""
@@ -250,13 +250,13 @@ fn gh_said(
     match rest.find("{") {
       None => break
       Some(i) => {
-        let after = rest.view(start_offset=i + 1).to_owned()
+        let after = rest.exact_view(start=i + 1).to_owned()
         match after.find("}") {
           None => break
           Some(j) => {
-            let name = after.view(end_offset=j).to_owned()
+            let name = after.exact_view(end=j).to_owned()
             if i > 0 {
-              runs.push(@ui.span(rest.view(end_offset=i).to_owned(), scale~))
+              runs.push(@ui.span(rest.exact_view(end=i).to_owned(), scale~))
             }
             let value = sr_arg(args, name)
             if gh_plain.contains(name) {
@@ -264,7 +264,7 @@ fn gh_said(
             } else {
               runs.push(@ui.span(value, color=hi, weight=700, scale=hi_scale))
             }
-            rest = after.view(start_offset=j + 1).to_owned()
+            rest = after.exact_view(start=j + 1).to_owned()
           }
         }
       }
@@ -327,7 +327,7 @@ fn gh_dim(ink : Int64) -> Int64 {
 /// `words` with a space between each two of its characters (three between its words): letters set far apart, as a
 /// masthead's small line is (the mockups' letter spacing of 0.32 to 0.42 of an em, past the widest tracking).
 fn gh_spaced(words : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut first = true
   for ch in words {
     if !first {
@@ -342,7 +342,7 @@ fn gh_spaced(words : String) -> String {
 ///|
 /// The figures of `words` alone (the time's: 10月26日 04:12, 10260412).
 fn gh_figures(words : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in words {
     if ch >= '0' && ch <= '9' {
       buf.write_char(ch)
@@ -609,7 +609,7 @@ let gh_code_words : @ui.TextStyle = @ui.text_style(size=Xs3, tracking=Widest, co
 /// (`side`: from the map's left, or from its right where `right`, so longer words grow away from the edge); where its
 /// dashed leader ends (`ex`, `ey`: a little inside the card, which covers the rest, as the mockup's ends on its edge);
 /// its symbol (map_icon_shapes' parts); its name's key and its lines' keys under shareSenren.
-struct MapPlace {
+priv struct MapPlace {
   x : Double
   y : Double
   right : Bool

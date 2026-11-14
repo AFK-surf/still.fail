@@ -16,6 +16,10 @@ import { routerSays } from "../src/comma/chats.ts";
 import { CommaSurface } from "../src/comma/surface.ts";
 import { CommaTasks } from "../src/comma/tasks.ts";
 import { Rig } from "./hub-fakes.ts";
+import { newMessage } from "../src/store/store.ts";
+import { installOutflowChatIndex, outflowChatIndexStep, outflowChatScopes } from "../src/store/outflow-index.ts";
+import * as read from "../src/read/store.ts";
+import { HOME, outflowChats } from "../src/read/outflow.ts";
 
 type Json = any;
 
@@ -319,6 +323,42 @@ test("the Task index: a chat of this station by its thread, another station's wi
   } finally { stats.close(); }
 });
 
+test("the Task index says what a chat asks of whom now, within Comma's bounds, and its link; nothing of an archived chat's, nor of a station from before", () => {
+  const stats = CommaStats.at(tempdir(), nothing, quiet);
+  try {
+    const many = Array.from({ length: 12 }, (_, i) => `P${i}@X`);
+    stats.apply([here([], {}, [
+      { ...chat(7, "need_human"), attention: { kind: "need", waitsFor: ["Bob@X", "bob@x", "not an email", "x".repeat(200) + "@x"], note: "Should 1389 ship?" }, url: "https://still.fail/o/ws/st/a" },
+      { ...chat(8, "all_done"), attention: { kind: "done", waitsFor: ["ann@x"], note: "\u{1F600}".repeat(400) } },
+      { ...chat(9, "ended"), attention: { kind: "failed", waitsFor: many, note: null }, url: "http://localhost/o/ws/st/c" },
+      { ...chat(10, "all_done"), archived: true, attention: { kind: "done", waitsFor: ["ann@x"], note: "Merged" }, url: "https://still.fail/o/ws/st/d" },
+      { ...chat(11, "working"), attention: { kind: "nudge", waitsFor: ["ann@x"], note: "hi" }, url: `https://still.fail/${"x".repeat(500)}` },
+      chat(12, "all_done"),
+    ])], [], FROM);
+    const wire = new Map(stats.tasks.since(0, 10).map(taskWire).map((w: Json) => [w.task, w]));
+    const need = wire.get("7");
+    assert.deepEqual([need.attention, need.waits_for, need.note, need.url, need.status], ["need", ["bob@x"], "Should 1389 ship?", "https://still.fail/o/ws/st/a", "needs_review"]);
+    const done = wire.get("8");
+    assert.deepEqual([done.attention, done.waits_for, [...done.note].length, done.url], ["done", ["ann@x"], 300, undefined], "a note of 300 characters at most, by code point");
+    const failed = wire.get("9");
+    assert.deepEqual([failed.attention, failed.waits_for, "note" in failed, "url" in failed], ["failed", many.slice(0, 8).map((m) => m.toLowerCase()), false, false], "8 at most; a link only https");
+    const archived = wire.get("10");
+    assert.deepEqual([archived.status, "attention" in archived, "waits_for" in archived, "note" in archived, archived.url], ["archived", false, false, false, "https://still.fail/o/ws/st/d"]);
+    const odd = wire.get("11");
+    assert.deepEqual(["attention" in odd, "url" in odd], [false, false], "a kind Comma does not know, a link too long: none");
+    assert.deepEqual(Object.keys(wire.get("12")).sort(), ["created_at", "created_by", "labels", "last_activity_at", "model", "rev", "runtime", "status", "task", "thread", "title"], "a station from before: the row as it was");
+    // A row of the largest still fits Comma's page of bytes, and pages are cut by bytes.
+    const big = Array.from({ length: PAGE_ROWS }, (_, i) => ({ ...chat(100 + i, "need_human"), title: "\u{1F600}".repeat(200),
+      attention: { kind: "need", waitsFor: Array.from({ length: 8 }, (_, j) => `${"p".repeat(190)}${j}@x.io`), note: "\u{1F600}".repeat(300) },
+      url: `https://still.fail/${"u".repeat(480)}` }));
+    stats.apply([here([], {}, big)], [], FROM);
+    const page = nextPage(stats.tasks, { epoch: null, through: 0 }, taskWire)!;
+    assert.ok(page.rows.length > 1 && page.rows.length < PAGE_ROWS);
+    assert.ok(Buffer.byteLength(JSON.stringify(page.rows)) <= PAGE_BYTES);
+    assert.equal(page.rows[0].waits_for.length, 8);
+  } finally { stats.close(); }
+});
+
 test("the Router writes in a chat of the workspace as itself, once per key; a chat of another workspace or a Slack thread is refused", async () => {
   const rig = new Rig();
   const stats = CommaStats.at(tempdir(), nothing, quiet);
@@ -335,6 +375,47 @@ test("the Router writes in a chat of the workspace as itself, once per key; a ch
     assert.throws(() => routerSays(rig.hub, stats, "another-ws", { ...w, key: "cm:k2" }), /no such chat/);
     const slack = rig.store.openThread("slack:ember", "C1", "100.1", null, null);
     assert.throws(() => routerSays(rig.hub, stats, home, { ...w, thread: slack.id, key: "cm:k3" }));
+  } finally {
+    stats.close();
+    await rig.hub.shutdown();
+  }
+});
+
+test("the Task index says which chats a Comma Router wrote in, with a key or without, after its idempotency record is gone; nothing of the others, nor of a station from before", async () => {
+  const rig = new Rig();
+  const stats = CommaStats.at(tempdir(), nothing, quiet);
+  try {
+    const chatOfKey = (key: string) => {
+      rig.store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, ws: null } as never);
+      const thread = rig.store.openThreadOf("ember", "CHAT", key, key, "ann@x", key);
+      rig.store.joinThread(thread.id, key, "ember");
+      return thread.id;
+    };
+    const keyed = chatOfKey("keyed");
+    const unkeyed = chatOfKey("unkeyed");
+    const people = chatOfKey("people");
+    const home = rig.hub.wsOf("keyed");
+    routerSays(rig.hub, stats, home, { thread: keyed, text: "选 main", key: "cm:k1", requester: "Router", connect: "cm" });
+    routerSays(rig.hub, stats, home, { thread: unkeyed, text: "ship it", key: "", requester: "Ops", connect: "cm" });
+    rig.store.insertMessage(newMessage(people, "people.1", "person", "ann@x", "please"));
+    // The idempotency record is cleaned up after BUILD_DAYS: what the index says does not go with it.
+    rig.store.db.exec("DELETE FROM comma_router_once_targets; DELETE FROM comma_router_once;");
+    installOutflowChatIndex(rig.store.db);
+    for (const scope of outflowChatScopes(HOME)) while (!outflowChatIndexStep(rig.store.db, scope).done) { /* bounded batches */ }
+    const got = outflowChats(read.makeStore(rig.store.db, rig.dir), 0) as Json;
+    const by = new Map<number, Json>(got.chats.map((c: Json) => [c.thread, c]));
+    assert.deepEqual([by.get(keyed).router, by.get(unkeyed).router, "router" in by.get(people)], [true, true, false]);
+
+    // As the Task index carries it; a row that comes to say it is a row changed, which Comma is sent again.
+    const before = got.chats.map((c: Json) => (c.thread === people ? c : { ...c, router: undefined }));
+    stats.apply([here([], {}, before)], [], FROM);
+    const rev = stats.tasks.rev();
+    assert.ok(stats.tasks.since(0, 10).map(taskWire).every((w: Json) => !("router" in w)), "a station from before: no field");
+    assert.equal(stats.apply([here([], {}, got.chats)], [], FROM).tasks, 2);
+    const wire = new Map(stats.tasks.since(rev, 10).map(taskWire).map((w: Json) => [w.task, w]));
+    assert.deepEqual([...wire.keys()].sort(), [String(keyed), String(unkeyed)].sort());
+    assert.ok([...wire.values()].every((w: Json) => w.router === true && w.rev > rev));
+    assert.deepEqual(stats.apply([here([], {}, [{ ...by.get(people), router: "yes" }, by.get(keyed), by.get(unkeyed)])], [], FROM).tasks, 0, "only true says it");
   } finally {
     stats.close();
     await rig.hub.shutdown();

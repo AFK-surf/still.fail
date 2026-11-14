@@ -25,15 +25,24 @@ pub let fx_key_actions : Array[(String, String, Array[String], Array[String], St
   ("chat.screen", "chat", ["Shift+Mod+D"], [], "yes"),
   ("chat.latest", "chat", ["Mod+Down"], [], "empty"),
   ("chat.find", "chat", ["Mod+F"], [], "yes"),
+  ("chat.outline", "chat", ["Mod+G"], [], "yes"),
+  ("chat.said.prev", "chat", ["Alt+Shift+Up"], [], "empty"),
+  ("chat.said.next", "chat", ["Alt+Shift+Down"], [], "empty"),
   ("chat.archive", "chat", ["Shift+Mod+E"], [], "yes"),
   ("panel.close", "chat", ["Escape"], [], "yes"),
   ("files.preview", "files", ["Shift+Mod+P"], [], "yes"),
 ]
 
 ///|
+/// The actions not in the list of shortcuts, only worth a key (keymap.ts UNLISTED): of those listed here, the steps
+/// between what people said in a chat.
+// kept across runs: a table, never written
+pub let fx_key_unlisted : Array[String] = ["chat.said.prev", "chat.said.next"]
+
+///|
 /// A binding as a key cap shows it (keymap.ts label): ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere.
 pub fn fx_key_label(b : String, mac : Bool) -> String {
-  let parts = b.split("+").map(fn(p) { p.to_string() }).collect()
+  let parts = b.split("+").map(fn(p) { p.to_owned() }).collect()
   let key = parts.pop().unwrap_or("")
   let shown = match key {
     "Space" => tr("web-main.keymap.space")
@@ -71,8 +80,9 @@ pub fn fx_keys_of(changed : Map[String, Array[String]], a : (String, String, Arr
 }
 
 ///|
-/// The prefs' `keymap` (KeymapView) with `changed` the keys changed here; as on a Mac where the Tester plays one.
-pub fn fixture_keymap(changed : Map[String, Array[String]]) -> Json {
+/// The prefs' `keymap` (KeymapView) with `changed` the keys changed here, the composer sending as `send_key` says
+/// (keymap.ts sendView); as on a Mac where the Tester plays one.
+pub fn fixture_keymap(changed : Map[String, Array[String]], send_key? : String = "") -> Json {
   let mac = @ui.platform() == 0
   let actions = fx_key_actions.map(fn(a) {
     let keys = fx_keys_of(changed, a)
@@ -82,11 +92,11 @@ pub fn fixture_keymap(changed : Map[String, Array[String]]) -> Json {
       "group": Json::string(a.1),
       "name": Json::string(tr("web-main.keymap." + a.0)),
       "typing": Json::string(a.4),
-      "keys": Json::array(keys.map(Json::string(_))),
-      "labels": Json::array(labels.map(Json::string(_))),
+      "keys": Json::array(keys.map(x => Json::string(x))),
+      "labels": Json::array(labels.map(x => Json::string(x))),
       "text": Json::string(if labels.length() == 0 { tr("web-main.shortcuts.unset") } else { labels.join(" / ") }),
       "changed": Json::boolean(changed.contains(a.0)),
-      "listed": Json::boolean(true),
+      "listed": Json::boolean(!fx_key_unlisted.contains(a.0)),
     })
   })
   let ws = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(fn(n) {
@@ -102,6 +112,31 @@ pub fn fixture_keymap(changed : Map[String, Array[String]]) -> Json {
     ),
     "actions": Json::array(actions),
     "workspace": Json::array(ws),
+    "send": fixture_send_keys(send_key, mac),
+  })
+}
+
+///|
+/// The composer's keys (keymap.ts sendView): Enter, or ⌘Enter (`mod`: Ctrl+Enter elsewhere), the keys of each in words.
+fn fixture_send_keys(send_key : String, mac : Bool) -> Json {
+  let by = if send_key == "mod" { "mod" } else { "enter" }
+  let send = fx_key_label(if by == "mod" { "Mod+Enter" } else { "Enter" }, mac)
+  let newline = if by == "mod" {
+    fx_key_label("Enter", mac) + " / " + fx_key_label("Shift+Enter", mac)
+  } else {
+    fx_key_label("Shift+Enter", mac)
+  }
+  let named = [("enter", "Enter"), ("mod", if mac { "⌘ Enter" } else { "Ctrl+Enter" })]
+  Json::object({
+    "by": Json::string(by),
+    "choices": Json::array(
+      named.map(fn(n) {
+        Json::object({ "by": Json::string(n.0), "name": Json::string(fill("web-main.shortcuts.sendWith", [("keys", n.1)])) })
+      }),
+    ),
+    "send": Json::string(send),
+    "newline": Json::string(newline),
+    "text": Json::string(fill("web-main.shortcuts.sendNote", [("send", send), ("newline", newline)])),
   })
 }
 
@@ -150,9 +185,9 @@ pub fn fixture_keys_set(changed : Map[String, Array[String]], params : Json) -> 
 ///|
 /// The prefs' `keys`: each action's keys changed here.
 pub fn fixture_keys(changed : Map[String, Array[String]]) -> Json {
-  let o : Map[String, Json] = {}
+  let o : Map[String, Json] = Map([])
   for k, v in changed {
-    o[k] = Json::array(v.map(Json::string(_)))
+    o[k] = Json::array(v.map(x => Json::string(x)))
   }
   Json::object(o)
 }

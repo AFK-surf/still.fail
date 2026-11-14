@@ -139,7 +139,7 @@ pub fn attend(src : Source, workspace : String, new_chat : Bool) -> Unit {
   if new_chat {
     params["newChat"] = Json::string(workspace)
   }
-  (src.call)("client.focus", Json::object(params), fn(_) {  })
+  (src.call)("client.focus", Json::object(params), answer_unread)
 }
 
 ///|
@@ -169,14 +169,14 @@ fn system_said(json : String) -> Unit {
   for s in said {
     match s {
       // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
-      Link(url) => link_later.push(app_link(url))
+      Link(url) => link_opened_with(app_link(url))
       // shown over another app, or in its own window again (share.mbt)
       Over(over) => share_over.set(over)
       // a tab or an item of the system's own bars chosen (sfdesk's rail_native.mbt takes it as it draws)
       NavTapped(id) => {
         let at = @hostapi.nav_tapped_at
         nav_tapped_place.set((at[0], at[1], at[2], at[3]))
-        let taps = @signals.untracked(fn() { nav_tapped.get() }).copy()
+        let taps = nav_tapped.untracked().copy()
         taps.push(id)
         nav_tapped.set(taps)
       }
@@ -194,12 +194,12 @@ fn system_said(json : String) -> Unit {
   for s in said {
     match s {
       Shown(away~) => {
-        (src.call)("client.wake", { "away": Json::number(away) }, fn(_) {  })
+        (src.call)("client.wake", { "away": Json::number(away) }, answer_unread)
         update_check(src, false)
       }
       // 检查更新 from the menu bar (menu_bar.mbt)
       Menu("update.check") => update_from_menu(src)
-      // one of the pages' actions from the menu bar: as its keys pressed (keymap.mbt action_pressed)
+      // one of the pages' actions from the menu bar: done as its keys are (keymap.mbt ask_action)
       Menu(action) => @settings.ask_action(action)
       // a package handed to the system's installer could not be installed
       InstallAllow(..) => toast_later(@sf.t("android-chat.file.allowInstall", args=[("app", "still.fail")]))
@@ -234,7 +234,7 @@ fn init {
 pub fn app_link(url : String) -> String {
   for scheme in ["stillfail://", "stillfail-beta://"] {
     if url.has_prefix(scheme) {
-      return "\{cloud_origin()}/\{url.view(start_offset=scheme.length())}"
+      return "\{cloud_origin()}/\{url.exact_view(start=scheme.length())}"
     }
   }
   url
@@ -280,10 +280,10 @@ pub fn workspace_in_view(src : Source) -> (Workspace?, Array[Workspace], Bool, B
 let badge_told : @signals.Signal[Int] = @signals.signal(-1, same=fn(a, b) { a == b })
 
 ///|
-/// Each frame signed in, `w` in view: the number on the app's icon (the desktop app's followBadge), the core's badge,
-/// else what is wrong and what waits in every workspace; told as it changes, once the frame's builds are over.
-pub fn badge_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
+/// Each frame signed in: the number on the app's icon (the desktop app's followBadge), the core's badge, else what is
+/// wrong and what waits in every workspace; told as it changes, once the frame's builds are over.
+pub fn badge_frame(c : @ui.Ctx, src : Source) -> Unit {
+  let marks = src.topic("workspaceMarks", marks_asked()).get().value
   let badge = match field(marks, "badge") {
     Some(Number(_, ..)) => count(marks, "badge")
     _ =>

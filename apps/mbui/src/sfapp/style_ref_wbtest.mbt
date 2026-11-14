@@ -53,39 +53,42 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 28208:9506c151
-    #|waiting wide 58225:bdb2c071
-    #|waiting-dark narrow 28126:8d2e104d
-    #|waiting-dark wide 58052:5c571917
-    #|finding narrow 34240:be2ffdf1
-    #|finding wide 64919:7d9721af
-    #|finding-dark narrow 34337:52a2c840
-    #|finding-dark wide 64925:ed3a50ea
-    #|code narrow 26964:88a7f87b
-    #|code wide 57110:56244bda
-    #|code-dark narrow 26856:ce8b5d5e
-    #|code-dark wide 56911:acb54c8d
-    #|wrong narrow 28173:7d27636f
-    #|wrong wide 58339:676fb52d
-    #|wrong-dark narrow 28275:4b23cc12
-    #|wrong-dark wide 58350:da1a726c
-    #|checking narrow 35247:a55b4d68
-    #|checking wide 66046:1e4ab9ff
-    #|checking-dark narrow 35339:cf8b4c9d
-    #|checking-dark wide 66047:288125e8
-    #|none narrow 27676:a0ff063c
-    #|none wide 57701:a6d3fcf
-    #|none-dark narrow 27598:34020870
-    #|none-dark wide 57532:b06e1bb
-    #|failed narrow 23435:473d3873
-    #|failed wide 53453:1b4b7d7b
-    #|failed-dark narrow 23437:6453ad5f
-    #|failed-dark wide 53364:94e5c7af
-    #|nocode narrow 28208:9506c151
-    #|nocode wide 58225:bdb2c071
-    #|nocode-dark narrow 28126:8d2e104d
-    #|nocode-dark wide 58052:5c571917
+    #|waiting narrow 28275:39622baf
+    #|waiting wide 58561:95cb81f6
+    #|waiting-dark narrow 28193:277c0cc7
+    #|waiting-dark wide 58388:a2810814
+    #|finding narrow 44483:19a881e2
+    #|finding wide 75292:ef31b5ff
+    #|finding-dark narrow 44536:d1f32a7a
+    #|finding-dark wide 75254:5f39daef
+    #|code narrow 31619:9deffdf
+    #|code wide 61977:d3d20b74
+    #|code-dark narrow 31494:1c8c4705
+    #|code-dark wide 61761:b97b01c
+    #|wrong narrow 28240:97d2f231
+    #|wrong wide 58675:b9440a2a
+    #|wrong-dark narrow 28342:6b141516
+    #|wrong-dark wide 58686:1155f0c7
+    #|checking narrow 35321:285a7a7f
+    #|checking wide 66422:9d8764b2
+    #|checking-dark narrow 35413:543f0fd4
+    #|checking-dark wide 66423:5c9c74d5
+    #|none narrow 37542:1dbb1867
+    #|none wide 67714:168f01d1
+    #|none-dark narrow 37420:fd5a9a96
+    #|none-dark wide 67501:fd9fa742
+    #|failed narrow 23502:ede593dd
+    #|failed wide 53789:444ff120
+    #|failed-dark narrow 23504:9d059bad
+    #|failed-dark wide 53700:83d0c2ac
+    #|nocode narrow 28275:39622baf
+    #|nocode wide 58561:95cb81f6
+    #|nocode-dark narrow 28193:277c0cc7
+    #|nocode-dark wide 58388:a2810814
     #|
+
+
+
 
 
 
@@ -134,6 +137,10 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
       let (name, w, h) = size
       let home = screen_drawlist("settings" + dark, w, h, page="home")
       out.write_string("settings" + dark + " " + name + " " + fnv(home) + "\n")
+      // (a station's page made once: what lies in the window drawn as the old list drew it, each of the four drawn to a
+      // picture the same to the byte as main's at 16203ebae7, every glyph shown in the same box and every word seen at
+      // the same place; the tree also hands the draw list the rows wholly under the window's foot, cut out by the page's
+      // clip, and the shapes they draw, which the old list never drew)
       let station = screen_drawlist("settings" + dark, w, h, page="station:ws1/st1")
       out.write_string("station" + dark + " " + name + " " + fnv(station) + "\n")
       // a settings page's wait line, in its list's rows (built as the list is laid out: still.fail#791)
@@ -141,20 +148,24 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
       out.write_string("me-reading" + dark + " " + name + " " + fnv(reading) + "\n")
     }
   }
+  // (the wide ones, 2026-11-10: 共享调试 a row of the settings' sidebar on a computer too, 关于 under the window's
+  // foot for it; the narrow ones, a phone's, had the row)
+  // (the wide ones again, 2026-11-10: a sidebar's marks, words and headings 2 in, where its rows' foot capsules start)
   inspect(out.to_string(), content=(
-    #|settings narrow 76418:6d7b9b7
-    #|station narrow 86425:11f0a459
-    #|me-reading narrow 23860:9496c484
-    #|settings wide 172657:8e369faa
-    #|station wide 230976:4161dff
-    #|me-reading wide 167370:6aef6d66
-    #|settings-dark narrow 76686:fbcc498
-    #|station-dark narrow 86258:47aff2b5
-    #|me-reading-dark narrow 23998:61f49844
-    #|settings-dark wide 172577:20f7e7bf
-    #|station-dark wide 230607:569c305a
-    #|me-reading-dark wide 167366:8048abfc
+    #|settings narrow 77022:ba68b727
+    #|station narrow 96266:e74e1ad6
+    #|me-reading narrow 23870:8074bf2b
+    #|settings wide 169493:802f151e
+    #|station wide 237792:ca86ca57
+    #|me-reading wide 164149:d62b64d1
+    #|settings-dark narrow 77290:42efbe58
+    #|station-dark narrow 96174:7466388
+    #|me-reading-dark narrow 23998:5789351d
+    #|settings-dark wide 169413:9d946751
+    #|station-dark wide 237497:686251f6
+    #|me-reading-dark wide 164135:8c5f9435
     #|
+
 
 
 

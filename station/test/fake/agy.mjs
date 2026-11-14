@@ -9,7 +9,53 @@ import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 const dump = process.env.FAKE_DUMP;
 const args = process.argv.slice(2);
+const promptAt = args.indexOf('-p');
+if (promptAt >= 0 && args[promptAt + 1] === '/usage') await printUsage();
 if (args[0] !== 'acp') await signIn();
+async function printUsage() {
+  if (dump) appendFileSync(dump, JSON.stringify({ args, home: process.env.HOME ?? null, geminiDir: process.env.ANTIGRAVITY_GEMINI_DIR ?? null, cloudCodeUrl: process.env.CLOUD_CODE_URL ?? null, key: process.env.GEMINI_API_KEY ?? null, updates: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null, fileTokens: process.env.SSH_CLIENT ?? null }) + '\n');
+  if (process.env.FAKE_AGY_SIGNED_OUT) {
+    process.stdout.write('Authentication required. Please visit the URL to log in:\n  https://accounts.google.com/o/oauth2/auth\n\nWaiting for authentication (timeout 60s)...\n');
+    await new Promise(() => {});
+  }
+  if (process.env.FAKE_AGY_USAGE_ERROR) {
+    const err = process.env.FAKE_AGY_USAGE_ERROR;
+    process.stderr.write(`error: ${err}\n`);
+    process.stdout.write(JSON.stringify({ conversation_id: '', status: 'ERROR', response: '', error: err }) + '\n');
+    process.exit(1);
+  }
+  const tokenPath = join(process.env.ANTIGRAVITY_GEMINI_DIR ?? join(process.env.HOME ?? '', '.gemini'), 'antigravity-cli', 'antigravity-oauth-token');
+  if (!existsSync(tokenPath)) {
+    process.stdout.write('Authentication required. Please visit the URL to log in:\n  https://accounts.google.com/o/oauth2/auth\n\nWaiting for authentication (timeout 60s)...\n');
+    await new Promise(() => {});
+  }
+  process.stdout.write(JSON.stringify({
+    conversation_id: '',
+    status: 'SUCCESS',
+    command: {
+      name: 'usage',
+      data: {
+        groups: [
+          {
+            name: 'Gemini Models',
+            buckets: [
+              { id: 'gemini-weekly', name: 'Weekly Limit Remaining', window: 'weekly', remaining_fraction: 0.75, reset_time: '2026-11-19T09:14:38Z' },
+              { id: 'gemini-5h', name: 'Five Hour Limit Remaining', window: '5h', remaining_fraction: 0.9, reset_time: '2026-11-12T14:14:38Z' },
+            ],
+          },
+          {
+            name: 'Claude and GPT models',
+            buckets: [
+              { id: '3p-weekly', name: 'Weekly Limit Remaining', window: 'weekly', remaining_fraction: 0.4, reset_time: '2026-11-19T09:14:38Z' },
+              { id: '3p-5h', name: 'Five Hour Limit Remaining', window: '5h', remaining_fraction: 0, reset_time: '2026-11-12T14:14:38Z' },
+            ],
+          },
+        ],
+      },
+    },
+  }) + '\n');
+  process.exit(0);
+}
 async function signIn() {
   if (dump) appendFileSync(dump, JSON.stringify({ args, home: process.env.HOME, remote: process.env.SSH_CONNECTION ?? null, key: process.env.GEMINI_API_KEY ?? null }) + '\n');
   if (!process.stdin.isTTY) { process.stderr.write('not a terminal\n'); process.exit(1); }
@@ -46,8 +92,22 @@ const update = (u) => say({ method: 'session/update', params: { sessionId, updat
 const dir = args[args.indexOf('--gemini-dir') + 1];
 const conversations = join(dir, 'antigravity-cli', 'conversations');
 mkdirSync(conversations, { recursive: true });
-if (dump) appendFileSync(dump, JSON.stringify({ args, key: process.env.GEMINI_API_KEY ?? null, updates: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null }) + '\n');
-const models = { currentModelId: 'gemini-3.5-flash', availableModels: [{ modelId: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' }, { modelId: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro' }] };
+if (dump) appendFileSync(dump, JSON.stringify({ args, key: process.env.GEMINI_API_KEY ?? null, updates: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null, fileTokens: process.env.SSH_CLIENT ?? null }) + '\n');
+const models = process.env.FAKE_AGY_SUBSCRIPTION
+  ? {
+      currentModelId: 'gemini-4-carbon-high',
+      availableModels: [
+        { modelId: 'gemini-4-carbon-low', name: 'Gemini 4 Carbon (Low)' },
+        { modelId: 'gemini-4-carbon-medium', name: 'Gemini 4 Carbon (Medium)' },
+        { modelId: 'gemini-4-carbon-high', name: 'Gemini 4 Carbon (High)' },
+        { modelId: 'claude-opus-5-5-low', name: 'Claude Opus 5.5 (Low)' },
+        { modelId: 'claude-opus-5-5-medium', name: 'Claude Opus 5.5 (Medium)' },
+        { modelId: 'claude-opus-5-5-high', name: 'Claude Opus 5.5 (High)' },
+        { modelId: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)' },
+        { modelId: 'gemini-pro-orchestrator', name: 'Gemini Pro Orchestrator' },
+      ],
+    }
+  : { currentModelId: 'gemini-3.5-flash', availableModels: [{ modelId: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' }, { modelId: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro' }] };
 for await (const line of createInterface({ input: process.stdin })) {
   const m = JSON.parse(line);
   if (dump) appendFileSync(dump + '.rpc', line + '\n');
@@ -71,12 +131,17 @@ for await (const line of createInterface({ input: process.stdin })) {
     if (held) reply(held, { stopReason: 'cancelled' }); held = null;
   } else if (m.method === 'session/prompt') {
     const text = p.prompt[0].text;
+    const prev = held;
     held = m.id;
+    if (prev) {
+      reply(prev, { stopReason: 'end_turn', usage: { totalTokens: 510, inputTokens: 500, outputTokens: 10, thoughtTokens: 0, cachedReadTokens: 0 } });
+      update({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text } });
+    }
     if (text === 'expired') { say({ id: m.id, error: { code: -32603, message: 'Authentication expired. Please log back in.' } }); held = null; continue; }
     if (text === 'quota') { say({ id: m.id, error: { code: -32603, message: 'RESOURCE_EXHAUSTED: You have exhausted your capacity on this model. Your quota will reset after 4h.' } }); held = null; continue; }
     update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'thinking' } });
     update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'first ' } });
-    if (text === 'hold') continue;
+    if (text === 'hold' || text === 'hold-steer') continue;
     update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
     update({ sessionUpdate: 'tool_call', toolCallId: 't1', title: 'view_file', kind: 'read', status: 'in_progress', rawInput: { AbsolutePath: '/a.txt' } });
     update({ sessionUpdate: 'tool_call_update', toolCallId: 't1', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'file contents' } }] });

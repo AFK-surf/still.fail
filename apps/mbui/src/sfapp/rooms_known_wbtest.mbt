@@ -50,13 +50,26 @@
 /// (share-card-senren-…), each over a new chat's composer laid out Medium on a tablet: its three chips, 90 more, 313.
 /// 归档建议 made once (2026-11-03): 4 fewer, 309. The chats' lists made once (2026-11-03): one fewer, 308. Back on 0.1.7190's chat page (#3975): 306. The reader's
 /// layout as nodes of the window's tree (reader-layout): 4 fewer, 302. 连接 and a connect's page made once (2026-11-09):
-/// 5 fewer, 297.)
-let rooms_known : Map[String, Int] = { "room": 297, "apart": 0, "hover": 0 }
+/// 5 fewer, 297. An agent's request for a rig a screen of its own (chat-rig, 2026-11-10), what every chat has: its last
+/// message's time, in the four windows it shows in, 4 more, 301; such a station's page, made once, none. An agent's history's head and details made once as nodes, 291.
+/// A new workspace over Home swept (new-workspace, new-workspace-code), what home-sheet has under it on a tablet: the new
+/// chat's three chips beside its composer, old views, the page behind counted again, 6 more, 297.
+/// A file beside a chat in the viewer a screen of its own (chat-view-side, chat-view-side-image, 2026-11-10), what
+/// chat-things-side has: its tab's close key, in the three wide windows each, 6 more, 303. A film and a song beside a
+/// chat (chat-view-side-video, chat-view-side-audio, 2026-11-11), the same: its tab's close key, 6 more, 309.
+/// An agent's request for the phone swept (chat-phone-lacks, and granted with each step left and connected, 2026-11-11),
+/// what every chat has: its last message's author and time, and a decided card's line opening its history, 112 more, 421.
+/// A preset's dialog over a new chat swept, and its steps further in (newchat-preset-new and five more, 2026-11-11), what
+/// newchat has under them on a phone and a tablet: the composer's three chips behind the panel, old views, the page
+/// behind counted again, 36 more, 457. Each target's room measured by its unparted reach within its holder and window
+/// (@view.press_room), parting with non-overlapping neighbours handled by the hit test without inflating visual gaps
+/// (2026-11-14): 406 fewer, 51.)
+let rooms_known : Map[String, Int] = { "room": 51, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.
 fn rooms_wrong(rooms : Array[String]) -> String? {
-  let counts : Map[String, Int] = {}
+  let counts : Map[String, Int] = Map([])
   for f in rooms {
     for rule in ["room", "apart", "hover"] {
       if f.contains(": \{rule}: ") {

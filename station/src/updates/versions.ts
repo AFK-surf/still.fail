@@ -141,7 +141,7 @@ export function stepOf(line: string): Words | null {
 /// How much of a download is in, as the pages say it: a line, and the share (drawn as a bar) when its size is known.
 export function downloading(version: string, got: number, total: number | null): [Words, number | null] {
   const mb = (b: number) => Math.round(b / 1_000_000);
-  if (total !== null && total > 0) return [{ key: "station.updates.downloadingSized", args: { version, mb: mb(total) } }, Math.floor((Math.min(got, total) * 100) / total)];
+  if (total !== null && total > 0) return [{ key: "station.updates.downloadingSized", args: { version, got: mb(Math.min(got, total)), mb: mb(total) } }, Math.floor((Math.min(got, total) * 100) / total)];
   return [{ key: "station.updates.downloadingSoFar", args: { version, mb: mb(got) } }, null];
 }
 

@@ -20,8 +20,8 @@ fn reveal_pair(on : @signals.Signal[Bool], node : Bool) -> @ui.Tester {
         c.box(w=Px(300.0), fn() {
           let target = if on.get() { 1.0 } else { 0.0 }
           let open = @motion.anim(c, "t/said", target, global=true)
-          open.follow(target, @motion.move().per_unit(@motion.reveal_height(c, "t/said")))
-          let share = open.get()
+          open.follow(c, target, @motion.moved().per_unit(@motion.reveal_height(c, "t/said")))
+          let share = open.get(c)
           if share > 0.0 {
             @motion.reveal(c, "t/said", share, middle=true, fn() { c.text(reveal_words, style~) |> ignore })
           }
@@ -41,7 +41,7 @@ fn reveal_pair(on : @signals.Signal[Bool], node : Bool) -> @ui.Tester {
           // (as the old one's words are set: the meta's size and its own line)
           let (size, line) = @ui.tree_theme().text_size(Meta)
           h
-          .words(Is(reveal_words), look={ size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false })
+          .words(Is(reveal_words), look={ size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 })
           .ink(By(fn() { @ui.tree_theme().color(Muted) }))
           .words_centered(Is(true))
           |> ignore
@@ -81,7 +81,7 @@ test "a room on two lines said as a node, opened and closed: drawn as an old vie
   assert_eq(
     (new == old, old.1.0.length() > 0, old.0.0.length(), old.2.0.length()),
     (true, true, 0, 0),
-    msg="old \{old.1.0[:2]}\nnode \{new.1.0[:2]}",
+    msg="old \{Repr(old.1.0[:2])}\nnode \{Repr(new.1.0[:2])}",
   )
 }
 
@@ -104,7 +104,7 @@ fn node_room(
         @motion.reveal_node(b, fn() { on.get() }, fn(h) {
           let (size, line) = @ui.tree_theme().text_size(Meta)
           h.box(fn(w) {
-            w.words(By(fn() { words.get() }), look={ size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }).words_centered(Is(true)) |> ignore
+            w.words(By(fn() { words.get() }), look={ size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }).words_centered(Is(true)) |> ignore
           })
           |> ignore
           h.box(fn(k) {
@@ -138,7 +138,7 @@ fn room_sizes(room : @view.View) -> (Double, Double) {
 /// The share of its way a room's Move as far as `natural` has gone `at` after `t0` from `from` to `to`.
 fn move_share(natural : Double, t0 : Double, at : Double, from? : Double = 0.0, to? : Double = 1.0) -> Double {
   let way = @motion.Way::new(from)
-  way.go(to, @motion.move().per_unit(natural), at=t0)
+  way.go(to, @motion.moved().per_unit(natural), at=t0)
   way.value_at(t0 + at)
 }
 
@@ -165,7 +165,7 @@ test "a room as a node opened the first time, each moment looked at in a run of 
   assert_eq(
     (stepped == jumped, stepped.map(fn(s) { (s.0 * 1000.0).round() }) == want.map(fn(w) { (w * 1000.0).round() }), natural > 30.0),
     (true, true, true),
-    msg="\{stepped} \{jumped} want \{want}",
+    msg="\{Repr(stepped)} \{Repr(jumped)} want \{Repr(want)}",
   )
 }
 
@@ -182,9 +182,9 @@ test "a room as a node turned back half way open: closing from where it was, on 
   let (h, _) = room_sizes(room.val.unwrap())
   // (the same way turned back at 60: from where it is then, as fast as it goes then)
   let way = @motion.Way::new(0.0)
-  way.go(1.0, @motion.move().per_unit(natural), at=t0)
+  way.go(1.0, @motion.moved().per_unit(natural), at=t0)
   let k = way.value_at(t0 + 60.0)
-  way.go(0.0, @motion.move().per_unit(natural), at=t0 + 60.0)
+  way.go(0.0, @motion.moved().per_unit(natural), at=t0 + 60.0)
   let back = way.value_at(t0 + 100.0)
   assert_eq(((h * 1000.0).round(), back < k), ((natural * back * 1000.0).round(), true), msg="\{k} \{back}")
 }
@@ -226,7 +226,7 @@ test "a room as a node grown about the middle of what it draws: a button at its 
   let button = held.kids()[1]
   let (x, _, w, _) = button.rect()
   // (what is drawn: the button alone, 60 wide at the left; grown about its middle, 30 in)
-  assert_eq(((x + w / 2.0) * 1000.0).round(), 30000.0, msg="\{button.rect()}")
+  assert_eq(((x + w / 2.0) * 1000.0).round(), 30000.0, msg="\{Repr(button.rect())}")
 }
 
 ///|
@@ -308,6 +308,6 @@ test "a room on two lines said as a node, opened and closed a second time (the o
   assert_eq(
     alike,
     Array::make(old.length(), true),
-    msg="old \{old.map(fn(o) { (o.0[:1], o.1[:1]) })}\nnode \{new.map(fn(o) { (o.0[:1], o.1[:1]) })}",
+    msg="old \{Repr(old.map(fn(o) { (o.0[:1], o.1[:1]) }))}\nnode \{Repr(new.map(fn(o) { (o.0[:1], o.1[:1]) }))}",
   )
 }

@@ -9,6 +9,18 @@
 let lang_said : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
+/// What the core said of the language and the product forgotten as each Tester starts: a run begins with the core
+/// having said neither, in whichever package's test program (the language was put back by sfapp's reset alone, the
+/// product by none: in a program with no app, sfpages' and sfdesk's, what one test set stayed the next's, 2026-11-11).
+/// A test that wants another language gives its Tester the device's (MBUI_LOCALE) or its core the prefs that say it.
+fn init {
+  @ui.on_reset(fn() {
+    lang_said.set("")
+    product_said.set("")
+  })
+}
+
+///|
 /// "zh" or "en" for a locale (BCP 47: zh-CN, en-US, …; "" none).
 pub fn language_of(locale : String) -> String {
   let l = locale.trim(chars=" ").to_lower()
@@ -93,7 +105,7 @@ pub fn branded(text : String) -> String {
   }
   let chars = text.to_array()
   let word = "still.fail".to_array()
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut i = 0
   while i < chars.length() {
     let j = i + word.length()

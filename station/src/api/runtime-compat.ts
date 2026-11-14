@@ -35,7 +35,7 @@ function shapeFor(path: string): Ty | undefined {
   return undefined;
 }
 
-const EVENTS: Record<string, Ty> = { overview: "Overview", session: "Session", chat: "ChatItem", "thread-view": "ChatThread" };
+const EVENTS: Record<string, Ty> = { overview: "Overview", session: "Session" };
 function frame(text: string, supported: Set<string>): string {
   const lines = text.split("\n");
   const event = lines.find(l => l.startsWith("event: "))?.slice(7);

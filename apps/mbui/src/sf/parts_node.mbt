@@ -14,8 +14,9 @@ pub fn wait_more_node(parent : @view.View, note : () -> WaitNote, sample : (@vie
 
 ///|
 /// What could not be read, in red in a line of its own (wait_line's `error`: at once, no spinner).
-fn wait_line_failed_node(parent : @view.View, words : () -> String) -> Unit {
-  words_node(parent, words, fn() { wait_words }).ink(By(fn() { theme().p.red })) |> ignore
+#callsite(autofill(loc))
+fn wait_line_failed_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> Unit {
+  words_node(loc~, parent, words, fn() { wait_words }).ink(By(fn() { theme().p.red })) |> ignore
 }
 
 ///|
@@ -51,9 +52,10 @@ pub fn[T : Eq, K : Hash + Eq] keyed_rows_node(
 ///|
 /// What stands apart from what follows (apart's, as a node) in `parent`, made by `body`: wide, 28 under it; narrow,
 /// what it holds 12 apart. The node.
-pub fn apart_node(parent : @view.View, body : (@view.View) -> Unit) -> @view.View {
+#callsite(autofill(loc))
+pub fn apart_node(parent : @view.View, body : (@view.View) -> Unit, loc~ : SourceLoc) -> @view.View {
   let narrow = look_node(parent) is Narrow
-  parent.box(fn(a) {
+  parent.box(made_for=loc, fn(a) {
     style_node(a, fn() { if narrow { wide_block } else { wide_apart } })
     body(a)
   })
@@ -62,8 +64,9 @@ pub fn apart_node(parent : @view.View, body : (@view.View) -> Unit) -> @view.Vie
 ///|
 /// Steps one after another (steps', as nodes) in `parent`: each its number and a dot in a 20 column, what `steps` makes
 /// of it beside it in a line that goes on in lines, 8 apart.
-pub fn steps_node(parent : @view.View, steps : Array[(@view.View) -> Unit]) -> Unit {
-  parent.box(fn(b) {
+#callsite(autofill(loc))
+pub fn steps_node(parent : @view.View, steps : Array[(@view.View) -> Unit], loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(b) {
     style_node(b, fn() { steps_box })
     for i, step in steps {
       b.box(fn(r) {
@@ -89,8 +92,9 @@ pub fn steps_node(parent : @view.View, steps : Array[(@view.View) -> Unit]) -> U
 ///|
 /// What was checked and found right (verify_ok's, as a node) in `parent`: a tick in a circle in green, `words` beside
 /// it in green.
-pub fn verify_ok_node(parent : @view.View, words : () -> String) -> Unit {
-  parent.box(fn(b) {
+#callsite(autofill(loc))
+pub fn verify_ok_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(b) {
     style_node(b, fn() { verify_line })
     icon_node(b, "check-circle", verify_icon, By(fn() { theme().p.green_ink })) |> ignore
     words_node(b, words, fn() { verify_words }) |> ignore
@@ -103,10 +107,16 @@ pub fn verify_ok_node(parent : @view.View, words : () -> String) -> Unit {
 /// `parent`: its `title`, and at its end, in the room the title leaves, what `value` makes; going nowhere. A row's room
 /// and corner, cutting what it holds there (what lies in its corners stands in the row's, as said_row's row following
 /// its card's corner does): narrow, a card's row; wide, a list's row.
-pub fn said_row_node(parent : @view.View, title : () -> String, value : (@view.View) -> Unit) -> Unit {
+#callsite(autofill(loc))
+pub fn said_row_node(
+  parent : @view.View,
+  title : () -> String,
+  value : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> Unit {
   let at = part_of(parent)
   let narrow = at.look is Narrow
-  parent.box(fn(r) {
+  parent.box(made_for=loc, fn(r) {
     r
     .row(Is(true))
     .gap(Is(12.0))

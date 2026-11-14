@@ -7,7 +7,7 @@
 /// one order.
 fn wide_drawn(t : @ui.Tester) -> Array[String] {
   t.draw()
-  let all = t.drawn_instances().map(fn(a) {
+  let all = t.drawn_instances_keyed().map(fn(a) {
     a
     .mapi(fn(j, x) {
       if a[5] == 1.0 && j == 12 {

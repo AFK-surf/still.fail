@@ -64,7 +64,17 @@ fn Reader::answer(self : Reader, line : String) -> Json {
       }
     { "op": String(op), .. } if moved(op) =>
       try {
-        { "id": id, "text": Json::string(self.read(op, ask.value("args").unwrap_or(Json::null())).stringify()) }
+        @readops.prepare_up_jobs.val = None
+        @readops.prepare_workspace_up_jobs.val = false
+        let answer : Map[String, Json] = { "id": id, "text": Json::string(self.read(op, ask).stringify()) }
+        // (an old session whose up jobs' lookup the pool is to prepare now: read/worker.ts `prepareUpJobs`)
+        if @readops.prepare_up_jobs.val is Some(session) {
+          answer["prepareUpJobs"] = Json::string(session)
+        }
+        if @readops.prepare_workspace_up_jobs.val {
+          answer["prepareWorkspaceUpJobs"] = true
+        }
+        Json::object(answer)
       } catch {
         @readops.Refused(status, m) => { "id": id, "status": Json::number(status.to_double()), "error": Json::string(m) }
         e => { "id": id, "status": 500, "error": Json::string(message(e)) }
@@ -77,14 +87,15 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage"].contains(
     op,
   )
 }
 
 ///|
 /// A read, in one snapshot as read/worker.ts makes it (a transaction around it).
-fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
+fn Reader::read(self : Reader, op : String, ask : Json) -> Json raise {
+  let args = ask.value("args").unwrap_or(Json::null())
   let db = match self.reading {
     Some(db) => db
     None => {
@@ -92,6 +103,10 @@ fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
       self.reading = Some(db)
       db
     }
+  }
+  // read/worker.ts `learn`: the model catalog as the pool gives it when it changed
+  if ask.value("catalog") is Some(models) {
+    @readops.learn_catalog(models)
   }
   db.exec("BEGIN")
   defer (db.exec("COMMIT") catch { _ => () })
@@ -109,6 +124,38 @@ fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
     "openedChatSaid" => @readops.opened_chat_said(db, args)
     "widgetState" => @readops.widget_state(db, args)
     "transcriptFile" => @readops.transcript_file(db, self.host, self.data, self.sep, self.finder, args)
+    "memory" => @readops.memory(self.host, self.data, self.sep, args)
+    "machineSessions" => @readops.machine_sessions(db, self.host, self.sep, args)
+    "machineSession" => @readops.machine_session(db, self.host, self.sep, args)
+    "sessionsAtWork" => @readops.sessions_at_work(db, args)
+    "policyChecks" => @readops.policy_checks(db, args)
+    "recentConnectPeople" => @readops.recent_connect_people(db, args)
+    "usageTurns" => @readops.usage_turns(db, args)
+    "usageCalls" => @readops.usage_calls(db, args)
+    "outflowMessages" => @readops.outflow_messages(db, self.host, self.data, self.sep, args)
+    "archiveLook" => @readops.archive_look(db, args)
+    "recentChatList" => @readops.recent_chat_list(db, args)
+    "searchChatList" => @readops.search_chat_list(db, args)
+    "threadList" => @readops.thread_list(db)
+    "sharedOf" => @readops.shared_of(db, self.host, self.data, self.sep, ask)
+    "sharedChats" => @readops.shared_chats(db, self.host, self.data, self.sep, ask)
+    "chatMarks" => @readops.chat_marks(db, self.host, self.data, self.sep, ask)
+    "entries" => @readops.thread_entries(db, self.host, self.data, self.sep, ask)
+    "letters" => @readops.thread_letters(db, self.host, self.data, self.sep, ask)
+    "summary" => @readops.session_summary(db, self.host, self.data, self.sep, ask)
+    "sessions" => @readops.session_list(db, self.host, self.data, self.sep, ask)
+    "session" => @readops.session_page(db, self.host, self.data, self.sep, ask)
+    "threads" => @readops.thread_list_of(db, self.host, self.data, self.sep, ask)
+    "thread" => @readops.thread_of(db, self.host, self.data, self.sep, ask)
+    "turnNotices" => @readops.turn_notices(db, self.host, self.data, self.sep, ask)
+    "saidNotices" => @readops.said_notices(db, self.host, self.data, self.sep, ask)
+    "chats" => @readops.viewer_chat_list(db, self.host, self.data, self.sep, ask)
+    "chatRows" => @readops.viewer_chat_rows(db, self.host, self.data, self.sep, ask)
+    "outflowChats" => @readops.outflow_chats(db, self.host, self.data, self.sep, ask)
+    "openJobs" => @readops.open_jobs(db, self.host, self.data, self.sep, ask)
+    "resourceChats" => @readops.resource_chats(db, self.host, self.data, self.sep, ask)
+    "usage" => @readops.usage_page(db, self.host, self.data, self.sep, ask)
+    "outflowUsage" => @readops.outflow_usage(db, self.host, self.data, self.sep, ask)
     _ => fail("no read \{op}")
   }
 }
@@ -450,6 +497,80 @@ async fn vault_uses(host : @host.Host, db_path : String) -> Unit {
 }
 
 ///|
+/// The export of the station's conversations (replica/runner.ts `MbRunner`, in its worker's place): each line an ask
+/// `{id, type, …}` (`places`, `pass`, `newGenerations`, `sources`, `close`), answered `{id, answer}` or `{id, error}`,
+/// one at a time. The time is the station's, said with each ask (`now`).
+async fn replica_export(host : @host.Host, db : String, replica : String, data_dir : String, origin : String, sep : String) -> Unit {
+  let clock = Ref(0.0)
+  // (a test's: batches smaller than BATCH_BYTES, or left as written)
+  let batch_bytes = match flag("--batch-bytes") {
+    Some(n) => @string.parse_int(n) catch { _ => @replica.batch_bytes }
+    None => @replica.batch_bytes
+  }
+  let fold = !@host.args().contains("--no-fold")
+  let exporter = @replica.Exporter::new(host, sep, db, replica, data_dir, origin, () => clock.val, batch_bytes~, fold~) catch {
+    e => {
+      let failed : Json = { "failed": Json::string(message(e)) }
+      host.say(failed.stringify())
+      return
+    }
+  }
+  while host.line() is Some(line) {
+    if line == "" {
+      continue
+    }
+    let ask = @jsjson.parse(line) catch { _ => @jsjson.JValue::Null }
+    let id = match ask.get("id") {
+      Some(Num(n)) => n
+      _ => 0.0
+    }
+    if ask.get("now") is Some(Num(now)) {
+      clock.val = now
+    }
+    let kind = match ask.get("type") {
+      Some(Str(u)) => @jsjson.text(u)
+      _ => ""
+    }
+    let answer : Result[@jsjson.JValue, String] = try {
+      match kind {
+        "places" => {
+          exporter.set_places(ask.get("places").unwrap_or(Null))
+          Ok(Null)
+        }
+        "pass" => Ok(exporter.pass(ask.get("told").unwrap_or(Null)))
+        "newGenerations" => {
+          exporter.new_generations(match ask.get("after") { Some(Num(a)) => a; _ => 0.0 })
+          Ok(Null)
+        }
+        "sources" => {
+          let hashes = match ask.get("hashes") {
+            Some(Arr(items)) => items.filter_map(h => if h is Str(u) { Some(@jsjson.text(u)) } else { None })
+            _ => []
+          }
+          Ok(exporter.sources(hashes))
+        }
+        "close" => {
+          exporter.close()
+          host.say("{\"id\":\{@jsjson.stringify(Num(id))},\"answer\":null}")
+          return
+        }
+        _ => Err("no such ask: \{kind}")
+      }
+    } catch {
+      e => Err(message(e))
+    }
+    match answer {
+      Ok(v) => host.say("{\"id\":\{@jsjson.stringify(Num(id))},\"answer\":\{@jsjson.stringify(v)}}")
+      Err(m) => {
+        let failed : Json = { "id": Json::number(id), "error": Json::string(m) }
+        host.say(failed.stringify())
+      }
+    }
+  }
+  exporter.close()
+}
+
+///|
 /// The live view's transcript locator (sessions/live-locator.ts): each line a `locate` or a reply to one being looked
 /// for (@locate.Locator).
 async fn live_locator(host : @host.Host, db_path : String, data : String, sep : String) -> Unit {
@@ -625,6 +746,48 @@ fn main {
     }
     (Some("live-locator"), Some(db), Some(data)) =>
       @host.run(shell_dir=beside(db, "shell"), host => live_locator(host, db, data, flag("--sep").unwrap_or("/")))
+    (Some("forward"), _, _) =>
+      // (a listening socket, handed down or bound here, carried to a port of this machine: `{"listening": port}` said once
+      // it listens; the shell's own files in `--shell-dir`)
+      @host.run(shell_dir=flag("--shell-dir").unwrap_or("."), host => {
+        let listening = match flag("--listen-fd") {
+          Some(fd) => @front.listen(host, fd=@string.parse_int(fd) catch { _ => -1 })
+          None => @front.listen(host, port=@string.parse_int(flag("--listen-port").unwrap_or("0")) catch { _ => 0 })
+        }
+        let said : Json = { "listening": Json::number(listening.port.to_double()) }
+        host.say(said.stringify())
+        @front.forward(host, listening, @string.parse_int(flag("--to").unwrap_or("0")) catch { _ => 0 })
+      })
+    (Some("mesh"), _, _) =>
+      // (the station's iroh endpoint kept for its Node, asked on the Unix socket at `--socket`: `{"listening": path}`
+      // said once it listens; the shell's own files in `--shell-dir`)
+      @host.run(shell_dir=flag("--shell-dir").unwrap_or("."), host => @front.mesh(host, flag("--socket").unwrap_or("mesh.sock")))
+    (Some("replica-export"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => replica_export(
+        host,
+        db,
+        flag("--replica").unwrap_or(beside(db, "replica")),
+        flag("--data-dir").unwrap_or(""),
+        flag("--origin").unwrap_or(""),
+        flag("--sep").unwrap_or("/"),
+      ))
+    (Some("replica-restore"), Some(db), Some(data)) =>
+      // (the restore brought before, put in: a line `{"ready": …}` (null: none waited) or `{"error"}`)
+      @host.run(shell_dir=beside(db, "shell"), host => {
+        let now = @string.parse_double(flag("--now").unwrap_or("0")) catch { _ => 0.0 }
+        let line = try {
+          match @replica.take_back(host, flag("--sep").unwrap_or("/"), data, db, now) {
+            Some(ready) => "{\"ready\":\{@jsjson.stringify(ready)}}"
+            None => "{\"ready\":null}"
+          }
+        } catch {
+          e => {
+            let failed : Json = { "error": Json::string(message(e)) }
+            failed.stringify()
+          }
+        }
+        host.say(line)
+      })
     (Some("vault-uses"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => vault_uses(host, db))
     (Some("outflow-chats"), Some(db), _) =>
@@ -721,7 +884,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill|post-blocks|usage-retire|usage-scope|signin-save|vault-uses --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill|post-blocks|usage-retire|usage-scope|signin-save|vault-uses|replica-export --db <file> | --builder replica-restore --db <file> --data <dir>")
       2
     }
   }

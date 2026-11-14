@@ -206,6 +206,31 @@ final class Crashes {
         handled(context, "MemoryRunaway", value, "memory_runaway", facts);
     }
 
+    /** What the window thread found (mbui's src/ui/journal.mbt): a hang, or what the app did while shown, sent at once as
+     *  {@code name} with the JSON's fields as its properties (kinds of work and times only: no words, no messages), as
+     *  the account the last report went as, or android-anonymous before one. */
+    static void hang(Context context, String json, String name) {
+        if (!hasKey()) return;
+        String known = account(context);
+        String account = known != null ? known : "android-anonymous";
+        long at = System.currentTimeMillis();
+        new Thread(() -> {
+            try {
+                JSONObject p = new JSONObject(json);
+                JSONObject d = device();
+                for (Iterator<String> k = d.keys(); k.hasNext(); ) {
+                    String key = k.next();
+                    p.put(key, d.get(key));
+                }
+                List<JSONObject> batch = new ArrayList<>();
+                batch.add(new JSONObject().put("event", name).put("distinct_id", account)
+                        .put("uuid", UUID.randomUUID().toString()).put("timestamp", iso(at)).put("properties", p));
+                send(context, batch);
+            } catch (Exception ignored) {
+            }
+        }, "stillfail-hangs").start();
+    }
+
     /** An error the app got past, sent at once as {@code type} with {@code value}, {@code reason} and {@code facts}. */
     private static void handled(Context context, String type, String value, String reason, JSONObject facts) {
         if (!hasKey()) return;

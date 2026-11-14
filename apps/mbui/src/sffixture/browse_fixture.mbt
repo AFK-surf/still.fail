@@ -62,7 +62,7 @@ pub fn fix_browse_prefs_set(params : Json) -> Bool {
         let kept = match fix_browse.prefs.get(k) {
           Some(x) => x
           None => {
-            let x : Map[String, Json] = {}
+            let x : Map[String, Json] = Map([])
             fix_browse.prefs[k] = x
             x
           }
@@ -140,10 +140,10 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
   let station = text(params, "station")
   let root = text(params, "root")
   // the folders it surely reads: the way down to the one shown (and to the one a press is in)
-  let folders : Map[String, Json] = {}
+  let folders : Map[String, Json] = Map([])
   let given = fn(path : String) {
     let mut so_far = ""
-    let parts = if path == "" { [] } else { path.split("/").map(fn(p) { p.to_string() }).collect() }
+    let parts = if path == "" { [] } else { path.split("/").map(fn(p) { p.to_owned() }).collect() }
     folders[station + "\n" + root + "\n"] = fix_browse_folder(mode, root, "")
     for p in parts {
       so_far = dv_join(so_far, p)
@@ -157,7 +157,7 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
     }
   }
   // the stations for a path typed; the time for a letter typed (else none, so a step is the same at any time)
-  let stations : Map[String, Json] = {}
+  let stations : Map[String, Json] = Map([])
   if name == "files.go" {
     match f {
       Some(f) => stations[text(params, "workspace")] = fix_browse_stations(f, text(params, "workspace"))
@@ -170,7 +170,7 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
     ("type", Some(c)) => c.moment()
     _ => 0.0
   }
-  let prefs : Map[String, Json] = {}
+  let prefs : Map[String, Json] = Map([])
   for k in ["driveViews", "filesTabs"] {
     prefs[k] = Json::object(fix_browse.prefs.get(k).unwrap_or({}).copy())
   }
@@ -197,7 +197,7 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
                 String(s) => s
                 _ => ""
               }
-              let parts = key.split("\n").map(fn(p) { p.to_string() }).collect()
+              let parts = key.split("\n").map(fn(p) { p.to_owned() }).collect()
               if parts.length() == 3 {
                 folders[key] = fix_browse_folder(mode, parts[1], parts[2])
               }
@@ -272,29 +272,5 @@ pub fn fix_browse_do(f : Fixture?, mode : String, name : String, params : Json) 
       }
     }
     Err(e) => Err(e)
-  }
-}
-
-///|
-/// The stations a workspace lists, those with a drive, this machine's (`here`) first: as the core gives the `stations`
-/// topic asked with `drive` (drive-browse.ts withDrive, kept).
-pub fn fix_browse_with_drive(f : Fixture, stations : Json?, here : String) -> Json? {
-  ignore(f)
-  let stations = match stations {
-    Some(s) => s
-    None => return None
-  }
-  let kept = match @sf.kept_call.val {
-    Some(k) => k
-    None => return None
-  }
-  let ask : Json = {
-    "op": {
-      "withDrive": { "stations": stations, "here": if here == "" { Json::null() } else { Json::string(here) } },
-    },
-  }
-  match kept("browse", ask, None) {
-    Some(Ok((answer, _))) => field(Some(answer), "value")
-    _ => None
   }
 }

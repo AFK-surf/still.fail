@@ -27,7 +27,11 @@ pub fn agent_avatar(@ui.Ctx, @sfbase.Source, MessageHere, String, String, String
 
 pub fn agent_badge(@ui.Ctx, String, Double, Int64) -> Unit
 
+pub fn agent_badge_node(@view.View, String, Double, ground? : () -> Int64) -> Unit
+
 pub fn agent_card(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @json.Json, across? : Bool) -> Unit
+
+pub fn agent_card_node(@view.View, @sfbase.Source, @sfbase.ChatRef, String, @sf.TipLayer, () -> @view.View?, across? : Bool) -> () -> Bool
 
 pub fn agent_mark(@ui.Ctx, String, String, String, side? : Double, said? : String, ground? : Int64, corner? : @ui.Radius, joined? : Bool) -> Unit
 
@@ -40,6 +44,8 @@ pub fn answer_invitation(@sfbase.Source, @json.Json?, String, Bool, String, () -
 pub fn appearance_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub fn archiving_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
+
+pub fn ask_bringing(@sfbase.Source, String, Map[String, @json.Json], () -> Bool, (@json.Json, Bool) -> Unit, bringing? : () -> Unit, failed? : () -> Unit) -> Unit
 
 pub let ask_turns : Map[String, Int32]
 
@@ -79,11 +85,15 @@ pub fn chat_mark(@ui.Ctx, String) -> Int32
 
 pub fn chat_mark_node(@view.View, () -> String) -> Unit
 
-pub fn chat_menu_of(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?]
+pub fn chat_menu_of(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?], share_from~ : () -> @sf.Beside) -> Array[@sf.MenuItem?]
 
 pub fn chat_messages_sample(@ui.Ctx, Double) -> Unit
 
 pub let chat_narrow_w : Double
+
+pub fn chat_page_body_node(@view.View, @sfbase.Source, @sfbase.ChatRef, tips~ : @sf.TipLayer, stint~ : () -> Int32, shows~ : () -> Bool, top? : () -> Double, foot? : () -> Double, composer? : (@view.View) -> Unit, lead? : Double) -> Unit
+
+pub fn chat_read_left(@sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView?) -> Bool
 
 pub fn chat_row(@ui.Ctx, @sfbase.Source, @sfbase.ChatItem, String, on? : Bool, list_ground? : Int64, more? : Bool, lifted? : Double, found? : Bool, opened? : (@sfbase.ChatRef) -> Unit, unghost? : (Bool) -> Unit, at? : @sf.ListAt) -> Int32
 
@@ -116,6 +126,8 @@ pub fn composer_open_room(@ui.Ctx, Double, corner? : Double) -> Double
 pub fn composer_place(@ui.Ctx, Double) -> ComposerPlace
 
 pub fn composer_room(@ui.Ctx, String, settled? : Bool, held? : Bool) -> Double
+
+pub let composer_shape_ms : Double
 
 pub fn composer_side() -> Double
 
@@ -166,6 +178,8 @@ pub fn filter_menu_open() -> Bool
 pub fn find_at() -> Int32
 
 pub fn find_bar(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Double, FindList) -> Unit
+
+pub fn find_bar_node(@view.View, @sfbase.Source, @sfbase.ChatRef, () -> Double?, FindList, @sf.TipLayer) -> @view.View
 
 pub fn find_chat() -> String
 
@@ -315,6 +329,8 @@ pub fn lock_wait_page(@ui.Ctx, @settings.Core, @settings.Here) -> Unit
 
 pub fn login_card(@ui.Ctx, @settings.Core, String, String, marked? : Bool, place? : String) -> Unit
 
+pub fn login_card_node(@view.View, @settings.Core, String, String, marked? : Bool, place? : String) -> Unit
+
 pub fn login_cards_reset() -> Unit
 
 pub fn login_steps(@ui.Ctx, @settings.Core, String, @json.Json?, String, Bool, (String, () -> Unit) -> Unit, in_station? : (String, Bool, (String) -> Unit)) -> Unit
@@ -349,7 +365,11 @@ pub let narrow_row_title : @ui.TextStyle
 
 pub fn new_chat_ask(String) -> Unit
 
+pub fn new_chat_asked(String) -> Map[String, @json.Json]
+
 pub fn new_chat_left(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, NewChatFrame, @json.Json?, @motion.Anim, @motion.Anim) -> Unit
+
+pub fn new_chat_opens(String, (String, Map[String, @json.Json]) -> @sfbase.TopicState) -> Bool
 
 pub fn new_chat_page(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, NewChatFrame) -> Unit
 
@@ -357,7 +377,11 @@ pub fn new_connect_dialog(@sfbase.Source, @settings.Core, @settings.Here, String
 
 pub fn new_profile_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer) -> Unit
 
+pub fn new_workspace_put(@sfbase.Source, name~ : String, code~ : String, error_code~ : String) -> Unit
+
 pub fn news_of(@sfbase.Source) -> @json.Json?
+
+pub fn news_params() -> Map[String, @json.Json]
 
 pub fn no_workspace_node(@view.View, @sfbase.Source, () -> @json.Json?, () -> Unit) -> @view.View
 
@@ -372,6 +396,8 @@ pub fn open_context_actions(@sfbase.Source, String, String, @json.Json?, @sf.Bes
 pub fn open_dialog(String, (@ui.Ctx, () -> Unit) -> Unit, (@ui.Ctx, () -> Unit) -> Unit, description? : String, wide? : Bool, live? : () -> (String, String, String), on_gone? : () -> Unit, steps? : Bool, back? : () -> Unit) -> Unit
 
 pub fn open_new_workspace(@sfbase.Source) -> Unit
+
+pub fn open_outline(@sfbase.Source, @sfbase.ChatRef, Double, Double, from~ : @sf.Anchor, side? : @view.Side, along? : @view.Along, keys? : Bool, stint? : Int32, typed? : String) -> Unit
 
 pub fn open_publish(@sfbase.Source, @sfbase.ChatRef, Double, picked? : Double?) -> Unit
 
@@ -397,6 +423,14 @@ pub fn opened_items(Array[@sfbase.OpenedChat], then? : () -> Unit) -> Array[@sf.
 
 pub fn others_message(@ui.Ctx, Bool, String, @sfbase.Stamp?, emits? : (@sfbase.Emits, String, Double)?, share? : (() -> Unit)?, share_link? : String, share_words? : String, () -> Unit, () -> Unit, (() -> Unit)?, () -> Unit) -> Unit
 
+pub fn outline_current(Array[Double], Double, Bool) -> Double
+
+pub fn outline_open_keys(@sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, stint? : Int32, typed? : String) -> Bool
+
+pub fn outline_params(@sfbase.ChatRef, Double) -> Map[String, @json.Json]
+
+pub fn outline_preset(String, String) -> Unit
+
 pub fn pair_steps(@ui.Ctx, @settings.Core, String, in_card? : Bool) -> Unit
 
 pub fn permissions_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
@@ -420,10 +454,6 @@ pub let pf_name_line : @ui.Style
 pub let pf_spin : Double
 
 pub let pf_sub : @ui.TextStyle
-
-pub let pf_tag : @ui.Style
-
-pub let pf_tag_words : @ui.TextStyle
 
 pub fn pick_files(@sfbase.Writing) -> Unit
 
@@ -465,11 +495,15 @@ pub let publish_viz_settle_ms : Double
 
 pub fn pull_mark(@ui.Ctx, @json.Json?, Double) -> Unit
 
+pub fn pull_mark_node(@view.View, () -> @json.Json?, Double) -> Unit
+
 pub fn pull_title(@json.Json?) -> String
 
 pub fn quotes(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Quote], Array[@sfbase.Attachment], mine? : Bool, at? : String) -> Unit
 
-pub fn rail_card_node(@view.View, @sfbase.Source, () -> @sfbase.Workspace?, String) -> Unit
+pub fn rail_card_node(@view.View, @sfbase.Source, () -> @sfbase.Workspace?, String, go? : (String) -> Unit) -> Unit
+
+pub fn rail_fits(Double) -> Bool
 
 pub fn reader_page(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
 
@@ -515,9 +549,15 @@ pub fn row_mark(@ui.Ctx, String, String) -> Unit
 
 pub fn rows_rest() -> Double
 
+pub fn said_go(@sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, Int32) -> Bool
+
+pub fn said_step(Array[Double], Double, Bool, Int32) -> Double?
+
 pub fn sample_chat(Int32) -> @sfbase.ChatItem
 
 pub fn sample_stations() -> Array[@json.Json]
+
+pub fn screen_covered(@sfbase.Source, String, String, Bool) -> Unit
 
 pub fn screen_fix_others(Array[String]) -> Unit
 
@@ -601,19 +641,25 @@ pub fn station_archiving_node(@view.View, @settings.Core, () -> @settings.Here, 
 
 pub fn station_figures(@ui.Ctx, @sfbase.Source, @json.Json?) -> Unit
 
+pub fn station_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer, stint? : () -> Int32) -> Unit
+
 pub fn station_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
+
+pub fn station_retire_panel(@settings.Core, @settings.Here, @json.Json?, @json.Json) -> Unit
 
 pub fn station_state(@ui.Ctx, @json.Json?) -> Unit
 
 pub fn station_waiting(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
 
-pub fn step_card(@ui.Ctx, String, String, String, () -> Unit) -> Unit
+pub fn step_card(@ui.Ctx, String, String, String, go? : (() -> Unit)?) -> Unit
 
 pub let steps_marked_ms : Double
 
 pub fn switch_workspace(@sfbase.Source, String) -> Unit
 
 pub fn thing_menu(@ui.Ctx, Int32, Double, String, (Double) -> Unit) -> Unit
+
+pub fn thing_menu_node_at(Double, Double, Double, String, (Double) -> Unit) -> Unit
 
 pub fn things_body(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Double, Bool, (Double) -> Unit) -> Unit
 
@@ -723,7 +769,7 @@ pub(all) struct FindList {
 }
 
 pub(all) struct Finding {
-  mut chat : String
+  chat : @signals.Signal[String]
   field : @ui.Field
   mut query : String
   asked : @signals.Signal[String]

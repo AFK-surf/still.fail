@@ -29,7 +29,7 @@ export const routes = ({ xshare, store }: { xshare?: ChatShares; store?: Store }
         answer(async (x, s) => {
           const key = segment(k!);
           // Its own chat on the pages, else the Slack thread it is in.
-          const home = s.getSession(key) === null ? null : (s.homeChat(key) ?? s.sessionThreads(key)[0]?.thread ?? null);
+          const home = s.getSession(key) === null ? null : (s.homeChat(key) ?? s.sessionThreads(key, 1)[0]?.thread ?? null);
           if (home === null) throw new Refused(404, `no chat ${key} on this station`);
           const viewer = r.viewer;
           if (home.createdBy !== viewer.email && viewer.role !== "owner" && viewer.role !== "admin") {

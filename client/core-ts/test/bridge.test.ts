@@ -13,6 +13,7 @@ import { Bridge, BridgeHost, bridgeIroh, startBridged } from "../src/hosts/bridg
 import { loadAddon } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Mesh } from "../src/mesh.ts";
+import { STATION_MESH } from "../src/station/mesh-wire.ts";
 import { Runner } from "../src/runtime.ts";
 import { FakeHost } from "../src/testing.ts";
 import { Tracer } from "../src/trace.ts";
@@ -233,7 +234,7 @@ test("the_mesh_goes_through_the_bridges_iroh", { skip }, async () => {
   const { dir, native, bridge } = shell();
   const host = new FakeHost();
   const runner = new Runner();
-  const mesh = await runner.run(Mesh.make({ host, runner, tracer: new Tracer(host, runner, 1), iroh: bridgeIroh(bridge), wakes: new Wakes() }, []));
+  const mesh = await runner.run(Mesh.make({ host, runner, tracer: new Tracer(host, runner, 1), iroh: bridgeIroh(bridge), wakes: new Wakes(), ...STATION_MESH }, []));
   mesh.addAddr(station.addr());
   const link = await runner.run(mesh.link(station.id(), (device) => Effect.succeed({ credential: `ok-${device.length}`, issued_at: 0, expires_at: 0, relay_url: "" } as J)));
   const reply = await runner.run(link.request({ method: "POST", path: "/admin/api/x", headers: [] }, bytes("hi")));

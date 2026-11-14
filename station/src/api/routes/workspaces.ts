@@ -1,12 +1,13 @@
 // The workspaces the station is in: GET lists them, to the owners and admins of any of them
 // all of them, to anyone else only their own; POST /workspaces/join `{token}` (one-time, from the workspace to join) has
 // it join one more, staying in those it is in: for the owners and admins of any of them. `lock`: that workspace's
-// lock's head as the asking device has it, which the station pins there (a locked station joins locked ones only).
+// lock's head as the asking device has it, which the station pins there (a locked station joins locked ones only); a lock
+// it keeps there already, not holding that head, stays (409, cli.ts `KeptLock`): only its machine resets it.
 import { type Answer, type Request, error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { managesStation } from "../../mesh/credential.ts";
 import type { Cloud } from "../../cloud/state.ts";
-import { joinWorkspace } from "../../cli.ts";
+import { KeptLock, joinWorkspace } from "../../cli.ts";
 
 export type WorkspacesDeps = { cloud: Cloud; data: string; changed?: () => void };
 
@@ -36,11 +37,16 @@ export const routes = ({ cloud, data, changed }: WorkspacesDeps): Route[] => [
       if (typeof token !== "string" || token === "") return error(400, "token is required");
       if (lock !== undefined && lock !== null && (typeof lock !== "string" || !/^[0-9a-f]{64}$/.test(lock))) return error(400, "lock: a lock's hash");
       try {
-        const joined = await joinWorkspace(data, token, typeof lock === "string" ? lock : undefined);
+        const joined = await joinWorkspace(data, token, typeof lock === "string" ? lock : undefined, { cloud });
         cloud.reload(true);
         changed?.();
         return json(200, JSON.stringify({ joined: { workspace: joined.workspace, workspaceName: joined.workspace_name, name: joined.name }, ...view(cloud, r) }));
       } catch (e) {
+        // Joined, the lock it keeps there left as it is (cli.ts `nameJoinedLock`): what it is in now is read again.
+        if (e instanceof KeptLock) {
+          cloud.reload(true);
+          changed?.();
+        }
         return error(409, (e as Error).message);
       }
     },

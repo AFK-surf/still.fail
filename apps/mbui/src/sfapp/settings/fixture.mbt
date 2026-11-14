@@ -23,6 +23,9 @@ priv struct SettingsFixture {
   /// a Windows station's running as administrator, as the core shows it (its overview's `elevation`), as a test sets
   /// it; none: not a Windows station
   mut elevation : Json?
+  /// the copies of its chats as the core shows them (its overview's `copies`), as a mode sets them; none: a station
+  /// from before them
+  mut copies : Json?
   /// The station with two GPUs, for the resource overview's fixture.
   mut gpus : Bool
   /// Four GPUs, to exercise another row of resource dials.
@@ -39,6 +42,8 @@ priv struct SettingsFixture {
   mut login_station : Bool
   /// a new profile's page at an Anthropic plan's sign-in, waiting for the code (settings-new-profile-login…)
   mut new_login : Bool
+  /// a new profile's draft at a key's form with a region and a protocol to choose (settings-new-profile-key)
+  mut new_key : Bool
   /// Claude 主账号's trouble: "" none, "quota" its allowance unreadable (settings-profile-quota-failed), "blocked"
   /// its allowance used up (settings-profile-blocked), "login" to be signed in to again (settings-profile-signin)
   mut trouble : String
@@ -46,22 +51,41 @@ priv struct SettingsFixture {
   mut vault_off : Bool
   /// secrets of lin's still in plain text from before security mode (settings-vault-plain), until encrypted
   mut plain_left : Int
+  /// lin's own vault waiting to be keyed anew on Willow, a device holding its key taken out of the lock
+  /// (settings-vault-waits): its row's `waits`
+  mut vault_waits : Bool
   /// the skills shared (true) or no longer (false) since the run started (`skill.share`), by name
   skills_shared : Map[String, Bool]
   /// the quota's resets used on ChatGPT 团队 (`profile.resetQuota`)
   mut resets_used : Int
   /// Two reset credits with distinct expiry times (settings-profile-quota-expiry).
   mut reset_expiry : Bool
+  /// Claude 主账号's resets of two kinds: a 5-hour one usable only at a limit, a Fable one usable now, used by
+  /// `profile.resetQuota` with its kind (settings-profile-quota-kinds).
+  mut reset_kinds : Bool
+  /// the Fable reset used (`profile.resetQuota` with `reset: model`)
+  mut fable_used : Bool
   /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
   models_added : Array[String]
   /// Whether the example API key is enabled.
   mut key_enabled : Bool
+  /// A copy of Maple's Claude subscription among Willow's profiles (settings-profile-copy), and whether Willow uses it.
+  mut copy_shown : Bool
+  mut copy_enabled : Bool
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
   /// prompt closed
   mut pairing : Bool
   mut pairing_personal : Bool
+  /// asked into one more workspace meanwhile (开源, its mark an emoji): fixture_prompts_now
+  mut pairing_more : Bool
   /// Maple is being added to security mode (settings-security-protecting).
   mut protecting : Bool
+  /// the lock's changes made here that no station took yet, by id (settings-security-pending: `fx_pending_rows`),
+  /// a failed one dropped by `lock.pendingDismiss`
+  pending : Array[String]
+  /// what the upgrade of safe mode waits for, as the core's `upgrade` says it on the owner's device that is to finish it
+  /// (settings-security-upgrade-…: `fx_upgrade`), "" none
+  mut upgrade : String
   /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
   mut pair_ended : String
   /// a device of lin's (Pixel 9) set up without the key to 林的库, waiting on this one for it (settings-vault-prompt),
@@ -69,14 +93,35 @@ priv struct SettingsFixture {
   mut key_ask : Bool
   /// how that went: "give" (授权), "hide" (稍后, or closed), "" while it is up
   mut key_ask_ended : String
+  /// the key being given it (the core's `doing`: vault.addDevice under way): fixture_prompts_now
+  mut key_giving : Bool
   /// Maple online too (settings-profiles-pick: Profile's ＋ asks which station)
   mut mba_online : Bool
+  /// how many other stations are online to take Willow's chats as it is retired (settings-station-retire…): 1 Maple,
+  /// 2 Cedar besides; 0 neither (Maple as it is)
+  mut retire_others : Int
+  /// the workspace Willow is retired from is its home (its accounts go along); false: one it joined (they stay)
+  mut retire_home : Bool
   // (settings-station-away: Willow away, what it last said of itself kept)
   mut willow_away : Bool
   // (settings-stations-incompatible: Willow up, saying what this core cannot read)
   mut willow_incompatible : Bool
+  // (settings-stations-tasks-theirs: Willow added by another member, its mode not the viewer's to change)
+  mut willow_theirs : Bool
   /// the subscriptions' allowances a month's window too, three in all (settings-profiles-monthly: OpenCode Go's)
   mut monthly : Bool
+  /// the Claude subscription's allowance its models' own weeks too, under the account's: how many of Fable's, Opus's
+  /// (nearly spent) and Sonnet's (settings-profiles-fable, settings-profile-fable: one; …-own3: all three, five windows)
+  mut own : Int
+  /// that subscription with no 5 小时 window (…-week-fable: the account's week and Fable's alone, as an account says
+  /// them whose short window has not begun)
+  mut no_hours : Bool
+  /// five Claude subscription accounts, by their e-mails, each its own windows as a report showed them
+  /// (settings-profiles-several: one row's figures a point wider than the others')
+  mut several : Bool
+  /// Willow's own Codex login, not a profile yet, with its allowance as the core sends an offered login's
+  /// (settings-profiles-offer: what is left of its week shown where it is listed, as a profile's is)
+  mut offer_quota : Bool
   /// The same subscription independently signed in and borrowed on several stations.
   mut profile_hosts : Bool
   /// Only one station is signed in; another borrows it.
@@ -108,6 +153,7 @@ let fx : SettingsFixture = {
   afresh_above: 1.0,
   logs: true,
   elevation: None,
+  copies: None,
   gpus: false,
   more_gpus: false,
   low_meters: false,
@@ -115,24 +161,41 @@ let fx : SettingsFixture = {
   login: "",
   login_station: false,
   new_login: false,
+  new_key: false,
   trouble: "",
   vault_off: false,
   plain_left: 0,
+  vault_waits: false,
   skills_shared: {},
   resets_used: 0,
   reset_expiry: false,
+  reset_kinds: false,
+  fable_used: false,
   models_added: [],
   key_enabled: true,
+  copy_shown: false,
+  copy_enabled: true,
   pairing: false,
   pairing_personal: false,
+  pairing_more: false,
   protecting: false,
+  pending: [],
+  upgrade: "",
   pair_ended: "",
   key_ask: false,
   key_ask_ended: "",
+  key_giving: false,
   mba_online: false,
+  retire_others: 0,
+  retire_home: true,
   willow_away: false,
   willow_incompatible: false,
+  willow_theirs: false,
   monthly: false,
+  own: 0,
+  no_hours: false,
+  several: false,
+  offer_quota: false,
   profile_hosts: false,
   profile_one_owner: false,
   profile_away: false,
@@ -165,6 +228,32 @@ fn fx_kept_file(key : String, name : String, size : Double, bytes : Double, open
 }
 
 ///|
+/// lin's own vault, 林的库 on Willow, as the core's `vaults` lists it: waiting to be keyed anew there (`waits`) in
+/// settings-vault-waits only, as the core says it only while it does.
+fn fx_vault_row() -> Json {
+  let row : Array[(String, Json)] = [
+    ("id", str("v1")),
+    ("name", str("林的库")),
+    ("owner", str("u1")),
+    ("ownerName", str("林")),
+    ("mine", Json::boolean(true)),
+    ("members", []),
+    ("station", str("st1")),
+    ("stationName", str("Willow")),
+    ("items", Json::number(3.0)),
+    ("devices", Json::number(2.0)),
+    ("open", Json::boolean(false)),
+    ("keyed", Json::boolean(true)),
+    ("missing", Json::number(0.0)),
+    ("recoverable", Json::boolean(true)),
+  ]
+  if fx.vault_waits {
+    row.push(("waits", str("Willow")))
+  }
+  obj(row)
+}
+
+///|
 /// What the drives' files kept come to as a run starts: 38.5 MB.
 let fx_drive_kept : Double = 40370176.0
 
@@ -188,6 +277,11 @@ let fixture_open : FixtureOpen = { sheet: "", list: "", block: 0, frames: 0, des
 let fx_connect_step : Ref[String] = Ref("team")
 
 ///|
+/// 连接 (MBUI_FIXTURE=settings-connects): a Slack app made and not connected yet over the connects, one connect with its
+/// own picture and one with its platform's mark.
+let fx_connects_waiting : Ref[Bool] = Ref(false)
+
+///|
 /// A station with enough accounts in one kind to search its profiles.
 let fx_station_many_profiles : Ref[Bool] = Ref(false)
 
@@ -196,21 +290,33 @@ let fx_station_many_profiles : Ref[Bool] = Ref(false)
 let fx_station_update_failed : Ref[Bool] = Ref(false)
 
 ///|
+/// A station just updated, what the update said kept on its row (the core's `done`): a sentence beside the name, which
+/// a phone with bigger words drew over it (#5117; words_large_wbtest.mbt).
+let fx_station_updated : Ref[Bool] = Ref(false)
+
+///|
 /// The made-up settings as a run starts (reset): none changed, no sheet or scroll to put up.
 fn fixture_reset() -> Unit {
   fx.names.clear()
+  rigs_fixture_reset()
+  devices_fixture_reset()
   fx_many_models.val = false
   fx_many_kept.val = false
   fx_station_many_profiles.val = false
   fx_station_update_failed.val = false
+  fx_station_updated.val = false
   fx.restored.clear()
   fx.skills_shared.clear()
   fx.drive_kept = fx_drive_kept
   fx.kept_cleared.clear()
   fx.resets_used = 0
   fx.reset_expiry = false
+  fx.reset_kinds = false
+  fx.fable_used = false
   fx.models_added.clear()
   fx.key_enabled = true
+  fx.copy_shown = false
+  fx.copy_enabled = true
   fx.version = 0
   fx.marks.clear()
   fx.auto = false
@@ -218,6 +324,8 @@ fn fixture_reset() -> Unit {
   fx.afresh_above = 1.0
   fx.logs = true
   fx.elevation = None
+  fx.copies = None
+  fixture_retire_asked.clear()
   fx.gpus = false
   fx.more_gpus = false
   fx.low_meters = false
@@ -227,19 +335,32 @@ fn fixture_reset() -> Unit {
   fx.login = ""
   fx.login_station = false
   fx.new_login = false
+  fx.new_key = false
   fx.trouble = ""
   fx.vault_off = false
   fx.plain_left = 0
+  fx.vault_waits = false
   fx.pairing = false
   fx.pairing_personal = false
+  fx.pairing_more = false
   fx.protecting = false
+  fx.pending.clear()
+  fx.upgrade = ""
   fx.pair_ended = ""
   fx.key_ask = false
   fx.key_ask_ended = ""
+  fx.key_giving = false
   fx.mba_online = false
+  fx.retire_others = 0
+  fx.retire_home = true
   fx.willow_away = false
   fx.willow_incompatible = false
+  fx.willow_theirs = false
   fx.monthly = false
+  fx.own = 0
+  fx.no_hours = false
+  fx.several = false
+  fx.offer_quota = false
   fx.profile_hosts = false
   fx.profile_one_owner = false
   fx.profile_away = false
@@ -252,6 +373,7 @@ fn fixture_reset() -> Unit {
   fixture_open.frames = 0
   fixture_open.desk = ""
   fx_connect_step.val = "team"
+  fx_connects_waiting.val = false
 }
 
 ///|
@@ -324,13 +446,31 @@ let fixture_changes : @signals.Signal[Int] = @signals.signal(0)
 /// The made-up core changed (the app's fixture, its settings, its browsing): what read its topics in a computed is
 /// worked out again.
 pub fn fixture_changed() -> Unit {
-  fixture_changes.set(@signals.untracked(fn() { fixture_changes.get() }) + 1)
+  fixture_changes.set(fixture_changes.untracked() + 1)
 }
 
 ///|
 /// A topic of the made-up core read: what reads it in a computed follows its changes (fixture_changed).
 pub fn fixture_followed() -> Unit {
   fixture_changes.get() |> ignore
+}
+
+///|
+/// A draft's words told the made-up core (`composer.text`): its topic alone changed, told to what reads that topic
+/// (fixture_draft_followed), nothing else of the made-up core's, as the core changes the draft's alone.
+// kept across runs: a count of changes; a run anew reads its topics anew
+let fixture_draft_changes : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// A draft's words changed in the made-up core (fixture_draft_changes).
+pub fn fixture_draft_changed() -> Unit {
+  fixture_draft_changes.set(fixture_draft_changes.untracked() + 1)
+}
+
+///|
+/// A draft's topic of the made-up core read: followed as its words change (fixture_draft_changed).
+pub fn fixture_draft_followed() -> Unit {
+  fixture_draft_changes.get() |> ignore
 }
 
 ///|
@@ -343,6 +483,18 @@ pub fn fixture_pair_ended() -> String {
 /// How the prompt for a vault's key went (`vault.addDevice` "give", `vault.hidePrompt` "hide"; "" while it is up).
 pub fn fixture_key_ask_ended() -> String {
   fx.key_ask_ended
+}
+
+///|
+/// What the made-up core's `lockPrompts` holds now, as another device changed it (lock_prompts.mbt, vault_prompts.mbt):
+/// the new device asking (`pairing`; into one more workspace meanwhile, `more`), the device waiting for the vault's key
+/// (`key_ask`; the key being given it, `giving`), told to what follows its topics.
+pub fn fixture_prompts_now(pairing~ : Bool, more? : Bool = false, key_ask~ : Bool, giving? : Bool = false) -> Unit {
+  fx.pairing = pairing
+  fx.pairing_more = more
+  fx.key_ask = key_ask
+  fx.key_giving = giving
+  fx_changed()
 }
 
 ///|
@@ -367,19 +519,23 @@ pub fn fixture_page(mode : String) -> String {
     fixture_open.block = block
     fixture_open.frames = 0
   }
-  // 共享调试 as it stands with the phone (fx_adb_share), its host's word on the phone said already
+  // 共享调试 as it stands with the phone (fx_adb_share), its host's word on the phone said already (settings-adb-desk: a
+  // computer's host, no adb of its own)
   fx_adb.val = ""
   if m.has_prefix("settings-adb-") {
     fx_adb.val = m.unsafe_substring(start=13, end=m.length())
     adb_host.phone.set(Some(
-      obj([
-        ("supported", Json::boolean(true)),
-        ("developer", Json::boolean(true)),
-        ("wireless", Json::boolean(fx_adb.val != "off" && fx_adb.val != "chats-off")),
-        ("wifi", Json::boolean(true)),
-        ("canSwitch", Json::boolean(false)),
-        ("reads", Json::boolean(false)),
-      ]),
+      if fx_adb.val == "desk" {
+        obj([("supported", Json::boolean(false)), ("none", Json::boolean(true))])
+      } else {
+        obj([
+          ("supported", Json::boolean(true)),
+          ("developer", Json::boolean(true)),
+          ("wireless", Json::boolean(fx_adb.val != "off" && fx_adb.val != "chats-off")),
+          ("wifi", Json::boolean(true)),
+          ("canSwitch", Json::boolean(false)),
+        ])
+      },
     ))
   }
   match m {
@@ -397,6 +553,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
     // its 设置 while it is away: only what can be changed then
     "settings-stations-incompatible" => fx.willow_incompatible = true
+    "settings-stations-tasks-theirs" => fx.willow_theirs = true
     "settings-station-away" => {
       fx.willow_away = true
       station_parts["ws1/st1"] = "settings"
@@ -407,21 +564,89 @@ pub fn fixture_page(mode : String) -> String {
       station_network_open["ws1/st1"] = true
       up("", "settings/station/ws1/st1", -1)
     }
+    // its 设置 scrolled to 备份: its row (Cedar and Aspen up to date; -alone: the only station of its workspace)
+    "settings-station-copies" | "settings-station-copies-alone" => {
+      fx.copies = Some(fixture_copies_row(alone=m == "settings-station-copies-alone"))
+      station_parts["ws1/st1"] = "settings"
+      up("", "settings/station/ws1/st1", -1)
+    }
+    // a new station's 设置 scrolled to 备份: a backup of a station no longer there it can restore (-offer: 恢复到这台
+    // live; -confirm: asked first), one being restored; -restored: what came of it, after the restart
+    "settings-station-restore" => {
+      fx.copies = Some(fixture_copies_restore(under_way=true, name="Old Mac"))
+      station_parts["ws1/st1"] = "settings"
+      up("", "settings/station/ws1/st1", -1)
+    }
+    // (-long: a station named in 24 characters, its confirm's title kept to one line)
+    "settings-station-restore-offer" | "settings-station-restore-confirm" | "settings-station-restore-confirm-long" => {
+      fx.copies = Some(fixture_copies_restore(under_way=false, name=if m == "settings-station-restore-confirm-long" { "Lin's MacBook Pro (2021)" } else { "Old Mac" }))
+      station_parts["ws1/st1"] = "settings"
+      up("", "settings/station/ws1/st1", -1)
+      if m != "settings-station-restore-offer" {
+        fixture_open.desk = "copies-confirm"
+      }
+    }
+    "settings-station-restored" => {
+      fx.copies = Some(fixture_copies_restored())
+      station_parts["ws1/st1"] = "settings"
+      up("", "settings/station/ws1/st1", -1)
+    }
+    // Willow retired from the workspace, its chats moved to another station (station_retire_node.mbt): its ⋯'s
+    // 迁走聊天并移出… there (-retire: Maple the one other station up); its panel opened over its page, what goes and
+    // what stays as Willow counts them (-panel: Maple chosen; -panel-pick: Maple and Cedar up, none chosen; -panel-none:
+    // none up; -panel-joined: a workspace Willow only joined, its accounts staying; -panel-long: the one up named long);
+    // then 迁移 at the top of its page, its steps as it goes: sending (取消), its chats paused (取消), failed as Maple
+    // took them (重试, 取消), its accounts moving, done (移出 workspace), done with two accounts left behind; -taking:
+    // a station as old stations' chats come to it
+    "settings-station-retire" | "settings-station-retire-panel" | "settings-station-retire-panel-pick" | "settings-station-retire-panel-none" | "settings-station-retire-panel-joined" | "settings-station-retire-panel-long" => {
+      fx.copies = Some(fixture_copies_retire(""))
+      fx.retire_others = match m {
+        "settings-station-retire-panel-pick" => 2
+        "settings-station-retire-panel-none" => 0
+        _ => 1
+      }
+      fx.retire_home = m != "settings-station-retire-panel-joined"
+      if m == "settings-station-retire-panel-long" {
+        fx.names["st2"] = "Lin's MacBook Pro (2021)"
+      }
+      if m != "settings-station-retire" {
+        fixture_open.desk = "retire-panel"
+      }
+      station_parts["ws1/st1"] = "overview"
+    }
+    "settings-station-retire-sending" | "settings-station-retire-sent" | "settings-station-retire-sent-failed" | "settings-station-retire-quiet" | "settings-station-retire-failed" | "settings-station-retire-accounts" | "settings-station-retire-done" | "settings-station-retire-done-left" | "settings-station-taking" => {
+      fx.copies = Some(fixture_copies_retire(if m == "settings-station-taking" { "taking" } else { m.unsafe_substring(start=24, end=m.length()) }))
+      fx.retire_others = 1
+      station_parts["ws1/st1"] = "overview"
+    }
     // its 进程: what still.fail uses of the machine
     "settings-station-processes" => station_parts["ws1/st1"] = "processes"
     "settings-station-lower" => {
       station_parts["ws1/st1"] = "settings"
       up("", "settings/station/ws1/st1", 0)
     }
-    "settings-station-versions" | "settings-station-update-failed" => {
+    "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" => {
       station_parts["ws1/st1"] = "machine"
       fx_station_update_failed.val = m == "settings-station-update-failed"
+      fx_station_updated.val = m == "settings-station-updated"
       up("", "settings/station/ws1/st1", 0)
     }
     "settings-stations-add" => up("add", "", 0)
     // Profile's ＋ with more than one station online: which to add it on (pressed by the film's step)
     "settings-profiles-pick" => fx.mba_online = true
+    // an account's page with the station it is on and its move to another, Maple up to take it: ChatGPT 团队, a
+    // subscription not shared; 备用 key, a key not shared
+    "settings-profile-move" | "settings-profile-move-key" => fx.mba_online = true
     "settings-profiles-monthly" => fx.monthly = true
+    "settings-profiles-fable" | "settings-profile-fable" => fx.own = 1
+    // (settings-station-own3: the station's page, for its accounts' panel pictured with them)
+    "settings-profiles-own3" | "settings-profile-own3" | "settings-station-own3" => fx.own = 3
+    "settings-profiles-week-fable" | "settings-profile-week-fable" => {
+      fx.own = 1
+      fx.no_hours = true
+    }
+    "settings-profiles-several" => fx.several = true
+    "settings-profiles-offer" => fx.offer_quota = true
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
@@ -440,12 +665,27 @@ pub fn fixture_page(mode : String) -> String {
       fx.login = "needs_code"
       up("", "settings/profile/ws1/st1/cc", 0)
     }
+    // A copy of another station's subscription: its page, where this station pauses it (its ⋯'s 停用)
+    "settings-profile-copy" => {
+      fx.copy_shown = true
+      up("", "settings/profile/ws1/st1/bx", 0)
+    }
     "settings-profile-login-station" => {
       fx.login = "needs_code"
       fx.login_station = true
       up("", "settings/profile/ws1/st1/cc", 0)
     }
     "settings-new-profile-login" => fx.new_login = true
+    // a key's form for a provider with a choice of region and of protocol (Kimi's: 中国 / 国际, OpenAI / Anthropic
+    // 兼容)
+    "settings-new-profile-key" => fx.new_key = true
+    // three stations online to add it on (Willow, Maple, Cedar): the add page's choice of them
+    // (desk_profile_wbtest.mbt's station pressed)
+    "settings-new-profile-stations" => {
+      fx.mba_online = true
+      fx.motion = 1
+      fx.names["st3"] = "Cedar"
+    }
     "settings-new-profile-login-station" => {
       fx.new_login = true
       fx.login_station = true
@@ -457,6 +697,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-quota-failed" => fx.trouble = "quota"
     "settings-profile-quota-login" => fx.trouble = "quota-login"
     "settings-profile-quota-expiry" => fx.reset_expiry = true
+    "settings-profile-quota-kinds" => fx.reset_kinds = true
     "settings-profile-blocked" => fx.trouble = "blocked"
     "settings-profile-signin" => fx.trouble = "login"
     // a connect's page; its way of making sessions asked (src/sfpages connect.mbt's dialog)
@@ -464,6 +705,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-connect-mode" => fixture_open.desk = "connect-mode"
     "settings-vault-off" => fx.vault_off = true
     "settings-vault-plain" => fx.plain_left = 2
+    "settings-vault-waits" => fx.vault_waits = true
     "settings-lock-prompt" => fx.pairing = true
     // (one asking into the person's own lock: no workspace named)
     "settings-lock-prompt-personal" => {
@@ -486,6 +728,10 @@ pub fn fixture_page(mode : String) -> String {
     "settings-security-join" => fixture_open.desk = "lock-join"
     "settings-security-off" => fixture_open.desk = "lock-off"
     "settings-security-protecting" => fx.protecting = true
+    "settings-security-pending" => fx.pending.append(["p1", "p2", "p3"])
+    // what the upgrade of safe mode waits for (security.mbt upgrade_keys): a station this person may update, one they
+    // may not, a member, a device, more than six, only their ask, a station of another workspace, a station updating
+    m if m.has_prefix("settings-security-upgrade-") => fx.upgrade = m.unsafe_substring(start=26, end=m.length())
     // the run's models listed (model_list.mbt): more than 8, by series, one of another station's to borrow
     "settings-run-models" => {
       fx_many_models.val = true
@@ -499,8 +745,11 @@ pub fn fixture_page(mode : String) -> String {
     "settings-fonts-code" => fonts_at.set(2)
     "settings-new-connect-platform" => fx_connect_step.val = "platform"
     "settings-new-connect-scan" => fx_connect_step.val = "feishuScan"
+    // a new Comma connect's model, its first step after the platform
+    "settings-new-connect-comma" => fx_connect_step.val = "commaBind"
     // a new Slack app's step: its name, its look
     "settings-new-connect-app" => fx_connect_step.val = "app"
+    "settings-connects" => fx_connects_waiting.val = true
     _ => fx_connect_step.val = "team"
   }
   // a new connect's dialog over 连接 (src/sfpages new_connect.mbt), at the step said above
@@ -509,24 +758,27 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-network" | "settings-station-away" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" | "settings-station-network" | "settings-station-away" | "settings-station-copies" | "settings-station-copies-alone" | "settings-station-restore" | "settings-station-restore-offer" | "settings-station-restore-confirm" | "settings-station-restore-confirm-long" | "settings-station-restored" | "settings-station-retire" | "settings-station-retire-panel" | "settings-station-retire-panel-pick" | "settings-station-retire-panel-none" | "settings-station-retire-panel-joined" | "settings-station-retire-panel-long" | "settings-station-retire-sending" | "settings-station-retire-sent" | "settings-station-retire-sent-failed" | "settings-station-retire-quiet" | "settings-station-retire-failed" | "settings-station-retire-accounts" | "settings-station-retire-done" | "settings-station-retire-done-left" | "settings-station-taking" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
-    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-unsigned" | "settings-adb-gate-none" | "settings-adb-gate-code" | "settings-adb-idle" => "adb:"
-    "settings-adb-lock-member" | "settings-adb-lock-outside" | "settings-adb-lock-code" | "settings-adb-lock-replaced" => "personal-lock:"
+    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-desk" | "settings-adb-unsigned" | "settings-adb-gate-none" | "settings-adb-gate-code" | "settings-adb-idle" | "settings-adb-lock-member" | "settings-adb-lock-two" | "settings-adb-lock-outside" =>
+      "adb:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-share" | "settings-profile-login" | "settings-profile-login-station" =>
       "profile:ws1/st1#cc"
-    "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
+    "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-stations" | "settings-new-profile-login" | "settings-new-profile-login-station" | "settings-new-profile-key" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
     "settings-connect-run" | "settings-connect-switch" | "settings-slack-app" => "connect:ws1/st1#k1"
-    "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" =>
+    // the page of a connect of another kind, none of its sessions yet
+    "settings-connect-comma" | "settings-connect-feishu" => "connect:ws1/st1#k1"
+    "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" | "settings-new-connect-comma" =>
       "connects"
-    "settings-vault-off" | "settings-vault-words" | "settings-vault-recover" | "settings-vault-plain" => "vault"
+    "settings-vault-off" | "settings-vault-words" | "settings-vault-recover" | "settings-vault-plain" | "settings-vault-waits" =>
+      "vault"
     "settings-vault-items" | "settings-vault-add" | "settings-vault-editor" => "vault-items"
     "settings-vault-item" => "vault-item:v1#it1"
     "settings-decisions" => "decisions-settings"
@@ -544,21 +796,29 @@ pub fn fixture_page(mode : String) -> String {
     "settings-connects-motion" => "connects"
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
-    "settings-security-join" | "settings-security-off" | "settings-security-protecting" => "security"
+    "settings-security-join" | "settings-security-off" | "settings-security-protecting" | "settings-security-pending" => "security"
+    m if m.has_prefix("settings-security-upgrade-") => "security"
+    "settings-stations-tasks" | "settings-stations-tasks-outside" | "settings-stations-tasks-theirs" | "settings-stations-devices" => "stations"
+    "settings-station-devices" => "station:ws1/st1"
+    "settings-station-tasks" | "settings-station-tasks-locked" => "station:ws1/aa11"
+    "settings-station-tasks-other" => "station:ws1/bb22"
     "settings-notify-off" | "settings-lock-prompt" | "settings-lock-prompt-personal" | "settings-vault-prompt" => "home"
     // (the notifications' page; the system having refused them: its banner's way to allow them)
     "settings-notify" | "settings-notify-denied" => "notifications"
-    "settings-station" | "settings-station-many-profiles" => "station:ws1/st1"
+    "settings-station" | "settings-station-pages" | "settings-station-many-profiles" | "settings-station-own3" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
-    "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-hosts-cutoff" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
+    "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-hosts-cutoff" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" | "settings-profile-fable" | "settings-profile-own3" | "settings-profile-week-fable" =>
       "profile:ws1/st1#cc"
-    "settings-profile-key" => "profile:ws1/st1#k2"
+    "settings-profile-key" | "settings-profile-move-key" => "profile:ws1/st1#k2"
+    "settings-profile-move" => "profile:ws1/st1#cx"
+    "settings-profile-copy" => "profile:ws1/st1#bx"
     "settings-profile-quota" | "settings-profile-quota-login" | "settings-profile-quota-expiry" => "profile:ws1/st1#cx"
+    "settings-profile-quota-kinds" => "profile:ws1/st1#cc"
     "settings-me-reading" => "me"
     "settings-usage-details-pending" => "usage"
-    "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
+    "settings-profiles-pick" | "settings-profiles-monthly" | "settings-profiles-fable" | "settings-profiles-own3" | "settings-profiles-week-fable" | "settings-profiles-several" | "settings-profiles-offer" => "profiles"
     "settings-connect" | "settings-connect-borrow" => "connect:ws1/st1#k1"
     _ =>
       if m.has_prefix("settings-") {
@@ -637,17 +897,26 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
       (
         "windows",
         Json::array(
-        [
-          obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str("2 小时后恢复"))]),
-          obj([("label", str("本周")), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("amber")), ("refills", str("星期一恢复"))]),
-        ].iter().concat(
+        (if fx.no_hours {
+          []
+        } else {
+          [obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str(if fx.own > 0 { "3 小时 5 分钟后刷新" } else { "2 小时后恢复" }))])]
+        }).iter().concat(
+          // (with its models' own: named and refilling in the words the core says, their real length)
+          [obj([("label", str(if fx.own > 0 { "每周" } else { "本周" })), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("amber")), ("refills", str(if fx.own > 0 { "2 天 4 小时后刷新" } else { "星期一恢复" }))])].iter(),
+        ).concat(
           (if fx.monthly {
             [obj([("label", str("每月")), ("usedPercent", Json::number(3.0)), ("mark", str("M")), ("left", Json::number(97.0)), ("level", str("ok")), ("refills", str("11 月 1 日恢复"))])]
           } else {
             []
           }).iter(),
+        ).concat(
+          [("Fable", 46, "ok"), ("Opus", 8, "red"), ("Sonnet", 100, "ok")].iter().take(fx.own).map(fn(m) {
+            obj([("label", str("每周 · " + m.0)), ("usedPercent", Json::number((100 - m.1).to_double())), ("scope", str(m.0)), ("mark", str(m.0)), ("left", Json::number(m.1.to_double())), ("level", str(m.2)), ("refills", str("2 天 4 小时后刷新"))])
+          }),
         ).collect()),
       ),
+      ..(if id == "cc" { fx_cc_resets() } else { [] }),
       ("checkedAt", Json::number(0.0)),
       ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
     ]),
@@ -692,7 +961,7 @@ pub fn fixture_profiles() -> Array[Json] {
 
 ///|
 fn fx_profiles() -> Array[Json] {
-  [
+  let profiles = [
     fx_profile("cc", "Claude 主账号", "subscription", fx_cc_tone(), "可用", "claude", "Claude 订阅", fx_cc_with([
       ("share", obj([("id", str("sh1")), ("role", str("host")), ("host", str("st1")), ("users", ["st2"])])),
       ("fast", Json::boolean(false)),
@@ -725,6 +994,92 @@ fn fx_profiles() -> Array[Json] {
       ("usedBy", []),
     ]),
   ]
+  if fx.copy_shown {
+    // Maple's Claude subscription borrowed here (share role user): its station pauses it (`enabled`), edits nothing else.
+    profiles.push(
+      fx_profile("bx", "maple@example.com", "subscription", if fx.copy_enabled { "green" } else { "neutral" }, if fx.copy_enabled { "可用" } else { "已停用" }, "claude", "Claude 订阅", [
+        ("email", str("maple@example.com")),
+        ("share", obj([("id", str("sh2")), ("role", str("user")), ("host", str("st2")), ("allow", Json::null()), ("reachable", Json::boolean(true)), ("pausable", Json::boolean(true))])),
+        ("enabled", Json::boolean(fx.copy_enabled)),
+        ("usedBy", []),
+      ]),
+    )
+  }
+  if fx.several {
+    fx_several(profiles)
+  }
+  profiles
+}
+
+///|
+/// The offered login's allowance (settings-profiles-offer): the figures of the fixture's own Claude subscription,
+/// as the Mac's text has them.
+fn fx_offer_quota() -> Json {
+  obj([
+    ("state", str("ok")),
+    ("windows", [
+      obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str("4 小时后恢复"))]),
+      obj([("label", str("本周")), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("ok")), ("refills", str("星期一恢复"))]),
+    ]),
+    ("checkedAt", Json::number(0.0)),
+  ])
+}
+
+///|
+/// The Claude subscription five accounts (settings-profiles-several): the first of them its own (cc), the rest copies,
+/// each by its e-mail with what is left of its windows by mark (Fable's a model's own week).
+fn fx_several(profiles : Array[Json]) -> Unit {
+  let accounts : Array[Array[(String, Int)]] = [
+    [("5H", 26), ("W", 17), ("Fable", 52)],
+    [("5H", 0), ("W", 13), ("Fable", 74)],
+    [("W", 0), ("Fable", 100)],
+    [("W", 48), ("Fable", 26)],
+    [("5H", 0), ("W", 5), ("Fable", 70)],
+  ]
+  guard profiles[0] is Object(cc) else { return }
+  for i, windows in accounts {
+    let p = cc.copy()
+    if i > 0 {
+      p["id"] = str("claude-" + (i + 1).to_string())
+    }
+    p["name"] = str("claude" + (i + 1).to_string() + "@example.com")
+    p["quota"] = obj([
+      ("state", str("ok")),
+      (
+        "windows",
+        Json::array(
+          windows.map(fn(w) {
+            let (mark, left) = w
+            let level = if left <= 10 { "red" } else if left <= 20 { "amber" } else { "ok" }
+            let (label, refills) = match mark {
+              "5H" => ("5 小时", "3 小时 5 分钟后刷新")
+              "W" => ("每周", "2 天 4 小时后刷新")
+              _ => ("每周 · " + mark, "2 天 4 小时后刷新")
+            }
+            let fields = [
+              ("label", str(label)),
+              ("usedPercent", Json::number((100 - left).to_double())),
+              ("mark", str(mark)),
+              ("left", Json::number(left.to_double())),
+              ("level", str(level)),
+              ("refills", str(refills)),
+            ]
+            if mark == "Fable" {
+              fields.push(("scope", str(mark)))
+            }
+            obj(fields)
+          }),
+        ),
+      ),
+      ("checkedAt", Json::number(0.0)),
+      ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
+    ])
+    if i == 0 {
+      profiles[0] = Json::object(p)
+    } else {
+      profiles.insert(i, Json::object(p))
+    }
+  }
 }
 
 ///|
@@ -799,7 +1154,7 @@ fn fx_station_profile_groups(profiles : Array[Json]) -> Array[Json] {
 
 ///|
 fn fx_station_profile_states(profiles : Array[Json]) -> Json {
-  let states : Map[String, Json] = {}
+  let states : Map[String, Json] = Map([])
   for p in profiles {
     let pv = Some(p)
     let trouble = field(pv, "trouble")
@@ -816,7 +1171,7 @@ fn fx_station_profile_states(profiles : Array[Json]) -> Json {
 ///|
 /// The profiles of one account: independently signed in on three stations and also borrowed on three.
 fn fx_profile_hosts() -> Array[Json] {
-  let member = fn(station : String, name : String, id : String, role : String, title : String, about : String) -> Json {
+  let profile_host = fn(station : String, name : String, id : String, role : String, title : String, about : String) -> Json {
     obj([
       ("station", str("ws1/" + station)), ("stationId", str(station)), ("stationName", str(name)),
       ("profileId", str(id)), ("profileName", str(id)), ("role", str(role)), ("title", str(title)),
@@ -825,12 +1180,12 @@ fn fx_profile_hosts() -> Array[Json] {
     ])
   }
   let members = [
-    member("st1", "Willow", "cc", "host", "Willow", "在此 station 登录，借给 Maple、Cedar、Birch"),
-    member("st2", "Maple", "sh1", "user", "Maple", "向 Willow 借用"),
-    member("st3", "Cedar", "local", "own", "Cedar", "在此 station 单独登录"),
-    member("st3", "Cedar", "sh1", "user", "Cedar", "向 Willow 借用"),
-    member("st4", "Birch", "local", "own", "Birch", "在此 station 单独登录"),
-    member("st4", "Birch", "sh1", "user", "Birch", "向 Willow 借用"),
+    profile_host("st1", "Willow", "cc", "host", "Willow", "在此 station 登录，借给 Maple、Cedar、Birch"),
+    profile_host("st2", "Maple", "sh1", "user", "Maple", "向 Willow 借用"),
+    profile_host("st3", "Cedar", "local", "own", "Cedar", "在此 station 单独登录"),
+    profile_host("st3", "Cedar", "sh1", "user", "Cedar", "向 Willow 借用"),
+    profile_host("st4", "Birch", "local", "own", "Birch", "在此 station 单独登录"),
+    profile_host("st4", "Birch", "sh1", "user", "Birch", "向 Willow 借用"),
   ]
   if fx.profile_one_owner {
     return [members[0], members[1]]
@@ -902,6 +1257,51 @@ fn fx_cc_with(more : Array[(String, Json)]) -> Array[(String, Json)] {
 }
 
 ///|
+/// ChatGPT 团队's resets left, in the core's words.
+fn fx_cx_reset_text(left : Int) -> String {
+  if fx.reset_expiry {
+    if left == 2 { "剩余 2 次 · 6 小时 35 分钟后、3 天 19 小时后到期" } else if left == 1 { "剩余 1 次 · 3 天 19 小时后到期" } else { "剩余 0 次" }
+  } else {
+    "还可重置 \{left} 次"
+  }
+}
+
+///|
+/// Claude 主账号's resets of two kinds, as the core offers them (settings-profile-quota-kinds).
+fn fx_cc_resets() -> Array[(String, Json)] {
+  if !fx.reset_kinds {
+    return []
+  }
+  let kinds = [
+    obj([
+      ("id", str("session")),
+      ("kind", str("session")),
+      ("left", Json::number(1.0)),
+      ("usable", Json::boolean(false)),
+      ("title", str("5 小时重置")),
+      ("leftText", str("剩 1 次")),
+      ("text", str("到达它能恢复的上限后才能用")),
+      ("refills", str("立即恢复 5 小时额度")),
+    ]),
+  ]
+  if !fx.fable_used {
+    kinds.push(
+      obj([
+        ("id", str("model")),
+        ("kind", str("model")),
+        ("left", Json::number(1.0)),
+        ("usable", Json::boolean(true)),
+        ("title", str("Fable 重置")),
+        ("leftText", str("剩 1 次")),
+        ("text", str("118 天后到期")),
+        ("refills", str("把本周 Fable 用掉的额度还回每周额度")),
+      ]),
+    )
+  }
+  [("resetCount", Json::number(kinds.length().to_double())), ("resets", Json::array(kinds))]
+}
+
+///|
 /// ChatGPT 团队's own: more models than its page shows at first (one named by hand once added, which can be taken off
 /// again), a reset of its quota left.
 fn fx_cx_more() -> Array[(String, Json)] {
@@ -909,7 +1309,7 @@ fn fx_cx_more() -> Array[(String, Json)] {
     "gpt-6", "gpt-6-mini", "gpt-6-nano", "gpt-6-codex", "gpt-6-codex-mini", "gpt-5.5", "gpt-5.5-mini", "gpt-5.5-codex", "gpt-5",
     "gpt-5-mini", "o9", "o9-mini",
   ]..append(fx.models_added)
-  let names : Map[String, Json] = {}
+  let names : Map[String, Json] = Map([])
   for m in ids {
     names[m] = str(m.to_upper())
   }
@@ -935,9 +1335,22 @@ fn fx_cx_more() -> Array[(String, Json)] {
           ],
         ),
         ("resetCount", Json::number(left.to_double())),
-        ("resetText", str(if fx.reset_expiry {
-          if left == 2 { "剩余 2 次 · 6 小时 35 分钟后、3 天 19 小时后到期" } else if left == 1 { "剩余 1 次 · 3 天 19 小时后到期" } else { "剩余 0 次" }
-        } else { "还可重置 \{left} 次" })),
+        ("resetText", str(fx_cx_reset_text(left))),
+        // (one kind, which says nothing of what it gives back: as the core offers it, with no kind to ask for)
+        ("resets", if left > 0 {
+          [
+            obj([
+              ("kind", str("credit")),
+              ("left", Json::number(left.to_double())),
+              ("usable", Json::boolean(true)),
+              ("title", str("额度重置")),
+              ("leftText", str("剩 \{left} 次")),
+              ("text", str(if fx.reset_expiry { if left == 2 { "6 小时 35 分钟后、3 天 19 小时后到期" } else { "3 天 19 小时后到期" } } else { "" })),
+            ]),
+          ]
+        } else {
+          []
+        }),
         ("checkedAt", Json::number(0.0)),
         ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
       ]),
@@ -979,6 +1392,11 @@ fn fx_connect(id : String, name : String, presence : String, status : String, mo
     ("id", str(id)),
     ("name", str(name)),
     ("team", str("星火")),
+    ..(if fx_connects_waiting.val && id == "k1" {
+      [("botImage", str("https://app.still.fail/avatars/backend.webp"))]
+    } else {
+      []
+    }),
     ("enabled", Json::boolean(true)),
     ("kind", str("slack")),
     ("mode", str(mode)),
@@ -1012,6 +1430,59 @@ fn fx_connect(id : String, name : String, presence : String, status : String, mo
       ),
     ),
     ("modeWords", fx_mode_words(false)),
+  ])
+}
+
+///|
+/// Connect k1 as one of another kind (MBUI_FIXTURE=settings-connect-comma, -feishu): Comma's, reached in Comma and
+/// running a session a Task; Feishu's, its app on 飞书. No Slack workspace either, so no team.
+fn fx_connect_as(kind : String) -> Json {
+  let feishu = kind == "feishu"
+  match fx_connect("k1", if feishu { "飞书助手" } else { "Comma 助手" }, "online", "在线", "multi-session") {
+    Object(o) => {
+      o["kind"] = str(kind)
+      o.remove("team")
+      o.remove("slack")
+      o["sessions"] = Json::number(0.0)
+      o["placeText"] = str(if feishu { "飞书" } else { "Comma" })
+      if feishu {
+        o["feishu"] = obj([
+          ("appId", str("cli_a7f3e9b2c41d500e")),
+          ("appSecret", str("…9c2b")),
+          ("domain", str("feishu")),
+          ("console", str("https://open.feishu.cn/app/cli_a7f3e9b2c41d500e")),
+        ])
+        o["modeWords"] = fx_mode_words(true)
+        o["modeText"] = str("每个群一个会话")
+        o["modeLabel"] = str("每个群一个会话")
+        o["modeSentence"] = str("在群里 @ 它开始，之后群里的消息都交给这个会话；@ 它说「新会话」另开一个，话题群的每个话题各一个会话")
+      }
+      Json::object(o)
+    }
+    v => v
+  }
+}
+
+///|
+/// A new connect on Comma's path at its model (MBUI_FIXTURE=settings-new-connect-comma): step 2 of 3, a model picked.
+fn fx_comma_flow() -> Json {
+  obj([
+    ("step", str("commaBind")),
+    ("title", str("绑定模型")),
+    ("back", str("platform")),
+    ("number", Json::number(2.0)),
+    ("total", Json::number(3.0)),
+    ("mobile", Json::boolean(true)),
+    ("platforms", [str("slack"), str("feishu"), str("comma")]),
+    ("platform", str("comma")),
+    ("comma", obj([("line", str("")), ("ready", Json::boolean(false)), ("error", Json::null())])),
+    ("mode", str("multi-session")),
+    ("requireMention", Json::boolean(true)),
+    ("threads", Json::boolean(false)),
+    ("modeWords", fx_mode_words(false)),
+    ("noProfile", Json::boolean(false)),
+    ("canCreate", Json::boolean(true)),
+    ("pick", fx_session_pick()),
   ])
 }
 
@@ -1148,6 +1619,8 @@ fn fx_station(address : String) -> Json {
       ("face", str("working")),
       ("line", str(if fx.willow_incompatible { "版本不兼容，需要更新" } else if fx.gpus { "AMD EPYC · 32 GB · Linux" } else { "Apple M1 Pro · 32 GB · macOS 26" })),
       ("online", Json::boolean(!fx.willow_away)),
+      // the viewer added it: its mode theirs to change (the core's `mine`)
+      ("mine", Json::boolean(!fx.willow_theirs)),
       ("profileGroups", Json::array(fx_station_profile_groups(profiles))),
       ("profileStates", fx_station_profile_states(profiles)),
       ("link", obj([("state", str(if fx.willow_away { "offline" } else { "online" }))])),
@@ -1162,7 +1635,8 @@ fn fx_station(address : String) -> Json {
           []
         },
       ),
-      ("runtimes", []),
+      // the runtimes it runs, each with its models (its page's: the connect page asks whether one runs on its runtime)
+      ("runtimes", [obj([("runtime", str("claude")), ("models", [str("claude-opus-5-5"), str("claude-sonnet-5")])])]),
       // what its profiles have turned on (Claude 主账号's: Opus 5.5 and Sonnet 5, on claude)
       (
         "models",
@@ -1235,7 +1709,23 @@ fn fx_station(address : String) -> Json {
           // a new profile's sign-in under way (settings-new-profile-login…)
           ("logins", if fx.new_login { [obj([("id", str("login-new")), ("runtime", str("claude")), ("job", fx_login_job("login-new", "needs_code"))])] } else { [] }),
           ("processesText", str("2 个 agent 进程 · claude 1.2 GB")),
-          ("slackApps", []),
+          (
+            "slackApps",
+            if fx_connects_waiting.val {
+              [
+                obj([
+                  ("appId", str("A07GEMINI01")),
+                  ("name", str("Gemini-Monoid")),
+                  ("teamId", str("T04ACME0001")),
+                  ("team", str("星火")),
+                  ("installed", Json::boolean(false)),
+                  ("install", str("https://slack.com/oauth/v2/authorize?client_id=1")),
+                ]),
+              ]
+            } else {
+              []
+            },
+          ),
           ("drive", obj([("roots", [{ "path": "~/项目", "name": "项目", "state": "ok" }, { "path": "~/文档", "name": "文档", "state": "ok" }]), ("all", Json::boolean(false))])),
           (
             "updates",
@@ -1244,9 +1734,9 @@ fn fx_station(address : String) -> Json {
                 ("id", str("station")),
                 ("name", str("Station")),
                 ("installed", Json::boolean(true)),
-                ("version", str("0.1.1288")),
+                ("version", str(if fx_station_updated.val { "0.1.1300" } else { "0.1.1288" })),
                 ("latest", str("0.1.1300")),
-                ("newer", Json::boolean(true)),
+                ("newer", Json::boolean(!fx_station_updated.val)),
                 ("channel", str("stable")),
                 ("auto", Json::boolean(fx.auto)),
                 ("updatable", Json::boolean(true)),
@@ -1254,8 +1744,9 @@ fn fx_station(address : String) -> Json {
                 ("failedText", str("更新失败")),
                 ("message", str(if fx_station_update_failed.val { "无法读取 C:\\Users\\Willow\\.stillfail\\mesh\\cloud.json：文件可能已加密或损坏。请在文件加密软件中允许程序 C:\\Users\\Willow\\.stillfail\\app\\node\\node.exe 读取，或从备份恢复文件。" } else { "" })),
                 ("checkedAt", Json::number(1.0)),
+                ("done", str(if fx_station_updated.val { "已更新到 0.1.1300，agent 未中断" } else { "" })),
                 // (the core's words of it: present.ts software)
-                ("shownText", str("0.1.1288")),
+                ("shownText", str(if fx_station_updated.val { "0.1.1300" } else { "0.1.1288" })),
                 ("tipText", str("")),
               ]),
               obj([
@@ -1311,11 +1802,15 @@ fn fx_station(address : String) -> Json {
           ("diagnostics", obj([("logs", Json::boolean(fx.logs))])),
           ("network", obj([("congestion", str(fx.congestion))])),
           ("elevation", fx.elevation.unwrap_or(Json::null())),
+          ("copies", fx.copies.unwrap_or(Json::null())),
           ("sharing", Json::boolean(true)),
           (
             "machineLogins",
             [
-              obj([("runtime", str("codex")), ("installed", Json::boolean(true)), ("loggedIn", Json::boolean(true)), ("email", str("lin@example.com")), ("plan", str("plus")), ("planText", str("Plus")), ("usable", Json::boolean(true)), ("text", str("")), ("offered", Json::boolean(true))]),
+              obj([("runtime", str("codex")), ("installed", Json::boolean(true)), ("loggedIn", Json::boolean(true)), ("email", str("lin@example.com")), ("plan", str("plus")), ("planText", str("Plus")), ("usable", Json::boolean(true)), ("text", str("")), ("offered", Json::boolean(true)),
+                // (null where the fixture says none: a field left as it is, as field_made has it)
+                ("quota", if fx.offer_quota { fx_offer_quota() } else { Json::null() }),
+              ]),
             ],
           ),
           (
@@ -1382,15 +1877,17 @@ fn fx_station(address : String) -> Json {
       ("betaOffered", Json::boolean(true)),
     ])
   } else {
+    // (Maple online for Profile's ＋; it, and Cedar besides, to take Willow's chats as it is retired)
+    let up = fx.mba_online || fx.retire_others >= 2 || (fx.retire_others == 1 && id == "st2")
     obj([
       ("station", str(address)),
       ("id", str(id)),
-      ("name", str(renamed.unwrap_or("Maple"))),
+      ("name", str(renamed.unwrap_or(if id == "st3" && fx.retire_others >= 2 { "Cedar" } else { "Maple" }))),
       ("icon", str(fx.marks.get(id).unwrap_or("glyph:laptop:teal"))),
-      ("summary", str(if fx.mba_online { "Apple M3 · 空闲" } else { "离线 · 2 天前" })),
-      ("face", str(if fx.mba_online { "idle" } else { "offline" })),
-      ("online", Json::boolean(fx.mba_online)),
-      ("link", obj([("state", str(if fx.mba_online { "online" } else { "offline" }))])),
+      ("summary", str(if up { "Apple M3 · 空闲" } else { "离线 · 2 天前" })),
+      ("face", str(if up { "idle" } else { "offline" })),
+      ("online", Json::boolean(up)),
+      ("link", obj([("state", str(if up { "online" } else { "offline" }))])),
       ("runtimes", []),
       ("models", []),
     ])
@@ -1514,10 +2011,10 @@ fn fx_usage_summary() -> Json {
     obj([("title", str(title)), ("items", Json::array(rows.map(fn(r) { obj([(key, str(r.0)), ("value", str(r.1))]) })))])
   }
   obj([
-    ("title", str("星火工作室")),
+    ("title", str("")),
     (
       "figures",
-      Json::array([("累计 token", "18.3 亿"), ("归档的对话", "1,358"), ("跨设备任务", "312"), ("决策点击率", "48%"), ("一起干活的设备", "3")].map(fn(f) {
+      Json::array([("累计 token", "18.3 亿"), ("归档的对话", "1,358"), ("跨设备任务", "312")].map(fn(f) {
         obj([("label", str(f.0)), ("value", str(f.1))])
       })),
     ),
@@ -1526,7 +2023,7 @@ fn fx_usage_summary() -> Json {
       obj([
         ("title", str("Token 活跃度")),
         ("sub", str("近 12 个月")),
-        ("views", [str("按天"), str("按周"), str("累计")]),
+        ("views", [str("按天"), str("按周")]),
         ("weekdays", Json::array(["日", "一", "二", "三", "四", "五", "六"].map(str))),
         ("months", Json::array(months.map(fn(m) { obj([("week", Json::number(m.0.to_double())), ("label", str(m.1))]) }))),
         ("cells", Json::array(cells)),
@@ -1537,43 +2034,35 @@ fn fx_usage_summary() -> Json {
         ("runningTips", Json::array(running_tips)),
         ("less", str("少")),
         ("more", str("多")),
-        ("captions", [str(""), str("每列一周 · 最高 1.1 亿"), str("累计 · 共 18.3 亿")]),
+        ("captions", [str(""), str("每列一周 · 最高 1.1 亿")]),
       ]),
     ),
     ("stations", named("各设备的工作量", "name", [("Willow", "12.6 亿 token · 69%"), ("Maple", "4.1 亿 token · 22%"), ("Birch", "1.6 亿 token · 9%")])),
     ("places", named("对话来自", "name", [("still.fail", "1,212 个对话"), ("Slack", "184 个对话"), ("飞书", "34 个对话")])),
-    ("asOf", str("统计截至 10月2日")),
+    ("asOf", str("")),
   ])
 }
 
 ///|
 /// What the core's `usage` view says (views/usage.ts) of a made-up workspace: its days split by the list `split`
-/// asks for, of the one person, account or model `only` names (its key) alone.
+/// asks for, of the one person, account or model `only` names (its key) alone; as it is sent (client/core-ts
+/// schema.ts UsageView: not its accounts' allowances, its scale's lines, a day's calls and parts, an item's calls).
 fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : String = "", details_pending? : Bool = false) -> Json {
   // (the one alone: a part of everything)
   let part = if only == "" { 1.0 } else { 0.42 }
   let daily : Array[Json] = []
   for i in 0..<days {
     let cost = (((i * 37 + 11) % 23).to_double() + 4.0) * part
-    let a = cost * 0.6
-    let b = cost * 0.3
-    let rest = cost - a - b
     daily.push(
       obj([
         ("day", str("2026-10-" + (if i + 1 < 10 { "0" } else { "" }) + (i + 1).to_string())),
         ("label", str("10/" + (i + 1).to_string())),
-        ("today", Json::boolean(i == days - 1)),
         ("cost", Json::number(cost)),
         ("costText", str("$" + cost.to_int().to_string())),
-        ("calls", Json::number(cost * 12.0)),
-        ("callsText", str((cost * 12.0).to_int().to_string() + " 次调用")),
-        ("parts", [Json::number(a), Json::number(b), Json::number(rest)]),
-        ("partsText", [str("$" + a.to_int().to_string()), str("$" + b.to_int().to_string()), str("$" + rest.to_int().to_string())]),
         // (what the core says of it: views/usage.ts)
         ("name", str(if i == days - 1 { "今天" } else { "10/" + (i + 1).to_string() })),
         ("tick", str(if i == days - 1 { "今天" } else if days <= 10 || (days - 1 - i) % 7 == 0 { "10/" + (i + 1).to_string() } else { "" })),
         ("shares", [Json::number(0.6), Json::number(0.3), Json::number(0.1)]),
-        ("sharesText", [str("60%"), str("30%"), str("10%")]),
       ]),
     )
   }
@@ -1582,27 +2071,32 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
       ("key", str(key)),
       ("title", str(title)),
       ("sub", str(sub)),
-      ("cost", Json::number(share * 100.0)),
       ("costText", str(cost)),
       ("share", Json::number(share)),
       ("shareText", str(shareText)),
-      ("calls", Json::number(0.0)),
-      ("callsText", str("")),
       ("tokensText", str("")),
-      // (its calls and tokens, as its share of the week's 1,416 calls and 2,353 万 tokens)
-      ("detail", str((share * 1416.0).to_int().to_string() + " 次调用 · " + (share * 2353.0).to_int().to_string() + " 万 token")),
     ])
   }
   let series = match split {
-    "models" => [("claude-opus-5-5", "Opus 5.5"), ("gpt-6", "GPT-6"), ("", "其他")]
-    "profiles" => [("Willow/cc", "公司 Claude"), ("Willow/codex", "Codex 团队"), ("", "其他")]
-    "chats" => [("Willow/1", "整理发布清单"), ("Willow/4", "给设置页加一个深色模式开关"), ("", "其他")]
-    _ => [("lin@example.com", "林"), ("ana@example.com", "Ana"), ("", "其他")]
+    "models" => [("claude-opus-5-5", "Opus 5.5", "$84"), ("gpt-6", "GPT-6", "$28"), ("", "其他", "$6.10")]
+    "profiles" => [("Willow/cc", "公司 Claude", "$84"), ("Willow/codex", "Codex 团队", "$34")]
+    "chats" => [("Willow/1", "整理发布清单", "$31"), ("Willow/4", "给设置页加一个深色模式开关", "$22"), ("", "其他", "$65")]
+    _ => [("lin@example.com", "林", "$80"), ("ana@example.com", "Ana", "$31"), ("", "其他", "$7.20")]
   }
   // The core ranks the filtered rows too: the selected split then contains only the chosen part.
   let series = if only != "" && series.iter().any(fn(s) { s.0 == only }) { series.filter(fn(s) { s.0 == only }) } else { series }
   let lists = [
-    ("people", "按人", [("lin@example.com", "林", "", "$80", 0.68), ("ana@example.com", "Ana", "", "$31", 0.26), ("wu@example.com", "吴", "", "$7.20", 0.06)]),
+    (
+      "people",
+      "按人",
+      [
+        ("lin@example.com", "林", "18 个对话 · 812 次调用 · 最多 Opus 5.5", "$80", 0.68),
+        ("ana@example.com", "Ana", "9 个对话 · 410 次调用 · 最多 GPT-6", "$31", 0.26),
+        ("wu@example.com", "吴", "4 个对话 · 118 次调用 · 最多 Sonnet 5", "$4.50", 0.04),
+        ("chen@example.com", "陈", "2 个对话 · 52 次调用 · 最多 Haiku 5", "$1.80", 0.015),
+        ("zhao@example.com", "赵", "1 个对话 · 24 次调用 · 最多 Haiku 5", "$0.90", 0.008),
+      ],
+    ),
     (
       "chats",
       "按对话",
@@ -1610,29 +2104,46 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
         ("Willow/1", "整理发布清单", "林 · Opus 5.5 · Willow", "$31", 0.26),
         ("Willow/4", "给设置页加一个深色模式开关", "Ana · GPT-6 · Willow", "$22", 0.19),
         ("Maple/3", "夜里的构建又失败了", "林 · Opus 5.5 · Maple", "$15", 0.13),
+        ("Willow/8", "排查列表滚动卡顿", "林 · Opus 5.5 · Willow", "$12", 0.10),
+        ("Maple/6", "补充支付回调单元测试", "Ana · Sonnet 5 · Maple", "$9.40", 0.08),
+        ("deleted/all", "已删除的对话（14 个）", "共 312 次调用 · Opus 5.5、GPT-6", "$28.60", 0.24),
       ],
     ),
-    ("profiles", "按账号", [("Willow/cc", "公司 Claude", "Willow · 最多 Opus 5.5", "$84", 0.71), ("Willow/codex", "Codex 团队", "Willow · 最多 GPT-6", "$34", 0.29)]),
-    ("models", "按模型", [("claude-opus-5-5", "Opus 5.5", "", "$84", 0.71), ("gpt-6", "GPT-6", "", "$28", 0.24), ("claude-haiku-5", "Haiku 5", "", "$6.10", 0.05)]),
+    (
+      "profiles",
+      "按账号",
+      [
+        ("Willow/cc", "公司 Claude", "Willow · 订阅 (Max) · 最多 Opus 5.5", "$84", 0.71),
+        ("Willow/codex", "Codex 团队", "Willow · 订阅 (Pro) · 最多 GPT-6", "$34", 0.29),
+      ],
+    ),
+    (
+      "models",
+      "按模型",
+      [
+        ("claude-opus-5-5", "Opus 5.5", "1,620 万 token · 842 次调用", "$84", 0.71),
+        ("gpt-6", "GPT-6", "510 万 token · 390 次调用", "$28", 0.24),
+        ("claude-haiku-5", "Haiku 5", "223 万 token · 184 次调用", "$6.10", 0.05),
+      ],
+    ),
   ]
   // (the day's name as the core says it: 10/5 for 2026-10-05)
-  let dd = if day.length() >= 10 { day.substring(start=8) } else { "" }
+  let dd = if day.length() >= 10 { day[8:].to_owned() } else { "" }
   // (its cost, as its bar says it)
   let day_cost = match daily.search_by(fn(d) { day != "" && text(Some(d), "day") == day }) {
     Some(i) => text(Some(daily[i]), "costText")
     None => ""
   }
-  let day_name = if day == "" { "" } else { "10/" + (if dd.has_prefix("0") { dd.substring(start=1) } else { dd }) }
+  let day_name = if day == "" { "" } else { "10/" + (if dd.has_prefix("0") { dd[1:].to_owned() } else { dd }) }
   let only_shown = match lists.search_by(fn(l) { l.2.search_by(fn(it) { it.0 == only }) is Some(_) }) {
     Some(k) if only != "" => {
-      let (list, _, its) = lists[k]
+      let (_, _, its) = lists[k]
       let it = its[its.search_by(fn(it) { it.0 == only }).unwrap()]
-      obj([("list", str(list)), ("key", str(only)), ("title", str(it.1))])
+      obj([("title", str(it.1))])
     }
     _ => Json::null()
   }
   obj([
-    ("days", Json::number(days.to_double())),
     ("split", str(split)),
     ("only", only_shown),
     ("wait", obj([("reading", Json::boolean(details_pending)), ("failing", []), ("empty", Json::boolean(false))])),
@@ -1644,71 +2155,36 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
         obj([
           ("label", str("折合费用")),
           ("value", str(if details_pending { "$0" } else if day_cost != "" { day_cost } else if only != "" { "$50" } else if days == 7 { "$118" } else { "$486" })),
-          ("sub", str("按 API 标准单价估算")),
           // (a day picked: against nothing)
           ("change", if details_pending || day != "" { Json::null() } else { str(if days == 7 { "↑18%" } else { "↓6.4%" }) }),
-          ("trend", str(if details_pending { "" } else if days == 7 { "up" } else { "down" })),
         ]),
         obj([
           ("label", str("模型调用")),
           ("value", str(if only != "" { "595 次" } else if days == 7 { "1,416 次" } else { "5,830 次" })),
-          ("sub", str(if days == 7 { "日均 202 次" } else { "日均 194 次" })),
           ("change", str(if days == 7 { "↑9.2%" } else { "↓3.1%" })),
-          ("trend", str(if days == 7 { "up" } else { "down" })),
         ]),
         obj([
           ("label", str("输入 token")),
           ("value", str(if only != "" { "970 万" } else if days == 7 { "2,310 万" } else { "9,870 万" })),
-          ("sub", str("缓存命中 91%")),
+          ("sub", str("缓存命中 84%")),
           ("change", str(if days == 7 { "↑21%" } else { "↑2.5%" })),
-          ("trend", str(if days == 7 { "up" } else { "up" })),
         ]),
         obj([
           ("label", str("输出 token")),
           ("value", str(if only != "" { "18 万" } else if days == 7 { "43 万" } else { "1.8 亿" })),
-          ("sub", str("平均每次 304")),
           ("change", str(if days == 7 { "↓4.0%" } else { "持平" })),
-          ("trend", str(if days == 7 { "down" } else { "" })),
         ]),
       ],
     ),
     ("versus", str("比前 " + days.to_string() + " 天")),
     ("period", str(if day != "" { day_name } else { "近 " + days.to_string() + " 天" })),
-    ("day", if day == "" { Json::null() } else { str(day) }),
-    // (公司 Claude's allowance, as its profile shows it)
-    (
-      "accounts",
-      [
-        obj([
-          ("key", str("lin@claude")),
-          ("title", str("lin@example.com")),
-          ("cost", Json::number(84.0)),
-          ("costText", str("$84")),
-          (
-            "quota",
-            obj([
-              ("state", str("ok")),
-              (
-                "windows",
-                [
-                  obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str("2 小时后恢复"))]),
-                  obj([("label", str("本周")), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("amber")), ("refills", str("星期一恢复"))]),
-                ],
-              ),
-              ("checkedAt", Json::number(0.0)),
-            ]),
-          ),
-        ]),
-      ],
-    ),
     ("summary", fx_usage_summary()),
-    ("series", Json::array(series.map(fn(x) { obj([("key", str(x.0)), ("name", str(x.1))]) }))),
+    ("series", Json::array(series.map(fn(x) { obj([("key", str(x.0)), ("name", str(x.1)), ("costText", str(x.2))]) }))),
     ("daily", Json::array(daily)),
     ("many", Json::boolean(days > 10)),
-    ("max", Json::number(27.0)),
     // (the scale the core works out for it: views/usage.ts scale)
     ("top", Json::number(30.0)),
-    ("ticks", [obj([("value", Json::number(10.0)), ("label", str("10"))]), obj([("value", Json::number(20.0)), ("label", str("20"))]), obj([("value", Json::number(30.0)), ("label", str("30"))])]),
+    ("ticks", [obj([("value", Json::number(15.0)), ("label", str("$15"))]), obj([("value", Json::number(30.0)), ("label", str("$30"))])]),
     (
       "lists",
       Json::array(
@@ -1720,8 +2196,8 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
             ("key", str(key)),
             ("title", str(title)),
             ("items", Json::array(listed)),
-            // (its first three and the rest: as many here)
-            ("parts", Json::array(listed)),
+            // (its first three and the rest: as many here, each its key)
+            ("parts", Json::array(shown.map(fn(it) { obj([("key", str(it.0))]) }))),
           ])
         }),
       ),
@@ -1738,7 +2214,9 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
             "rows",
             [
               obj([("model", str("Opus 5.5")), ("rates", [obj([("label", str("输入")), ("value", str("$5"))]), obj([("label", str("输出")), ("value", str("$25"))]), obj([("label", str("缓存读")), ("value", str("$0.5"))])])]),
+              obj([("model", str("GPT-6")), ("rates", [obj([("label", str("输入")), ("value", str("$2.5"))]), obj([("label", str("输出")), ("value", str("$10"))]), obj([("label", str("缓存读")), ("value", str("$0.25"))])])]),
               obj([("model", str("Sonnet 5")), ("rates", [obj([("label", str("输入")), ("value", str("$3"))]), obj([("label", str("输出")), ("value", str("$15"))]), obj([("label", str("缓存读")), ("value", str("$0.3"))])])]),
+              obj([("model", str("Haiku 5")), ("rates", [obj([("label", str("输入")), ("value", str("$1"))]), obj([("label", str("输出")), ("value", str("$5"))]), obj([("label", str("缓存读")), ("value", str("$0.1"))])])]),
             ],
           ),
         ]),
@@ -1804,6 +2282,17 @@ fn fx_memory() -> Json {
       ],
     ),
   ])
+}
+
+///|
+/// The workspaces the new device asks into (settings-lock-prompt): 星火工作室 and 个人, and 开源 once it asked there
+/// too (fx's `pairing_more`).
+fn pairing_places() -> Array[Json] {
+  let places = [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])]
+  if fx.pairing_more {
+    places.push(obj([("id", str("ws3")), ("name", str("开源")), ("emoji", str("🌲"))]))
+  }
+  places
 }
 
 ///|
@@ -1882,11 +2371,16 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             fx_members(me),
           ),
           ("stations", [obj([("id", str("st1")), ("name", str("Willow"))]), obj([("id", str("st2")), ("name", str("Maple"))])]),
+          ("rigs", rigs_fixture_listed(mode)),
           ("invitations", [obj([("id", str("i1")), ("role", str("member")), ("email", str("qin@example.com")), ("time", obj([("expires_at", stamp_of("", until="6 天后"))]))])]),
           ("added", [obj([("email", str("he@example.com")), ("role", str("member"))])]),
           ("relays", []),
         ]),
       )
+    // the workspace's stations that only run tasks (rigs_fixture.mbt)
+    "rigs" if rigs_fixture_mode(mode) => Some(rigs_fixture_topic(mode))
+    // the workspace's devices (devices_fixture.mbt)
+    "devices" if devices_fixture_mode(mode) => Some(devices_fixture_topic())
     // every way its devices reach its stations (the core's views/ways.ts), the punched path turned off
     "workspaceWays" =>
       Some(
@@ -1911,7 +2405,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       } else {
         // (settings-stations-motion: 3 comes, then Maple goes)
         let all = [fx_station("ws1/st1"), fx_station("ws1/st2")]
-        if fx.motion >= 1 {
+        if fx.motion >= 1 || fx.retire_others >= 2 {
           all.push(fx_station("ws1/st3"))
         }
         if fx.motion >= 2 {
@@ -1937,7 +2431,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                   ("deviceText", str("Pixel 9")),
                   ("created_at", Json::number(0.0)),
                   ("untilText", str("14:05 前有效")),
-                  ("workspaces", if fx.pairing_personal { [] } else { [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])] }),
+                  ("workspaces", if fx.pairing_personal { [] } else { Json::array(pairing_places()) }),
                 ]),
               ]
             } else {
@@ -1966,21 +2460,43 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ),
         ]),
       )
-    "screens" =>
-      Some(
-        obj([
-          (
-            "screens",
-            [
-              obj([("id", str("desktop")), ("kind", str("desktop")), ("title", str("Willow 的屏幕")), ("width", Json::number(3024.0)), ("height", Json::number(1964.0)), ("line", str("3024 × 1964 · 无人在看")), ("link", str(""))]),
-              obj([("id", str("browser:t1")), ("kind", str("browser")), ("title", str("发布清单 - 文档")), ("width", Json::number(1280.0)), ("height", Json::number(800.0)), ("line", str("浏览器标签页 · 1280 × 800")), ("link", str(""))]),
-            ],
-          ),
-          ("outdated", Json::boolean(false)),
-          ("control", Json::boolean(true)),
-          ("known", Json::boolean(true)),
-        ]),
-      )
+    "screens" => {
+      let m = if mode.has_suffix("-dark") { mode.unsafe_substring(start=0, end=mode.length() - 5) } else { mode }
+      if m == "settings-station-pages" || m == "screen-pages" || m == "screen-user-pages" || m == "screen-user-tabs" {
+        Some(
+          obj([
+            (
+              "screens",
+              [
+                obj([("id", str("desktop")), ("kind", str("desktop")), ("title", str("Willow 的屏幕")), ("width", Json::number(3024.0)), ("height", Json::number(1964.0)), ("line", str("3024 × 1964 · 无人在看")), ("link", str(""))]),
+                obj([("id", str("browser:u_mail")), ("kind", str("browser")), ("userTab", Json::boolean(true)), ("closable", Json::boolean(true)), ("openUrl", Json::boolean(true)), ("site", str("mail.proton.me")), ("title", str("收件箱 - Proton Mail")), ("width", Json::number(1280.0)), ("height", Json::number(800.0)), ("line", str("mail.proton.me")), ("link", str(""))]),
+                obj([("id", str("browser:u_gh")), ("kind", str("browser")), ("userTab", Json::boolean(true)), ("sleeping", Json::boolean(true)), ("closable", Json::boolean(true)), ("openUrl", Json::boolean(true)), ("site", str("github.com")), ("title", str("GitHub")), ("width", Json::number(0.0)), ("height", Json::number(0.0)), ("line", str("github.com")), ("link", str(""))]),
+                obj([("id", str("browser:tab-1")), ("kind", str("browser")), ("closable", Json::boolean(true)), ("openUrl", Json::boolean(true)), ("title", str("Sign in · Anthropic")), ("width", Json::number(1280.0)), ("height", Json::number(720.0)), ("line", str("浏览器标签页 · 1280 × 720")), ("link", str(""))]),
+              ],
+            ),
+            ("browser", Json::boolean(true)),
+            ("outdated", Json::boolean(false)),
+            ("control", Json::boolean(true)),
+            ("known", Json::boolean(true)),
+          ]),
+        )
+      } else {
+        Some(
+          obj([
+            (
+              "screens",
+              [
+                obj([("id", str("desktop")), ("kind", str("desktop")), ("title", str("Willow 的屏幕")), ("width", Json::number(3024.0)), ("height", Json::number(1964.0)), ("line", str("3024 × 1964 · 无人在看")), ("link", str(""))]),
+                obj([("id", str("browser:t1")), ("kind", str("browser")), ("title", str("发布清单 - 文档")), ("width", Json::number(1280.0)), ("height", Json::number(800.0)), ("line", str("浏览器标签页 · 1280 × 800")), ("link", str(""))]),
+              ],
+            ),
+            ("outdated", Json::boolean(false)),
+            ("control", Json::boolean(true)),
+            ("known", Json::boolean(true)),
+          ]),
+        )
+      }
+    }
     // what still.fail uses of Willow's machine (the `resources` view): a chat's agent and the station
     "resources" => Some(fx_resources())
     "adbShare" => Some(fx_adb_share())
@@ -2014,6 +2530,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         ]),
       )
     "profileFlow" if fx.new_login => Some(fx_profile_flow_plan())
+    "profileFlow" if fx.new_key => Some(fx_profile_flow_key())
     "profileFlow" => Some(fx_profile_flow(hermes=mode == "settings-new-profile-hermes"))
     "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => {
       let v = fx_session_pick()
@@ -2030,6 +2547,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         Some(v)
       }
     }
+    "connectFlow" if fx_connect_step.val == "commaBind" => Some(fx_comma_flow())
     "connectFlow" if fx_connect_step.val != "team" && fx_connect_step.val != "app" =>
       Some(fx_feishu_flow(fx_connect_step.val))
     "connectFlow" =>
@@ -2133,38 +2651,39 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("hintReviewText", str("")),
         ]),
       )
-    "changelog" =>
+    // (as the core answers it: every tab, the one asked (`part`, the first where none or another is said) with its
+    // days, its first `limit` of them; two changes, none more)
+    "changelog" => {
+      let asked = match params.get("part") {
+        Some(String("station")) => "station"
+        _ => "app"
+      }
+      let days : Array[Json] = [
+        obj([
+          ("day", Json::number(20380.0)),
+          ("label", str("10 月 19 日")),
+          (
+            "entries",
+            [
+              obj([("version", Json::number(2.0)), ("versionName", str("0.1.1300")), ("lines", [obj([("kind", str("new")), ("label", str("新增")), ("text", str("设置里可以添加 station 和 Profile"))])]), ("has", Json::boolean(false)), ("note", str("更新后可用"))]),
+              obj([("version", Json::number(1.0)), ("versionName", str("0.1.1288")), ("lines", [obj([("kind", str("fix")), ("label", str("修复")), ("text", str("对话列表偶尔把同一行显示两次，滑到底再滑回来也不会消失"))])]), ("has", Json::boolean(true)), ("note", str(""))]),
+            ],
+          ),
+        ]),
+      ]
       Some(
         obj([
           ("build", Json::number(1300.0)),
           (
             "tabs",
             [
-              obj([
-                ("part", str("app")),
-                ("label", str("此 app")),
-                (
-                  "days",
-                  [
-                    obj([
-                      ("day", Json::number(20380.0)),
-                      ("label", str("10 月 19 日")),
-                      (
-                        "entries",
-                        [
-                          obj([("version", Json::number(2.0)), ("versionName", str("0.1.1300")), ("text", []), ("lines", [obj([("kind", str("new")), ("label", str("新增")), ("text", str("设置里可以添加 station 和 Profile"))])]), ("has", Json::boolean(false)), ("note", str("更新后可用")), ("mine", Json::boolean(true))]),
-                          obj([("version", Json::number(1.0)), ("versionName", str("0.1.1288")), ("text", []), ("lines", [obj([("kind", str("fix")), ("label", str("修复")), ("text", str("对话列表偶尔把同一行显示两次，滑到底再滑回来也不会消失"))])]), ("has", Json::boolean(true)), ("note", str("")), ("mine", Json::boolean(true))]),
-                        ],
-                      ),
-                    ]),
-                  ],
-                ),
-              ]),
+              obj([("part", str("app")), ("label", str("此 app")), ("days", if asked == "app" { Json::array(days) } else { [] })]),
               obj([("part", str("station")), ("label", str("Station")), ("days", [])]),
             ],
           ),
         ]),
       )
+    }
     "agentEnvForm" =>
       Some(
         obj([
@@ -2192,14 +2711,25 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               obj([
                 ("station", str("ws1/st1")),
                 ("stationName", str("Willow")),
-                ("connect", fx_connect("k1", "星火助手", "online", "在线", "multi-session")),
+                (
+                  "connect",
+                  match mode {
+                    "settings-connect-comma" => fx_connect_as("comma")
+                    "settings-connect-feishu" => fx_connect_as("feishu")
+                    _ => fx_connect("k1", "星火助手", "online", "在线", "multi-session")
+                  },
+                ),
                 ("runtimeChanges", Json::boolean(mode == "settings-connect-switch")),
                 (
                   "sessions",
-                  [
-                    obj([("key", str("s-c7")), ("titleText", str("Slack 里问的报销流程")), ("statusText", str("昨天"))]),
-                    obj([("key", str("s-c2")), ("titleText", str("首页的列表改成按天分组")), ("statusText", str("8 分钟前"))]),
-                  ],
+                  if mode == "settings-connect-comma" || mode == "settings-connect-feishu" {
+                    []
+                  } else {
+                    [
+                      obj([("key", str("s-c7")), ("titleText", str("Slack 里问的报销流程")), ("statusText", str("昨天"))]),
+                      obj([("key", str("s-c2")), ("titleText", str("首页的列表改成按天分组")), ("statusText", str("8 分钟前"))]),
+                    ]
+                  },
                 ),
                 ("candidates", []),
                 ("running", Json::number(0.0)),
@@ -2297,7 +2827,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                     obj([
                       ("appText", str("still.fail 桌面版")),
                       ("devices", [
-                        obj([("id", str("d3")), ("kind", str("app")), ("label", str("still.fail 桌面版 · Ana 的 MacBook Air")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("lastSeen", Json::number(1759570000.0)), ("removable", Json::boolean(true)), ("nameText", str("Ana 的 MacBook Air")), ("fullText", str("Ana 的 MacBook Air · still.fail 桌面版")), ("metaText", str("5 天前使用过 · 受信任"))]),
+                        obj([("id", str("d3")), ("kind", str("app")), ("label", str("still.fail 桌面版 · Ana 的 MacBook Air")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("lastSeen", Json::number(1759570000.0)), ("removable", Json::boolean(false)), ("nameText", str("Ana 的 MacBook Air")), ("fullText", str("Ana 的 MacBook Air · still.fail 桌面版")), ("metaText", str("5 天前使用过 · 受信任"))]),
                       ]),
                     ]),
                   ],
@@ -2313,7 +2843,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             ],
           ),
           ("renew", []),
-        ]),
+        ] +
+        fx_pending_fields() +
+        fx_upgrade_fields()),
       )
     "vaults" =>
       Some(
@@ -2325,24 +2857,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("plainLeft", Json::number(fx.plain_left.to_double())),
           (
             "vaults",
-            [
-              obj([
-                ("id", str("v1")),
-                ("name", str("林的库")),
-                ("owner", str("u1")),
-                ("ownerName", str("林")),
-                ("mine", Json::boolean(true)),
-                ("members", []),
-                ("station", str("st1")),
-                ("stationName", str("Willow")),
-                ("items", Json::number(3.0)),
-                ("devices", Json::number(2.0)),
-                ("open", Json::boolean(false)),
-                ("keyed", Json::boolean(true)),
-                ("missing", Json::number(0.0)),
-                ("recoverable", Json::boolean(true)),
-              ]),
-            ],
+            [fx_vault_row()],
           ),
           (
             "requests",
@@ -2406,14 +2921,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("group", str(text(Some(p), "group"))),
           ("groupTitle", str(text(Some(p), "groupTitle"))),
           ("station", str("ws1/st1")),
-          ("stationId", str("st1")),
-          ("stationName", str("Willow")),
-          ("profile", p),
+          // (as the list is sent it: client/core-ts schema.ts WorkspaceProfile, ListedProfile)
+          ("profile", listed_profile_said(p)),
           ("title", str(if text(Some(p), "email") == "" { text(Some(p), "name") } else { text(Some(p), "email") })),
-          ("shared", Json::boolean(false)),
-          ("host", str("st1")),
-          ("hostName", str("Willow")),
-          ("hostOnline", Json::boolean(true)),
           ("usable", Json::boolean(true)),
           ("state", state),
           ("look", Json::boolean(look)),
@@ -2421,26 +2931,30 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "stations",
             [
-              obj([("id", str("st1")), ("station", str("ws1/st1")), ("name", str("Willow")), ("online", Json::boolean(true)), ("allowed", Json::boolean(true))]),
-              obj([("id", str("st2")), ("station", str("ws1/st2")), ("name", str("Maple")), ("online", Json::boolean(false)), ("allowed", Json::boolean(true))]),
+              obj([("id", str("st1")), ("name", str("Willow")), ("online", Json::boolean(true))]),
+              obj([("id", str("st2")), ("name", str("Maple")), ("online", Json::boolean(fx.mba_online))]),
             ],
           ),
           (
             "members",
-            if fx.profile_hosts && text(pv, "id") == "cc" { Json::array(fx_profile_hosts().filter(fn(m) { !fx.profile_pending || text(Some(m), "stationId") != "st2" })) } else { [
-              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Willow")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(1.0))]),
+            if fx.profile_hosts && text(pv, "id") == "cc" {
+              Json::array(
+                fx_profile_hosts()
+                .filter(fn(m) { !fx.profile_pending || text(Some(m), "stationId") != "st2" })
+                .map(fn(m) { fields_dropped(m, ["stationName", "profileName", "checkText", "usedBy"]) }),
+              )
+            } else { [
+              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkTone", str("green"))]),
             ] },
           ),
           (
             "places",
             if fx.profile_hosts && text(pv, "id") == "cc" {
-              Json::array(fx_profile_places())
+              Json::array(fx_profile_places().map(fn(pl) { fields_dropped(pl, ["stationId"]) }))
             } else {
-              [obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Willow")), ("profileId", str(text(pv, "id"))), ("online", Json::boolean(true)), ("usable", Json::boolean(true)), ("sourceName", str("")), ("state", Json::null())])]
+              [obj([("station", str("ws1/st1")), ("stationName", str("Willow")), ("profileId", str(text(pv, "id"))), ("online", Json::boolean(true)), ("usable", Json::boolean(true)), ("sourceName", str("")), ("state", Json::null())])]
             },
           ),
-          ("editable", Json::boolean(true)),
-          ("canShare", Json::boolean(true)),
         ])
       })
       let attention = list.filter(fn(e) { flag(Some(e), "look") }).length()
@@ -2513,6 +3027,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
     }
     "doing" => Some(obj([("doing", if fx.protecting {
       [obj([("call", str("lock.joinStation")), ("stage", str("running")), ("params", obj([("workspace", str("ws1")), ("station", str("st2"))]))])]
+    } else if fx.key_giving {
+      [obj([("call", str("vault.addDevice")), ("stage", str("running")), ("params", obj([("workspace", str("ws1")), ("vault", str("v1")), ("device", str("d-new"))]))])]
     } else {
       []
     })]))
@@ -2556,6 +3072,28 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
 /// take.
 pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
+  match rigs_fixture_call(name, p) {
+    Some(r) => return Some(r)
+    None => ()
+  }
+  match devices_fixture_call(name, p) {
+    Some(r) => return Some(r)
+    None => ()
+  }
+  // (an account moved to Maple: asked with what the station needs, the one it is on, which, and where to)
+  if name == "profile.move" {
+    return Some(
+      if text(p, "station") == "ws1/st1" && text(p, "id") != "" && text(p, "to") == "st2" && fx.mba_online {
+        Ok(obj([]))
+      } else {
+        Err(obj([("code", str("invalid")), ("message", str("missing station, id or to"))]))
+      },
+    )
+  }
+  match retire_fixture_call(name, p) {
+    Some(r) => return Some(r)
+    None => ()
+  }
   match name {
     "workspace.renameStation" => {
       // a name, or (the mark picker's) a mark
@@ -2616,7 +3154,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           obj([
             (
               "chats",
-              Json::array([
+              Json::array(([
                 // a PDF opened, 5 minutes ago; a video, 12 of its 48 MB come
                 obj([
                   ("station", str("ws1/st1")),
@@ -2637,7 +3175,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
                 obj([("station", str("ws1/st1")), ("thread", Json::number(4.0)), ("title", str("给设置页加一个深色模式开关")), ("sessions", ["s-c4"]), ("bytes", Json::number(860000.0))]),
                 obj([("station", str("ws1/st2")), ("thread", Json::number(3.0)), ("title", str("夜里的构建又失败了")), ("sessions", ["s-c3"]), ("bytes", Json::number(41000.0))]),
                 ] +
-                fx_kept_many()
+                fx_kept_many())
                 |> fx_kept_most_first,
               ),
             ),
@@ -2647,6 +3185,21 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           ]),
         ),
       )
+    // the upgrade finished by the person's ask: none left to show
+    "lock.handOver" => {
+      fx.upgrade = ""
+      fx_changed()
+      Some(Ok(Json::null()))
+    }
+    // a failed pending change read, dropped (a waiting one stays)
+    "lock.pendingDismiss" => {
+      let id = text(p, "id")
+      if fx_pending_rows().iter().any(fn(r) { text(Some(r), "id") == id && text(Some(r), "state") == "failed" }) {
+        fx.pending.retain(fn(x) { x != id })
+        fx_changed()
+      }
+      Some(Ok(Json::null()))
+    }
     "drive.kept.clear" => {
       fx.drive_kept = 0.0
       fx_changed()
@@ -2664,6 +3217,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           obj([
             ("token", str("made-up")),
             ("install", str("curl -fsSL https://still.fail/install.sh | sh -s -- 4f7c2a9e1b")),
+            ("installWindows", str("& ([scriptblock]::Create((irm https://still.fail/install.ps1))) 4f7c2a9e1b")),
             ("command", str("stillfail station enroll https://still.fail 4f7c2a9e1b")),
           ]),
         ),
@@ -2725,10 +3279,20 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       fx_changed()
       Some(Ok(obj([])))
     }
+    "profile.put" if text(p, "id") == "bx" && has(field(p, "input"), "enabled") => {
+      fx.copy_enabled = flag(field(p, "input"), "enabled")
+      fx_changed()
+      Some(Ok(obj([])))
+    }
     "profile.quota" | "profile.check" | "profile.put" => Some(Ok(obj([])))
     // the subscription's sign-in begun: as settings-profile-login has it, waiting on the code
     "profile.login" => {
       fx.login = "needs_code"
+      fx_changed()
+      Some(Ok(obj([])))
+    }
+    "profile.resetQuota" if text(p, "reset") == "model" => {
+      fx.fable_used = true
       fx_changed()
       Some(Ok(obj([])))
     }
@@ -2772,10 +3336,28 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     // people added: each as one who has not signed in yet
     "workspace.addMembers" =>
       Some(Ok(obj([("joined", []), ("added", field(p, "emails").unwrap_or(Json::array([]))), ("already", [])])))
-    // a chat agent's run settings (a new chat's picks are the new chat fixture's)
-    "pick.set" if text(p, "of").has_prefix("session:") => Some(Ok(obj([])))
     _ => None
   }
+}
+
+///|
+/// The trusted devices a waiting device dials (the lock's `me.pair.approvers`): a phone and a laptop, the phone
+/// showing the code where `code`.
+fn waiting_approvers(code : Bool) -> Json {
+  [
+    obj([
+      ("id", str("d-phone")),
+      ("showing", Json::boolean(code)),
+      ("kind", str("phone")),
+      ("nameText", str("Pixel 9")),
+    ]),
+    obj([
+      ("id", str("d-laptop")),
+      ("showing", Json::boolean(false)),
+      ("kind", str("computer")),
+      ("nameText", str("林的 MacBook Pro")),
+    ]),
+  ]
 }
 
 ///|
@@ -2788,14 +3370,15 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
 fn waiting_lock(mode : String) -> Json {
   let mode = if mode.has_suffix("-dark") { mode.unsafe_substring(start=0, end=mode.length() - 5) } else { mode }
   let pair = match mode {
-    "lock-finding" => obj([("state", str("finding"))])
+    // (the devices it dials, the core's rows; one showing the code, once it does)
+    "lock-finding" => obj([("state", str("finding")), ("approvers", waiting_approvers(false))])
     "lock-code" | "lock-upgrade" =>
-      obj([("state", str("code")), ("left", Json::number(3.0)), ("untilText", str("14:05 前有效"))])
+      obj([("state", str("code")), ("left", Json::number(3.0)), ("untilText", str("14:05 前有效")), ("approvers", waiting_approvers(true))])
     "lock-wrong" => obj([("state", str("wrong")), ("left", Json::number(2.0)), ("untilText", str("14:05 前有效"))])
     "lock-wrong-gone" =>
       obj([("state", str("wrong")), ("left", Json::number(2.0)), ("error", str("安全码不对，或显示它的设备已断开，还可以试 2 次")), ("untilText", str("14:05 前有效"))])
     "lock-checking" => obj([("state", str("checking")), ("left", Json::number(3.0))])
-    "lock-none" => obj([("state", str("none"))])
+    "lock-none" => obj([("state", str("none")), ("approvers", waiting_approvers(false))])
     "lock-failed" => obj([("state", str("failed")), ("error", str("配对超时"))])
     "lock-elsewhere" =>
       obj([("state", str("failed")), ("devices", Json::number(0.0)), ("error", str("此设备已在「日常」获批，在这里还需要此 workspace 的管理员或你在这里的受信任设备批准"))])
@@ -2861,6 +3444,12 @@ fn waiting_lock(mode : String) -> Json {
 ///|
 /// The dialog of the desktop's pages a fixture's mode puts up ("" none), taken once: the desktop's page puts it up
 /// once it is drawn with what it needs.
+pub fn fixture_copies() -> Json? {
+  fx.copies
+}
+
+///|
+/// What a fixture's mode puts up over the settings (MBUI_FIXTURE=settings-…), said once.
 pub fn fixture_desk() -> String {
   let d = fixture_open.desk
   fixture_open.desk = ""
@@ -2888,7 +3477,7 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
         adding.made.set(Some(
           (
             "curl -fsSL https://still.fail/install.sh | sh -s -- 4f7c2a9e1b",
-            "stillfail station enroll https://still.fail 4f7c2a9e1b",
+            "& ([scriptblock]::Create((irm https://still.fail/install.ps1))) 4f7c2a9e1b",
           ),
         ))
       }
@@ -2957,6 +3546,36 @@ fn fx_profile_flow_plan() -> Json {
     ("canSubmit", Json::boolean(false)),
     ("pending", Json::boolean(false)),
     ("submitLabel", str("")),
+    ("usesLine", str("")),
+  ])
+}
+
+///|
+/// A new profile's draft at a key's form (`profileFlow`, settings-new-profile-key): Kimi's, a region and a protocol to
+/// choose, the key not typed yet.
+fn fx_profile_flow_key() -> Json {
+  let pair = fn(id : String, label : String) { obj([("id", str(id)), ("label", str(label))]) }
+  obj([
+    ("step", str("connect")),
+    ("station", str("ws1/st1")),
+    ("title", str("连接 Kimi")),
+    ("hint", str("")),
+    ("method", str("key")),
+    ("tile", obj([("id", str("kimi")), ("name", str("Kimi")), ("kind", str("api-provider")), ("runtime", str("")), ("mark", str("kimi"))])),
+    ("groups", []),
+    ("choices", []),
+    ("showEndpoint", Json::boolean(false)),
+    ("endpoint", str("")),
+    ("regions", [pair("cn", "中国"), pair("global", "国际")]),
+    ("region", str("cn")),
+    ("protocols", [pair("openai", "OpenAI 兼容"), pair("anthropic", "Anthropic 兼容")]),
+    ("protocol", str("openai")),
+    ("showKey", Json::boolean(true)),
+    ("key", str("")),
+    ("keyLabel", str("API key")),
+    ("canSubmit", Json::boolean(false)),
+    ("pending", Json::boolean(false)),
+    ("submitLabel", str("验证并添加")),
     ("usesLine", str("")),
   ])
 }
@@ -3093,14 +3712,13 @@ fn fx_session_pick() -> Json {
     ("accountText", str("自动分配")),
     ("accountNote", str("Claude 主账号 · 5 小时窗口已用 62%")),
     ("repick", str("重新分配")),
-    // (RunnableProfile: its kind, its runtime, its allowance)
+    // (PickProfile: its kind, its runtime, its allowance as its chips draw it)
     (
       "accounts",
       [
         obj([
           ("id", str("p1")),
           ("name", str("Claude 主账号")),
-          ("current", Json::boolean(true)),
           ("kind", str("subscription")),
           ("runtime", str("claude")),
           (
@@ -3164,7 +3782,7 @@ fn fx_feishu_flow(step : String) -> Json {
 fn fx_qr(n : Int) -> Json {
   let rows : Array[Json] = []
   for y in 0..<n {
-    let row = StringBuilder::new()
+    let row = StringBuilder()
     for x in 0..<n {
       let finder = fn(ox : Int, oy : Int) {
         let dx = x - ox
@@ -3226,7 +3844,7 @@ fn fx_resources() -> Json {
     obj([("key", str(key)), ("pid", Json::number(pid)), ("name", str(name)), ("endable", Json::boolean(endable)), ("use", u)])
   }
   let tile = fn(key : String, label : String, value : String, sub : String, points : Array[Double]) {
-    obj([("key", str(key)), ("label", str(label)), ("value", str(value)), ("sub", str(sub)), ("points", Json::array(points.map(Json::number(_))))])
+    obj([("key", str(key)), ("label", str(label)), ("value", str(value)), ("sub", str(sub)), ("points", Json::array(points.map(x => Json::number(x))))])
   }
   let chat = fx_use(25.9, 59.0e6, 0.0, 2.9e6, ("25.9%", "59 MB", "0 B/s", "2.9 MB/s"))
   let notes = fx_use(14.1, 980.0e6, 0.0, 13.0e3, ("14.1%", "980 MB", "0 B/s", "13 KB/s"))
@@ -3305,8 +3923,8 @@ fn fx_resources() -> Json {
 }
 
 ///|
-/// 共享调试 as a fixture's mode has it (MBUI_FIXTURE=settings-adb-<off|unpaired|pairing|connected|failed|chats|idle>; ""
-/// not lent).
+/// 共享调试 as a fixture's mode has it (MBUI_FIXTURE=settings-adb-<off|unpaired|pairing|connected|failed|chats|idle|desk>;
+/// "" not lent).
 let fx_adb : Ref[String] = Ref("")
 
 ///|
@@ -3325,34 +3943,60 @@ fn fx_adb_share() -> Json {
       ]..append(fields),
     )
   }
+  // lent for a chat's grant (the station's adb as `adb` holds the phone), as a core of grants says it: the first lending
+  // at its top, each in `lends`
+  let granted = fn(adb : String, fields : Array[(String, Json)]) {
+    lent(adb, [
+      ("on", Json::boolean(true)),
+      ("lends", Json::array([obj([("station", str("ws1/st1")), ("phase", str("offered")), ("adb", str(adb)), ("serial", str("127.0.0.1:37762")), ("tunnels", Json::number(0.0))])])),
+      ("grants", Json::array([obj([("station", str("ws1/st1")), ("id", str("p-1")), ("session", str("s-c1")), ("chatTitle", str("通知权限检查")), ("reason", str("装上刚编好的测试包，看首屏在折叠屏展开时排得对不对")), ("status", str("granted")), ("scope", str("chat"))])])),
+      ..fields,
+    ])
+  }
+  // a device on the person's own lock
+  let device = fn(key : String, label : String, me : Bool) { obj([("key", str(key)), ("label", str(label)), ("me", Json::boolean(me))]) }
   match fx_adb.val {
-    // the person's own lock on the page: this device on it, outside it, or asked for a code
+    // the person's own lock on 共享调试: this device on it (its devices listed, two), or to be approved by one
     "lock-member" =>
       lent("connected", [
         ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("member")), ("devices", Json::array([
-          obj([("key", str("ed25519:aa")), ("label", str("OPPO PLP110")), ("me", Json::boolean(true))]),
-          obj([("key", str("ed25519:bb")), ("label", str("MacBook Pro")), ("me", Json::boolean(false))]),
+          device("ed25519:aa", "OPPO PLP110", true),
+          device("ed25519:bb", "MacBook Pro", false),
         ]))])])),
         ("toConfirm", Json::number(2.0)),
       ])
-    // 共享调试 off the person's own lock: none yet, or this device joining one (the page is the lock's step alone)
+    // on the locks of two accounts (a phone signed in to both), the second's email long; a chat's grant held
+    "lock-two" =>
+      granted("connected", [
+        ("personal", Json::array([
+          obj([("sub", str("s-zuo")), ("email", str("zuozijian1994@gmail.com")), ("standing", str("member")), ("devices", Json::array([
+            device("ed25519:z1", "youdid.wtf 桌面版 · 左子健的 MacBook Air", false),
+            device("ed25519:z2", "youdid.wtf Android · OPPO Find N6", true),
+            device("ed25519:z3", "still.fail Android · OPPO Find N6", false),
+          ]))]),
+          obj([("sub", str("s-work")), ("email", str("zijian.zuo.engineering@example-company.com")), ("standing", str("member")), ("devices", Json::array([
+            device("ed25519:w1", "youdid.wtf Android · OPPO Find N6", true),
+            device("ed25519:w2", "still.fail 桌面版 · Mac Studio", false),
+          ]))]),
+        ])),
+      ])
+    // 共享调试 with no lock of the person's own yet (the page as it is: allowing a request begins it), or this device
+    // typing the code a trusted device of theirs shows (the page is that step alone)
     "gate-none" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("none")), ("devices", Json::array([]))])]))])
     "gate-code" =>
       lent("connected", [
         ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([])), ("pair", obj([("state", str("code")), ("devices", Json::number(1.0)), ("untilText", str("14:05 前有效")), ("showing", Json::array([str("MacBook Pro")]))]))])])),
       ])
     "lock-outside" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([]))])]))])
-    "lock-code" =>
-      lent("connected", [
-        ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([])), ("pair", obj([("state", str("code")), ("devices", Json::number(1.0)), ("untilText", str("14:05 前有效")), ("showing", Json::array([str("MacBook Pro")]))]))])])),
-      ])
-    "lock-replaced" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("replaced")), ("devices", Json::array([]))])]))])
-    "unpaired" => lent("unpaired", [])
-    "pairing" => lent("unpaired", [("pairPort", Json::number(37115.0))])
-    "connected" => lent("connected", [("tunnels", Json::number(1.0))])
+    // lent for a chat's grant to Willow: its adb waiting to be paired (the pairing dialog not open yet, then open),
+    // holding the phone, failing
+    "unpaired" => granted("unpaired", [])
+    "pairing" => granted("unpaired", [("pairPort", Json::number(37115.0))])
+    "connected" => granted("connected", [("tunnels", Json::number(1.0))])
     "failed" =>
-      lent("failed", [
-        ("message", str("the phone did not reach adb: 无法连接手机上的 adb：Connection refused (os error 111)")),
+      granted("failed", [
+        // (the phone's own words, as a station says them: station/src/adb/link.ts Refused)
+        ("message", str("无法连接手机上的 adb：Connection refused (os error 111)")),
         ("refusedPort", Json::number(41239.0)),
       ])
     // settings' 共享调试, its switch off: nothing granted
@@ -3361,6 +4005,7 @@ fn fx_adb_share() -> Json {
     // a core from before it said the one it names at its top: the first)
     "second" =>
       lent("connected", [
+        ("on", Json::boolean(true)),
         ("pairPort", Json::number(37115.0)),
         (
           "lends",
@@ -3369,9 +4014,17 @@ fn fx_adb_share() -> Json {
             obj([("station", str("ws1/st2")), ("phase", str("offered")), ("adb", str("unpaired")), ("serial", str("127.0.0.1:37715")), ("tunnels", Json::number(0.0))]),
           ]),
         ),
+        (
+          "grants",
+          Json::array([
+            obj([("station", str("ws1/st1")), ("id", str("p-1")), ("reason", str("装上刚编好的测试包，看首屏在折叠屏展开时排得对不对")), ("status", str("granted")), ("scope", str("chat"))]),
+            obj([("station", str("ws1/st2")), ("id", str("p-2")), ("reason", str("录一段登录流程的视频")), ("status", str("granted")), ("scope", str("hour"))]),
+          ]),
+        ),
       ])
-    // The length and mix of reasons people see in the grants list, including one from before use times were recorded.
-    "chats-long" =>
+    // The length and mix of reasons people see in the grants list, including one from before use times were recorded
+    // (desk: the same seen on a computer, which lends no adb of its own)
+    "chats-long" | "desk" =>
       obj([
         ("sharing", Json::boolean(true)),
         ("station", str("ws1/st1")),
@@ -3465,4 +4118,341 @@ pub fn fixture_machine_sessions(core : Core) -> Unit {
     s("m9", "codex", "把发票 PDF 按月份归档", "~/Documents/Codex/ledger", "10月20日", "09:31", ""),
   ]
   open_machine_sessions(core, "ws1/st1", "Willow")
+}
+
+///|
+/// Willow's 备份 row as the core shows it (StationCopies): Cedar and Aspen up to date; `alone`: the only station of its
+/// workspace.
+fn fixture_copies_row(alone~ : Bool) -> Json {
+  obj([
+    ("line", str(if alone { "再加一台 station 就会自动备份" } else { "已备份到 Cedar 和 Aspen · 2 分钟前" })),
+    ("level", str(if alone { "amber" } else { "ok" })),
+    ("offers", []),
+    ("canRestore", Json::boolean(true)),
+    ("formerly", []),
+  ])
+}
+
+///|
+/// A new station's 备份 (StationCopies): no chat of its own yet, Old Mac's backup (at Cedar) to restore; `under_way`:
+/// it being restored, how in its row (恢复到这台 waits), else 恢复到这台 live.
+fn fixture_copies_restore(under_way~ : Bool, name~ : String) -> Json {
+  obj([
+    ("line", str("还没备份好 · Cedar 连不上")),
+    ("level", str("amber")),
+    (
+      "offers",
+      [
+        obj([
+          ("station", str("st9")),
+          ("gen", str("1-abcdef01")),
+          ("name", str(name)),
+          ("line", str(if under_way { "正在恢复：37 / 412 个文件" } else { name + " 的 128 个聊天" })),
+          ("fromStation", str("st2")),
+          ("busy", Json::boolean(under_way)),
+        ]),
+      ],
+    ),
+    ("canRestore", Json::boolean(!under_way)),
+    ("formerly", []),
+  ])
+}
+
+///|
+/// The station after the restart that took Old Mac's chats in: what came of it, in its 备份 row until a station is up to
+/// date with it.
+fn fixture_copies_restored() -> Json {
+  obj([
+    ("line", str("已恢复 Old Mac 的 128 个聊天 · 2 分钟前")),
+    ("level", str("amber")),
+    ("offers", []),
+    ("canRestore", Json::boolean(true)),
+    ("formerly", [str("st9")]),
+  ])
+}
+
+///|
+/// Willow's copies (StationCopies) as it is retired, by `step` (the fixture mode's end), in the core's words: "" none
+/// under way, it may be retired; "sending" its files going to Maple, "quiet" its chats paused, both let go of;
+/// "failed" Maple out of reach as it took them, tried again or let go of; "accounts" its accounts moving; "done" all
+/// on Maple, "done-left" with two accounts left behind; "taking": a station that takes two retired ones' chats in, Old
+/// Mac's working directories made again and Birch's failed.
+fn fixture_copies_retire(step : String) -> Json {
+  let to = "Maple"
+  let keys = ["sending", "quiet", "handing", "accounts", "connects"]
+  // (`sent`: all of it there, the chats still working, 暂停聊天 not yet, waiting for the hand-over's confirmation;
+  // `sent-failed`: back there after a hand-over failed, that row saying why and that the chats work again: as the
+  // core's copies.ts says)
+  let sent = step == "sent" || step == "sent-failed"
+  let at = match step {
+    "sending" => 0
+    "quiet" | "sent" | "sent-failed" => 1
+    "failed" => 2
+    "accounts" => 3
+    _ => 5
+  }
+  let steps = keys.mapi(fn(i, key) {
+    let state = if i < at {
+      "done"
+    } else if i == at {
+      if step == "failed" || step == "sent-failed" { "failed" } else if step == "sent" { "todo" } else { "now" }
+    } else {
+      "todo"
+    }
+    let note = match (state, key) {
+      ("todo", _) if step == "sent" && i == at => tr("core-views.copies.retire.waiting")
+      ("now", "sending") => fill("core-views.copies.retire.sent", [("done", "1.5 GB"), ("total", "3.2 GB")])
+      ("failed", _) if step == "sent-failed" =>
+        fill("core-views.copies.retire.resumed", [("why", fill("core-views.copies.retire.why.failed", [("name", to)]))])
+      ("failed", _) => fill("core-views.copies.retire.why.offline", [("name", to)])
+      _ => ""
+    }
+    obj([
+      ("key", str(key)),
+      ("label", str(fill("core-views.copies.retire.step." + key, [("name", to)]))),
+      ("state", str(state)),
+      ("note", str(note)),
+    ])
+  })
+  let left = if step == "done-left" {
+    obj([
+      ("label", str(fill("core-views.copies.retire.left", [("n", "2")]))),
+      (
+        "note",
+        str(fill("core-views.copies.retire.leftNote", [("names", "cuesurf5@proton.me" + tr("core-views.copies.andLast") + "Kimi Code key"), ("name", to)])),
+      ),
+    ])
+  } else {
+    Json::null()
+  }
+  let r = if step == "" || step == "taking" {
+    Json::null()
+  } else {
+    obj([
+      ("steps", Json::array(steps)),
+      ("left", left),
+      ("done", Json::boolean(at == 5)),
+      ("stopped", Json::boolean(at > 0 && at < 5 && !sent)),
+      ("to", str("st2")),
+      ("toName", str(to)),
+      ("cancellable", Json::boolean(at <= 2)),
+      ("retriable", Json::boolean(step == "failed" || step == "sent-failed")),
+    ])
+  }
+  let taking = fn(origin : String, name : String, line : String, level : String) {
+    obj([("origin", str(origin)), ("name", str(name)), ("line", str(line)), ("level", str(level))])
+  }
+  obj([
+    ("line", str("已备份到 Cedar 和 Aspen · 2 分钟前")),
+    ("level", str("ok")),
+    ("offers", []),
+    ("canRestore", Json::boolean(true)),
+    ("formerly", []),
+    ("canRetire", Json::boolean(step == "" || step == "taking")),
+    ("retire", r),
+    (
+      "taking",
+      if step == "taking" {
+        [
+          taking("st9", "Old Mac", tr("core-views.copies.taking.gits"), "ok"),
+          taking("st8", "Birch", fill("core-views.copies.taking.failed", [("why", tr("core-views.copies.why.error"))]), "amber"),
+        ]
+      } else {
+        []
+      },
+    ),
+  ])
+}
+
+///|
+/// What retiring Willow would take along and leave (RetirePreview, `copies.retirePreview`), as a station of real use
+/// says it: 594 chats, 525 of them archived; five connects; nine accounts, its home's, else staying; six tasks and
+/// services running; three chats whose folders are not on it.
+pub fn fixture_retire_preview() -> Json {
+  let things = fn(names : Array[String]) {
+    Json::array(names.mapi(fn(i, n) { obj([("id", str("t" + i.to_string())), ("name", str(n))]) }))
+  }
+  let accounts = [
+    "cuesurf5@proton.me", "lin@example.com", "studio-ci@cue.surf", "Kimi Code key", "OpenRouter (team)", "jev-decisions",
+    "zhou.design@example.com", "Anthropic API · nightly", "Cursor (Lin)",
+  ]
+  obj([
+    ("home", Json::boolean(fx.retire_home)),
+    ("chats", Json::number(594.0)),
+    ("archived", Json::number(525.0)),
+    ("connects", things(["发布助手 · Slack", "飞书助手", "Comma 助手", "值班机器人 · Slack", "Release notes · Slack"])),
+    ("accounts", if fx.retire_home { things(accounts) } else { [] }),
+    ("accountsStay", if fx.retire_home { [] } else { things(accounts) }),
+    (
+      "jobs",
+      Json::array(
+        ["pnpm dev", "station tests", "preview :5173", "storybook", "ollama serve", "nightly build"].map(fn(n) {
+          obj([("name", str(n)), ("session", str("s-c1"))])
+        }),
+      ),
+    ),
+    ("outside", Json::number(3.0)),
+  ])
+}
+
+///|
+/// The calls of Willow's retirement the made-up core was asked, as it was asked them (name and params), each answered
+/// only where what it was given is what the core needs (the station's address; for `copies.retire` a station of the
+/// workspace up and not Willow): a test reads what a page asked.
+// kept across runs: emptied by fixture_reset
+pub let fixture_retire_asked : Array[(String, Json)] = []
+
+///|
+/// A `copies.retire*` call answered as the core would, Willow's copies moved on as its station would say them next;
+/// one given what the core would refuse refused in its words. None: not one of them.
+fn retire_fixture_call(name : String, p : Json?) -> Result[Json, Json]? {
+  if name == "copies.retirePreview" {
+    fixture_retire_asked.push((name, p.unwrap_or(Json::null())))
+    return Some(if text(p, "station") == "ws1/st1" { Ok(fixture_retire_preview()) } else { Err(obj([("code", str("invalid")), ("message", str("missing station"))])) })
+  }
+  guard name == "copies.retire" || name == "copies.retireCancel" || name == "copies.retireAgain" else { return None }
+  fixture_retire_asked.push((name, p.unwrap_or(Json::null())))
+  let refused = fn(why : String) { Some(Err(obj([("code", str("invalid")), ("message", str(why))]))) }
+  guard text(p, "station") == "ws1/st1" else { return refused("missing station") }
+  match name {
+    "copies.retire" => {
+      let to = text(p, "to")
+      let up = (to == "st2" && fx.retire_others >= 1) || (to == "st3" && fx.retire_others >= 2)
+      guard up else { return refused("no such station up: " + to) }
+      fx.copies = Some(fixture_copies_retire("sending"))
+    }
+    "copies.retireCancel" => fx.copies = Some(fixture_copies_retire(""))
+    _ => fx.copies = Some(fixture_copies_retire("quiet"))
+  }
+  fx_changed()
+  Some(Ok(obj([])))
+}
+
+///|
+/// The lock's changes made here that no station took yet, as the core's `lock` topic has them (lock-pending.ts
+/// `pendingRow`), oldest first: a device of a long name taken out, waiting for Willow and Maple; Ana's role, changed
+/// meanwhile on another device; a web page's renewal refused, in the station's words.
+fn fx_pending_rows() -> Array[Json] {
+  let all = [
+    obj([
+      ("id", str("p1")),
+      ("text", str("移除设备 林的 MacBook Pro（2024 款 · 公司配的那台 · 放在办公室）：已记下，等 Willow、Maple 上线后生效")),
+      ("state", str("waiting")),
+      ("stations", [str("Willow"), str("Maple")]),
+    ]),
+    obj([
+      ("id", str("p2")),
+      ("text", str("把 Ana 改为成员：没有生效。「Ana」在这之后又被改过，请查看现在的状态，仍然需要的话再操作一次")),
+      ("state", str("failed")),
+      ("stations", []),
+      ("dismissText", str("知道了")),
+    ]),
+    obj([
+      ("id", str("p3")),
+      ("text", str("续期 Chrome · macOS：没有生效。请查看现在的状态，仍然需要的话再操作一次")),
+      ("state", str("failed")),
+      ("stations", []),
+      ("why", str("这台设备已不在安全模式中")),
+      ("dismissText", str("知道了")),
+    ]),
+  ]
+  all.filter(fn(r) { fx.pending.contains(text(Some(r), "id")) })
+}
+
+///|
+/// What the upgrade of safe mode waits for in the state `fx.upgrade` names, as the core's `upgrade` says it (views/lock.ts
+/// `upgradeOf`): its title, its lines (a sentence each, what it is of, a station's address and whether this person may
+/// update it from here, or how its update goes), or its button where only the person's ask is lacking.
+fn fx_upgrade() -> Json? {
+  let station = fn(name : String, at : String, can : Bool) -> Json {
+    obj(
+      [
+        ("text", str("等待 station \{name}：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」")),
+        ("of", str("station")),
+        ("station", str(at)),
+      ] +
+      (if can { [("canUpdate", Json::boolean(true))] } else { [] }),
+    )
+  }
+  let person = fn(name : String) -> Json {
+    obj([("text", str("等待 \{name}：请其在自己的受信任设备上将 still.fail 更新到最新版本并打开一次")), ("of", str("member"))])
+  }
+  let device = fn(name : String, device : String) -> Json {
+    obj([
+      ("text", str("等待 \{name} 的设备「\{device}」：请其在另一台受信任设备上打开「设置 › 安全」并完成一次验证；该设备已不再使用的话，请其将它移除")),
+      ("of", str("device")),
+    ])
+  }
+  let lines : Array[Json] = match fx.upgrade {
+    "station" => [station("Maple", "ws1/st2", true)]
+    "station-not" => [station("Maple", "ws1/st2", false)]
+    "member" => [person("Ana")]
+    "device" => [device("Ana", "Pixel 8 · still.fail Android")]
+    "many" =>
+      [
+        station("Maple", "ws1/st2", true),
+        person("Ana"),
+        person("ben@example.com"),
+        device("Ana", "Pixel 8 · still.fail Android"),
+        device("周宁", "周宁的 MacBook Air · still.fail 桌面版"),
+        station("Cedar", "ws1/st3", false),
+        obj([("text", str("以及另外 3 项")), ("of", str("more"))]),
+      ]
+    "other" =>
+      [
+        obj([
+          ("text", str("等待「个人」的 station 家里的 mini：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」")),
+          ("of", str("station")),
+          ("station", str("ws2/st9")),
+          ("canUpdate", Json::boolean(true)),
+        ]),
+      ]
+    "updating" =>
+      [
+        obj([
+          ("text", str("等待 station Maple：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」")),
+          ("of", str("station")),
+          ("station", str("ws1/st2")),
+          ("updating", Json::boolean(true)),
+          ("percent", Json::number(40.0)),
+        ]),
+      ]
+    "ask" => []
+    _ => return None
+  }
+  Some(
+    obj(
+      [("titleText", str("安全模式有一项升级尚未完成")), ("lines", Json::array(lines))] +
+      (if fx.upgrade == "ask" { [("askText", str("验证并完成升级"))] } else { [] }),
+    ),
+  )
+}
+
+///|
+/// The `lock` topic's field of the upgrade, while there is one.
+fn fx_upgrade_fields() -> Array[(String, Json)] {
+  match fx_upgrade() {
+    Some(u) => [("upgrade", u)]
+    None => []
+  }
+}
+
+///|
+/// The `lock` topic's fields of what is pending: the rows, and their heading while there are any.
+fn fx_pending_fields() -> Array[(String, Json)] {
+  let rows = fx_pending_rows()
+  if rows.is_empty() {
+    [("pending", Json::array(rows))]
+  } else {
+    [("pending", Json::array(rows)), ("pendingText", str("以下改动还没有生效"))]
+  }
+}
+
+///|
+/// What is pending made `ids` (of settings-security-pending's), as the core says it changed: a station took one, or one
+/// was dropped.
+pub fn fixture_pending_set(ids : Array[String]) -> Unit {
+  fx.pending.clear()
+  fx.pending.append(ids)
+  fx_changed()
 }

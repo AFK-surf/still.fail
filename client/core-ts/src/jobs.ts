@@ -5,7 +5,7 @@ import * as format from "./format.ts";
 import { said } from "./format.ts";
 import { t } from "./i18n.ts";
 import type { Clock } from "./present.ts";
-import { terminal } from "./terminal.ts";
+import { type LogLine, linesOf } from "./log-lines.ts";
 import { arr as arrU, get as getU } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -335,16 +335,22 @@ export function longJobs(stations: [string, string | null, J[]][], c: Clock, fro
   return { groups, lit: bell.on && ids.some((id) => !bell.seen.has(id)), ids };
 }
 
-/// A job's output as read, as a terminal shows it (its colours in `runs`, terminal.ts), with its last line and when it
-/// grew in words put in (`JobLogView`).
-export function log(value: J, c: Clock): J {
+/// A job's output as read (`JobLogView`): its lines as a terminal shows them, each its runs of one style and its number
+/// (log-lines.ts: what the link kept, `from` its first's), with its last line with words in it and when it grew in
+/// words put in. Asked for its last line alone (`lines` 1: a job's row), those two alone, no lines.
+export function log(value: J, c: Clock, asked: unknown = null): J {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
-  const shown = terminal(strOf(value, "text"));
-  const last = shown.text.trim();
+  // (one already shown, its lines made and its text gone, as it is: present.ts may shape a value twice)
+  if (typeof value.text !== "string" && Array.isArray(value.lines)) return value;
+  const all = linesOf(strOf(value, "text"));
+  const from = typeof value.from === "number" ? value.from : 0;
+  let last = "";
+  for (let i = all.length - 1; i >= 0 && last === ""; i--) last = all[i]!.map((r) => r.text).join("").trim();
   const at = msOf(value, "outputAt");
+  const { text: _text, runs: _runs, from: _from, lines: _lines, ...rest } = value;
   return {
-    ...value,
-    ...shown,
+    ...rest,
+    ...(asked !== 1 ? { lines: all.map((runs, i): LogLine => ({ n: from + i, runs })) } : {}),
     ...(last !== "" ? { last } : {}),
     ...(at !== null || last !== "" ? { said: at === null ? t("core-logic.jobs.output") : t("core-logic.jobs.output_at", { ago: ago(at, c.now) }) } : {}),
   };

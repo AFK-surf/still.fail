@@ -40,7 +40,7 @@ pub fn download_start(src : Source, station : String, key : String, name : Strin
     Some(f) => p["from"] = f
     None => ()
   }
-  (src.call)("download.start", Json::object(p), fn(_) {  })
+  (src.call)("download.start", Json::object(p), answer_unread)
 }
 
 ///|
@@ -63,7 +63,7 @@ pub fn download_start_drive(
     "size": Json::number(size),
     "mtime": Json::number(mtime),
   }
-  (src.call)("download.start", Json::object(p), fn(_) {  })
+  (src.call)("download.start", Json::object(p), answer_unread)
 }
 
 ///|
@@ -77,7 +77,7 @@ pub fn download_start_zip(src : Source, station : String, root : String, path : 
     "name": Json::string(name),
     "zip": Json::boolean(true),
   }
-  (src.call)("download.start", Json::object(p), fn(_) {  })
+  (src.call)("download.start", Json::object(p), answer_unread)
 }
 
 ///|
@@ -96,13 +96,13 @@ pub fn download_of_drive(src : Source, station : String, root : String, path : S
 ///|
 /// The core's download `id`, failed (or waiting for its station), tried again now.
 pub fn download_retry(src : Source, id : String) -> Unit {
-  (src.call)("download.retry", { "id": Json::string(id) }, fn(_) {  })
+  (src.call)("download.retry", { "id": Json::string(id) }, answer_unread)
 }
 
 ///|
 /// The core's download `id` called off: stopped, what was fetched of it let go.
 pub fn download_cancel(src : Source, id : String) -> Unit {
-  (src.call)("download.cancel", { "id": Json::string(id) }, fn(_) {  })
+  (src.call)("download.cancel", { "id": Json::string(id) }, answer_unread)
 }
 
 ///|
@@ -145,13 +145,13 @@ pub fn fill_want(src : Source, station : String, key : String, name : String, si
     "size": Json::number(size),
     "from": from,
   }
-  (src.call)("fill.want", Json::object(p), fn(_) {  })
+  (src.call)("fill.want", Json::object(p), answer_unread)
 }
 
 ///|
 /// The file `id` no longer brought (loaded, or after everything else), what came of it kept (`fill.stop`).
 pub fn keeping_stop(src : Source, id : String) -> Unit {
-  (src.call)("fill.stop", { "id": Json::string(id) }, fn(_) {  })
+  (src.call)("fill.stop", { "id": Json::string(id) }, answer_unread)
 }
 
 ///|
@@ -178,7 +178,7 @@ pub fn downloads_frame(c : @ui.Ctx, src : Source) -> Unit {
 ///|
 /// Each download of `listed` all here taken (once) and saved.
 fn take_ready(src : Source, listed : Array[Json]) -> Unit {
-  let ready : Map[String, Bool] = {}
+  let ready : Map[String, Bool] = Map([])
   for d in listed {
     if text(Some(d), "state") == "ready" {
       ready[text(Some(d), "id")] = true
@@ -226,7 +226,7 @@ fn save_download(src : Source, id : String, name : String, size : Double) -> Uni
     if at != "" {
       p["at"] = Json::string(at)
     }
-    (src.call)("download.done", Json::object(p), fn(_) {  })
+    (src.call)("download.done", Json::object(p), answer_unread)
   }
   let keep : Ref[@ui.Keep?] = { val: None }
   // (a picture or a film into a phone's photo album, as keep_bytes keeps one)

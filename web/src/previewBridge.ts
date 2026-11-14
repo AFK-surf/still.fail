@@ -11,12 +11,8 @@
 
 import { PreviewCache } from "./previewCache.ts";
 
-/// A message of the preview's frame (cloud/src/preview.ts) or its marks (annotate/frame.ts): `stillfail-preview-<name>`,
-/// or `ember-preview-<name>` as the frames deployed before 2026-11-05 say it.
-export const fromPreview = (data: unknown, name: string): boolean => {
-  const type = (data as { type?: unknown } | null)?.type;
-  return type === `stillfail-preview-${name}` || type === `ember-preview-${name}`;
-};
+/// A message of the preview's frame (cloud/src/preview.ts) or its marks (annotate/frame.ts): `stillfail-preview-<name>`.
+export const fromPreview = (data: unknown, name: string): boolean => (data as { type?: unknown } | null)?.type === `stillfail-preview-${name}`;
 /// The type of a message to the preview's frame.
 export const toPreview = (name: string) => `stillfail-preview-${name}`;
 import { t } from "./i18n.ts";

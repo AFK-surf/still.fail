@@ -4,14 +4,18 @@
 // after a crash) with its turn's end told once and no live event twice.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { basename, delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { ClaudeDriver, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
-import { REPO_RULES_HOOK } from "../src/agents/repo-rules.ts";
+import { ClaudeDriver, type ClaudeDriverOptions, SILENT_SUBAGENTS, SUBAGENT_HOOK, type Turn, backgroundOf, classifyResult, hooksOf, onFrame } from "../src/agents/claude.ts";
+import { RenewRefused } from "../src/accounts/console.ts";
+import { Said } from "../src/ops/i18n.ts";
+import { REPO_RULES_COMMAND, REPO_RULES_HOOK, hookCommand, hookNode } from "../src/agents/repo-rules.ts";
+import { SLACK_SPOKEN, SPEAKS } from "../src/tools/mcp.ts";
+import { claudeProject } from "../src/read/transcript.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import { modelLimitOf } from "../src/agents/runtime.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
@@ -41,8 +45,11 @@ after(async () => {
   rmSync(data, { recursive: true, force: true });
 });
 
-function driver(machineToken?: (env?: unknown, rejected?: string) => Promise<{ token: string; expiresAt: number }>) {
-  const d = new ClaudeDriver({ data, machineToken });
+function driver(
+  machineToken?: (env?: unknown, rejected?: string) => Promise<{ token: string; expiresAt: number }>,
+  subscriptionToken?: ClaudeDriverOptions["subscriptionToken"],
+) {
+  const d = new ClaudeDriver({ data, machineToken, subscriptionToken });
   drivers.push(d);
   return d;
 }
@@ -175,6 +182,10 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.ok(args.includes("--no-session-persistence"));
     assert.ok(!args.includes("--dangerously-skip-permissions"));
     assert.deepEqual(JSON.parse(args[args.indexOf("--mcp-config") + 1]!), { mcpServers: {} });
+    // With none of the station's tools, nothing to keep a subagent from, and nothing said of hooks.
+    const settings = JSON.parse(args[args.indexOf("--settings") + 1]!);
+    assert.equal(settings.hooks.PreToolUse, undefined);
+    assert.equal("disableAllHooks" in settings, false);
     await session.dispose();
   });
 
@@ -213,6 +224,21 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const [rules] = settings.hooks.PostToolUse;
     assert.match(rules.matcher, /^Bash\|Read\|/);
     assert.ok(rules.hooks[0].command.includes(REPO_RULES_HOOK), rules.hooks[0].command);
+    // A subagent kept from the tools a session speaks by (test/subagent-hook.test.ts): those tools, slack_api for its
+    // writes, and no other, as Claude Code names them.
+    assert.deepEqual(Object.keys(settings.hooks).sort(), ["PostToolUse", "PreToolUse", "SessionStart"]);
+    assert.deepEqual(settings.hooks.PreToolUse, SILENT_SUBAGENTS.PreToolUse);
+    const [silent] = settings.hooks.PreToolUse;
+    assert.equal(settings.hooks.PreToolUse.length, 1);
+    assert.equal(silent.matcher, [...SPEAKS, "slack_api"].map((tool) => `mcp__stillfail__${tool}`).join("|"));
+    assert.equal(silent.matcher, "mcp__stillfail__chat_post|mcp__stillfail__chat_state|mcp__stillfail__session_send|mcp__stillfail__chat_create|mcp__stillfail__chat_leave|mcp__stillfail__chat_archive|mcp__stillfail__slack_api");
+    // One command, the hook's file by the station's Node, told the Slack methods that write as one quoted word, and
+    // given up on (the call let through) after seconds, not Claude Code's ten minutes.
+    assert.deepEqual(silent.hooks, [{ type: "command", command: hookCommand(SUBAGENT_HOOK, SLACK_SPOKEN.join(",")), timeout: 10 }]);
+    assert.equal(silent.hooks[0].command, `'${process.execPath}' '${SUBAGENT_HOOK}' '${SLACK_SPOKEN.join(",")}' 2>/dev/null || true`);
+    assert.match(silent.hooks[0].command, /' 'chat\.postMessage,chat\.postEphemeral,[A-Za-z.,]+,assistant\.threads\.,chat\.startStream,chat\.appendStream,chat\.stopStream' 2>/);
+    // No settings file of the machine, the project or the working directory turns the hook off (a subagent wrote one).
+    assert.equal(settings.disableAllHooks, false);
     const [compacted] = settings.hooks.SessionStart;
     assert.equal(compacted.matcher, "compact");
     assert.ok(compacted.hooks[0].command.includes(REPO_RULES_HOOK), compacted.hooks[0].command);
@@ -228,7 +254,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(env.ANTHROPIC_BASE_URL, "https://opencode.ai/zen/go");
     assert.equal(env.ANTHROPIC_API_KEY, "k1");
     assert.equal(env.ANTHROPIC_CUSTOM_HEADERS, `x-opencode-session: ${o.route}`);
-    assert.equal(env.ANTHROPIC_SMALL_FAST_MODEL, "deepseek-flash");
+    assert.equal(env.ANTHROPIC_SMALL_FAST_MODEL, "claude-haiku-5-5");
     if (process.platform === "darwin") assert.match(env.PATH.split(":")[0], /stillfail-no-keychain-\d+$/, "a security that holds nothing of Claude Code's");
 
     // The user's message, as stream-json input.
@@ -237,6 +263,52 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await until(ended(2));
     await session.dispose();
     await until((e) => e.some((x) => x.type === "closed"));
+  });
+
+  test("a session continued from a terminal keeps its subagents from speaking too, and is given nothing else of the station's settings", async () => {
+    const d = driver();
+    const o = options({ instructions: "" });
+    const { push, until } = listen();
+    const session = await d.open(o, push);
+    await session.prompt("say:hi");
+    await until(ended(1));
+    const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
+    assert.ok(!started.argv.includes("--append-system-prompt") && !started.argv.includes("--disallowedTools"));
+    const settings = JSON.parse(started.argv[started.argv.indexOf("--settings") + 1]);
+    assert.deepEqual(Object.keys(settings), ["disableAllHooks", "hooks"]);
+    assert.equal(settings.disableAllHooks, false);
+    assert.deepEqual(settings.hooks, SILENT_SUBAGENTS);
+    await session.dispose();
+  });
+
+  test("the hooks' files are the ones named, the build ships them, and they are run by a Node that outlives an update", () => {
+    // The files by name: a constant pointed at another file would pass every test that only compares it with itself.
+    assert.equal(basename(SUBAGENT_HOOK), "subagent-hook.mjs");
+    assert.equal(basename(REPO_RULES_HOOK), "repo-rules-hook.mjs");
+    for (const file of [SUBAGENT_HOOK, REPO_RULES_HOOK]) assert.ok(existsSync(file), file);
+    // A release has them beside its bundle: the build copies each there, or a session's command names a file that is not.
+    const build: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).scripts.build;
+    const copied = build.split("&&").map((step) => step.trim().split(/\s+/)).find((words) => words[0] === "cp" && words.at(-1) === "dist/" && words[1] !== "-R") ?? [];
+    for (const file of ["src/agents/subagent-hook.mjs", "src/agents/repo-rules-hook.mjs"]) assert.ok(copied.includes(file), `${file} is not copied to dist/ by the build: ${copied.join(" ")}`);
+    // In a release (<app>/station/<hook>, <app>/node the release's Node) the command names that Node, which the next
+    // release's takes the place of; the Node the station runs on is a version's own directory, pruned after an update.
+    // Where either installer puts it (bin/node; node.exe on Windows), whichever is there.
+    for (const own of [join("/app", "node", "bin", "node"), join("/app", "node", "node.exe")]) {
+      assert.equal(hookNode(join("/app", "station", "subagent-hook.mjs"), (path) => path === own), own);
+    }
+    // A checkout, these tests: no Node beside it, its own.
+    assert.equal(hookNode(join("/app", "station", "subagent-hook.mjs"), () => false), process.execPath);
+    assert.equal(hookNode(SUBAGENT_HOOK), process.execPath);
+    assert.equal(REPO_RULES_COMMAND, `'${process.execPath}' '${REPO_RULES_HOOK}' 2>/dev/null || true`);
+    // Every word quoted for the shell that runs it, a quote in one too.
+    assert.equal(hookCommand("/a b/it's.mjs", "x y", "$(z)"), `'${process.execPath}' '/a b/it'\\''s.mjs' 'x y' '$(z)' 2>/dev/null || true`);
+  });
+
+  test("sets of hooks are joined event by event, none replacing another's", () => {
+    const a = { PreToolUse: [{ matcher: "A" }], PostToolUse: [{ matcher: "B" }] };
+    assert.deepEqual(hooksOf(a, SILENT_SUBAGENTS), { PreToolUse: [{ matcher: "A" }, ...SILENT_SUBAGENTS.PreToolUse], PostToolUse: [{ matcher: "B" }] });
+    assert.deepEqual(hooksOf({}, SILENT_SUBAGENTS), SILENT_SUBAGENTS);
+    assert.deepEqual(a, { PreToolUse: [{ matcher: "A" }], PostToolUse: [{ matcher: "B" }] }, "what it is given is left as it was");
   });
 
   test("a session kept to less context starts Claude Code compacting at it", async () => {
@@ -253,7 +325,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await session.dispose();
   });
 
-  test("Fast on an Anthropic key or a Claude subscription is Claude Code's fastMode, as the session is set else as its profile is, and needs a new process", async () => {
+  test("Fast on an Anthropic key, a Claude subscription or an OpenRouter key is Claude Code's fastMode, as the session is set else as its profile is, and needs a new process", async () => {
     const d = driver();
     const fastMode = async (o: OpenOptions & { dump: string }) => {
       const { push, until } = listen();
@@ -278,6 +350,15 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const sub = options({ fast: true });
     const [onSubscription, subscriptionFast] = await fastMode({ ...sub, profile: { ...sub.profile, access: { kind: "subscription" } } });
     assert.equal(subscriptionFast, true);
+    // An OpenRouter key's too (OpenRouter serves speed: "fast" from Anthropic's fast tier); another provider's not.
+    const provider = (id: string) => {
+      const base = options({ fast: true });
+      return { ...base, profile: { ...base.profile, access: { kind: "api-provider" as const, key: "k", provider: id } } };
+    };
+    const [onOpenRouter, openRouterFast] = await fastMode(provider("openrouter"));
+    assert.equal(openRouterFast, true);
+    const [onOtherProvider, otherProviderFast] = await fastMode(provider("minimax"));
+    assert.equal(otherProviderFast, undefined, "a provider not known to take it");
     const [notKeyed, other] = await fastMode(options({ fast: true }));
     assert.equal(other, undefined, "not an account that takes it");
     // Another Fast is not taken in place; the same is, with another model.
@@ -286,7 +367,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(standard.retune?.({ ...o, model: "m2", fast: true }), false);
     assert.equal(standard.retune?.({ ...o, model: "m2", fast: undefined }), false, "back to its profile's, which is on");
     assert.equal(notKeyed.retune?.({ ...options({ fast: false }), model: "m2" }), true);
-    await Promise.all([onProfile, standard, onSubscription, notKeyed].map((s) => s.dispose()));
+    await Promise.all([onProfile, standard, onSubscription, onOpenRouter, onOtherProvider, notKeyed].map((s) => s.dispose()));
   });
 
   test("a Kimi Code sign-in's key is read from its home by Claude Code's key helper, not given it", async () => {
@@ -325,6 +406,13 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(modelLimitOf("You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage, to continue."), "Fable");
     assert.equal(modelLimitOf("Claude usage limit reached: you have reached your weekly usage limit"), null);
     assert.equal(modelLimitOf("You've hit your session limit · resets 3:40am"), null);
+    // Claude Code's words for it since 2026-11-14: told as the model's limit too, not the model failing.
+    const hit = "You've hit your Fable limit · resets Nov 20 at 9am (Asia/Tokyo). Switch to another model to continue.";
+    assert.equal(classifyResult(hit), "rate_limit");
+    assert.equal(modelLimitOf(hit), "Fable");
+    for (const text of ["You've hit your weekly limit · resets Oct 8", "You've hit your 5-hour limit · resets 7:50am (UTC)", "You've hit your daily limit"]) {
+      assert.equal(modelLimitOf(text), null, text);
+    }
     assert.equal(classifyResult("session limit configuration is invalid"), "model");
     assert.equal(classifyResult('API Error: 403 {"error":{"type":"forbidden","message":"Request not allowed"}}'), "refused");
     assert.equal(classifyResult("API Error: 403 OAuth token does not meet scope requirement"), "auth");
@@ -342,6 +430,36 @@ describe("the Claude Code driver", { concurrency: true }, () => {
       }
     }
     assert.equal(classifyResult("5-hour limit configuration is invalid"), "model");
+  });
+
+  test("a session that ran in another directory is resumed from where claude looks, its cwd's project; none at all is refused", async () => {
+    // Claude Code 2.1.63 resumes only from the project of the directory it runs in (FB-16: a chat whose turns all ended
+    // at once with error_during_execution, "No conversation found with session ID").
+    const d = driver();
+    const o = options({ cwd: mkdtempSync(join(data, "cwd-")) });
+    const id = "0c0c0c0c-0000-4000-8000-000000000001";
+    const before = join(o.profile.home, "projects", "-somewhere-else");
+    mkdirSync(before, { recursive: true });
+    writeFileSync(join(before, `${id}.jsonl`), '{"type":"user"}\n');
+    const session = await d.open({ ...o, resume: id }, listen().push);
+    const here = join(o.profile.home, "projects", claudeProject(realpathSync(o.cwd))!, `${id}.jsonl`);
+    assert.equal(readFileSync(here, "utf8"), '{"type":"user"}\n');
+    appendFileSync(here, '{"type":"assistant"}\n');
+    assert.equal(readFileSync(join(before, `${id}.jsonl`), "utf8"), '{"type":"user"}\n{"type":"assistant"}\n', "one file, under both names");
+    await session.dispose();
+    await assert.rejects(d.open({ ...options(), resume: "0c0c0c0c-0000-4000-8000-000000000002" }, listen().push), /no claude transcript/);
+  });
+
+  test("a turn that failed with no result says claude's errors, not just error_during_execution", () => {
+    // As claude 2.1.321 ends a turn it could not run (here --resume of a session it has not).
+    const said = "No conversation found with session ID: 11111111-1111-1111-1111-111111111111";
+    const { events, push } = listen();
+    const turn: Turn = { busy: true, aborting: false, authFailure: null, closed: false };
+    onFrame({ type: "result", subtype: "error_during_execution", is_error: true, num_turns: 0, errors: [said] }, turn, push, () => {});
+    assert.deepEqual(outcome(events), { kind: "failed", reason: classifyResult(said), message: said });
+    const none = listen();
+    onFrame({ type: "result", subtype: "error_during_execution", is_error: true, errors: [] }, { busy: true, aborting: false, authFailure: null, closed: false }, none.push, () => {});
+    assert.equal((outcome(none.events) as { message: string }).message, "error_during_execution");
   });
 
   test("the first api_retry 401 interrupts the turn, which fails as auth", async () => {
@@ -500,6 +618,78 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal((outcome(events, 1) as { reason?: string }).reason, "auth");
     assert.equal(stdin(o.dump).filter((m) => m.type === "control_response").at(-1).response.response.reason, "refresh_failed");
     await session.dispose();
+  });
+
+  test("a local subscription runs on a token renewed by the station, and falls back to its kept token without touching .credentials.json when renewal fails", async () => {
+    const subOptions = () => {
+      const base = options();
+      const creds = JSON.stringify({ claudeAiOauth: { accessToken: "kept-tok", refreshToken: "rt" } });
+      writeFileSync(join(base.profile.home, ".credentials.json"), creds);
+      return { ...base, creds, profile: { ...base.profile, id: "sub", access: { kind: "subscription" as const } } };
+    };
+
+    // 1. Central renewal at open() and in-place renewal on 401 via oauth_token_refresh.
+    const asked: [string, string | undefined][] = [];
+    let next = 1;
+    const d1 = driver(undefined, async (p, rejected) => {
+      asked.push([p.id, rejected]);
+      return { token: `sub-${next}`, expiresAt: Date.now() + 3600_000 };
+    });
+    const o1 = subOptions();
+    const l1 = listen();
+    const s1 = await d1.open(o1, l1.push);
+    next = 2;
+    await s1.prompt("expired");
+    await l1.until(ended(1));
+    const env1 = JSON.parse(readFileSync(o1.dump, "utf8").trim()).env;
+    assert.equal(env1.CLAUDE_CODE_OAUTH_TOKEN, "sub-1");
+    assert.equal(env1.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH, "1");
+    assert.equal(env1.CLAUDE_CODE_ENTRYPOINT, "claude-desktop");
+    if (process.platform === "darwin") assert.match(env1.PATH.split(":")[0], /stillfail-no-keychain-\d+$/);
+    assert.deepEqual(outcome(l1.events), { kind: "completed" });
+    assert.deepEqual(deltas(l1.events), ["token:sub-2"]);
+    assert.deepEqual(asked, [["sub", undefined], ["sub", "sub-1"]]);
+    assert.equal(readFileSync(join(o1.profile.home, ".credentials.json"), "utf8"), o1.creds);
+    await s1.dispose();
+
+    // 2. Transient failure in open() hands over the kept token with RENEWED so oauth_token_refresh retries in-place.
+    let transient = true;
+    const d2 = driver(undefined, async (_p, rejected) => {
+      if (transient) {
+        transient = false;
+        throw new Said("network down");
+      }
+      assert.equal(rejected, "kept-tok");
+      return { token: "sub-3", expiresAt: Date.now() + 3600_000 };
+    });
+    const o2 = subOptions();
+    const l2 = listen();
+    const s2 = await d2.open(o2, l2.push);
+    await s2.prompt("expired");
+    await l2.until(ended(1));
+    const env2 = JSON.parse(readFileSync(o2.dump, "utf8").trim()).env;
+    assert.equal(env2.CLAUDE_CODE_OAUTH_TOKEN, "kept-tok");
+    assert.equal(env2.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH, "1");
+    assert.deepEqual(outcome(l2.events), { kind: "completed" });
+    assert.deepEqual(deltas(l2.events), ["token:sub-3"]);
+    await s2.dispose();
+
+    // 3. Permanent refusal (RenewRefused) in open() hands over the kept token without RENEWED so a 401 fails on auth
+    //    (triggering recheck/failover) instead of throwing in open() or letting Claude Code delete .credentials.json.
+    const d3 = driver(undefined, async () => {
+      throw new RenewRefused(400, "revoked");
+    });
+    const o3 = subOptions();
+    const l3 = listen();
+    const s3 = await d3.open(o3, l3.push);
+    await s3.prompt("expired");
+    await l3.until(ended(1));
+    const env3 = JSON.parse(readFileSync(o3.dump, "utf8").trim()).env;
+    assert.equal(env3.CLAUDE_CODE_OAUTH_TOKEN, "kept-tok");
+    assert.equal(env3.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH, undefined);
+    assert.equal((outcome(l3.events) as { reason?: string }).reason, "auth");
+    assert.equal(readFileSync(join(o3.profile.home, ".credentials.json"), "utf8"), o3.creds);
+    await s3.dispose();
   });
 
   for (const crashed of [false, true]) {

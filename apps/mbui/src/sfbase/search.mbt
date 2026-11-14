@@ -47,6 +47,7 @@ pub(all) struct FoundItem {
 /// Where something found opens (SearchOpen, the core's search-open.ts `openOf`): `to` chat, service (its chat, its page
 /// over it), task (its chat), station (its page), members (the workspace's), files (its station's: `root`, `path`
 /// under it, `how` read or play, else the folder `path` shown).
+#derive(Eq, Debug)
 pub(all) struct FoundOpen {
   to : String
   station : String
@@ -55,7 +56,7 @@ pub(all) struct FoundOpen {
   root : String?
   path : String
   how : String
-} derive(Eq, Show)
+}
 
 ///|
 /// A kind of what was found (SearchGroup): its heading, what of it is listed, whether there is more of it.

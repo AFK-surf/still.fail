@@ -11,7 +11,7 @@
 fn entry_said() -> Unit {
   first_waiting.val = false
   frame_bare.val = false
-  @sfbase.held_pictures_waiting.val = false
+  @sfbase.held_pictures_waiting.val = []
 }
 
 ///|
@@ -43,7 +43,7 @@ fn entry_tree(v : @view.View, page : (@view.View) -> Unit, over : (@ui.Ctx) -> U
 /// (its sheet saying to sign in first) and the library's presenters.
 fn signed_out_tree(v : @view.View, src : Source) -> Unit {
   entry_tree(v, fn(body) { @sfpages.sign_in_node(body, src) |> ignore }, fn(c) {
-    if !link_later.is_empty() {
+    if links_wait() {
       c.tell("links", fn() { signed_out_links(src) })
     }
     sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })

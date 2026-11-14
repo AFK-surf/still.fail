@@ -11,12 +11,19 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const strOf = (v: J, k: string): string => (typeof get(v, k) === "string" ? v[k] : "");
 
 export function glyph(stations: J[], days: J[]): J {
+  return glyphOf(
+    stations,
+    days
+      .flatMap((d) => arr(get(d, "items")))
+      .filter((i) => get(i, "state") === "run")
+      .map((i) => get(i, "station"))
+      .filter((s): s is string => typeof s === "string"),
+  );
+}
+
+/// The glyph of stations, of those whose listed chats have one at work (`running`, their addresses).
+export function glyphOf(stations: J[], running: string[]): J {
   const state = (s: J) => strOf(s, "state");
-  const running = days
-    .flatMap((d) => arr(get(d, "items")))
-    .filter((i) => get(i, "state") === "run")
-    .map((i) => get(i, "station"))
-    .filter((s) => typeof s === "string");
   const online = stations.filter((s) => state(s) === "online");
   const dim = stations.filter((s) => state(s) === "offline" || state(s) === "connecting").length;
   const connecting = stations.filter((s) => state(s) === "connecting").length;
@@ -61,9 +68,9 @@ export function doing(state: string, cause: unknown, overview: J): { running: nu
   return { running: 0, doing: t("core-views.station.offline_short") };
 }
 
-export function listNote(stations: J[], days: J[], loading: boolean, unread: string[]): J {
+export function listNote(stations: J[], any: boolean, loading: boolean, unread: string[]): J {
   const is = (s: J, w: string) => get(s, "state") === w;
-  if (days.length > 0) return { reading: false, failing: [], empty: false };
+  if (any) return { reading: false, failing: [], empty: false };
   const connecting = stations.some((s) => is(s, "connecting"));
   const failing = loading
     ? []

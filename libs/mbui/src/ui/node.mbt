@@ -1,0 +1,942 @@
+// The tree a view builds each frame. Nodes live in a pool that is reused
+// from frame to frame; they refer to each other by index, never by pointer,
+// so reference counting sees no cycles.
+
+///|
+#derive(Eq)
+pub(all) enum Size {
+  Auto
+  Px(Double)
+  Fill(Double)
+  /// as wide as what it holds, cut short where its row has less room (words on one line end in an ellipsis: CSS's
+  /// min-width: 0 with text-overflow), not grown past that
+  Cut
+  /// a share of the parent's room inside its padding, in percent (CSS's `width: 50%`)
+  Pct(Double)
+}
+
+///|
+#derive(Eq)
+pub(all) enum Dir {
+  Row
+  Column
+}
+
+///|
+#derive(Eq)
+pub(all) enum Align {
+  AStart
+  ACenter
+  AEnd
+  AStretch
+}
+
+///|
+#derive(Eq)
+pub(all) enum Justify {
+  JStart
+  JCenter
+  JEnd
+  JBetween
+}
+
+///|
+let kind_box = 0
+
+///|
+let kind_text = 1
+
+///|
+let kind_list = 2
+
+///|
+let kind_editor = 3
+
+///|
+let kind_scroll = 4
+
+///|
+let kind_image = 5
+
+///|
+let kind_page = 6
+
+///|
+let kind_rich = 7
+
+///|
+/// where a native view shows (native.mbt)
+let kind_native = 8
+
+///|
+/// Words said one way only (Node's `shorter`).
+// kept across runs: a table, never written
+let no_words : Array[String] = []
+
+///|
+struct Node {
+  mut kind : Int
+  mut id : Int
+  mut hit : Bool
+  // (with `hit` false: pointed at, never pressed: Ctx::box's `points`)
+  mut points : Bool
+  /// what its build said of it as a target, held by it (the way there's 1): the pointer's shape over it
+  /// and what a press on it does besides (hit_marks: Ctx::cursor, takes_presses, window_drag, keeps_selection,
+  /// holds_through, menu_asked); 0 none said
+  mut marks : Int
+  /// how it takes the focus where it does (Ctx::focusable): what Tab goes among is the nodes that do, in their order
+  /// (Ctx::focusables_found)
+  mut focus : Focusable?
+  /// how its corner is worked out once laid out, where it is (corners.mbt): corner_inner (`Inner`), corner_inner_or
+  /// (`InnerOr`), corner_around (`Around`); 0 as said
+  mut corner_by : Int
+  /// what it is in the tree read out (Ctx::semantics: the last said of it), and whether it was made hidden from that
+  /// tree (Ctx::hidden_from_semantics)
+  mut sem : Sem?
+  mut sem_hid : Bool
+  /// the old view it was built in (view_host.mbt's island_allows), none in a layer of its own (a menu, a sheet)
+  mut island : @view.NodeId?
+  /// a node of the window's tree's, put among the frame's for the corner rule (corners.mbt with_tree_nodes), that
+  /// scrolls what it holds up and down (Tree::scrolls_now): as a list does, what is in it lies under its top and foot
+  mut tree_scrolls : Bool
+  /// how far its scroll was put in all for what came out another height over what shows (Tree::scroll_corrected): no
+  /// move of it, what shows held where it was (sizes_steady.mbt takes the scroll out but for this)
+  mut tree_corrected : Double
+  /// a node of the window's tree's, put among the frame's, that holds a page's list's rows (Tree::holds_rows)
+  mut tree_rows : Bool
+  /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
+  mut floats : Bool
+  /// it scrolls what it holds, as the scrolling box `scroller` is (sideways.mbt: its id, 0 none), what it holds its
+  /// first child's (`scroller_inner`: a field's words are its own); found from the nodes once laid out (sideways_found)
+  mut scroller : Int
+  mut scroller_inner : Bool
+  /// the words it holds may be picked, kept by a key once laid out (Ctx::words): found from the nodes once laid out
+  /// (words_after_layout)
+  mut words : WordsMark?
+  /// what takes the presses landing on it, which takes none itself (Ctx::presses_to: a target's id), and where that
+  /// was said; held by it (the way there's 1)
+  mut press_owner : (Int, SourceLoc)?
+  /// the node of the window's tree that takes the presses landing on it (Ctx::presses_to_node: drawn here, pressed
+  /// there), if any
+  mut press_node : @view.NodeId?
+  /// the values of the view's own shown as it was built in it (Ctx::moved: a name, what it showed), for a move setting
+  /// out later to go from (move_state.mbt); its own box's shown is its properties
+  mut moved_vars : Array[(String, FixedArray[Double])]?
+  /// how it is drawn over how it is laid out (draw.mbt: a look, a cut, a fade, what it is drawn into) as its build said
+  /// it (`drawn_built`), and as this frame draws it: that, taken anew from it once laid out (Ctx::drawn_found), and
+  /// what is said of it after (a motion's look worked out from the layout)
+  mut drawn_built : Drawn?
+  /// what its build said comes again while it shows (Ctx::cycle, cycle_look: `true`; Ctx::every: `false`), how often
+  /// and where it was said: the frame's cycles and periodic (Tester::cycles), said again of a row kept as its nodes
+  mut ticks : Array[(Bool, Double, SourceLoc)]?
+  mut drawn : Drawn?
+  mut parent : Int
+  mut first : Int
+  mut last : Int
+  mut next : Int
+  /// who it is (What decides the work): what holds it and its key there (its id, or how many
+  /// before it there have none), not where it falls in the frame's order; the slot of the frame's nodes it was last
+  /// put in; how many of what it holds have no id, as they are built (`keyless`: it is one of them); the pass of a build
+  /// that last made it
+  mut ident : Int
+  mut keyless : Bool
+  /// the scope it was built in (Ctx::scope's)
+  mut seed : Int
+  mut slot : Int
+  mut kids : Int
+  mut made_pass : Int
+  mut dir : Dir
+  mut w : Size
+  mut h : Size
+  mut min_h : Double
+  mut max_h : Double
+  mut min_w : Double
+  /// its `min_w` gives way to the parent's room (Len's `Within`: CSS's `min(100%, …)`)
+  mut min_w_within : Bool
+  mut max_w : Double
+  mut pad_l : Double
+  mut pad_t : Double
+  mut pad_r : Double
+  mut pad_b : Double
+  mut gap : Double
+  mut align : Align
+  mut justify : Justify
+  mut bg : Int64
+  mut radius : Double
+  // its corners each their own where they are not all `radius` (top left, top right, bottom right, bottom left, as
+  // drawn): said so (Radius::Corners), or worked out once laid out where some lie in a container's corners and others
+  // in none (corners.mbt); None where all four are `radius`
+  mut radii : FixedArray[Double]?
+  /// where its corners come from, each, where they are linked (Radius::Linked: the corner rule holds it to them)
+  mut links : FixedArray[CornerOf]?
+  /// its corners worked out once laid out (corners.mbt: `Inner`, `InnerOr`, one in a container's corner), not said
+  mut corners_worked : Bool
+  mut border_w : Double
+  mut border_c : Int64
+  // its border drawn as dashes (Patch's `dashed`)
+  mut dashed : Bool
+  mut shadow : Double
+  // the shadow's colour and how far down it falls (-1: a third of its blur)
+  mut shadow_c : Int64
+  mut shadow_y : Double
+  // the shadow only outside the box (what is under it not darkened: a glass it is laid under)
+  mut shadow_out : Bool
+  mut clip : Bool
+  mut tx : Double
+  mut ty : Double
+  // its offset (as tx, ty) worked out as it is laid out, from its own size (Ctx::place_by_size): in place of tx, ty
+  mut place : ((Double, Double) -> (Double, Double))?
+  // moved off where its parent lays it by what this gives at the frame's time, from its own size (Ctx::moved_by: a page
+  // sliding in), and where that had it as it was last placed, on the device's pixels (what it holds placed with it)
+  mut moved_by : ((Double, Double) -> (Double, Double))?
+  mut moved_x : Double
+  mut moved_y : Double
+  /// what moves it only carries it from where it is laid out to where it is drawn (Ctx::moved_carries: an old view's
+  /// box, moved to where the window's tree draws it): where it is drawn is its place, as any node's, not a motion
+  mut moved_carries : Bool
+  /// what a list's row holds that comes and goes in its room (ListRows::enter, leave): placed in its middle and faded
+  /// to its edges, not what the row is drawn on (a group's ground round it)
+  mut room_held : Bool
+  mut opacity : Double
+  // its ground made of what is under it (glass.mbt), and whether the liquid
+  // glass inside it is one group (drawn first, merging)
+  mut glass : Glass?
+  mut glass_group : Bool
+  // a notch cut into its top edge (its ground, border and glass): a circle
+  // of radius notch_r about its top's middle, notch_y below the edge (above
+  // it when negative), met by the edge through fillets of notch_f
+  mut notch_y : Double
+  mut notch_r : Double
+  mut notch_f : Double
+  // text
+  mut text : String
+  // its words' stable_hash, and the words it is of (Node::text_said): worked out again only as other words come
+  mut said_of : String
+  mut said_hash : Int64
+  // other ways to say its words on one line where they have less room, each shorter than the one before (Ctx::text,
+  // Ctx::editor's placeholder: `shorter`)
+  mut shorter : Array[String]
+  mut font_size : Double
+  mut weight : Int
+  mut color : Int64
+  mut wrap : Bool
+  // A last-resort ellipsis is intentional even though the words' sizing does not say Cut or Fill.
+  mut allow_ellipsis : Bool
+  // a wrapped text's lines each centred across its box
+  mut center : Bool
+  // a line's height (0: the font's own)
+  mut line_h : Double
+  // a font taller than its line not padded beyond itself (set_line `trim`)
+  mut line_trim : Bool
+  // added to each cluster's advance, half before and half after it (Android's letter spacing), in pixels
+  mut spacing : Double
+  // digits all one width (@hostapi.style_tabular: Ctx::text `tabular`, the theme's where it says nothing)
+  mut tabular : Bool
+  // wrapped words broken where their lines come out even, on as many lines (Ctx::text `balance`: Node::text_layout)
+  mut balance : Bool
+  // wrapped words cut after this many lines, the last ending in an ellipsis (0: no limit)
+  mut max_lines : Int
+  mut fit : Fit
+  // an image fades in as it arrives
+  mut fade : Bool
+  // an image and its background composited before their shared edge is cut
+  mut matte : Bool
+  // a GIF that moves, held at its first frame (Ctx::image `still`)
+  mut still : Bool
+  // a page of a book, and which
+  mut pages : Pages?
+  mut page_no : Int
+  // laid over its parent rather than beside its siblings
+  mut layer : Bool
+  // a ground its style gives it in a state it is not in now (pointed at, pressed, chosen, focused): the corner rule's
+  mut state_ground : Bool
+  // of a node of the window's tree's, its ground read the hand on a node or the keyboard's focus as it was last worked
+  // out (view's Tree::ground_read): a ground seen in a state it is not in now, the corner rule's as state_ground is
+  mut ground_by_hand : Bool
+  // its margins (CSS's: outside its border, below 0 pulling what is beside it over it)
+  mut mar_l : Double
+  mut mar_t : Double
+  mut mar_r : Double
+  mut mar_b : Double
+  // where it is put in its parent, out of the flow, from the parent's edges, its padding not kept (CSS's position:
+  // absolute with left, top, right, bottom; NaN: not said); any said, it is placed so
+  mut at_l : Double
+  mut at_t : Double
+  mut at_r : Double
+  mut at_b : Double
+  // the name it is moved by (Ctx::move_state: the web's moveState's selector), "" none
+  mut moves : String
+  // a row laid out right to left (built where Ctx::rtl)
+  mut rtl : Bool
+  // its width over its height, its height following its width (0: none; Ctx::box `aspect`)
+  mut aspect : Double
+  // laid over the whole window, drawn and tapped over everything built outside one (overlay.mbt), and in it, what
+  // takes every press and wheel that what lies over it does not (a modal's ground)
+  mut portal : Bool
+  // a layer's own node (portal): the layer's id (overlay.mbt), 0 for any other
+  mut portal_id : Int
+  // a layer's own node: where it is in the window's stack of layers, the old frame's and the tree's (Ctx::stacked);
+  // -1 none said (where the old frame built it among its own)
+  mut stack : Int
+  // a layer's own node said at no place, opened by an old view of the window's tree: that view's node, at whose place
+  // it is (Ctx::node_stack: as that is now)
+  mut stack_in : @view.NodeId?
+  // the stratum it starts over what is put off under it (strata.mbt: 0 none, its bar's or its cover's)
+  mut mark : Int
+  // a shot's layer (shot.mbt): drawn not on the screen but into the shot's own instances
+  mut shot : Bool
+  // the surface of the look it is in, said by what draws it (Ctx::surface: a panel's, a card's that comes first): its own
+  // ground, edge and shadow as faint as the look, what it holds as its look's `words` says (scene.mbt words_alpha)
+  mut surface : Bool
+  // a look is said on it (Ctx::look, look_by, set_look), whatever it comes to now: the scope of a look of its own, its
+  // surface (the one said in it, or itself) as faint as what holds it (scene.mbt look_surface)
+  mut look_scope : Bool
+  /// what draws it as it is painted, under what it holds (its alpha): a frame drawn again (reveal.mbt), what the frame
+  /// drew round a point larger (loupe.mbt)
+  mut paints : ((Node, Double) -> Unit)?
+  mut blocks : Bool
+  // the wheel stops at it: what lies under it scrolls by no wheel over it (Ctx::stop_wheel: a popover's panel)
+  mut stops_wheel : Bool
+  // the pointer goes through it and what it holds to what lies under it (Ctx::passes: a tooltip)
+  mut passes : Bool
+  // what it holds laid out as wide as it is, scrolled sideways inside it (Ctx::sideways); built inside such a box's
+  // content, at any depth (none of it shrinks to the box: Ctx::layout_node)
+  mut sideways : Bool
+  mut in_sideways : Bool
+  // built in a page's bones (Ctx::bones): drawn as them in this colour (0: as itself); and drawn whole, one piece of
+  // its own box with nothing in it (Ctx::bone_whole)
+  mut bones : Int64
+  mut bone_whole : Bool
+  // kept to what is left of its column's room when that is short (Ctx::capped `shrinks`: CSS's flex-shrink with
+  // overflow: auto, a dialog's body under its maximum height), else as tall as what it holds
+  mut shrinks : Bool
+  // at most its max-height as tall as it asks its row to be, as tall as its row then stretches it past that (Ctx::capped
+  // `past_most`: a column scrolling past its most beside a taller one, as far down as that one)
+  mut past_most : Bool
+  // as wide as its content in a row, not squeezed where the row is short (Ctx::box `keep`): only its siblings shrink
+  mut keep : Bool
+  // left out of its row when the row has not the room (Ctx::box `drop`): k > 0 the k-th to go, -1 the row's ⋯ (there
+  // only while something of it is left out), 0 always there
+  mut drop : Int
+  // a row of ways of saying one thing, each shorter than the one before, only the first that fits shown (Ctx::box
+  // `one_of`)
+  mut one_of : Bool
+  // laid out never shorter than the tallest it has been while built so (Ctx::box `tallest`)
+  mut tallest : Bool
+  // the least it is laid out across in a row, as worked out from what it holds (Ctx::flex_tree): narrower, what it
+  // holds would lie over what is beside it
+  mut least : Double
+  // what its row's fit keeps of it before a part of the row leaves (Ctx::box `drop`): its least, but words cut short
+  // keep four of their size, and what holds them so (layout.mbt cut_kept_ems)
+  mut fit_least : Double
+  // the least it comes to as a last resort in a row that has not the room for every least (flex's last_resort): its
+  // least, but words on one line that say not how they give at none of them, and what holds them so
+  mut soft_least : Double
+  // a row that goes on in lines when what it holds does not fit (Ctx::box `flow`: Compose's FlowRow), what it holds
+  // as wide as it is
+  mut flow : Bool
+  // a flow's later lines go above its first (Ctx::box `flow_reverse`)
+  mut flow_reverse : Bool
+  // between a flow's lines (-1: its gap)
+  mut line_gap : Double
+  // what it is called where it shows no words of its own (an icon's button: Compose's contentDescription), found by
+  // them as words are (Ctx::box `label`; a drive's or a test's `=WORDS`)
+  mut label : String
+  // the name of what it stands for in another app's tree (Ctx::box `name`: a web page's class, `shellCss.dock`), read
+  // only by a tool comparing the two (Tester::boxes), "" none
+  mut name : String
+  // layout results, absolute, in logical pixels, kept from frame to frame
+  // in the slot (a subtree laid out as last frame is moved, not laid out)
+  mut x : Double
+  mut y : Double
+  mut fw : Double
+  mut fh : Double
+  // the text as shown: its layout, or that cut to fit with an ellipsis
+  mut tl : TextLayout?
+  // the text laid out, in a width up to full_max (one layout serves every
+  // width from its widest line up to that)
+  mut full : TextLayout?
+  mut full_max : Double
+  // whether full is cut after its max_lines (words left off it)
+  mut full_cut : Bool
+  // rich text: its runs, and as laid out (in rl_max)
+  mut rich : Rich?
+  // lines drawn over its ground (Ctx::lines: line.mbt)
+  mut lines : Array[Line]
+  // shapes drawn over its ground (Ctx::shapes: shape.mbt), and the bands they come to, worked out once for the shapes
+  // they were worked out for (kept as the node is handed on to another: Ctx::paint_shapes asks whether they are those)
+  mut shapes : Array[Shape]
+  mut shape_bands : ShapeBands?
+  // its runs as laid out when cut after its max_lines, or on one line laid narrower than it is (the ellipsis a run of
+  // its own), else None: what is drawn
+  mut rcut : Rich?
+  mut rl : RichLayout?
+  mut rl_max : Double
+  // the paragraph `rl` was laid out from (its runs and their styles): `rl` serves only that one
+  mut rl_for : Rich?
+  // on one line, how wide all of it is, as `rl` was laid out (what it is cut from; NaN: wrapped)
+  mut rl_whole : Double
+  // list rows: index of the item this child shows
+  mut item : Int
+  // held this far below the top of the list it is in as its row scrolls past, within its parent (Ctx::stick; NaN:
+  // where it is laid out)
+  mut stick : Double
+  // its node in the flex engine (how the engine measures it as a leaf told it as it is laid out as one: layout.mbt)
+  fl : @flex.Node
+  // what the flex node was last given (layout.mbt, Ctx::flex_tree): the
+  // kind, what a leaf measures (text and its font, a rich paragraph, an
+  // image's size), the grid of pixels it was laid out on (scale, whole pixels or not)
+  mut lk_kind : Int
+  mut lk_text : String
+  mut lk_shorter : Array[String]
+  mut lk_size : Double
+  mut lk_weight : Int
+  mut lk_line : Double
+  mut lk_trim : Bool
+  mut lk_wrap : Bool
+  mut lk_spacing : Double
+  mut lk_tabular : Bool
+  mut lk_balance : Bool
+  mut lk_max_lines : Int
+  // the faces as they were given when its words were laid out (faces.mbt words_shaped_in)
+  mut lk_shaped : Int
+  mut lk_rich : Rich?
+  mut lk_iw : Double
+  mut lk_ih : Double
+  mut lk_scale : Double
+  mut lk_whole : Bool
+  // who held it when it was last laid out (its parent's ident): moved under another, both are laid out anew (@flex's
+  // compute: a node moved under another parent dirties both)
+  mut lk_up : Int
+  // its offsets (tx, ty) when last placed
+  mut otx : Double
+  mut oty : Double
+  // this frame: nothing in its subtree changed since it was last placed
+  // but where it is (Ctx::commit moves it as a whole)
+  mut same : Bool
+}
+
+///|
+fn Node::new() -> Node {
+  let n : Node = {
+    kind: 0,
+    id: 0,
+    hit: false,
+    points: false,
+    marks: 0,
+    focus: None,
+    corner_by: 0,
+    sem: None,
+    sem_hid: false,
+    island: None,
+    tree_scrolls: false,
+    tree_corrected: 0.0,
+    tree_rows: false,
+    floats: false,
+    scroller: 0,
+    scroller_inner: false,
+    words: None,
+    press_owner: None,
+    press_node: None,
+    moved_vars: None,
+    drawn_built: None,
+    ticks: None,
+    drawn: None,
+    parent: -1,
+    first: -1,
+    last: -1,
+    next: -1,
+    ident: 0,
+    keyless: false,
+    seed: 0,
+    slot: -1,
+    kids: 0,
+    made_pass: -1,
+    dir: Column,
+    w: Auto,
+    h: Auto,
+    min_h: 0.0,
+    max_h: 1.0e9,
+    min_w: 0.0,
+    min_w_within: false,
+    max_w: 1.0e9,
+    pad_l: 0.0,
+    pad_t: 0.0,
+    pad_r: 0.0,
+    pad_b: 0.0,
+    gap: 0.0,
+    align: AStretch,
+    justify: JStart,
+    bg: 0L,
+    radius: 0.0,
+    radii: None,
+    links: None,
+    corners_worked: false,
+    border_w: 0.0,
+    border_c: 0L,
+    dashed: false,
+    shadow: 0.0,
+    shadow_c: 0x0000002EL,
+    shadow_y: -1.0,
+    shadow_out: false,
+    clip: false,
+    tx: 0.0,
+    ty: 0.0,
+    place: None,
+    moved_by: None,
+    moved_x: 0.0,
+    moved_y: 0.0,
+    moved_carries: false,
+    room_held: false,
+    opacity: 1.0,
+    glass: None,
+    glass_group: false,
+    notch_y: 0.0,
+    notch_r: 0.0,
+    notch_f: 0.0,
+    text: "",
+    shorter: no_words,
+    font_size: 14.0,
+    weight: 400,
+    color: 0x000000FFL,
+    wrap: true,
+    center: false,
+    line_h: 0.0,
+    line_trim: false,
+    spacing: 0.0,
+    tabular: false,
+    balance: false,
+    max_lines: 0,
+    fit: FitCover,
+    fade: true,
+    matte: false,
+    still: false,
+    pages: None,
+    page_no: -1,
+    layer: false,
+    state_ground: false,
+    ground_by_hand: false,
+    mar_l: 0.0,
+    mar_t: 0.0,
+    mar_r: 0.0,
+    mar_b: 0.0,
+    at_l: 0.0 / 0.0,
+    at_t: 0.0 / 0.0,
+    at_r: 0.0 / 0.0,
+    at_b: 0.0 / 0.0,
+    moves: "",
+    rtl: false,
+    aspect: 0.0,
+    portal: false,
+    portal_id: 0,
+    stack: -1,
+    stack_in: None,
+    mark: 0,
+    shot: false,
+    surface: false,
+    look_scope: false,
+    paints: None,
+    blocks: false,
+    stops_wheel: false,
+    passes: false,
+    sideways: false,
+    in_sideways: false,
+    bones: 0L,
+    bone_whole: false,
+    shrinks: false,
+    past_most: false,
+    keep: false,
+    allow_ellipsis: false,
+    drop: 0,
+    one_of: false,
+    tallest: false,
+    least: 0.0,
+    fit_least: 0.0,
+    soft_least: 0.0,
+    flow: false,
+    flow_reverse: false,
+    line_gap: -1.0,
+    label: "",
+    name: "",
+    x: 0.0,
+    y: 0.0,
+    fw: 0.0,
+    fh: 0.0,
+    tl: None,
+    full: None,
+    full_max: 0.0,
+    full_cut: false,
+    rich: None,
+    lines: [],
+    said_of: "",
+    said_hash: stable_hash(""),
+    shapes: [],
+    shape_bands: None,
+    rcut: None,
+    rl: None,
+    rl_max: 0.0,
+    rl_for: None,
+    rl_whole: 0.0 / 0.0,
+    item: -1,
+    stick: 0.0 / 0.0,
+    fl: @flex.Node::new(),
+    lk_kind: -1,
+    lk_text: "",
+    lk_shorter: no_words,
+    lk_size: 0.0,
+    lk_weight: 0,
+    lk_line: 0.0,
+    lk_trim: false,
+    lk_wrap: false,
+    lk_spacing: 0.0,
+    lk_tabular: false,
+    lk_balance: false,
+    lk_max_lines: 0,
+    lk_shaped: -1,
+    lk_rich: None,
+    lk_iw: -1.0,
+    lk_ih: -1.0,
+    lk_scale: -1.0,
+    lk_whole: false,
+    lk_up: 0,
+    otx: 0.0,
+    oty: 0.0,
+    same: false,
+  }
+  n
+}
+
+///|
+/// A node reused for the next frame is reset in three parts (alloc sets
+/// its kind and parent; Ctx::alloc_part), and a builder that sets a part
+/// itself skips it: a box its look, a text its words. This part, what no
+/// builder sets all of: its place in the tree, what few nodes use.
+fn Node::reset_rest(self : Node) -> Unit {
+  self.id = 0
+  self.hit = false
+  self.points = false
+  self.marks = 0
+  self.focus = None
+  self.corner_by = 0
+  self.sem = None
+  self.sem_hid = false
+  self.island = None
+  self.tree_scrolls = false
+  self.tree_corrected = 0.0
+  self.tree_rows = false
+  self.floats = false
+  self.scroller = 0
+  self.scroller_inner = false
+  self.words = None
+  self.press_owner = None
+  self.press_node = None
+  self.moved_vars = None
+  self.drawn_built = None
+  self.ticks = None
+  self.drawn = None
+  self.first = -1
+  self.last = -1
+  self.next = -1
+  self.moved_by = None
+  self.moved_x = 0.0
+  self.moved_y = 0.0
+  self.moved_carries = false
+  self.room_held = false
+  self.fit = FitCover
+  self.fade = true
+  self.matte = false
+  self.still = false
+  self.pages = None
+  self.page_no = -1
+  self.layer = false
+  self.mar_l = 0.0
+  self.mar_t = 0.0
+  self.mar_r = 0.0
+  self.mar_b = 0.0
+  self.at_l = 0.0 / 0.0
+  self.at_t = 0.0 / 0.0
+  self.at_r = 0.0 / 0.0
+  self.at_b = 0.0 / 0.0
+  self.moves = ""
+  self.portal = false
+  self.portal_id = 0
+  self.stack = -1
+  self.stack_in = None
+  self.mark = 0
+  self.shot = false
+  self.surface = false
+  self.look_scope = false
+  self.paints = None
+  self.blocks = false
+  self.stops_wheel = false
+  self.passes = false
+  self.sideways = false
+  self.in_sideways = false
+  self.bones = 0L
+  self.bone_whole = false
+  self.shrinks = false
+  self.past_most = false
+  self.keep = false
+  self.allow_ellipsis = false
+  self.drop = 0
+  self.one_of = false
+  self.tallest = false
+  self.flow = false
+  self.flow_reverse = false
+  self.line_gap = -1.0
+  self.label = ""
+  self.name = ""
+  self.rich = None
+  // (none, shared: only ever put in place whole, Ctx::lines and Ctx::shapes; a new empty one for each node on every
+  // frame was two allocations a node)
+  self.lines = no_lines
+  self.shapes = no_shapes
+  // (its cut runs go with its layout, kept with it: rl, rl_for, rl_whole)
+  self.item = -1
+  self.stick = 0.0 / 0.0
+}
+
+///|
+/// Every field as Node::new has it, its flex node aside (its own, never laid out where this is asked: corners.mbt
+/// tree_laid_spare): the three parts a node reused is reset in, and what those leave to Ctx::alloc_part, to node_known
+/// or to the layout; its lines and shapes none, as reset_rest has them (empty, shared). A node of the window's tree's
+/// put among the frame's again (Ctx::with_tree_nodes), as a new one. A field added to Node::new is added here too.
+fn Node::reset_new(self : Node) -> Unit {
+  self.reset_rest()
+  self.reset_look()
+  self.reset_words()
+  self.kind = 0
+  self.parent = -1
+  self.corners_worked = false
+  self.ident = 0
+  self.keyless = false
+  self.seed = 0
+  self.slot = -1
+  self.kids = 0
+  self.made_pass = -1
+  self.notch_y = 0.0
+  self.notch_f = 0.0
+  self.least = 0.0
+  self.fit_least = 0.0
+  self.soft_least = 0.0
+  self.x = 0.0
+  self.y = 0.0
+  self.fw = 0.0
+  self.fh = 0.0
+  self.tl = None
+  self.full = None
+  self.full_max = 0.0
+  self.full_cut = false
+  self.said_of = ""
+  self.said_hash = no_words_said
+  self.shape_bands = None
+  self.rcut = None
+  self.rl = None
+  self.rl_max = 0.0
+  self.rl_for = None
+  self.rl_whole = 0.0 / 0.0
+  self.lk_kind = -1
+  self.lk_text = ""
+  self.lk_shorter = no_words
+  self.lk_size = 0.0
+  self.lk_weight = 0
+  self.lk_line = 0.0
+  self.lk_trim = false
+  self.lk_wrap = false
+  self.lk_spacing = 0.0
+  self.lk_tabular = false
+  self.lk_balance = false
+  self.lk_max_lines = 0
+  self.lk_shaped = -1
+  self.lk_rich = None
+  self.lk_iw = -1.0
+  self.lk_ih = -1.0
+  self.lk_scale = -1.0
+  self.lk_whole = false
+  self.lk_up = 0
+  self.otx = 0.0
+  self.oty = 0.0
+  self.same = false
+}
+
+///|
+/// The stable_hash of no words (Node::new's `said_hash`), worked out once.
+// kept across runs: a table, never written
+let no_words_said : Int64 = stable_hash("")
+
+///|
+/// Its words' stable_hash (tree_sig): kept with the words it was worked out of, worked out again only where they are
+/// other words (the same string, as a row built again from the same data has it, not read again).
+fn Node::text_said(self : Node) -> Int64 {
+  if !physical_equal(self.said_of, self.text) && self.said_of != self.text {
+    self.said_of = self.text
+    self.said_hash = stable_hash(self.text)
+  }
+  self.said_hash
+}
+
+///|
+/// No lines, no shapes: what a node not drawing any holds (Node::reset_rest).
+// kept across runs: a table, never written
+let no_lines : Array[Line] = []
+
+///|
+// kept across runs: a table, never written
+let no_shapes : Array[Shape] = []
+
+///|
+/// What Ctx::box sets, all of it.
+fn Node::reset_look(self : Node) -> Unit {
+  self.state_ground = false
+  self.ground_by_hand = false
+  self.dir = Column
+  self.rtl = false
+  self.aspect = 0.0
+  self.w = Auto
+  self.h = Auto
+  self.min_h = 0.0
+  self.max_h = 1.0e9
+  self.min_w = 0.0
+  self.min_w_within = false
+  self.max_w = 1.0e9
+  self.pad_l = 0.0
+  self.pad_t = 0.0
+  self.pad_r = 0.0
+  self.pad_b = 0.0
+  self.gap = 0.0
+  self.align = AStretch
+  self.justify = JStart
+  self.bg = 0L
+  self.radius = 0.0
+  self.radii = None
+  self.links = None
+  self.border_w = 0.0
+  self.border_c = 0L
+  self.dashed = false
+  self.shadow = 0.0
+  self.shadow_c = 0x0000002EL
+  self.shadow_y = -1.0
+  self.shadow_out = false
+  self.clip = false
+  self.tx = 0.0
+  self.ty = 0.0
+  self.place = None
+  self.opacity = 1.0
+  self.glass = None
+  self.glass_group = false
+  self.notch_r = 0.0
+}
+
+///|
+/// What Ctx::text sets, all of it.
+fn Node::reset_words(self : Node) -> Unit {
+  self.text = ""
+  self.shorter = no_words
+  self.font_size = 14.0
+  self.weight = 400
+  self.color = 0x000000FFL
+  self.wrap = true
+  self.center = false
+  self.line_h = 0.0
+  self.line_trim = false
+  self.spacing = 0.0
+  self.tabular = false
+  self.balance = false
+  self.max_lines = 0
+}
+
+///|
+/// Whether it is put in its parent by where it is said to be (`at_*`), out of the flow.
+fn Node::placed_at(self : Node) -> Bool {
+  !self.at_l.is_nan() || !self.at_t.is_nan() || !self.at_r.is_nan() || !self.at_b.is_nan()
+}
+
+///|
+/// Whether it is drawn moved off its place: by its offset (`tx`, `ty`), or by what moves it (Ctx::moved_by) where
+/// that is a motion, not what only carries it to where it is drawn (Ctx::moved_carries).
+fn Node::moved_off(self : Node) -> Bool {
+  self.tx != 0.0 || self.ty != 0.0 || (!self.moved_carries && (self.moved_x != 0.0 || self.moved_y != 0.0))
+}
+
+///|
+/// Its corner `j` as drawn (0 top left, 1 top right, 2 bottom right, 3 bottom left: round it, as a clip's and an
+/// instance's are): its own where its corners are each theirs (radii), else `radius`.
+fn Node::radius_at(self : Node, j : Int) -> Double {
+  match self.radii {
+    Some(r) => r[j]
+    None => self.radius
+  }
+}
+
+///|
+/// Its corners made `r` (radius_at's order): all four one, `radius`; else each its own. One within a millionth of a
+/// point: a corner worked out from where boxes are (corners.mbt, concentric) has their rounding in it, and a box laid
+/// out again and one kept and moved there are a rounding apart (layout.mbt's moved_shift): their corners are the same
+/// either way, said the same way.
+fn Node::set_radii(self : Node, r : FixedArray[Double]) -> Unit {
+  let most = dmax(dmax(r[0], r[1]), dmax(r[2], r[3]))
+  let least = dmin(dmin(r[0], r[1]), dmin(r[2], r[3]))
+  if most - least < 1.0e-6 {
+    self.radius = most
+    self.radii = None
+  } else {
+    self.radius = most
+    self.radii = Some(r)
+  }
+}
+
+///|
+/// Its corners as drawn (radius_at's order), a copy.
+fn Node::radii_now(self : Node) -> FixedArray[Double] {
+  match self.radii {
+    Some(r) => FixedArray::from_array([r[0], r[1], r[2], r[3]])
+    None => FixedArray::make(4, self.radius)
+  }
+}
+
+///|
+fn imax(a : Int, b : Int) -> Int {
+  if a > b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+fn imin(a : Int, b : Int) -> Int {
+  if a < b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+fn dmax(a : Double, b : Double) -> Double {
+  if a > b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+fn dmin(a : Double, b : Double) -> Double {
+  if a < b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
+  if v < lo {
+    lo
+  } else if v > hi {
+    hi
+  } else {
+    v
+  }
+}

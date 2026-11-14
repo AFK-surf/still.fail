@@ -59,7 +59,7 @@ pub let memory_chevron : Double = 14.0
 /// Whether the built-in skills are folded open, by station: kept as one goes back and comes in again, the same for
 /// every page that shows that station's memory (builtin_open_of, builtin_turn).
 // kept across runs: put back as a run begins (on_reset)
-pub let builtin_open : Map[String, Bool] = Map::new()
+pub let builtin_open : Map[String, Bool] = Map([])
 
 ///|
 fn init {
@@ -83,5 +83,5 @@ pub fn builtin_open_of(address : String) -> Bool {
 /// Station `address`'s built-in skills folded open, or shut where they were open: told what follows them.
 pub fn builtin_turn(address : String) -> Unit {
   builtin_open[address] = !builtin_open.get(address).unwrap_or(false)
-  builtin_turned.set(@signals.untracked(fn() { builtin_turned.get() }) + 1)
+  builtin_turned.set(builtin_turned.untracked() + 1)
 }

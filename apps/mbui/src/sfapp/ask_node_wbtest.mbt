@@ -121,7 +121,7 @@ test "大屏: a question, a press outside it moved onto it and let go there: clo
   let (bx, by, bw, bh) = t.query(Button, label="保存").unwrap().rect
   t.press_at(ox, oy)
   let at_down = @sf.presenting()
-  t.move(bx + bw / 2.0, by + bh / 2.0)
+  t.move_to(bx + bw / 2.0, by + bh / 2.0)
   t.release(bx + bw / 2.0, by + bh / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_eq((at_down, @sf.presenting(), said), (false, false, []))

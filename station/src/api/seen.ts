@@ -5,7 +5,7 @@ import { type InWorkspace, sees } from "../store/rows.ts";
 import type { Store } from "../store/store.ts";
 
 /// Whether `viewer` sees a session (one not there: the home workspace's).
-export const sessionSeen = (store: Store, viewer: InWorkspace, key: string) => sees(viewer, store.getSession(key)?.ws ?? null);
+export const sessionSeen = (store: Store, viewer: InWorkspace, key: string) => sees(viewer, store.sessionWs(key) ?? null);
 
 /// Whether `viewer` sees a thread: one of its sessions is in their workspace (a thread with none: the home one's).
 export function threadSeen(store: Store, viewer: InWorkspace, id: number): boolean {

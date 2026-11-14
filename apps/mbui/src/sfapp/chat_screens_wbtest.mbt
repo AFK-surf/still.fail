@@ -37,6 +37,25 @@ test "a chat's screen button with more of them: a menu, its display first, the o
 }
 
 ///|
+test "a chat's screen button says no count on it, however many there are" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-station-screens", wide=true)
+  assert_eq(screen_count_on(t), [])
+  let one = decide_core(calls, "chat-station-screen", wide=true)
+  assert_eq(screen_count_on(one), [])
+}
+
+///|
+/// The words drawn on the screen button's box.
+fn screen_count_on(t : @ui.Tester) -> Array[String] raise {
+  let (bx, by, bw, bh) = t.get(Button, label="Station 屏幕").rect
+  t
+  .words()
+  .filter(fn(w) { w.5 > 0.0 && w.1 >= bx && w.1 < bx + bw && w.2 >= by - bh / 2.0 && w.2 < by + bh / 2.0 })
+  .map(fn(w) { w.0 })
+}
+
+///|
 test "a chat without screens has no screen button" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-info", wide=true)

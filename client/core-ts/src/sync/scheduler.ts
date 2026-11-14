@@ -88,7 +88,11 @@ export class Scheduler {
     const p = this.#boosted(key, priority);
     const waiting = l.waiting.find((w) => w.key === key);
     if (waiting) {
-      waiting.priority = Math.max(waiting.priority, p);
+      // (raised to the urgent, it may go on now in the room kept for them)
+      if (p > waiting.priority) {
+        waiting.priority = p;
+        this.#pump(l, lane);
+      }
       return waiting.done;
     }
     const task: Waiting = { key, priority: p, seq: ++this.#seq, work, done: Deferred.makeUnsafe<void, CoreError>() };
@@ -145,8 +149,16 @@ export class Scheduler {
     if (prefix === null) this.#boosts.delete(who);
     else this.#boosts.set(who, [prefix, priority]);
     if (prefix === null) return;
-    for (const lane of this.#lanes.values()) {
-      for (const w of lane.waiting) if (w.key.startsWith(prefix)) w.priority = Math.max(w.priority, priority);
+    for (const [name, lane] of this.#lanes) {
+      let raised = false;
+      for (const w of lane.waiting) {
+        if (w.key.startsWith(prefix) && w.priority < priority) {
+          w.priority = priority;
+          raised = true;
+        }
+      }
+      // (raised to the urgent, it may go on now in the room kept for them)
+      if (raised) this.#pump(lane, name);
     }
   }
 

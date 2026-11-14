@@ -3,33 +3,26 @@
 
 ///|
 /// 大屏, a mouse's: the relay dialog to #dev open from a chat's row, "看下 @p" typed in its note, its @ menu shown.
-fn relay_mentions_tester(calls? : Array[Made] = []) -> @ui.Tester raise {
+/// `held`: where given, whom a note past "看下 @p" can mention is not answered at once but kept there, to be answered
+/// when the test says (as a core on a device answers: after the keys of the same frame).
+fn relay_mentions_tester(calls? : Array[Made] = [], held? : Array[() -> Unit]) -> @ui.Tester raise {
   new_run()
   let base = fixture("home")
   let people : Json = [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao" }, { "id": "U2", "name": "peter" }]
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "chat.relayPeople" => done(Ok({ "people": people }))
-        // (whom it finds, the core's: relay-pick.ts mentionView, tested there)
+        // (whom it finds, as the core finds them: relay_mentions_kept)
         "chat.relayMentions" => {
           let note = text(Some(params), "note")
-          // (an aka with a space in it: Peng Xiao's, as the core's mentionQuery takes it)
-          let (at, rows) : (Int, Array[Json]) = if note.has_suffix("@Peng X") {
-            let before = note.view(end_offset=note.length() - 7).to_string()
-            (note.length() - 7, [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": before + "@pengxiao " }])
-          } else if note.has_suffix("@p") {
-            let before = note.view(end_offset=note.length() - 2).to_string()
-            (note.length() - 2, [
-              { "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": before + "@pengxiao " },
-              { "id": "U2", "name": "peter", "note": before + "@peter " },
-            ])
-          } else {
-            (-1, [])
+          let answer = fn() { done(Ok(relay_mentions_kept(note))) }
+          match held {
+            Some(h) if !note.has_suffix("@p") => h.push(answer)
+            _ => answer()
           }
-          done(Ok({ "query": if at < 0 { Json::null() } else { Json::string("p") }, "at": Json::number(at.to_double()), "rows": Json::array(rows) }))
         }
         _ => (base.call)(name, params, done)
       }
@@ -39,6 +32,7 @@ fn relay_mentions_tester(calls? : Array[Made] = []) -> @ui.Tester raise {
   let (x, y) = t.find("整理发布清单").unwrap()
   t.right_click(x, y)
   t.frame()
+  open_share(t)
   t.tap_text("接力到频道…")
   t.frame()
   t.frame()
@@ -50,6 +44,30 @@ fn relay_mentions_tester(calls? : Array[Made] = []) -> @ui.Tester raise {
   t.frame()
   assert_true(t.find("可以 @ 的人") is Some(_), msg="its menu shown: " + t.words().map(fn(w) { w.0 }).join("|"))
   t
+}
+
+///|
+/// What the core answers `chat.relayMentions` with for each note these tests type, for the fixture's two people
+/// (pengxiao, Peng Xiao; peter): written down from client/core-ts/src/relay-pick.ts mentionView, run in Node on those
+/// two and each note (2026-11-11). A note not here fails the test that typed it, saying which: add its answer as
+/// mentionView gives it, never a made-up one.
+fn relay_mentions_kept(note : String) -> Json {
+  match note {
+    "看下 @" => { "query": "", "at": 3, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }, { "id": "U2", "name": "peter", "note": "看下 @peter " }] }
+    "看下 @p" => { "query": "p", "at": 3, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }, { "id": "U2", "name": "peter", "note": "看下 @peter " }] }
+    "看下 @pe" => { "query": "pe", "at": 3, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }, { "id": "U2", "name": "peter", "note": "看下 @peter " }] }
+    "看下 @P" => { "query": "P", "at": 3, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }, { "id": "U2", "name": "peter", "note": "看下 @peter " }] }
+    "看下 @Pe" => { "query": "Pe", "at": 3, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }, { "id": "U2", "name": "peter", "note": "看下 @peter " }] }
+    "看下 @Pen" => { "query": "Pen", "at": 3, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }] }
+    "看下 @Peng" => { "query": "Peng", "at": 3, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }] }
+    "看下 @Peng " => { "query": "Peng ", "at": 3, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }] }
+    "看下 @Peng X" => { "query": "Peng X", "at": 3, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "看下 @pengxiao " }] }
+    "看下 @pengxiao " => { "query": "pengxiao ", "at": 3, "rows": [] }
+    "看下 @peter " => { "query": "peter ", "at": 3, "rows": [] }
+    "@" => { "query": "", "at": 0, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "@pengxiao " }, { "id": "U2", "name": "peter", "note": "@peter " }] }
+    "@p" => { "query": "p", "at": 0, "rows": [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": "@pengxiao " }, { "id": "U2", "name": "peter", "note": "@peter " }] }
+    _ => @halt.saying("chat.relayMentions: no answer kept for the note \"\{note}\" (relay_mentions_kept)")
+  }
 }
 
 ///|
@@ -175,6 +193,21 @@ test "wide: the relay's @ menu, a letter typed, Enter and Escape before a frame:
   t.key_told(@ui.key_code_enter, 0, t.time())
   // (the one the menu shows chosen, put in for the `@` and what was typed after it, as Enter comes; the menu done with
   // then, the Escape after it the dialog's)
+  let note = relaying.note.text()
+  t.key_told(@ui.key_escape, 0, t.time())
+  t.draw()
+  t.run_for(@kit.pop_out_ms)
+  assert_eq((note, named(calls, "chat.relay").length(), t.find("开头附一句（可选）") is Some(_)), ("看下 @pengxiao ", 0, false))
+}
+
+///|
+test "wide: the relay's @ menu, a letter typed, Enter and Escape before a frame, whom it finds then not answered yet: the one shown chosen put in for the @ and the letter, the Escape after it the dialog's" {
+  let calls : Array[Made] = []
+  let held : Array[() -> Unit] = []
+  let t = relay_mentions_tester(calls~, held~)
+  t.text_told("e", t.time())
+  t.key_told(@ui.key_code_enter, 0, t.time())
+  // (whom "看下 @pe" finds not answered as Enter comes, held: what is shown, "@p"'s, the one chosen)
   let note = relaying.note.text()
   t.key_told(@ui.key_escape, 0, t.time())
   t.draw()

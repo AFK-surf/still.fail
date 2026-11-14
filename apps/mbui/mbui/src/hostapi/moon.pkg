@@ -1,7 +1,0 @@
-import {
-  "mbui/codec",
-  "mbui/signals",
-  "moonbitlang/core/encoding/utf8",
-  "moonbitlang/core/json",
-  "moonbitlang/core/string",
-}

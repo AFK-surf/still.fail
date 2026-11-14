@@ -49,14 +49,33 @@ test "外观's 震动 switch is at the end of its row and turns haptics off and 
     })
     let at = "\{w} platform \{platform}"
     let titles = t.boxes_held().filter(fn(b) { b.text == "震动" })
-    assert_eq(titles.length(), 1, msg="\{at}: \{titles.map(fn(b) { (b.x, b.y, b.w, b.h, b.weight) })}")
-    let (x, y, _, sh) = t.get(Switch, label="震动").rect
+    assert_eq(titles.length(), 1, msg="\{at}: \{Repr(titles.map(fn(b) { (b.x, b.y, b.w, b.h, b.weight) }))}")
+    let (sx, y, sw, sh) = t.get(Switch, label="震动").rect
+    // (where the switch is drawn: its track, the widest round ground in what is read out. What is read out is its
+    // press's room, which may be wider than the track drawn in it: a small switch's, 9 more each side with a finger)
+    let mut track : (Double, Double)? = None
+    for b in t.boxes_held() {
+      if b.bg != 0L &&
+        b.h > 0.0 &&
+        (b.radius * 2.0 - b.h).abs() < 0.5 &&
+        b.x >= sx - 0.5 &&
+        b.x + b.w <= sx + sw + 0.5 &&
+        b.y >= y - 0.5 &&
+        b.y + b.h <= y + sh + 0.5 &&
+        (match track {
+          Some((_, tw)) => b.w > tw
+          None => true
+        }) {
+        track = Some((b.x, b.w))
+      }
+    }
+    guard track is Some((x, _)) else { fail("\{at}: no track drawn in the switch") }
     // (the title's words as they are drawn: where they end, their line's middle)
     guard t.rect_of("震动") is Some((tx, ty, tw, th)) else { fail("\{at}: no 震动 drawn") }
     assert_true(x >= tx + tw, msg="\{at}: switch follows its title: title ends \{tx + tw}, switch \{x}")
     if !laid_wide(w) {
       let title_mid = ty + th / 2.0
-      assert_true((y + sh / 2.0 - title_mid).abs() < 2.0, msg="\{at}: switch is on the title's line: title \{(ty, th)}, switch \{(y, sh)}")
+      assert_true((y + sh / 2.0 - title_mid).abs() < 2.0, msg="\{at}: switch is on the title's line: title \{Repr((ty, th))}, switch \{Repr((y, sh))}")
     }
     assert_eq(t.get(Switch, label="震动").check, Some(On), msg=at)
     t.tap_text("震动")
@@ -96,7 +115,7 @@ test "外观: wide setting titles have the same weight as the rows in 自动决�
     let page = setting_tester(Appearance, 1280.0, platform~)
     for title in ["主题", "字体", "震动"] {
       let found = page.boxes_held().filter(fn(b) { b.text == title })
-      assert_eq(found.map(fn(b) { b.weight }), [500], msg="\{platform}: \{title} \{found.map(fn(b) { (b.x, b.y, b.w, b.h) })}")
+      assert_eq(found.map(fn(b) { b.weight }), [500], msg="\{platform}: \{title} \{Repr(found.map(fn(b) { (b.x, b.y, b.w, b.h) }))}")
     }
     // a switch's row in a group (分享给其他 station over 可用的 station): its title no lighter than the rows by it
     let switch = @ui.Tester::new(fn(c) {
@@ -167,11 +186,11 @@ test "下方栏, at each width on either screen: what a bar's title has at its e
     let (titles, deletes) = (middles("第 1 栏") + middles("第 2 栏"), middles("删除"))
     let (current, make) = (middles("当前"), middles("设为当前"))
     guard titles.length() == 2 && deletes.length() == 2 && current.length() == 1 && make.length() == 1 else {
-      fail("\{at}: \{titles} \{deletes} \{current} \{make}")
+      fail("\{at}: \{Repr(titles)} \{Repr(deletes)} \{Repr(current)} \{Repr(make)}")
     }
     // 第 1 栏 with 当前 and 删除, 第 2 栏 with 设为当前 and 删除 (2026-10-26: 删除 4 over 当前 and the title)
     for pair in [(titles[0], current[0]), (titles[0], deletes[0]), (titles[1], make[0]), (titles[1], deletes[1])] {
-      assert_true((pair.0 - pair.1).abs() < 0.5, msg="\{at}: \{pair}")
+      assert_true((pair.0 - pair.1).abs() < 0.5, msg="\{at}: \{Repr(pair)}")
     }
   }
 }

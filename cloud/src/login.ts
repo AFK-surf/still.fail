@@ -1,5 +1,7 @@
 import { devicePage, escape } from "./page";
 import { cloudProduct, requestLang, setCloud, tr, type Lang } from "./i18n.ts";
+import { asOrigin } from "./guests.ts";
+import { asProductOf } from "./here.ts";
 import { mailConfigured, sendCode } from "./mail";
 import { passwordAccounts, passwordIdentity } from "./password";
 export { devicePage } from "./page";
@@ -16,7 +18,7 @@ export function signedInPage(lang: Lang, app: string | null): Response {
 import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import type { Env } from "./env";
-import { CODE_TTL_SEC, LOGIN_TTL_SEC, REFRESH_RETRY_SEC, digest, googleIdentity, limited, nowSeconds, randomSecret, readText, reply, seal, unseal, validRedirect, validSecret, type Identity, type Tokens } from "./auth";
+import { CODE_TTL_SEC, LOGIN_TTL_SEC, REFRESH_RETRY_SEC, digest, googleIdentity, provider, providerConfigured, limited, nowSeconds, randomSecret, readText, reply, seal, unseal, validRedirect, validSecret, type Identity, type Tokens } from "./auth";
 
 type Attempt = {
   redirect: string;
@@ -27,6 +29,9 @@ type Attempt = {
   nonce: string;
   googleVerifier: string;
   expires: number;
+  /** The origin it started on: this cloud's, or a guest's (guests.ts), whose links, cookie, Google client and name it
+   * goes by. Unset: this cloud's (one from before). */
+  origin?: string;
   /** waiting: a device's, its page not used yet; choosing: the page asks Google or an email; code: a code was sent to
    * `email`; started: gone to Google. */
   phase: "waiting" | "choosing" | "code" | "started" | "callback" | "complete" | "used" | "cancelled";
@@ -107,17 +112,32 @@ function legalLink(lang: Lang, page: "terms" | "privacy"): string {
 
 /** One login attempt, single-use callback and PKCE code, removed on its alarm. */
 export class LoginAttempt extends DurableObject<Env> {
+  /** The cloud as it is on the attempt's origin (guests.ts `asOrigin`), for what is being answered (`#as`). */
+  #env: Env;
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     // (its pages' and mails' words name its product)
     setCloud(env.PUBLIC_ORIGIN);
+    this.#env = env;
+  }
+
+  /** `run` as answered on `origin` (this cloud's when unset): its links, cookie and Google client, its product's words. */
+  #as<T>(origin: string | undefined, run: () => Promise<T>): Promise<T> {
+    this.#env = asOrigin(this.env, origin ?? this.#env.PUBLIC_ORIGIN);
+    return asProductOf(this.#env.PUBLIC_ORIGIN, run);
+  }
+
+  /** The origin the attempt kept started on. */
+  #kept(): string | undefined {
+    return this.ctx.storage.kv.get<Attempt>("attempt")?.origin;
   }
 
   private async google(id: string, attempt: Attempt, browser: string): Promise<Response> {
-    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    const url = new URL((await provider(this.#env)).authorization);
     for (const [key, value] of Object.entries({
-      client_id: this.env.GOOGLE_CLIENT_ID,
-      redirect_uri: `${this.env.PUBLIC_ORIGIN}/v1/auth/google/callback`,
+      client_id: this.#env.GOOGLE_CLIENT_ID,
+      redirect_uri: `${this.#env.PUBLIC_ORIGIN}/v1/auth/google/callback`,
       response_type: "code",
       scope: "openid email profile",
       state: id,
@@ -127,10 +147,10 @@ export class LoginAttempt extends DurableObject<Env> {
       code_challenge: await digest(attempt.googleVerifier),
     }))
       url.searchParams.set(key, value);
-    return redirect(url.toString(), cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC));
+    return redirect(url.toString(), cookie(this.#env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC));
   }
-  async startDevice(id: string, challenge: string, name: string): Promise<Response> {
-    return this.ctx.blockConcurrencyWhile(async () => {
+  async startDevice(id: string, challenge: string, name: string, origin?: string): Promise<Response> {
+    return this.ctx.blockConcurrencyWhile(() => this.#as(origin, async () => {
       if (this.ctx.storage.kv.get("attempt")) return reply({ error: "login_exists" }, 409);
       if (!validSecret(id) || !validSecret(challenge) || !name.trim() || name.length > 80) return reply({ error: "invalid_login" }, 400);
       const attempt: Attempt = {
@@ -144,18 +164,19 @@ export class LoginAttempt extends DurableObject<Env> {
         expires: nowSeconds() + LOGIN_TTL_SEC,
         phase: "waiting",
         device: true,
+        origin: this.#env.PUBLIC_ORIGIN,
       };
       this.ctx.storage.kv.put("attempt", attempt);
       await this.ctx.storage.setAlarm(attempt.expires * 1000);
       return reply({
-        verification_uri: `${this.env.PUBLIC_ORIGIN}/v1/auth/device/${id}`,
+        verification_uri: `${this.#env.PUBLIC_ORIGIN}/v1/auth/device/${id}`,
         expires_at: attempt.expires,
         interval: 3,
       });
-    });
+    }));
   }
   async authorizeDevice(id: string, request: Request): Promise<Response> {
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(() => this.#as(new URL(request.url).origin, async () => {
       const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
       const lang = requestLang(request);
       if (!attempt?.device || attempt.expires <= nowSeconds() || attempt.phase !== "waiting") return devicePage(lang, tr(lang, "cloud.login.ended.title"), `<p>${tr(lang, "cloud.login.ended.body")}</p>`);
@@ -167,13 +188,14 @@ export class LoginAttempt extends DurableObject<Env> {
         return devicePage(
           lang,
           tr(lang, "cloud.login.device.title"),
-          `<p>${tr(lang, "cloud.login.device.signingIn", { name: `<strong>${escape(attempt.name)}</strong>` })}</p><p>${tr(lang, "cloud.login.device.reach")}</p><form method="post"><input type="hidden" name="csrf" value="${browser}"><button class="secondary">${GOOGLE_MARK}${tr(lang, "cloud.login.device.continue")}</button></form>`,
-          cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+          `<p>${tr(lang, "cloud.login.device.signingIn", { name: `<strong>${escape(attempt.name)}</strong>` })}</p><p>${tr(lang, "cloud.login.device.reach")}</p><form method="post"><input type="hidden" name="csrf" value="${browser}"><button class="secondary">${this.continueWith(lang)}</button></form>`,
+          cookie(this.#env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+          await this.providerSource(),
         );
       }
-      const browser = cookieOf(request, this.env.PUBLIC_ORIGIN, id);
+      const browser = cookieOf(request, this.#env.PUBLIC_ORIGIN, id);
       try {
-        if (request.headers.get("origin") !== this.env.PUBLIC_ORIGIN || request.headers.get("content-type")?.split(";")[0] !== "application/x-www-form-urlencoded") return reply({ error: "invalid_login_state" }, 400);
+        if (request.headers.get("origin") !== this.#env.PUBLIC_ORIGIN || request.headers.get("content-type")?.split(";")[0] !== "application/x-www-form-urlencoded") return reply({ error: "invalid_login_state" }, 400);
         const csrf = new URLSearchParams(await readText(request, 1024)).get("csrf");
         if (!validSecret(browser) || csrf !== browser || (await digest(browser)) !== attempt.browserHash) return reply({ error: "invalid_login_state" }, 400);
       } catch {
@@ -182,10 +204,10 @@ export class LoginAttempt extends DurableObject<Env> {
       attempt.phase = "started";
       this.ctx.storage.kv.put("attempt", attempt);
       return this.google(id, attempt, browser);
-    });
+    }));
   }
   async cancelDevice(verifier: string): Promise<Response> {
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(() => this.#as(this.#kept(), async () => {
       const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
       if (!attempt?.device || !validSecret(verifier) || (await digest(verifier)) !== attempt.challenge) return reply({ error: "invalid_grant" }, 401);
       if (attempt.receipt && attempt.identity) {
@@ -197,10 +219,10 @@ export class LoginAttempt extends DurableObject<Env> {
       delete attempt.receipt;
       this.ctx.storage.kv.put("attempt", attempt);
       return reply({ cancelled: true });
-    });
+    }));
   }
   async pollDevice(verifier: string): Promise<Response> {
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(() => this.#as(this.#kept(), async () => {
       const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
       if (!attempt?.device || attempt.expires <= nowSeconds() || !validSecret(verifier) || (await digest(verifier)) !== attempt.challenge) return reply({ error: "invalid_grant" }, 401);
       if (attempt.phase === "cancelled") return reply({ error: "login_cancelled" }, 403);
@@ -223,12 +245,12 @@ export class LoginAttempt extends DurableObject<Env> {
         return reply(tokens);
       }
       return result;
-    });
+    }));
   }
   async start(id: string, params: { redirect: string; state: string; challenge: string; name: string }, request: Request): Promise<Response> {
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(() => this.#as(new URL(request.url).origin, async () => {
       if (this.ctx.storage.kv.get("attempt")) return reply({ error: "login_exists" }, 409);
-      if (!validSecret(id) || !validRedirect(this.env, params.redirect) || !validSecret(params.state) || !validSecret(params.challenge) || params.name.length > 80) return reply({ error: "invalid_login" }, 400);
+      if (!validSecret(id) || !validRedirect(this.#env, params.redirect) || !validSecret(params.state) || !validSecret(params.challenge) || params.name.length > 80) return reply({ error: "invalid_login" }, 400);
       const browser = randomSecret();
       const choosing = mailConfigured(this.env);
       const attempt: Attempt = {
@@ -238,18 +260,19 @@ export class LoginAttempt extends DurableObject<Env> {
         googleVerifier: randomSecret(),
         expires: nowSeconds() + LOGIN_TTL_SEC,
         phase: choosing ? "choosing" : "started",
+        origin: this.#env.PUBLIC_ORIGIN,
       };
       this.ctx.storage.kv.put("attempt", attempt);
       await this.ctx.storage.setAlarm(attempt.expires * 1000);
       // Without a way to send codes, straight to Google, as before there was another way.
       return choosing ? this.choosePage(requestLang(request), id, attempt, browser) : this.google(id, attempt, browser);
-    });
+    }));
   }
 
   async callback(id: string, request: Request): Promise<Response> {
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(() => this.#as(new URL(request.url).origin, async () => {
       const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
-      const value = cookieOf(request, this.env.PUBLIC_ORIGIN, id);
+      const value = cookieOf(request, this.#env.PUBLIC_ORIGIN, id);
       if (!attempt || attempt.expires <= nowSeconds() || attempt.phase !== "started" || !validSecret(value) || (await digest(value)) !== attempt.browserHash) return reply({ error: "invalid_login_state" }, 400);
       // Consume before any external I/O; a repeated callback cannot replay Google.
       attempt.phase = "callback";
@@ -262,7 +285,7 @@ export class LoginAttempt extends DurableObject<Env> {
         finish.searchParams.set("error", "login_cancelled");
       } else {
         try {
-          const identity = await googleIdentity(this.env, code, attempt.googleVerifier, attempt.nonce, url.origin);
+          const identity = await googleIdentity(this.#env, code, attempt.googleVerifier, attempt.nonce, url.origin);
           // An account that signed up with this email (a code sent to it) is this one too.
           const account = await this.env.DIRECTORY.getByName("primary").accountFor(identity.sub, identity.email);
           finish = await this.complete(id, attempt, { ...identity, sub: account?.sub ?? identity.sub });
@@ -278,13 +301,13 @@ export class LoginAttempt extends DurableObject<Env> {
         }
         finish.searchParams.delete("state");
       }
-      return redirect(finish.toString(), cookie(this.env.PUBLIC_ORIGIN, id, "", 0));
-    });
+      return redirect(finish.toString(), cookie(this.#env.PUBLIC_ORIGIN, id, "", 0));
+    }));
   }
 
   /** Where the browser goes once the sign-in is done: the client's callback with its state, or the device's page. */
   private finish(attempt: Attempt): URL {
-    const finish = new URL(attempt.device ? `${this.env.PUBLIC_ORIGIN}/v1/auth/device/complete` : attempt.redirect);
+    const finish = new URL(attempt.device ? `${this.#env.PUBLIC_ORIGIN}/v1/auth/device/complete` : attempt.redirect);
     finish.searchParams.set("state", attempt.state);
     return finish;
   }
@@ -306,23 +329,38 @@ export class LoginAttempt extends DurableObject<Env> {
     return finish;
   }
 
-  /** The page that asks how to sign in: Google, or a code sent to an email (`email` typed, `error` with it). */
-  private choosePage(lang: Lang, id: string, attempt: Attempt, browser: string, email = "", error?: string): Response {
+  /** What the button that signs in through the provider says: Google's, with its mark, or OIDC_NAME's (its host's). */
+  private continueWith(lang: Lang): string {
+    const issuer = this.#env.OIDC_ISSUER;
+    if (!issuer || new URL(issuer).origin === "https://accounts.google.com") return `${GOOGLE_MARK}${tr(lang, "cloud.login.device.continue")}`;
+    return tr(lang, "cloud.login.oidc.continue", { name: escape(this.#env.OIDC_NAME || new URL(issuer).host) });
+  }
+
+  /** Where a page's form may send the browser on to besides Google (page.ts): another provider's sign-in page. */
+  private async providerSource(): Promise<string | undefined> {
+    if (!this.#env.OIDC_ISSUER || !providerConfigured(this.#env)) return undefined;
+    return new URL((await provider(this.#env)).authorization).origin;
+  }
+
+  /** The page that asks how to sign in: through the provider (where there is one), or a code sent to an email (`email`
+   * typed, `error` with it). */
+  private async choosePage(lang: Lang, id: string, attempt: Attempt, browser: string, email = "", error?: string): Promise<Response> {
     const csrf = `<input type="hidden" name="csrf" value="${browser}">`;
     const action = `/v1/auth/login/${id}`;
     const device = attempt.device ? `<p>${tr(lang, "cloud.login.device.signingIn", { name: `<strong>${escape(attempt.name)}</strong>` })}</p><p>${tr(lang, "cloud.login.device.reach")}</p>` : "";
     return devicePage(
       lang,
       tr(lang, attempt.device ? "cloud.login.device.title" : "cloud.login.choose.title"),
-      `${device}<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="google"><button class="secondary">${GOOGLE_MARK}${tr(lang, "cloud.login.device.continue")}</button></form>` +
-        `<p class="or">${tr(lang, "cloud.login.choose.or")}</p>` +
+      device +
+        (providerConfigured(this.#env) ? `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="google"><button class="secondary">${this.continueWith(lang)}</button></form><p class="or">${tr(lang, "cloud.login.choose.or")}</p>` : "") +
         `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="email"><input type="email" name="email" value="${escape(email)}" placeholder="${tr(lang, "cloud.login.email.placeholder")}" autocomplete="email" required maxlength="254"><button>${tr(lang, "cloud.login.email.send")}</button></form>` +
         (error ? `<p class="error">${escape(error)}</p>` : "") +
         // With a password, for the accounts set up for it (password.ts): a page of its own behind a quiet link, as the web's
         // sign-in page folds it away.
         `<p class="links"><button form="password" class="link">${tr(lang, "cloud.login.password.open")}</button></p><form id="password" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="password-page"></form>` +
         `<p class="legal">${tr(lang, "cloud.login.choose.agree", { terms: legalLink(lang, "terms"), privacy: legalLink(lang, "privacy") })}</p>`,
-      cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+      cookie(this.#env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+      await this.providerSource(),
     );
   }
 
@@ -337,7 +375,7 @@ export class LoginAttempt extends DurableObject<Env> {
       `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="password"><input type="email" name="email" value="${escape(email)}" placeholder="${tr(lang, "cloud.login.email.placeholder")}" autocomplete="username" required maxlength="254"${email ? "" : " autofocus"}><input type="password" name="password" placeholder="${tr(lang, "cloud.login.password.field")}" autocomplete="current-password" required maxlength="256"${email ? " autofocus" : ""}><button>${tr(lang, "cloud.login.password.submit")}</button></form>` +
         (wrong ? `<p class="error">${tr(lang, "cloud.login.password.wrong")}</p>` : "") +
         `<p class="links"><button form="back" class="link">${tr(lang, "cloud.login.password.other")}</button></p><form id="back" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="back"></form>`,
-      cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+      cookie(this.#env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
       // A right password sends the browser back where the attempt returns, as the code's page's right code does.
       attempt.device ? undefined : returnSource(attempt.redirect),
     );
@@ -355,7 +393,7 @@ export class LoginAttempt extends DurableObject<Env> {
         (error ? `<p class="error">${escape(error)}</p>` : "") +
         `<p class="links"><button form="resend" class="link">${tr(lang, "cloud.login.code.resend")}</button><button form="back" class="link">${tr(lang, "cloud.login.code.other")}</button></p>` +
         `<form id="resend" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="resend"></form><form id="back" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="back"></form>`,
-      cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+      cookie(this.#env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
       // The right code sends the browser back where the attempt returns (choose's redirect): a device's ends here.
       attempt.device ? undefined : returnSource(attempt.redirect),
     );
@@ -374,15 +412,15 @@ export class LoginAttempt extends DurableObject<Env> {
    * page that asks for a password), password (an account set up for one, password.ts), resend, back (another email) or code (the `code` typed).
    */
   async choose(id: string, request: Request): Promise<Response> {
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(() => this.#as(new URL(request.url).origin, async () => {
       const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
       const lang = requestLang(request);
-      const ended = (title = "cloud.login.ended.title") => devicePage(lang, tr(lang, title), `<p>${tr(lang, "cloud.login.ended.body")}</p>`, cookie(this.env.PUBLIC_ORIGIN, id, "", 0));
+      const ended = (title = "cloud.login.ended.title") => devicePage(lang, tr(lang, title), `<p>${tr(lang, "cloud.login.ended.body")}</p>`, cookie(this.#env.PUBLIC_ORIGIN, id, "", 0));
       if (!attempt || attempt.expires <= nowSeconds() || !(attempt.phase === "choosing" || attempt.phase === "code" || (attempt.phase === "waiting" && attempt.device)) || !mailConfigured(this.env)) return ended();
-      const browser = cookieOf(request, this.env.PUBLIC_ORIGIN, id);
+      const browser = cookieOf(request, this.#env.PUBLIC_ORIGIN, id);
       let form: URLSearchParams;
       try {
-        if (request.headers.get("origin") !== this.env.PUBLIC_ORIGIN || request.headers.get("content-type")?.split(";")[0] !== "application/x-www-form-urlencoded") return reply({ error: "invalid_login_state" }, 400);
+        if (request.headers.get("origin") !== this.#env.PUBLIC_ORIGIN || request.headers.get("content-type")?.split(";")[0] !== "application/x-www-form-urlencoded") return reply({ error: "invalid_login_state" }, 400);
         form = new URLSearchParams(await readText(request, 2048));
         if (!validSecret(browser) || form.get("csrf") !== browser || (await digest(browser)) !== attempt.browserHash) return reply({ error: "invalid_login_state" }, 400);
       } catch {
@@ -414,7 +452,7 @@ export class LoginAttempt extends DurableObject<Env> {
         return this.codePage(lang, id, attempt, browser);
       };
       const via = form.get("via");
-      if (via === "google") {
+      if (via === "google" && providerConfigured(this.#env)) {
         attempt.phase = "started";
         this.ctx.storage.kv.put("attempt", attempt);
         return this.google(id, attempt, browser);
@@ -435,7 +473,7 @@ export class LoginAttempt extends DurableObject<Env> {
         attempt.shared = true;
         const finish = await this.complete(id, attempt, await passwordIdentity(account));
         if (attempt.device) finish.searchParams.delete("state");
-        return redirect(finish.toString(), cookie(this.env.PUBLIC_ORIGIN, id, "", 0));
+        return redirect(finish.toString(), cookie(this.#env.PUBLIC_ORIGIN, id, "", 0));
       }
       if (via === "resend" && attempt.phase === "code" && attempt.email) return send(attempt.email);
       if (via === "back") {
@@ -460,14 +498,14 @@ export class LoginAttempt extends DurableObject<Env> {
         }
         const finish = await this.complete(id, attempt, await this.emailIdentity(attempt.email));
         if (attempt.device) finish.searchParams.delete("state");
-        return redirect(finish.toString(), cookie(this.env.PUBLIC_ORIGIN, id, "", 0));
+        return redirect(finish.toString(), cookie(this.#env.PUBLIC_ORIGIN, id, "", 0));
       }
       return attempt.phase === "code" ? this.codePage(lang, id, attempt, browser) : this.choosePage(lang, id, attempt, browser);
-    });
+    }));
   }
 
   async exchange(secret: string, verifier: string, redirectUri: string): Promise<Response> {
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(() => this.#as(this.#kept(), async () => {
       const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
       if (
         !attempt ||
@@ -486,7 +524,7 @@ export class LoginAttempt extends DurableObject<Env> {
       attempt.phase = "used";
       this.ctx.storage.kv.put("attempt", attempt);
       return this.env.ACCOUNTS.getByName(attempt.identity.sub).create(attempt.identity, attempt.sessionId, attempt.name, attempt.shared);
-    });
+    }));
   }
 
   async alarm() {
@@ -512,7 +550,8 @@ export class LoginLimiter extends DurableObject<Env> {
       short: old?.minute === minute ? old.short : 0,
       daily: old?.day === day ? old.daily : 0,
     };
-    if (next.short >= 10 || next.daily >= 100) return false;
+    const times = Math.max(1, Math.floor(Number(this.env.LOGIN_LIMIT_TIMES ?? 1)) || 1);
+    if (next.short >= 10 * times || next.daily >= 100 * times) return false;
     next.short++;
     next.daily++;
     this.ctx.storage.kv.put("limits", next);

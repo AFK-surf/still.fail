@@ -1,0 +1,86 @@
+// Streams (stream.mbt) on a native host: android_host.c with Streams.java, apple_stream.m, win_stream.cpp,
+// linux_stream.c.
+
+///|
+extern "C" fn st_open() -> Int = "mb_host_stream_open"
+
+///|
+#borrow(avcc)
+extern "C" fn st_h264(id : Int, avcc : Bytes, w : Int, h : Int) -> Unit = "mb_host_stream_h264"
+
+///|
+#borrow(data)
+extern "C" fn st_frame(id : Int, data : Bytes, key : Int, ts : Double) -> Unit = "mb_host_stream_frame"
+
+///|
+#borrow(data)
+extern "C" fn st_jpeg(id : Int, data : Bytes, ts : Double) -> Unit = "mb_host_stream_jpeg"
+
+///|
+extern "C" fn st_next(id : Int) -> String = "mb_host_stream_next"
+
+///|
+extern "C" fn st_show(id : Int, ts : Double) -> Unit = "mb_host_stream_show"
+
+///|
+extern "C" fn st_close(id : Int) -> Unit = "mb_host_stream_close"
+
+///|
+extern "C" fn st_h264_here() -> Int = "mb_host_h264_here"
+
+///|
+extern "C" fn st_feeds() -> Int = "mb_host_stream_feeds"
+
+///|
+#borrow(cmd, data)
+extern "C" fn st_codec(id : Int, cmd : String, data : Bytes) -> Unit = "mb_host_stream_codec"
+
+///|
+extern "C" fn st_audio_here() -> Int = "mb_host_stream_audio_here"
+
+///|
+extern "C" fn st_h265_here() -> Int = "mb_host_h265_here"
+
+///|
+#borrow(hvcc)
+extern "C" fn st_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit = "mb_host_stream_hevc"
+
+///|
+extern "C" fn st_av1_here() -> Int = "mb_host_av1_here"
+
+///|
+#borrow(av1c)
+extern "C" fn st_av1(id : Int, av1c : Bytes, w : Int, h : Int) -> Unit = "mb_host_stream_av1"
+
+///|
+#borrow(data)
+extern "C" fn st_audio(id : Int, data : Bytes) -> Unit = "mb_host_stream_audio"
+
+///|
+extern "C" fn st_layers() -> Int = "mb_host_stream_layers"
+
+///|
+#borrow(png)
+extern "C" fn st_pointer(id : Int, png : Bytes, w : Double, h : Double, hx : Double, hy : Double) -> Unit = "mb_host_stream_pointer"
+
+///|
+extern "C" fn st_pointer_at(id : Int, x : Double, y : Double, shown : Int) -> Unit = "mb_host_stream_pointer_at"
+
+///|
+extern "C" fn st_direct(id : Int, route : Double, after : Double, what : Int) -> Unit = "mb_host_stream_direct"
+
+///|
+#borrow(data)
+extern "C" fn st_frame_shown(id : Int, data : Bytes, key : Int, ts : Double, show : Int) -> Int = "mb_host_stream_frame_shown"
+
+///|
+extern "C" fn st_flush(id : Int, drain : Int) -> Unit = "mb_host_stream_flush"
+
+///|
+extern "C" fn st_audio_played(id : Int) -> Double = "mb_host_stream_audio_played"
+
+///|
+extern "C" fn st_audio_queued(id : Int) -> Double = "mb_host_stream_audio_queued"
+
+///|
+extern "C" fn st_audio_volume(id : Int, v : Double) -> Unit = "mb_host_stream_audio_volume"

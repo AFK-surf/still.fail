@@ -6,7 +6,8 @@ fn over_ids() -> Array[String] {
 
 ///|
 test "what is up over the window says its actions as one set: built again, what it no longer says gone, none twice; another up in its place, only its own; kept while it is up, built again or not; gone once it is not" {
-  native_bars_reset()
+  // (no Tester: the test begins its run itself)
+  run_begin()
   native_bars.on.set(true)
   let up = Ref(true)
   // (built: three said; built again: one no longer said, one said twice)
@@ -30,7 +31,6 @@ test "what is up over the window says its actions as one set: built again, what 
   up.val = false
   native_over_gone()
   let gone = (native_over.up, over_ids())
-  native_bars_reset()
   assert_eq((again, other, kept, gone), (
     ["over/close", "over/full"],
     ["over/download"],
@@ -43,9 +43,9 @@ test "what is up over the window says its actions as one set: built again, what 
 // of two as high the one said last; one gone, the one under it as it said it last.
 
 ///|
-/// The system's bars there (native_on), none said yet.
+/// A run of its own begun (no Tester: the test begins it itself), the system's bars there (native_on), none said yet.
 fn over_begun() -> Unit {
-  native_bars_reset()
+  run_begin()
   native_bars.on.set(true)
 }
 
@@ -76,7 +76,6 @@ test "what is up over the window said by a page and by what is over it: the one 
   page_up.val = false
   native_over_gone()
   assert_true(!native_over.up, msg="none up")
-  native_bars_reset()
 }
 
 ///|
@@ -88,5 +87,4 @@ test "what is up over the window said by two as high, A then B then A: the one s
   assert_eq(handed().0, "B", msg="B said last")
   native_over_up("A", alive=fn() { true }, owner="a") |> ignore
   assert_eq(handed().0, "A", msg="A said last again")
-  native_bars_reset()
 }

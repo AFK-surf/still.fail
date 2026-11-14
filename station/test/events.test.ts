@@ -1,5 +1,5 @@
-// GET /events as admin/events.rs has it: sidebar rows told by what changed, one `session` event per burst, `read`
-// only to its viewer, job logs as they grow; and each event with its id (the station's run, its number), what was told
+// GET /events: what is written told as it is written (each device makes its sidebar and a thread's summary itself),
+// one `session` event per burst, the shared chat list by what changed, `read` only to its viewer, job logs as they grow; and each event with its id (the station's run, its number), what was told
 // told again to a stream that takes over from another or comes back after its link went (`since`).
 import type { Clock } from "effect";
 import assert from "node:assert/strict";
@@ -24,18 +24,12 @@ function setup(clock?: Clock.Clock, handover?: EventsDeps["handover"], db?: { ro
   const readers: any = {
     read: async (op: string, args: any) => {
       reads.push(op);
-      if (op === "chats") return JSON.stringify(rows[args.viewer.email] ?? []);
-      // The items a change can touch (read/views.ts chatRows): here every one, each a session's.
-      if (op === "chatRows") return JSON.stringify({ rows: rows[args.viewer.email] ?? [], scope: [...(args.sessions as string[]), ...(rows[args.viewer.email] ?? []).map((r) => r.id)] });
       if (op === "summary") return JSON.stringify({ key: args.key });
-      if (op === "thread") return JSON.stringify({ id: args.id, last: 1, unread: 1, for: args.viewer.email });
-      // The same for several viewers in one read (read/ops.ts chatRowsOf, read/ops-sessions.ts threadViews).
-      if (op === "chatRowsOf") return JSON.stringify(args.viewers.map((v: any) => ({ rows: rows[v.viewer.email] ?? [], scope: [...(args.sessions as string[]), ...(rows[v.viewer.email] ?? []).map((r) => r.id)] })));
+      // The shared chat list (read/views.ts sharedOf): here a@x's rows.
       if (op === "sharedOf") {
         const all = rows["a@x"] ?? [];
         return JSON.stringify({ rows: all, scope: args.sessions === null ? null : [...args.sessions, ...all.map((r) => r.id)] });
       }
-      if (op === "threadViews") return JSON.stringify(args.viewers.map((v: any) => ({ id: args.id, last: 1, unread: 1, for: v.viewer.email })));
       throw new Error(op);
     },
   };
@@ -69,7 +63,8 @@ function reader(body: AsyncIterable<Buffer>) {
         if (next.done) return;
         const raw = next.value.toString();
         const m = /^(?:id: ([0-9a-f]+\.\d+)\n)?event: (.+)\ndata: (.*)\n\n$/.exec(raw);
-        got.push(m ? { id: m[1], event: m[2], data: JSON.parse(m[3]!), raw } : { raw });
+        // `made`, said first to every stream (it makes its rows itself), is kept as it came alone.
+        got.push(m && m[2] !== "made" ? { id: m[1], event: m[2], data: JSON.parse(m[3]!), raw } : { raw });
       }
     })());
   more();
@@ -89,7 +84,7 @@ async function opened(events: Events, since: string | null = null) {
 }
 
 async function openedShared(events: Events, since: string | null = null) {
-  const answer = await events.open(viewer("a@x"), "zh", false, [], [], since, false, [], false, false, true, true);
+  const answer = await events.open(viewer("a@x"), "zh", false, [], [], since, false, [], false, true);
   return { resumed: (answer.headers as Record<string, string>)["stillfail-resumed"] === "1", ...reader(answer.body as AsyncIterable<Buffer>) };
 }
 
@@ -128,7 +123,7 @@ test("a shared chat moving between workspaces is removed from the old one, inclu
   const { events, rows, change } = setup(testClock().clock);
   rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
   const from = await openedShared(events);
-  const answer = await events.open({ ...viewer("b@x"), workspace: "other", home: false }, "zh", false, [], [], null, false, [], false, false, true, true);
+  const answer = await events.open({ ...viewer("b@x"), workspace: "other", home: false }, "zh", false, [], [], null, false, [], false, true);
   const to = reader(answer.body as AsyncIterable<Buffer>);
   change({ type: "session", key: "1" });
   await settle();
@@ -255,6 +250,36 @@ test("a shared stream coming back is told a chat created while nobody followed",
   await back.close();
 });
 
+test("a stream coming back says where the log was as it joined: what it tells up to there is told again, after it as it happens", async () => {
+  const { events, rows, change } = setup(testClock().clock);
+  rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
+  const lost = await openedShared(events);
+  change({ type: "session", key: "1" });
+  await settle();
+  const heard = lost.got.findLast((e) => e.id)!.id!;
+  await lost.close();
+  rows["a@x"] = [...rows["a@x"]!, { id: "2", title: "new", ws: "w" }];
+  change({ type: "session", key: "2" });
+  await settle();
+  const answer = await events.open(viewer("a@x"), "zh", false, [], [], heard, false, [], false, true);
+  const back = reader(answer.body as AsyncIterable<Buffer>);
+  const head = (answer.headers as Record<string, string>)["stillfail-head"]!;
+  await settle();
+  const n = (id: string) => Number(id.split(".")[1]);
+  const told = (id: string) => back.got.find((e) => e.event === "chat-shared" && e.data.id === id && e.id);
+  assert.ok(told("2") && n(told("2")!.id!) <= n(head), `${head} ${told("2")?.id}`);
+  rows["a@x"] = [...rows["a@x"]!, { id: "3", title: "later", ws: "w" }];
+  change({ type: "session", key: "3" });
+  await settle();
+  assert.ok(told("3") && n(told("3")!.id!) > n(head), `${head} ${told("3")?.id}`);
+  // Not resumed: none said.
+  const answered = await events.open(viewer("a@x"), "zh", false, [], [], null, false, [], false, true);
+  assert.equal((answered.headers as Record<string, string>)["stillfail-head"], undefined);
+  const fresh = reader(answered.body as AsyncIterable<Buffer>);
+  await fresh.close();
+  await back.close();
+});
+
 test("a shared stream coming back after station handover is told a chat created while away", async () => {
   const time = testClock();
   const file = join(mkdtempSync(join(tmpdir(), "events-")), "run", "events.json");
@@ -278,25 +303,26 @@ test("a shared stream coming back after station handover is told a chat created 
   await back.close();
 });
 
-test("changes are told as events, rows by what changed, read only to its viewer", async () => {
+test("changes are told as events, read only to its viewer, no sidebar read", async () => {
   const { events, rows, change, reads } = setup(testClock().clock);
   const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
   const b = reader((await events.open(viewer("b@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
   await settle();
   assert.equal(a.got[0]!.raw, "retry: 3000\n\n");
+  assert.equal(a.got[1]!.raw, `event: made\ndata: ${JSON.stringify({ rows: true, marks: true })}\n\n`, "told first it makes its rows");
   rows["a@x"] = [{ id: "1", title: "one" }, { id: "2", title: "two" }];
   reads.length = 0;
-  // A burst: one `session` event, one round of rows.
+  // A burst: one `session` event, and nothing of anyone's sidebar read.
   change({ type: "session", key: "s" });
   change({ type: "session", key: "s" });
   change({ type: "session", key: "gone" });
   change({ type: "read", viewer: "b@x", thread: 3, n: 9 });
   await settle();
   const ofA = a.got.filter((e) => e.event).map((e) => [e.event, e.data]);
-  assert.deepEqual(ofA, [["session", { key: "s" }], ["chat", { id: "2", title: "two" }]]);
+  assert.deepEqual(ofA, [["session", { key: "s" }]]);
   const ofB = b.got.filter((e) => e.event).map((e) => [e.event, e.data]);
   assert.deepEqual(ofB, [["read", { viewer: "b@x", thread: 3, n: 9 }], ["session", { key: "s" }]]);
-  assert.equal(reads.filter((r) => r === "summary").length, 1);
+  assert.deepEqual(reads, ["summary"]);
   // Ids go up on each stream, of one run of the station; what is told to everyone has one id on all streams.
   const numbers = (got: { id?: string }[]) => got.filter((e) => e.id).map((e) => Number(e.id!.split(".")[1]));
   for (const got of [a.got, b.got]) assert.deepEqual(numbers(got), [...numbers(got)].sort((x, y) => x - y));
@@ -306,7 +332,7 @@ test("changes are told as events, rows by what changed, read only to its viewer"
   rows["a@x"] = [{ id: "2", title: "two" }];
   change({ type: "threadRemoved", id: 1 });
   await settle();
-  assert.deepEqual(a.got.slice(-2).map((e) => [e.event, e.data]), [["thread-removed", { id: 1 }], ["chat-removed", { id: "1" }]]);
+  assert.deepEqual(a.got.slice(-1).map((e) => [e.event, e.data]), [["thread-removed", { id: 1 }]]);
   change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
   await settle();
   assert.deepEqual(b.got.filter((e) => e.event === "thread").map((e) => e.data), [{ id: 4, entries: [{ n: 1, text: "hi" }] }]);
@@ -394,7 +420,7 @@ test("a stream that takes over from what is not kept any more, or another run's,
   await old.close();
 });
 
-test("a stream that comes back after its link went is told what was told meanwhile and how its sidebar stands", async () => {
+test("a stream that comes back after its link went is told what was told meanwhile and how its overview stands", async () => {
   const time = testClock();
   const { events, rows, overview, change } = setup(time.clock);
   const open = async (since?: string) => {
@@ -421,12 +447,9 @@ test("a stream that comes back after its link went is told what was told meanwhi
   const told = back.got.filter((e) => e.event).map((e) => [e.event, e.event === "thread" ? e.data.id : e.event === "session" ? e.data.key : e.data]);
   assert.deepEqual(told, [
     ["thread", 4],
-    ["thread-view", { id: 4, last: 1, unread: 1, for: "a@x" }],
     ["session", "s2"],
-    // Its sidebar and overview, as they changed while none of its viewer's streams was there to be told.
+    // Its overview, as it changed while none of its viewer's streams was there to be told.
     ["overview", { running: 1 }],
-    ["chat", { id: "1", title: "one, renamed" }],
-    ["chat", { id: "2", title: "two" }],
   ]);
   // Its overview again only as it changes.
   change({ type: "processes" } as StoreChange);
@@ -440,46 +463,6 @@ test("a stream that comes back after its link went is told what was told meanwhi
   assert.equal(late.resumed, false);
   assert.deepEqual(late.got.filter((e) => e.event).map((e) => e.event), ["missed"]);
   await late.close();
-});
-
-// On a station (2026-11-02, 17:18-17:20) every device that came back had its viewer's whole sidebar read, 42 to 46 s a read
-// while memory was short, their other reads waiting behind it up to 99 s: a stream that comes back has read what
-// changed of its sidebar while none of its viewer's streams was here, and nothing more.
-test("a stream that comes back has read only what changed of its sidebar meanwhile, here and at the next process", async () => {
-  const time = testClock();
-  const file = join(mkdtempSync(join(tmpdir(), "events-")), "run", "events.json");
-  const before = setup(time.clock, { file, previous: previous() });
-  const sidebar = (reads: string[]) => reads.filter((r) => r === "chats" || r === "chatRowsOf");
-  const first = await opened(before.events);
-  before.change({ type: "session", key: "s1" });
-  await settle();
-  // Nothing changed meanwhile: nothing read.
-  await first.close();
-  before.reads.length = 0;
-  const quiet = await opened(before.events, first.got.findLast((e) => e.id)!.id!);
-  await settle();
-  assert.equal(quiet.resumed, true);
-  assert.deepEqual(sidebar(before.reads), [], "nothing read");
-  // A session changed meanwhile: the items it touches alone.
-  await quiet.close();
-  before.rows["a@x"] = [{ id: "1", title: "one, renamed" }];
-  before.change({ type: "session", key: "1" });
-  await settle();
-  before.reads.length = 0;
-  const changed = await opened(before.events, quiet.got.findLast((e) => e.id)?.id ?? first.got.findLast((e) => e.id)!.id!);
-  await settle();
-  assert.deepEqual(sidebar(before.reads), ["chatRowsOf"], "no sidebar read whole");
-  assert.deepEqual(changed.got.filter((e) => e.event === "chat").map((e) => e.data), [{ id: "1", title: "one, renamed" }]);
-  // An update with its stream here: back at the next process, nothing changed since, nothing read there.
-  const heard = changed.got.findLast((e) => e.id)!.id!;
-  await before.events.handOver();
-  await changed.close();
-  const after = setup(time.clock, { file, previous: previous() }, before);
-  const moved = await opened(after.events, heard);
-  await settle();
-  assert.equal(moved.resumed, true);
-  assert.deepEqual(sidebar(after.reads), [], "nothing read at the next process");
-  await moved.close();
 });
 
 test("a stream read afresh is told where the log is, so the next goes on from there though nothing was told", async () => {
@@ -511,53 +494,6 @@ test("a stream read afresh is told where the log is, so the next goes on from th
   // Resumed, it is told no position of its own: what comes on it says where it is.
   assert.equal(back.got.filter((e) => /^id: [^\n]+\n\n$/.test(e.raw)).length, 0);
   await back.close();
-});
-
-test("streams opened while the sidebar could not be read are ended once it reads, and read the station again", async () => {
-  const { events, rows, change } = setup(testClock().clock);
-  const all = rows["a@x"]!;
-  const open = async (email: string, since?: string) => {
-    const answer = await events.open(viewer(email), "zh", false, [], [], since ?? null);
-    const it = (answer.body as AsyncIterable<Buffer>)[Symbol.asyncIterator]();
-    const got: string[] = [];
-    let ended = false;
-    let last: string | undefined;
-    void (async () => {
-      for (;;) {
-        const next = await it.next();
-        if (next.done) return void (ended = true);
-        const m = /^(?:id: ([0-9a-f]+\.\d+)\n)?event: (.+)\n/.exec(next.value.toString());
-        if (m) got.push(m[2]!), (last = m[1] ?? last);
-      }
-    })();
-    return { resumed: (answer.headers as Record<string, string>)["stillfail-resumed"] === "1", got, ended: () => ended, last: () => last, close: () => it.return?.() };
-  };
-  // a@x's sidebar does not read (an archive file gone, say); b@x's does.
-  Object.defineProperty(rows, "a@x", { configurable: true, get: () => { throw new Error("No such file or directory (os error 2)"); } });
-  const blind = await open("a@x");
-  const other = await open("b@x");
-  change({ type: "session", key: "s1" });
-  await settle();
-  // What does not depend on it is told all the same, and the stream stays.
-  assert.deepEqual([blind.got, blind.ended()], [["session"], false]);
-  // It reads again, with a chat made meanwhile: nothing says which rows changed since the client last had them, so
-  // the stream is ended instead; another viewer's is not.
-  Object.defineProperty(rows, "a@x", { configurable: true, writable: true, value: [...all, { id: "2", title: "two" }] });
-  change({ type: "session", key: "s2" });
-  await settle();
-  assert.deepEqual([blind.got, blind.ended()], [["session", "session"], true]);
-  assert.deepEqual([other.got, other.ended()], [["session", "session"], false]);
-  // Its client comes back from where it was: not resumed, so it reads the station again; from then on its sidebar is
-  // told by what changes.
-  const back = await open("a@x", blind.last());
-  await settle();
-  assert.deepEqual([back.resumed, back.got], [false, ["missed"]]);
-  rows["a@x"] = [...all, { id: "2", title: "two" }, { id: "3", title: "three" }];
-  change({ type: "session", key: "s3" });
-  await settle();
-  assert.deepEqual([back.got, back.ended()], [["missed", "session", "chat"], false]);
-  await back.close();
-  await other.close();
 });
 
 test("a job's log is told now and as it grows", async () => {
@@ -637,20 +573,6 @@ test("usage is told with when the earliest call recorded since was made, each te
   await s.close();
 });
 
-test("after something is said in a thread, each viewer is told it as GET /threads/:id has it for them", async () => {
-  const { events, change } = setup(testClock().clock);
-  const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
-  const b = reader((await events.open(viewer("b@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
-  change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
-  await settle();
-  const views = (s: typeof a) => s.got.filter((e) => e.event === "thread-view").map((e) => [e.data.id, e.data.for]);
-  assert.deepEqual(views(a), [[4, "a@x"]]);
-  assert.deepEqual(views(b), [[4, "b@x"]]);
-  assert.ok(a.got.some((e) => e.event === "thread"));
-  await a.close();
-  await b.close();
-});
-
 // On a station (2026-11-02 15:41 UTC) what was told of two messages just said waited 50 s and 31 s: each was read back first,
 // in line behind other reads. What is said is told as the store wrote it.
 test("what is said in a thread is told at once, though no read is ever answered", async () => {
@@ -717,9 +639,8 @@ test("what says a thing whole is kept as it was last told only", async () => {
   const back = reader((await events.open(viewer("a@x"), "zh", false, [], [], heard)).body as AsyncIterable<Buffer>);
   await settle();
   const count = (name: string) => back.got.filter((e) => e.event === name).length;
-  // Every thing said in a thread (each adds to it); the session, the overview and the thread's summary once, as they
-  // were last told.
-  assert.deepEqual([count("thread"), count("session"), count("overview"), count("thread-view")], [3, 1, 1, 1]);
+  // Every thing said in a thread (each adds to it); the session and the overview once, as they were last told.
+  assert.deepEqual([count("thread"), count("session"), count("overview")], [3, 1, 1]);
   assert.deepEqual(back.got.find((e) => e.event === "overview")!.data, { running: 5 });
   await back.close();
   await other.close();
@@ -789,107 +710,32 @@ test("a named live stream only receives a delayed result while its viewer can st
   } finally { await stream.close(); }
 });
 
-test("one person's streams in two languages are read for together: once a change, the sidebar and the thread alike", async () => {
-  // One a viewer, the same chats were read again for each language and workspace a person's devices follow in (four on
-  // a station, 2026-11-02), each from the disk while memory was short, after every message.
-  const { events, change, reads } = setup(testClock().clock);
-  const zh = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
-  const en = reader((await events.open(viewer("a@x"), "en", false, [], [])).body as AsyncIterable<Buffer>);
-  await settle();
-  reads.length = 0;
-  change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
-  await settle();
-  assert.deepEqual(reads.filter((r) => r !== "summary"), ["threadViews", "chatRowsOf"], "one read of each, not one a viewer");
-  const views = (s: typeof zh) => s.got.filter((e) => e.event === "thread-view").map((e) => e.data.id);
-  assert.deepEqual([views(zh), views(en)], [[4], [4]], "each told its own");
-  await zh.close();
-  await en.close();
-});
-
-test("the sidebar's rows are left to clients that make them from what they are told (rows=1): none read for what is said, a session's summary, a read, a pin", async () => {
+test("the sidebar's rows are the client's to make from what it is told: none read for what is said, a session's summary, a read, a pin", async () => {
   // Every change read every row it could touch again for every viewer: 3 to 5 s each on a station short of memory (2026-11-03).
   const { events, change, reads } = setup(testClock().clock);
-  const sidebar = () => reads.filter((r) => r === "chats" || r === "chatRowsOf");
-  const theirs = reader((await events.open(viewer("a@x"), "zh", false, [], [], null, false, [], false, true, true)).body as AsyncIterable<Buffer>);
+  const theirs = reader((await events.open(viewer("a@x"), "zh", false, [], [], null)).body as AsyncIterable<Buffer>);
   await settle();
-  assert.deepEqual(theirs.got.filter((e) => e.event === "made").map((e) => e.data), [{ rows: true, marks: true }], "told it makes them, first");
-  assert.deepEqual(sidebar(), [], "not read as it opens: it reads them itself (read here too, each stream read the sidebar twice)");
-  reads.length = 0;
+  assert.deepEqual(reads, [], "not read as it opens: it reads them itself");
   change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
   change({ type: "session", key: "s1" });
   change({ type: "read", viewer: "a@x", thread: 4, n: 1 });
   change({ type: "pins", viewer: "a@x", session: "s1", at: 5 });
   change({ type: "dismissed", viewer: "a@x", card: { thread: 4, n: 1 } });
   await settle();
-  assert.deepEqual(sidebar(), [], "none read");
+  assert.deepEqual(reads, ["summary"], "none read but the session's summary it is told");
   assert.deepEqual(theirs.got.filter((e) => e.event === "pin").map((e) => e.data), [{ session: "s1", at: 5 }], "what it makes them of, told");
   // Nor what changes which rows there are (a chat's sessions, a chat gone): told that, it reads what it needs itself.
   change({ type: "thread", id: 4, entries: [] });
   change({ type: "threadRemoved", id: 5 });
   await settle();
-  assert.deepEqual(sidebar(), []);
+  assert.deepEqual(reads, ["summary"]);
   assert.deepEqual(theirs.got.filter((e) => e.event === "chat-changed" || e.event === "thread-removed").map((e) => [e.event, e.data]), [["chat-changed", { thread: 4 }], ["thread-removed", { id: 5 }]]);
-  // Come back where it left off: resumed, its rows never told against.
+  // Come back where it left off: resumed.
   const id = theirs.got.at(-1)!.id!;
-  const back = await events.open(viewer("a@x"), "zh", false, [], [], id, false, [], false, true, true);
+  const back = await events.open(viewer("a@x"), "zh", false, [], [], id);
   assert.equal((back.headers as Record<string, string>)["stillfail-resumed"], "1");
   reader(back.body as AsyncIterable<Buffer>).close();
-  // One of theirs from before (no `rows=1`) as well: read for it.
-  const before = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
-  await settle();
-  reads.length = 0;
-  change({ type: "thread", id: 4, entries: [{ n: 2 } as any] });
-  await settle();
-  assert.deepEqual(sidebar(), ["chatRowsOf"]);
-  assert.deepEqual(before.got.filter((e) => e.event === "made"), [], "a stream from before is told nothing new");
   await theirs.close();
-  await before.close();
-});
-
-test("a thread's summary is left to clients that make it from what is said (views=1): none read for a viewer all of whose streams do", async () => {
-  // Read for each viewer after every message, it was read from the disk while memory was short (a station, 2026-11-02).
-  const { events, change, reads } = setup(testClock().clock);
-  const theirs = reader((await events.open(viewer("a@x"), "zh", false, [], [], null, false, [], false, true)).body as AsyncIterable<Buffer>);
-  await settle();
-  reads.length = 0;
-  change({ type: "thread", id: 4, entries: [{ n: 1 } as any] });
-  await settle();
-  assert.deepEqual(reads.filter((r) => r === "threadViews" || r === "thread"), [], "none read");
-  assert.deepEqual(theirs.got.filter((e) => e.event === "thread").map((e) => e.data.id), [4], "what was said, told");
-  // One of theirs from before (no `views=1`) as well: read and told, for it.
-  const before = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
-  await settle();
-  reads.length = 0;
-  change({ type: "thread", id: 4, entries: [{ n: 2 } as any] });
-  await settle();
-  assert.deepEqual(reads.filter((r) => r === "threadViews"), ["threadViews"]);
-  assert.deepEqual(before.got.filter((e) => e.event === "thread-view").map((e) => e.data.id), [4]);
-  await theirs.close();
-  await before.close();
-});
-
-test("a change of a session or a thread reads again only the sidebar items it can touch, an item gone told so", async () => {
-  const { events, rows, change, reads } = setup(testClock().clock);
-  const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
-  await settle();
-  reads.length = 0;
-  rows["a@x"] = [{ id: "1", title: "renamed" }];
-  change({ type: "session", key: "1" });
-  change({ type: "thread", id: 7, entries: [] });
-  await settle();
-  assert.deepEqual(reads.filter((r) => r === "chats" || r === "chatRowsOf"), ["chatRowsOf"], "no sidebar read whole");
-  assert.deepEqual(a.got.filter((e) => e.event === "chat").map((e) => e.data), [{ id: "1", title: "renamed" }]);
-  // Gone from the sidebar: told so, as one the change could touch.
-  rows["a@x"] = [];
-  change({ type: "session", key: "1" });
-  await settle();
-  assert.deepEqual(a.got.filter((e) => e.event === "chat-removed").map((e) => e.data), [{ id: "1" }]);
-  // What only a viewer's read position changes: only theirs.
-  reads.length = 0;
-  change({ type: "read", viewer: "b@x", thread: 3, n: 1 });
-  await settle();
-  assert.deepEqual(reads, [], "nobody of b@x follows");
-  await a.close();
 });
 
 test("a stream that comes back to the next station process is resumed there, as the one before would have resumed it", async () => {
@@ -929,14 +775,12 @@ test("a stream that comes back to the next station process is resumed there, as 
   assert.equal(back.resumed, true);
   assert.equal(existsSync(file), false);
   const told = back.got.filter((e) => e.event).map((e) => [e.event, e.event === "thread" ? e.data.id : e.event === "session" ? e.data.key : e.data]);
-  // What came after `since` and is its viewer's (not b@x's read, nothing told once handed over); its sidebar where it
-  // changed, against what the one before told it (row 1 and the overview as they were: not told again).
+  // What came after `since` and is its viewer's (not b@x's read, nothing told once handed over); the overview as it
+  // was: not told again.
   assert.deepEqual(told, [
     ["thread", 4],
-    ["thread-view", { id: 4, last: 1, unread: 1, for: "a@x" }],
     ["read", { viewer: "a@x", thread: 3, n: 9 }],
     ["session", "s2"],
-    ["chat", { id: "2", title: "two" }],
   ]);
   // And on from there: the same run, numbered on.
   after.change({ type: "session", key: "s3" });
@@ -969,7 +813,7 @@ test("what the next process tells before its streams come back is kept for them,
   await settle();
   assert.equal(back.resumed, true);
   const told = back.got.filter((e) => e.event && e.event !== "overview").map((e) => [e.event, e.event === "thread" ? e.data.id : e.event === "session" ? e.data.key : e.data]);
-  assert.deepEqual(told, [["thread", 5], ["thread-view", { id: 5, last: 1, unread: 1, for: "a@x" }], ["session", "s3"]]);
+  assert.deepEqual(told, [["thread", 5], ["session", "s3"]]);
   await back.close();
 });
 
@@ -1049,7 +893,6 @@ test("what the next process is to tell before it goes on from the one before is 
     ["read", { viewer: "a@x", thread: 3, n: 9 }],
     ["vault-plain", { id: "p1" }],
     ["thread", 5],
-    ["thread-view", { id: 5, last: 1, unread: 1, for: "a@x" }],
     ["session", "s2"],
   ]);
   // The same run, numbered on from the last the one before told.

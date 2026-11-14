@@ -1,6 +1,6 @@
 // The still.fail station's installer for Windows, served at /install.ps1 (install.ts is macOS's and Linux's): in
-// PowerShell on the machine that is to be a station, `& ([scriptblock]::Create((irm <origin>/install.ps1))) <token> [<lock>]`
-// (the workspace lock's hash to pin).
+// PowerShell on the machine that is to be a station, `& ([scriptblock]::Create((irm <origin>/install.ps1))) <token> [<lock>] [rig:<person>]`
+// (the workspace lock's hash to pin; `rig:<person>`: it joins as a rig, its person's own lock's hash pinned).
 // It does what install.sh does, the Windows way ("Windows"):
 // - the release (stillfail-station-win32-x64.zip) in ~\.stillfail\app; the Node it runs on (NODE_VERSION) downloaded
 //   once per version into ~\.stillfail\node\v<version> and checked, then copied to <app>\node (no links: they take a
@@ -65,7 +65,8 @@ function productCases(): string {
 
 // __SAY(key, name=$variable; …) is a message (say above).
 const SCRIPT = `# still.fail station installer for Windows (cloud/src/install-windows.ts).
-param([string]$Token = '', [string]$Lock = '', [switch]$Admin)
+param([string]$Token = '', [string]$Lock = '', [string]$Rig = '', [switch]$Admin)
+if ($Lock -like 'rig:*') { $Rig = $Lock; $Lock = '' }
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $origin = '__ORIGIN__'
@@ -113,7 +114,9 @@ if ($channel -eq 'beta') { $release = "beta/stillfail-station-$platform.zip"; if
 else { $channel = 'stable'; $release = "stillfail-station-$platform.zip"; if (-not $env:STILLFAIL_INSTALLER_HANDED) { Say (__SAY(cloud.install.download)) } }
 Step 'download'
 $zip = Join-Path $tmp 'stillfail.zip'
-# Handed a release already downloaded (by the installer of the release before, below): taken, its directory removed.
+# Handed a release already downloaded (by the installer of the release before, below, or by the station, which made it
+# from a delta: station/src/updates/release.ts): taken, its directory removed. What a station made is the zip with every
+# entry stored, which Expand-Archive reads as it reads the deflated one, and STILLFAIL_RELEASE_SHA256 then its hash.
 if ($env:STILLFAIL_ARCHIVE -and $env:STILLFAIL_ARCHIVE -match '[\\\\/]stillfail-handed-[0-9a-f]+[\\\\/]stillfail\\.zip$') {
   Move-Item -LiteralPath $env:STILLFAIL_ARCHIVE $zip
   Remove-Item -Recurse -Force (Split-Path -Parent $env:STILLFAIL_ARCHIVE) -ErrorAction SilentlyContinue
@@ -372,6 +375,7 @@ if (-not $binApart -and -not (($userPath -split ';') -contains $bin)) {
 if ($Token) {
   Say (__SAY(cloud.install.join))
   $pin = if ($Lock) { @('--lock', $Lock) } else { @() }
+  if ($Rig) { $pin += @('--rig', $Rig.Substring(4)) }
   & (Join-Path $app 'mesh\\target\\release\\stillfail-station.exe') enroll $origin $Token --stay --data $data @pin
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }

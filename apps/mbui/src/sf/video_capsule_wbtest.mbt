@@ -99,7 +99,7 @@ test "a video capsule keeps its visible words whole while it changes between tim
       for _ in 0..<10 {
         t.run_for(dur_ms / 10.0)
         let faults = t.squeeze_faults()
-        assert_eq(faults, [], msg="duration=\{duration}, coming=\{on}, at=\{t.time()}: \{faults}")
+        assert_eq(faults, [], msg="duration=\{duration}, coming=\{on}, at=\{t.time()}: \{Repr(faults)}")
       }
     }
   }

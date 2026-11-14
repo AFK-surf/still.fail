@@ -1,11 +1,13 @@
 // What a web link in a message is (the `linkPreview` topic): read each time its card shows, what was read last shown
-// meanwhile, the app opened again too; a pull request's last change in words.
+// meanwhile, the app opened again too; a pull request's last change in words. Its pictures (a page's icon and picture, a
+// pull request's author's face, a picture file's) go out as tokens, their bytes beside a call's answer
+// (peek-pictures.ts).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { Core } from "../src/core.ts";
 import { HostWire } from "../src/station/wire.ts";
-import { apply, readsOf, subscribe, v } from "./helpers.ts";
+import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
 import { base, started, status } from "./station-fixture.ts";
 
@@ -142,5 +144,141 @@ test("a_message_a_link_names_is_read_alone_as_its_card_shows_and_kept", async ()
   await host.time.pass(500, 10);
   apply(host, values);
   assert.equal(values.get(3), null);
+  core.close();
+});
+
+// deno-lint-ignore no-explicit-any
+type J = any;
+const PAGE = "https://example.com/bench";
+const PAGE_ASKED = `GET /link-preview?url=${encodeURIComponent(PAGE)}`;
+const bytesOf = (seed: number, n: number) => Uint8Array.from({ length: n }, (_, i) => (i * 31 + seed) & 255);
+const dataUrl = (type: string, bytes: Uint8Array) => `data:${type};base64,${Buffer.from(bytes).toString("base64")}`;
+const page = (title: string, icon: Uint8Array, image: Uint8Array) => ({ kind: "page", url: PAGE, title, site: "Example", icon: dataUrl("image/png", icon), image: dataUrl("image/jpeg", image) });
+
+/// The answer to call `id` among what went out: its value or its error, and its bytes.
+function answered(emitted: [number, unknown][], id: number): { ok?: J; error?: J; bytes?: Uint8Array } {
+  const m = emitted.map(([, m]) => m as J).find((m) => m.id === id && ("ok" in m || "error" in m));
+  assert.ok(m !== undefined, `call ${id} answered`);
+  return m;
+}
+
+test("a_link_cards_pictures_go_out_as_tokens_and_come_as_their_bytes_beside_a_call", async () => {
+  const icon = bytesOf(1, 600);
+  const image = bytesOf(2, 5000);
+  const face = bytesOf(3, 300);
+  const said: Record<string, unknown> = { ...base(), [PAGE_ASKED]: page("列表", icon, image), [ASKED]: { ...pr("open", 1), author: { login: "lin", avatar: dataUrl("image/png", face) } } };
+  const { core, host } = await started(said);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  // Asked before its topic has read it: none, and nothing asked of the station for it.
+  call(core, ui, 1, "link.preview.picture", { station: S, url: PAGE, which: "icon" });
+  await host.settle();
+  assert.equal(answered(host.takeEmitted(), 1).error?.code, "no_picture");
+  assert.equal(host.requests.flatMap(readsOf).filter((u) => u.includes("/admin/api/link-preview?")).length, 0);
+  subscribe(core, ui, 2, { topic: "linkPreview", station: S, url: PAGE });
+  subscribe(core, ui, 3, { topic: "linkPreview", station: S, url: URL });
+  await host.time.pass(500, 10);
+  apply(host, values);
+  const shown = v(values, 2);
+  assert.equal(shown.title, "列表");
+  assert.ok(typeof shown.icon === "string" && shown.icon !== "" && !shown.icon.startsWith("data:"), shown.icon);
+  assert.ok(typeof shown.image === "string" && shown.image !== shown.icon && !shown.image.startsWith("data:"), shown.image);
+  assert.ok(JSON.stringify(shown).length < 1000, "no picture in what goes out");
+  const face1 = v(values, 3).author.avatar;
+  assert.ok(typeof face1 === "string" && !face1.startsWith("data:"), face1);
+  // Each picture's bytes, as the station sent them, beside its type; none asked of the station again.
+  const reads = host.requests.length;
+  call(core, ui, 4, "link.preview.picture", { station: S, url: PAGE, which: "icon" });
+  call(core, ui, 5, "link.preview.picture", { station: S, url: PAGE, which: "image" });
+  call(core, ui, 6, "link.preview.picture", { station: S, url: URL, which: "avatar" });
+  call(core, ui, 7, "link.preview.picture", { station: S, url: URL, which: "image" });
+  await host.settle();
+  const out = host.takeEmitted();
+  for (const [id, type, bytes] of [[4, "image/png", icon], [5, "image/jpeg", image], [6, "image/png", face]] as const) {
+    const a = answered(out, id);
+    assert.deepEqual(a.ok, { type });
+    assert.deepEqual([...(a.bytes ?? [])], [...bytes], `call ${id}: the station's picture's bytes`);
+  }
+  // A picture it has none of: the error that says so.
+  assert.equal(answered(out, 7).error?.code, "no_picture");
+  assert.equal(host.requests.length, reads, "nothing asked of the station");
+  // Read again with another title: the same tokens; with another icon: another icon's token, the same picture's.
+  const again = async (was: number, id: number, value: unknown) => {
+    said[PAGE_ASKED] = value;
+    core.receive(ui, { kind: "unsubscribe", id: was, unsubscribe: true });
+    subscribe(core, ui, id, { topic: "linkPreview", station: S, url: PAGE });
+    await host.time.pass(500, 10);
+    apply(host, values);
+    return v(values, id);
+  };
+  const retitled = await again(2, 8, page("列表二", icon, image));
+  assert.equal(retitled.title, "列表二");
+  assert.deepEqual([retitled.icon, retitled.image], [shown.icon, shown.image]);
+  const icon2 = bytesOf(9, 600);
+  const changed = await again(8, 9, page("列表二", icon2, image));
+  assert.notEqual(changed.icon, shown.icon);
+  assert.equal(changed.image, shown.image);
+  call(core, ui, 10, "link.preview.picture", { station: S, url: PAGE, which: "icon" });
+  await host.settle();
+  assert.deepEqual([...(answered(host.takeEmitted(), 10).bytes ?? [])], [...icon2]);
+  // What the core's own readers read is the whole of it, as the station said it.
+  assert.ok(String((core.inner.stations.link(S)?.memory.get(`linkPreview\n${PAGE}`) as J)?.icon).startsWith("data:image/png;base64,"));
+  core.close();
+});
+
+test("a_file_peeks_picture_goes_out_as_a_token_and_comes_as_its_bytes_beside_a_call", async () => {
+  const PEEK = `GET /sessions/s-1/peek?path=${encodeURIComponent("shot.png")}&line=3`;
+  const TEXT = `GET /sessions/s-1/peek?path=${encodeURIComponent("src/a.ts")}`;
+  const picture = bytesOf(4, 9000);
+  const peek = (bytes: Uint8Array, size: number) => ({ path: "/w/shot.png", name: "shot.png", size, mtime: 1, type: "image/png", kind: "image", image: { type: "image/png", data: Buffer.from(bytes).toString("base64") } });
+  const said: Record<string, unknown> = { ...base(), [PEEK]: peek(picture, 9000), [TEXT]: { path: "/w/src/a.ts", name: "a.ts", size: 1, mtime: 1, type: "text/plain", kind: "text" } };
+  const { core, host } = await started(said);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  const topic = { topic: "filePeek", station: S, key: "s-1", path: "shot.png", line: 3 };
+  call(core, ui, 1, "file.peek.picture", { station: S, key: "s-1", path: "shot.png", line: 3 });
+  await host.settle();
+  assert.equal(answered(host.takeEmitted(), 1).error?.code, "no_picture", "not read yet");
+  subscribe(core, ui, 2, topic);
+  subscribe(core, ui, 3, { topic: "filePeek", station: S, key: "s-1", path: "src/a.ts" });
+  await host.time.pass(500, 10);
+  apply(host, values);
+  const shown = v(values, 2);
+  assert.equal(shown.image.type, "image/png");
+  assert.equal(shown.image.data, undefined, "no bytes in what goes out");
+  assert.ok(typeof shown.image.picture === "string" && shown.image.picture !== "", shown.image.picture);
+  const reads = host.requests.length;
+  call(core, ui, 4, "file.peek.picture", { station: S, key: "s-1", path: "shot.png", line: 3 });
+  call(core, ui, 5, "file.peek.picture", { station: S, key: "s-1", path: "src/a.ts" });
+  call(core, ui, 6, "file.peek.picture", { station: S, key: "s-1", path: "shot.png" });
+  await host.settle();
+  const out = host.takeEmitted();
+  assert.deepEqual(answered(out, 4).ok, { type: "image/png" });
+  assert.deepEqual([...(answered(out, 4).bytes ?? [])], [...picture]);
+  assert.equal(answered(out, 5).error?.code, "no_picture", "a text file has none");
+  assert.equal(answered(out, 6).error?.code, "no_picture", "another line's peek is another topic's, not read");
+  assert.equal(host.requests.length, reads, "nothing asked of the station");
+  // The station's peek asked by its operation (a file's path pressed: the app reads its `kind`): as the topic gives it,
+  // its picture by the same token, no bytes in it.
+  call(core, ui, 20, "file.peek", { station: S, key: "s-1", path: "shot.png", line: 3 });
+  await host.time.pass(500, 10);
+  const op = answered(host.takeEmitted(), 20).ok;
+  assert.equal(op.kind, "image");
+  assert.equal(op.image.data, undefined, "no bytes in the operation's answer");
+  assert.equal(op.image.picture, shown.image.picture, "the topic's token");
+  assert.ok(JSON.stringify(op).length < 1000, `the operation's answer: ${JSON.stringify(op).length} B`);
+  // Read again: written with the same picture, the same token; another picture, another.
+  const again = async (was: number, id: number, value: unknown) => {
+    said[PEEK] = value;
+    core.receive(ui, { kind: "unsubscribe", id: was, unsubscribe: true });
+    subscribe(core, ui, id, topic);
+    await host.time.pass(500, 10);
+    apply(host, values);
+    return v(values, id);
+  };
+  const same = await again(2, 7, { ...peek(picture, 9000), mtime: 2 });
+  assert.equal(same.image.picture, shown.image.picture);
+  const other = await again(7, 8, peek(bytesOf(5, 9000), 9000));
+  assert.notEqual(other.image.picture, shown.image.picture);
   core.close();
 });

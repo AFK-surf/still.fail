@@ -16,7 +16,7 @@ permissions:
   actions: read # an arch/next pipeline may have built its shell as a run artifact rather than publishing it
 jobs:
   mac:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: macos-26
     timeout-minutes: 5
     env:
@@ -87,6 +87,7 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-next-moon-mac-${{ github.event.workflow_run.head_sha || github.sha }}
           restore-keys: mbui-next-moon-mac-
       - uses: actions/cache/restore@v4
@@ -95,6 +96,7 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-mac-moon-${{ github.sha }}
           restore-keys: mbui-mac-moon-
       - run: |
@@ -134,4 +136,5 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: ${{ env.MOON_KEY }}

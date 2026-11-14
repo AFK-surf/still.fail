@@ -35,10 +35,11 @@ const FAMILIES = {
     { family_label: "Claude Opus 5.5", slug: "claude-opus-5.5", variants: [{ model_uid: "claude-opus-5-5-medium" }, { model_uid: "claude-opus-5-5-low" }, { model_uid: "claude-opus-5-5-high-fast" }] },
     { family_label: "Kimi K2.6", slug: "kimi-k2.6", variants: [{ model_uid: "kimi-k2-6" }] },
     { family_label: "GLM 5.2", slug: "glm-5.2", variants: [{ model_uid: "glm-5-2" }, { model_uid: "glm-5-2-max" }, { model_uid: "glm-5-2-1m" }] },
+    { family_label: "Fusion", slug: "fusion", variants: [{ model_uid: "fusion-gpt-6-sol-max-sidekick-swe-2-medium" }, { model_uid: "fusion-gpt-6-sol-low-fast-sidekick-swe-2-medium" }] },
   ],
 };
 /// The `model` config option's values.
-const MODELS = ["adaptive", "swe-2-high", "swe-2-medium", "swe-2-max", "claude-opus-5-5-medium", "claude-opus-5-5-low", "kimi-k2-6", "glm-5-2", "glm-5-2-max", "glm-5-2-1m"];
+const MODELS = ["adaptive", "swe-2-high", "swe-2-medium", "swe-2-max", "claude-opus-5-5-medium", "claude-opus-5-5-low", "kimi-k2-6", "glm-5-2", "glm-5-2-max", "glm-5-2-1m", "fusion-gpt-6-sol-max-sidekick-swe-2-medium"];
 
 if (args[0] === "--version") {
   console.log(`devin ${version}`);
@@ -117,7 +118,7 @@ function agent() {
     { id: "speed", name: "Speed", type: "select", currentValue: "standard", options: [{ value: "standard" }, { value: "fast" }] },
   ];
   /// The thinking levels of the current model's family.
-  const levels = (model) => (model.startsWith("swe-2") ? ["medium", "high", "max"] : model.startsWith("claude-opus-5-5") ? ["low", "medium"] : model.startsWith("glm-5-2") ? ["max"] : []);
+  const levels = (model) => (model.startsWith("swe-2") ? ["medium", "high", "max"] : model.startsWith("claude-opus-5-5") ? ["low", "medium"] : model.startsWith("glm-5-2") ? ["max"] : model.startsWith("fusion-gpt-6-sol") ? ["low", "medium", "high", "xhigh", "max"] : []);
   const modes = (s) => ({ currentModeId: s.mode, availableModes: [{ id: "normal" }, { id: "accept-edits" }, { id: "plan" }, { id: "bypass" }] });
   const words = ["foul", "calm", "bold", "pale", "wide", "keen"];
   const things = ["taxi", "river", "lamp", "fern", "moon", "reef"];

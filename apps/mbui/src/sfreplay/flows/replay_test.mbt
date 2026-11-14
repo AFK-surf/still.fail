@@ -11,7 +11,7 @@ fn signed_out_run() -> Unit raise {
     #|{"in":{"id":1,"value":[]},"w":1000}
   ))
   r.attach()
-  @ui.on_message("core", @core.receive)
+  @sfcore.listen(@sfapp.core_taking())
   let t = @ui.Tester::new(@sfreplay.app, tree=@sfreplay.app_tree)
   // posted to mbui's queue, taken by the next frame as it begins
   assert_eq(r.deliver(to=fn(json, bytes) { t.post("core", json, bytes?) }), 1)

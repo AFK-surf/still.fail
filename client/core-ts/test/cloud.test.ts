@@ -11,7 +11,8 @@ import { request } from "../src/ops.ts";
 import { Runner } from "../src/runtime.ts";
 import { RELAY, Status, stationWhat, value } from "../src/status.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
-import { EXPORT_MS, Kind, Tracer, route } from "../src/trace.ts";
+import { TRACES, route } from "../src/route.ts";
+import { EXPORT_MS, Kind, Tracer } from "../src/trace.ts";
 import { ofAddress, Workspaces } from "../src/workspace.ts";
 import * as brand from "../src/brand.ts";
 import { cloudError } from "../src/cloud.ts";
@@ -304,7 +305,7 @@ test("spans_nest_and_go_out_in_one_batch", async () => {
   assert.equal(context.traceparent(), `00-${r.traceId}-${r.spanId}-01`);
 });
 
-/// 2026-11-07: a phone's failed reconnects, sent as its network was down, never reached Axiom.
+/// 2026-11-07: a phone's failed reconnects, sent as its network was down, never reached the traces.
 test("a_batch_that_did_not_go_out_goes_with_the_next", async () => {
   const host = new FakeHost();
   const tracer = new Tracer(host, new Runner(host.time.clock), 1);
@@ -341,7 +342,7 @@ test("nothing_is_recorded_when_off_and_a_dropped_span_is_cancelled", async () =>
   await host.time.pass(EXPORT_MS + 20, 100);
   assert.equal(bodies.length, 0);
   assert.deepEqual(host.time.sleeps, []);
-  const on = new Tracer(host, new Runner(host.time.clock), 1);
+  const on = new Tracer(host, new Runner(host.time.clock), 1, TRACES);
   const onBodies: unknown[] = [];
   on.setExport((b) => Effect.sync(() => void onBodies.push(parseJson(b))));
   on.root("chat.open", Kind.Internal).cancel();

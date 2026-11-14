@@ -12,7 +12,7 @@ pub fn read_trace(name : String) -> String? {
   while d != "" {
     dirs.push(d)
     match d.rev_find("/") {
-      Some(i) if i > 0 => d = d[:i].to_string()
+      Some(i) if i > 0 => d = d[:i].to_owned()
       _ => d = ""
     }
   }

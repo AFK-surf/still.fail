@@ -4,7 +4,7 @@
 
 ///|
 test "53-settings-sheet-sinking" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("settings-sheet-sinking"), seed~)
     f.tap("icon:settings")
     f.run_for(@ui.move_most_ms)
@@ -16,21 +16,21 @@ test "53-settings-sheet-sinking" {
     // under it, here its versions' words, which take none; the overview has its rows to go to there)
     f.tap("=软件与设备")
     f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.tap("=重命名")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.clear()
     f.type_text("e2e-not-082939")
     // the scrim tapped: the sheet sinks, only drawn; 保存 tapped where it is drawn on its way down takes nothing
     // (near its end, past where the page's rows under it keep what they are pressed at (their card's words' inset), so
     // the taps meet none of them whatever height the rows are drawn)
-    let save = f.t.get(@ui.Role::Button, label="保存").rect
-    let (sx, sy) = (save.0 + save.2 - 6.0, save.1 + save.3 / 2.0)
+    let save = f.t.query(@ui.Role::Button, label="保存").map(fn(x) { x.rect }).unwrap_or((0.0, 0.0, 0.0, 0.0))
+    let (sx, sy) = (f.measured(save.0 + save.2 - 6.0), f.measured(save.1 + save.3 / 2.0))
     f.tap_at(195.0, 60.0)
     for dy in [0.0, 30.0, 60.0, 90.0] {
       f.tap_at(sx, sy + dy)
     }
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest)
     f.gone("station 名称")
     f.see("=willow")
     f.end()

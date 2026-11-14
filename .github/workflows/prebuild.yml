@@ -2,7 +2,7 @@
 # CI's other jobs only fetch, built when asked: for a branch whose change makes a new one (apps/mbui/engine,
 # client/shell, …), the jobs that fetch it fail saying to run this:
 #
-#     gh workflow run prebuild.yml -R AFK-surf/still.fail --ref <branch>
+#     gh workflow run prebuild.yml -R AFK-surf/monoid --ref <branch>
 #
 # Each that neither the store nor the release has is built from the branch's checkout (Windows' on GitHub's Windows,
 # Android's on Linux with the NDK, Linux's on GitHub's Ubuntu of their own architecture) and put in the release
@@ -26,8 +26,7 @@ jobs:
       builds: ${{ steps.what.outputs.builds }}
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ./.github/actions/node
       # One job a Windows part (each its own build, minutes); Android's in one, the shell first (the engine links it);
       # one job a Linux part too (the engine leaves the shell's symbols to the loader: not linked to it), on its own
       # architecture's Ubuntu (built there: Hermes and its hermesc for that machine).
@@ -63,8 +62,7 @@ jobs:
       # the keys are git's blobs: the checkout as git has it
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ./.github/actions/node
       - if: runner.os == 'Windows'
         uses: ./.github/actions/msvc
       # Git Bash's /usr/bin/link shadows MSVC's link.exe for cargo

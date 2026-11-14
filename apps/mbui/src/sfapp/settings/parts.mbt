@@ -6,12 +6,12 @@
 ///|
 /// Each page's blocks as given and as its list made of them, by the page's key (scroll_page's `keys`).
 // kept across runs: put back by settings' reset (parts_reset)
-let page_rows : Map[String, @ui.ListRows[(String, () -> Unit)]] = {}
+let page_rows : Map[String, @ui.ListRows[(String, () -> Unit)]] = Map([])
 
 ///|
 /// Each page's keys that can make its list continuous, as last given.
 // kept across runs: put back by settings' reset (parts_reset)
-let page_keys : Map[String, Array[String]] = {}
+let page_keys : Map[String, Array[String]] = Map([])
 
 ///|
 fn page_rows_of(key : String) -> @ui.ListRows[(String, () -> Unit)] {
@@ -114,7 +114,7 @@ fn scroll_page(
       page_keys[key] = present
       let watched = present.iter().any(fn(k) { was.contains(k) })
       // (what each shows, by its key: one showing another thing goes to its new height)
-      let shows : Map[String, String] = {}
+      let shows : Map[String, String] = Map([])
       match versions {
         Some(vs) if vs.length() == ks.length() =>
           for i, k in ks {
@@ -374,7 +374,13 @@ fn nav_bar(
     wide_head(c, core, back, title, trailing?=trailing, on_back?=on_back, about~)
     return
   }
-  @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val, on_press=fn() {
+  // (what it is, an ⓘ after the title, as the wide head has it)
+  let title_after = if about == "" {
+    None
+  } else {
+    Some(fn() { @sf.about(c, "settings-about", about, label=tr("web-main.about")) })
+  }
+  @sf.nav_bar(c, "settings-back", back, title, sub?=sub, title_after?, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val, on_press=fn() {
     match on_back {
       Some(f) => f()
       None => (core.pop)()
@@ -726,20 +732,6 @@ let wide_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibol
 let wide_section_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
-/// What stands at the column's edge in the wide frame, 16 in as the title is (a section's control); 12 on a phone.
-fn inset(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=if wide.val { wide_inset } else { phone_inset }, body) |> ignore
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_inset : @ui.Style = @ui.css("w=Full px=S4")
-
-///|
-// kept across runs: a value (no field of it changes)
-let phone_inset : @ui.Style = @ui.css("w=Full px=S3")
-
-///|
 /// A page's note under its title, in a line or two.
 fn page_note(c : @ui.Ctx, words : String) -> Unit {
   if wide.val {
@@ -769,14 +761,11 @@ let page_note_box : @ui.Style = @ui.css("w=Full px=S6 pb=S2_5")
 
 ///|
 /// What stands in a card's foot corners (the ladder's: @sf.pane_corner), so how far in its foot is: a
-/// capsule (a settings button or field, or a library button of its own height), concentric with the card's corner,
-/// reaching past its words to there (`foot_across`, `foot_start`); a block (a command's box), the ladder's inset, reaching past them to it
-/// (`block_across`), round by the ladder's next step there; or nothing with a ground, its words card_pad in.
+/// capsule (a library button of its own height), concentric with the card's corner; or nothing with a ground, its
+/// words card_pad in.
 priv enum Foot {
   Words
-  Capsule
   UiCapsule
-  Block
 }
 
 ///|
@@ -787,9 +776,7 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words
   let id = if key == "" { 0 } else { c.id(key) }
   let ground = match foot {
     Words => card_ground
-    Capsule => card_foot_ground
     UiCapsule => card_ui_foot_ground
-    Block => card_block_ground
   }
   c.box(style=if wide.val { wide_card_room } else { card_room_now() }, fn() {
     c.box(style=ground, id~, fn() {
@@ -830,16 +817,6 @@ pub let settings_button_h : Double = 38.0
 /// words after it: its words where they were).
 // kept across runs: a value (no field of it changes)
 pub let foot_across : @ui.Style = @sf.foot_across(settings_button_h)
-
-///|
-/// A card with a block in its foot corners: its foot the ladder's inset.
-// kept across runs: a value (no field of it changes)
-let card_block_ground : @ui.Style = card_ground.then(@ui.style(pb=@sf.inset_room))
-
-///|
-/// A card with a button in its foot corners: its foot as far in as makes it concentric (@sf.foot_pad).
-// kept across runs: a value (no field of it changes)
-let card_foot_ground : @ui.Style = card_ground.then(@sf.foot_pad(settings_button_h))
 
 ///|
 /// A card with a library button in its foot corners, in from the card by its own height.
@@ -1455,28 +1432,6 @@ fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, s
 let round_button : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter")
 
 ///|
-/// A body of words: on a list card 12 and 12 in (its words 20 from the card's edge, as its rows'),
-/// else 16 and 14; 12 apart.
-fn body(c : @ui.Ctx, f : () -> Unit) -> Unit {
-  c.box(style=if on_card.val { body_on_card } else { body_box }, f) |> ignore
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let body_box : @ui.Style = @ui.css("w=Full px=S4 py=S3_5 gap=S3")
-
-///|
-// kept across runs: a value (no field of it changes)
-let body_on_card : @ui.Style = body_box.then(@ui.css("px=S3 py=S3"))
-
-///|
-/// A quiet note.
-fn note(c : @ui.Ctx, words : String) -> Unit {
-  // Security.kt:110 (12sp, line 18)
-  c.text(words, style=@sf.note.then(@sf.full_words)) |> ignore
-}
-
-///|
 /// Words in the code face (CodeFont: a code, a key, a variable), one line unless `wrap`.
 /// With `style` (a role of @sf's styles.mbt), that, and what is said besides over it.
 pub fn mono(
@@ -1532,10 +1487,3 @@ let centre_column : @ui.Style = @ui.css("w=Full align=ACenter")
 fn head_pill(c : @ui.Ctx, key : String, label : String, on_press~ : () -> Unit) -> Unit {
   @sf.button(c, label, key~, icon="plus", on_press~)
 }
-
-///|
-/// A block of a sheet laid out here (in its column: @sf.sheet_column) after the first, 10 under the one before: room
-/// between them, none under the last (its panel's own over its foot).
-// kept across runs: a value (no field of it changes)
-let sheet_block : @ui.Style = @ui.css("w=Full pt=S2_5")
-

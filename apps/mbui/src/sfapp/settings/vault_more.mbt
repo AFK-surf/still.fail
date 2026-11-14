@@ -21,20 +21,17 @@ fn vault_fields(kind : String) -> Array[String] {
 pub let file_most : Int = 64 * 1024
 
 ///|
-/// A file picked to be kept, once the system's picker (`pick`) answered: `got` its bytes in base64 and its name; one
-/// bigger than a file kept may be said so, and not taken. Whether it answered (the pick is then done with).
-pub fn take_picked_file(core : Core, pick : @ui.Pick, got : (String, String) -> Unit) -> Bool {
-  match pick.files() {
-    None => false
-    Some(files) => {
-      match files.get(0) {
-        Some(f) if f.bytes.length() > file_most || f.held != 0 => (core.say)(tr("android-settings.vault.fileTooBig"))
-        Some(f) => got(@codec.base64(f.bytes), f.name)
-        None => ()
-      }
-      true
+/// Asks the system's picker for a file to be kept: `got` its bytes in base64 and its name once answered; one bigger
+/// than a file kept may be said so, and not taken.
+pub fn pick_vault_file(core : Core, got : (String, String) -> Unit) -> Unit {
+  @ui.pick(Files, on_got=fn(files) {
+    match files.get(0) {
+      Some(f) if f.bytes.length() > file_most || f.held != 0 => (core.say)(tr("android-settings.vault.fileTooBig"))
+      Some(f) => got(@codec.base64(f.bytes), f.name)
+      None => ()
     }
-  }
+  })
+  |> ignore
 }
 
 ///|
@@ -129,7 +126,7 @@ pub let recovery_words_turned : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 pub fn recovery_words_changed() -> Unit {
-  recovery_words_turned.set(@signals.untracked(fn() { recovery_words_turned.get() }) + 1)
+  recovery_words_turned.set(recovery_words_turned.untracked() + 1)
 }
 
 ///|
@@ -218,10 +215,8 @@ pub(all) struct VaultEditing {
   /// the fields shown in the clear (by field)
   reveal : Map[String, Bool]
   serial : Int
-  /// a file's: its bytes in base64 and its name, as picked (or as it was); the system's picker while it asks
-  mut file_content : String
-  mut file_name : String
-  mut file_pick : @ui.Pick?
+  /// a file's: its bytes in base64 and its name, as picked (or as it was)
+  file : @signals.Signal[(String, String)]
 }
 
 ///|
@@ -229,8 +224,8 @@ pub let vault_serial : Ref[Int] = Ref(0)
 
 ///|
 /// What `vault.putItem` is given for an item: the vault, the item's id where it is one already, what
-/// it holds (`words`: its fields' words by name, as typed), and, where agents may ask for it, how (`mode`, its hosts,
-/// its variable) and its longest grant (`lasts`: "default" its vault's).
+/// it holds (`words`: its fields' words by name, as typed; `about`, what it is for, its notes), and, where agents may
+/// ask for it, how (`mode`, its hosts, its variable), its longest grant (`lasts`: "default" its vault's) and its about.
 pub fn vault_put_params(
   vault : String,
   row : Json?,
@@ -243,6 +238,11 @@ pub fn vault_put_params(
 ) -> Array[(String, Json)] {
   let got = fn(f : String) { words.get(f).unwrap_or("").trim(chars=" \n").to_owned() }
   let name = words.get("name").unwrap_or("").trim(chars=" ").to_owned()
+  // (an editor without the field keeps the notes it had)
+  let about = match words.get("about") {
+    Some(a) => a.trim(chars=" \n").to_owned()
+    None => text(was, "notes")
+  }
   let fields : Array[(String, Json)] = []
   for f in vault_fields(k) {
     // a private key as pasted (its last line break is part of it); the rest without the spaces around them
@@ -256,7 +256,7 @@ pub fn vault_put_params(
     ("name", str(name)),
     ("fields", obj(fields)),
     ("domains", Json::array(strings(was, "domains").map(str))),
-    ("notes", str(text(was, "notes"))),
+    ("notes", str(about)),
   ])
   let params = [("vault", str(vault)), ("plain", plain_item)]
   match row {
@@ -283,6 +283,9 @@ pub fn vault_put_params(
     // its own longest grant (none: its vault's)
     if lasts != "default" {
       listing.push(("lasts", str(lasts)))
+    }
+    if about != "" {
+      listing.push(("about", str(about)))
     }
     params.push(("listing", obj(listing)))
   }

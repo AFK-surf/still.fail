@@ -31,6 +31,12 @@ env MBUI_FIXTURE=home MBUI_WIN=320x560 MBUI_FILM_SCALE=1 MBUI_NATIVE_INPUT=finge
 cmp "$take/home.png" "$take/kept.png"
 jq -e '.settings.allow_corner_faults == "1"' "$take/kept.png.scene.json" >/dev/null
 jq -e '.settings.allow_corner_faults == ""' "$take/home.png.scene.json" >/dev/null
+# The made-up station's pace, when given, is in the record; not given, it says none
+env MBUI_FIXTURE=home MBUI_WIN=320x560 MBUI_FILM_SCALE=1 MBUI_NATIVE_INPUT=finger MBUI_FIX_PACE=350,600,700 MBUI_FIX_CORE=250 \
+  bash scripts/media.sh picture "$take/paced.png" "$take/pass.drive"
+jq -e '.settings.fixture_options.fix_pace == "350,600,700" and .settings.fixture_options.fix_core == "250"' \
+  "$take/paced.png.scene.json" >/dev/null
+jq -e '.settings.fixture_options.fix_pace == "" and .settings.fixture_options.fix_core == ""' "$take/home.png.scene.json" >/dev/null
 cp "$take/home.png" "$take/previous.png"
 cp "$take/home.png.scene.json" "$take/previous.json"
 if render "$take/fail.drive" > "$take/failure.log" 2>&1; then

@@ -96,22 +96,22 @@ test "a table read as it comes: 正在打开 on its stage, then how much has com
   let held = Ref(None)
   let t = outer_viewer("csv", held)
   let v = viewer.get().unwrap()
-  assert_true(v.bytes.get() is None && t.find("正在打开") is Some(_), msg="coming: \{t.words().map(fn(w) { w.0 })}")
+  assert_true(v.bytes.get() is None && t.find("正在打开") is Some(_), msg="coming: \{Repr(t.words().map(fn(w) { w.0 }))}")
   let coming = outer_buttons(t)
   // (its bar: its name in it, 下载 and close its buttons)
-  assert_true(t.find("数据.csv") is Some(_) && coming.contains("下载") && coming.contains("关闭（Esc）"), msg="its bar as it comes: \{coming}")
+  assert_true(t.find("数据.csv") is Some(_) && coming.contains("下载") && coming.contains("关闭（Esc）"), msg="its bar as it comes: \{Repr(coming)}")
   match held.val {
     Some((on_value, _)) => on_value({ "loaded": 100.0, "total": 200.0 })
     None => fail("its whole not asked for")
   }
   t.draw()
-  assert_true(t.find("正在读取 100 B / 200 B") is Some(_), msg="how much has come: \{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("正在读取 100 B / 200 B") is Some(_), msg="how much has come: \{Repr(t.words().map(fn(w) { w.0 }))}")
   assert_eq(outer_buttons(t).filter(fn(b) { b.contains("100 B") }), [], msg="nothing of it in the bar")
   outer_give(t, held, "数据.csv")
   assert_true(v.bytes.get() is Some(_) && t.find("帧时间（毫秒）") is Some(_), msg="read: the table")
   // (预览 and 源码 read out as a choice's options, 预览 the one chosen)
   let options = t.semantics().filter(fn(s) { s.role == @ui.Role::Radio }).map(fn(s) { (s.label, s.check) })
-  assert_true(options.contains(("预览", Some(@ui.Check::On))) && options.contains(("源码", Some(@ui.Check::Off))), msg="its bar's 预览 and 源码: \{options}")
+  assert_true(options.contains(("预览", Some(@ui.Check::On))) && options.contains(("源码", Some(@ui.Check::Off))), msg="its bar's 预览 and 源码: \{Repr(options)}")
 }
 
 ///|
@@ -124,10 +124,10 @@ test "a table's 源码 its words as they are, 预览 the table again, said in th
   let words = fn() { t.words().map(fn(w) { w.0 }) }
   t.tap_text("源码")
   t.draw()
-  assert_true(v.source && words().iter().any(fn(w) { w.has_prefix("名字,平台,帧时间（毫秒）,通过\n") }) && !words().contains("帧时间（毫秒）"), msg="源码: \{v.source} \{words()}")
+  assert_true(v.source && words().iter().any(fn(w) { w.has_prefix("名字,平台,帧时间（毫秒）,通过\n") }) && !words().contains("帧时间（毫秒）"), msg="源码: \{v.source} \{Repr(words())}")
   t.tap_text("预览")
   t.draw()
-  assert_true(!v.source && words().contains("帧时间（毫秒）") && !words().iter().any(fn(w) { w.has_prefix("名字,平台,帧时间（毫秒）,通过") }), msg="预览: \{words()}")
+  assert_true(!v.source && words().contains("帧时间（毫秒）") && !words().iter().any(fn(w) { w.has_prefix("名字,平台,帧时间（毫秒）,通过") }), msg="预览: \{Repr(words())}")
 }
 
 ///|
@@ -142,9 +142,9 @@ test "a PDF whose read failed: why on its stage, its bar's name, 下载 and clos
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_eq(viewer.get().unwrap().error.get(), Some("连接已断开"))
-  assert_true(t.find("无法读取：连接已断开") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("无法读取：连接已断开") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   let bar = outer_buttons(t)
-  assert_true(t.find("设计说明.pdf") is Some(_) && bar.contains("下载") && bar.contains("关闭（Esc）"), msg="\{bar}")
+  assert_true(t.find("设计说明.pdf") is Some(_) && bar.contains("下载") && bar.contains("关闭（Esc）"), msg="\{Repr(bar)}")
 }
 
 ///|
@@ -159,7 +159,7 @@ fn outer_part(
   total : Double,
 ) -> Unit raise {
   guard parts.val.search_by(fn(p) { p.0 == offset && p.1 == length }) is Some(i) else {
-    fail("no part asked from \{offset}, \{length} long: \{outer_asked}")
+    fail("no part asked from \{offset}, \{length} long: \{Repr(outer_asked)}")
   }
   let (_, _, done) = parts.val.remove(i)
   done(Ok(({ "total": Json::number(total) }, bytes)))
@@ -188,7 +188,7 @@ test "a file of no kind it knows by its name, its first part words, bigger than 
   // (its first part asked to know what it is: none known yet, coming)
   let v = viewer.get().unwrap()
   assert_true(v.kind is None && v.sniffed.get() is None, msg="its kind not known yet")
-  assert_true(t.find("正在打开") is Some(_), msg="coming: \{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("正在打开") is Some(_), msg="coming: \{Repr(t.words().map(fn(w) { w.0 }))}")
   let first = @utf8.encode("今天要做的事：\n一、核对安装包签名\n")
   // (asked to know what it is: its first 8192)
   outer_part(t, parts, 0.0, 8192, first, total)
@@ -198,16 +198,16 @@ test "a file of no kind it knows by its name, its first part words, bigger than 
   assert_true(physical_equal(viewer.get().unwrap(), v), msg="the same viewer")
   assert_eq(v.sniffed.get(), Some(true))
   assert_true(v.shown_kind() == Some(KText) && !v.told_of(), msg="sniffed as words")
-  assert_true(v.flowing() && v.bytes.get() is None, msg="read as it comes, not whole: flow \{v.flow.map(fn(f) { f.parts.get() })}, whole \{v.bytes.get().map(fn(b) { b.length() })}, parts waiting \{parts.val.map(fn(p) { (p.0, p.1) })}, asked \{outer_asked}, held whole \{held.val is Some(_)}, the same viewer \{physical_equal(viewer.get().unwrap(), v)}, its flow \{viewer.get().unwrap().flow.map(fn(f) { f.parts.get() })}")
+  assert_true(v.flowing() && v.bytes.get() is None, msg="read as it comes, not whole: flow \{Repr(v.flow.map(fn(f) { f.parts.get() }))}, whole \{Repr(v.bytes.get().map(fn(b) { b.length() }))}, parts waiting \{Repr(parts.val.map(fn(p) { (p.0, p.1) }))}, asked \{Repr(outer_asked)}, held whole \{held.val is Some(_)}, the same viewer \{physical_equal(viewer.get().unwrap(), v)}, its flow \{Repr(viewer.get().unwrap().flow.map(fn(f) { f.parts.get() }))}")
   assert_true(t.find("此文件类型不支持预览") is None, msg="not told of")
-  assert_true(t.find("一、核对安装包签名") is Some(_), msg="what has come of it: \{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("一、核对安装包签名") is Some(_), msg="what has come of it: \{Repr(t.words().map(fn(w) { w.0 }))}")
   // (its next part, once asked, given: what it adds shown)
   if parts.val.search_by(fn(p) { p.0 == first.length().to_double() }) is Some(_) {
     outer_part(t, parts, first.length().to_double(), @sfbase.flow_part, @utf8.encode("二、发布说明\n"), total)
     t.run_for(@ui.move_most_ms)
-    assert_true(t.find("二、发布说明") is Some(_), msg="its next part: \{t.words().map(fn(w) { w.0 })}")
+    assert_true(t.find("二、发布说明") is Some(_), msg="its next part: \{Repr(t.words().map(fn(w) { w.0 }))}")
   } else {
-    fail("its next part not asked for: \{outer_asked}")
+    fail("its next part not asked for: \{Repr(outer_asked)}")
   }
   assert_true(physical_equal(viewer.get().unwrap(), v), msg="the same viewer still")
 }
@@ -220,7 +220,7 @@ fn outer_closed(how : String) -> Unit raise {
   let t = outer_viewer("csv", held)
   outer_give(t, held, "数据.csv")
   // (the keyboard's focus none of the page's while it shows: not its composer's)
-  assert_true(!t.ime().0, msg="\{how}: the composer's keyboard away under the viewer: \{t.ime()}")
+  assert_true(!t.ime().0, msg="\{how}: the composer's keyboard away under the viewer: \{Repr(t.ime())}")
   match how {
     "esc" => t.key(@ui.key_escape)
     "back" => t.back()
@@ -236,20 +236,20 @@ fn outer_closed(how : String) -> Unit raise {
     t.type_text("ab")
     t.draw()
     let (focused, words, _, _) = t.ime()
-    assert_true(focused && words == "ab" && pv_leaving.get() is Some(_), msg="esc: the composer's as it goes: \{t.ime()}")
+    assert_true(focused && words == "ab" && pv_leaving.get() is Some(_), msg="esc: the composer's as it goes: \{Repr(t.ime())}")
     return
   }
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is None && pv_leaving.get() is None, msg="\{how}: gone")
   // (the composer the page's again, none of it given the focus under the viewer: as it was)
-  assert_true(!t.ime().0, msg="\{how}: no focus given the composer under it: \{t.ime()}")
+  assert_true(!t.ime().0, msg="\{how}: no focus given the composer under it: \{Repr(t.ime())}")
   guard t.locate("按空格输入") is [(x, y), ..] else { fail("\{how}: no composer on the screen") }
   t.tap(x, y)
   t.draw()
   t.type_text("ab")
   t.draw()
   let (focused, words, _, _) = t.ime()
-  assert_true(focused && words == "ab", msg="\{how}: the composer's: \{t.ime()}")
+  assert_true(focused && words == "ab", msg="\{how}: the composer's: \{Repr(t.ime())}")
 }
 
 ///|
@@ -275,7 +275,7 @@ test "desk: Markdown in the viewer's reader, its find open: Esc closes the find,
   t.run_for(@sf.reader_place_ms)
   t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
   t.draw()
-  assert_true(t.find("在全文中搜索") is Some(_), msg="its find: \{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("在全文中搜索") is Some(_), msg="its find: \{Repr(t.words().map(fn(w) { w.0 }))}")
   t.key(@ui.key_escape)
   t.draw()
   assert_true(t.find("在全文中搜索") is None, msg="its find closed")
@@ -303,7 +303,7 @@ test "beside an iPhone Duo's own bars: a PDF, a file of no kind and a table hand
       "csv" => t.find("帧时间（毫秒）") is Some(_)
       _ => t.find("此文件类型不支持预览") is Some(_)
     }
-    assert_true(shown, msg="\{at.0}: shown: \{t.words().map(fn(w) { w.0 })}")
+    assert_true(shown, msg="\{at.0}: shown: \{Repr(t.words().map(fn(w) { w.0 }))}")
     let said = t.nav_said()
     for id in ["over/mark", "over/copy", "over/fit", "over/actual"] {
       assert_true(!said.contains("\"" + id + "\""), msg="\{at.0}: no \{id}: \{said}")

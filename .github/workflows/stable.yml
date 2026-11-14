@@ -15,7 +15,7 @@ permissions:
   actions: read
 jobs:
   plan:
-    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main'
+    if: github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -34,12 +34,13 @@ jobs:
         run: python3 .github/stable-plan.py
 
   # The Android app is mbui's (apps/mbui, its `stable` variant: fail.still.android, signed as the Kotlin app was, so an
-  # installed one updates in place) since 2026-10-24, as asked; the Kotlin app stopped at 0.1.4520.
+  # installed one updates in place) since 2026-10-24, as asked; the Kotlin app stopped at 0.1.4520. 10 minutes (it runs
+  # by hand): on 2026-11-11 still.fail's took 2m09s and monoid's was cut at the job's 5, which skipped the release after.
   android:
     needs: plan
     runs-on: [self-hosted, macos-ci]
     environment: production
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -66,12 +67,14 @@ jobs:
         with: { name: "monoid-android-stable", path: "${{ runner.temp }}/monoid", if-no-files-found: error, retention-days: 1, compression-level: 0 }
 
   # The Mac app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, signed by the same team, so an installed
-  # Electron app's updater moves it over, its data and sign-in kept), as the beta's became on 2026-10-26.
+  # Electron app's updater moves it over, its data and sign-in kept), as the beta's became on 2026-10-26. 10 minutes (it
+  # runs by hand): the day before's main has no warm build, and its build and Apple's notary took 4m59s on 2026-11-12
+  # and were cut at 5 on 2026-11-13.
   desktop:
     needs: plan
     runs-on: [self-hosted, macos-ci]
     environment: production
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -89,7 +92,9 @@ jobs:
           sh .github/release-desktop.sh --stable
           build=$(git rev-list --count HEAD)
           cache=${MBUI_MAC_CACHE:-"$HOME/stillfail-ci/mbui-mac-stable"}
-          work=${WORK:-"$cache/work"}
+          # (where scripts/beta.sh of the release's checkout builds: beside libs/mbui once mbui is there)
+          work=$cache/tree/apps/mbui; [ -d "$GITHUB_WORKSPACE/libs/mbui" ] || work=$cache/work
+          work=${WORK:-$work}
           if [ "${MBUI_FRESH:-}" = 1 ]; then work="$GITHUB_WORKSPACE/apps/mbui"; fi
           # The checkout is the reviewed release, which can be older than this workflow. Use this workflow's helper.
           git show "$GITHUB_SHA:scripts/release-put.sh" > "$RUNNER_TEMP/release-put-cleanup.sh"
@@ -98,12 +103,14 @@ jobs:
   # The Windows app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, its installer run by an installed
   # Electron app's updater, its data and sign-in kept), as the beta's became on 2026-10-26: built as the pipeline's
   # desktop-win job builds the beta's, from main's build as preview.yml's windows job left it in the Actions cache, its
-  # installer's .sig signed (scripts/release-sign.ts), not code-signed.
+  # installer's .sig signed (scripts/release-sign.ts), not code-signed. The release is the day before's main (#4929), whose
+  # build the cache has often lost by then: the build restored is a later commit's, and rebuilding from it took 3m44s
+  # on 2026-11-11 (48s from the commit's own), so the job has 10 minutes (it runs by hand).
   desktop-win:
     needs: plan
     runs-on: windows-2025
     environment: production
-    timeout-minutes: 5
+    timeout-minutes: 10
     defaults:
       run:
         shell: bash
@@ -133,8 +140,8 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: |
-            apps/mbui/mbui/_build
-            apps/mbui/mbui/out
+            libs/mbui/_build
+            libs/mbui/out
           key: mbui-win-build-mono-${{ needs.plan.outputs.sha }}
           restore-keys: mbui-win-build-mono-
       - uses: actions/cache/restore@v4
@@ -153,10 +160,14 @@ jobs:
           . "$RUNNER_TEMP/win-compiler.sh"
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release.sh desktop-win
-      - name: Put its files, then its feeds
+      # its files (named by its version: nothing points at them yet) put here; its feeds by desktop-win-feeds, after the
+      # deltas to it, which are not this job's to make (it takes most of its 5 minutes already)
+      - name: Put its files
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: sh scripts/release-put.sh "$RUNNER_TEMP/release"
+        run: sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with: { name: "release-desktop-win-stable", path: "${{ runner.temp }}/release", retention-days: 1 }
       # monoid's (build.monoid.desktop): the same program, linked again with its own resources (its id, name and
       # environment: apps/mbui/scripts/win.sh), nothing compiled again; put by monoid-desktop-win.
       - name: Pack and sign monoid's stable Windows app from the same build
@@ -170,6 +181,27 @@ jobs:
       - uses: actions/upload-artifact@v4
         continue-on-error: true
         with: { name: "monoid-desktop-win-stable", path: "${{ runner.temp }}/monoid", if-no-files-found: error, retention-days: 1 }
+
+  # The stable Windows app's feeds (desktop-win put its files), after the deltas to it from the stable builds before
+  # (scripts/release-deltas.ts, which fetches the installer's raw form back: a few minutes of a Linux runner's, never a
+  # reason to hold the release back).
+  desktop-win-feeds:
+    needs: [plan, desktop-win]
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with: { name: "release-desktop-win-stable", path: "${{ runner.temp }}/release" }
+      - name: Its deltas, then its feeds
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/release-deltas.ts "$RUNNER_TEMP/release" --deadline 200
+          sh scripts/release-put.sh "$RUNNER_TEMP/release"
 
   # monoid's stable apps (apps/mbui's monoid variants on monoid's cloud: build.monoid.android, build.monoid.desktop), of
   # the same reviewed release as still.fail's, made from theirs (nothing compiled again) and put in monoid's bucket in the
@@ -185,11 +217,12 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { name: "monoid-android-stable", path: "${{ runner.temp }}/monoid" }
-      - name: Put it in monoid's bucket (its files, then its feed)
+      - name: Put it in monoid's bucket (its files and deltas, then its feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/release-deltas.ts "$RUNNER_TEMP/monoid" --releases https://app.monoid.build/releases --deadline 150
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
   # monoid's Mac app: still.fail's stable one (as the desktop job put it) renamed, not built again: the same program,
@@ -230,11 +263,12 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { name: "monoid-desktop-win-stable", path: "${{ runner.temp }}/monoid" }
-      - name: Put it in monoid's bucket (its files, then its feed)
+      - name: Put it in monoid's bucket (its files and deltas, then its feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/release-deltas.ts "$RUNNER_TEMP/monoid" --releases https://app.monoid.build/releases --deadline 150
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
   # The app's page for a web built here (plan's web=build: a release branch's commit, never on beta, or a main commit
@@ -300,9 +334,12 @@ jobs:
   # Offer compatible apps before making the station update available.
   station:
     needs: [plan, web]
+    # web needs mbui-web, skipped when web=artifact; without this, the default success() over a skipped ancestor skips
+    # this job and everything after it (0.1.8278, 2026-11-12).
+    if: ${{ !cancelled() && needs.web.result == 'success' }}
     runs-on: [self-hosted, macos-ci]
     environment: production
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -324,6 +361,7 @@ jobs:
   # stable release that left it out kept still.fail at 2026-10-01's for two weeks (no Windows download on it).
   site:
     needs: [plan, web]
+    if: ${{ !cancelled() && needs.web.result == 'success' }}
     runs-on: [self-hosted, macos-ci]
     environment: production
     timeout-minutes: 5
@@ -345,7 +383,8 @@ jobs:
         run: sh .github/deploy.sh site
 
   done:
-    needs: [plan, android, desktop, desktop-win, web, station, site]
+    needs: [plan, android, desktop, desktop-win, desktop-win-feeds, web, station, site]
+    if: ${{ !cancelled() && needs.web.result == 'success' && needs.station.result == 'success' && needs.site.result == 'success' && needs.desktop-win-feeds.result == 'success' }}
     runs-on: [self-hosted, macos-ci]
     timeout-minutes: 5
     permissions:

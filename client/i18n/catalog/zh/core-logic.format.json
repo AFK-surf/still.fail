@@ -1,0 +1,15 @@
+{
+  "core-logic.format.date.1": "1月{day}日",
+  "core-logic.format.date.10": "10月{day}日",
+  "core-logic.format.date.11": "11月{day}日",
+  "core-logic.format.date.12": "12月{day}日",
+  "core-logic.format.date.2": "2月{day}日",
+  "core-logic.format.date.3": "3月{day}日",
+  "core-logic.format.date.4": "4月{day}日",
+  "core-logic.format.date.5": "5月{day}日",
+  "core-logic.format.date.6": "6月{day}日",
+  "core-logic.format.date.7": "7月{day}日",
+  "core-logic.format.date.8": "8月{day}日",
+  "core-logic.format.date.9": "9月{day}日",
+  "core-logic.format.date_time": "{date} {time}"
+}

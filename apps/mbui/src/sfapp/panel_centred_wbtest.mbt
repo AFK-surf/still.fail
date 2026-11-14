@@ -7,7 +7,7 @@
 fn centred_said(t : @ui.Tester) -> String {
   let r = fn(role : @ui.Role, label : String) { t.query(role, label~).map(fn(s) { tenth4(s.rect) }) }
   let w = fn(s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
-  "dialog \{t.query(Dialog).map(fn(s) { (s.label, tenth4(s.rect)) })} title \{w("面板")} says \{w("说明的话")} words \{w("面板里的话，长一些，好看它怎么折行")} ok \{r(Button, "好的")} close \{r(Button, "关闭")} focus \{t.focused().map(fn(s) { "\{s.role} \{s.label}" })}"
+  "dialog \{@ui.some_text(t.query(Dialog).map(fn(s) { (s.label, tenth4(s.rect)) }).map(fn(d) { "(\{d.0}, \{@ui.rect_text(d.1)})" }))} title \{@ui.list_text(w("面板").map(@ui.rect_text))} says \{@ui.list_text(w("说明的话").map(@ui.rect_text))} words \{@ui.list_text(w("面板里的话，长一些，好看它怎么折行").map(@ui.rect_text))} ok \{@ui.some_text(r(Button, "好的").map(@ui.rect_text))} close \{@ui.some_text(r(Button, "关闭").map(@ui.rect_text))} focus \{@ui.some_text(t.focused().map(fn(s) { "\{s.role} \{s.label}" }))}"
 }
 
 ///|
@@ -33,7 +33,7 @@ test "panel centred, 大屏 keyboard and mouse: plain, with what it says, a foot
     t.run_for(@ui.move_most_ms)
     let said = centred_said(t)
     let rows = t.words().filter(fn(x) { x.0 == "第0行" }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) })
-    out.push("\{kind}: \{said} row0 \{rows}")
+    out.push("\{kind}: \{said} row0 \{@ui.list_text(rows.map(@ui.rect_text))}")
     // (said a dialog titled as it is: an untitled one says no label of its own, read out by what it holds)
     drawn.push(t.query(Dialog).map(fn(_) { tree_said(Dialog, if kind == "untitled" { "" } else { "面板" }) is Some(_) }))
   }
@@ -75,7 +75,7 @@ test "panel centred, 大屏 keyboard and mouse: closed by its close button, by E
     t.run_for(@kit.pop_out_ms / 2.0)
     let midway = t.focused().map(fn(s) { "\{s.role} \{s.label}" })
     t.run_for(@ui.move_most_ms)
-    out.push("\{how}: focus closed \{at_close} midway \{midway} then presenting \{@sf.presenting()} gone \{gone.val} said \{said} focus \{t.focused().map(fn(s) { "\{s.role} \{s.label}" })}")
+    out.push("\{how}: focus closed \{@ui.some_text(at_close)} midway \{@ui.some_text(midway)} then presenting \{@sf.presenting()} gone \{gone.val} said \{@ui.list_text(said)} focus \{@ui.some_text(t.focused().map(fn(s) { "\{s.role} \{s.label}" }))}")
   }
   // (as main has it, a4c845604)
   assert_eq(out, [
@@ -119,10 +119,10 @@ test "panel centred, 大屏 keyboard and mouse: untitled saying something; what 
     },
   )
   t.run_for(@ui.move_most_ms)
-  out.push("holds: dialog \{dialog(t)} words \{w(t, "面板里的话，长一些，好看它怎么折行")} foot words \{w(t, "脚注")} ok \{t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) })}")
+  out.push("holds: dialog \{@ui.some_text(dialog(t).map(fn(d) { "(\{d.0}, \{@ui.rect_text(d.1)})" }))} words \{@ui.list_text(w(t, "面板里的话，长一些，好看它怎么折行").map(@ui.rect_text))} foot words \{@ui.list_text(w(t, "脚注").map(@ui.rect_text))} ok \{@ui.some_text(t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) }).map(@ui.rect_text))}")
   holds.set(false)
   t.run_for(@ui.move_most_ms)
-  out.push("holds nothing: dialog \{dialog(t)} foot words \{w(t, "脚注")} ok \{t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) })}")
+  out.push("holds nothing: dialog \{@ui.some_text(dialog(t).map(fn(d) { "(\{d.0}, \{@ui.rect_text(d.1)})" }))} foot words \{@ui.list_text(w(t, "脚注").map(@ui.rect_text))} ok \{@ui.some_text(t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) }).map(@ui.rect_text))}")
   // (as main has it, a4c845604)
   assert_eq(out, [
     "untitled says: dialog Some((关闭 说明的话 面板里的话，长一些，好看它怎么折行 好的, (380, 310, 520, 180))) title [] says [(404, 340, 472, 20)] words [(414, 394, 452, 22)] ok Some((826, 436, 44, 24)) close Some((842, 336, 32, 32)) focus None",

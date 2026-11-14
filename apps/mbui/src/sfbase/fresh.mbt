@@ -75,12 +75,13 @@ pub fn new_fade(c : @ui.Ctx) -> @motion.Anim {
 /// (on a phone as Android's LeaveFade), over the chat it became (new_chat_leaving_of): as the words go, not once the
 /// core has made the chat and taken them in.
 pub fn became_starts(c : @ui.Ctx, wide~ : Bool) -> Unit {
+  ignore(wide)
   let leave = new_leave(c)
-  leave.snap(0.0)
-  leave.animate(1.0, @motion.tween(new_leave_ms, ease=Leave))
+  leave.snap(c, 0.0)
+  leave.animate(c, 1.0, @motion.tween(new_leave_ms, ease=Leave))
   let fade = new_fade(c)
-  fade.snap(0.0)
-  fade.animate(1.0, @motion.tween(new_fade_ms, ease=Leave))
+  fade.snap(c, 0.0)
+  fade.animate(c, 1.0, @motion.tween(new_fade_ms, ease=Leave))
 }
 
 ///|
@@ -88,8 +89,8 @@ pub fn became_starts(c : @ui.Ctx, wide~ : Bool) -> Unit {
 /// back as they were, from where they had gone.
 pub fn leaving_back() -> Unit {
   let c = @ui.current()
-  new_leave(c).animate(0.0, @motion.tween(new_leave_ms, ease=Out))
-  new_fade(c).animate(0.0, @motion.tween(new_fade_ms, ease=Out))
+  new_leave(c).animate(c, 0.0, @motion.tween(new_leave_ms, ease=Out))
+  new_fade(c).animate(c, 0.0, @motion.tween(new_fade_ms, ease=Out))
 }
 
 ///|
@@ -98,7 +99,7 @@ pub fn leaving_back() -> Unit {
 /// while it is the chat: the frame draws it leaving over the chat).
 pub fn new_sending(c : @ui.Ctx) -> (Double, Double) {
   if fresh.sending.get() && fresh.became.get() is None {
-    (new_leave(c).get(), new_fade(c).get())
+    (new_leave(c).get(c), new_fade(c).get(c))
   } else {
     (0.0, 0.0)
   }
@@ -184,7 +185,7 @@ let fresh_views : Ref[(ChatRef, ChatView, Array[Entry])?] = Ref(None)
 /// set out).
 pub fn new_chat_leaving_of(c : @ui.Ctx, r : ChatRef) -> Bool {
   match fresh.became.get() {
-    Some(b) => b == r && !new_leave(c).over()
+    Some(b) => b == r && !new_leave(c).over(c)
     None => false
   }
 }
@@ -194,7 +195,7 @@ pub fn new_chat_leaving_of(c : @ui.Ctx, r : ChatRef) -> Bool {
 /// core's own, its first view not read yet, nothing breathing over it.
 pub fn new_chat_made(c : @ui.Ctx, r : ChatRef) -> Bool {
   match fresh.became.get() {
-    Some(b) if b == r => !new_leave(c).over() || flight_carried(r.station + ":" + r.session)
+    Some(b) if b == r => !new_leave(c).over(c) || flight_carried(r.station + ":" + r.session)
     _ => false
   }
 }

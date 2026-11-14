@@ -2,8 +2,13 @@
 // one is made; the one picked for a new chat there is kept on this device and goes with the chat as it is made.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
-import { base, overview, started } from "./station-fixture.ts";
+import { apply as applyOps } from "../src/delta.ts";
+import { answers, apply, call, readsOf, subscribe, v } from "./helpers.ts";
+import { base, overview, started, stationReplies } from "./station-fixture.ts";
+import type { HttpRequest } from "../src/host.ts";
+import type { StationAddr } from "../src/station/addr.ts";
+import { HostWire, type RequestHead, type StationWire } from "../src/station/wire.ts";
+import type { FakeHost } from "../src/testing.ts";
 
 const S = "ws/st";
 const preset = (id: string, name: string) => ({ id, name, dirs: [{ path: `/repos/${id}`, repo: `github.com/acme/${id}` }], instructions: "", createdBy: "a@x.com", createdAt: 1, updatedAt: 1 });
@@ -83,9 +88,10 @@ test("presets_are_read_as_shown_again_once_one_is_made_and_the_one_picked_goes_w
   assert.equal(v(values, 2).presetName, "Lib", "named as the station says, the page asking nothing more");
   assert.equal(v(values, 2).presetStation, S);
   assert.deepEqual(v(values, 2).presets, [
-    { id: "app", name: "App", dirs: 1, station: S, stationName: "studio", marks: [{ name: "app", repo: "github.com/acme/app" }] },
-    { id: "lib", name: "Lib", dirs: 1, station: S, stationName: "studio", marks: [{ name: "lib", repo: "github.com/acme/lib" }] },
+    { id: "app", name: "App", station: S, stationName: "studio" },
+    { id: "lib", name: "Lib", station: S, stationName: "studio" },
   ]);
+  assert.deepEqual(v(values, 2).presetMarks, [{ name: "lib", repo: "github.com/acme/lib" }], "the one picked's marks, its control's look");
   call(core, ui, 5, "newChat.create", { station: S, key: v(values, 2).next });
   await host.settle();
   const asked = host.requests.find((r) => r.method === "POST" && r.url.endsWith("/admin/api/sessions"));
@@ -121,4 +127,273 @@ test("presets_shown_are_read_again_as_the_station_tells_they_changed", async () 
   apply(s.host, values);
   assert.deepEqual(v(values, 1).candidates.map((c: { name: string }) => c.name), ["app"]);
   s.core.close();
+});
+
+test("a_repository_cloned_onto_the_station_shows_as_it_goes_and_an_older_station_sends_no_clones", async () => {
+  // (a station from before sends no `clones`: none)
+  const said: Record<string, unknown> = { ...base(), "GET /presets": { presets: [], candidates: [candidate] } };
+  const s = await started(said as never);
+  const ui = s.core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(s.core, ui, 1, { topic: "presets", station: S });
+  await s.host.settle();
+  apply(s.host, values);
+  assert.deepEqual(v(values, 1).clones, []);
+
+  // Started: the station answers at once, the page reads the list again and shows it cloning.
+  const cloning = { id: "c1", url: "https://github.com/acme/lib.git", repo: "github.com/acme/lib", name: "lib", state: "cloning", by: "a@x.com", startedAt: 5 };
+  said["POST /presets/clone"] = cloning;
+  said["GET /presets"] = { presets: [], candidates: [candidate], clones: [cloning] };
+  call(s.core, ui, 2, "preset.clone", { station: S, url: "acme/lib" });
+  await s.host.settle();
+  const emitted = s.host.takeEmitted();
+  const answer = answers(emitted, 2) as { ok?: { id: string; state: string } } | undefined;
+  assert.equal(answer?.ok?.state, "cloning", JSON.stringify(answer));
+  assert.equal(answer?.ok?.id, "c1");
+  const asked = s.host.requests.find((r) => r.method === "POST" && r.url.endsWith("/admin/api/presets/clone"));
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(asked!.body!)), { url: "acme/lib" });
+  for (const [, message] of emitted) {
+    const m = message as Record<string, unknown>;
+    if (m.id !== 1) continue;
+    if ("value" in m) values.set(1, m.value);
+    else if ("delta" in m) values.set(1, applyOps(values.get(1), m.delta as never));
+  }
+  assert.deepEqual(v(values, 1).clones.map((c: { name: string; state: string; error: string }) => [c.name, c.state, c.error]), [["lib", "cloning", ""]]);
+
+  // Failed, then dropped.
+  said["GET /presets"] = { presets: [], candidates: [candidate], clones: [{ ...cloning, state: "failed", error: "fatal: repository not found" }] };
+  s.push("presets", {});
+  await s.host.settle();
+  apply(s.host, values);
+  assert.equal(v(values, 1).clones[0].error, "fatal: repository not found");
+  said["DELETE /presets/clones/c1"] = { ok: true };
+  said["GET /presets"] = { presets: [], candidates: [candidate], clones: [] };
+  call(s.core, ui, 3, "preset.cloneDrop", { station: S, id: "c1" });
+  await s.host.settle();
+  apply(s.host, values);
+  assert.ok(s.host.requests.some((r) => r.method === "DELETE" && r.url.endsWith("/admin/api/presets/clones/c1")));
+  assert.deepEqual(v(values, 1).clones, []);
+  s.core.close();
+});
+
+test("a_preset_applies_its_optional_station_and_model_when_picked_or_leaves_them_unrestricted", async () => {
+  const p2 = {
+    ...profile,
+    id: "p2",
+    name: "p2@x.com",
+    models: ["claude-opus-5-5", "claude-sonnet-5-5"],
+  };
+  const presetBound = {
+    id: "review",
+    name: "Code Review",
+    dirs: [],
+    instructions: "Review carefully.",
+    autoStation: true,
+    model: { model: "claude-sonnet-5-5", runtime: "claude", effort: "high" },
+    createdBy: "a@x.com",
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const presetFree = {
+    id: "free",
+    name: "Free Prompt",
+    dirs: [],
+    instructions: "Just instructions.",
+    createdBy: "a@x.com",
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const said: Record<string, unknown> = {
+    ...base(),
+    "GET /overview": { ...overview, profiles: [p2] },
+    "GET /presets": { presets: [presetBound, presetFree], candidates: [candidate] },
+  };
+  const { host, core } = await started(said as never);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "presets", station: S });
+  subscribe(core, ui, 2, { topic: "newChat", scope: "ws" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).pick.value.model, "claude-opus-5-5");
+
+  // Picking a preset with a model applies that model and effort.
+  call(core, ui, 3, "newChat.pick", { scope: "ws", preset: "review", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).preset, "review");
+  assert.equal(v(values, 2).pick.value.model, "claude-sonnet-5-5");
+  assert.equal(v(values, 2).pick.value.effort, "high");
+
+  // Picking an unrestricted preset leaves the station and the model as they were picked before it: the bound one was
+  // the preset's, never written over the person's own.
+  call(core, ui, 4, "newChat.pick", { scope: "ws", preset: "free", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).preset, "free");
+  assert.equal(v(values, 2).presetModel, false);
+  assert.equal(v(values, 2).pick.value.model, "claude-opus-5-5");
+
+  // `connect-new:preset` starts unrestricted (`value.model === null`) while still populating panel options/efforts,
+  // saves via `pick.save`, and resets to unrestricted via `pick.set({ clear: true })`.
+  subscribe(core, ui, 5, { topic: "pick", station: S, of: "connect-new:preset" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 5).value.model, undefined);
+  assert.equal(v(values, 5).option, "claude-opus-5-5");
+  assert.equal(v(values, 5).changed, true);
+
+  call(core, ui, 6, "pick.save", { station: S, of: "connect-new:preset", model: "claude-opus-5-5", effort: "medium" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 5).value.model, "claude-opus-5-5");
+  assert.equal(v(values, 5).value.effort, "medium");
+
+  call(core, ui, 7, "pick.set", { station: S, of: "connect-new:preset", clear: true });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 5).value.model, undefined);
+  core.close();
+});
+
+test("what_a_preset_binds_is_not_changed_on_the_page_nor_sent_otherwise", async () => {
+  const p2 = { ...profile, id: "p2", name: "p2@x.com", models: ["claude-opus-5-5", "claude-sonnet-5-5"] };
+  const bound = {
+    id: "review", name: "Code Review", dirs: [], instructions: "", model: { model: "claude-sonnet-5-5", runtime: "claude", effort: "high" },
+    createdBy: "a@x.com", createdAt: 1, updatedAt: 1,
+  };
+  const elsewhere = { id: "far", name: "Far", dirs: [], instructions: "", station: "ws/other", createdBy: "a@x.com", createdAt: 1, updatedAt: 1 };
+  const said: Record<string, unknown> = {
+    ...base(),
+    "GET /overview": { ...overview, profiles: [p2] },
+    "GET /presets": { presets: [bound, elsewhere], candidates: [candidate] },
+    "POST /sessions": { key: "chat:c-new", thread: { id: 9, threadTs: "9.0" } },
+  };
+  const { host, core } = await started(said as never);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  // (what a call answered, the values it changed taken as `apply` takes them)
+  const answered = (id: number): Record<string, unknown> | undefined => {
+    const out = host.takeEmitted();
+    for (const [, m] of out) {
+      const x = m as Record<string, unknown>;
+      if ("value" in x) values.set(x.id as number, x.value);
+      else if ("delta" in x) values.set(x.id as number, applyOps(values.get(x.id as number), x.delta as never));
+    }
+    return answers(out, id);
+  };
+  subscribe(core, ui, 1, { topic: "presets", station: S });
+  subscribe(core, ui, 2, { topic: "newChat", scope: "ws" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).pick.value.model, "claude-opus-5-5");
+  assert.equal(v(values, 2).presetModel, false);
+
+  // Its model: shown as the preset's, the control not to open, a pick of another refused saying how to have it.
+  call(core, ui, 3, "newChat.pick", { scope: "ws", preset: "review", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).presetModel, true);
+  assert.equal(v(values, 2).presetStations, false);
+  assert.equal(v(values, 2).pick.value.model, "claude-sonnet-5-5");
+  assert.equal(v(values, 2).pick.value.effort, "high");
+  call(core, ui, 4, "newChat.pick", { scope: "ws", station: "st", model: "claude-opus-5-5" });
+  await host.settle();
+  const refused = answered(4) as { error?: { message: string } };
+  assert.match(refused.error?.message ?? "", /Code Review/);
+  assert.equal(v(values, 2).pick.value.model, "claude-sonnet-5-5", "nothing changed");
+  call(core, ui, 5, "newChat.create", { station: S, key: v(values, 2).next });
+  await host.settle();
+  const made = host.requests.find((r) => r.method === "POST" && r.url.endsWith("/admin/api/sessions"));
+  const body = JSON.parse(new TextDecoder().decode(made!.body!));
+  assert.equal(body.model, "claude-sonnet-5-5");
+  assert.equal(body.effort, "high");
+  assert.equal(body.preset, "review");
+
+  // None picked: the person's own choice again, never written over by the preset's.
+  call(core, ui, 6, "newChat.pick", { scope: "ws", preset: "", presetStation: "" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).presetModel, false);
+  assert.equal(v(values, 2).pick.value.model, "claude-opus-5-5");
+
+  // Its stations: only those it names offered; none of them here, so no chat is made on this one, and it says how.
+  call(core, ui, 7, "newChat.pick", { scope: "ws", preset: "far", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 2).presetStations, true);
+  assert.deepEqual(v(values, 2).stations.map((s: { id: string }) => s.id), ["st"], "the one it is on, held while no other is up");
+  call(core, ui, 8, "newChat.pick", { scope: "ws", station: "st" });
+  await host.settle();
+  assert.match(((answered(8) as { error?: { message: string } }).error?.message) ?? "", /Far/);
+  const before = host.requests.length;
+  call(core, ui, 9, "newChat.create", { station: S, key: v(values, 2).next });
+  await host.settle();
+  assert.ok("error" in (answered(9) ?? {}), "refused before anything is asked of the station");
+  assert.equal(host.requests.slice(before).filter((r) => r.method === "POST" && r.url.endsWith("/admin/api/sessions")).length, 0);
+  core.close();
+});
+
+test("a_preset_that_binds_a_model_starts_only_on_stations_that_run_it_never_on_another_model", async () => {
+  // `ws/st` (studio) runs Sonnet, `ws/st2` (mini) only Opus, both answering at the same origin: which one a request is
+  // for, as the wire says (the user, 2026-11-14: an Argon preset switched to another station ran another model).
+  const AT = "x-test-station";
+  const wire = (h: FakeHost) => {
+    const inner = new HostWire(h);
+    return { request: (station: StationAddr, head: RequestHead, body: Uint8Array) => inner.request(station, { ...head, headers: [...head.headers, [AT, station.station]] }, body) } as StationWire;
+  };
+  const sonnet = { ...profile, id: "p2", name: "p2@x.com", models: ["claude-opus-5-5", "claude-sonnet-5-5"] };
+  const bound = {
+    id: "review", name: "Code Review", dirs: [], instructions: "", model: { model: "claude-sonnet-5-5", runtime: "claude", effort: "high" },
+    createdBy: "a@x.com", createdAt: 1, updatedAt: 1,
+  };
+  const nowhere = { ...bound, id: "fable", name: "Fable", model: { model: "claude-fable-5-2", runtime: "claude" } };
+  const { host, core } = await started({ ...base(), "POST /sessions": { key: "chat:c-new", thread: { id: 9, threadTs: "9.0" } } } as never, 0, wire, (x) => {
+    x.cloud.also = { stations: [{ id: "st", name: "studio", online: true, last_seen: null }, { id: "st2", name: "mini", online: true, last_seen: null }] };
+    stationReplies(x.host, (req: HttpRequest) => {
+      const asked = `${req.method} ${req.url.replace("https://stillfail.test/admin/api", "")}`;
+      const mini = req.headers.some(([k, val]) => k === AT && val === "st2");
+      if (asked === "GET /overview") return { ...overview, profiles: [mini ? profile : sonnet] };
+      if (asked === "GET /presets") return mini ? { presets: [], candidates: [] } : { presets: [bound, nowhere], candidates: [candidate] };
+      return undefined;
+    });
+  });
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  const answered = (id: number) => answers(host.takeEmitted(), id) as { error?: { message: string } } | undefined;
+  subscribe(core, ui, 1, { topic: "newChat", scope: "ws" });
+  await host.time.pass(500);
+  await host.settle();
+  apply(host, values);
+  // On mini before the preset is picked: picking it moves the page to a station that runs its model.
+  call(core, ui, 2, "newChat.pick", { scope: "ws", station: "st2" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).station.id, "st2");
+  call(core, ui, 3, "newChat.pick", { scope: "ws", preset: "review", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).station.id, "st");
+  assert.equal(v(values, 1).pick.value.model, "claude-sonnet-5-5");
+  // Mini is not offered, and asked for it is refused saying why, the page as it was.
+  assert.deepEqual(v(values, 1).stations.map((s: { id: string }) => s.id), ["st"]);
+  call(core, ui, 4, "newChat.pick", { scope: "ws", station: "st2" });
+  await host.settle();
+  assert.match(answered(4)?.error?.message ?? "", /Code Review/);
+  apply(host, values);
+  assert.equal(v(values, 1).station.id, "st");
+
+  // A preset whose model no station runs: the page stays, says so, and makes no chat on another model.
+  call(core, ui, 5, "newChat.pick", { scope: "ws", preset: "fable", presetStation: S });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).station.id, "st");
+  assert.match(v(values, 1).problem, /Fable/);
+  assert.equal(v(values, 1).pick.value.model, "claude-fable-5-2", "its control shows the preset's model, never the station's first");
+  const before = host.requests.length;
+  call(core, ui, 6, "newChat.create", { station: S, key: v(values, 1).next });
+  await host.settle();
+  assert.match(answered(6)?.error?.message ?? "", /Fable/);
+  assert.equal(host.requests.slice(before).filter((r) => r.method === "POST" && r.url.endsWith("/admin/api/sessions")).length, 0);
+  core.close();
 });

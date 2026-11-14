@@ -12,7 +12,7 @@
 // chats, sessions, threads, jobs) is loaded by one indexed query the first time it is asked for and from then on kept
 // current by the writer, row by row, until no topic reads it. Nothing is loaded at start.
 import { lowerBound, upperBound } from "../ordered.ts";
-import { work } from "../work.ts";
+import { glanced, work } from "../work.ts";
 import { LogIndex, LogIndices } from "./log-index.ts";
 import { Deferred, Effect, type Fiber, Queue } from "effect";
 import type { Sql, SqlRow, SqlValue } from "../host.ts";
@@ -20,7 +20,9 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, versionOf } from "./schema.ts";
+import { CHAT_COLUMNS, CHAT_MADE, type ChatColumnsMade, ensureChatColumns, ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewProfilesOf, PART_COLUMNS, partRev, versionOf } from "./schema.ts";
+import { CHAT_READS, rowColumns, type ChatRead } from "./chat-reads.ts";
+import { KEPT, KEPT_ALL, KeptValues, type ListRow } from "./kept.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
 import { OWN_SURFACES } from "../titles.ts";
@@ -33,11 +35,19 @@ type J = any;
 
 /// What the core finds a chat row by that only it can say (views/marks.ts, decisions.ts): how urgent the row is for
 /// its person, whether it asks something.
-export type Derive = { tone(row: J): string | null; asks(row: J): boolean };
+/// `state`: what its agents are doing as its list's row says it (present.rowState: "block", "run", "failed", or null), of its
+/// `agents` alone (a row derived again at open is given those alone: schema.ts ensureChatColumns); `watched`, whether one
+/// of its agents keeps watch (present.watches), of them too.
+export type Derive = { tone(row: J): string | null; asks(row: J): boolean; state(row: J): string | null; watched(row: J): boolean };
+
+/// What a list reads first of a chat (listHead): its row kept beside it under the key in force, else its record.
+export type HeadRow = { station: string; id: string; pinnedAt: number | null; row: ListRow | null; record: J };
+export type { ListRow };
 
 /// A chat row before and after a burst (undefined: not there).
 export type RowChange = { id: string; before: J | undefined; after: J | undefined };
-type ReadChatChange = RowChange & { archived: boolean; between?: J[] };
+/// A row written, for the declared reads (chat-reads.ts): its records and its place (`ord`) before and after.
+type ReadChatChange = RowChange & { archived: boolean; between?: J[]; ordBefore: number | undefined; ordAfter: number | undefined };
 
 /// What a burst changed.
 export type Changes = {
@@ -226,6 +236,9 @@ export class Collection {
 
 /// How many items of a log a read takes from SQLite one by one, beside those parsed already; more, it reads the range.
 const LOG_READ_ALONE = 16;
+/// How many changes of a log are kept said (`logPutSince`), and of how many logs.
+const LOG_PUTS_KEPT = 64;
+const LOG_PUTS_LOGS = 512;
 
 /// Rows read by key, kept until written; the oldest go past `cap`.
 class Cache {
@@ -277,9 +290,33 @@ const MD_SHOWN_EVERY = 86_400_000;
 /// The tables of what this device did itself: written again on their own when a burst could not be (a full disk).
 const PRECIOUS = /^(INSERT|DELETE|UPDATE)[^(]*\b(outbox|pending|first|changing|draft|workspace_pref)\b/i;
 
-/// The chat columns of a row, and its JSON without them.
-type ChatCols = { json: string; unread: number | null; thread: number | null; session: string | null; clientKey: string | null; lastActive: number; pinnedAt: number | null; mine: number; running: number; tone: string | null; asks: number };
+/// Where a document is kept (#putDoc): its table, the columns of its key and their values, and when its source confirmed
+/// it (null: not now; undefined: the table keeps none).
+type Doc = { table: string; keys: string[]; of: SqlValue[]; confirmed?: number | null };
 
+/// The chat columns of a row, and its JSON without them.
+type ChatCols = { json: string; unread: number | null; thread: number | null; session: string | null; clientKey: string | null; lastActive: number; pinnedAt: number | null; mine: number; running: number; tone: string | null; asks: number; state: string | null; watched: number };
+
+/// A chat row a declared read found (chat-reads.ts): its keys, the read's own columns after them (`cols`, from the
+/// fourth), and its record where the read asked for it (read by its key, from the cache where held).
+export type ChatFound = { station: string; archived: boolean; id: string; cols: SqlRow; record: J | undefined };
+
+/// The rows a declared read's statement gave, each a ChatFound of its own (its record not read).
+export const foundOf = (rows: readonly SqlRow[]): ChatFound[] => rows.map((r) => ({ station: String(r[0]), archived: r[1] === 1, id: String(r[2]), cols: r.slice(3), record: undefined }));
+
+/// The statement that puts a chat's record: the columns every core writes, `state` and `made` this core's, and those
+/// SQLite makes of its JSON (schema.ts CHAT_COLUMNS), of the JSON given last.
+const PUT_CHAT = `INSERT OR REPLACE INTO chat (station, id, archived, ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, state, watched, made, json, ${CHAT_COLUMNS.map(([c]) => c).join(", ")})
+  SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${CHAT_MADE}, r.json, ${CHAT_COLUMNS.map(([, of]) => of("r.json")).join(", ")} FROM (SELECT ? AS json) AS r`;
+
+
+/// A chat row as a station's list was last written (`setChats`): the row as it was given (null: only read), and its
+/// place.
+type HeldChat = { row: J; ord: number };
+
+/// The most rows of a list given that `setChats` compares with what is written by reading them by their keys: more,
+/// and it reads the list once.
+const CHATS_COMPARED_BY_KEY = 8;
 
 /// The logs a station's channels are held in (station/channel-kinds.ts): a thread's entries, its letters (their own log
 /// beside its entries), a session's transcript.
@@ -301,8 +338,25 @@ export class AccountDb {
   readonly found: number;
   /// Whether what was said can be found (`said` is there; it could not be made without room).
   readonly #said: boolean = false;
+  /// Whether each overview's part the chat list reads is kept (`station_part`; it could not be made without room).
+  #parts = false;
+  /// The columns of each overview's part this database keeps (schema.ts PART_COLUMNS: `station_part`'s).
+  #columns = new Set<string>();
+  /// The profiles read of each station's overview, one by one (overviewProfile): let go of as its profiles change.
+  readonly #profilesRead = new Map<string, Set<string>>();
+  /// What is made of a record and kept beside it (db/kept.ts): a chat list's rows, the overviews' verdicts, the
+  /// accounts' rows.
+  readonly kept: KeptValues;
   /// The logs let go for room (`log_use`), by K(kind, station, id).
   readonly #evicted = new Set<string>();
+  /// Each station's chat list (`chats`, `archived`) as it was last written, by K(list, station), each row by its id
+  /// (HeldChat): the row object given and its place, nothing that grows with the row (its JSON would be the list again
+  /// in memory, for every station the sync touches, the whole run, to save a read that is seldom needed). So `setChats`
+  /// takes a row given that is the one written before (the same object, frozen) at the same place as written, reading
+  /// nothing; the few others are read by their keys to be compared, many the list once. Kept true by every write of
+  /// the table here (#putChatRow, #deleteChatRow), let go where it could not be (a burst rolled back, a station
+  /// forgotten): then the next `setChats` reads the list once.
+  readonly #chatsHeld = new Map<string, Map<string, HeldChat>>();
   readonly #runner: Runner;
   readonly #derive: Derive;
   #inTx = false;
@@ -323,12 +377,20 @@ export class AccountDb {
   /// a long chat's count was read from SQLite again on every view of it (four times to open one, 2026-11-08).
   readonly #logSpans = new Map<string, { min: number; max: number; count: number } | null>();
   readonly #lists = new Map<string, Collection>();
+  /// What was put in each log lately (`logPutSince`), so what is made of a long log reads again only what changed: by
+  /// the log, each change's number (`#logRev`, one count for every log) and the numbers it put (null: another change,
+  /// a cut or a delete). Of the changes before `from` (a log's, else `#logPutsFrom`) nothing is known.
+  #logRev = 0;
+  #logPutsFrom = 0;
+  readonly #logPuts = new Map<string, { from: number; puts: { rev: number; put: number[] | null }[] }>();
   #closed = false;
   /// Told after each burst is written, with what it changed.
   onCommit: (changes: Changes) => void = () => {};
   /// Told when a burst could not be written for want of room (true), and once one could again (false).
   onFull: (full: boolean, error: string | null) => void = () => {};
   #full = false;
+  /// What deriving the chat columns again took as this database was opened (schema.ts ensureChatColumns).
+  chatColumnsMade: ChatColumnsMade | null = null;
 
   constructor(sub: string, name: string, sql: Sql, runner: Runner, derive: Derive) {
     this.sub = sub;
@@ -337,6 +399,17 @@ export class AccountDb {
     this.#runner = runner;
     this.#derive = derive;
     this.found = versionOf(sql);
+    this.kept = new KeptValues({
+      sql,
+      write: (fn) => this.#write(fn),
+      run: (q, params) => void this.#run(q, params),
+      cache: this.#cache,
+      held: (source, owner) => {
+        const v = this.#cache.get(source === "chat" ? K("chat", owner[0], 0, owner[1]) : source === "station" ? K("st", owner[0], "overview") : K("profiled", owner[0]));
+        return v === null ? undefined : v;
+      },
+      record: (source, owner) => (source === "chat" ? this.chat(owner[0], owner[1]) : source === "station" ? this.stationDoc(owner[0], "overview") : this.overviewProfiled(owner[0])),
+    });
     this.readOnly = !migrate(sql);
     if (!this.readOnly) {
       const was = this.sql.all("SELECT value FROM meta WHERE key = 'account'")[0]?.[0];
@@ -347,6 +420,21 @@ export class AccountDb {
         this.#said = true;
       } catch {
         // No room to make it: messages are not found by their words this time.
+      }
+      try {
+        ensureOverviewParts(sql);
+        this.#parts = true;
+        for (const [column] of PART_COLUMNS) this.#columns.add(column);
+      } catch {
+        // No room to make it: each part is read of its overview, by SQLite, this time.
+      }
+      // (after the tables they are kept beside, station_part's: ensureOverviewParts)
+      this.kept.open(KEPT_ALL);
+      try {
+        this.chatColumnsMade = ensureChatColumns(sql, (agents) => ({ state: derive.state({ agents }), watched: derive.watched({ agents }) }));
+      } catch (e) {
+        // No room to derive them: the rows another core wrote are read by the columns they have, this time.
+        console.error("still.fail core: a chat's columns could not be derived:", e instanceof Error ? e.message : String(e));
       }
       try {
         if (ensureSlackSaid(sql)) this.#fillSlackSaid();
@@ -371,6 +459,10 @@ export class AccountDb {
       this.#mdKept = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'md_kept'").length > 0;
     } else if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0) {
       this.#said = true;
+    }
+    if (this.readOnly) {
+      this.#parts = this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'station_part'").length > 0;
+      for (const r of this.#parts ? this.sql.all("PRAGMA table_info(station_part)") : []) this.#columns.add(String(r[1]));
     }
     this.#bursts = Effect.runSync(Queue.unbounded<void>());
     // The one write fiber: a burst is committed once what started it has run.
@@ -439,10 +531,13 @@ export class AccountDb {
       changes.firstChats.clear();
       // What was read is not what is kept any more.
       this.#cache.clear();
+      this.kept.forget();
       this.#logCache.clear();
       this.#logIndices.clear();
       this.#logSpans.clear();
+      this.#logPutsForgotten();
       this.#lists.clear();
+      this.#chatsHeld.clear();
       this.#slackNames.clear();
       const again = [...this.#unwritten, ...precious];
       this.#unwritten = [];
@@ -505,7 +600,7 @@ export class AccountDb {
     m.set(id, { id, before: was ? was.before : before, after });
   }
 
-  #tellChatRead(station: string, archived: number, id: string, before: J | undefined, after: J | undefined): void {
+  #tellChatRead(station: string, archived: number, id: string, before: J | undefined, after: J | undefined, ordBefore: number | undefined, ordAfter: number | undefined): void {
     let rows = this.#changes.readChats.get(station);
     if (!rows) {
       rows = new Map();
@@ -516,14 +611,50 @@ export class AccountDb {
     if (was) {
       if (was.after !== undefined) (was.between ??= []).push(was.after);
       was.after = after;
-    } else rows.set(key, { id, archived: archived !== 0, before, after });
+      was.ordAfter = ordAfter;
+    } else rows.set(key, { id, archived: archived !== 0, before, after, ordBefore, ordAfter });
   }
 
-  #tellLog(table: string, station: string, id: string): void {
+  /// A log changed: `put` the numbers put in it, null for anything else.
+  #tellLog(table: string, station: string, id: string, put: number[] | null = null): void {
     this.#logIndices.delete(K(table, station, id));
     this.#logSpans.delete(K(table, station, id));
     this.#changes.logs.set(K(table, station, id), [table, station, id]);
     if (table === "slack") this.#slackNames.delete(station);
+    const key = K(table, station, id);
+    const was = this.#logPuts.get(key);
+    const log = was ?? { from: this.#logPutsFrom, puts: [] };
+    log.puts.push({ rev: ++this.#logRev, put });
+    if (log.puts.length > LOG_PUTS_KEPT) log.from = log.puts.shift()!.rev;
+    this.#logPuts.delete(key);
+    this.#logPuts.set(key, log);
+    // (the least lately changed logs' let go: of every log's changes up to theirs nothing is known then)
+    while (this.#logPuts.size > LOG_PUTS_LOGS) {
+      const [oldest, gone] = this.#logPuts.entries().next().value!;
+      this.#logPuts.delete(oldest);
+      this.#logPutsFrom = Math.max(this.#logPutsFrom, gone.puts[gone.puts.length - 1]?.rev ?? 0);
+    }
+  }
+
+  /// Nothing known of what was put in any log until now (what is held changed otherwise: rolled back, a station forgotten).
+  #logPutsForgotten(): void {
+    this.#logPuts.clear();
+    this.#logPutsFrom = ++this.#logRev;
+  }
+
+  /// The numbers put in a log since change `since` (`rev` of an answer before; 0: none), and the change it is at now;
+  /// `put` null where that is not known (it changed otherwise, or long ago): all of it is to be read again.
+  logPutSince(table: LogTable, station: string, id: string, since: number): { rev: number; put: number[] | null } {
+    const rev = this.#logRev;
+    const log = this.#logPuts.get(K(table, station, id));
+    if (since <= 0 || since < (log?.from ?? this.#logPutsFrom)) return { rev, put: null };
+    const put = new Set<number>();
+    for (const p of log?.puts ?? []) {
+      if (p.rev <= since) continue;
+      if (p.put === null) return { rev, put: null };
+      for (const n of p.put) put.add(n);
+    }
+    return { rev, put: [...put] };
   }
 
   close(): void {
@@ -542,7 +673,7 @@ export class AccountDb {
   }
 
   putAccountDoc(name: string, value: J, confirmed: number | null, topic: Topic | null): void {
-    this.#putDoc(K("acct", name), value, "SELECT json FROM account_doc WHERE name = ?", [name], "INSERT INTO account_doc (name, json, confirmed) VALUES (?, ?, ?) ON CONFLICT (name) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [name, json, confirmed], topic);
+    this.#putDoc(K("acct", name), value, { table: "account_doc", keys: ["name"], of: [name], confirmed }, topic);
   }
 
   dropAccountDoc(name: string, topic: Topic | null): void {
@@ -554,7 +685,7 @@ export class AccountDb {
   }
 
   putWorkspace(id: string, value: J, confirmed: number | null): void {
-    this.#putDoc(K("ws", id), value, "SELECT json FROM workspace WHERE id = ?", [id], "INSERT INTO workspace (id, json, confirmed) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [id, json, confirmed], { topic: "workspace", workspace: id });
+    this.#putDoc(K("ws", id), value, { table: "workspace", keys: ["id"], of: [id], confirmed }, { topic: "workspace", workspace: id });
   }
 
   dropWorkspace(id: string): void {
@@ -565,17 +696,149 @@ export class AccountDb {
     return this.sql.all("SELECT id FROM workspace").map((r) => String(r[0]));
   }
 
-  /// A station's overview, footprint or usage.
+  /// A station's overview or usage.
   stationDoc(station: string, kind: string): J {
-    return this.#doc(K("st", station, kind), "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind]);
+    const key = K("st", station, kind);
+    const read = kind === "overview" && !this.#cache.has(key);
+    const v = this.#doc(key, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind]);
+    if (read && v !== undefined) work.overviewsRead++;
+    return v;
   }
 
   putStationDoc(station: string, kind: string, value: J, confirmed: number | null, topic: Topic | null): void {
-    this.#putDoc(K("st", station, kind), value, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind], "INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, kind, json, confirmed], topic);
+    const doc = { table: "station", keys: ["address", "kind"], of: [station, kind], confirmed };
+    this.#putDoc(K("st", station, kind), value, doc, topic, kind === "overview" ? (put) => this.#overviewWritten(station, put) : undefined);
   }
 
   dropStationDoc(station: string, kind: string, topic: Topic | null): void {
-    this.#dropDoc(K("st", station, kind), "DELETE FROM station WHERE address = ? AND kind = ?", [station, kind], topic);
+    const drop = () => this.#dropDoc(K("st", station, kind), "DELETE FROM station WHERE address = ? AND kind = ?", [station, kind], topic);
+    if (kind === "overview") this.#overviewWritten(station, drop);
+    else drop();
+  }
+
+  /// What the chat list reads of a station's overview (schema.ts overviewPartOf), undefined while none is held: kept
+  /// beside it (`station_part`, by triggers), not the overview, which is not read.
+  overviewPart(station: string): J {
+    return this.#overviewColumn(station, "part");
+  }
+
+  /// What a station's row reads of its overview (schema.ts overviewRowOf), undefined while none is held or it is not an
+  /// object: kept beside its part (`station_part.row`), not in it, so the chat list reads and parses what it did.
+  overviewRow(station: string): J {
+    return this.#overviewColumn(station, "row");
+  }
+
+  /// What a chat's page reads of its station's overview (schema.ts overviewChatOf), undefined while none is held or it
+  /// is not an object: kept beside its part (`station_part.chat`), not the overview, which is not read.
+  overviewChat(station: string): J {
+    return this.#overviewColumn(station, "chat");
+  }
+
+  /// The stations a station took the place of (schema.ts overviewFormerlyOf), undefined while no overview is held:
+  /// kept beside its part (`station_part.formerly`).
+  overviewFormerly(station: string): J {
+    return this.#overviewColumn(station, "formerly");
+  }
+
+  /// What the workspace's profiles read of a station's overview (schema.ts overviewProfiledOf), undefined while no
+  /// overview is held: kept beside its part (`station_part.profiled`).
+  overviewProfiled(station: string): J {
+    return this.#overviewColumn(station, "profiled");
+  }
+
+  /// The profile `id` of a station's overview, whole, undefined where it has none such (schema.ts overviewProfilesOf):
+  /// that one alone read out of the column of its profiles by SQLite, not the overview, nor its other profiles.
+  overviewProfile(station: string, id: string): J {
+    const key = K("profile", station, id);
+    if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
+    let read = this.#profilesRead.get(station);
+    if (read === undefined) this.#profilesRead.set(station, (read = new Set()));
+    read.add(id);
+    const path = `$.${JSON.stringify(id)}`;
+    const kept = this.#columns.has("profiles") ? this.sql.all("SELECT profiles IS NOT NULL, profiles -> ? FROM station_part WHERE address = ?", [path, station])[0] : undefined;
+    const r = kept !== undefined && kept[0] === 1
+      ? kept[1]
+      : this.sql.all(`SELECT (${overviewProfilesOf("st.json")}) -> ? FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [path, station])[0]?.[0];
+    const text = typeof r === "string" ? r : undefined;
+    if (text !== undefined) {
+      work.overviewParts++;
+      work.overviewPartChars += text.length;
+    }
+    const v = text === undefined ? undefined : frozen(JSON.parse(text));
+    this.#cache.set(key, v ?? null);
+    return v;
+  }
+
+  /// Column `column` of a station's part (schema.ts PART_COLUMNS), parsed, kept till it changes.
+  #overviewColumn(station: string, column: string): J {
+    const key = K(column, station);
+    if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
+    const text = this.#columnText(station, column);
+    if (text !== undefined) {
+      work.overviewParts++;
+      work.overviewPartChars += text.length;
+    }
+    const v = text === undefined ? undefined : frozen(JSON.parse(text));
+    this.#cache.set(key, v ?? null);
+    return v;
+  }
+
+  /// Column `column` of a station's part as the database holds it; where it holds none (it could not keep the parts,
+  /// a database a newer core wrote, or a core from before the column keeps the parts now by its own triggers: a web
+  /// page still open from before), made of the overview by SQLite as it is read.
+  #columnText(station: string, column: string): string | undefined {
+    const kept = this.#columns.has(column) ? this.sql.all(`SELECT ${column} FROM station_part WHERE address = ?`, [station])[0] : undefined;
+    if (typeof kept?.[0] === "string") return kept[0];
+    const of = PART_COLUMNS.find(([c]) => c === column)![1];
+    const r = this.sql.all(`SELECT ${of("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [station])[0];
+    return typeof r?.[0] === "string" ? r[0] : undefined;
+  }
+
+  /// Whether a station's overview is held: by its key alone, its JSON not read.
+  overviewHeld(station: string): boolean {
+    const held = this.#cache.get(K("st", station, "overview"));
+    if (held !== undefined) return held !== null;
+    return this.sql.all("SELECT 1 FROM station WHERE address = ? AND kind = 'overview'", [station]).length > 0;
+  }
+
+  /// What each column of a station's part is now, as its revision says it (schema.ts partRev): -1 where it holds no text
+  /// (none held, or the overview not an object), its revision where it holds one, null where nothing says (a row a core
+  /// that knows nothing of them put in, or a database that keeps no parts). A few numbers: no text read.
+  #partRevs(station: string): (number | null)[] {
+    if (!this.#parts) return PART_COLUMNS.map(() => null);
+    const r = this.sql.all(`SELECT ${PART_COLUMNS.map(([c]) => `CASE WHEN ${partRev(c)} IS NOT NULL AND ${c} IS NULL THEN -1 ELSE ${partRev(c)} END`).join(", ")} FROM station_part WHERE address = ?`, [station])[0];
+    return PART_COLUMNS.map((_, i) => (r === undefined ? -1 : typeof r[i] === "number" ? r[i] : null));
+  }
+
+  /// The overview written or dropped by `write`, its part with it (the triggers): said only where a column of the part
+  /// changed (its revision moved, or nothing says it did not), as `$overview-<column>` (what the chat list reads,
+  /// `$overview-part`; a station's row, `$overview-row`; a chat's page, `$overview-chat`; a link to a chat,
+  /// `$overview-formerly`), what the cache holds of it let go and read again as a reader asks (#overviewColumn); and
+  /// where the overview is not what it was, as `$overview-fit`. What is kept beside the overview and its part
+  /// (db/kept.ts: its verdict, its accounts' rows) is made again of them as they are written, a column read for it only
+  /// where a value kept is to be made again.
+  #overviewWritten(station: string, write: () => void): void {
+    this.#write(() => {
+      const before = this.#partRevs(station);
+      const key = K("st", station, "overview");
+      const was = this.#cache.get(key);
+      const overview = this.kept.writing("station", [station]);
+      const profiled = this.kept.writing("station_part", [station]);
+      write();
+      const after = this.#partRevs(station);
+      for (const [i, [column]] of PART_COLUMNS.entries()) {
+        if (before[i] !== null && after[i] !== null && before[i] === after[i]) continue;
+        // (its profiles read one by one, not parsed whole: each read again of them)
+        if (column === "profiles") for (const id of this.#profilesRead.get(station) ?? []) this.#cache.delete(K("profile", station, id));
+        else this.#cache.delete(K(column, station));
+        if (column === "profiled") this.kept.wrote(profiled, () => this.#overviewColumn(station, column));
+        this.#tell({ topic: `$overview-${column}`, station });
+      }
+      const now = this.#cache.get(key);
+      if (now === was && now !== undefined) return;
+      this.#tell({ topic: "$overview-fit", station });
+      this.kept.wrote(overview, () => (isObject(now) ? now : undefined));
+    });
   }
 
   /// At most `most` of a station's documents whose kind starts with `prefix`, the latest confirmed: the others go.
@@ -589,7 +852,7 @@ export class AccountDb {
   }
 
   putSlackApp(station: string, connect: string, value: J, confirmed: number | null): void {
-    this.#putDoc(K("slack", station, connect), value, "SELECT json FROM slack_app WHERE station = ? AND connect = ?", [station, connect], "INSERT INTO slack_app (station, connect, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (station, connect) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, connect, json, confirmed], { topic: "slackApp", station, connect });
+    this.#putDoc(K("slack", station, connect), value, { table: "slack_app", keys: ["station", "connect"], of: [station, connect], confirmed }, { topic: "slackApp", station, connect });
   }
 
   draft(station: string, chat: string): J {
@@ -599,7 +862,7 @@ export class AccountDb {
   putDraft(station: string, chat: string, value: J | undefined): void {
     const topic = { topic: "draft", station, chat };
     if (value === undefined) this.#dropDoc(K("draft", station, chat), "DELETE FROM draft WHERE station = ? AND chat = ?", [station, chat], topic);
-    else this.#putDoc(K("draft", station, chat), value, "SELECT json FROM draft WHERE station = ? AND chat = ?", [station, chat], "INSERT OR REPLACE INTO draft (station, chat, json) VALUES (?, ?, ?)", (json) => [station, chat, json], topic);
+    else this.#putDoc(K("draft", station, chat), value, { table: "draft", keys: ["station", "chat"], of: [station, chat] }, topic);
   }
 
   workspacePref(workspace: string, key: string): J {
@@ -608,7 +871,7 @@ export class AccountDb {
 
   putWorkspacePref(workspace: string, key: string, value: J | undefined, topic: Topic | null = null): void {
     if (value === undefined) this.#dropDoc(K("wpref", workspace, key), "DELETE FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], topic);
-    else this.#putDoc(K("wpref", workspace, key), value, "SELECT json FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], "INSERT OR REPLACE INTO workspace_pref (workspace, key, json) VALUES (?, ?, ?)", (json) => [workspace, key, json], topic);
+    else this.#putDoc(K("wpref", workspace, key), value, { table: "workspace_pref", keys: ["workspace", "key"], of: [workspace, key] }, topic);
   }
 
   /// What this device did and its station has not confirmed (views/local.ts): every row of one of its tables.
@@ -635,19 +898,34 @@ export class AccountDb {
     return value;
   }
 
-  #putDoc(key: string, value: J, select: string, selectParams: SqlValue[], upsert: string, params: (json: string) => SqlValue[], topic: Topic | null): void {
+  /// A document put (`doc`: its table, the columns of its key and their values, and when its source confirmed it where
+  /// the table keeps that, null where it did not now), `around` the write where one is given (what its triggers make
+  /// beside it: #overviewWritten). Whether it is the same as the one held is SQLite's to say, by a number: no document's
+  /// text comes back to be compared. The same: only when it was confirmed changes. Another, or none held: it is put,
+  /// kept in the cache as it is, and told.
+  #putDoc(key: string, value: J, doc: Doc, topic: Topic | null, around?: (put: () => void) => void): void {
     this.#write(() => {
       const json = JSON.stringify(value);
-      const was = this.sql.all(select, selectParams)[0]?.[0];
-      if (was === json) {
-        // The same: only when it was confirmed changes.
-        const p = params(json);
-        if (p[p.length - 1] !== null) this.#run(upsert, p);
+      const where = doc.keys.map((c) => `${c} = ?`).join(" AND ");
+      const same = this.sql.all(`SELECT json = ? FROM ${doc.table} WHERE ${where}`, [json, ...doc.of])[0]?.[0];
+      if (same === 1) {
+        if (doc.confirmed !== undefined && doc.confirmed !== null) this.#run(`UPDATE ${doc.table} SET confirmed = ? WHERE ${where}`, [doc.confirmed, ...doc.of]);
         return;
       }
-      this.#run(upsert, params(json));
-      this.#cache.set(key, frozen(JSON.parse(json)));
-      if (topic) this.#tell(topic);
+      const columns = [...doc.keys, "json", ...(doc.confirmed === undefined ? [] : ["confirmed"])];
+      const values = [...doc.of, json, ...(doc.confirmed === undefined ? [] : [doc.confirmed])];
+      const put = () => {
+        this.#run(
+          doc.confirmed === undefined
+            ? `INSERT OR REPLACE INTO ${doc.table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`
+            : `INSERT INTO ${doc.table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")}) ON CONFLICT (${doc.keys.join(", ")}) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)`,
+          values,
+        );
+        this.#cache.set(key, frozen(JSON.parse(json)));
+        if (topic) this.#tell(topic);
+      };
+      if (around === undefined) put();
+      else around(put);
     });
   }
 
@@ -712,34 +990,107 @@ export class AccountDb {
     c = new Collection(kind === "threads");
     switch (kind) {
       case "chats":
-      case "archived":
-        for (const r of this.sql.all("SELECT id, ord, json, unread FROM chat WHERE station = ? AND archived = ?", [station, kind === "archived" ? 1 : 0])) {
-          const id = String(r[0]);
-          c.set(id, this.#chatRow(station, kind === "archived" ? 1 : 0, id, r[2], r[3]), [r[1] as number]);
-        }
+      case "archived": {
+        // (each kept row as it is kept: account.ts #byKey)
+        const a = kind === "archived" ? 1 : 0;
+        const found = this.sql.all("SELECT station, id, ord FROM chat WHERE station = ? AND archived = ?", [station, a]);
+        const made = this.#chatRowsFound(found, a, () => this.sql.all("SELECT station, id, json, unread FROM chat WHERE station = ? AND archived = ?", [station, a]));
+        found.forEach((r, i) => {
+          if (made[i] !== undefined) c.set(String(r[1]), made[i], [r[2] as number]);
+        });
         break;
-      case "sessions":
-        for (const r of this.sql.all("SELECT key, ord, summary FROM session WHERE station = ? AND listed = 1", [station])) c.set(String(r[0]), this.#cached(K("sum", station, String(r[0])), r[2]), [r[1] as number]);
+      }
+      case "sessions": {
+        const found = this.sql.all("SELECT key, ord FROM session WHERE station = ? AND listed = 1", [station]);
+        const key = (r: SqlRow) => K("sum", station, String(r[0]));
+        const made = this.#byKey(
+          found.map((r) => [key(r), r[0]]),
+          () => this.sql.all("SELECT key, summary FROM session WHERE station = ? AND listed = 1", [station]),
+          (keys) => this.sql.all("SELECT s.key, s.summary FROM json_each(?) AS k CROSS JOIN session AS s WHERE s.station = ? AND s.key = k.value", [keys, station]),
+          key,
+          (r) => this.#cached(key(r), r[1]),
+        );
+        found.forEach((r, i) => c.set(String(r[0]), made[i], [r[1] as number]));
         break;
-      case "threads":
-        for (const r of this.sql.all("SELECT id, sort_at, created_at, json, last, read, unread FROM thread WHERE station = ? AND listed = 1", [station])) {
-          c.set(String(r[0]), this.#threadRow(station, r[0] as number, r[3], r[4], r[5], r[6]), [r[1] as number, r[2] as number, r[0] as number]);
-        }
+      }
+      case "threads": {
+        const found = this.sql.all("SELECT id, sort_at, created_at FROM thread WHERE station = ? AND listed = 1", [station]);
+        const made = this.#threadsFound(station, found, () => this.sql.all("SELECT id, json, last, read, unread FROM thread WHERE station = ? AND listed = 1", [station]));
+        found.forEach((r, i) => {
+          if (made[i] !== undefined) c.set(String(r[0]), made[i], [r[1] as number, r[2] as number, r[0] as number]);
+        });
         break;
-      case "jobs":
-        for (const r of this.sql.all("SELECT id, ord, json, chat FROM job WHERE station = ? AND open = 1", [station])) c.set(String(r[0]), this.#jobItem(station, String(r[0]), r[2], r[3]), [r[1] as number]);
+      }
+      case "jobs": {
+        const found = this.sql.all("SELECT id, ord FROM job WHERE station = ? AND open = 1", [station]);
+        const key = (r: SqlRow) => K("jobitem", station, String(r[0]));
+        const made = this.#byKey(
+          found.map((r) => [key(r), r[0]]),
+          () => this.sql.all("SELECT id, json, chat FROM job WHERE station = ? AND open = 1", [station]),
+          (keys) => this.sql.all("SELECT j.id, j.json, j.chat FROM json_each(?) AS k CROSS JOIN job AS j WHERE j.station = ? AND j.id = k.value", [keys, station]),
+          key,
+          (r) => this.#jobItem(station, String(r[0]), r[1], r[2]),
+        );
+        found.forEach((r, i) => {
+          if (made[i] !== undefined) c.set(String(r[0]), made[i], [r[1] as number]);
+        });
         break;
+      }
     }
     this.#lists.set(key, c);
     return c;
+  }
+
+  /// The rows a query found by their keys alone (`found`: each one's key in the cache, and what `byKey` finds it again
+  /// by), in its order, undefined where none was read: each one kept by its key as it is kept, read from the database
+  /// only where none is. A list asked for again, a workspace's mark made again, read every row's JSON to take the one
+  /// kept (5.6 ms in Hermes for a mark of 123 rows, every one kept, 2026-11-11). The JSON of those not kept is read by one
+  /// more query: where they are most of what was found (more than half: a list read cold), `all`, the query again with
+  /// its JSON, so that a cold read costs one query more of keys alone; otherwise `byKey`, given their keys as one JSON
+  /// array (json_each: one statement whatever their number, never near SQLite's variable limit, and one statement kept
+  /// prepared), each found by its primary key. Each row read: `keyOf` its key, `make` it into the row (which keeps it).
+  #byKey(found: [string, unknown][], all: () => SqlRow[], byKey: (keys: string) => SqlRow[], keyOf: (r: SqlRow) => string, make: (r: SqlRow) => J): (J | undefined)[] {
+    const out: (J | undefined)[] = found.map(([key]) => this.#cache.get(key) ?? undefined);
+    let missing = 0;
+    for (const v of out) if (v === undefined) missing++;
+    if (missing === 0) return out;
+    const whole = missing * 2 > found.length;
+    const rows = whole ? all() : byKey(JSON.stringify(found.flatMap(([, at], i) => (out[i] === undefined ? [at] : []))));
+    const read = new Map<string, SqlRow>();
+    for (const r of rows) read.set(keyOf(r), r);
+    for (let i = 0; i < found.length; i++) {
+      if (out[i] !== undefined) {
+        // (read again with the rest, for nothing)
+        if (whole && read.has(found[i][0])) work.rowJson++;
+        continue;
+      }
+      const r = read.get(found[i][0]);
+      if (r !== undefined) out[i] = make(r);
+    }
+    return out;
+  }
+
+  /// Chat rows a query found (`found`: station, id), `archived` or not, in its order (account.ts #byKey); `all` the
+  /// query again with their JSON (station, id, json, unread).
+  #chatRowsFound(found: SqlRow[], archived: number, all: () => SqlRow[]): (J | undefined)[] {
+    const key = (r: SqlRow) => K("chat", String(r[0]), archived, String(r[1]));
+    return this.#byKey(
+      found.map((r) => [key(r), [r[0], r[1]]]),
+      all,
+      (keys) => this.sql.all("SELECT c.station, c.id, c.json, c.unread FROM json_each(?) AS k CROSS JOIN chat AS c WHERE c.station = json_extract(k.value, '$[0]') AND c.archived = ? AND c.id = json_extract(k.value, '$[1]')", [keys, archived]),
+      key,
+      (r) => this.#chatRow(String(r[0]), archived, String(r[1]), r[2], r[3]),
+    );
   }
 
   #loadedList(station: string, kind: ListKind): Collection | undefined {
     return this.#lists.get(K(kind, station));
   }
 
-  /// A row parsed once and kept by its key until written.
-  #cached(key: string, json: SqlValue, make?: (parsed: J) => J): J {
+  /// A row parsed once and kept by its key until written. `json` as read from the database (counted: work.rowJson, read
+  /// for nothing where the row is kept), else as written here (`read` false).
+  #cached(key: string, json: SqlValue, make?: (parsed: J) => J, read = true): J {
+    if (read && typeof json === "string") work.rowJson++;
     const hit = this.#cache.get(key);
     if (hit !== undefined && hit !== null) return hit;
     const v = frozen(make ? make(parse(json)) : parse(json));
@@ -757,125 +1108,265 @@ export class AccountDb {
   }
 
   #chatCols(row: J): ChatCols {
+    work.chatRowsSerialised++;
     const rest = { ...row };
     const unread = typeof rest.unread === "boolean" ? (rest.unread ? 1 : 0) : null;
     delete rest.unread;
     let running = 0;
     for (const a of Array.isArray(row.agents) ? row.agents : []) if (get(a, "process") === "running") running = 1;
+    // (the columns the declared reads are told by as chat-reads.ts rowColumns says them: one rule)
+    const c = rowColumns(row);
     return {
       json: JSON.stringify(rest),
       unread,
-      thread: u64(row.thread),
-      session: str(row.session),
-      clientKey: str(row.clientKey),
-      lastActive: num(row.lastActiveAt) ?? 0,
-      pinnedAt: num(row.pinned),
-      mine: row.mine === true ? 1 : 0,
+      thread: c.thread,
+      session: c.session,
+      clientKey: c.clientKey,
+      lastActive: c.lastActive,
+      pinnedAt: c.pinnedAt,
+      mine: c.mine ? 1 : 0,
       running,
       tone: this.#derive.tone(row),
       asks: this.#derive.asks(row) ? 1 : 0,
+      state: this.#derive.state(row),
+      watched: this.#derive.watched(row) ? 1 : 0,
     };
   }
 
-  #putChatRow(station: string, archived: number, id: string, row: J, ord: number, before: J | undefined): void {
-    const c = this.#chatCols(row);
-    this.#run(
-      "INSERT OR REPLACE INTO chat (station, id, archived, ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [station, id, archived, ord, c.thread, c.session, c.clientKey, c.lastActive, c.pinnedAt, c.unread, c.mine, c.running, c.tone, c.asks, c.json],
-    );
+  /// (`c`: its columns, where they were made already)
+  #putChatRow(station: string, archived: number, id: string, row: J, ord: number, before: J | undefined, ordBefore: number | undefined, c: ChatCols = this.#chatCols(row)): void {
+    // (asked before the record is put: its triggers take the row kept beside it)
+    const beside = this.kept.writing("chat", [station, id]);
+    this.#run(PUT_CHAT, [station, id, archived, ord, c.thread, c.session, c.clientKey, c.lastActive, c.pinnedAt, c.unread, c.mine, c.running, c.tone, c.asks, c.state, c.watched, c.json]);
+    this.#chatsHeld.get(K(archived ? "archived" : "chats", station))?.set(id, { row, ord });
     const kept = frozen(JSON.parse(JSON.stringify(row)));
     this.#cache.set(K("chat", station, archived, id), kept);
+    // (its row kept beside it went with it, by the triggers: made again of it, where it is listed)
+    this.kept.wrote(beside, () => (archived ? undefined : kept));
     this.#loadedList(station, archived ? "archived" : "chats")?.set(id, kept, [ord]);
-    this.#tellChatRead(station, archived, id, before, kept);
+    this.#tellChatRead(station, archived, id, before, kept, before === undefined ? undefined : ordBefore, ord);
     if (!archived) this.#tellChat(station, id, before, kept);
     this.#tell({ topic: archived ? "archivedRows" : "chatRows", station });
   }
 
-  /// A station's chat list as read: rows that changed are written, those gone deleted, the list read.
-  setChats(station: string, archived: boolean, rows: J[], confirmed: number | null): void {
+  /// A row whose record is as written, at another place alone (a list whose places are of each row, setChats `places`,
+  /// given where its rows were placed otherwise, once): its place written by its key, the record not put again, nothing
+  /// serialised or parsed (schema.ts chatTriggers are not of `ord`; the row kept beside it goes, as at any update of its
+  /// record, db/kept.ts, made again as it is read). The reads that order by place told of it (chatKeys before and after),
+  /// the list held here put in its order. Not the list's revision (rowsRev, setChats `changed`): what waits on it is a
+  /// change made here waiting for the station's rows to say it (views/local.ts `settle`), which no place says.
+  #placeChatRow(station: string, archived: number, id: string, row: J, record: J, ord: number, ordBefore: number): void {
+    const list = archived ? "archived" : "chats";
+    this.#run("UPDATE chat SET ord = ? WHERE station = ? AND archived = ? AND id = ?", [ord, station, archived, id]);
+    this.#chatsHeld.get(K(list, station))?.set(id, { row, ord });
+    const loaded = this.#loadedList(station, list);
+    if (loaded !== undefined) {
+      loaded.set(id, loaded.items.get(id) ?? record, [ord]);
+      this.#tell({ topic: TOPIC_OF[list], station });
+    }
+    this.#tellChatRead(station, archived, id, record, record, ordBefore, ord);
+  }
+
+  /// A station's chat list as read: rows that changed are written, those gone deleted, the list read. What was written
+  /// before is held (#chatsHeld): only what must be compared is read. `places`: each row's place, where the list says
+  /// them of each row (one its station makes, rows-made.ts `sharedPlace`), else they are found from those written
+  /// (placesFor). A list written in other places takes those given at this write, once.
+  setChats(station: string, archived: boolean, rows: J[], confirmed: number | null, places?: readonly number[]): void {
     this.#write(() => {
       const a = archived ? 1 : 0;
-      const was = new Map<string, SqlRow>();
-      for (const r of this.sql.all("SELECT id, ord, json, unread FROM chat WHERE station = ? AND archived = ? ORDER BY ord", [station, a])) was.set(String(r[0]), r);
+      const list = archived ? "archived" : "chats";
       const items: [string, J][] = [];
+      const given: number[] = [];
       const seen = new Set<string>();
-      for (const row of rows) {
+      glanced.chatRowsWalked += rows.length;
+      rows.forEach((row, i) => {
         const id = idText(get(row, "id"));
-        if (id === null || seen.has(id)) continue;
+        if (id === null || seen.has(id)) return;
         seen.add(id);
         items.push([id, row]);
+        if (places !== undefined) given.push(places[i]!);
+      });
+      let held = this.#chatsHeld.get(K(list, station));
+      // (the row written, frozen: it cannot have changed since)
+      const asHeld = (id: string, row: J) => held?.get(id)?.row === row && Object.isFrozen(row);
+      // What is written of those to compare and those gone (id, ord, json, unread): by their keys where they are few,
+      // else the list.
+      const stored = new Map<string, SqlRow>();
+      const unsure = held === undefined ? [] : [...items.filter(([id, row]) => !asHeld(id, row)).map(([id]) => id), ...[...held.keys()].filter((id) => !seen.has(id))];
+      if (held === undefined || unsure.length > CHATS_COMPARED_BY_KEY) {
+        for (const r of this.sql.all("SELECT id, ord, json, unread FROM chat WHERE station = ? AND archived = ?", [station, a])) stored.set(String(r[0]), r);
+        const was = held;
+        held = new Map([...stored].map(([id, r]) => [id, { row: was?.get(id)?.row ?? null, ord: r[1] as number }]));
+        this.#chatsHeld.set(K(list, station), held);
+      } else if (unsure.length > 0) {
+        for (const r of this.sql.all("SELECT c.id, c.ord, c.json, c.unread FROM json_each(?) AS k CROSS JOIN chat AS c WHERE c.station = ? AND c.archived = ? AND c.id = k.value", [JSON.stringify(unsure), station, a])) stored.set(String(r[0]), r);
       }
-      const places = placesFor(items.map(([id]) => (was.has(id) ? (was.get(id)![1] as number) : null)));
+      const was = held;
+      const at = places !== undefined ? given : placesFor(items.map(([id]) => was.get(id)?.ord ?? null));
+      // (a record as written: read just now, else the row given again, written as it is)
+      const before = (id: string, row: J): J => {
+        const r = stored.get(id);
+        if (r !== undefined) return this.#chatRow(station, a, id, r[2], r[3]);
+        const kept = this.#cache.get(K("chat", station, a, id));
+        return kept !== undefined && kept !== null ? kept : frozen(JSON.parse(JSON.stringify(row)));
+      };
       let changed = false;
       items.forEach(([id, row], i) => {
-        const before = was.get(id);
+        const h = was.get(id);
+        if (h !== undefined && asHeld(id, row)) {
+          if (h.ord === at[i]) {
+            glanced.chatRowsSame++;
+            return;
+          }
+          // (moved alone)
+          return this.#placeChatRow(station, a, id, row, before(id, row), at[i]!, h.ord);
+        }
         const c = this.#chatCols(row);
-        if (before && before[1] === places[i] && before[2] === c.json && before[3] === c.unread) return;
+        const r = stored.get(id);
+        if (h !== undefined && r !== undefined && r[2] === c.json && r[3] === c.unread) {
+          if (h.ord !== at[i]) return this.#placeChatRow(station, a, id, row, before(id, row), at[i]!, h.ord);
+          h.row = row;
+          return;
+        }
         changed = true;
-        this.#putChatRow(station, a, id, row, places[i], before ? this.#chatRow(station, a, id, before[2], before[3]) : undefined);
+        this.#putChatRow(station, a, id, row, at[i]!, h === undefined ? undefined : before(id, row), h?.ord, c);
       });
-      for (const [id, r] of was) {
-        if (seen.has(id)) continue;
+      // (those gone, in the list's order)
+      const gone = [...was].filter(([id]) => !seen.has(id)).sort(([, x], [, y]) => x.ord - y.ord);
+      for (const [id, h] of gone) {
         changed = true;
-        this.#deleteChatRow(station, a, id, this.#chatRow(station, a, id, r[2], r[3]));
+        this.#deleteChatRow(station, a, id, before(id, h.row), h.ord);
       }
-      this.#markListed(station, archived ? "archived" : "chats", confirmed, changed);
+      this.#markListed(station, list, confirmed, changed);
     });
   }
 
-  #deleteChatRow(station: string, archived: number, id: string, before: J | undefined): void {
+  #deleteChatRow(station: string, archived: number, id: string, before: J | undefined, ordBefore: number): void {
+    const kept = this.kept.writing("chat", [station, id]);
     this.#run("DELETE FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id]);
+    this.#chatsHeld.get(K(archived ? "archived" : "chats", station))?.delete(id);
     this.#cache.delete(K("chat", station, archived, id));
+    this.kept.wrote(kept, () => undefined);
     this.#loadedList(station, archived ? "archived" : "chats")?.delete(id);
-    this.#tellChatRead(station, archived, id, before, undefined);
+    this.#tellChatRead(station, archived, id, before, undefined, ordBefore, undefined);
     if (!archived) this.#tellChat(station, id, before, undefined);
     this.#tell({ topic: archived ? "archivedRows" : "chatRows", station });
   }
 
-  /// A sidebar row as an event has it: in place, or last when new. Nothing while the station's rows were never read.
-  putChat(station: string, row: J): void {
+  /// A sidebar row as an event has it: at `place` where its list says each row's (setChats `places`), else in place, or
+  /// last when new. Nothing while the station's rows were never read. The row written before (the same object, frozen) at
+  /// the same place writes nothing and reads nothing; another is read by its key to be compared.
+  putChat(station: string, row: J, place?: number): void {
     const id = idText(get(row, "id"));
     if (id === null || !this.listed(station, "chats")) return;
     this.#write(() => {
+      const h = this.#chatsHeld.get(K("chats", station))?.get(id);
+      if (h !== undefined && h.row === row && Object.isFrozen(row)) {
+        if (place === undefined || h.ord === place) return;
+        // (as written, at another place: that alone)
+        const kept = this.#cache.get(K("chat", station, 0, id));
+        return this.#placeChatRow(station, 0, id, row, kept !== undefined && kept !== null ? kept : frozen(JSON.parse(JSON.stringify(row))), place, h.ord);
+      }
       const r = this.sql.all("SELECT ord, json, unread FROM chat WHERE station = ? AND archived = 0 AND id = ?", [station, id])[0];
       const c = this.#chatCols(row);
-      if (r && r[1] === c.json && r[2] === c.unread) return;
-      const ord = r ? (r[0] as number) : ((this.sql.all("SELECT max(ord) FROM chat WHERE station = ? AND archived = 0", [station])[0]?.[0] as number | null) ?? -1) + 1;
-      this.#putChatRow(station, 0, id, row, ord, r ? this.#chatRow(station, 0, id, r[1], r[2]) : undefined);
+      if (r && r[1] === c.json && r[2] === c.unread) {
+        if (place !== undefined && r[0] !== place) return this.#placeChatRow(station, 0, id, row, this.#chatRow(station, 0, id, r[1], r[2]), place, r[0] as number);
+        if (h !== undefined) h.row = row;
+        return;
+      }
+      const ord = place ?? (r ? (r[0] as number) : ((this.sql.all("SELECT max(ord) FROM chat WHERE station = ? AND archived = 0", [station])[0]?.[0] as number | null) ?? -1) + 1);
+      this.#putChatRow(station, 0, id, row, ord, r ? this.#chatRow(station, 0, id, r[1], r[2]) : undefined, r ? (r[0] as number) : undefined, c);
       this.#bumpRev(station, "chats");
     });
   }
 
   dropChat(station: string, id: string): void {
+    // (not in the list as it was last written: nothing to drop, nothing read)
+    const held = this.#chatsHeld.get(K("chats", station));
+    if (held !== undefined && !held.has(id)) return;
     this.#write(() => {
-      const r = this.sql.all("SELECT json, unread FROM chat WHERE station = ? AND archived = 0 AND id = ?", [station, id])[0];
+      // (its record from the cache where it is held: only its place read)
+      const kept = this.#cache.get(K("chat", station, 0, id));
+      if (kept !== undefined && kept !== null) {
+        const r = this.sql.all("SELECT ord FROM chat WHERE station = ? AND archived = 0 AND id = ?", [station, id])[0];
+        if (!r) return;
+        this.#deleteChatRow(station, 0, id, kept, r[0] as number);
+        this.#bumpRev(station, "chats");
+        return;
+      }
+      const r = this.sql.all("SELECT json, unread, ord FROM chat WHERE station = ? AND archived = 0 AND id = ?", [station, id])[0];
       if (!r) return;
-      this.#deleteChatRow(station, 0, id, this.#chatRow(station, 0, id, r[0], r[1]));
+      this.#deleteChatRow(station, 0, id, this.#chatRow(station, 0, id, r[0], r[1]), r[2] as number);
       this.#bumpRev(station, "chats");
     });
   }
 
+  /// What a declared read finds (chat-reads.ts), each row with its record where `wants` says so (every row by default):
+  /// read by its key, from the cache where it is held, its JSON read only where it is not.
+  chatFound<P>(read: ChatRead<P>, p: P, wants: (cols: SqlRow) => boolean = () => true): ChatFound[] {
+    const out = foundOf(this.chatCounted(read, p));
+    if (read.records) this.chatRecords(out.filter((f) => wants(f.cols)));
+    return out;
+  }
+
+  /// The records of rows a read found (`record` of each, undefined where it is gone): read by their keys, from the cache
+  /// where held, their JSON read only where not.
+  chatRecords(found: ChatFound[]): void {
+    for (const archived of [0, 1]) {
+      const of = found.filter((f) => (f.archived ? 1 : 0) === archived);
+      if (of.length === 0) continue;
+      const made = this.#records(of.map((f) => [f.station, f.id]), archived);
+      of.forEach((f, i) => (f.record = made[i]));
+    }
+  }
+
+  /// What a declared read of counts or columns answers (chat-reads.ts), as SQLite gives it.
+  chatCounted<P>(read: ChatRead<P>, p: P): SqlRow[] {
+    return this.sql.all(read.sql, read.params(p));
+  }
+
+  /// Chat records by their keys (station, id), `archived` or not, in that order (undefined: none): each kept by its key
+  /// as it is kept, the JSON of those not kept read by one statement (json_each), by their primary keys.
+  #records(found: [string, string][], archived: number): (J | undefined)[] {
+    const out: (J | undefined)[] = found.map(([station, id]) => this.#cache.get(K("chat", station, archived, id)) ?? undefined);
+    const missing = found.filter((_, i) => out[i] === undefined);
+    if (missing.length === 0) return out;
+    const read = new Map<string, SqlRow>();
+    for (const r of this.sql.all("SELECT c.station, c.id, c.json, c.unread FROM json_each(?) AS k CROSS JOIN chat AS c WHERE c.station = json_extract(k.value, '$[0]') AND c.archived = ? AND c.id = json_extract(k.value, '$[1]')", [JSON.stringify(missing), archived])) {
+      read.set(K(String(r[0]), String(r[1])), r);
+    }
+    found.forEach(([station, id], i) => {
+      if (out[i] !== undefined) return;
+      const r = read.get(K(station, id));
+      if (r !== undefined) out[i] = this.#chatRow(station, archived, id, r[2], r[3]);
+    });
+    return out;
+  }
+
+  /// A sidebar row by its id where it is held in memory (read or written this run): nothing read.
+  heldChat(station: string, id: string): J {
+    const kept = this.#cache.get(K("chat", station, 0, id));
+    return kept === null ? undefined : kept;
+  }
+
   /// A sidebar row by its id.
   chat(station: string, id: string): J {
-    const r = this.sql.all("SELECT json, unread FROM chat WHERE station = ? AND archived = 0 AND id = ?", [station, id])[0];
-    return r ? this.#chatRow(station, 0, id, r[0], r[1]) : undefined;
+    // (a row kept by its key is the one in the database: written, it is kept anew; gone, let go)
+    const kept = this.#cache.get(K("chat", station, 0, id));
+    if (kept !== undefined && kept !== null) return kept;
+    return this.chatFound(CHAT_READS.row, { station, id })[0]?.record;
   }
 
   /// The row of a chat a link names (its row's id, or its agent's session), listed or archived, and whether archived: a
-  /// row or two read, not the station's lists.
+  /// row read, not the station's lists.
   chatNamed(station: string, id: string): { row: J; archived: boolean } | undefined {
-    for (const archived of [0, 1]) {
-      const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id])[0]
-        ?? this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = ? AND session = ? ORDER BY ord LIMIT 1", [station, archived, id])[0];
-      if (r) return { row: this.#chatRow(station, archived, String(r[0]), r[1], r[2]), archived: archived === 1 };
-    }
-    return undefined;
+    const found = this.chatFound(CHAT_READS.named, { station, id })[0];
+    return found?.record === undefined ? undefined : { row: found.record, archived: found.archived };
   }
 
   /// The sidebar row of a thread.
   chatOfThread(station: string, thread: number): J {
-    const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND thread = ? ORDER BY ord LIMIT 1", [station, thread])[0];
-    return r ? this.#chatRow(station, 0, String(r[0]), r[1], r[2]) : undefined;
+    return this.chatFound(CHAT_READS.thread, { station, thread })[0]?.record;
   }
 
   /// The sidebar rows a thread's or an agent's session's changes touch: the thread's chat's; the rows the session is
@@ -890,23 +1381,59 @@ export class AccountDb {
 
   /// The sidebar row of an agent's session.
   chatOfSession(station: string, session: string): J {
-    const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND session = ? ORDER BY ord LIMIT 1", [station, session])[0];
-    return r ? this.#chatRow(station, 0, String(r[0]), r[1], r[2]) : undefined;
+    return this.chatFound(CHAT_READS.session, { station, session })[0]?.record;
+  }
+
+  /// The sidebar row an agent's session is among the agents of (`chat_agent`), the first in the list's order.
+  chatOfAgent(station: string, session: string): J {
+    return this.chatFound(CHAT_READS.agent, { station, session })[0]?.record;
   }
 
   /// The sidebar row asked for here under a client key (views/local.ts).
   chatOfClientKey(station: string, key: string): J {
-    const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND client_key = ? LIMIT 1", [station, key])[0];
-    return r ? this.#chatRow(station, 0, String(r[0]), r[1], r[2]) : undefined;
+    return this.chatFound(CHAT_READS.client, { station, key })[0]?.record;
   }
 
-  /// The rows of these stations a list shows first: the pinned, then the latest active, `limit` of them.
-  chatHead(stations: string[], limit: number): [string, J][] {
+  /// The rows of these stations a list shows first: the pinned, then the latest active, `limit` of them; `mine`, of the
+  /// viewer's own alone (a list of them, whose first rows are not the first of all: its column, not a row read to see).
+  chatHead(stations: string[], limit: number, mine = false): [string, J][] {
     if (stations.length === 0) return [];
     const marks = stations.map(() => "?").join(", ");
-    return this.sql
-      .all(`SELECT station, id, json, unread FROM chat WHERE archived = 0 AND station IN (${marks}) ORDER BY pinned_at DESC, last_active DESC LIMIT ?`, [...stations, limit])
-      .map((r) => [String(r[0]), this.#chatRow(String(r[0]), 0, String(r[1]), r[2], r[3])]);
+    const where = `archived = 0 AND station IN (${marks})${mine ? " AND mine = 1" : ""} ORDER BY pinned_at DESC, last_active DESC LIMIT ?`;
+    const found = this.sql.all(`SELECT station, id FROM chat WHERE ${where}`, [...stations, limit]);
+    const made = this.#chatRowsFound(found, 0, () => this.sql.all(`SELECT station, id, json, unread FROM chat WHERE ${where}`, [...stations, limit]));
+    return found.flatMap((r, i): [string, J][] => (made[i] === undefined ? [] : [[String(r[0]), made[i]]]));
+  }
+
+  /// The rows of these stations a list shows first (chatHead's), each its row kept beside it under its station's key in
+  /// force (`keys`), else its record: a record's JSON is read only where no row is kept under that key.
+  listHead(stations: string[], limit: number, mine: boolean, keys: Map<string, string>): HeadRow[] {
+    if (stations.length === 0) return [];
+    const d = KEPT.listRow;
+    if (!this.kept.keeps(d)) return this.chatHead(stations, limit, mine).map(([station, record]) => ({ station, id: String(get(record, "id")), pinnedAt: num(get(record, "pinned")), row: null, record }));
+    const marks = stations.map(() => "?").join(", ");
+    const where = `c.archived = 0 AND c.station IN (${marks})${mine ? " AND c.mine = 1" : ""} ORDER BY c.pinned_at DESC, c.last_active DESC LIMIT ?`;
+    // (a row kept under another key not read: joined by the one in force)
+    const j = this.kept.joined(d, "r", ["c.station", "c.id"], `json_extract(?, '$."' || c.station || '"')`);
+    const found = this.sql.all(`SELECT c.station, c.id, c.pinned_at, ${j.columns} FROM chat AS c ${j.join} WHERE ${where}`, [JSON.stringify(Object.fromEntries(keys)), ...stations, limit]);
+    const out: HeadRow[] = [];
+    const missing: SqlRow[] = [];
+    for (const r of found) {
+      const station = String(r[0]);
+      const id = String(r[1]);
+      const key = keys.get(station);
+      const row = key === undefined ? undefined : this.kept.taken(d, [station, id], key, r.slice(3));
+      if (row === undefined) missing.push(r);
+      out.push({ station, id, pinnedAt: typeof r[2] === "number" ? r[2] : null, row: row ?? null, record: undefined });
+    }
+    if (missing.length > 0) {
+      // (theirs alone, by their keys, whatever their number: #byKey's `all` is these too)
+      const theirs = () => this.sql.all("SELECT c.station, c.id, c.json, c.unread FROM json_each(?) AS k CROSS JOIN chat AS c WHERE c.station = json_extract(k.value, '$[0]') AND c.archived = 0 AND c.id = json_extract(k.value, '$[1]')", [JSON.stringify(missing.map((r) => [r[0], r[1]]))]);
+      const records = this.#chatRowsFound(missing.map((r) => [r[0], r[1]]), 0, theirs);
+      const by = new Map(missing.map((r, i) => [K(String(r[0]), String(r[1])), records[i]]));
+      for (const h of out) if (h.row === null) h.record = by.get(K(h.station, h.id));
+    }
+    return out.filter((h) => h.row !== null || h.record !== undefined);
   }
 
   /// How many sidebar rows these stations have.
@@ -918,15 +1445,7 @@ export class AccountDb {
   /// The rows of these stations that ask something of their person or are unread (views/marks.ts).
   marked(stations: string[]): [string, J][] {
     if (stations.length === 0) return [];
-    const marks = stations.map(() => "?").join(", ");
-    return this.sql
-      .all(`SELECT station, id, json, unread FROM chat WHERE archived = 0 AND station IN (${marks}) AND (tone IS NOT NULL OR asks = 1)`, stations)
-      .map((r) => [String(r[0]), this.#chatRow(String(r[0]), 0, String(r[1]), r[2], r[3])]);
-  }
-
-  /// The rows of a station whose agents are at work.
-  running(station: string): J[] {
-    return this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND running = 1", [station]).map((r) => this.#chatRow(station, 0, String(r[0]), r[1], r[2]));
+    return this.chatFound(CHAT_READS.marked, { stations }).flatMap((f): [string, J][] => (f.record === undefined ? [] : [[f.station, f.record]]));
   }
 
   /// The viewer read a thread up to `n`: its rows unread no more where that covers their last message.
@@ -937,7 +1456,7 @@ export class AccountDb {
       const last = u64(get(get(before, "last"), "seq"));
       if (last !== null && n < last) continue;
       const after = { ...before, unread: false };
-      this.#putChatRow(station, 0, id, after, r[1] as number, before);
+      this.#putChatRow(station, 0, id, after, r[1] as number, before, r[1] as number);
       this.#bumpRev(station, "chats");
     }
   }
@@ -950,6 +1469,8 @@ export class AccountDb {
 
   /// A session's summary.
   summary(station: string, key: string): J {
+    const kept = this.#cache.get(K("sum", station, key));
+    if (kept !== undefined && kept !== null) return kept;
     const r = this.sql.all("SELECT summary FROM session WHERE station = ? AND key = ?", [station, key])[0];
     return r && r[0] !== null ? this.#cached(K("sum", station, key), r[0]) : undefined;
   }
@@ -960,13 +1481,16 @@ export class AccountDb {
     return r && r[0] !== null ? this.#cached(K("sum", station, key), r[0]) : undefined;
   }
 
-  /// A station's sessions as read: summaries written where they changed, those no longer listed unlisted.
-  setSessions(station: string, list: J[], confirmed: number | null): void {
+  /// A station's sessions as read: summaries written where they changed, those no longer listed unlisted. `changed`: the
+  /// keys of those its station said changed from the ones held (sync.ts #whole), the rest as written: then only those
+  /// are compared with what is written, the others' places alone read.
+  setSessions(station: string, list: J[], confirmed: number | null, changed?: ReadonlySet<string>): void {
     this.#write(() => {
       const was = new Map<string, SqlRow>();
       // Only listed sessions need comparing with the list. Unlisted ones keep their details but cannot be removed from
       // this list, and the details of listed ones are not needed to compare their summaries either.
-      for (const r of this.sql.all("SELECT key, ord, summary, listed FROM session WHERE station = ? AND listed = 1", [station])) was.set(String(r[0]), r);
+      const read = changed === undefined ? "SELECT key, ord, summary, listed FROM session WHERE station = ? AND listed = 1" : "SELECT key, ord FROM session WHERE station = ? AND listed = 1";
+      for (const r of this.sql.all(read, [station])) was.set(String(r[0]), r);
       const items: [string, J][] = [];
       const seen = new Set<string>();
       for (const s of list) {
@@ -975,24 +1499,27 @@ export class AccountDb {
         seen.add(key);
         items.push([key, s]);
       }
-      const places = placesFor(items.map(([key]) => (was.get(key)?.[3] === 1 ? (was.get(key)![1] as number) : null)));
-      let changed = false;
+      const places = placesFor(items.map(([key]) => (was.has(key) ? (was.get(key)![1] as number) : null)));
+      let wrote = false;
       items.forEach(([key, s], i) => {
         const r = was.get(key);
+        // (as written, where it stays: none of it to compare)
+        if (r && r[1] === places[i] && changed !== undefined && !changed.has(key)) return;
         const json = JSON.stringify(s);
-        if (r && r[3] === 1 && r[1] === places[i] && r[2] === json) return;
-        changed = true;
+        const summary = changed === undefined ? r?.[2] : r && changed.has(key) ? this.sql.all("SELECT summary FROM session WHERE station = ? AND key = ?", [station, key])[0]?.[0] : undefined;
+        if (r && r[1] === places[i] && summary === json) return;
+        wrote = true;
         this.#putSummary(station, key, s, json, 1, places[i]);
       });
-      for (const [key, r] of was) {
-        if (seen.has(key) || r[3] !== 1) continue;
-        changed = true;
+      for (const [key] of was) {
+        if (seen.has(key)) continue;
+        wrote = true;
         this.#run("UPDATE session SET listed = 0 WHERE station = ? AND key = ?", [station, key]);
         this.#loadedList(station, "sessions")?.delete(key);
         this.#tell({ topic: "sessions", station });
         this.#tellSession(station, key);
       }
-      this.#markListed(station, "sessions", confirmed, changed);
+      this.#markListed(station, "sessions", confirmed, wrote);
     });
   }
 
@@ -1103,11 +1630,10 @@ export class AccountDb {
   }
 
   #detailThreads(station: string, key: string, ids: number[]): J[] {
-    const rows = this.sql.all(
-      `SELECT id, json, last, read, unread FROM thread WHERE station = ? AND (id IN (SELECT thread FROM thread_member WHERE station = ? AND session = ?)${ids.length > 0 ? ` OR id IN (${ids.map(() => "?").join(", ")})` : ""}) ORDER BY sort_at DESC, created_at DESC, id DESC`,
-      [station, station, key, ...ids],
-    );
-    return rows.map((r) => this.#threadRow(station, r[0] as number, r[1], r[2], r[3], r[4]));
+    const where = `station = ? AND (id IN (SELECT thread FROM thread_member WHERE station = ? AND session = ?)${ids.length > 0 ? ` OR id IN (${ids.map(() => "?").join(", ")})` : ""}) ORDER BY sort_at DESC, created_at DESC, id DESC`;
+    const found = this.sql.all(`SELECT id FROM thread WHERE ${where}`, [station, station, key, ...ids]);
+    const made = this.#threadsFound(station, found, () => this.sql.all(`SELECT id, json, last, read, unread FROM thread WHERE ${where}`, [station, station, key, ...ids]));
+    return made.filter((t) => t !== undefined);
   }
 
   /// A session's detail as read (GET /sessions/:key): its threads into their rows (the ids it named kept), the rest
@@ -1177,13 +1703,28 @@ export class AccountDb {
 
   // ── threads ──
 
-  #threadRow(station: string, id: number, json: SqlValue, last: SqlValue, read: SqlValue, unread: SqlValue): J {
+  /// `read` false: `json` as written here, not read.
+  #threadRow(station: string, id: number, json: SqlValue, last: SqlValue, read: SqlValue, unread: SqlValue, fromDb = true): J {
     return this.#cached(K("thread", station, id), json, (t) => {
       if (last !== null) t.last = last;
       if (read !== null) t.read = read;
       if (unread !== null) t.unread = unread;
       return t;
-    });
+    }, fromDb);
+  }
+
+  /// A station's thread rows a query found (`found`: their ids first), in its order (account.ts #byKey); `all` the
+  /// query again with their JSON (id, json, last, read, unread). A thread's `last`, `read` and `unread`, columns only,
+  /// are in its row as kept: a change of them lets the row go (#threadChanged).
+  #threadsFound(station: string, found: SqlRow[], all: () => SqlRow[]): (J | undefined)[] {
+    const key = (r: SqlRow) => K("thread", station, r[0] as number);
+    return this.#byKey(
+      found.map((r) => [key(r), r[0]]),
+      all,
+      (keys) => this.sql.all("SELECT t.id, t.json, t.last, t.read, t.unread FROM json_each(?) AS k CROSS JOIN thread AS t WHERE t.station = ? AND t.id = k.value", [keys, station]),
+      key,
+      (r) => this.#threadRow(station, r[0] as number, r[1], r[2], r[3], r[4]),
+    );
   }
 
   /// A thread's summary, listed or not.
@@ -1253,7 +1794,7 @@ export class AccountDb {
       [station, id, isListed, c.last, c.read, c.unread, c.sortAt, c.createdAt, c.surface, c.first, c.json],
     );
     this.#cache.delete(K("thread", station, id));
-    const row = this.#threadRow(station, id, c.json, c.last, c.read, c.unread);
+    const row = this.#threadRow(station, id, c.json, c.last, c.read, c.unread, false);
     const members = membersOf(view);
     const was = before ? membersOf(before) : [];
     if (members.join("\u0001") !== was.join("\u0001")) {
@@ -1287,21 +1828,22 @@ export class AccountDb {
     this.#tell({ topic: "thread", station, thread: id });
   }
 
-  /// A station's threads as read.
-  setThreads(station: string, list: J[], confirmed: number | null): void {
+  /// A station's threads as read. `changed`: the ids of those its station said changed from the ones held (sync.ts
+  /// #whole), the rest as written: only those are compared with what is written.
+  setThreads(station: string, list: J[], confirmed: number | null, changed?: ReadonlySet<string>): void {
     this.#write(() => {
       const seen = new Set<number>();
       for (const view of list) {
         const id = u64(get(view, "id"));
         if (id === null || seen.has(id)) continue;
         seen.add(id);
-        this.#putThreadRow(station, view, 1);
+        if (changed === undefined || changed.has(String(id))) this.#putThreadRow(station, view, 1);
       }
-      let changed = false;
+      let wrote = false;
       for (const r of this.sql.all("SELECT id FROM thread WHERE station = ? AND listed = 1", [station])) {
         const id = r[0] as number;
         if (seen.has(id)) continue;
-        changed = true;
+        wrote = true;
         const before = this.thread(station, id);
         this.#run("UPDATE thread SET listed = 0 WHERE station = ? AND id = ?", [station, id]);
         this.#loadedList(station, "threads")?.delete(String(id));
@@ -1309,7 +1851,7 @@ export class AccountDb {
         this.#tell({ topic: "thread", station, thread: id });
         for (const member of membersOf(before)) this.#tellSession(station, member);
       }
-      this.#markListed(station, "threads", confirmed, changed);
+      this.#markListed(station, "threads", confirmed, wrote);
     });
   }
 
@@ -1324,11 +1866,6 @@ export class AccountDb {
       this.#deleteThread(station, id);
       this.#forgetEntries(station, id);
     });
-  }
-
-  /// A thread out of the lists (it is not there any more), its entries kept.
-  unlistThread(station: string, id: number): void {
-    this.#write(() => this.#deleteThread(station, id));
   }
 
   /// A thread goes at least to `n` (an event, a message sent).
@@ -1382,15 +1919,17 @@ export class AccountDb {
 
   // ── jobs ──
 
-  #jobItem(station: string, id: string, json: SqlValue, chat: SqlValue): J {
+  #jobItem(station: string, id: string, json: SqlValue, chat: SqlValue, fromDb = true): J {
     return this.#cached(K("jobitem", station, id), json, (job) => {
       if (chat !== null && chat !== undefined) job.chat = parse(chat);
       return job;
-    });
+    }, fromDb);
   }
 
   /// A job as it is now.
   job(station: string, id: string): J {
+    const kept = this.#cache.get(K("job", station, id));
+    if (kept !== undefined && kept !== null) return kept;
     const r = this.sql.all("SELECT json FROM job WHERE station = ? AND id = ?", [station, id])[0];
     return r ? this.#cached(K("job", station, id), r[0]) : undefined;
   }
@@ -1437,7 +1976,7 @@ export class AccountDb {
     this.#cache.delete(K("job", station, id));
     this.#cache.delete(K("jobitem", station, id));
     const list = this.#loadedList(station, "jobs");
-    if (open) list?.set(id, this.#jobItem(station, id, json, chat), [ord]);
+    if (open) list?.set(id, this.#jobItem(station, id, json, chat, false), [ord]);
     else list?.delete(id);
     this.#tell({ topic: "jobs", station });
     this.#tell({ topic: "job", station, id });
@@ -1686,7 +2225,8 @@ export class AccountDb {
         if (written.length > 0 && this.#readSlackSaid(station, id, written)) said = true;
         if (said) this.#tellLog("slack", station, id);
       }
-      if (changed) this.#tellLog(table, station, id);
+      // (what was put, unless something was cut too)
+      if (changed) this.#tellLog(table, station, id, cutAfter === null ? written.map(([n]) => n) : null);
       if (index) {
         index.put(written.map(([n]) => n), cutAfter);
         this.#logIndices.set(cacheKey, index);
@@ -2038,13 +2578,16 @@ export class AccountDb {
         this.#mdSize = null;
       }
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
+      this.kept.forgetStation(station);
       this.#cache.clear();
+      this.#logPutsForgotten();
       this.#logCache.clear();
       this.#logIndices.clear();
       this.#logSpans.clear();
       for (const key of [...this.#lists.keys()]) if (key.endsWith(`\u0001${station}`)) this.#lists.delete(key);
+      for (const list of ["chats", "archived"] as const) this.#chatsHeld.delete(K(list, station));
       this.#tell({ topic: "$station-reset", station });
-      for (const topic of ["overview", "footprint", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
+      for (const topic of ["overview", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
     });
   }
 

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
-const envScript = fileURLToPath(new URL("../mbui/scripts/env.sh", import.meta.url));
+const envScript = fileURLToPath(new URL("../../../libs/mbui/scripts/env.sh", import.meta.url));
 
 test("the default toolchain does not name a private station session", () => {
   const hasPrivateSession = /\.stillfail\/remote\/sessions\//.test(readFileSync(envScript, "utf8"));

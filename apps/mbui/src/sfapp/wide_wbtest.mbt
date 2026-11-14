@@ -17,7 +17,7 @@ fn wide_tester(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -34,7 +34,36 @@ fn wide_tester(
 test "wide: existing chat messages are fully visible in the first frame" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  assert_eq(t.look_of("做完了：").map(fn(l) { l.2 }), Some(1.0))
+  // (its words drawn in the first frame as they are at rest: there, in the colours they are drawn in then, none on its
+  // way in; the old view's message by its look, one of the tree's by its glyphs where its words are drawn)
+  match t.look_of("做完了：") {
+    Some(l) => assert_eq(l.2, 1.0)
+    None => {
+      let first = colours_of_words(t, "做完了：")
+      assert_true(first.length() > 0, msg="「做完了：」 not drawn in the first frame")
+      t.run_for(@ui.move_most_ms)
+      assert_eq(first, colours_of_words(t, "做完了："))
+    }
+  }
+}
+
+///|
+/// The colours the glyphs drawn where words `s` of a paragraph are (Tester::run_rects' first line of them) are drawn
+/// in, each once, in order.
+fn colours_of_words(t : @ui.Tester, s : String) -> Array[Int64] {
+  match t.run_rects(s) {
+    [(x, y, w, h), ..] => {
+      let out : Array[Int64] = []
+      for g in t.drawn_glyphs() {
+        if g.0 >= x - 1.0 && g.0 < x + w && g.1 >= y - h / 2.0 && g.1 < y + h && !out.contains(g.2) {
+          out.push(g.2)
+        }
+      }
+      out.sort()
+      out
+    }
+    _ => []
+  }
 }
 
 ///|
@@ -117,7 +146,7 @@ test "wide: a row's menu from its right click pins it (chat.pin) and closes" {
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
   assert_true(t.find("重命名") is Some(_))
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   match t.find("固定") {
     Some(_) => {
       t.tap_text("固定")
@@ -127,7 +156,7 @@ test "wide: a row's menu from its right click pins it (chat.pin) and closes" {
     None => ()
   }
   t.key(@ui.key_escape)
-  assert_true(t.find("复制会话链接") is None)
+  assert_true(t.find("分享…") is None)
 }
 
 ///|
@@ -136,6 +165,8 @@ test "wide: a row's menu offers what its page's \"…\" does besides (分享给�
   let t = wide_tester(calls, mode="home-share")
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
+  // (in its 分享…, with the rest of what shares it)
+  open_share(t)
   assert_true(t.query(MenuItem, label="分享给其他 workspace") is Some(_), msg=t.drawn_text())
   assert_true(t.query(MenuItem, label="在 Slack 中打开") is Some(_), msg=t.drawn_text())
   t.click(MenuItem, label="分享图片")
@@ -146,6 +177,7 @@ test "wide: a row's menu offers what its page's \"…\" does besides (分享给�
   t.key(@ui.key_escape)
   let (x, y) = t.find("给设置页加一个深色模式开关").unwrap()
   t.right_click(x, y)
+  open_share(t)
   assert_true(t.query(MenuItem, label="复制会话链接") is Some(_))
   assert_true(t.query(MenuItem, label="分享图片") is None)
   assert_true(t.query(MenuItem, label="分享给其他 workspace") is None)
@@ -388,6 +420,36 @@ test "wide: where this machine is a station, files from the Finder let go on the
 }
 
 ///|
+/// Where the chat's find colours its matches in, in the window (x, y, w, h): the highlighter's bands (a shape, the old
+/// page's) or a mark's ground under the words (View::runs_marks: a rect), in its colour on the light theme.
+fn find_coloured_in(t : @ui.Tester) -> Array[(Double, Double, Double, Double)] {
+  let ink = 0xFFCC00D9L
+  let out = t.drawn_shapes().filter(fn(r) { r.5 == ink }).map(fn(r) { (r.0, r.1, r.2, r.3) })
+  out.append(t.drawn_rects().filter(fn(r) { r.4 == ink }).map(fn(r) { (r.0, r.1, r.2, r.3) }))
+  out
+}
+
+///|
+/// Where the find's strokes in `color`, `width` thick, start, in the window (x, y): a hand-drawn line (the old page's)
+/// or a mark's line at the words' foot (View::runs_marks: a rect that thick).
+fn find_strokes(t : @ui.Tester, color : Int64, width : Double) -> Array[(Double, Double)] {
+  let out = t.drawn_lines().filter(fn(l) { l.4 == width && l.5 == color }).map(fn(l) { (l.0, l.1) })
+  out.append(
+    t.drawn_rects().filter(fn(r) { r.4 == color && (r.3 - width).abs() < 0.01 && r.2 > width }).map(fn(r) { (r.0, r.1) }),
+  )
+  out
+}
+
+///|
+/// Whether a stroke of the find's (find_strokes) is under a line of words drawn holding `words` (search_stroke_under's).
+fn find_stroke_under(t : @ui.Tester, words : String, color : Int64, width : Double) -> Bool {
+  let text = t.text_runs().filter(fn(r) { r.text.contains(words) })
+  find_strokes(t, color, width).iter().any(fn(l) {
+    text.iter().any(fn(r) { l.0 >= r.x0 - 3.0 && l.0 <= r.x1 + 3.0 && l.1 >= r.base && l.1 <= r.bottom + 8.0 })
+  })
+}
+
+///|
 test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter the next, Esc closes it and forgets" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
@@ -412,16 +474,16 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   assert_true(@sfpages.find_at() != first || @sfpages.find_k() > 0 || total == 1)
   assert_eq(@sfpages.find_words_in("ws1/st1\u{1}s-c1"), ["截图"])
   t.run_for(@sfpages.found_draw_ms)
-  assert_true(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }), msg="the matches are not coloured in")
-  assert_true(search_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width), msg="the current match has no stroke")
-  assert_false(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width), msg="other matches are stroked")
+  assert_true(find_coloured_in(t).length() > 0, msg="the matches are not coloured in")
+  assert_true(find_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width), msg="the current match has no stroke")
+  assert_false(find_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width), msg="other matches are stroked")
   // Clearing the field removes the current message's mark as well as the other matches'.
   t.backspace()
   t.backspace()
   t.frame()
   assert_true(@sfpages.find_words_in("ws1/st1\u{1}s-c1").is_empty())
-  assert_false(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }))
-  assert_false(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width))
+  assert_true(find_coloured_in(t).is_empty())
+  assert_false(find_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width))
   t.key(@ui.key_escape)
   t.frame()
   assert_true(t.find("在对话中查找") is None)
@@ -456,18 +518,19 @@ test "wide: next and previous move the stroke between occurrences in one message
   t.type_text("一起")
   t.run_for(@sfpages.find_typing_ms * 2.0 + @sf.stroke_ms)
   t.frame()
-  let w = t.ctx().words_of("pick/ts8").unwrap()
-  let ranges = @sf.find_words(w.text, ["一起"])
+  // (ts8's words, where they are drawn: "深色模式我一起看。要不要把旧的截图也一起换掉？")
+  let (rl, wx, wy) = t.rich_of("深色模式我一起看").unwrap()
+  let ranges = @sf.find_words(rl.text, ["一起"])
   assert_eq(ranges.length(), 2)
-  let first = w.rects(ranges[0].0, ranges[0].1)[0]
-  let second = w.rects(ranges[1].0, ranges[1].1)[0]
+  let at = fn(r : (Double, Double, Double, Double)) { (r.0 + wx, r.1 + wy, r.2, r.3) }
+  let first = at(rl.rects(ranges[0].0, ranges[0].1)[0])
+  let second = at(rl.rects(ranges[1].0, ranges[1].1)[0])
   // (the matches coloured in: a band of it over a match's words)
   let coloured = fn(rect : (Double, Double, Double, Double)) {
-    t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L && r.0 < rect.0 + rect.2 && r.0 + r.2 > rect.0 && r.1 < rect.1 + rect.3 && r.1 + r.3 > rect.1 })
+    find_coloured_in(t).iter().any(fn(r) { r.0 < rect.0 + rect.2 && r.0 + r.2 > rect.0 && r.1 < rect.1 + rect.3 && r.1 + r.3 > rect.1 })
   }
   let strong_under = fn(rect : (Double, Double, Double, Double)) {
-    t.drawn_lines().iter().any(fn(l) {
-      l.4 == @sf.message_stroke.width && l.5 == @sf.theme().p.accent &&
+    find_strokes(t, @sf.theme().p.accent, @sf.message_stroke.width).iter().any(fn(l) {
       l.0 >= rect.0 - 3.0 && l.0 <= rect.0 + rect.2 + 3.0 && l.1 >= rect.1 && l.1 <= rect.1 + rect.3 + 8.0
     })
   }
@@ -477,7 +540,7 @@ test "wide: next and previous move the stroke between occurrences in one message
   t.frame()
   t.frame()
   assert_eq(@sfpages.find_k(), 1)
-  assert_true(reading_of("ws1/st1\u{1}s-c1").found_drawn.get() < @sf.stroke_ms, msg="the stroke draws in again for the next occurrence")
+  assert_true(reading_of("ws1/st1\u{1}s-c1").found_drawn.get(t.ctx()) < @sf.stroke_ms, msg="the stroke draws in again for the next occurrence")
   assert_true(coloured(first) && coloured(second), msg="the colouring in is still, as the reader moves")
   t.run_for(@sf.stroke_ms)
   assert_true(!strong_under(first) && strong_under(second), msg="the second occurrence is current")
@@ -575,7 +638,7 @@ test "wide: the machine's own sessions offered under the composer as its station
   }
   // under the composer, which has not moved for it
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
-  assert_true(oy > by + bh, msg="the offer at \{oy} under the composer \{(by, bh)}")
+  assert_true(oy > by + bh, msg="the offer at \{oy} under the composer \{Repr((by, bh))}")
   let ground = fn() {
     t.drawn_rects().iter().any(fn(r) { r.4 == @sf.theme().p.hover && r.2 < 400.0 && ox > r.0 && ox < r.0 + r.2 && oy > r.1 && oy < r.1 + r.3 })
   }
@@ -583,12 +646,12 @@ test "wide: the machine's own sessions offered under the composer as its station
     t.drawn_glyphs().filter(fn(g) { (g.1 - oy).abs() < 12.0 && (g.0 - ox).abs() < 100.0 }).map(fn(g) { g.2 })
   }
   assert_false(ground())
-  assert_true(inks().length() > 0 && inks().iter().all(fn(k) { k == @sf.theme().p.muted }), msg="quiet: \{inks()}")
+  assert_true(inks().length() > 0 && inks().iter().all(fn(k) { k == @sf.theme().p.muted }), msg="quiet: \{Repr(inks())}")
   // pointed at: its ground, its words the text's
-  t.move(ox, oy)
+  t.move_to(ox, oy)
   t.draw()
   assert_true(ground(), msg="the hover's ground under the offer")
-  assert_true(inks().iter().all(fn(k) { k == @sf.theme().p.text }), msg="lit: \{inks()}")
+  assert_true(inks().iter().all(fn(k) { k == @sf.theme().p.text }), msg="lit: \{Repr(inks())}")
   // left: quiet again
   t.leave()
   assert_false(ground())
@@ -626,7 +689,6 @@ fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
         ("newChat", Some(Object(v))) => {
           let m = v.copy()
           if text(v.get("station"), "id") == "st2" {
-            m["frequent"] = Json::array([])
             m["spent"] = Json::string("Opus 5.5 的额度已用完，发出的消息会等它恢复")
             m["problem"] = Json::string("Maple 上还没有选好要用的模型")
           } else {
@@ -813,11 +875,11 @@ test "wide: a new chat becomes its chat as the web's: its scene fading where it 
   let (mx, my, mw, mh) = composer_glass(t)
   // (as tall as the new chat's box was, about: focused, the chat's is a box too, Chat.tsx multiline)
   ignore(mh)
-  assert_true(my > by + 20.0 && mx < bx && mw > bw, msg="the composer on its way: \{(mx, my, mw, mh)} from \{(bx, by, bw, bh)}")
+  assert_true(my > by + 20.0 && mx < bx && mw > bw, msg="the composer on its way: \{Repr((mx, my, mw, mh))} from \{Repr((bx, by, bw, bh))}")
   // the composer at the chat's foot as the words land (520 ms), a capsule as wide as the column and its curves
   t.run_for(sent + flight_desk_ms + 1.0 - t.time())
   let (ex, ey, ew, eh) = composer_glass(t)
-  assert_true(ey + eh > 800.0 - 30.0, msg="at the foot: \{(ex, ey, ew, eh)}")
+  assert_true(ey + eh > 800.0 - 30.0, msg="at the foot: \{Repr((ex, ey, ew, eh))}")
   assert_true(ew > bw)
   t.frame()
   assert_at((ex, ey), { let (x, y, _, _) = composer_glass(t); (x, y) })
@@ -825,7 +887,7 @@ test "wide: a new chat becomes its chat as the web's: its scene fading where it 
   t.run_for(sent + flight_carry_ms + 34.0 - t.time())
   assert_true(send_flight.get() is None)
   let landed = seen_once(t, words)
-  assert_true(landed.1 < ey && landed.1 > ey - 200.0 && landed.0 > typed.0 + 100.0, msg="landed at \{landed} from \{typed}")
+  assert_true(landed.1 < ey && landed.1 > ey - 200.0 && landed.0 > typed.0 + 100.0, msg="landed at \{Repr(landed)} from \{Repr(typed)}")
 }
 
 ///|
@@ -858,7 +920,7 @@ fn hint_drawn(t : @ui.Tester) -> Bool raise {
 
 ///|
 test "wide: a new chat's first words, the hint gone under them, into their bubble over the composer from the frame they are sent, whenever the core answers" {
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let unread = @signals.signal(true)
   let t = held_core(held, unread, w=1280.0, h=800.0, platform=0)
   t.frame()
@@ -889,7 +951,7 @@ test "wide: a new chat's first words, the hint gone under them, into their bubbl
   assert_true(send_flight.get() is None)
   // over the composer at the chat's foot (the chat's rows at its end), down with it from where they were typed
   let (_, foot_y, _, _) = composer_glass(t)
-  assert_true(landed.1 > typed.1 && landed.1 < foot_y, msg="landed at \{landed} from \{typed}")
+  assert_true(landed.1 > typed.1 && landed.1 < foot_y, msg="landed at \{Repr(landed)} from \{Repr(typed)}")
   // the core's answers and its view: they stay
   for name in ["newChat.create", "chat.send"] {
     match held.get(name) {
@@ -916,7 +978,7 @@ fn choices_in_ground(t : @ui.Tester) -> Unit raise {
   let at = seen_words(t, "Willow").filter(fn(p) { p.0 > gx && p.0 < gx + gw })
   assert_true(
     at.length() > 0 && at.iter().all(fn(p) { p.1 >= gy && p.1 <= gy + gh }),
-    msg="the choices at \{at}, the composer's ground \{(gx, gy, gw, gh)} at \{t.time()}",
+    msg="the choices at \{Repr(at)}, the composer's ground \{Repr((gx, gy, gw, gh))} at \{t.time()}",
   )
 }
 
@@ -925,7 +987,7 @@ fn choices_in_ground(t : @ui.Tester) -> Unit raise {
 let chat_seen_ms : Double = 300.0
 
 ///|
-test "wide: a chat and a new chat switched by the sidebar: the composer goes between their places, a new chat left leaves by its own way, what comes in is there at once" {
+test "wide: a chat and a new chat switched by the sidebar: the composer goes between their places, the rest of the page the other's at once, the new chat left gone in that frame" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   // (the chat seen before the sidebar is tapped: its composer put there at once as it opened, at the run's first
@@ -939,7 +1001,7 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   let went = t.time()
   assert_true(app.nav.top() == NewChat)
   let (_, y0, _, h0) = composer_glass(t)
-  assert_true((y0 + h0 - (cy + ch)).abs() < 1.0, msg="from the chat's foot: \{(y0, h0)} \{(cy, ch)}")
+  assert_true((y0 + h0 - (cy + ch)).abs() < 1.0, msg="from the chat's foot: \{Repr((y0, h0))} \{Repr((cy, ch))}")
   assert_eq(t.look_of("想让 agent 做什么？").map(fn(l) { l.2 }), Some(1.0))
   // what it holds there and did not at the chat's foot (the new chat's choices) carried on its ground all the way
   choices_in_ground(t)
@@ -947,24 +1009,23 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   choices_in_ground(t)
   t.run_for(went + @ui.move_most_ms + 1.0 - t.time())
   let (_, y1, _, h1) = composer_glass(t)
-  assert_true(y1 + h1 < cy - 100.0, msg="in the page's middle: \{(y1, h1)}")
+  assert_true(y1 + h1 < cy - 100.0, msg="in the page's middle: \{Repr((y1, h1))}")
   assert_eq(t.look_of("想让 agent 做什么？").map(fn(l) { l.2 }), Some(1.0))
-  // back to the chat by its row: the composer down to its foot, the new chat's scene fading where it is (its
-  // own way, as one become its chat leaves), the chat there at once under it
+  // back to the chat by its row: the composer down to its foot from its place in the page, the rest the chat's at
+  // once, the new chat's scene gone in that frame (another chat looked at: nothing of the new chat fades over it, its
+  // words over the chat's own as it went till 2026-11-14; the coordinator of the migration's ruling)
   t.tap_text("整理发布清单")
   t.draw()
   let back = t.time()
   assert_true(app.nav.top() is Chat(_))
+  assert_true(t.find("想让 agent 做什么？") is None, msg="the new chat's scene over the chat at \{t.time()}")
+  let (_, yb, _, hb) = composer_glass(t)
+  assert_true(yb + hb < cy - 100.0, msg="from its place in the page: \{Repr((yb, hb))}")
   t.run_for(new_leave_ms / 2.0)
-  match t.look_of("想让 agent 做什么？") {
-    Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="leaving: \{a}")
-    None => fail("the new chat gone at once")
-  }
-  t.run_for(back + new_leave_ms + 1.0 - t.time())
-  assert_true(t.find("想让 agent 做什么？") is None)
+  assert_true(t.find("想让 agent 做什么？") is None, msg="the new chat's scene over the chat at \{t.time()}")
   t.run_for(back + @ui.move_most_ms + 1.0 - t.time())
   let (_, y2, _, h2) = composer_glass(t)
-  assert_true((y2 + h2 - (cy + ch)).abs() < 1.0, msg="at the chat's foot again: \{(y2, h2)}")
+  assert_true((y2 + h2 - (cy + ch)).abs() < 1.0, msg="at the chat's foot again: \{Repr((y2, h2))}")
 }
 
 ///|
@@ -1039,11 +1100,16 @@ test "wide: words picked in a message are what ⌘C copies while the composer ke
   t.drag(px + 1.0, py + ph / 2.0, px + pw - 1.0, py + ph / 2.0)
   t.frame()
   assert_eq(t.ctx().selected_text(), "第二屏的插画")
-  assert_true(t.ctx().field_focused())
+  // (the composer keeps the keyboard: the host told a field of its words is in use, on a page of either kind)
+  let composing = fn() {
+    let (active, words, _, _) = t.ime()
+    active && words == "发布前再看一眼"
+  }
+  assert_true(composing(), msg="the composer's focus: \{Repr(t.ime())}")
   t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
   t.frame()
   assert_eq(t.clipboard(), "第二屏的插画")
-  assert_true(t.ctx().field_focused())
+  assert_true(composing(), msg="the composer's focus: \{Repr(t.ime())}")
 }
 
 ///|
@@ -1142,7 +1208,7 @@ test "wide: words picked in a message with the pointer: 引用 over them quotes 
     [w, ..] => (w.1, w.2)
     _ => fail("no 引用 over what is picked")
   }
-  assert_true((qx - (px + pw)).abs() < 40.0, msg="引用 at \{(qx, qy)}")
+  assert_true((qx - (px + pw)).abs() < 40.0, msg="引用 at \{Repr((qx, qy))}")
   t.tap(qx + 4.0, qy + 4.0)
   t.frame()
   // into the chat's draft as the core keeps it (composer.quote), whose words with them
@@ -1165,11 +1231,15 @@ test "wide: words in a message that did not go can be picked, copied and quoted"
   assert_true(selected != "")
   t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
   assert_eq(t.clipboard(), selected)
-  t.tap_text("引用")
+  // (its 引用 over where the pointer let go, an old view's words or a node of the tree's: where it is drawn)
+  match t.words().filter(fn(w) { w.0 == "引用" }) {
+    [(_, qx, qy, qw, qh, _), ..] => t.tap(qx + qw / 2.0, qy + qh / 2.0)
+    _ => fail("no 引用 over what is picked")
+  }
   let quoted = named(calls, "composer.quote")
   assert_eq(quoted.length(), 1)
   let q = field(Some(quoted[0].params), "quote")
-  assert_eq(text(q, "text"), selected.trim(chars=" \n\t").to_string())
+  assert_eq(text(q, "text"), selected.trim(chars=" \n\t").to_owned())
   assert_eq(text(q, "ts"), "")
 }
 
@@ -1194,7 +1264,7 @@ test "wide: words picked with the pointer from a message's heading into its list
     [w, ..] => (w.1, w.2)
     _ => fail("no 引用 over where the pointer let go")
   }
-  assert_true(qy > hy && (qx - (ix + iw)).abs() < 40.0, msg="引用 at \{(qx, qy)}")
+  assert_true(qy > hy && (qx - (ix + iw)).abs() < 40.0, msg="引用 at \{Repr((qx, qy))}")
   // dragged up the other way, over the heading where it let go, at its start
   t.drag(ix + iw - 1.0, iy + ih / 2.0, hx + 1.0, hy + hh / 2.0)
   t.frame()
@@ -1203,7 +1273,7 @@ test "wide: words picked with the pointer from a message's heading into its list
     [w, ..] => (w.1, w.2)
     _ => fail("no 引用 over where the pointer let go")
   }
-  assert_true((qx - hx).abs() < 40.0, msg="引用 at \{(qx, qy)}")
+  assert_true((qx - hx).abs() < 40.0, msg="引用 at \{Repr((qx, qy))}")
   t.tap(qx + 4.0, qy + 4.0)
   t.frame()
   let quoted = named(calls, "composer.quote")
@@ -1558,7 +1628,7 @@ test "wide: a place of the rail pressed with ⌘ held and dragged up a place is 
   t.press_at(x, y)
   t.hold_mods(0)
   for k in 1..=10 {
-    t.move(x, y - @sfdesk.rail_pitch * k.to_double() / 10.0)
+    t.move_to(x, y - @sfdesk.rail_pitch * k.to_double() / 10.0)
   }
   t.release(x, y - @sfdesk.rail_pitch)
   t.frame()
@@ -1827,6 +1897,43 @@ test "wide: 文件 from the computer held over the folder say where they go; let
 }
 
 ///|
+/// How long the host takes to read files let go on the window (any while).
+let files_reading : Double = 300.0
+
+///|
+test "wide: 文件 from the computer let go on the folder, their reading done a while after: a folder of them made and filled, each file up" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls)
+  let (x, y) = t.find("合同草稿.pdf").unwrap()
+  let at = (x, y + 120.0)
+  t.hold_files(Some(at))
+  t.frame()
+  t.frame()
+  // (the host reads them a while, as a device's does: what they hold told when the test says)
+  t.picks_by_hand()
+  t.drop_files(at.0, at.1, [
+    ("新的/", Bytes::new(0)),
+    ("新的/记录.txt", @utf8.encode("一行字\n")),
+    ("清单.txt", @utf8.encode("另一行\n")),
+  ])
+  t.frame()
+  t.frame()
+  t.frame()
+  assert_eq(named(calls, "drive.mkdir").length(), 0)
+  t.run_for(files_reading)
+  // read: the host says so
+  t.pick_answer(t.pick_asks().length())
+  t.frame()
+  t.frame()
+  t.frame()
+  let made = named(calls, "drive.mkdir")
+  assert_eq(made.length(), 1, msg="taken once they were read")
+  assert_eq(text(Some(made[0].params), "path"), "新的")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("清单.txt") is Some(_), msg="up")
+}
+
+///|
 test "wide: 文件's columns as Finder's: an edge dragged makes its column wider (that one), with ⌥ every one (kept: prefs.set driveViews.column); pressed twice as wide as its names" {
   let calls : Array[Made] = []
   let t = files_dragging(calls, view="columns")
@@ -1927,7 +2034,7 @@ test "wide: the workspace's page as on a phone: its name its title, who you are 
   assert_true(t.query(Button, label="添加成员") is Some(_))
   assert_true(t.find("管理员") is Some(_), msg="a role at its row's end")
   // the relays and the ways behind one row (workspace_page.mbt ws_ways_panel)
-  assert_true(t.find("连接方式") is Some(_))
+  assert_true(t.find("中继") is Some(_))
   assert_true(t.find("添加中继") is None)
   // a person pressed: what can be done about them, beside them
   assert_false(@sf.presenting())
@@ -1950,7 +2057,7 @@ test "wide: 字体's faces a row each under the places' choice, the chosen one c
   let src2 : Source = {
     ..src,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (src.call)(name, params, done)
     },
   }
@@ -2137,11 +2244,13 @@ test "wide: 用量: what it counts beside its title, the summary, the days split
   // (the chats' sidebar closing to the rail's bar meanwhile, as the web's)
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="说明") is Some(_), msg="what it counts")
-  // the summary, the days split by person or by model (picked over them), the chats; no accounts' list
+  // the period overview, the days split by person, model or account, the breakdown list; the summary on 累计
   assert_true(t.find("整理发布清单") is Some(_), msg="the chats: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("按人") is Some(_) && t.find("按模型") is Some(_) && t.find("按账号") is Some(_), msg="the split")
+  assert_true(t.find("花费明细") is Some(_), msg="breakdown")
+  t.tap_text("累计")
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("累计 token") is Some(_) && t.find("跨设备任务") is Some(_), msg="the summary")
-  assert_true(t.find("按人") is Some(_) && t.find("按模型") is Some(_) && t.find("按账号") is None, msg="the split")
-  assert_true(t.find("按对话") is None, msg="no list to pick")
 }
 
 ///|
@@ -2200,7 +2309,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
     None => fail("no agent's message")
   }
   assert_eq(word("Claude · Opus 5.5").length(), 0)
-  t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
+  t.move_to(last.1 - 20.0, last.2 + last.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // its label and its account under it, where it stands, its latest lines, the figures side by side, the quiet line
   let label = word("Claude · Opus 5.5")
@@ -2214,13 +2323,13 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   let cache = word("91%")
   let names_of = word("费用估算")
   let account = word("林的 Max")
-  let quiet = word("8 轮 · 共干了 1 小时 12 分")
+  let quiet = word("共工作 1 小时 12 分")
   assert_true(
     status.length() == 1 && lines.length() == 1 && cost.length() == 1 && cache.length() == 1 &&
     account.length() == 1 &&
     quiet.length() == 1 &&
     names_of.length() == 1,
-    msg="\{(status, lines, cost, cache, account, quiet, names_of)}",
+    msg="\{Repr((status, lines, cost, cache, account, quiet, names_of))}",
   )
   // 288 wide, its words 16 in from the panel's edge (its padding, 6, and a row's 10): the quiet line as wide as it
   let left = quiet[0].1
@@ -2246,7 +2355,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   assert_true(quiet[0].2 + quiet[0].4 < last.2, msg="over the picture")
   assert_true(left - 16.0 >= 0.0 && left + 288.0 + 16.0 <= 1280.0)
   // gone once the pointer has left it
-  t.move(900.0, 300.0)
+  t.move_to(900.0, 300.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_eq(word("Claude · Opus 5.5").length(), 0)
 }
@@ -2265,7 +2374,7 @@ test "wide: what an agent runs as, pressed in its card, opens its model's panel 
     Some(w) => w
     None => fail("no agent's message")
   }
-  t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
+  t.move_to(last.1 - 20.0, last.2 + last.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   let (x, y, w, h) = t.get(Button, label="Claude · Opus 5.5").rect
   t.click(Button, label="Claude · Opus 5.5")
@@ -2291,13 +2400,13 @@ test "wide: a web link in a message has its page's card while the pointer rests 
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let (x, y) = peek_words_at(t, "https://example.com/bench/list")
   assert_eq(word("列表滚动的性能数据").length(), 0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // its card: the page's title over its site and where it goes
   assert_eq(word("列表滚动的性能数据").length(), 1, msg="its title")
   assert_eq(word("Example · example.com/bench/list").length(), 1, msg="where it goes")
   // gone once the pointer has left it
-  t.move(900.0, 100.0)
+  t.move_to(900.0, 100.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_eq(word("列表滚动的性能数据").length(), 0)
 }
@@ -2311,7 +2420,7 @@ test "wide: a pull request's link in a message has its card as GitHub says it: i
   let said = ["已合并", "acme/shop #128", "3 小时前", "首页列表按天分组", "lin", "+120", "4 个文件", "检查通过 9"]
   // (some said elsewhere too: a message's time)
   let before = said.map(fn(w) { word(w).length() })
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   for k, w in said {
     assert_eq(word(w).length(), before[k] + 1, msg=w)
@@ -2326,7 +2435,7 @@ test "wide: a file an agent names by its path is a chip in its words, its card a
   // its chip: its path and the line it names, as the core shortened it
   let (x, y) = peek_words_at(t, "src/list/place.mbt:12")
   assert_eq(t.locate("self.anchor = self.anchor + n").length(), 0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // its card: its name and line, its whole path (home as ~), its lines round the one named
   assert_eq(word("place.mbt:12").length(), 1, msg="its name and line")
@@ -2360,13 +2469,13 @@ test "wide: a reference to a chat in a message has the chat's card while the poi
   // (its @ and its title one link: from either, the same card)
   let (x, y) = peek_words_at(t, "@首页的列表改成按天分组")
   assert_eq(word(said).length(), 0)
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // read by the core as the pointer came onto it, once each link in the run (peeks.mbt chats_named: kept across runs,
   // so asked again by none after one has read it), the chat found in the workspace's list: where it stands
   assert_true(calls.filter(fn(m) { m.name == "link.parse" }).length() <= 1)
   assert_eq(word(said).length(), 1, msg="where it stands")
-  t.move(900.0, 100.0)
+  t.move_to(900.0, 100.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_eq(word(said).length(), 0)
 }
@@ -2387,22 +2496,22 @@ test "wide: an agent's card says over each of its allowance's chips what is left
     Some(w) => w
     None => fail("no agent's message")
   }
-  t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
+  t.move_to(last.1 - 20.0, last.2 + last.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_eq(word("林的 Max").length(), 1, msg="its card")
   // its weekly window's chip, 18% left: what it says over it once the pointer rests there (which window, what is
   // left, when it refills, as the web's tip), the card staying open
   let chip = word("18%")
-  assert_eq(chip.length(), 1, msg="\{chip}")
+  assert_eq(chip.length(), 1, msg="\{Repr(chip)}")
   let tip = fn() {
     t.words().filter(fn(w) { (w.0.contains("每周剩余 18%") || w.0.contains("2 天 4 小时后刷新")) && w.5 > 0.5 })
   }
   assert_eq(tip().length(), 0)
-  t.move(chip[0].1 + chip[0].3 / 2.0, chip[0].2 + chip[0].4 / 2.0)
+  t.move_to(chip[0].1 + chip[0].3 / 2.0, chip[0].2 + chip[0].4 / 2.0)
   t.run_for(@sf.tip_delay_ms * 2.0)
   assert_true(
     tip().iter().any(fn(w) { w.0.contains("每周剩余 18%") }) && tip().iter().any(fn(w) { w.0.contains("2 天 4 小时后刷新") }),
-    msg="its tip: \{tip()}",
+    msg="its tip: \{Repr(tip())}",
   )
   assert_eq(word("林的 Max").length(), 1, msg="the card stays")
 }
@@ -2414,14 +2523,14 @@ test "wide: the station a chat's agent runs on, beside its mark in the bar, has 
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   // its part of the tile: in the chat's bar, named for what it is
   let part = t.locate("=Willow").filter(fn(p) { p.1 < 60.0 && p.0 > 400.0 })
-  assert_eq(part.length(), 1, msg="\{t.locate("=Willow")}")
+  assert_eq(part.length(), 1, msg="\{Repr(t.locate("=Willow"))}")
   assert_eq(word("机器详情").length(), 0)
-  t.move(part[0].0, part[0].1)
+  t.move_to(part[0].0, part[0].1)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // its card: its name, what it says of itself, where to go on from it
   assert_eq(word("机器详情").length(), 1, msg="its card")
   // gone once the pointer has left it
-  t.move(900.0, 400.0)
+  t.move_to(900.0, 400.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_eq(word("机器详情").length(), 0)
 }
@@ -2477,8 +2586,8 @@ fn working_agent_card(stands? : String) -> @ui.Tester {
         _ => Some(w)
       }
     })
-  guard last is Some(name) else { abort("no agent's message") }
-  t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
+  guard last is Some(name) else { @halt.saying("no agent's message") }
+  t.move_to(name.1 - 20.0, name.2 + name.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   t
 }
@@ -2491,12 +2600,12 @@ test "wide: a working agent's card has its stop at the end of where it stands, u
   let stands = shown.filter(fn(w) { w.0 == "做完了" })
   // (the card's stop: right of the chat's column, where the activity's are)
   let stop = t.locate("icon:stop").filter(fn(p) { label.length() == 1 && p.0 > label[0].1 })
-  assert_true(stop.length() == 1 && label.length() == 1 && stands.length() == 1, msg="\{(stop, label, stands)}")
+  assert_true(stop.length() == 1 && label.length() == 1 && stands.length() == 1, msg="\{Repr((stop, label, stands))}")
   // its stop under its label (the label's line its own), on the line of where it stands, at its end; nothing in the
   // card's corners (nor anywhere) breaks the rule
   let (s, (x, y)) = (stands[0], stop[0])
-  assert_true(y > label[0].2 + label[0].4, msg="its stop under its label: \{(stop, label)}")
-  assert_true(x > s.1 + s.3 && (y - (s.2 + s.4 / 2.0)).abs() < 1.0, msg="its stop by where it stands: \{(stop, s)}")
+  assert_true(y > label[0].2 + label[0].4, msg="its stop under its label: \{Repr((stop, label))}")
+  assert_true(x > s.1 + s.3 && (y - (s.2 + s.4 / 2.0)).abs() < 1.0, msg="its stop by where it stands: \{Repr((stop, s))}")
   assert_eq(t.corner_faults(), [])
 }
 
@@ -2508,11 +2617,11 @@ test "wide: a working agent's card whose standing is long (what it waits for) ha
   let stands = shown.filter(fn(w) { w.0.has_prefix("等待：") })
   let label = shown.filter(fn(w) { w.0 == "Claude · Opus 5.5" })
   let stop = t.locate("icon:stop").filter(fn(p) { label.length() == 1 && p.0 > label[0].1 })
-  assert_true(stop.length() == 1 && stands.length() == 1 && label.length() == 1, msg="\{(stop, stands, label)}")
+  assert_true(stop.length() == 1 && stands.length() == 1 && label.length() == 1, msg="\{Repr((stop, stands, label))}")
   // its words on two lines (not squeezed into three by what is beside them), the stop at the first one's end
   let (s, (x, y)) = (stands[0], stop[0])
-  assert_true(s.4 < 2.5 * label[0].4, msg="its words on two lines: \{(s, label)}")
-  assert_true(x > s.1 + s.3 && y > s.2 && y < s.2 + s.4 / 2.0, msg="its stop by their first line: \{(stop, s)}")
+  assert_true(s.4 < 2.5 * label[0].4, msg="its words on two lines: \{Repr((s, label))}")
+  assert_true(x > s.1 + s.3 && y > s.2 && y < s.2 + s.4 / 2.0, msg="its stop by their first line: \{Repr((stop, s))}")
   assert_eq(t.corner_faults(), [])
 }
 
@@ -2573,23 +2682,23 @@ test "wide: an agent's card opened again has its latest lines as they are then: 
   )
   let (t, x, y) = lines_card(latest)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_eq(word("读了 src/ui/list.mbt").length(), 1, msg="its card, its lines")
   // the pointer gone from it: the card closed and gone
-  t.move(1270.0, 790.0)
+  t.move_to(1270.0, 790.0)
   t.run_for(card_gone_ms)
   assert_eq(word("跑了列表的测试").length(), 0, msg="its card gone")
   // one more done while it is closed; the pointer back, resting till it opens, and a little more
   latest.set(([("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt"), ("k4", "提交了改动")], 2))
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms + card_opening_ms)
   // as they are: no copy of the first leaving, the new one as whole as those that stayed, a line apart
   assert_eq(word("读了 src/ui/list.mbt").length(), 0, msg="no copy of what it showed before")
   let (a, b, n) = (word("跑了列表的测试"), word("改了 src/ui/list.mbt"), word("提交了改动"))
-  assert_true(a.length() == 1 && b.length() == 1 && n.length() == 1, msg="\{(a, b, n)}")
-  assert_true((n[0].5 - a[0].5).abs() < 0.01, msg="the new one as whole: \{(a, n)}")
-  assert_true(((n[0].2 - b[0].2) - (b[0].2 - a[0].2)).abs() < 0.01 && b[0].2 > a[0].2, msg="\{(a, b, n)}")
+  assert_true(a.length() == 1 && b.length() == 1 && n.length() == 1, msg="\{Repr((a, b, n))}")
+  assert_true((n[0].5 - a[0].5).abs() < 0.01, msg="the new one as whole: \{Repr((a, n))}")
+  assert_true(((n[0].2 - b[0].2) - (b[0].2 - a[0].2)).abs() < 0.01 && b[0].2 > a[0].2, msg="\{Repr((a, b, n))}")
 }
 
 ///|
@@ -2599,7 +2708,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   )
   let (t, x, y) = lines_card(latest)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // where the three are at rest: a line apart
   let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
@@ -2608,7 +2717,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   let y2 = y_of("跑了列表的测试")
   let y3 = y_of("改了 src/ui/list.mbt")
   let pitch = y2 - y1
-  assert_true(pitch > 10.0 && near(y3 - y2, pitch), msg="\{(y1, y2, y3)}")
+  assert_true(pitch > 10.0 && near(y3 - y2, pitch), msg="\{Repr((y1, y2, y3))}")
   // one more done: the first goes, the next comes
   latest.set(([("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt"), ("k4", "提交了改动")], 2))
   t.frame()
@@ -2617,7 +2726,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   assert_true(near(y_of("跑了列表的测试"), y2) && near(y_of("改了 src/ui/list.mbt"), y3))
   assert_eq(word("提交了改动").length(), 0)
   let gone = word("读了 src/ui/list.mbt")
-  assert_true(gone.length() == 1 && near(gone[0].2, y1) && gone[0].5 > 0.99, msg="\{gone}")
+  assert_true(gone.length() == 1 && near(gone[0].2, y1) && gone[0].5 > 0.99, msg="\{Repr(gone)}")
   // half way: on their way up together, the copy with them
   t.run_for(@sfpages.lines_ms / 2.0)
   let mid = y_of("跑了列表的测试")
@@ -2625,13 +2734,13 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   let (m3, m4, m1) = (y_of("改了 src/ui/list.mbt"), y_of("提交了改动"), y_of("读了 src/ui/list.mbt"))
   assert_true(
     near(m3 - mid, pitch) && near(m4 - mid, pitch * 2.0) && near(m1, mid - pitch),
-    msg="\{(mid, m3, m4, m1, pitch)}",
+    msg="\{Repr((mid, m3, m4, m1, pitch))}",
   )
   // there: a line up each, the new one whole, the copy gone
   t.run_for(@sfpages.lines_ms / 2.0)
   assert_true(near(y_of("跑了列表的测试"), y1) && near(y_of("改了 src/ui/list.mbt"), y2))
   let new = word("提交了改动")
-  assert_true(near(new[0].2, y3) && new[0].5 > 0.99, msg="\{new}")
+  assert_true(near(new[0].2, y3) && new[0].5 > 0.99, msg="\{Repr(new)}")
   t.frame()
   assert_eq(word("读了 src/ui/list.mbt").length(), 0)
 }
@@ -2785,7 +2894,7 @@ test "wide: adding a favorite chooses a station and folder without changing its 
 fn with_row(v : Json, id : String, more : Map[String, Json]) -> Json {
   match v {
     Object(m) => {
-      let out : Map[String, Json] = {}
+      let out : Map[String, Json] = Map([])
       for k, x in m {
         out[k] = with_row(x, id, more)
       }
@@ -2798,6 +2907,20 @@ fn with_row(v : Json, id : String, more : Map[String, Json]) -> Json {
     }
     Array(a) => Json::array(a.map(fn(x) { with_row(x, id, more) }))
     x => x
+  }
+}
+
+///|
+/// Whether the message with `words` flashes as a message gone to does: the accent's ground drawn under all of its words'
+/// first line, as either page lights a row gone to (what is drawn, not which row a list says it lit).
+fn gone_lit(t : @ui.Tester, words : String) -> Bool {
+  let accent = @ui.tree_theme().color(AccentBg)
+  match t.run_rects(words) {
+    [(wx, wy, ww, wh), ..] =>
+      t.drawn_rects().iter().any(fn(r) {
+        (r.4 >> 8) == (accent >> 8) && (r.4 & 0xFFL) > 0L && r.0 <= wx && r.0 + r.2 >= wx + ww && r.1 <= wy && r.1 + r.3 >= wy + wh
+      })
+    _ => false
   }
 }
 
@@ -2830,17 +2953,20 @@ test "wide: a row pressed on its state line while the core says which message th
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.draw()
-  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
+  // (message ts8 lit)
+  let lit = fn() { gone_lit(t, "量过一次就记住") }
   // its title: the chat as it is
   let (tx, ty) = t.find("整理发布清单").unwrap()
   t.tap(tx, ty)
   t.frame()
-  assert_eq(rd.flash, "")
+  t.run_for(@sfbase.flash_in_ms)
+  assert_false(lit(), msg="its title: nothing flashing")
   // its state line: the message the state is about, flashing
   let (lx, ly) = t.find("等你回复：发布前要不要再跑一遍").unwrap()
   t.tap(lx, ly)
   t.frame()
-  assert_eq(rd.flash, "ts8")
+  t.run_for(@sfbase.flash_in_ms)
+  assert_true(lit(), msg="ts8 flashing")
 }
 
 ///|
@@ -2852,11 +2978,11 @@ test "wide: Esc goes to what the frame opened first (a row's menu), then to the 
   assert_true(@sfpages.find_chat() != "")
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   // the menu closed, the bar still open
   t.key(@ui.key_escape)
   t.frame()
-  assert_true(t.find("复制会话链接") is None)
+  assert_true(t.find("分享…") is None)
   assert_true(@sfpages.find_chat() != "")
   // then the bar
   t.key(@ui.key_escape)
@@ -2890,7 +3016,7 @@ fn ref_rested() -> (Int, Bool) raise {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-peeks")
   let (x, y) = peek_words_at(t, "@首页的列表改成按天分组")
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   let shown = t.words().filter(fn(w) { w.0 == "待处理 · 分组的标题用相对日期还是具体日期？" && w.5 > 0.5 }).length() == 1
   (calls.filter(fn(m) { m.name == "link.parse" }).length(), shown)
@@ -2900,7 +3026,7 @@ fn ref_rested() -> (Int, Bool) raise {
 test "wide: a reference to a chat rested on in one run and again in the next: its card shown both times, its link read by the core no more than once (what the core said of it kept across runs)" {
   let first = ref_rested()
   let again = ref_rested()
-  assert_true(first.0 <= 1 && first.1, msg="first: \{first}")
+  assert_true(first.0 <= 1 && first.1, msg="first: \{Repr(first)}")
   assert_eq(again, (0, true))
 }
 
@@ -2928,5 +3054,5 @@ test "大屏: a settings row pressed, its page opened as one change: the setting
     Setting(@settings.Route::Security) => ()
     _ => fail("not 安全 after its row")
   }
-  assert_eq(seen.filter(fn(p) { p != "settings" }), [], msg="\{seen}")
+  assert_eq(seen.filter(fn(p) { p != "settings" }), [], msg="\{Repr(seen)}")
 }

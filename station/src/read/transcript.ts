@@ -47,9 +47,71 @@ const SMALL = 600;
 const BRIEF_CHARS = 300;
 /// The fields of a call's input that say what it does: what an execution history names a call by before it is opened,
 /// and a chat's activity says it does (client/core-ts/src/activity.ts doing, history.ts describe, hint, fileOf).
-const SAYING = ["description", "command", "cmd", "file_path", "path", "notebook_path", "pattern", "url", "query", "prompt"];
+const SAYING = [
+  "description",
+  "toolSummary",
+  "command",
+  "cmd",
+  "CommandLine",
+  "file_path",
+  "path",
+  "Path",
+  "target_file",
+  "target_directory",
+  "DirectoryPath",
+  "Directory",
+  "SearchDirectory",
+  "SearchPath",
+  "notebook_path",
+  "StartLine",
+  "EndLine",
+  "offset",
+  "limit",
+  "Target",
+  "Replacement",
+  "Content",
+  "Overwrite",
+  "old_string",
+  "new_string",
+  "pattern",
+  "Pattern",
+  "url",
+  "query",
+  "Query",
+  "prompt",
+  "Prompt",
+  "station",
+  "action",
+  "name",
+  "key",
+  "id",
+  "to",
+  "chat",
+  "title",
+  "file",
+  "method",
+  "Role",
+  "Recipient",
+  "Message",
+  "summary",
+  "message",
+  "recipient",
+  "subagent_type",
+  "TypeName",
+  "agent_id",
+  "brief",
+  "task",
+  "text",
+  "reason",
+  "about",
+  "Action",
+  "TaskId",
+  "skill",
+];
 /// Calls whole in brief too: what they hold is what a history shows of them (a post, a state, what went to Slack).
 const WHOLE = new Set(["chat_post", "chat_state", "slack_api"]);
+const BOILERPLATE_THOUGHT_LINE =
+  /^(?:I'm thinking(?: through how to approach this)?\.?|I am thinking(?: through how to approach this)?\.?|Let's think(?:\s+through\s+this|\s+about\s+this)?\.?|Thinking(?:\s+process)?\.?:?|Thought\s+process:?|Process:?|Reasoning:?|(?:\d+\.\s*)?(?:\*\*)?(?:Analyze the Request|Analysis|Summary|Plan|Context|Goal|Steps|Next Steps|Approach|Findings|Observations):(?:\*\*)?|`?\d{4}-\d{2}-\d{2}T[\d:.]+Z`?[),.;:]*)$/i;
 /// Each call's brief, as it was read (from its whole input, not one cut to MAX_TEXT).
 const briefs = new WeakMap<TimelineEntry, string>();
 
@@ -59,10 +121,12 @@ const firstChars = (text: string, n: number) => Array.from(text).slice(0, n).joi
 /// A call's input in brief: of an object, only the fields that say what it does, each cut short; anything else cut short.
 function briefOf(input: Json | undefined): string {
   if (isObj(input)) {
-    const kept: Record<string, string | string[]> = {};
+    const kept: Record<string, string | number | boolean | string[]> = {};
     for (const name of SAYING) {
       const v = get(input, name);
       if (isStr(v)) kept[name] = firstChars(v, BRIEF_CHARS);
+      else if (typeof v === "number" && Number.isFinite(v)) kept[name] = v;
+      else if (typeof v === "boolean") kept[name] = v;
       else if (Array.isArray(v)) kept[name] = v.filter(isStr).map((p) => firstChars(p, BRIEF_CHARS));
     }
     return JSON.stringify(kept);
@@ -102,13 +166,18 @@ export function brief(e: TimelineEntry): TimelineEntry {
       const v = JSON.parse(e.text);
       if (isObj(v) && typeof v.ok === "boolean") text = JSON.stringify(isStr(v.ts) ? { ok: v.ok, ts: v.ts } : { ok: v.ok });
     } catch {
-      // Not Slack's answer: nothing of it.
+      // Not Slack's answer: keep a spawned sub-agent's id if present so later SendMessage calls can name it.
+    }
+    if (text === "") {
+      const aid = /\b(?:agentId|agent_id|conversationId)["'\s:=]+["']?([A-Za-z0-9_-]{6,})/.exec(e.text);
+      if (aid?.[1]) text = `agentId: ${aid[1]}`;
     }
     return { ...e, text, brief: true };
   }
   if (e.kind === "thinking") {
-    const first = e.text.split("\n").find((l) => trim(l) !== "") ?? "";
-    return { ...e, text: firstChars(trim(first), BRIEF_CHARS), brief: true };
+    const lines = e.text.split("\n").map(trim).filter((l) => l !== "");
+    const first = lines.find((l) => !BOILERPLATE_THOUGHT_LINE.test(l)) ?? lines[0] ?? "";
+    return { ...e, text: firstChars(first, BRIEF_CHARS), brief: true };
   }
   return e;
 }
@@ -587,7 +656,7 @@ function grokTimeline(r: Json, out: TimelineEntry[]) {
     }
   } else if (kind === "tool_result") {
     const text = isStr(content) ? content : toText(content ?? null);
-    const e: TimelineEntry = { at: null, kind: "tool_result", text: clip(text), ok: get(r, "is_error") !== true };
+    const e: TimelineEntry = { at: null, kind: "tool_result", text: clip(text), ok: get(r, "is_error") !== true && !/^Failed to call [\w.-]+:/.test(text) };
     const id = stringOf(get(r, "tool_call_id"));
     if (id !== undefined) e.callId = id;
     out.push(e);
@@ -609,10 +678,21 @@ function cursorTimeline(r: Json, out: TimelineEntry[]) {
     if (name === "mcp" && isStr(get(input, "providerIdentifier")) && isStr(get(input, "toolName"))) [name, input] = [`mcp__${get(input, "providerIdentifier")}__${get(input, "toolName")}`, get(input, "args") ?? {}];
     const args = pretty(input);
     const id = stringOf(get(r, "id"));
-    const call: TimelineEntry = { at, kind: "tool_call", text: keptWhole(name) ? args : clip(args), tool: name };
+    const resultText = cursorResult(get(r, "result"));
+    const started = get(r, "startedAt");
+    const startedAt = typeof started === "number" && Number.isFinite(started) ? new Date(started).toISOString() : null;
+    const agyTimes = /^Created At:\s*(\S+)\r?\nCompleted At:\s*(\S+)/.exec(resultText);
+    const parseIso = (s: string | undefined): string | null => {
+      if (!s) return null;
+      const ms = Date.parse(s);
+      return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+    };
+    const callAt = startedAt ?? parseIso(agyTimes?.[1]) ?? at;
+    const resultAt = startedAt !== null ? at : (parseIso(agyTimes?.[2]) ?? at);
+    const call: TimelineEntry = { at: callAt, kind: "tool_call", text: keptWhole(name) ? args : clip(args), tool: name };
     if (id !== undefined) call.callId = id;
     out.push(withBrief(call, input));
-    const result: TimelineEntry = { at, kind: "tool_result", text: clip(cursorResult(get(r, "result"))), ok: get(r, "status") !== "error" };
+    const result: TimelineEntry = { at: resultAt, kind: "tool_result", text: clip(resultText), ok: get(r, "status") !== "error" };
     if (id !== undefined) result.callId = id;
     out.push(result);
   }

@@ -65,7 +65,12 @@ export class PeerBus {
   /// What answers the methods none names (the remote tasks).
   private rest: Inbox | null = null;
   private outsider: Inbox | null = null;
+  /// What every request passes before the part that answers it hears it (a rig's: rig/module.ts); it throws why not.
+  private guard: ((workspace: string, peer: string, request: Json) => void) | null = null;
   private readonly onAttach: (() => void)[] = [];
+  /// The station that took a lost one's place, by the lost one's id (replica/copies.ts `now`), and this station's id.
+  private now: ((station: string, workspace: string | null) => string) | null = null;
+  private self = "";
 
   /// `sleep`: how a request waits for the transport (the station's clock).
   constructor(options: { waitMs?: number; sleep: (ms: number) => Promise<void> }) {
@@ -87,13 +92,31 @@ export class PeerBus {
     else this.onAttach.push(f);
   }
 
-  /// A request to another station of the workspace.
+  /// A request to another station of the workspace. One named by a lost station's id goes to the station that took its
+  /// place (a chat's link from before it was lost), this one's own answered here.
   async ask(station: string, request: Json): Promise<Json> {
     if (!this.call) await Promise.race([this.attached, this.sleep(this.waitMs)]);
     const call = this.call;
     if (!call) throw new Error("station mesh is not ready");
     const workspace = typeof request?.workspace === "string" ? request.workspace : null;
-    return call(station, workspace, request);
+    const to = station === "" || this.now === null ? station : this.now(station, workspace);
+    if (to !== station && to === this.self) return this.handle(workspace ?? "", this.self, request);
+    return call(to, workspace, request);
+  }
+
+  /// A request to the station `station` names itself, never to one that took its place (a retired station told by the one
+  /// its chats went to, which is that station too: replica/retire.ts).
+  async askItself(station: string, request: Json): Promise<Json> {
+    if (!this.call) await Promise.race([this.attached, this.sleep(this.waitMs)]);
+    const call = this.call;
+    if (!call) throw new Error("station mesh is not ready");
+    return call(station, typeof request?.workspace === "string" ? request.workspace : null, request);
+  }
+
+  /// Which station took a lost one's place (`now`); `self`, this station's id.
+  formerly(now: (station: string, workspace: string | null) => string, self: string): void {
+    this.now = now;
+    this.self = self;
   }
 
   /// Who answers `methods` (whole names, or prefixes ending in `.`): one part each.
@@ -111,6 +134,11 @@ export class PeerBus {
     this.outsider = inbox;
   }
 
+  /// What every request of the workspace's stations passes first (one at most): it throws a Refused why not.
+  guarded(guard: (workspace: string, peer: string, request: Json) => void): void {
+    this.guard = guard;
+  }
+
   /// Whether stations of other workspaces are heard at all.
   hearsOutside(): boolean {
     return this.outsider !== null;
@@ -122,6 +150,11 @@ export class PeerBus {
     const dot = method.indexOf(".");
     const inbox = this.handlers.get(method) ?? (dot > 0 ? this.handlers.get(method.slice(0, dot + 1)) : undefined) ?? this.rest;
     if (!inbox) return Promise.reject(new Error("station is starting"));
+    try {
+      this.guard?.(workspace, peer, request);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     return inbox(peer, request, workspace);
   }
 

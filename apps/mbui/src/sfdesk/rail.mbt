@@ -167,9 +167,13 @@ fn list_place(mode : Int) -> String {
 fn rail_top_h(bar : Bool) -> Double {
   if bar {
     0.0
+  } else if @ui.window_keys_left() && wide.tape.get() {
+    // (its first place's middle on the line of the sidebar's first row beside it, under the window's buttons: worked
+    // out as that row's is, not read back from the frame's)
+    tape_brand_under_buttons() + band_new_top + band_row_h() / 2.0 - rail_item_side / 2.0
   } else if @ui.window_keys_left() {
     dmax(rail_top_inset + rail_gap, @ui.window_points_to_content(side_top_inset))
-  } else if wide.tape {
+  } else if wide.tape.get() {
     // (and its first place's middle on the line of the sidebar's first row beside it, 新建对话's: pengxiao, 2026-10-25)
     dmax(@sf.rail_in_tape(), tape_first_row_mid() - rail_item_side / 2.0)
   } else {
@@ -207,7 +211,7 @@ fn rail_box_w(bar : Bool, moving : FoldLook?) -> Double {
     None =>
       if bar {
         rail_closed_w
-      } else if wide.tape {
+      } else if wide.tape.get() {
         rail_shown_w + rail_tape_more()
       } else {
         rail_shown_w + rail_window_in() - rail_in_px
@@ -307,7 +311,7 @@ let mark_folded_from : Double = 0.4
 /// the tape, a panel beside the page's as it is, the page's ground, which a phone's lists and pages share (the user,
 /// 2026-10-25: the medium screen's grounds the phone's, no other colours).
 pub fn apart_ground() -> Int64 {
-  if wide.tape {
+  if wide.tape.get() {
     @sf.theme().p.bg
   } else {
     closed_ground()
@@ -370,7 +374,7 @@ fn rail_go_told(src : Source, w : Workspace, place : String, tell : (String, () 
         app.filters[w.id] = f
         // (kept once, whichever build asked: Ctx::tell)
         tell("rail/list-filter", fn() {
-          (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), fn(_) {  })
+          (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), @sfbase.answer_unread)
         })
       }
       // the chats again: the chat last open stays open beside the list
@@ -434,7 +438,7 @@ pub fn rail_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       _ => (0.0, 0.0, 0.0, 0.0)
     }
     @sfpages.workspace_menu(c, src, at)
-    rail_transfers_list(c, src, w)
+    rail_transfers_list(src, w)
   }
 }
 
@@ -445,42 +449,64 @@ pub fn open_rail_menu(place : String) -> Unit {
 }
 
 ///|
+/// The menu as last drawn open, held while it goes out so its contents and anchor do not change during its exit.
+priv struct RailMenuDrawn {
+  place : String
+  from : (Double, Double, Double, Double)?
+  kept : Array[String]
+  entries : Array[@kit.Entry]
+  icons : Map[String, String]
+  mut replaced : Bool
+}
+
+///|
+// kept across runs: put back by wide_reset
+let rail_menu_drawn : Ref[RailMenuDrawn?] = Ref(None)
+
+///|
 /// The rail's menu (from a right click on it), beside the place right clicked (else its
 /// first), 8 past it, clear of the window's buttons' row: the places not in it (pressed, their page; their ＋, shown on
 /// the row pointed at, puts one in it and the rail is changed from there), 从侧边条移除 the place right clicked,
 /// 自定义侧边条, 侧边条恢复默认 when it was changed.
 fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let (place, from) = match wide.rail_menu.get() {
-    Some(m) => m
+  let showing = wide.rail_menu.get()
+  let drawn = match showing {
+    Some((place, from)) => {
+      let kept = rail_items(src, w.id)
+      // (提醒 is no page, nor the one in view at the rail's foot: put in from 自定义侧边条)
+      let extra = rail_in_view(src, w)
+      let away = rail_places(src).filter(fn(i) { !kept.contains(i) && i != "attention" && i != extra })
+      let entries : Array[@kit.Entry] = []
+      let icons : Map[String, String] = Map([])
+      if away.length() > 0 {
+        entries.push(@kit.menu_label(@sf.t("web-main.rail.away")))
+        for i in away {
+          entries.push(@kit.menu_item("go:" + i, label=rail_label(src, i)))
+          icons["go:" + i] = rail_icon(i)
+        }
+        entries.push(@kit.menu_separator())
+      }
+      if place != "" && kept.contains(place) && kept.length() > 1 {
+        entries.push(@kit.menu_item("remove", label=@sf.t("web-main.rail.remove", args=[("name", rail_label(src, place))])))
+        icons["remove"] = "minus"
+      }
+      entries.push(@kit.menu_item("customize", label=@sf.t("web-main.rail.customize")))
+      icons["customize"] = "sliders"
+      if flag(rail_of(src, w.id), "changed") {
+        entries.push(@kit.menu_item("reset", label=@sf.t("web-main.rail.reset")))
+        icons["reset"] = "refresh"
+      }
+      let drawn : RailMenuDrawn = { place, from, kept, entries, icons, replaced: false }
+      rail_menu_drawn.val = Some(drawn)
+      drawn
+    }
+    None if rail_menu_drawn.val is Some(m) => m
     None => {
       @sf.dropdown(c, "rail-menu", false, 0, [], {}, @sf.menu_w) |> ignore
       return
     }
   }
-  let kept = rail_items(src, w.id)
-  // (提醒 is no page, nor the one in view at the rail's foot: put in from 自定义侧边条)
-  let extra = rail_in_view(src, w)
-  let away = rail_places(src).filter(fn(i) { !kept.contains(i) && i != "attention" && i != extra })
-  let entries : Array[@kit.Entry] = []
-  let icons : Map[String, String] = {}
-  if away.length() > 0 {
-    entries.push(@kit.menu_label(@sf.t("web-main.rail.away")))
-    for i in away {
-      entries.push(@kit.menu_item("go:" + i, label=rail_label(src, i)))
-      icons["go:" + i] = rail_icon(i)
-    }
-    entries.push(@kit.menu_separator())
-  }
-  if place != "" && kept.contains(place) && kept.length() > 1 {
-    entries.push(@kit.menu_item("remove", label=@sf.t("web-main.rail.remove", args=[("name", rail_label(src, place))])))
-    icons["remove"] = "minus"
-  }
-  entries.push(@kit.menu_item("customize", label=@sf.t("web-main.rail.customize")))
-  icons["customize"] = "sliders"
-  if flag(rail_of(src, w.id), "changed") {
-    entries.push(@kit.menu_item("reset", label=@sf.t("web-main.rail.reset")))
-    icons["reset"] = "refresh"
-  }
+  let { place, from, kept, entries, icons, .. } = drawn
   // (beside the place it was asked on, where that was as it was asked: rail_node's)
   let (ax, ay, aw, ah) = from.unwrap_or((0.0, rail_menu_clear, rail_w - side_into_rail, 0.0))
   // a place's ＋: put in, the rail changed from there, the menu gone
@@ -491,7 +517,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       @sf.dropdown(
         c,
         "rail-menu",
-        true,
+        showing is Some(_),
         0,
         entries,
         icons,
@@ -499,13 +525,16 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         side=Right,
         offset=rail_menu_off,
         at=(ax, dmax(ay, rail_menu_clear), aw, ah),
+        // The adder takes this menu's place: it must be reachable as soon as it opens.
+        show_exit=!drawn.replaced,
         row_end=fn(c, s) {
           if s.entry.value.has_prefix("go:") {
-            let i = s.entry.value.view(start_offset=3).to_string()
+            let i = s.entry.value.exact_view(start=3).to_owned()
             rail_menu_add(c, i, rail_label(src, i), s.hot, on_press=fn() {
               let next = kept.copy()
               next.push(i)
               rail_keep(src, w.id, next)
+              drawn.replaced = true
               wide.editing.set(true)
               wide.rail_menu.set(None)
             })
@@ -521,8 +550,11 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   match m.chosen {
     Some("remove") => rail_keep(src, w.id, kept.filter(fn(i) { i != place }))
     Some("reset") => rail_keep(src, w.id, words_in(items(rail_view(src), "default")))
-    Some("customize") => wide.editing.set(true)
-    Some(v) if v.has_prefix("go:") => rail_go(c, src, w, v.view(start_offset=3).to_string())
+    Some("customize") => {
+      drawn.replaced = true
+      wide.editing.set(true)
+    }
+    Some(v) if v.has_prefix("go:") => rail_go(c, src, w, v.exact_view(start=3).to_owned())
     _ => ()
   }
 }
@@ -541,9 +573,9 @@ fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool, on_pre
   let to = if @sf.pointed_or_finger(c, hot || over) { 1.0 } else { 0.0 }
   let shown = @motion.told(c, "rail-menu/add-shown/" + place, to, spec=nav_fade)
   let b = c.box(style=if over { rail_menu_plus_on } else { rail_menu_plus }, id~, fn() {
-    if to > 0.0 || !shown.over() {
+    if to > 0.0 || !shown.over(c) {
       let i = @sf.icon(c, "plus", size=rail_menu_plus_icon, color=if over { t.p.text } else { t.p.muted })
-      c.look_by(i, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, shown.get()))) })
+      c.look_by(i, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, shown.get(c)))) })
     }
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.rail.add", args=[("name", label)]))
@@ -718,11 +750,6 @@ let rail_dash_r : Double = 11.75
 
 ///|
 let rail_dash_at : Double = -0.5
-
-///|
-/// A place while the rail is changed: outlined, its corner the editing frame's.
-// kept across runs: a value (no field of it changes)
-let rail_editing : @ui.Style = @ui.css("radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)

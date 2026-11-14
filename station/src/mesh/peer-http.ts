@@ -89,7 +89,8 @@ export function peerNamed(cloud: Cloud, given: string): { id: string; workspace:
   const all = cloud.memberships();
   const self = cloud.state?.station;
   const lower = given.toLowerCase();
-  const stations = all.flatMap((m) => m.peers.filter((p) => typeof p?.id === "string"));
+  // The workspace's rigs among them (a station that only runs tasks): a service a task started there is reached as one on a station is.
+  const stations = all.flatMap((m) => [...m.peers.filter((p) => typeof p?.id === "string"), ...cloud.rigs(m.workspace)]);
   let ids = [...new Set(stations.filter((p) => p.id === given).map((p) => p.id as string))];
   if (ids.length === 0) ids = [...new Set(stations.filter((p) => typeof p.name === "string" && p.name.toLowerCase() === lower).map((p) => p.id as string))];
   if (ids.length === 0 && (given === self || all.some((m) => m.name.toLowerCase() === lower))) ids = [self!];
@@ -100,7 +101,8 @@ export function peerNamed(cloud: Cloud, given: string): { id: string; workspace:
   }
   if (ids[0] === self) throw new HttpRefusal(400, `${given} is this station: reach its services at http://localhost:<port>/ directly`);
   try {
-    return { id: ids[0]!, workspace: member(cloud, ids[0]!, null) };
+    const rig = cloud.rigOf(ids[0]!);
+    return { id: ids[0]!, workspace: rig !== null ? rig.workspace : member(cloud, ids[0]!, null) };
   } catch (error) {
     throw new HttpRefusal(403, (error as Error).message);
   }
@@ -194,12 +196,16 @@ export class PeerHttp implements PeerRoute {
   /// A connection to station `id` (`given`: as the URL named it) speaking this protocol. A station from before it is told
   /// by the station transport's protocol, offered after this one: it takes that one instead.
   private async connect(id: string, given: string): Promise<Connection> {
-    const connecting = this.endpoint.connect(this.addr(id), PEER_HTTP_ALPN, [PEER_ALPN]);
+    let giveUp = () => {};
+    const givenUp = new Promise<void>((resolve) => (giveUp = resolve));
+    const connecting = this.endpoint.connect(this.addr(id), PEER_HTTP_ALPN, [PEER_ALPN], givenUp);
     let conn: Connection;
     try {
       conn = await wall.within(this.connectMs, connecting, TIMED_OUT);
     } catch (error) {
       if ((error as Error).message !== TIMED_OUT) throw new HttpRefusal(502, `station ${given} cannot be reached: ${(error as Error).message}`, true);
+      // Its handshake given up: left going, it retransmitted for the connection's idle timeout, ten minutes.
+      giveUp();
       connecting.then((late) => late.close(0, "too late"), () => {});
       throw new HttpRefusal(504, `station ${given} did not answer within ${Math.round(this.connectMs / 1000)} s: it is offline, or cannot be reached from here`, true);
     }
@@ -236,12 +242,22 @@ export class PeerHttp implements PeerRoute {
   /// saying why. `probe`: only whether that station would take one (it knows forwards, the port is not one it refuses),
   /// nothing connected; resolves with no stream then.
   async tunnel(given: string, port: number, probe = false): Promise<Tunnel | null> {
+    return this.#tunnel(given, { port }, probe);
+  }
+
+  /// A connection to a device attached to `station` (devices/, 2026-11-10), for chat `session` of this station: once
+  /// that station has reached the device and let the chat through, the stream its bytes go on; else an HttpRefusal.
+  async tunnelDevice(given: string, device: string, session: string, probe = false): Promise<Tunnel | null> {
+    return this.#tunnel(given, { device, session }, probe);
+  }
+
+  async #tunnel(given: string, to: { port: number } | { device: string; session: string }, probe: boolean): Promise<Tunnel | null> {
     const peer = peerNamed(this.cloud, given);
     // Named in what it says by its name (a forward asks by the id).
     const station = nameOf(this.cloud, peer.id);
     const s = await this.stream(peer.id, station);
     try {
-      await writeLine(s, { workspace: peer.workspace, port, tcp: true, ...(probe ? { probe: true } : {}) });
+      await writeLine(s, { workspace: peer.workspace, ...to, tcp: true, ...(probe ? { probe: true } : {}) });
       if (probe) await s.finish();
       const reader = new Reader(s, MAX_HEAD);
       const answer = await reader.line();
@@ -339,7 +355,23 @@ export class PeerHttp implements PeerRoute {
 /// What a station serving others' requests knows of this machine: how a forwarded connection reaches a port here
 /// (peer-forward.ts `reachLocal`; tests map ports), and which ports are this station's own forwards (refused: a forward
 /// reaching another would carry it on, around in a loop when two stations forward to each other).
-export type HereLocal = { reach?: (port: number) => Promise<Socket>; forwarded?: (port: number) => boolean };
+/// `allowed`: why a station of the workspace may not reach this machine's services now, or null (a rig: only a station
+/// with a chat its person granted, rig/grants.ts; a station refuses none of its workspace's).
+/// `device`: a connection to a device attached to this machine for a chat of that station (devices/), or a
+/// `DeviceRefused` saying why not.
+export type HereLocal = {
+  reach?: (port: number) => Promise<Socket>; forwarded?: (port: number) => boolean; allowed?: (peer: string, workspace: string) => string | null;
+  device?: (peer: string, workspace: string, session: string, device: string, probe: boolean) => Promise<Duplex | null>;
+};
+
+/// Why a chat may not reach a device here (its HTTP status: 403 not let through, 404 no such device).
+export class DeviceRefused extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 /// Another station's connection on this protocol: each stream a request to a web service on this machine, while that
 /// station is in a workspace with this one. Out of it, its connection ends; a roster not current ends nothing (losing
@@ -408,6 +440,29 @@ async function answer(cloud: Cloud, peer: string, stream: Stream, local: HereLoc
   } catch (error) {
     return refusal(stream, (error as Error).message);
   }
+  // A device's connection: let through by the device's own rules, not by what a station may reach of this machine.
+  if (typeof head.device === "string" && head.tcp === true) {
+    if (local.device === undefined) return refuse(404, "that station has no devices: it may need an update");
+    let socket: Duplex | null;
+    try {
+      socket = await local.device(peer, typeof head.workspace === "string" ? head.workspace : "", typeof head.session === "string" ? head.session : "", head.device, head.probe === true);
+    } catch (error) {
+      return refuse(error instanceof DeviceRefused ? error.status : 502, error instanceof DeviceRefused ? `that machine refused: ${error.message}` : `the device could not be reached there: ${(error as Error).message}`);
+    }
+    if (socket === null) {
+      await writeLine(stream, { status: 200 });
+      return ended(stream);
+    }
+    try {
+      await writeLine(stream, { status: 200 });
+    } catch (error) {
+      socket.destroy();
+      throw error;
+    }
+    return pipeTcp(socket, stream, reader.carry);
+  }
+  const barred = local.allowed?.(peer, typeof head.workspace === "string" ? head.workspace : "") ?? null;
+  if (barred !== null) return refuse(403, `that machine refused: ${barred}`);
   const port = head.port;
   if (!Number.isInteger(port) || port < 1 || port > 65535) return refuse(400, "port: 1 to 65535");
   // The station's own (its agents' door would carry the request on to a third).

@@ -5,6 +5,11 @@ import { conform } from "../src/conform.ts";
 import { holdLanguage, setCurrent } from "../src/i18n.ts";
 import * as p from "../src/present.ts";
 import { packetsSince } from "../src/station/topics.ts";
+import * as clock from "../src/clock.ts";
+import * as format from "../src/format.ts";
+import { t } from "../src/i18n.ts";
+import { deepFreeze, get, isObject, shaped, u64 } from "../src/util.ts";
+import { fixture, more, profilesOf, records, STATIONS } from "./real-size.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -50,6 +55,37 @@ test("reset credits show the expiries known for each available card", () => {
   } finally {
     setCurrent("zh");
   }
+});
+
+test("a_subscriptions_resets_are_offered_a_kind_each_with_what_one_gives_back", () => {
+  const now = 1_900_000_000_000;
+  const day = 86_400_000;
+  const c = { now, offsetMin: 0 };
+  const raw = {
+    state: "ok", windows: [], detail: null, checkedAt: now, resetCount: 2, resetExpiries: [now + 3 * day],
+    resets: [
+      { id: "session", kind: "session", left: 1, usable: false },
+      { id: "model", kind: "model", model: "Fable", left: 1, usable: true, expiries: [now + 3 * day] },
+    ],
+  };
+  const shown = p.times(raw, c) as J;
+  assert.deepEqual(shown.resets, [
+    { id: "session", kind: "session", left: 1, usable: false, title: "5 小时重置", leftText: "剩 1 次", text: "到达它能恢复的上限后才能用", refills: "立即恢复 5 小时额度" },
+    { id: "model", kind: "model", model: "Fable", left: 1, expiries: [now + 3 * day], usable: true, title: "Fable 重置", leftText: "剩 1 次", text: "3 天后到期", refills: "把本周 Fable 用掉的额度还回每周额度" },
+  ]);
+  assert.deepEqual((conform("Quota", shown) as J).ok.resets, shown.resets);
+  // A station from before kinds, or one kind (a ChatGPT subscription's): all of them as one, no kind to ask for.
+  const one = p.times({ state: "ok", windows: [], detail: null, checkedAt: now, resetCount: 2, resetExpiries: [now + day] }, c) as J;
+  assert.deepEqual(one.resets, [{ kind: "credit", left: 2, expiries: [now + day], usable: true, title: "额度重置", leftText: "剩 2 次", text: "1 天后到期" }]);
+  // Put again (as it goes out inside another value than the one it was put in), each says what it said: when it
+  // ends, and whose model's it is.
+  const other = p.times({ ...raw, resets: [{ id: "model", kind: "model", model: "Opus", left: 1, usable: true, expiries: [now + 3 * day] }] }, c) as J;
+  assert.equal(other.resets[0].title, "Opus 重置");
+  for (const once of [shown, one, other]) {
+    assert.deepEqual(p.times(structuredClone(once), c), once);
+    assert.deepEqual(p.times((conform("Quota", once) as J).ok, c), (conform("Quota", once) as J).ok);
+  }
+  assert.deepEqual((p.times({ state: "ok", windows: [], detail: null, checkedAt: now, resetCount: 0 }, c) as J).resets, []);
 });
 
 test("a_connection_is_said_in_words_and_only_what_is_off_is_coloured", () => {
@@ -105,6 +141,38 @@ test("a_rows_people_are_said_in_words_who_started_it_first", () => {
   row = { people: [{ id: "lina@x.com", name: "Lina" }] };
   row = p.rowPeople(row, me, [], []);
   assert.equal(row.peopleText, "Lina");
+});
+
+test("a member is found by e-mail whatever its case, the first of them, as a scan of the list finds it", () => {
+  // (what the names came of before the list was kept by e-mail: the first whose e-mail, a string, is the same lowered)
+  const scan = (members: any[], email: string) => members.find((m) => typeof m?.email === "string" && m.email.toLowerCase() === email.toLowerCase());
+  const members: any[] = [
+    { email: "Ana@Acme.dev", name: "Ana" },
+    { email: "ana@acme.dev", name: "the second Ana" },
+    { email: "", name: "no address" },
+    { email: 7, name: "a number" },
+    null,
+    "not a member",
+    { name: "none at all" },
+    { email: "WANG.LEI@acme.dev", name: "王磊", picture: "https://x/p.png" },
+  ];
+  const asked = ["ana@acme.dev", "ANA@ACME.DEV", "Ana@Acme.dev", "wang.lei@ACME.dev", "", "7", "nobody@acme.dev", "local"];
+  for (const email of asked) {
+    const m = scan(members, email);
+    assert.equal(p.memberName(members, email), m?.name ? m.name : null, email);
+    const shown = (p.person({ id: email, email: email === "" ? undefined : email }, { id: "me", email: "me@acme.dev" }, members) as any).shown;
+    assert.equal(shown.name, email === "local" ? shown.name : (m?.name || email), email);
+    assert.equal(shown.picture, typeof m?.picture === "string" && m.picture !== "" ? m.picture : null, email);
+    const by = p.lastBy({ last: { authorKind: "person", author: email, authorName: "said" } }, { id: "me", email: "me@acme.dev" }, [], members) as any;
+    assert.equal(by.name, m?.name || "said" || email, email);
+  }
+  // a list that grew is read again: the one added is found, the first of an address still the first
+  members.push({ email: "new@acme.dev", name: "New" }, { email: "ANA@acme.dev", name: "a third Ana" });
+  assert.equal(p.memberName(members, "new@acme.dev"), "New");
+  assert.equal(p.memberName(members, "ana@acme.dev"), "Ana");
+  // another list is another's
+  assert.equal(p.memberName([{ email: "ana@acme.dev", name: "Other" }], "ANA@acme.dev"), "Other");
+  assert.equal(p.memberName([], "ana@acme.dev"), null);
 });
 
 test("profile_recovery_follows_states_and_clears_after_success", () => {
@@ -591,6 +659,29 @@ test("what_the_clients_show_is_put_in_here", () => {
   assert.equal(v.time.createdAt.ago, "3 分钟前");
   const w = v.quota.windows;
   assert.deepEqual([w[0].mark, w[1].mark, w[1].level, w[1].refills], ["5H", "W", "red", "1 小时 5 分钟后刷新"]);
+  // What a model has to itself (Fable's week) is drawn with the account's windows, after the account's week.
+  const own: J = p.times({ quota: { state: "ok", windows: [{ label: "每周", usedPercent: 10, resetsAt: null }, { label: "5 小时", usedPercent: 0, resetsAt: null }], scoped: [{ label: "每周 · Fable", usedPercent: 92, resetsAt: c.now + 3_900_000, scope: "Fable" }] } }, c);
+  assert.deepEqual(own.quota.windows.map((w: J) => [w.label, w.mark, w.left, w.level, w.scope]), [["5 小时", "5H", 100, "ok", undefined], ["每周", "W", 90, "ok", undefined], ["每周 · Fable", "Fable", 8, "red", "Fable"]]);
+  assert.equal("scoped" in own.quota, false);
+  assert.deepEqual((p.times(own, c) as J).quota.windows.map((w: J) => w.mark), ["5H", "W", "Fable"], "put again, the same");
+  const agy: J = p.times({
+    quota: {
+      state: "ok",
+      windows: [
+        { label: "每周 · Gemini", usedPercent: 25, resetsAt: null },
+        { label: "5 小时 · Gemini", usedPercent: 10, resetsAt: null },
+        { label: "每周 · Claude / GPT", usedPercent: 60, resetsAt: null },
+        { label: "5 小时 · Claude / GPT", usedPercent: 100, resetsAt: null },
+      ],
+    },
+  }, c);
+  assert.deepEqual(agy.quota.windows.map((w: J) => [w.label, w.mark, w.left]), [
+    ["5 小时 · Gemini", "Gemini 5H", 90],
+    ["每周 · Gemini", "Gemini W", 75],
+    ["5 小时 · Claude / GPT", "Claude / GPT 5H", 0],
+    ["每周 · Claude / GPT", "Claude / GPT W", 40],
+  ]);
+  assert.deepEqual((p.times(agy, c) as J).quota.windows.map((w: J) => w.mark), ["Gemini 5H", "Gemini W", "Claude / GPT 5H", "Claude / GPT W"]);
   const members = [{ email: "a@x.com", name: "阿一", picture: "https://p/a" }];
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"]], members), "@ds-ember 和 @U9 看下");
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"], ["U9", "Mia"]], members), "@ds-ember 和 @Mia 看下");
@@ -756,6 +847,9 @@ test("a_connect_says_where_it_is_reached_how_it_runs_and_what_switching_it_does"
   assert.ok(c.modeSentence.endsWith("仅在被 @ 时唤醒。"));
   assert.equal(c.modeWords.single.label, "所有群共用一个会话");
   assert.equal(p.connect({ ...base, kind: "slack", team: "Acme", feishu: undefined }).placeText, "Acme");
+  // a Comma connect: reached in Comma, and not linked yet in its own name, never Slack's
+  const comma = p.connect({ ...base, kind: "comma", mode: "multi-session", feishu: undefined });
+  assert.deepEqual([comma.placeText, comma.statusText], ["Comma", "未连接 Comma"]);
   // switched to one each, with two running: what that does in its groups' words, then that the running finish
   const changes = p.modeChanges(base, 2);
   const multi = changes.find((x: J) => x.mode === "multi-session");
@@ -793,4 +887,175 @@ test("a_slack_apps_permissions_are_said_in_sections_those_only_admins_allow_mark
   assert.deepEqual([base.id, base.fixed, base.admin], ["base", true, null]);
   const connect = sections[1].groups.find((g: J) => g.id === "connect");
   assert.equal(connect.tip, `${connect.description} ${connect.admin}`);
+});
+
+// ── times, held to how it was written before it copied only what it changed ──
+
+/// `times` as it was (before an object was copied only as something was first put in it), word for word.
+function timesBefore(value: unknown, c: p.Clock): unknown {
+  const SECONDS = ["created_at", "expires_at", "used_at", "revoked_at", "last_seen", "lastSeen"];
+  const MILLIS = ["createdAt", "lastActiveAt", "lastUsedAt", "checkedAt", "resetsAt"];
+  const { windows, resetsText, presentReset } = p.timesParts;
+  const stamp = p.stamp;
+  const times = timesBefore;
+  if (value !== null && typeof value === "object" && shaped.has(value)) return value;
+  if (Array.isArray(value)) {
+    let out: unknown[] | null = null;
+    for (let i = 0; i < value.length; i++) {
+      const v = times(value[i], c);
+      if (v !== value[i]) (out ??= [...value])[i] = v;
+    }
+    return out ?? value;
+  }
+  if (!isObject(value)) return value;
+  const map: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+  let changed = false;
+  const stamps: Record<string, unknown> = {};
+  let any = false;
+  for (const key of Object.keys(map)) {
+    const v = map[key];
+    if (typeof v === "number" && v > 0) {
+      if (SECONDS.includes(key)) {
+        stamps[key] = stamp(v * 1000, c);
+        any = true;
+      } else if (MILLIS.includes(key)) {
+        stamps[key] = stamp(v, c);
+        any = true;
+      }
+    } else if (key === "windows" && Array.isArray(v) && [v, map.scoped].some((l) => Array.isArray(l) && l.some((w) => get(w, "usedPercent") !== undefined))) {
+      map[key] = windows([...v, ...(Array.isArray(map.scoped) ? map.scoped : [])] as Record<string, unknown>[], c);
+      delete map.scoped;
+      changed = true;
+    } else if (key !== "time" && !(key === "scoped" && Array.isArray(map.windows))) {
+      const shown = times(v, c);
+      if (shown !== v) {
+        map[key] = shown;
+        changed = true;
+      }
+    }
+  }
+  if ("windows" in map && "state" in map) {
+    clock.minute.get();
+    const credits = map.credits;
+    if (isObject(credits)) {
+      const text =
+        credits.unlimited === true
+          ? t("core-views.present.credits.unlimited")
+          : typeof credits.balance === "string"
+            ? t("core-views.present.credits.balance", { balance: format.decimal(credits.balance) })
+            : credits.hasCredits === false
+              ? t("core-views.present.credits.none")
+              : t("core-views.present.credits.unknown");
+      map.creditsText = text;
+      changed = true;
+    }
+    const count = u64(map.resetCount);
+    if (count !== undefined) {
+      map.resetText = resetsText(count, map.resetExpiries, c);
+      const kinds = Array.isArray(map.resets) ? map.resets.filter(isObject) : count > 0 ? [{ kind: "credit", left: count, expiries: map.resetExpiries, usable: true }] : [];
+      map.resets = kinds.map((r) => presentReset(r, c));
+      changed = true;
+    }
+  }
+  if (any) {
+    map.time = isObject(map.time) ? { ...map.time, ...stamps } : stamps;
+    changed = true;
+  }
+  return changed ? map : value;
+}
+
+/// Holds `times` to `timesBefore` on `value` and on every part of it: equal, its keys in the same order, and the part
+/// itself wherever the one before gave the part itself. How many parts were compared.
+function sameTimes(value: unknown, c: p.Clock, where: string): number {
+  deepFreeze(value);
+  let n = 0;
+  const walk = (v: unknown, path: string): void => {
+    if (v === null || typeof v !== "object") return;
+    const [now, before] = [p.times(v, c), timesBefore(v, c)];
+    assert.deepEqual(now, before, path);
+    assert.equal(JSON.stringify(now), JSON.stringify(before), `${path}: its keys in the same order`);
+    if (before === v) assert.equal(now, v, `${path}: the part itself`);
+    else assert.notEqual(now, v, `${path}: a new part`);
+    n++;
+    for (const k of Object.keys(v)) walk((v as Record<string, unknown>)[k], `${path}.${k}`);
+  };
+  walk(value, where);
+  return n;
+}
+
+test("times copies only what it puts and gives what it gave: every part of a workspace of real size", () => {
+  const now = 1_900_000_000_000;
+  for (const offsetMin of [0, 480]) {
+    const c = { now, offsetMin };
+    let parts = 0;
+    let changed = 0;
+    for (const [topic, value] of [...fixture(now), ...more(now)]) {
+      parts += sameTimes(value, c, JSON.stringify(topic));
+      if (timesBefore(value, c) !== value) changed++;
+    }
+    for (const [kind, id, value] of records(now)) parts += sameTimes(value, c, `${kind} ${id}`);
+    for (let st = 0; st < STATIONS.length; st++) parts += sameTimes(profilesOf(now, st), c, `profiles ${st}`);
+    // (the fixture holds times in words to put, and the parts walked are its whole)
+    assert.ok(changed > 10 && parts > 10_000, `${changed} values put, ${parts} parts`);
+  }
+});
+
+test("times copies only what it puts and gives what it gave: arrays, quotas' windows and resets, times already said", () => {
+  const now = 1_900_000_000_000;
+  const c = { now, offsetMin: 480 };
+  const window = (label: string, usedPercent?: number) => ({ label, ...(usedPercent === undefined ? {} : { usedPercent }), resetsAt: now + 3_600_000 });
+  const cases: [string, unknown][] = [
+    ["an array with one element changed", [{ a: 1 }, { created_at: 1_800_000_000 }, "x", [1, 2], { b: { c: [3] } }]],
+    ["nothing to put", { a: { b: { c: 1 } }, d: [{ e: 2 }], createdAt: 0, lastSeen: -1, used_at: "soon" }],
+    ["nested parts unchanged beside one put", { a: { b: { c: 1 } }, d: [{ e: 2 }], lastSeen: 1_800_000_000, f: { g: { checkedAt: now - 5000 } } }],
+    ["a time already in words", { updatedAt: now - 3_600_000, time: { updatedAt: { ago: "1 小时前" } }, createdAt: now - 5000, lastActiveAt: now - 90_000_000 }],
+    ["a time key holding no number", { time: { created_at: 5 }, checkedAt: "now", resetsAt: null }],
+    ["windows with scoped", { state: "ok", windows: [window("5h", 10)], scoped: [window("Fable 每周", 50)], checkedAt: now - 60_000, detail: null }],
+    ["scoped before windows", { scoped: [window("Fable 每周", 50)], state: "ok", windows: [window("5h", 10), window("每周", 95)] }],
+    ["only scoped used", { state: "ok", windows: [window("5h")], scoped: [window("Fable 每周", 80)] }],
+    ["no window used", { state: "ok", windows: [window("5h")], scoped: [{ x: { created_at: 1_800_000_000 } }] }],
+    ["scoped with no windows list", { state: "ok", windows: null, scoped: [{ created_at: 1_800_000_000 }] }],
+    ["windows as a field of no quota", { windows: [window("5h", 10)], scoped: "none" }],
+    ["credits and resets", { state: "ok", windows: [], credits: { balance: "12.5", checkedAt: now - 1000 }, resetCount: 2, resetExpiries: [now + 86_400_000, now - 1] }],
+    ["credits of each kind", [{ state: "ok", windows: [], credits: { unlimited: true } }, { state: "ok", windows: [], credits: { hasCredits: false } }, { state: "ok", windows: [], credits: {} }, { state: "ok", windows: [], credits: "x" }]],
+    ["resets by kind", { state: "ok", windows: [window("每周", 100)], resetCount: 2, resetExpiries: [now + 1e9], resets: [{ id: "weekly", kind: "weekly", left: 1, usable: true, expiries: [now + 1e9] }, "x", { kind: "model", model: "Fable", left: 1, usable: false }] }],
+    ["no resets left", { state: "ok", windows: [], resetCount: 0 }],
+    ["a quota inside a profile", { id: "p", quota: { state: "ok", windows: [window("5h", 75)], scoped: [], checkedAt: now - 120_000, resetCount: 1 }, usedBy: [{ created_at: 1_800_000_000, name: "x" }] }],
+  ];
+  for (const [name, value] of cases) sameTimes(value, c, name);
+  // A part already shaped is the part itself.
+  const done = { createdAt: now - 1000 };
+  shaped.add(done);
+  assert.equal(p.times(done, c), done);
+  const around = { a: done };
+  assert.equal(p.times(around, c), around);
+});
+
+test("devin_fusion_pairings_factor_by_lead_and_sidekick_stay_removable_when_ticked_and_hide_on_shared_copies", () => {
+  const uid = "fusion-gpt-6-sol-sidekick-swe-2-medium";
+  const devin = p.profile({
+    runtime: "devin",
+    runtimes: ["devin"],
+    models: [uid, "swe-2"],
+    named: [uid],
+    check: {
+      state: "ok",
+      detail: "ok",
+      models: ["swe-2"],
+    },
+  });
+  assert.deepEqual(devin.added, [uid]);
+  assert.deepEqual(devin.series, [
+    { name: "SWE", models: ["swe-2"] },
+    { name: "Sol", models: [uid] },
+  ]);
+  assert.equal(devin.fusion, undefined);
+  assert.deepEqual(p.buildFusion({ leads: { "gpt-6-sol-max": [0], "claude-opus-5-5-high": [0] }, sides: ["swe-2-medium"] }), {
+    leads: [
+      { id: "claude-opus-5-5", name: "Opus 5.5", maker: { id: "anthropic", name: "Anthropic" }, sides: [0] },
+      { id: "gpt-6-sol", name: "GPT-6 Sol", maker: { id: "openai", name: "OpenAI" }, sides: [0] },
+    ],
+    sides: [{ id: "swe-2-medium", name: "SWE-2 · 中", maker: { id: "devin", name: "Cognition" } }],
+  });
+  assert.equal(p.buildFusion(null), null);
 });

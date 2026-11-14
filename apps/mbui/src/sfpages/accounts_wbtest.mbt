@@ -71,12 +71,11 @@ test "returning to a Claude account's open login page does not ask again" {
         },
       }
     })
-    t.click(Button, label="其他方式")
-    presented_in(t)
-    t.tap_text("回到 Willow 的浏览器")
-    t.run_for(@kit.presence_out_ms)
+    t.click(Button, label="回到 Willow 的浏览器")
+    t.frame()
     assert_eq(calls, ["profile.loginBrowser"])
     assert_false(@sf.presenting())
+    assert_true(t.audit().is_empty())
   }
 }
 
@@ -94,20 +93,20 @@ test "a shared subscription's main switch and its station details remain usable 
     let at = "\{w} platform \{platform}"
     scrolled_to(t, w, "分享给其他 station")
     assert_eq(t.get(Switch, label="分享给其他 station").check, Some(On), msg=at)
-    assert_true(t.find("登录在") is Some(_) && t.find("可用的 station") is Some(_), msg=at)
+    assert_true(t.find("所在 station") is Some(_) && t.find("可用的 station") is Some(_), msg=at)
     assert_true(t.find("使用中：Maple") is Some(_), msg=at)
     let boxes = t.boxes_held()
     let switch_title = boxes.filter(fn(b) { b.text == "分享给其他 station" })
     assert_eq(switch_title.length(), 1, msg=at)
-    for title in ["登录在", "可用的 station"] {
+    for title in ["所在 station", "可用的 station"] {
       let found = boxes.filter(fn(b) { b.text == title })
       assert_eq(found.length(), 1, msg="\{at}: \{title}")
       assert_eq(found[0].weight, 500, msg="\{at}: \{title}")
       assert_eq(found[0].color, switch_title[0].color, msg="\{at}: \{title} ink")
     }
-    t.tap_text("登录在")
+    t.tap_text("所在 station")
     t.run_for(@kit.presence_in_ms)
-    assert_true(t.find("选择登录的 station") is Some(_), msg=at)
+    assert_true(t.find("移到哪台 station？") is Some(_), msg=at)
     @sf.presenters_reset()
     // (what was presented let go at once by hand, the test's way to close it: no signal of it, said)
     t.stepped()
@@ -125,6 +124,46 @@ test "a shared subscription's main switch and its station details remain usable 
     assert_eq(asked.length(), 1, msg=at)
     assert_false(flag(Some(asked[0].1), "on"), msg=at)
   }
+}
+
+///|
+test "which stations may use a share is said with the stations it was chosen among, so only theirs change" {
+  let calls : Array[Json] = []
+  let t = setting_tester(Profile("ws1/st1", "cc"), 1280.0, h=2400.0, over=fn(s) {
+    { ..s, call: fn(name, params, done) {
+        if name == "profile.share" {
+          calls.push(params)
+          done(Ok(obj([])))
+        } else {
+          (s.call)(name, params, done)
+        }
+      } }
+  })
+  scrolled_to(t, 1280.0, "可用的 station")
+  let among = fn(p : Json) -> Array[String] {
+    match field(Some(p), "among") {
+      Some(Array(a)) => a.filter_map(fn(x) { if x is String(v) { Some(v) } else { None } })
+      _ => []
+    }
+  }
+  // Maple left out: the list of those ticked, and every one listed as what it was chosen among
+  t.tap_text("可用的 station")
+  t.run_for(@kit.presence_in_ms)
+  t.click(Switch, label="Maple")
+  t.frame()
+  t.click(Button, label="完成")
+  t.run_for(@kit.presence_out_ms)
+  assert_eq(calls.length(), 1)
+  assert_eq(field(Some(calls[0]), "allow"), Some(Json::array([Json::string("st1")])))
+  assert_eq(among(calls[0]), ["st1", "st2"])
+  // all of them ticked: no list, so the station keeps what was chosen of the others where it is in several workspaces
+  t.tap_text("可用的 station")
+  t.run_for(@kit.presence_in_ms)
+  t.click(Button, label="完成")
+  t.run_for(@kit.presence_out_ms)
+  assert_eq(calls.length(), 2)
+  assert_eq(field(Some(calls[1]), "allow"), None)
+  assert_eq(among(calls[1]), ["st1", "st2"])
 }
 
 ///|
@@ -170,7 +209,8 @@ fn drawn_names() -> Array[String] {
 }
 
 ///|
-/// Three places with the same account status: the current station, a link, and one still waiting for a profile.
+/// Three places with the same account status: the current station, a link, and one still waiting for a profile (the
+/// account's own topic, `profile`, which its page reads them of).
 fn alignment_places(s : Source) -> Source {
   fn shaped(v : Json) -> Json {
     match v {
@@ -201,7 +241,7 @@ fn alignment_places(s : Source) -> Source {
     ..s,
     topic_read: fn(name, params) {
       let v = s.topic(name, params).get().snapshot()
-      if name == "profiles" {
+      if name == "profile" {
         match v.value {
           Some(x) => { ..v, value: Some(shaped(x)) }
           None => v
@@ -395,10 +435,10 @@ test "a revoked Codex sign-in offers sign-in from the account check" {
 }
 
 ///|
-test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, then uses one of the resets left" {
+test "a profile's quota, a narrow page with a mouse: its resets left at the row's end; pressed, asks first, then uses one" {
   let t = setting_tester(Profile("ws1/st1", "cx"), 390.0)
-  scrolled_to(t, 390.0, "还可重置 2 次")
-  t.tap_text("重置额度")
+  scrolled_to(t, 390.0, "剩 2 次")
+  t.click(Link, label="额度重置")
   t.frame()
   assert_true(@sf.presenting(), msg="asked first")
   assert_true(t.find("重置额度？") is Some(_))
@@ -408,18 +448,43 @@ test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, th
   t.tap_text("使用一次重置")
   t.frame()
   t.frame()
-  assert_true(t.find("还可重置 1 次") is Some(_))
+  assert_true(t.find("剩 1 次") is Some(_))
 }
 
 ///|
 test "reset credits show their separate expiry times at every page width" {
   for (w, platform) in page_cases {
     let t = setting_tester(Profile("ws1/st1", "cx"), w, platform~, mode="settings-profile-quota-expiry")
-    let note = "剩余 2 次 · 6 小时 35 分钟后、3 天 19 小时后到期"
+    let note = "6 小时 35 分钟后、3 天 19 小时后到期"
     scrolled_to(t, w, note)
     assert_true(t.find(note) is Some(_), msg="reset expiries at width \{w}")
-    assert_true(t.find("重置额度") is Some(_), msg="reset action at width \{w}")
+    assert_true(t.find("剩 2 次") is Some(_), msg="how many left, on their own, at width \{w}")
   }
+}
+
+///|
+test "a subscription's resets of two kinds, a row each: what each gives back said, one usable only at a limit not offered, the other used by its kind" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, mode="settings-profile-quota-kinds")
+    scrolled_to(t, w, "Fable 重置")
+    assert_true(t.find("5 小时重置") is Some(_), msg="the 5-hour kind at width \{w}")
+    assert_true(t.find("立即恢复 5 小时额度 · 到达它能恢复的上限后才能用") is Some(_), msg="what it gives back, and why not now, at width \{w}")
+    assert_true(t.find("把本周 Fable 用掉的额度还回每周额度 · 118 天后到期") is Some(_), msg="what the Fable one gives back at width \{w}")
+    assert_true(t.find("剩 1 次") is Some(_), msg="how many left, on their own, at width \{w}")
+  }
+  let t = setting_tester(Profile("ws1/st1", "cc"), 390.0, mode="settings-profile-quota-kinds")
+  scrolled_to(t, 390.0, "Fable 重置")
+  assert_true(t.query(Link, label="5 小时重置") is None, msg="usable only at a limit: not offered")
+  t.click(Link, label="Fable 重置")
+  t.frame()
+  assert_true(@sf.presenting(), msg="asked first")
+  assert_true(t.find("将使用「Claude 主账号」的 1 次 Fable 重置：把本周 Fable 用掉的额度还回每周额度") is Some(_))
+  t.run_for(@kit.presence_in_ms)
+  t.click(Button, label="使用一次重置")
+  // (its row closing its room on its way)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Link, label="Fable 重置") is None, msg="the Fable reset used, by its kind")
+  assert_true(t.find("5 小时重置") is Some(_), msg="the other kind left")
 }
 
 ///|
@@ -458,7 +523,7 @@ test "a profile model's id appears beside the option the pointer is over" {
   t.run_for(@kit.presence_in_ms)
   for (name, id) in [("Opus 5.5", "claude-opus-5-5"), ("Sonnet 5", "claude-sonnet-5")] {
     let (x, y, w, h) = t.rect_of(name).unwrap()
-    t.move(x + w / 2.0, y + h / 2.0)
+    t.move_to(x + w / 2.0, y + h / 2.0)
     t.run_for(@sf.tip_delay_ms + @kit.presence_in_ms)
     let tip = t.get(Tooltip, label=id).rect
     let gap = tip.0 - (x + w)
@@ -494,7 +559,7 @@ fn long_profile(s : Source) -> Source {
           // (in place of the fixture's own accounts)
           let lists = match o.get("lists") { Some(Array(a)) => a.filter(fn(l) {
                 match l {
-                  Object(m) => !(m.get("key") is Some(String("profiles", ..)))
+                  Object(m) => !(m.get("key") is Some(String("profiles")))
                   _ => true
                 }
               }); _ => [] }
@@ -537,4 +602,123 @@ test "a profile's page on a phone: its long name, its figures on one line and ho
     assert_eq(y3, y1, msg="\{w}: one line")
     assert_true(x3 + w3 <= w, msg="\{w}: inside the page")
   }
+}
+
+///|
+test "a Devin profile's models panel asks Fusion pairs on demand, switches lead model chips, deduplicates ticked ones, and syncs pick.like" {
+  let calls : Array[(String, Json)] = []
+  let existing_uid = "fusion-gpt-6-sol-sidekick-claude-sonnet-5-5-medium"
+  let fusion_catalog : Json = {
+    "sides": [
+      { "id": "swe-2-medium", "name": "SWE-2 · 中", "maker": { "id": "devin", "name": "Cognition" } },
+      { "id": "claude-sonnet-5-5-medium", "name": "Sonnet 5.5 · 中", "maker": { "id": "anthropic", "name": "Anthropic" } },
+    ],
+    "leads": [
+      {
+        "id": "claude-opus-5-5",
+        "name": "Opus 5.5",
+        "maker": { "id": "anthropic", "name": "Anthropic" },
+        "sides": [0],
+      },
+      {
+        "id": "gpt-6-sol",
+        "name": "GPT-6 Sol",
+        "maker": { "id": "openai", "name": "OpenAI" },
+        "sides": [0, 1],
+      },
+    ],
+  }
+  let fusion_profile = fn(s : Source) -> Source {
+    fn shaped(v : Json) -> Json {
+      match v {
+        Object(o) if o.get("id") == Some(Json::string("cc")) && o.contains("available") => {
+          let p = o.copy()
+          p["runtime"] = "devin"
+          p["models"] = ["gemini-4-carbon", existing_uid]
+          p["named"] = [existing_uid]
+          p["added"] = [existing_uid]
+          p["modelsText"] = "2 个模型"
+          p["available"] = ["gemini-4-carbon", existing_uid]
+          p["names"] = {
+            "gemini-4-carbon": "Gemini 4 Carbon",
+            "fusion-gpt-6-sol-sidekick-claude-sonnet-5-5-medium": "GPT-6 Sol + Sonnet 5.5 (中)",
+          }
+          p["series"] = [
+            { "name": "Gemini", "models": ["gemini-4-carbon"] },
+            { "name": "Sol", "models": [existing_uid] },
+          ]
+          Json::object(p)
+        }
+        Object(o) => {
+          let p = o.copy()
+          for k, x in o {
+            p[k] = shaped(x)
+          }
+          Json::object(p)
+        }
+        Array(a) => Json::array(a.map(shaped))
+        _ => v
+      }
+    }
+    fn shaped_pick(v : Json) -> Json {
+      match v {
+        Object(o) => {
+          let p = o.copy()
+          let opts = match o.get("options") {
+            Some(Array(a)) => a.copy()
+            _ => []
+          }
+          opts.push({ "model": existing_uid, "ids": [existing_uid], "liked": true })
+          p["options"] = Json::array(opts)
+          Json::object(p)
+        }
+        _ => v
+      }
+    }
+    {
+      ..s,
+      topic_read: fn(name, params) {
+        let v = s.topic(name, params).get().snapshot()
+        match v.value {
+          Some(x) => { ..v, value: Some(if name == "pick" { shaped_pick(x) } else { shaped(x) }) }
+          None => v
+        }
+      },
+      call: fn(name, params, done) {
+        calls.push((name, params))
+        if name == "profile.fusion" {
+          done(Ok({ "fusion": fusion_catalog }))
+        } else {
+          done(Ok(obj([])))
+        }
+      },
+    }
+  }
+  let t = setting_tester(Profile("ws1/st1", "cc"), 1280.0, over=fusion_profile)
+  assert_eq(calls.length(), 0)
+  scrolled_to(t, 1280.0, "全部模型")
+  t.tap_text("全部模型")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(calls.map(fn(x) { x.0 }), ["profile.fusion"])
+  assert_true(t.find("Fusion 组合") is Some(_))
+  // Already-ticked Fusion pair from another lead (`gpt-6-sol`) is shown in `Fusion 组合`, not duplicated in top series.
+  assert_true(t.find("GPT-6 Sol + Sonnet 5.5 (中)") is None)
+  assert_true(t.find("GPT-6 Sol + Sonnet 5.5 · 中") is Some(_))
+  assert_true(t.query(Checkbox, label="SWE-2 · 中") is Some(_))
+  // Unchecking the already-ticked & liked pair removes it from `models` and clears `pick.like`.
+  t.click(Checkbox, label="GPT-6 Sol + Sonnet 5.5 · 中")
+  t.frame()
+  assert_eq(calls.map(fn(x) { x.0 }), ["profile.fusion", "profile.put", "pick.like"])
+  assert_true(!calls[1].1.stringify().contains(existing_uid), msg="profile.put drops \{existing_uid}: \{calls[1].1.stringify()}")
+  assert_true(calls[2].1.stringify().contains("\"liked\":false"), msg="pick.like clears \{existing_uid}: \{calls[2].1.stringify()}")
+  // Switching lead model chip to `GPT-6 Sol` and checking a sidekick saves it and stars it.
+  t.click(Radio, label="GPT-6 Sol")
+  t.frame()
+  assert_true(t.query(Checkbox, label="SWE-2 · 中") is Some(_))
+  t.click(Checkbox, label="SWE-2 · 中")
+  t.frame()
+  assert_eq(calls.map(fn(x) { x.0 }), ["profile.fusion", "profile.put", "pick.like", "profile.put", "pick.like"])
+  let uid = "fusion-gpt-6-sol-sidekick-swe-2-medium"
+  assert_true(calls[3].1.stringify().contains(uid), msg="profile.put saves \{uid}: \{calls[3].1.stringify()}")
+  assert_true(calls[4].1.stringify().contains("\"liked\":true"), msg="pick.like likes \{uid}: \{calls[4].1.stringify()}")
 }

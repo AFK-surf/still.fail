@@ -7,11 +7,11 @@
 import assert from "node:assert/strict";
 import { suite, test as register, type TestOptions } from "node:test";
 import { Clock, Duration, Effect } from "effect";
-import type { Credential } from "../src/cloud.ts";
 import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ALPN, CONNECT_TIMEOUT_MS, DEVICE_KEY, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
+import { CONNECT_TIMEOUT_MS, DEVICE_KEY, Mesh, PROBE_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, MeshWire, STATION_MESH } from "../src/station/mesh-wire.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -46,7 +46,7 @@ function grants(prefix: string, count: { n: number }): CredentialSource {
     Effect.sync(() => {
       assert.equal(device.length, 64);
       count.n++;
-      return { credential: `${prefix}-${count.n}`, issued_at: 0, expires_at: 0, relay_url: "" } as Credential;
+      return { credential: `${prefix}-${count.n}`, also: null };
     });
 }
 
@@ -70,7 +70,7 @@ function quickClock(times = new Map([[RENEW_MS, 150]])): Clock.Clock {
 
 function env(host: FakeHost, wakes = new Wakes(), clock?: Clock.Clock) {
   const runner = new Runner(clock);
-  return { host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes };
+  return { host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes, ...STATION_MESH };
 }
 
 async function setup(station?: Station, host = new FakeHost(), wakes = new Wakes(), clock?: Clock.Clock) {
@@ -282,7 +282,7 @@ test("renews_the_grant_until_the_link_closes", { skip }, async () => {
 test("a_refused_renewal_makes_the_next_link_reopen", { skip }, async () => {
   const { mesh, station, runner } = await setup(undefined, new FakeHost(), new Wakes(), quickClock());
   let n = 0;
-  const refuseLater: CredentialSource = () => Effect.sync(() => ({ credential: ++n === 1 ? "ok" : "revoked", issued_at: 0, expires_at: 0, relay_url: "" }) as Credential);
+  const refuseLater: CredentialSource = () => Effect.sync(() => ({ credential: ++n === 1 ? "ok" : "revoked", also: null }));
   const first = await runner.run(mesh.link(station.id(), refuseLater));
   // Its renewal (150 ms on) refused, as a busy machine takes.
   for (let i = 0; i < 250 && first.usable(); i++) await sleep(20);
@@ -732,7 +732,7 @@ test("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", { skip }
   const mesh = await e.runner.run(Mesh.make(e, []));
   mesh.addAddr({ id: endpoint.id(), ips: [endpoint.sockets().find((a: string) => a.startsWith("127.0.0.1"))] });
   const store = new Store(host, e.runner);
-  const adb = new Adb({ ...personalStub(), host, runner: e.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const adb = new Adb({ ...personalStub(), host, runner: e.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", also: null }), relays: () => [], lends: () => true });
   takeAll(adb);
   const station = `ws/${endpoint.id()}`;
   await e.runner.run(adb.run({ kind: "share", offer: { station, connect: port, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));

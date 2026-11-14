@@ -1,8 +1,9 @@
 // The statistics a Comma connect sends of the workspace (comma/stats.ts), as one station reads them of its own: what
-// its agents spent and the chats they worked in, written out field by field here, so that what the station keeps
-// changing never changes what another station of another version is answered (`outflow.read`, comma/peer.ts, named so
-// as stations of every version answer it). The chats of one workspace of the station's (its home one, unless another
-// station of a workspace it joined asks).
+// its agents spent and the chats they worked in (with what each asks of whom now, its link in the app, and whether a
+// Comma Router wrote in it), written out field by field here, so that what the station keeps changing never changes
+// what another station of another version is answered (`outflow.read`, comma/peer.ts, named so as stations of every
+// version answer it). The chats of one workspace of the station's (its home one, unless another station of a workspace
+// it joined asks).
 import type { Json, Store } from "./store.ts";
 import * as store from "./store.ts";
 import { ending, sees } from "../store/rows.ts";
@@ -11,6 +12,7 @@ import { titleNeedsFirstText, titleOf } from "./views.ts";
 import { slackCreator } from "./slack-known.ts";
 import { usage } from "./usage.ts";
 import type { Lang } from "../ops/i18n.ts";
+import { type PageBase, sessionPage } from "../sessions/page.ts";
 
 /// Which workspace's chats are read, as `sees` takes a viewer.
 export type Of = { workspace: string; home: boolean };
@@ -51,6 +53,65 @@ function state(turn: Json | null): string | null {
   return said === "need_help" ? "need_human" : said;
 }
 
+/// A card's assignee, the email of who decides it, as the card on message `n` of `thread` names one: by its key.
+function assigneeAt(s: Store, thread: number, n: number): string | null {
+  const r = s.db.prepare("SELECT card FROM entries WHERE thread = ? AND n = ? AND kind = 'message'").get(thread, n) as { card: string | null } | undefined;
+  if (typeof r?.card !== "string") return null;
+  try {
+    const assignee = JSON.parse(r.card)?.assignee;
+    return typeof assignee === "string" && assignee.trim() !== "" ? assignee.trim().toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/// Whether a chat's latest message (that is not a letter) is one its creator has not read: past where they read it
+/// to in the app, and not theirs. Each by its key (thread_state, the message, their read mark).
+function unreadBy(s: Store, thread: number, ref: string, email: string): boolean {
+  const said = s.db.prepare(`SELECT e.n, e.author_kind, e.author FROM thread_state t JOIN entries e ON e.thread = t.thread AND e.n = t.said_n
+    WHERE t.thread = ?`).get(thread) as { n: number; author_kind: string; author: string } | undefined;
+  if (said === undefined) return false;
+  if (said.author_kind === "person" && (said.author === ref || said.author.toLowerCase() === email)) return false;
+  const read = s.db.prepare("SELECT MAX(n) AS n FROM reads WHERE viewer IN (?1, lower(?1)) AND thread = ?2").get(email, thread) as { n: number | null };
+  return said.n > (read.n ?? 0);
+}
+
+/// What a chat asks of someone now, by its agents' latest turn; null when nothing (and for an archived chat):
+/// - `need`: it ended needing a person (need_human). For whoever decides the card the need is about (its assignee),
+///   else whoever started the chat; its words the need.
+/// - `done`: it ended all done and whoever started it has not read its latest message in the app (a still.fail chat:
+///   a Slack or Feishu thread is read there, which the station does not know). Its words what was done.
+/// - `failed`: it failed without saying how it ended, for whoever started it; its words the failure's first line.
+/// `waitsFor`: the emails of who it is for, as far as known.
+function attentionOf(s: Store, thread: store.ThreadRow, latest: Json | null, creator: string | null, email: string | null): Json | null {
+  if (latest === null || thread.hiddenAt !== null) return null;
+  const said = state(latest);
+  const mine = email === null ? [] : [email.toLowerCase()];
+  const words = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
+  if (said === "need_human") {
+    const about = latest.about;
+    const assignee = about !== undefined && about !== null ? assigneeAt(s, about.thread, about.seq) : null;
+    return { kind: "need", waitsFor: assignee !== null ? [assignee] : mine, note: words(latest.need) };
+  }
+  if (said === "all_done") {
+    if (email === null || creator === null || thread.surface !== store.STILLFAIL_SURFACE) return null;
+    return unreadBy(s, thread.id, creator, email.toLowerCase()) ? { kind: "done", waitsFor: mine, note: words(latest.need) } : null;
+  }
+  if (latest.outcome === "failed" && latest.declared === null) {
+    const detail = words(latest.detail);
+    return { kind: "failed", waitsFor: mine, note: detail === null ? null : words(detail.split("\n")[0]) };
+  }
+  return null;
+}
+
+/// Whether a Comma Router ever wrote in still.fail chat `thread`, by one keyed range of who wrote in it (thread_people,
+/// kept by the entries' trigger, so of all its history and gone only with its entries). Its writes are the only
+/// person messages of a still.fail chat named `slack:<connect>:<requester>` (comma/chats.ts routerSaysOnce); people
+/// write there as their email (lifecycle.ts `say`), and the Router writes in no other chat.
+export const ROUTER_WROTE = "SELECT 1 FROM thread_people WHERE thread = ? AND author >= 'slack:' AND author < 'slack;' LIMIT 1";
+const routerWrote = (s: Store, thread: store.ThreadRow): boolean =>
+  thread.surface === store.STILLFAIL_SURFACE && s.db.prepare(ROUTER_WROTE).get(thread.id) !== undefined;
+
 /// A page of chats: at most `limit`, those after `before` (the `next` of the page before).
 export type ChatsPage = { limit: number; before: string | null };
 export const OUTFLOW_CHATS_PENDING = "outflow chat order is still being prepared";
@@ -63,9 +124,12 @@ const OUTFLOW_CHAT_FIRST = `SELECT thread, at FROM outflow_chat_order INDEXED BY
 
 /// v1 `chats`: the chats with something new since `since` (ms), the latest active first: each one's thread (what
 /// `usage` rows name), where it is (`stillfail`, `slack`, `feishu`), title, how it stands, who started it, when, its
-/// latest activity, whether it is archived, and its agents' runtimes and models. With `page`, at most its `limit`,
-/// `more` when there are more and `next` to ask for them with; without, all of them.
-export function outflowChats(s: Store, since: number, of: Of = HOME, page: ChatsPage | null = null): Json {
+/// latest activity, whether it is archived, and its agents' runtimes and models; what it asks of whom now
+/// (`attention`, attentionOf: absent when nothing) and, given where this station's pages are (`pages`), its link in the
+/// app (`url`, the page of its latest turn's session); `router: true` when a Comma Router ever wrote in it (routerWrote:
+/// absent when not). With `page`, at most its `limit`, `more` when there are more and `next` to ask for them with;
+/// without, all of them.
+export function outflowChats(s: Store, since: number, of: Of = HOME, page: ChatsPage | null = null, pages: PageBase | null = null): Json {
   // The read and this coverage check share the reader's snapshot. A concurrent write is settled before a retry.
   if (!outflowChatIndexReady(s.db, of)) throw new Error(OUTFLOW_CHATS_PENDING);
   const [at, beforeThread] = (page?.before ?? "").split(".").map(Number);
@@ -104,16 +168,23 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
     const turns = members.map((m) => turnsBySession.get(m.session) ?? null).filter((x): x is NonNullable<typeof x> => x !== null);
     const latest = turns.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))[0] ?? null;
     const creator = thread.createdBy ?? sessions.get(members[0]!.session)?.createdBy ?? null;
+    const who = creator === null ? null : { ref: creator, ...person(s, creator) };
+    const attention = attentionOf(s, thread, latest, creator, typeof who?.email === "string" && who.email !== "" ? who.email : null);
+    const lead = members.find((m) => latest !== null && turnsBySession.get(m.session) === latest)?.session ?? members[0]!.session;
+    const url = pages === null ? null : sessionPage(pages, sessions.get(lead)?.ws ?? pages.workspace, lead);
     chats.push({
       thread: thread.id,
       surface: thread.surface === store.STILLFAIL_SURFACE ? "stillfail" : thread.surface,
       title: titleOf(thread, titleNeedsFirstText(thread) ? store.firstText(s, thread.id) : null, null),
       state: state(latest),
-      creator: creator === null ? null : { ref: creator, ...person(s, creator) },
+      creator: who,
       createdAt: thread.createdAt,
       lastActiveAt,
       archived: thread.hiddenAt !== null,
       agents: members.map((m) => ({ runtime: sessions.get(m.session)!.runtime, model: sessions.get(m.session)!.model })),
+      ...(attention === null ? {} : { attention }),
+      ...(url === null ? {} : { url }),
+      ...(routerWrote(s, thread) ? { router: true } : {}),
     });
   }
   if (page === null) return { since, chats };

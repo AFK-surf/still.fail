@@ -57,8 +57,11 @@
     // stations and devices in mainland China, where Cloudflare's is slow or out of reach; one in Hong Kong (Alibaba
     // Cloud, on a line tuned for the mainland), near enough to both the mainland and abroad; one in Shenzhen (Alibaba
     // Cloud, BGP), for the south of the mainland, far from Beijing and without Hong Kong's border crossing; one in Tokyo
-    // (Alibaba Cloud), for stations and devices abroad.
-    "RELAY_URLS": "https://39.105.157.122,https://47.76.247.168,https://120.24.233.158,https://47.79.40.84",
+    // (Alibaba Cloud), for stations and devices abroad; one in Shanghai (AFK's office: the soft router afkgw's static
+    // China Telecom line, 180.155.2.74, forwarded to an OrbStack container on ci-08; its own certificate, its port 8445
+    // as the carrier keeps 80 and 443 shut), where a station in the office homed on it at 50 ms against Shenzhen's
+    // 157-228 ms (2026-11-11, the user: 「先试试好使就加」).
+    "RELAY_URLS": "https://39.105.157.122,https://47.76.247.168,https://120.24.233.158,https://47.79.40.84,https://relay.pvg.office.afk.surf:8445",
     // Ways into those two for devices alone (src/relays.ts): Beijing's machine forwarding to Hong Kong's relay, and
     // Hong Kong's to Beijing's (nginx on :8443, each with its own certificate), so a phone in the mainland reaches a
     // station abroad (bft in Tokyo, whose line to Beijing loses packets) through Beijing and Hong Kong's good line.
@@ -67,11 +70,12 @@
     // The relays probed from China's carriers every half hour by Globalping's free probes (src/probes.ts).
     "RELAY_PROBES": "globalping",
     // What they are called on a station's card (经中继北京).
-    "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港", "https://120.24.233.158": "深圳", "https://47.79.40.84": "东京", "https://39.105.157.122:8443": "北京转香港", "https://47.76.247.168:8443": "香港转北京" },
+    "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港", "https://120.24.233.158": "深圳", "https://47.79.40.84": "东京", "https://relay.pvg.office.afk.surf:8445": "上海", "https://39.105.157.122:8443": "北京转香港", "https://47.76.247.168:8443": "香港转北京" },
     // The pages still.fail/status checks (src/status.ts).
     "STATUS_PAGES": { "site": "https://still.fail/", "web": "https://app.still.fail/" },
-    // Whose issues labelled `incident` it shows.
-    "STATUS_REPO": "AFK-surf/still.fail",
+    // Whose issues labelled `incident` it shows, and whose workflows say a release is out: the id of AFK-surf's
+    // repository of still.fail, which renaming it leaves as it is (`gh api repos/<owner>/<name> --jq .id`).
+    "STATUS_REPO_ID": "1391814537",
     "GOOGLE_CLIENT_ID": "",
     // Where the sign-in codes come from (src/mail.ts).
     "EMAIL_FROM": "noreply@still.fail",
@@ -86,6 +90,8 @@
     "bindings": [
       { "name": "ACCOUNTS", "class_name": "Account" },
       { "name": "DIRECTORY", "class_name": "Directory" },
+      // One per station, by its key: its presence socket, and whether it is enrolled (src/station.ts).
+      { "name": "STATIONS", "class_name": "Station" },
       { "name": "LOGINS", "class_name": "LoginAttempt" },
       { "name": "LOGIN_LIMITS", "class_name": "LoginLimiter" },
       { "name": "TELEMETRY_LIMITS", "class_name": "TelemetryLimiter" },
@@ -105,5 +111,6 @@
     { "tag": "stillfail-v1", "new_sqlite_classes": ["Account", "Directory", "LoginAttempt", "LoginLimiter", "TelemetryLimiter"] },
     { "tag": "stillfail-v2", "new_sqlite_classes": ["RelayLoad"] },
     { "tag": "stillfail-v3", "new_sqlite_classes": ["ServiceStatus"] },
+    { "tag": "stillfail-v4", "new_sqlite_classes": ["Station"] },
   ],
 }

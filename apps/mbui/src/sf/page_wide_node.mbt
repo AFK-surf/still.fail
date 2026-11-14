@@ -8,19 +8,21 @@
 ///|
 /// What a wide page made once holds, in its order: what stands over it, its head, its blocks by their keys, the room
 /// at its foot.
+#derive(Eq, Hash)
 priv enum WideItem {
   WideTop
   WideHead
   WideLead
   WideBlock(String)
   WideFoot
-} derive(Eq, Hash)
+}
 
 ///|
 /// A wide page made once (wide_page's) in node `v`: under what stands over it as the frame says (`frame`'s top), its
 /// head (wide_head_node) where the frame's bar does not name it, else what it is for alone (barred_page's), its blocks (each made by `block` in the column, at its
 /// edges: desk_block's 16 in; the first 16 under the head), then 80 at its foot and the frame's room; each part in its
 /// lane (lane_node) and made only while it shows (as desk_lanes' old list builds only the rows in view).
+#callsite(autofill(loc))
 fn wide_page_node(
   v : @view.View,
   title : () -> String,
@@ -34,6 +36,8 @@ fn wide_page_node(
   about : () -> String,
   tips : TipLayer,
   head : ((@view.View) -> Unit)?,
+  near_foot : (Double, () -> Bool, () -> Unit)?,
+  loc~ : SourceLoc,
 ) -> Unit {
   let items = fn() -> Array[WideItem] {
     let f = frame()
@@ -52,9 +56,10 @@ fn wide_page_node(
     out.push(WideFoot)
     out
   }
-  v.box(fn(sc) {
+  v.box(made_for=loc, fn(sc) {
     sc.grow(Is(1.0)) |> ignore
-    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, fn(s, item) {
+    // (at once, as it was: a debt of 方案 A, given its way list by list, shown to the owner: list-comes-off)
+    sc.scrolls_window(scroll, items, bar=@ui.tree_scroll_bar(), est=pg_block_est, at_once=true, near_foot?, fn(s, item) {
       match item {
         // the room the frame keeps over it (a status bar's)
         WideTop => s.height(By(fn() { Some(frame().top) })) |> ignore
@@ -100,8 +105,9 @@ let desk_first_top : Double = 16.0
 ///|
 /// A lane across the page (desk_lane: 24 from its sides at least), its column in the middle (desk_lane_column: 792 at
 /// most), `make` making what is in the column.
-fn lane_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
-  parent.box(fn(lane) {
+#callsite(autofill(loc))
+fn lane_node(parent : @view.View, make : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(lane) {
     // (in a panel of its own none in from its sides, its blocks' own 16 there its cards' panel_card_in: desk_lane_now)
     let side = if in_pane_node(parent) { 0.0 } else { desk_lane_in }
     lane.row(Is(true)).padding(Is((side, 0.0, side, 0.0))).lies_along(Is(Middle)) |> ignore
@@ -118,6 +124,7 @@ fn lane_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
 /// A wide page's head (wide_page's: desk_head, 16 in, 12 under it; 40 over it, 20 with back over its title): back
 /// (desk_back's) where the frame says it goes, its title (cut short where its line has less, 80 at least), what it does
 /// at the line's end, what it is for under it (6 under the title, the meta's muted).
+#callsite(autofill(loc))
 fn wide_head_node(
   col : @view.View,
   title : () -> String,
@@ -127,6 +134,7 @@ fn wide_head_node(
   actions : ((@view.View) -> Unit)?,
   about : () -> String,
   tips : TipLayer,
+  loc~ : SourceLoc,
 ) -> Unit {
   col
   .padding(By(fn() {
@@ -139,7 +147,7 @@ fn wide_head_node(
     line.row(Is(true)).padding(Is((0.0, 0.0, 0.0, desk_back_foot))) |> ignore
     desk_back_node(line, fn() { frame().back.unwrap_or("") }, on_back)
   })
-  col.box(fn(l) {
+  col.box(made_for=loc, fn(l) {
     l.row(Is(true)).gap(Is(desk_title_gap)).lines_up(Is(Some(Middle))) |> ignore
     // (its title, and what it is for by a mark after it where it says (desk_title_about: 6 apart, across their middle),
     // the title cut short before it)
@@ -223,8 +231,9 @@ let desk_about_gap : Double = 6.0
 ///|
 /// Back over a wide page's head (desk_back's, as a node): its chevron and where it goes (`label`), muted, the text's
 /// ink under the hand; `back` done as it is pressed; read out a link by where it goes.
-fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit) -> Unit {
-  parent.box(fn(b) {
+#callsite(autofill(loc))
+fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(b) {
     b.row(Is(true)).gap(Is(4.0)).lines_up(Is(Some(Middle))) |> ignore
     presses_node(b, back)
     b.says(By(fn() { Some(@view.said(Link, label=label())) })) |> ignore
@@ -240,8 +249,9 @@ fn desk_back_node(parent : @view.View, label : () -> String, back : () -> Unit) 
 /// What a section says in place of what it holds where it has none, `words` as it says it now: narrow, 12 from the
 /// page's sides, none over and 8 under, the meta's muted as wide as the page (mMemoryNote); wide, as it is, the UI's
 /// muted.
-pub fn section_none_node(parent : @view.View, words : () -> String) -> Unit {
-  parent.box(fn(n) {
+#callsite(autofill(loc))
+pub fn section_none_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(n) {
     match look_node(n) {
       Narrow => {
         n.padding(Is((section_none_x, 0.0, section_none_x, section_none_foot))) |> ignore
@@ -273,6 +283,7 @@ let section_none_foot : Double = 8.0
 /// (heading's): a section whose actions belong there says its title's own (`ends`: what is done on its title's line,
 /// at its end, either way: narrow, heading_node's `ends`; wide, as `actions` stand). `title_after`: what its title holds
 /// after its words, wide (a count: 8 after them in a line, section_title_line's); narrow none, as section's.
+#callsite(autofill(loc))
 pub fn section_node(
   parent : @view.View,
   title : () -> String,
@@ -283,6 +294,7 @@ pub fn section_node(
   actions? : (() -> Bool, (@view.View) -> Unit),
   ends? : (@view.View) -> Unit,
   title_after? : (@view.View) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
   let at = part_of(parent)
   match at.look {
@@ -308,7 +320,7 @@ pub fn section_node(
       }
     }
     Wide =>
-      parent.box(fn(sec) {
+      parent.box(made_for=loc, fn(sec) {
         sec.padding(Is((0.0, 0.0, 0.0, section_foot))) |> ignore
         sec.box(fn(line) {
           // (in a panel of its own on the panel's words' line, its cards 16 in: section_head_in_pane)
@@ -395,10 +407,35 @@ let section_foot : Double = 28.0
 let section_note_w : Double = 624.0
 
 ///|
+/// A section's heading alone, a block of a page's list over the pieces of its card (card_piece_node): as section_node
+/// heads a section, narrow heading_node's, wide its title on its line, as far over the card as it stands there.
+#callsite(autofill(loc))
+pub fn section_heading_node(parent : @view.View, title : () -> String, loc~ : SourceLoc) -> Unit {
+  match look_node(parent) {
+    Narrow => heading_node(loc~, parent, title)
+    Wide =>
+      parent.box(made_for=loc, fn(line) {
+        let side = if in_pane_node(line) { panel_words - panel_card_in } else { 0.0 }
+        line.padding(Is((side, 0.0, side, title_card_wide))) |> ignore
+        words_node(line, title, fn() { section_title }) |> ignore
+      })
+      |> ignore
+  }
+}
+
+///|
 /// Rows together on a wide page (group's, wide): at the column's edges, a list card (desk_list: its rows `list_pad` in,
 /// 2 apart, its corner the list card's: what is made on it a list's rows, part_of) or, a `card` of words, desk_card
 /// (20 in, 14 apart, Xl3); standing as a section does where it is in none (wide_alone: 28 under it), where it says so (`alone`).
-fn wide_group_node(parent : @view.View, at : PartAt, rows : (@view.View) -> Unit, card : Bool, alone? : Bool = true) -> Unit {
+#callsite(autofill(loc))
+fn wide_group_node(
+  parent : @view.View,
+  at : PartAt,
+  rows : (@view.View) -> Unit,
+  card : Bool,
+  alone? : Bool = true,
+  loc~ : SourceLoc,
+) -> Unit {
   let make = fn(p : @view.View) {
     p.box(fn(k) {
       if card {
@@ -423,7 +460,7 @@ fn wide_group_node(parent : @view.View, at : PartAt, rows : (@view.View) -> Unit
   if at.section || !alone {
     make(parent)
   } else {
-    parent.box(fn(r) {
+    parent.box(made_for=loc, fn(r) {
       r.padding(Is((0.0, 0.0, 0.0, section_foot))) |> ignore
       make(r)
     })
@@ -434,8 +471,9 @@ fn wide_group_node(parent : @view.View, at : PartAt, rows : (@view.View) -> Unit
 ///|
 /// A list card (desk_list's, wide whatever the page's width) in `parent`: its rows `list_pad` in, 2 apart, its corner the
 /// list card's, nothing under it of a section's.
-pub fn list_card_node(parent : @view.View, rows : (@view.View) -> Unit) -> Unit {
-  wide_group_node(parent, { ..part_of(parent), look: Wide }, rows, false, alone=false)
+#callsite(autofill(loc))
+pub fn list_card_node(parent : @view.View, rows : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  wide_group_node(loc~, parent, { ..part_of(parent), look: Wide }, rows, false, alone=false)
 }
 
 ///|
@@ -448,10 +486,12 @@ let desk_list_gap : Double = 2.0
 /// (on none: Xl2's); lit under the hand where it `goes`. Its words desk_list_title's (strong: bolder; one that `acts` in
 /// the link's ink), what it says wide_value's, its chevron (an arrow out where it goes `out`) 16 in the muted ink; its
 /// note and what is wrong under its first line, wide_list_note's, 2 apart; what is `below` as link_row_node has it.
+/// `press`: what is done as the row (given it) is pressed (link_row_made's `pressed_by`).
+#callsite(autofill(loc))
 fn wide_link_row_node(
   parent : @view.View,
   title : () -> String,
-  press : () -> Unit,
+  press : (@view.View) -> () -> Unit,
   value : () -> String,
   value_bad : () -> Bool,
   value_dot : () -> Bool,
@@ -481,6 +521,7 @@ fn wide_link_row_node(
   title_cut : Bool,
   value_cut : Bool,
   chevron_room : Bool,
+  loc~ : SourceLoc,
 ) -> Unit {
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
@@ -502,7 +543,14 @@ fn wide_link_row_node(
   // inset where it is first or last, the row itself where it stands, what is pressed: a press beside it its
   // neighbour's, none of the two drawn over each other; desk_list_link)
   let reach = at.list && goes && in_pane_node(parent)
-  parent.box(fn(o) {
+  // (where it stands across in a panel's body, row_line's: panel_row_at; on a group's card in one, as on a page's card,
+  // as the narrow row's; elsewhere as ever)
+  let pin = panel_in_of(parent)
+  let (out, side) = match panel_row_at(pin, own=desk_list_out, card=on_card_node(parent)) {
+    Some(p) => (p.out, p.side)
+    None => (0.0, text_in)
+  }
+  parent.box(made_for=loc, fn(o) {
     if reach {
       o
       .margin(Is((0.0, -link_pane_out, 0.0, -link_pane_out)))
@@ -516,8 +564,17 @@ fn wide_link_row_node(
     .gap(Is(12.0))
     // (its words a row's room in at its sides, 10 over and under: the old view's wide_list_row_ground; in a panel's
     // card none of its own where it is not pressed, none in the card's corners: wide_list_row)
-    .padding(Is((text_in, wide_row_over, text_in, wide_row_over)))
-    .radius(By(fn() { if at.list { if (in_pane_node(r) && !goes) || reach { 0.0 } else { list_row_corner(r) } } else { @ui.tree_theme().corner(Xl2) } }))
+    .margin(Is((-out, 0.0, -out, 0.0)))
+    .padding(Is((side, wide_row_over, side, wide_row_over)))
+    .radius(By(fn() {
+      if pin.small {
+        small_panel_inner(r_menu)
+      } else if at.list {
+        if (in_pane_node(r) && !goes) || reach { 0.0 } else { list_row_corner(r) }
+      } else {
+        @ui.tree_theme().corner(Xl2)
+      }
+    }))
     .min_height(By(fn() { Some(theme().items.least) }))
     // (a face across its middle, as its words: the old view's, row_top only where it is not a face)
     .lines_up(By(fn() { Some(if under() && !face { Start } else { Middle }) }))
@@ -529,7 +586,7 @@ fn wide_link_row_node(
     }
     if goes {
       (if reach { o } else { r }).ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
-      presses_node(r, press)
+      presses_node(r, press(r))
       r.says(By(fn() { Some(@view.said(Link, label=title(), expanded?=folds.map(fn(f) { f() }))) })) |> ignore
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as a list's title's line at least,
@@ -643,6 +700,7 @@ fn wide_link_row_node(
 /// list's card (part_of) a row of it (wide_in_list: as far in as its rows' words, 10 over and under, as high as one at
 /// least, its corner concentric with the card's), its title as strong as the list's other rows' (setting_title); its
 /// words' looks `looks` where given. The control alone answers.
+#callsite(autofill(loc))
 fn wide_control_row_node(
   parent : @view.View,
   title : () -> String,
@@ -650,6 +708,7 @@ fn wide_control_row_node(
   lead : ((@view.View) -> Unit)?,
   control : (@view.View) -> Unit,
   looks? : (() -> @ui.TextStyle, () -> @ui.TextStyle),
+  loc~ : SourceLoc,
 ) -> Unit {
   let at = part_of(parent)
   let (title_look, note_look) = match looks {
@@ -667,7 +726,7 @@ fn wide_control_row_node(
     control(r)
   }
   if at.list {
-    parent.box(fn(cell) {
+    parent.box(made_for=loc, fn(cell) {
       cell
       // (as wide_in_list's: a row's room in at its start, at its end what holds its switch out of the card's corner,
       // 10 over and under)

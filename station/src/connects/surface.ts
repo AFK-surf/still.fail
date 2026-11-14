@@ -10,6 +10,7 @@ import { Clock, Deferred, Effect, Exit, FiberSet, Result, Scope } from "effect";
 import WebSocket from "ws";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
+import { unanswered } from "../ops/unanswered.ts";
 import type { Attachment } from "../store/store.ts";
 import type { Handler, Person, ThreadRef } from "../sessions/chat.ts";
 import type { BotIdentity, Connection, SocketStatus } from "./connections.ts";
@@ -177,12 +178,60 @@ export abstract class ConnectedSurface implements Connection {
   /// An identity it cannot work as throws (Feishu's app without a bot).
   protected usable(_identity: BotIdentity): void {}
 
+  /// Who its bot is, then its socket kept up. The platform's refusal (a token it takes no more, an app without a bot)
+  /// fails it; no answer at all (the network down as the station starts: 2026-11-12, an update's new process left
+  /// Slack and Feishu unconnected for 38 minutes) does not: it is asked again on the socket's backoff, the socket
+  /// opened once it answers.
   async start(handler: Handler) {
-    const identity = await this.identify();
+    let identity: BotIdentity;
+    try {
+      identity = await this.identify();
+    } catch (error) {
+      if (!unanswered(error)) throw error;
+      this.notReached(error as Error, this.backoffMs);
+      void this.run(this.identifyLoop(handler)).catch(() => {});
+      return;
+    }
+    this.began(identity, handler);
+  }
+
+  private began(identity: BotIdentity, handler: Handler) {
     this.usable(identity);
     log.info(this.kind, `${this.kind} authenticated`, { connect: this.connect, bot: identity.botName, botUserId: identity.botUserId, team: identity.team });
     this.me = identity;
     void this.run(this.connectLoop(handler)).catch(() => {});
+  }
+
+  private notReached(error: Error, retryInMs: number) {
+    this.setStatus(false, error.message);
+    log.warn(this.kind, `${this.kind} not reached`, { connect: this.connect, error: error.message, retryInMs });
+  }
+
+  /// Asks who its bot is again (after a wait that doubles up to a minute) until the platform answers, then goes on as
+  /// `start` would have; a refusal then ends it, said as the socket's error.
+  private identifyLoop(handler: Handler): Effect.Effect<void> {
+    const self = this;
+    return Effect.gen(function* () {
+      let backoff = self.backoffMs;
+      for (;;) {
+        yield* Effect.sleep(backoff);
+        backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
+        const asked = yield* Effect.result(Effect.tryPromise({ try: () => self.identify(), catch: (e) => e as Error }));
+        if (Result.isFailure(asked) && unanswered(asked.failure)) {
+          self.notReached(asked.failure, backoff);
+          continue;
+        }
+        try {
+          if (Result.isFailure(asked)) throw asked.failure;
+          self.began(asked.success, handler);
+        } catch (error) {
+          const said = (error as Error).message;
+          self.setStatus(false, said);
+          log.error(self.kind, "failed to connect", { connect: self.connect, error: said });
+        }
+        return;
+      }
+    });
   }
 
   async stop() {

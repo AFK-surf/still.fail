@@ -30,7 +30,7 @@ test("each host's old name serves the same: static sites, the API, the relay, th
     }
     assert.deepEqual(await text(await h.fetchOld("main", "/sw.js")), [200, "// the notifications' worker"]);
     assert.deepEqual(await text(await h.fetchOld("admin", "/codes")), [200, "<title>still.fail 管理后台</title>"]);
-    assert.deepEqual(await text(await h.fetchOld("preview", "/_ember/frame")), [200, "<title>still.fail preview (old path)</title>"]);
+    assert.deepEqual(await text(await h.fetchOld("preview", "/_stillfail/frame")), [200, "<title>still.fail preview</title>"]);
     assert.equal(((await (await h.fetchOld("main", "/healthz")).json()) as { service: string }).service, "stillfail-cloud");
     assert.equal(((await (await h.fetchOld("main", "/ping")).json()) as { service: string }).service, "stillfail-relay");
     assert.match((await h.fetchOld("main", "/install.sh")).headers.get("content-type") ?? "", /shellscript/);
@@ -165,26 +165,22 @@ test("a device's events socket takes only the stillfail subprotocols", async () 
   }
 });
 
-test("the preview host's files are under /_stillfail/ and, for clients from before the rename, /_ember/", async () => {
+test("the preview host's files are under /_stillfail/ alone, on either host", async () => {
   const files = previewFiles("// annotate");
-  for (const prefix of ["_stillfail", "_ember"]) {
-    assert.equal(files[`${prefix}/annotate.js`], "// annotate");
-    // The frame loads its script and service worker from beside itself: each stays under the prefix it was opened with.
-    assert.match(files[`${prefix}/frame.html`]!, /<script src="annotate\.js"><\/script>/);
-    assert.match(files[`${prefix}/frame.html`]!, /register\("sw\.js", \{ scope: "\/" \}\)/);
-    assert.match(files._headers!, new RegExp(`/${prefix}/sw\\.js\\n  Service-Worker-Allowed: /\\n`));
-    assert.match(files[`${prefix}/sw.js`]!, /const FRAMES = \["\/_stillfail\/frame", "\/_ember\/frame"\];/);
-  }
-  // The service worker leaves the host's own files alone, under either prefix.
+  assert.equal(files["_stillfail/annotate.js"], "// annotate");
+  assert.match(files["_stillfail/frame.html"]!, /<script src="annotate\.js"><\/script>/);
+  assert.match(files["_stillfail/frame.html"]!, /register\("sw\.js", \{ scope: "\/" \}\)/);
+  assert.match(files._headers!, /\/_stillfail\/sw\.js\n  Service-Worker-Allowed: \/\n/);
+  assert.match(files["_stillfail/sw.js"]!, /const FRAMES = \["\/_stillfail\/frame"\];/);
+  assert.equal(files["_ember/frame.html"], undefined);
+  // The service worker leaves the host's own files alone.
   const own = new Function(`${/const OWN = .*;/.exec(files["_stillfail/sw.js"]!)![0]} return OWN;`)() as RegExp;
-  assert.deepEqual(["/_stillfail/frame", "/_ember/sw.js", "/app/_ember/x", "/_embers/x", "/"].map((p) => own.test(p)), [true, true, false, false, false]);
+  assert.deepEqual(["/_stillfail/frame", "/_ember/sw.js", "/app/_stillfail/x", "/"].map((p) => own.test(p)), [true, false, false, false]);
 
   const h = await harness();
   try {
     for (const fetch of [h.fetchPreview, (path: string) => h.fetchOld("preview", path)]) {
       assert.equal((await fetch("/_stillfail/frame")).status, 200);
-      assert.equal((await fetch("/_ember/frame")).status, 200);
-      assert.equal((await fetch("/_ember/sw.js")).headers.get("service-worker-allowed"), "/");
       assert.equal((await fetch("/_stillfail/sw.js")).headers.get("service-worker-allowed"), "/");
     }
   } finally {

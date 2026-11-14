@@ -107,8 +107,8 @@ test "a long status stays a one-line pill" {
   )
   t.draw()
   let lines = t.lines_of(words)
-  assert_eq(lines.length(), 1, msg="\{lines}")
-  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
+  assert_eq(lines.length(), 1, msg="\{Repr(lines)}")
+  assert_true(lines[0].has_suffix("…"), msg="\{Repr(lines)}")
 }
 
 ///|
@@ -214,23 +214,23 @@ test "a column's edge: 7 wide, 4 past the column; dragged past the slop, the wid
   assert_eq((e.rect.0, e.rect.2, e.rect.3), (240.0 + handle_out - handle_w, handle_w, 800.0))
   let x = e.rect.0 + 3.0
   t.press_at(x, 400.0)
-  t.move(x + 2.0, 400.0)
+  t.move_to(x + 2.0, 400.0)
   assert_eq(width.val, 240.0)
   assert_eq(said.length(), 0)
-  t.move(x + 50.0, 400.0)
+  t.move_to(x + 50.0, 400.0)
   assert_eq(width.val, 290.0)
   // the edge under the pointer in the frame it moved in
   assert_eq(t.get(Separator, label="调整列宽").rect.0, x + 50.0 - 3.0)
   assert_eq(t.haptics(), [])
   // at either end, felt as it gets there, once while it stays
-  t.move(x + 1000.0, 400.0)
+  t.move_to(x + 1000.0, 400.0)
   assert_eq(width.val, 640.0)
-  t.move(x + 1100.0, 400.0)
+  t.move_to(x + 1100.0, 400.0)
   assert_eq(t.haptics(), [@ui.TextHandleMove])
-  t.move(x - 500.0, 400.0)
+  t.move_to(x - 500.0, 400.0)
   assert_eq(width.val, 160.0)
   assert_eq(t.haptics(), [@ui.TextHandleMove, @ui.TextHandleMove])
-  t.move(x + 60.4, 400.0)
+  t.move_to(x + 60.4, 400.0)
   assert_eq(width.val, 300.0)
   assert_eq(t.haptics().length(), 2)
   t.release(x + 60.4, 400.0)
@@ -260,12 +260,12 @@ test "a column's edge: its bar 24 high over the column, 48 on the edge once its 
   let bar = fn() {
     t.drawn_rects().filter(fn(r) { r.2 == edge_bar_w }).map(fn(r) { r.3 })
   }
-  t.move(100.0, 400.0)
+  t.move_to(100.0, 400.0)
   t.run_for(edge_bar_ms)
   assert_eq(bar(), [24.0])
   assert_true(t.find("调整列宽") is None)
   let e = t.get(Separator, label="调整列宽")
-  t.move(e.rect.0 + 3.0, 300.0)
+  t.move_to(e.rect.0 + 3.0, 300.0)
   t.run_for(edge_bar_ms)
   assert_eq(bar(), [48.0])
   // its words 300 ms after the pointer came (and in), 14 right of it, their middle level with it, following it down
@@ -278,7 +278,7 @@ test "a column's edge: its bar 24 high over the column, 48 on the edge once its 
     }
     None => fail("no tip")
   }
-  t.move(e.rect.0 + 3.0, 500.0)
+  t.move_to(e.rect.0 + 3.0, 500.0)
   t.frame()
   match t.rect_of("调整列宽") {
     Some((_, wy, _, wh)) => assert_true((wy + wh / 2.0 - 500.0).abs() <= 1.0, msg=(wy + wh / 2.0).to_string())
@@ -293,19 +293,19 @@ test "a column's edge's words go as it is pressed, and come again only once the 
   let t = @ui.Tester::new(edge_view(width, said), w=1280.0, h=800.0)
   t.draw()
   let x = t.get(Separator, label="调整列宽").rect.0 + 3.0
-  t.move(x, 300.0)
+  t.move_to(x, 300.0)
   t.run_for(edge_tip_ms)
   t.run_for(edge_tip_ms)
   assert_true(t.find("调整列宽") is Some(_))
   t.press_at(x, 300.0)
-  t.move(x + 40.0, 300.0)
+  t.move_to(x + 40.0, 300.0)
   t.release(x + 40.0, 300.0)
   t.run_for(edge_tip_ms)
   t.run_for(edge_tip_ms)
   assert_true(t.find("调整列宽") is None)
-  t.move(100.0, 300.0)
+  t.move_to(100.0, 300.0)
   t.frame()
-  t.move(x + 40.0, 300.0)
+  t.move_to(x + 40.0, 300.0)
   t.run_for(edge_tip_ms)
   t.run_for(edge_tip_ms)
   assert_true(t.find("调整列宽") is Some(_))
@@ -318,7 +318,7 @@ test "a column's edge's words stay away after it is dragged by many moves, the p
   let t = @ui.Tester::new(edge_view(width, said), w=1280.0, h=800.0)
   t.draw()
   let x = t.get(Separator, label="调整列宽").rect.0 + 3.0
-  t.move(x, 300.0)
+  t.move_to(x, 300.0)
   t.run_for(edge_tip_ms)
   t.run_for(edge_tip_ms)
   assert_true(t.find("调整列宽") is Some(_))
@@ -331,7 +331,6 @@ test "a column's edge's words stay away after it is dragged by many moves, the p
 
 ///|
 test "a list's row in a side column: what stands at its first line's end in one column with what stands in its foot's end corner" {
-  let l = theme().chat_list
   let t = @ui.Tester::new(
     wide_view(fn(c) {
       c.box(w=Px(280.0), fn() {
@@ -373,7 +372,7 @@ test "a list's row in a side column: what stands at its first line's end in one 
   }
   let end = at(0xFF0000FFL)
   let corner = at(0x00FF00FFL)
-  assert_true(end > 0.0 && corner > 0.0, msg="\{t.drawn_rects()}")
+  assert_true(end > 0.0 && corner > 0.0, msg="\{Repr(t.drawn_rects())}")
   assert_true((end - corner).abs() < 0.5, msg="the first line's end at \{end}, the corner's at \{corner}")
 }
 
@@ -422,8 +421,142 @@ test "a list's row as a node in a side column: what stands at its first line's e
       }
       let end = at(0xFF0000FFL)
       let corner = at(0x00FF00FFL)
-      assert_true(end > 0.0 && corner > 0.0, msg="\{t.drawn_rects()}")
+      assert_true(end > 0.0 && corner > 0.0, msg="\{Repr(t.drawn_rects())}")
       assert_true((end - corner).abs() < 0.5, msg="platform \{platform}, last \{last}: the first line's end at \{end}, the corner's at \{corner}")
     }
+  }
+}
+
+///|
+test "a list's row as a node: its lines as high as their words' lines at the system's size of words, nothing over another, its mark across its first line's middle, a chat's row higher by as much as they are" {
+  // (a mouse's and a finger's sizes; the default size of words and a phone's set larger; a row as high as what it
+  // holds, its mark beside its first line, and a chat's row, as high as the theme says)
+  let rows : Map[String, Double] = Map([])
+  for platform in [0, 2] {
+    for high in [false, true] {
+      for scale in [1.0, 1.3] {
+        let at = "platform \{platform}, high \{high}, at \{scale}"
+        let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=800.0, h=600.0, platform~, corners_held=false)
+        if scale != 1.0 {
+          t.set_font_scale(scale)
+        }
+        @ui.set_view_app(fn(root) {
+          @ui.set_tree_theme(ui_theme_now)
+          root.box(fn(holder) {
+            holder.width(Is(Some(280.0))) |> ignore
+            holder.box(fn(row) {
+              list_row_node(
+                row,
+                Whole,
+                high~,
+                ground=fn() { 0x00FF00FFL },
+                mark?=if high {
+                  None
+                } else {
+                  Some(fn(k : @view.View) {
+                    k.box(fn(s) { s.width(Is(Some(8.0))).height(Is(Some(8.0))).ground(Is(0xFF0000FFL)) |> ignore })
+                    |> ignore
+                  })
+                },
+                fn(h) { words_node(h, fn() { "整理发布清单" }, fn() { theme().chat_list.title }) |> ignore },
+                fn(u) {
+                  list_row_line_node(u, fn(l) { words_node(l, fn() { "正在核对第三项" }, fn() { theme().chat_list.last }) |> ignore })
+                },
+              )
+            })
+            |> ignore
+          })
+          |> ignore
+        })
+        t.run_for(@ui.move_most_ms)
+        assert_eq(t.squeeze_faults(), [], msg="\{at}: \{Repr(t.squeeze_faults())}")
+        let word = fn(s : String) {
+          match t.words().search_by(fn(w) { w.0 == s }) {
+            Some(i) => t.words()[i]
+            None => ("", 0.0, 0.0, 0.0, 0.0, 0.0)
+          }
+        }
+        let title = word("整理发布清单")
+        let under = word("正在核对第三项")
+        assert_true(title.4 > 0.0 && under.4 > 0.0, msg="\{at}: \{Repr(t.words())}")
+        // (the line under it starts no higher than where its title's line ends)
+        assert_true(under.2 >= title.2 + title.4 - 0.5, msg="\{at}: its title at \{Repr(title)}, the line under it at \{Repr(under)}")
+        guard t.drawn_rects().search_by(fn(r) { r.4 == 0x00FF00FFL }) is Some(g) else { fail("\{at}: no row") }
+        let ground = t.drawn_rects()[g]
+        rows["\{platform} \{high} \{scale}"] = ground.3
+        if high {
+          // (as high as the theme says at the default size of words)
+          if scale == 1.0 {
+            assert_eq(ground.3, theme().chat_list.row_h, msg=at)
+          }
+        } else {
+          // (its mark across its title's middle)
+          guard t.drawn_rects().search_by(fn(r) { r.4 == 0xFF0000FFL }) is Some(i) else { fail("\{at}: no mark") }
+          let mark = t.drawn_rects()[i]
+          assert_true(
+            (mark.1 + mark.3 / 2.0 - (title.2 + title.4 / 2.0)).abs() < 0.5,
+            msg="\{at}: its mark at \{Repr(mark)}, its title at \{Repr(title)}",
+          )
+        }
+      }
+      // (higher at 1.3, by as much as its two lines' words are)
+      let (lo, hi) = (rows.get("\{platform} \{high} 1").unwrap_or(0.0), rows.get("\{platform} \{high} 1.3").unwrap_or(0.0))
+      assert_true(hi > lo + 4.0, msg="platform \{platform}, high \{high}: \{lo} at the default size, \{hi} at 1.3")
+    }
+  }
+}
+
+///|
+test "a chat's rows as nodes: as high as each other whatever their second lines say, following the system's size of words as it changes" {
+  // (a mouse's and a finger's sizes; a row whose second line says something and one whose says nothing, at the default
+  // size, then the system's set to 1.3, then back)
+  for platform in [0, 2] {
+    let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=800.0, h=600.0, platform~, corners_held=false)
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(ui_theme_now)
+      root.box(fn(holder) {
+        holder.width(Is(Some(280.0))) |> ignore
+        for said in [("正在核对第三项", 0x00FF00FFL), ("", 0x0000FFFFL)] {
+          holder.box(fn(row) {
+            list_row_node(
+              row,
+              Whole,
+              high=true,
+              ground=fn() { said.1 },
+              fn(h) { words_node(h, fn() { "整理发布清单" }, fn() { theme().chat_list.title }) |> ignore },
+              fn(u) {
+                list_row_line_node(u, fn(l) { words_node(l, fn() { said.0 }, fn() { theme().chat_list.last }) |> ignore })
+              },
+            )
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    })
+    let heights = fn(at : String) -> (Double, Double) raise {
+      t.run_for(@ui.move_most_ms)
+      assert_eq(t.squeeze_faults(), [], msg="\{at}: \{Repr(t.squeeze_faults())}")
+      let high = fn(color : Int64) -> Double raise {
+        match t.drawn_rects().search_by(fn(r) { r.4 == color }) {
+          Some(i) => t.drawn_rects()[i].3
+          None => fail("\{at}: no row of \{color}")
+        }
+      }
+      (high(0x00FF00FFL), high(0x0000FFFFL))
+    }
+    let row_h = theme().chat_list.row_h
+    let at = "platform \{platform}"
+    let (said, none) = heights("\{at} at the default size")
+    assert_eq(said, row_h, msg=at)
+    assert_eq(none, row_h, msg=at)
+    t.set_font_scale(1.3)
+    let (said, none) = heights("\{at} at 1.3")
+    assert_true(said > row_h + 4.0, msg="\{at} at 1.3: \{said}, the theme's \{row_h}")
+    assert_eq(none, said, msg="\{at} at 1.3: what says nothing under its title as high as what says something")
+    t.set_font_scale(1.0)
+    let (said, none) = heights("\{at} back at the default size")
+    assert_eq(said, row_h, msg=at)
+    assert_eq(none, row_h, msg=at)
   }
 }

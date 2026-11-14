@@ -67,11 +67,9 @@ pub fn list_row(
     }
     _ => l.item
   }
+  // (a row with a mark: the mark beside its first line only, the lines under it from the mark's edge, as its foot's
+  // capsules are: one edge down the row, the user, 2026-11-10: 「第二行到底对哪里齐」)
   let top = fn() {
-    match mark {
-      Some(m) => c.box(style=list_row_mark.then(line), m) |> ignore
-      None => ()
-    }
     c.box(style=l.text, fn() {
       // (in a side column, what stands at its first line's end (`end_slot` wide: a chat's station) in one column with
       // what stands in its foot's end corner (a chat's people and agents, concentric with the row's corner: aside_end),
@@ -86,7 +84,18 @@ pub fn list_row(
       // (reaching out past the row's padding where the corner's column is nearer its end, in from it where farther)
       let head_style = if reach > 0.0 { l.head.then(@ui.style(mr=room(-reach))) } else { l.head }
       let end_in = end_room + dmax(0.0, -reach)
-      c.box(style=if end_in > 0.0 { head_style.then(@ui.style(pr=room(end_in))) } else { head_style }, head) |> ignore
+      let head_box = fn() {
+        c.box(style=if end_in > 0.0 { head_style.then(@ui.style(pr=room(end_in))) } else { head_style }, head) |> ignore
+      }
+      match mark {
+        Some(m) =>
+          c.box(style=list_row_marked, fn() {
+            c.box(style=list_row_mark.then(line), m) |> ignore
+            c.box(style=list_row_under, head_box) |> ignore
+          })
+          |> ignore
+        None => head_box()
+      }
       match (corner, at) {
         // (the room what stands in the corner keeps at the end of the lines under the first)
         (Some(_), Side | Tape) =>
@@ -129,6 +138,11 @@ pub fn list_row(
 ///|
 // kept across runs: a value (no field of it changes)
 let list_row_square : @ui.Style = @ui.css("radius=Sharp")
+
+///|
+/// A marked row's first line: its mark and its head, the row's gap between them (the theme's item's S2).
+// kept across runs: a value (no field of it changes)
+let list_row_marked : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

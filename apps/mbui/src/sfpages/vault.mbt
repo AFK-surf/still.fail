@@ -4,9 +4,10 @@
 // device signing, this device set up, the recovery words written down): a card alone on either, with the way on. Set
 // up, 密钥 is what waits on the viewer and how the library stands, not what it keeps (「密钥管理不需要入口做这么浅，因为
 // 平时不会手动操作，顶多就是类似 1p，进去看一眼复制一下」): the requests waiting on the viewer first (each one's card, as
-// in its chat); a row to 全部密钥; how its secrets are kept, a row each on one list card, each what it is with how it
-// stands under it (encrypted or not, and unlocked here a while; those still in plain text from before; the longest an
-// approval lasts, picked through the presenters; the devices holding its key); deleting the vault in red at its foot,
+// in its chat); a vault waiting to be keyed anew, a card under its name (vault_waits); a row to 全部密钥; how its
+// secrets are kept, a row each on one list card, each what it is with how it stands under it (encrypted or not, and
+// unlocked here a while; those still in plain text from before; the longest an approval lasts, picked through the
+// presenters; the devices holding its key); deleting the vault in red at its foot,
 // asked first; the stations that refused it. 全部密钥 is what it keeps, a section a kind (the profiles' accounts as the
 // profiles list them, then each vault's secrets), each a row to its page, and 添加 at its head. Made of the library's
 // page parts (@sf.section, group, link_row, page_card), laid out by the page's width. Adding, a
@@ -207,6 +208,12 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
       out.push(fn() { vault_no_key(c, core, ws, Some(row)) })
     }
   }
+  // one waiting to be keyed anew: on which station, and that it is read meanwhile, not changed
+  for row in vaults {
+    if text(Some(row), "waits") != "" {
+      out.push(fn() { vault_waits(c, Some(row)) })
+    }
+  }
   // what it keeps (the profiles' accounts, the vaults' secrets), a page of its own
   out.push(fn() {
     @sf.group(c, fn() {
@@ -268,6 +275,11 @@ fn vault_request(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
     filename: text(save, "filename"),
     typed: flag(save, "typed"),
     station: "",
+    describe: field(rv, "describe") is Some(_),
+    new_name: text(field(rv, "describe"), "name"),
+    new_about: text(field(rv, "describe"), "about"),
+    was_about: text(field(rv, "describe"), "wasAbout"),
+    remove: flag(rv, "remove"),
   }
   let station = text(rv, "station")
   let extra = if station == "" {
@@ -300,14 +312,14 @@ fn vault_kept(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
       })
     } else {
       let open = vaults.iter().any(fn(x) { flag(Some(x), "open") })
-      let sealed = @sf.t("web-pages.vault.lib.sealed")
+      let sealed_words = @sf.t("web-pages.vault.lib.sealed")
       if open {
         let locking = is_doing(core, ["vault.lock"], [("workspace", ws)])
-        vault_do_row(c, "vault-lock", sealed, @sf.t("web-pages.vault.opened"), @sf.t("web-pages.vault.lockNow"), busy=locking, on_press=fn() {
+        vault_do_row(c, "vault-lock", sealed_words, @sf.t("web-pages.vault.opened"), @sf.t("web-pages.vault.lockNow"), busy=locking, on_press=fn() {
           vault_act(core, ws, "lock", [], @sf.t("web-pages.vault.lockNow"))
         })
       } else {
-        @sf.link_row(c, "", sealed, note=@sf.t("web-pages.vault.lib.sealedWhy"), goes=false) |> ignore
+        @sf.link_row(c, "", sealed_words, note=@sf.t("web-pages.vault.lib.sealedWhy"), goes=false) |> ignore
       }
       if left > 0 {
         let moving = is_doing(core, ["vault.migrate"], [("workspace", ws)])
@@ -466,6 +478,22 @@ fn vault_no_key(c : @ui.Ctx, core : Core, ws : String, rv : Json?) -> Unit {
         }
       })
     })
+  })
+}
+
+///|
+/// A vault waiting to be keyed anew (its row's `waits`: a device or member holding its key taken out of the lock),
+/// under its name: on which station its owner's device gives it new keys, and that until then it is read and used, not
+/// changed. Nothing to press: the owner's device does it by itself, and a change meanwhile says why it is refused.
+fn vault_waits(c : @ui.Ctx, rv : Json?) -> Unit {
+  let station = text(rv, "waits")
+  let note = if flag(rv, "mine") {
+    @sf.t("web-pages.vault.waits.mine", args=[("station", station)])
+  } else {
+    @sf.t("web-pages.vault.waits.theirs", args=[("owner", text(rv, "ownerName")), ("station", station)])
+  }
+  @sf.section(c, text(rv, "name"), fn() {
+    @sf.page_card(c, fn() { @sf.card_lines(c, @sf.t("web-pages.vault.waits.title"), note~) })
   })
 }
 
@@ -703,7 +731,7 @@ fn vault_first_node(
     "not-signer" => vault_gate_node(b, core, "web-pages.vault.notSigner", "web-pages.vault.notSignerWhy")
     "off" => vault_off_node(b, core, ws)
     k if k.has_prefix("named/") => {
-      let id = k.view(start_offset=6).to_owned()
+      let id = k.exact_view(start=6).to_owned()
       vault_named_node(b, core, ws, fn() { items(view().value, "vaults").iter().find_first(fn(r) { text(Some(r), "id") == id }) })
     }
     _ => return false
@@ -814,7 +842,7 @@ fn vt_mono_node(parent : @view.View, words : () -> String, size : @ui.TextSize, 
     // (its size as the theme's is now: followed, the system's size of words changed)
     let look = fn() -> @view.WordsLook {
       let (px, line) = @ui.tree_theme().text_size(size)
-      { size: px, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
+      { size: px, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
     }
     w
     .words_runs(By(fn() { [@ui.span(words(), mono=true)] }), look=@signals.untracked(look))
@@ -844,10 +872,11 @@ fn vault_reset() -> Unit {
 
 ///|
 /// A row of 全部密钥: a vault's secret ("it/<vault>/<item>"), or those of a vault it does not name ("hidden/<vault>").
+#derive(Eq)
 priv enum VaultRow {
   Secret(Json, Json, Bool, Bool)
   Hidden(Json, String, String, Bool)
-} derive(Eq)
+}
 
 ///|
 /// 全部密钥 (LibraryItems), as a password manager's list (the user, 2026-10-26: a section a kind of one row each was
@@ -921,7 +950,7 @@ fn vault_all_node(b : @view.View, core : Core, ws : () -> String, view : () -> J
               title,
               said([g.0, text(ev, "where")]),
               if text(p, "checkTone") == "red" { text(p, "checkText") } else { "" },
-              text(p, "group"),
+              text(ev, "group"),
               Profile(text(ev, "station"), text(p, "id")),
             ),
           )

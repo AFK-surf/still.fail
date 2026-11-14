@@ -52,7 +52,7 @@ test "the screen's pointer is drawn in the station's shape, the point it points 
   r.config()
   r.frame(1000.0)
   assert_true(r.sess().pad(r.sess().src))
-  let seen : Map[String, Bool] = Map::new()
+  let seen : Map[String, Bool] = Map([])
   for shape in ["default", "text", "pointer", "ew-resize", "nwse-resize", "move", "crosshair", "not-allowed", "wait"] {
     r.cursor_at(0.5, 0.5, shape)
     let (src, x, y, w) = drawn_pointer(r).unwrap()
@@ -118,7 +118,7 @@ fn ScreenRig::layered(self : ScreenRig, control? : Bool = false) -> @ui.Stream {
 ///|
 /// The state the view has now, its pointer at (x, y) in `shape` (the rest as it was): a value of the view.
 fn ScreenRig::cursor_moved(self : ScreenRig, x : Double, y : Double, shape? : String = "default") -> Json {
-  guard self.sess().state is Some(Object(m)) else { abort("no state") }
+  guard self.sess().state is Some(Object(m)) else { @halt.saying("no state") }
   let m = m.copy()
   m["cursor"] = { "x": Json::number(x), "y": Json::number(y), "shape": Json::string(shape) }
   { "state": Json::object(m) }
@@ -158,7 +158,7 @@ test "on a host whose pictures show on their own layer, the station's pointer is
   let (ibeam, _) = @sf.pointer_png(r.t.ctx(), shape="text")
   assert_eq(pointer_told(r, st).last(), Some("pointer \{ibeam} 20x20 hot=10,10"))
   // anything else of the state changed with it: not quiet, built
-  guard r.sess().state is Some(Object(m)) else { abort("no state") }
+  guard r.sess().state is Some(Object(m)) else { @halt.saying("no state") }
   let m = m.copy()
   m["title"] = Json::string("another")
   m["cursor"] = { "x": Json::number(0.3), "y": Json::number(0.3), "shape": Json::string("text") }
@@ -207,5 +207,46 @@ test "where pictures are drawn by the app, the station's pointer is drawn over t
   assert_true(drawn_pointer(r) is Some(_))
   assert_false(r.sess().stream.unwrap().layered())
   assert_false(screen_value_quiet(r.cursor_moved(0.25, 0.75)))
+  screen_done(r.t)
+}
+
+///|
+test "a trackpad starts where the station's pointer is: at its first press and as it is chosen, never again as the station's lags behind it" {
+  let r = screen_rig()
+  r.state("live", others=[], more={
+    "kind": Json::string("desktop"),
+    "cursor": { "x": Json::number(0.25), "y": Json::number(0.75), "shape": Json::string("default") },
+  })
+  r.config()
+  r.frame(1000.0)
+  assert_true(r.sess().pad(r.sess().src))
+  // its first press: a click where the station's pointer is, not the middle
+  r.tap_at(0.6, 0.2)
+  let first = r.inputs()
+  assert_eq(kind_of_input(first[0]), "down")
+  assert_true(close_to(number(Some(first[0]), "x"), 0.25))
+  assert_true(close_to(number(Some(first[0]), "y"), 0.75))
+  r.t.run_for(screen_double_tap_ms)
+  // the station says its pointer is elsewhere: the next press is where the trackpad left it
+  r.cursor_at(0.9, 0.1, "default")
+  let from = r.inputs().length()
+  r.tap_at(0.6, 0.2)
+  let again = r.inputs()[from:].to_owned()
+  assert_true(close_to(number(Some(again[0]), "x"), 0.25))
+  assert_true(close_to(number(Some(again[0]), "y"), 0.75))
+  r.t.run_for(screen_double_tap_ms)
+  // direct, then the trackpad chosen again: it starts where the station's pointer is now
+  pad_turned(r)
+  assert_true(!r.sess().pad(r.sess().src))
+  pad_turned(r)
+  assert_true(r.sess().pad(r.sess().src))
+  assert_eq(r.ui().pad.at(), (0.9, 0.1))
+  r.t.run_for(@sf.toast_ms)
+  let from = r.inputs().length()
+  r.tap_at(0.6, 0.2)
+  let chosen = r.inputs()[from:].to_owned()
+  assert_true(close_to(number(Some(chosen[0]), "x"), 0.9))
+  assert_true(close_to(number(Some(chosen[0]), "y"), 0.1))
+  r.t.run_for(screen_double_tap_ms)
   screen_done(r.t)
 }

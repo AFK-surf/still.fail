@@ -5,7 +5,7 @@
 test "Home: a chat with news goes to the top: it closes where it was and opens there, never across the rows it passes" {
   // (the clock set after reset, which puts the fixture's own back)
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -22,13 +22,13 @@ test "Home: a chat with news goes to the top: it closes where it was and opens t
   let ci = t.words().filter(fn(w) { w.0 == "盯着 CI，绿了告诉我" })
   assert_eq(ci.length(), 2)
   for w in ci {
-    assert_true(w.5 < 1.0, msg="\{w}")
+    assert_true(w.5 < 1.0, msg="\{Repr(w)}")
   }
   // its room open, the copy where it was gone
   t.run_for(@ui.row_size_ms)
   let ci = t.words().filter(fn(w) { w.0 == "盯着 CI，绿了告诉我" })
   assert_eq(ci.length(), 1)
-  assert_true((ci[0].2 - y_top).abs() < 0.5, msg="\{ci[0]} \{y_top}")
+  assert_true((ci[0].2 - y_top).abs() < 0.5, msg="\{Repr(ci[0])} \{y_top}")
   let (_, f2) = t.drawn_of("整理发布清单").unwrap()
   assert_true((f2 - y_top - 66.0).abs() < 0.5)
   fix_clock.val = None
@@ -44,7 +44,7 @@ fn home_moving(t : @ui.Tester) -> Array[String] {
 test "Home: back from a chat to the list changed meanwhile, the list drawn as it is: nothing in it moves" {
   // (its ListMotion new: nothing moves the first time)
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -100,7 +100,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
           }
           let first = match days[0] {
             Object(d) => d
-            _ => abort("no day")
+            _ => @halt.saying("no day")
           }
           let rows = match first.get("items") {
             Some(Array(r)) => r.copy()
@@ -142,14 +142,14 @@ test "Home: a row swiped off is archived once it has gone, and leaves no copy of
   t.frame()
   assert_true(t.locate("=把旧的截图都换成新的").is_empty())
   // gone with no copy fading where it was; the rows under it close over the room
-  assert_true(t.moving().iter().all(fn(m) { !m.contains("c8 leaving") }), msg="\{t.moving()}")
+  assert_true(t.moving().iter().all(fn(m) { !m.contains("c8 leaving") }), msg="\{Repr(t.moving())}")
 }
 
 ///|
 test "words sent fly from the field into their bubble" {
   // the fixture's own station takes what is sent: the outbox at once, the message after
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
@@ -191,7 +191,7 @@ test "words sent fly from the field into their bubble" {
 ///|
 test "words sent: the composer stays as it was while they are in it, and comes down as they let go of it, not from under them" {
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
@@ -211,10 +211,10 @@ test "words sent: the composer stays as it was while they are in it, and comes d
   // was, its ＋ and send where they were), the list's room under its last row as it was
   assert_true(flight_of("ws1/st1:s-c1") is Some(f) && f.placed)
   assert_eq(box(), tall)
-  assert_true(!reshaping(), msg="\{t.moving()}")
+  assert_true(!reshaping(), msg="\{Repr(t.moving())}")
   assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), room)
   // let go of once the words are on their way: it comes down from as tall as it was, its field with it
-  let go = t.rest_of("composer/held-box/")
+  let (go, down) = @sfbase.flight_lets_go("ws1/st1:s-c1").unwrap()
   assert_true(go > t.time() && go < @double.infinity, msg="\{go} \{t.time()}")
   t.run_for(go - t.time())
   assert_true(
@@ -222,9 +222,9 @@ test "words sent: the composer stays as it was while they are in it, and comes d
     msg="the words not yet on their way",
   )
   assert_true(box() < tall, msg="\{box()} \{tall}")
-  assert_true(reshaping(), msg="\{t.moving()}")
+  assert_true(reshaping(), msg="\{Repr(t.moving())}")
   // and its room under the list down with it, on the same curve
-  t.run_for(t.rest_of("composer/hold/") - t.time())
+  t.run_for(go + down - t.time())
   assert_true(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") < room)
   fix_clock.val = None
 }
@@ -232,7 +232,7 @@ test "words sent: the composer stays as it was while they are in it, and comes d
 ///|
 test "words sent set out from where they were typed and land where their message has them, set alike all the way" {
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
@@ -256,7 +256,7 @@ test "words sent set out from where they were typed and land where their message
     let (fx, fy) = typed.place(f.lead + p.a)
     assert_true(
       copies.iter().any(fn(w) { (w.1 + p.at.0 - fx).abs() < 0.5 && (w.2 + p.at.1 - fy).abs() < 0.5 }),
-      msg="\{p.a}: \{fx},\{fy} \{copies}",
+      msg="\{p.a}: \{fx},\{fy} \{Repr(copies)}",
     )
   }
   // landed: the message's own words where it has them, nothing else of them drawn
@@ -264,14 +264,14 @@ test "words sent set out from where they were typed and land where their message
   t.frame()
   assert_true(flight_of("ws1/st1:s-c1") is None)
   let drawn = t.words().filter(fn(w) { w.0 == words && w.5 > 0.01 })
-  assert_eq(drawn.length(), 1, msg="\{drawn}")
+  assert_eq(drawn.length(), 1, msg="\{Repr(drawn)}")
   fix_clock.val = None
 }
 
 ///|
 test "words sent break their lines in their message where the composer broke them: a paragraph goes a line a piece" {
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })

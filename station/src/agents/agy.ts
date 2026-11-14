@@ -1,17 +1,23 @@
 // Antigravity CLI driver: one `agy acp` per session, spoken to in ACP (acp.ts) with one ACP session in it. See
 //. Beside what ACP says:
-// - its files (sign-in, settings, conversations) are in the profile's, `--gemini-dir`: none of the machine's ~/.gemini;
+// - its files (sign-in, settings, conversations) are in the profile's, `--gemini-dir`: none of the machine's ~/.gemini,
+//   and on macOS none of the login keychain's (`AGY_FILE_TOKENS`);
 // - the station's instructions are appended to its system prompt (`_meta.antigravity.systemPrompt.append` of
 //   session/new and session/load, which initialize says it takes);
 // - it runs without approvals (`--dangerously-skip-permissions`), with no telemetry and no updating itself;
-// - a message for the running turn waits for the next; its model is session/set_model;
+// - a message for the running turn steers it (`promptTakeover`); its model is session/set_model;
 // - the station keeps the transcript (acp.ts KeptTranscript), with each turn's usage: the prompt's answer says it.
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
+import { lstat, rm, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { writePrivateSoon } from "../ops/files.ts";
+import { log } from "../ops/log.ts";
+import { platform } from "../platform/index.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { AcpDriver, AcpSession, KeptTranscript, type AcpStart } from "./acp.ts";
 import type { Events } from "./own-process.ts";
-import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
+import { accessKind, expandRoute, profileEnv, profileModel } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, failureOf, uuid, type FailureReason, type OpenOptions, type Profile } from "./runtime.ts";
 
 type Json = any;
@@ -25,6 +31,11 @@ export const geminiDir = (home: string) => join(agyHome(home), ".gemini");
 /// Where its sign-in to a Google account lands in that home (its TUI's, `agy` with the profile's agy/ as its HOME:
 /// accounts/login.ts), which the ACP server reads from `--gemini-dir`: a file, `id_token_email` whose account it is.
 export const agyToken = (home: string) => join(geminiDir(home), "antigravity-cli", "antigravity-oauth-token");
+/// Where the station notes the Google account's email when `agyToken` is written or checked: the account's name, and
+/// which keychain item is this profile's (`agyTakeBack`).
+export const agyAccountFile = (home: string) => join(agyHome(home), "account.json");
+/// Where `agy acp` keeps its conversation databases under `--gemini-dir` once a signed-in session opens.
+export const agyConversations = (home: string) => join(geminiDir(home), "antigravity-cli", "conversations");
 export function agyEmailIn(text: string): string | null {
   try {
     const email = JSON.parse(text)?.id_token_email;
@@ -33,6 +44,92 @@ export function agyEmailIn(text: string): string | null {
     return null;
   }
 }
+
+export async function noteAgyEmail(home: string, text: string): Promise<string | null> {
+  let parsed: Json;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    await rm(agyAccountFile(home), { force: true }).catch(() => {});
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    await rm(agyAccountFile(home), { force: true }).catch(() => {});
+    return null;
+  }
+  const raw = parsed.id_token_email;
+  const email = typeof raw === "string" && raw !== "" ? raw : null;
+  try {
+    await writeFile(agyAccountFile(home), `${JSON.stringify(email !== null ? { email } : {})}\n`);
+  } catch {}
+  return email;
+}
+
+export async function agyNotedEmail(home: string): Promise<string | null> {
+  try {
+    const email = JSON.parse(await readFile(agyAccountFile(home), "utf8"))?.email;
+    return typeof email === "string" && email !== "" ? email : null;
+  } catch {
+    return null;
+  }
+}
+
+/// On macOS, `agy` keeps its sign-in in one login keychain item for the whole user (service `gemini`, account
+/// `antigravity`, through go-keyring's `/usr/bin/security`), which `--gemini-dir` does not separate: it reads that item
+/// before the profile's `agyToken`, and moved the file there, so every profile ran on whichever account was put there
+/// last (2026-11-14: a session moved to another account went on with the first one's quota). Where it thinks it is
+/// in an SSH session it keeps the sign-in in the file alone ("Using file-based token storage because SSH session
+/// detected", 1.5.9), so the station's processes are given that (`agyEnv`, agy-quota.ts).
+export const AGY_FILE_TOKENS = { SSH_CLIENT: "127.0.0.1 0 0" };
+
+/// The keychain item `agy` kept a sign-in in before `AGY_FILE_TOKENS` (go-keyring's encoding taken off), or null.
+/// Replaced in tests.
+export const agyKeychain = {
+  read: () =>
+    new Promise<string | null>((resolve) => {
+      execFile("/usr/bin/security", ["find-generic-password", "-s", "gemini", "-a", "antigravity", "-w"], { timeout: 5000 }, (error, stdout) => resolve(error ? null : String(stdout).trim()));
+    }),
+};
+
+/// go-keyring's stored value as `agy` wrote it: base64 or hex behind a prefix, else as it is.
+export function goKeyringValue(stored: string): string {
+  if (stored.startsWith("go-keyring-base64:")) return Buffer.from(stored.slice("go-keyring-base64:".length), "base64").toString("utf8");
+  if (stored.startsWith("go-keyring-encoded:")) return Buffer.from(stored.slice("go-keyring-encoded:".length), "hex").toString("utf8");
+  return stored;
+}
+
+/// Whether the profile has its sign-in in its `agyToken`, moving it back there from the keychain where `agy` moved it
+/// before `AGY_FILE_TOKENS`: only when the item is the account the profile noted (`agyAccountFile`), since the item is
+/// the last account signed in on the machine, not necessarily this profile's. One whose item is another account's
+/// signs in again. The item is left: it may be the user's own `agy`'s.
+export async function agyTakeBack(home: string): Promise<boolean> {
+  try {
+    await lstat(agyToken(home));
+    return true;
+  } catch {}
+  if (!platform.hasKeychain) return false;
+  const noted = await agyNotedEmail(home);
+  if (noted === null) return false;
+  const stored = await agyKeychain.read();
+  if (stored === null) return false;
+  const text = goKeyringValue(stored);
+  if (agyEmailIn(text) !== noted) return false;
+  try {
+    await writePrivateSoon(agyToken(home), text);
+  } catch (error) {
+    log.warn("agents::agy", "could not move a profile's sign-in out of the keychain", { home, error: String(error) });
+    return false;
+  }
+  log.info("agents::agy", "a profile's sign-in moved back from the keychain to its file", { home });
+  return true;
+}
+/// How many bytes of the station's tools a session's model is declared (tools/mcp.ts `fitted`). `agy` 1.5.6 in ACP
+/// declares an MCP server's tools only while all of them together stay within about 57-60 KB, dropping the largest
+/// beyond that, and offers no call_mcp_tool for those it dropped: measured 2026-11-12 with the station's 42 tools
+/// (73 KB; chat_post, station_task and secret_save were dropped, so its sessions could not post) and with subsets of
+/// them (57 KB declared whole). Kept well under it, for its own tools' growth.
+export const AGY_TOOL_BUDGET = 45_000;
+
 /// Where the station keeps its sessions' transcripts.
 export const SESSIONS = "sessions";
 
@@ -41,14 +138,18 @@ const SESSION_ID = /^[a-zA-Z0-9_-]+$/;
 
 /// What failed a turn, from what it said of it.
 export const classifyFailure = (text: string): FailureReason =>
-  failureOf(text, { auth: ["authentication required", "not logged into antigravity", "authentication expired", "couldn't sign in"], limit: ["resource_exhausted", "quota"] });
+  failureOf(text, { auth: ["authentication required", "not logged into antigravity", "authentication expired", "couldn't sign in", "invalid_grant", "unauthenticated"], limit: ["resource_exhausted", "quota"] });
 
 /// The process's arguments: the profile's files, no approvals, no telemetry.
 export const agyArgs = (home: string) => ["acp", "--gemini-dir", geminiDir(home), "--dangerously-skip-permissions", "--disable-telemetry"];
 
-/// Its environment: the profile's key or variables; none of the machine's Google accounts or projects.
+/// Environment of an Antigravity CLI process: the station's scrubbed environment, the profile's own variables (which
+/// win), its `--gemini-dir` (`ANTIGRAVITY_GEMINI_DIR`, for sandbox sync too), its sign-in in that file alone
+/// (`AGY_FILE_TOKENS`), updates off, and the peer HTTP endpoint.
 export function agyEnv(options: OpenOptions): Record<string, string> {
   const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "agy"), options.route) };
+  env.ANTIGRAVITY_GEMINI_DIR = geminiDir(options.profile.home);
+  if (platform.hasKeychain) Object.assign(env, AGY_FILE_TOKENS);
   env.AGY_CLI_DISABLE_AUTO_UPDATE = "1";
   env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
   return env;
@@ -68,6 +169,71 @@ export function agyUpdate(update: Json): Json {
     if (update.title.startsWith(prefix)) return { ...update, title: `mcp__${server}__${update.title.slice(prefix.length)}` };
   }
   return update;
+}
+
+/// The thinking levels Antigravity's ACP models append to a family's name (`gemini-4-carbon-high`, `claude-opus-5-5-medium`).
+export const AGY_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+/// A raw ACP `modelId` split into its base model and thinking level (`gemini-4-carbon-high` → `gemini-4-carbon` at `high`,
+/// `gemini-3.5-flash` → `gemini-3.5-flash`).
+export function agyBaseModel(id: string): { model: string; effort?: string } {
+  const trimmed = id.trim();
+  const effort = AGY_LEVELS.find((l) => trimmed.endsWith(`-${l}`) && trimmed.length > l.length + 1);
+  return effort === undefined ? { model: trimmed } : { model: trimmed.slice(0, -effort.length - 1), effort };
+}
+
+export type AgyCatalog = { models: string[]; efforts: Record<string, string[]>; defaults: Record<string, string> };
+
+/// The base models, their thinking levels (`[]` where at most one variant is offered, e.g. `gpt-oss-120b-medium`), and
+/// any default level reported by `currentModelId`.
+export function agyCatalog(availableModels: readonly string[], currentModelId?: string | null): AgyCatalog {
+  const models: string[] = [];
+  const levels = new Map<string, Set<string>>();
+  for (const raw of availableModels) {
+    const { model, effort } = agyBaseModel(raw);
+    if (model === "") continue;
+    if (!models.includes(model)) models.push(model);
+    if (effort !== undefined) {
+      let set = levels.get(model);
+      if (!set) levels.set(model, (set = new Set()));
+      set.add(effort);
+    }
+  }
+  const efforts: Record<string, string[]> = {};
+  const defaults: Record<string, string> = {};
+  const cur = typeof currentModelId === "string" && currentModelId.trim() !== "" ? agyBaseModel(currentModelId) : null;
+  for (const model of models) {
+    const sorted = AGY_LEVELS.filter((l) => levels.get(model)?.has(l) === true);
+    efforts[model] = sorted.length >= 2 ? sorted : [];
+    if (sorted.length >= 2) {
+      defaults[model] =
+        cur !== null && cur.model === model && cur.effort !== undefined && sorted.includes(cur.effort)
+          ? cur.effort
+          : sorted.includes("high")
+            ? "high"
+            : sorted[sorted.length - 1]!;
+    }
+  }
+  return { models, efforts, defaults };
+}
+
+/// The ACP `modelId` for `(model, effort)` among `availableModels`, or `null` when `availableModels` is non-empty and
+/// offers neither `model` nor any level of it.
+export function agyVariant(model: string, effort: string | undefined, availableModels: readonly string[], defaultModelId?: string | null): string | null {
+  const { model: base, effort: inline } = agyBaseModel(model);
+  const wanted = effort !== undefined && AGY_LEVELS.includes(effort) ? effort : inline;
+  if (wanted === undefined && typeof defaultModelId === "string" && defaultModelId !== "" && agyBaseModel(defaultModelId).model === base) {
+    if (availableModels.length === 0 || availableModels.includes(defaultModelId)) return defaultModelId;
+  }
+  if (availableModels.length === 0) {
+    return wanted !== undefined && inline === undefined ? `${base}-${wanted}` : model;
+  }
+  if (wanted !== undefined && availableModels.includes(`${base}-${wanted}`)) return `${base}-${wanted}`;
+  if (effort === undefined && availableModels.includes(model)) return model;
+  if (availableModels.includes(base)) return base;
+  const variants = availableModels.filter((m) => agyBaseModel(m).model === base);
+  if (variants.length === 0) return null;
+  return variants.find((m) => m === `${base}-high`) ?? variants.find((m) => m === `${base}-medium`) ?? variants[0]!;
 }
 
 /// The models session/new or session/load lists (ACP's `models`), the current first.
@@ -109,18 +275,28 @@ export class AgyDriver extends AcpDriver<AgySession> {
     return "agy";
   }
 
-  /// The models a profile's CLI offers: a session opened only to ask.
-  async models(profile: Profile): Promise<string[]> {
+  /// The models a profile's CLI offers, normalized into base models and their thinking levels: a session opened only to ask.
+  async catalog(profile: Profile): Promise<AgyCatalog> {
     const session = await this.begin({ key: `models-${profile.id}-${uuid()}`, profile, cwd: agyHome(profile.home), instructions: "", mcpToken: "", mcpUrl: "", route: "model-discovery" }, () => {}, true);
     try {
-      return session.availableModels;
+      return agyCatalog(session.availableModels, session.currentModelId);
     } finally {
       await session.dispose();
     }
   }
 
+  /// The models a profile's CLI offers: a session opened only to ask.
+  async models(profile: Profile): Promise<string[]> {
+    return (await this.catalog(profile)).models;
+  }
+
   protected session(options: OpenOptions, events: Events) {
     return new AgySession(this, events, options);
+  }
+
+  protected async begin(options: OpenOptions, events: Events, probe: boolean): Promise<AgySession> {
+    if (accessKind(options.profile) === "subscription") await agyTakeBack(options.profile.home);
+    return super.begin(options, events, probe);
   }
 
   protected starting(options: OpenOptions): AcpStart {
@@ -135,14 +311,22 @@ export class AgyDriver extends AcpDriver<AgySession> {
 
   protected async ready(session: AgySession, options: OpenOptions, probe: boolean) {
     const model = probe ? undefined : (options.model ?? profileModel(options.profile));
-    if (model !== undefined && model !== session.model) await session.request(`model:${uuid()}`, "session/set_model", { sessionId: session.id(), modelId: model });
-    if (model !== undefined) session.model = model;
+    if (model === undefined) return;
+    const target = agyVariant(model, options.effort, session.availableModels, session.defaultModelId) ?? model;
+    if (target !== session.currentModelId) await session.request(`model:${uuid()}`, "session/set_model", { sessionId: session.id(), modelId: target });
+    session.currentModelId = target;
+    session.model = agyBaseModel(model).model;
   }
 }
 
 export class AgySession extends AcpSession {
+  protected readonly steersByPrompt = true;
   /// What session/new or session/load said it offers.
   availableModels: string[] = [];
+  /// The raw ACP `modelId` currently active in the process.
+  currentModelId: string | null = null;
+  /// The raw ACP `modelId` the process opened on before any `session/set_model`.
+  defaultModelId: string | null = null;
   /// The context its last call had and the model's window, as usage_update says them.
   private context = { used: 0, size: 0 };
 
@@ -167,7 +351,23 @@ export class AgySession extends AcpSession {
     super.opened(result);
     this.availableModels = agyModels(result);
     const current = result?.models?.currentModelId;
-    if (typeof current === "string" && current !== "") this.model = current;
+    if (typeof current === "string" && current !== "") {
+      this.currentModelId = current;
+      this.defaultModelId = current;
+      this.model = agyBaseModel(current).model;
+    }
+  }
+
+  protected kept() {
+    return { availableModels: this.availableModels, currentModelId: this.currentModelId, defaultModelId: this.defaultModelId, context: this.context };
+  }
+
+  protected taken(snapshot: Json) {
+    this.availableModels = Array.isArray(snapshot.availableModels) ? snapshot.availableModels.filter((m: unknown): m is string => typeof m === "string") : [];
+    this.currentModelId = typeof snapshot.currentModelId === "string" ? snapshot.currentModelId : this.model;
+    this.defaultModelId = typeof snapshot.defaultModelId === "string" ? snapshot.defaultModelId : null;
+    const c = snapshot.context;
+    if (c && typeof c === "object") this.context = { used: typeof c.used === "number" ? c.used : 0, size: typeof c.size === "number" ? c.size : 0 };
   }
 
   protected updated(update: Json) {
@@ -183,14 +383,25 @@ export class AgySession extends AcpSession {
     if (usage !== null) this.transcript?.keep(this.sessionId, { type: "usage", run: id.slice(id.indexOf(":") + 1), model: this.model, usage, calls: 1, context: this.context.used, window: this.context.size });
   }
 
-  /// Between turns, another model is set in the running process, read from its next turn on.
+  protected ignored(id: string, answer: Json) {
+    this.ending(id, answer);
+  }
+
+  /// Into the running turn: Antigravity CLI immediately resolves the superseded prompt and finishes on the new one.
+  async steer(text: string) {
+    return this.promptTakeover(text);
+  }
+
+  /// Between turns, another model or thinking level is set in the running process, read from its next turn on.
   retune(options: OpenOptions) {
     if (this.turn.closed || this.turn.busy || this.sessionId === "") return false;
     const model = options.model ?? profileModel(options.profile);
     if (model === undefined) return false;
-    if (this.availableModels.length > 0 && !this.availableModels.includes(model)) return false;
-    if (model !== this.model) this.send("session/set_model", { sessionId: this.sessionId, modelId: model });
-    this.model = model;
+    const target = agyVariant(model, options.effort, this.availableModels, this.defaultModelId);
+    if (target === null) return false;
+    if (target !== this.currentModelId) this.send("session/set_model", { sessionId: this.sessionId, modelId: target });
+    this.currentModelId = target;
+    this.model = agyBaseModel(model).model;
     return true;
   }
 }

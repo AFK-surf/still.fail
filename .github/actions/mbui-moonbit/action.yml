@@ -78,16 +78,16 @@ runs:
       shell: bash
       # (none in a checkout without mbui's tools: nothing kept)
       run: |
-        [ -d apps/mbui/mbui/tools ] || exit 0
-        for t in mbc chk detlint apk; do echo "$t=$(sh apps/mbui/mbui/scripts/$t key)" >> "$GITHUB_OUTPUT"; done
+        [ -d libs/mbui/tools ] || exit 0
+        for t in mbc chk detlint apk; do echo "$t=$(sh libs/mbui/scripts/$t key)" >> "$GITHUB_OUTPUT"; done
         # (the app's: scripts/testexe, a test program's runs for scripts/test.sh)
         [ ! -f apps/mbui/scripts/testexe ] || echo "testexe=$(bash apps/mbui/scripts/testexe key)" >> "$GITHUB_OUTPUT"
     - if: steps.tools.outputs.mbc != ''
       uses: actions/cache@v4
       with:
         path: |
-          apps/mbui/mbui/tools/_build/native/release/build/mbc/mbc.exe
-          apps/mbui/mbui/tools/_build/native/release/build/mbc/mbc.exe.src
+          libs/mbui/tools/_build/native/release/build/mbc/mbc.exe
+          libs/mbui/tools/_build/native/release/build/mbc/mbc.exe.src
         key: mbui-tool-mbc-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.mbc }}
     - if: steps.tools.outputs.testexe != ''
       uses: actions/cache@v4
@@ -100,20 +100,20 @@ runs:
       uses: actions/cache@v4
       with:
         path: |
-          apps/mbui/mbui/tools/_build/native/release/build/chk/chk.exe
-          apps/mbui/mbui/tools/_build/native/release/build/chk/chk.exe.src
+          libs/mbui/tools/_build/native/release/build/chk/chk.exe
+          libs/mbui/tools/_build/native/release/build/chk/chk.exe.src
         key: mbui-tool-chk-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.chk }}
     - if: steps.tools.outputs.detlint != ''
       uses: actions/cache@v4
       with:
         path: |
-          apps/mbui/mbui/tools/_build/native/release/build/detlint/detlint.exe
-          apps/mbui/mbui/tools/_build/native/release/build/detlint/detlint.exe.src
+          libs/mbui/tools/_build/native/release/build/detlint/detlint.exe
+          libs/mbui/tools/_build/native/release/build/detlint/detlint.exe.src
         key: mbui-tool-detlint-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.detlint }}
     - if: steps.tools.outputs.apk != ''
       uses: actions/cache@v4
       with:
         path: |
-          apps/mbui/mbui/tools/_build/native/release/build/apk/apk.exe
-          apps/mbui/mbui/tools/_build/native/release/build/apk/apk.exe.src
+          libs/mbui/tools/_build/native/release/build/apk/apk.exe
+          libs/mbui/tools/_build/native/release/build/apk/apk.exe.src
         key: mbui-tool-apk-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.apk }}

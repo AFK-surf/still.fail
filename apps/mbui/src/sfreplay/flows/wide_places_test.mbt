@@ -5,7 +5,7 @@
 
 ///|
 test "65-wide-places" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("wide-places"), seed~, w=1280.0, h=800.0)
     f.see("新建对话")
     f.tap("icon:folder")
@@ -17,7 +17,7 @@ test "65-wide-places" {
     f.tap("=外观")
     f.see("跟随系统")
     f.tap("=深色")
-    assert_true(@sf.theme().dark)
+    f.check(@sf.theme().dark, "not dark after 深色")
     f.tap("=跟随系统", top=true)
     // its thumb slides there (Ctx::cover), from this tap to the end of its slide
     f.run_for(@ui.cover_slide_ms)

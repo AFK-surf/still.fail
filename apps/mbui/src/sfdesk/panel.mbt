@@ -13,9 +13,11 @@ fn tabs_key(r : ChatRef) -> String {
 
 ///|
 /// Whether this panel shows `tab` beside a chat of `v`: one of its agents' histories (by its session's key), 任务, 文件,
-/// agent 往来, a web service of its agents' (`service:<job>`), a visualization (`file:[…]`: service_tab.mbt).
+/// agent 往来, a web service of its agents' (`service:<job>`), a visualization (`file:[…]`: service_tab.mbt), a file in
+/// the viewer (`view:[…]`: sfbase's viewer_tab.mbt).
 fn side_shows(v : ChatView, tab : String) -> Bool {
   tab == "jobs" ||
+  @sfbase.view_tab_file(tab) is Some(_) ||
   tab == "files" ||
   tab == "letters" ||
   tab == "things" ||
@@ -51,7 +53,15 @@ pub fn side_now(src : Source, r : ChatRef) -> (Array[String], String) {
 /// agent's history after the histories open, any other last), closed (the last left in front, if it was), brought to
 /// the front; all of them closed (`clear`). The panel is told first whether any will be open, to slide as they come.
 pub fn side_change(src : Source, r : ChatRef, action : String, tab : String?) -> Unit {
-  let (tabs, front) = side_now(src, r)
+  side_change_from(src, r, action, tab, side_now(src, r))
+}
+
+///|
+/// side_change, chat `r`'s tabs as they are now (side_now's) given, read by the caller where it holds them: what
+/// changes them as a page comes on top (beside_follow) reads them in its reaction's read, held as long as that reads
+/// them, not by the wide frame's node for as long as it lives (Source::owned_by's raw read: the chat held after it left).
+fn side_change_from(src : Source, r : ChatRef, action : String, tab : String?, now : (Array[String], String)) -> Unit {
+  let (tabs, front) = now
   let any = match action {
     "open" | "front" => true
     "close" => tabs.iter().any(fn(t) { Some(t) != tab })
@@ -77,15 +87,43 @@ pub fn side_ask(src : Source, r : ChatRef, action : String, tab : String?) -> Un
     Some(t) => params["tab"] = Json::string(t)
     None => ()
   }
-  (src.call)("chat.tabs." + action, Json::object(params), fn(_) {  })
+  (src.call)("chat.tabs." + action, Json::object(params), @sfbase.answer_unread)
+}
+
+///|
+/// File tab `tab` opened beside chat `r` (the shell's `beside`: sfapp's beside_where), in front; a tab of that file open
+/// there already (the same file, what it said of itself then aside: view_tab_file's same_file), that one brought to the
+/// front, never a second: the tab put in front.
+pub fn view_beside(src : Source, r : ChatRef, tab : String) -> String {
+  let open = match @sfbase.view_tab_file(tab) {
+    Some(f) =>
+      side_now(src, r).0
+      .iter()
+      .find_first(fn(t) {
+        match @sfbase.view_tab_file(t) {
+          Some(g) => f.same_file(g)
+          None => false
+        }
+      })
+    None => None
+  }
+  let put = open.unwrap_or(tab)
+  side_change(src, r, "open", Some(put))
+  put
 }
 
 ///|
 /// An agent's history pressed (its mark in the bar), or the chat's files (its info's 文件): in front, closed; else
-/// opened in front.
+/// opened in front; an agent's history opened whole, once what it first shows is answered (history_side_open).
 pub fn side_toggle(src : Source, r : ChatRef, tab : String) -> Unit {
   let (tabs, front) = side_now(src, r)
-  side_change(src, r, if tabs.contains(tab) && front == tab { "close" } else { "open" }, Some(tab))
+  if tabs.contains(tab) && front == tab {
+    side_change(src, r, "close", Some(tab))
+  } else if side_history_tab(tab) {
+    history_side_open(src, r, tab, fn() { side_change(src, r, "open", Some(tab)) })
+  } else {
+    side_change(src, r, "open", Some(tab))
+  }
 }
 
 ///|
@@ -404,43 +442,61 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
 ///|
 /// Chat `r`'s page (`chat`) in workspace `w`, its side panel the tree's beside it (side_panel_node; on the tape a panel
 /// of its own, tape_side): as the panel's column slides, the page on its way to the width it leaves the page, there as
-/// the slide ends.
+/// the slide ends: built again in the first frame at or past its end (Ctx::shows_until), whether or not the page's room
+/// changes then. (A frame drawn just short of the end has the column as wide as it comes to be already; at 24 frames a
+/// second, in a window wide enough for the list to be held at its width on the way (sfpages' laid_w), the next kept the
+/// page as on its way, parting from it built anew: view_beside_wbtest, wide_panel_wbtest.)
 pub fn with_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, chat : () -> Unit) -> Unit {
-  let key = chat_key(r)
-  match panel_own.goes.get(key) {
-    Some(way) if !@sf.in_pane() && way.goes_at(c.moment()) => {
-      let (id, to, ends) = (@sfbase.page_way.id, @sfbase.page_way.to, @sfbase.page_way.ends)
-      // (the pane as wide as the block's column leaves it at rest; on the block's own way, where that goes)
-      let pane = if id != "" {
-        to
-      } else {
-        let ww = c.window_size().0
-        ww - fold_target(src, w, ww).1.col
-      }
-      // (over a page too narrow for both, the page as wide as it is)
-      if pane < side_both_least {
-        chat()
-        return
-      }
-      @sfbase.page_way_said(
-        id + "/--side-panel/" + key + "/" + (way.target() > 0.0).to_string(),
-        pane - way.target(),
-        ends=dmax(if id != "" { ends } else { 0.0 }, way.ends_at()),
-      )
-      chat()
-      @sfbase.page_way_said(id, to, ends~)
-    }
-    _ => chat()
+  if @sf.in_pane() {
+    chat()
+    return
   }
+  let key = chat_key(r)
+  let (id, to, ends) = (@sfbase.page_way.id, @sfbase.page_way.to, @sfbase.page_way.ends)
+  let open = side_now(src, r).0.length() > 0
+  let way_opt = panel_own.goes.get(key)
+  let way_goes = match way_opt {
+    Some(way) => way.goes_at(c.moment())
+    None => false
+  }
+  if !way_goes && !(id != "" && open) {
+    chat()
+    return
+  }
+  let pane = if id != "" {
+    to
+  } else {
+    let ww = c.window_size().0
+    ww - fold_target(src, w, ww).1.col
+  }
+  if pane < side_both_least {
+    chat()
+    return
+  }
+  let (side_to, side_ends, side_tag) = match way_opt {
+    Some(way) if way_goes => {
+      c.shows_until(way.ends_at())
+      (way.target(), way.ends_at(), (way.target() > 0.0).to_string())
+    }
+    _ => (side_width(pane), 0.0, "true")
+  }
+  @sfbase.page_way_said(
+    id + "/--side-panel/" + key + "/" + side_tag,
+    pane - side_to,
+    ends=dmax(if id != "" { ends } else { 0.0 }, side_ends),
+  )
+  chat()
+  @sfbase.page_way_said(id, to, ends~)
 }
 
 ///|
 /// Whose side panel is open (what the frame puts beside the page on the tape): a chat's, or workspace `ws`'s new
 /// chat's (its Station 文件, kept by the same `chatTabs`, by `new:<ws>`).
+#derive(Eq)
 pub(all) enum SideOf {
   ChatSide(ChatRef)
   NewSide(String)
-} derive(Eq)
+}
 
 ///|
 /// The key its panel is kept by (chatTabs).
@@ -609,6 +665,11 @@ fn side_tab_names(src : Source, r : ChatRef, v : ChatView, tab : String) -> (Str
     Some(label) => return (label, @sf.t("web-pages.chat.close", args=[("name", label)]))
     None => ()
   }
+  // a file in the viewer: by its name
+  match @sfbase.view_tab_file(tab) {
+    Some(f) => return (f.file.name, @sf.t("web-pages.chat.close", args=[("name", f.file.name)]))
+    None => ()
+  }
   let agent = v.agents.iter().find_first(fn(a) { a.key == tab })
   let service = match tab_service(tab) {
     Some(job) => Some(src.topic("job", { "station": Json::string(r.station), "id": Json::string(job) }).get().value)
@@ -673,7 +734,13 @@ fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : 
     }
     None => ()
   }
-  let icon = if tab_file(tab) is Some(_) {
+  let icon = if @sfbase.view_tab_file(tab) is Some(f) {
+    if @sfbase.preview_kind(f.file.name).0 == Some(@sfbase.KImage) {
+      "photo"
+    } else {
+      "file"
+    }
+  } else if tab_file(tab) is Some(_) {
     "file"
   } else if tab == "jobs" {
     "boxes"

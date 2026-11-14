@@ -2,24 +2,26 @@
 // value through its shape (client/core-ts/src/shapes/schema.ts) as it goes out.
 import { conform, type Ty } from "./conform.ts";
 import * as format from "./format.ts";
-import { t } from "./i18n.ts";
+import { current as language, t } from "./i18n.ts";
 import { authorNameOf } from "./entries.ts";
-import type { Topic } from "./protocol.ts";
+import { STATION_PARTS, type Topic } from "./protocol.ts";
 import * as brand from "./brand.ts";
 import * as decisions from "./decisions.ts";
 import * as drive from "./drive.ts";
 import * as prefsMod from "./prefs.ts";
-import * as footprint from "./footprint.ts";
 import * as jobsMod from "./jobs.ts";
 import { permissionsShown } from "./permissions.ts";
+import { copiesShown } from "./copies.ts";
 import { elevationShown } from "./elevation.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
 import { SHAPES, TOPIC_SHAPES } from "./shapes/schema.ts";
 import * as clock from "./clock.ts";
+import { untracked } from "./reactive.ts";
 import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 import { codexQuotaFailure } from "./codex-quota.ts";
+import { linkShown, peekShown } from "./peek-pictures.ts";
 import { isStationAuthor } from "./titles.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -38,10 +40,73 @@ export function clockAt(c: Clock): void {
 
 const DAY_MS = 86_400_000;
 
+// The grains of the clock a making read, recorded as it reads them (`grainsOf`), so that what takes a value kept from
+// it reads them too (`taken`).
+const MINUTE = 1;
+const DAY = 2;
+let grains = 0;
+
+function byMinute(): void {
+  grains |= MINUTE;
+  clock.minute.get();
+}
+
+function byDay(): void {
+  grains |= DAY;
+  clock.day.get();
+}
+
+/// What `fn` gives, and the grains of the clock it read (`MINUTE`, `DAY`); what it read counts for a making around it too.
+export function grainsOf<T>(fn: () => T): { value: T; grains: number } {
+  const outer = grains;
+  grains = 0;
+  try {
+    const value = fn();
+    return { value, grains };
+  } finally {
+    grains |= outer;
+  }
+}
+
+/// A value made for a clock and kept with what it was made of (`made`): the minute, offset, language and product name
+/// its words hold for (`at`), and the grains of the clock its making read.
+export type Made<T> = { value: T; at: string; grains: number };
+
+/// What kept words hold for: the minute of the clock they were made for (the clock they were made with, not the
+/// `clock.minute` signal, which moves only as a value is put together or a ticking topic is shown, so lags now by a
+/// second at each minute and by hours while nothing is), its offset, and what they are said in.
+function holdsFor(c: Clock): string {
+  return `${Math.floor(c.now / 60_000)}/${c.offsetMin}/${language()}/${brand.name()}`;
+}
+
+/// What `make` makes of `of` for clock `c`, kept in `kept`: the one kept while it was made in the same minute (a value
+/// made again in that minute could differ only by what a decorator says of `c.now` within it, which a computed kept
+/// through the minute says as stale), else made again, untracked; reads nothing reactive. A station's whole overview
+/// decorated took 2.6 ms in Hermes, made again by every computed that read it, and again as one let go was read anew
+/// though its record had not changed (views.ts #stationShownOf). `taken` is what a computed takes of it.
+export function made<K extends object, T>(kept: WeakMap<K, Made<T>>, of: K, c: Clock, make: () => T): Made<T> {
+  const at = holdsFor(c);
+  const was = kept.get(of);
+  if (was !== undefined && was.at === at) return was;
+  const m = untracked(() => grainsOf(make));
+  const next = { value: m.value, at, grains: m.grains };
+  kept.set(of, next);
+  return next;
+}
+
+/// A kept value as the computed taking it has it: reading the grains of the clock its making read, so that it is made
+/// again as its words change, as though it had made the value itself.
+export function taken<T>(m: Made<T>): T {
+  if (m.grains & MINUTE) byMinute();
+  if (m.grains & DAY) byDay();
+  return m.value;
+}
+
 /// A moment in words (Stamp).
 export function stamp(ms: number, c: Clock): Record<string, unknown> {
   // (a day or more past, its words are its day's: 昨天 18:12, 11月3日 18:12; nearer, or to come, the minute's)
-  (c.now - ms >= DAY_MS ? clock.day : clock.minute).get();
+  if (c.now - ms >= DAY_MS) byDay();
+  else byMinute();
   return {
     past: ms <= c.now,
     at: ms,
@@ -52,8 +117,17 @@ export function stamp(ms: number, c: Clock): Record<string, unknown> {
 }
 
 /// Times kept in seconds (still.fail cloud's) and in milliseconds (the station's).
-const SECONDS = ["created_at", "expires_at", "used_at", "revoked_at", "last_seen", "lastSeen"];
-const MILLIS = ["createdAt", "lastActiveAt", "lastUsedAt", "checkedAt", "resetsAt"];
+const SECONDS = new Set(["created_at", "expires_at", "used_at", "revoked_at", "last_seen", "lastSeen"]);
+const MILLIS = new Set(["createdAt", "lastActiveAt", "lastUsedAt", "checkedAt", "resetsAt"]);
+/// The fields `times` says in words (`time`), each a moment.
+export const TIME_KEYS: readonly string[] = [...SECONDS, ...MILLIS];
+
+/// When a window that refills at `resetsAt` refills, in words (as `windows` says it), read by the minute: what a row
+/// kept beside its part says of its windows as it goes out (views.ts windowShown).
+export function refillsOf(resetsAt: number, c: Clock): string {
+  byMinute();
+  return format.refillsIn(resetsAt, c.now);
+}
 
 /// What a window with `used` percent of it used has left, and how full it is.
 export function leftLevel(used: number): [number, string] {
@@ -61,11 +135,12 @@ export function leftLevel(used: number): [number, string] {
 }
 
 function windows(list: Record<string, unknown>[], c: Clock): Record<string, unknown>[] {
-  clock.minute.get();
-  const out = list.map((w) => {
+  byMinute();
+  const marks = format.windowMarks(list.map((w) => str(w.label) ?? ""));
+  const out = list.map((w, i) => {
     const label = str(w.label) ?? "";
     const used = typeof w.usedPercent === "number" ? w.usedPercent : 0;
-    const [mark, order] = format.windowMark(label);
+    const [mark, order] = marks[i]!;
     const [left, level] = leftLevel(used);
     return { ...w, label: format.windowName(label), mark, order, left, level, refills: typeof w.resetsAt === "number" ? format.refillsIn(w.resetsAt, c.now) : null };
   });
@@ -73,8 +148,66 @@ function windows(list: Record<string, unknown>[], c: Clock): Record<string, unkn
   return out.sort((a, b) => (u64(a.order) ?? 1) - (u64(b.order) ?? 1));
 }
 
+/// When so many resets end, in words (none known: nothing).
+function resetEnds(count: number, expiries: unknown, c: Clock): string[] {
+  const expiry: string[] = [];
+  if (count > 0 && Array.isArray(expiries)) {
+    const ends = expiries.filter((at: unknown): at is number => typeof at === "number" && Number.isSafeInteger(at) && at > 0)
+      .sort((a: number, b: number) => a - b).slice(0, count);
+    if (ends.some((at: number) => at <= c.now)) expiry.push(t("core-views.present.resets_expired"));
+    const future = ends.filter((at: number) => at > c.now).map((at: number) => format.preciseTimeUntil(at, c.now));
+    if (future.length) expiry.push(t("core-views.present.resets_expire", { when: future.join(t("core-views.present.resets_separator")) }));
+  }
+  return expiry;
+}
+
+/// So many resets left, and when they end.
+function resetsText(count: number, expiries: unknown, c: Clock): string {
+  return [t("core-views.present.resets_left", { n: count }), ...resetEnds(count, expiries, c)].join(" · ");
+}
+
+/// Each kind's name, and what one gives back (a provider's own reset, `credit`, says nothing of it).
+const RESET_KINDS: Record<string, [string, string | null]> = {
+  session: ["core-views.present.reset.session", "core-views.present.reset.refills.session"],
+  weekly: ["core-views.present.reset.weekly", "core-views.present.reset.refills.weekly"],
+  full: ["core-views.present.reset.full", "core-views.present.reset.refills.full"],
+  model: ["core-views.present.reset.model", "core-views.present.reset.refills.model"],
+  credit: ["core-views.present.reset.credit", null],
+};
+
+/// A kind of reset as it is offered: its name, what one gives back, how many are left (`leftText`) and till when, and whether one
+/// can be used now (else only once at a limit it refills). `id`, what the station is asked for (none: any).
+/// What its words are made from (`model`, `expiries`) stays in it, as a window keeps its `resetsAt`: an overview is put
+/// again where it goes out as another value than the one it was put in (a part of it, an account's row, one that shares
+/// with the one before: store.ts), and a row put again says what it said. Without them a row lost when it ends the
+/// second time it went out (2026-11-11).
+function presentReset(r: Record<string, unknown>, c: Clock): Record<string, unknown> {
+  const kind = Object.prototype.hasOwnProperty.call(RESET_KINDS, str(r.kind) ?? "") ? str(r.kind)! : "credit";
+  const [name, gives] = RESET_KINDS[kind]!;
+  const model = str(r.model) ?? "Fable";
+  const left = u64(r.left) ?? 0;
+  const usable = r.usable !== false;
+  const refills = gives === null ? null : t(gives, { model });
+  return {
+    ...(typeof r.id === "string" ? { id: r.id } : {}),
+    kind,
+    ...(typeof r.model === "string" ? { model: r.model } : {}),
+    left,
+    ...(Array.isArray(r.expiries) ? { expiries: r.expiries.filter((at: unknown) => typeof at === "number" && Number.isSafeInteger(at)) } : {}),
+    usable,
+    title: t(name, { model }),
+    // (how many on their own, where they are seen at once: the user, 2026-11-10)
+    leftText: t("core-views.present.reset.left", { n: left }),
+    text: [...resetEnds(left, r.expiries, c), ...(usable ? [] : [t("core-views.present.reset.needsLimit")])].join(" · "),
+    ...(refills !== null ? { refills } : {}),
+  };
+}
+
 /// Every time in a value, in words beside it: an object with some gets `time: { <field>: stamp }`; a quota's windows
 /// are put as they are drawn. A new value where anything is put; a part with nothing put is the part as it was.
+/// An object is copied only as something is first put in it, its keys looked up in sets: walking a station's 150 KB
+/// overview took 1.5 ms in Hermes copying every object and looking each key up in two arrays, where most of its parts
+/// have nothing put.
 export function times(value: unknown, c: Clock): unknown {
   if (value !== null && typeof value === "object" && shaped.has(value)) return value;
   if (Array.isArray(value)) {
@@ -86,34 +219,29 @@ export function times(value: unknown, c: Clock): unknown {
     return out ?? value;
   }
   if (!isObject(value)) return value;
-  const map: Record<string, unknown> = { ...(value as Record<string, unknown>) };
-  let changed = false;
-  const stamps: Record<string, unknown> = {};
-  let any = false;
-  for (const key of Object.keys(map)) {
-    const v = map[key];
+  const from = value as Record<string, unknown>;
+  // (what is read is the copy once there is one: a part already put, `scoped` taken into the windows)
+  let map: Record<string, unknown> | null = null;
+  let stamps: Record<string, unknown> | null = null;
+  for (const key of Object.keys(from)) {
+    const v = (map ?? from)[key];
     if (typeof v === "number" && v > 0) {
-      if (SECONDS.includes(key)) {
-        stamps[key] = stamp(v * 1000, c);
-        any = true;
-      } else if (MILLIS.includes(key)) {
-        stamps[key] = stamp(v, c);
-        any = true;
-      }
-    } else if (key === "windows" && Array.isArray(v) && v.some((w) => get(w, "usedPercent") !== undefined)) {
-      map[key] = windows(v as Record<string, unknown>[], c);
-      changed = true;
-    } else if (key !== "time") {
+      if (SECONDS.has(key)) (stamps ??= {})[key] = stamp(v * 1000, c);
+      else if (MILLIS.has(key)) (stamps ??= {})[key] = stamp(v, c);
+    } else if (key === "windows" && Array.isArray(v) && [v, (map ?? from).scoped].some((l) => Array.isArray(l) && l.some((w) => get(w, "usedPercent") !== undefined))) {
+      // What its models have to themselves (`scoped`: Fable's week) drawn after the account's own. Where one model
+      // is asked about (a chat's agent, an account to run a model on), views/models.ts quotaFor has left only its.
+      map ??= { ...from };
+      map[key] = windows([...v, ...(Array.isArray(map.scoped) ? map.scoped : [])] as Record<string, unknown>[], c);
+      delete map.scoped;
+    } else if (key !== "time" && !(key === "scoped" && Array.isArray((map ?? from).windows))) {
       const shown = times(v, c);
-      if (shown !== v) {
-        map[key] = shown;
-        changed = true;
-      }
+      if (shown !== v) (map ??= { ...from })[key] = shown;
     }
   }
-  if ("windows" in map && "state" in map) {
-    clock.minute.get();
-    const credits = map.credits;
+  if ("windows" in from && "state" in from) {
+    byMinute();
+    const credits = (map ?? from).credits;
     if (isObject(credits)) {
       const text =
         credits.unlimited === true
@@ -123,32 +251,30 @@ export function times(value: unknown, c: Clock): unknown {
             : credits.hasCredits === false
               ? t("core-views.present.credits.none")
               : t("core-views.present.credits.unknown");
-      map.creditsText = text;
-      changed = true;
+      (map ??= { ...from }).creditsText = text;
     }
-    const count = u64(map.resetCount);
+    const count = u64((map ?? from).resetCount);
     if (count !== undefined) {
-      const expiry: string[] = [];
-      if (count > 0 && Array.isArray(map.resetExpiries)) {
-        const expiries = map.resetExpiries.filter((at: unknown): at is number => typeof at === "number" && Number.isSafeInteger(at) && at > 0)
-          .sort((a: number, b: number) => a - b).slice(0, count);
-        if (expiries.some((at: number) => at <= c.now)) expiry.push(t("core-views.present.resets_expired"));
-        const future = expiries.filter((at: number) => at > c.now).map((at: number) => format.preciseTimeUntil(at, c.now));
-        if (future.length) expiry.push(t("core-views.present.resets_expire", { when: future.join(t("core-views.present.resets_separator")) }));
-      }
-      map.resetText = [t("core-views.present.resets_left", { n: count }), ...expiry].join(" · ");
-      changed = true;
+      map ??= { ...from };
+      map.resetText = resetsText(count, map.resetExpiries, c);
+      // Each kind of reset it holds, as it is offered: a station from before kinds, or a provider with one kind (a
+      // ChatGPT subscription's), all of them as one with no kind to ask for.
+      const kinds = Array.isArray(map.resets) ? map.resets.filter(isObject) : count > 0 ? [{ kind: "credit", left: count, expiries: map.resetExpiries, usable: true }] : [];
+      map.resets = kinds.map((r) => presentReset(r, c));
     }
   }
-  if (any) {
+  if (stamps !== null) {
+    map ??= { ...from };
     // (beside the times a value already says in words: a pull request's `updatedAt`, from its card)
     map.time = isObject(map.time) ? { ...map.time, ...stamps } : stamps;
-    changed = true;
   }
-  return changed ? map : value;
+  return map ?? value;
 }
 
-const NO_TICK = new Set(["live", "thread", "letters", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "slackTokens", "joinable", "memberships", "screenCard"]);
+/// What `times` puts in a value, for the test that holds it to how it was written before (present.test.ts).
+export const timesParts = { windows, resetsText, presentReset };
+
+const NO_TICK = new Set(["chats", "live", "thread", "letters", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "slackTokens", "joinable", "memberships", "screenCard"]);
 
 /// Whether a topic shows times in words, sent again each minute while shown.
 export function ticks(topic: Topic): boolean {
@@ -159,7 +285,11 @@ export function ticks(topic: Topic): boolean {
 /// it does not allow is an error naming the field.
 /// A topic's shape; undefined for one that goes out as it is.
 export function shapeOf(topic: Topic): Ty | undefined {
-  if (topic.topic === "stations" && topic.brief === true) return { vec: "StationBrief" };
+  // One part of a station's overview: that field's own shape in Overview, null while there is none.
+  if (topic.topic === "stationPart") {
+    const ty = typeof topic.part === "string" && STATION_PARTS.includes(topic.part) ? fieldOf("Overview", topic.part) : undefined;
+    return ty === undefined ? undefined : typeof ty === "object" && "opt" in ty ? ty : { opt: ty };
+  }
   return TOPIC_SHAPES[topic.topic];
 }
 
@@ -179,7 +309,8 @@ export function fieldOf(ty: Ty, field: string): Ty | undefined {
 
 /// An item of a keyed list as `decorate` would make it inside its whole (output.ts).
 export function decorateItem(topic: Topic, item: unknown, c: Clock): unknown {
-  if (!ticks(topic)) return item;
+  // (a list's station rows say their times in words themselves, views.ts: none put in to be dropped by their shape)
+  if (!ticks(topic) || topic.topic === "stations") return item;
   return times(topic.topic === "sessions" ? session(item as J) : item, c);
 }
 
@@ -238,6 +369,12 @@ export function waiting(s: J): J {
 }
 
 /// A chat's watch, when one of its agents keeps watch.
+/// Whether one of a row's agents keeps watch (rowWatch not null), its words not made: what the list of those watching
+/// asks of a row it does not make whole.
+export function watches(agents: J[]): boolean {
+  return agents.some((a) => arr(get(get(a, "watch"), "names"))?.some((n) => typeof n === "string") === true);
+}
+
 export function rowWatch(agents: J[]): J {
   const names: string[] = [];
   for (const a of agents) {
@@ -430,10 +567,31 @@ export function isViewer(me: J, person: string, slackUsers: string[]): boolean {
   return id === person || (email !== undefined && email.toLowerCase() === person.toLowerCase()) || slackUsers.includes(person);
 }
 
-const sameEmail = (a: unknown, b: string) => typeof a === "string" && a.toLowerCase() === b.toLowerCase();
+/// A members list's members by their e-mail in lower case, the first of each, while the list is as long as it was
+/// (a workspace's is shared and never changed in place). Looked up for every person of every row of a list: each a
+/// scan of the list, both sides lowered at every step, was a third of making a row (13 ms of 42 for 420 rows in
+/// Hermes, 2026-11-11).
+const membersByEmail = new WeakMap<J[], { length: number; of: Map<string, J> }>();
+
+/// The member whose e-mail is `email`, whatever its case: the first in the list.
+function memberOf(members: J[], email: string): J {
+  let kept = membersByEmail.get(members);
+  if (kept === undefined || kept.length !== members.length) {
+    const of = new Map<string, J>();
+    for (const m of members) {
+      const e = get(m, "email");
+      if (typeof e !== "string") continue;
+      const key = e.toLowerCase();
+      if (!of.has(key)) of.set(key, m);
+    }
+    kept = { length: members.length, of };
+    membersByEmail.set(members, kept);
+  }
+  return kept.of.get(email.toLowerCase());
+}
 
 export function memberName(members: J[], email: string): string | null {
-  const m = members.find((m) => sameEmail(get(m, "email"), email));
+  const m = memberOf(members, email);
   const name = str(get(m, "name"));
   return name ? name : null;
 }
@@ -483,13 +641,34 @@ export function person(p: J, me: J, members: J[]): J {
   const id = strOf("id") ?? "";
   const email = strOf("email");
   const key = email ?? id;
-  const member = members.find((m) => sameEmail(get(m, "email"), key));
+  const member = memberOf(members, key);
   const mName = str(get(member, "name")) || null;
   const name = id === "local" ? t("core-views.present.local_page") : (mName ?? strOf("name") ?? email ?? id);
   const mine = isViewer(me, id, []) || (email !== null && isViewer(me, email, []));
   // A Slack person's own picture, as their Slack shows it; else their workspace account's.
   const picture = strOf("picture") ?? (str(get(member, "picture")) || null);
   return { ...p, shown: { name, display: mine ? t("core-views.present.you") : name, picture, mine } };
+}
+
+/// The workspace's members a row's people and its last line name (rowPeople, lastBy read their names and pictures): what
+/// of the members a row is made of, the rest of them nothing of its.
+export function rowMembers(row: J, members: J[]): J[] {
+  const out: J[] = [];
+  const add = (key: string | undefined) => {
+    const m = key === undefined || key === "" ? undefined : memberOf(members, key);
+    if (m !== undefined && !out.includes(m)) out.push(m);
+  };
+  // (as person() keys them: the email, else the id)
+  const keyOf = (p: J) => {
+    const email = str(get(p, "email"));
+    return email !== undefined && email !== "" ? email : str(get(p, "id"));
+  };
+  if (isObject(get(row, "creator"))) add(keyOf(row.creator));
+  for (const p of arr(get(row, "people")) ?? []) add(keyOf(p));
+  const last = get(row, "last");
+  const kind = str(get(last, "authorKind")) ?? "person";
+  if (isObject(last) && kind !== "agent" && !isStationAuthor(kind)) add(str(last.author));
+  return out;
 }
 
 /// A row's people as the clients show them.
@@ -537,16 +716,17 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
   }
   if (isStationAuthor(kind)) return { kind: "station", name: brand.name(), mine: false };
   const mine = isViewer(me, author, slackUsers);
-  const member = members.find((m) => sameEmail(get(m, "email"), author));
+  const member = memberOf(members, author);
   const name = mine ? t("core-views.present.you") : (str(get(member, "name")) || saidName || author);
   // A Slack person's own picture, as their Slack shows it; else their workspace account's.
   const picture = str(last.authorPicture) || str(get(member, "picture")) || null;
   return { kind: "person", id: author, name, picture, mine };
 }
 
-/// A session's summary with what the clients show of it.
-export function session(s: J): J {
-  if (!isObject(s)) return s;
+/// Where a session stands, in words (`statusText`), what leads them (`statusLead`, said by a client as a mark of its own)
+/// and what follows that (`statusRest`); and its colour (`tone`): what a row's state line reads of its agents
+/// (rowStateLine), and a session's summary says (session).
+function statusOf(s: J): { text: string; tone: J; lead: Lead["kind"] | null; rest: string } {
   const status = shownStatus(s);
   let [text, tone] = format.statusText(status);
   const turn = get(s, "lastTurn");
@@ -574,6 +754,46 @@ export function session(s: J): J {
     lead = watched ? "watch" : "wait";
     rest = watched ? text : what ?? "";
   }
+  return { text, tone, lead, rest };
+}
+
+/// An agent as a chat list's row's state line reads it (rowStateLine: its state in words, what leads them), its summary
+/// as it is besides: what session() says of it and that alone reads.
+export function agentStated(s: J): J {
+  if (!isObject(s)) return s;
+  const { text, lead, rest } = statusOf(s);
+  return { ...s, statusText: text, ...(lead !== null ? { statusLead: lead, statusRest: rest } : {}) };
+}
+
+/// An agent as a chat list's row holds it (views.ts #listRow): what the row draws of it (RowAgent: `runtime`, `agentText`,
+/// `maker`, as session() says them), and what the core reads of a list's row's agents besides: `key`, `model` (who said
+/// a found message, lastBy: views.ts #foundMessages, views/search.ts).
+export function listedAgent(s: J): J {
+  if (!isObject(s)) return s;
+  const o = s as J;
+  const m = typeof o.model === "string" ? o.model : null;
+  const out: J = {};
+  if (o.key !== undefined) out.key = o.key;
+  if (o.runtime !== undefined) out.runtime = o.runtime;
+  if (o.model !== undefined) out.model = o.model;
+  out.agentText = format.agentLabel(m, typeof o.effort === "string" ? o.effort : null);
+  out.maker = maker(m);
+  return out;
+}
+
+/// Whether the viewer said a row's last thing: lastBy's `mine`, all a chat list's row says of who said it (LastBy).
+export function lastByMine(row: J, me: J, slackUsers: string[]): boolean | null {
+  const last = get(row, "last");
+  if (!isObject(last)) return null;
+  const kind = str(last.authorKind) ?? "person";
+  if (kind === "agent" || isStationAuthor(kind)) return false;
+  return isViewer(me, str(last.author) ?? "", slackUsers);
+}
+
+/// A session's summary with what the clients show of it.
+export function session(s: J): J {
+  if (!isObject(s)) return s;
+  const { text, tone, lead, rest } = statusOf(s);
   const o = s as J;
   const strOf = (k: string): string | null => (typeof o[k] === "string" ? o[k] : null);
   const runtime = strOf("runtime") ?? "claude";
@@ -643,7 +863,7 @@ export function connect(c: J): J {
     modeSentence: single
       ? words.single.description + t(o.requireMention === false ? "web-pages.connect.everyMessageSentence" : "web-pages.connect.mentionOnlySentence")
       : way.description,
-    placeText: str(o.team) ?? (feishu ? (str(get(o.feishu, "domain")) === "lark" ? "Lark" : t("web-pages.connect.feishu.name")) : "Slack"),
+    placeText: str(o.team) ?? (feishu ? (str(get(o.feishu, "domain")) === "lark" ? "Lark" : t("web-pages.connect.feishu.name")) : kind === "comma" ? "Comma" : "Slack"),
     runtimeText: format.runtimeLabel(runtime),
     runText: `${format.runtimeLabel(runtime)} · ${label}`,
     modelName: bm ? model.name(bm) : null,
@@ -825,6 +1045,44 @@ export function profile(p: J): J {
     ? withoutPart(detail, o.runtime === "claude" && checkPlan?.toLowerCase() === "ultra" ? "max" : "")
     : t("core-views.present.profile.never_checked");
   return o;
+}
+
+/// Opt-in Devin Fusion pairings (`fusion-<lead>-sidekick-<side>`), factored into sorted lead and sidekick tables.
+export function buildFusion(raw: J): J | null {
+  if (!isObject(raw)) return null;
+  const rawSides = arr(raw.sides)?.filter((s): s is string => typeof s === "string" && s !== "") ?? [];
+  const rawLeads = isObject(raw.leads) ? raw.leads : null;
+  if (rawSides.length === 0 || !rawLeads) return null;
+  const leadSides = new Map<string, Set<string>>();
+  const sideSet = new Set<string>();
+  for (const [rawLead, idxs] of Object.entries(rawLeads)) {
+    const lead = model.devinFusionLead(rawLead);
+    if (lead === "" || !Array.isArray(idxs)) continue;
+    for (const idx of idxs) {
+      const side = typeof idx === "number" ? rawSides[idx] : undefined;
+      if (typeof side !== "string" || side === "") continue;
+      let set = leadSides.get(lead);
+      if (!set) {
+        set = new Set();
+        leadSides.set(lead, set);
+      }
+      set.add(side);
+      sideSet.add(side);
+    }
+  }
+  if (leadSides.size === 0 || sideSet.size === 0) return null;
+  const sideIds = rawSides.filter((s, i) => sideSet.has(s) && rawSides.indexOf(s) === i);
+  const sideIndex = new Map(sideIds.map((id, i) => [id, i]));
+  const sides = sideIds.map((id) => ({ id, name: model.sidekickName(id), maker: maker(id) }));
+  const leads = [...leadSides.entries()]
+    .sort(([a], [b]) => model.compareOrder(a, b))
+    .map(([id, set]) => ({
+      id,
+      name: model.name(id),
+      maker: maker(id),
+      sides: [...set].map((sid) => sideIndex.get(sid)!).sort((a, b) => a - b),
+    }));
+  return { leads, sides };
 }
 
 /// A line of parts (a detail's: 已登录，an address，a plan) without the part that is `part` and the comma before it.
@@ -1155,8 +1413,6 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
   switch (topic.topic) {
     case "host":
       return host(value);
-    case "footprint":
-      return footprint.shown(value, c);
     case "drive":
       return drive.shown(value, c);
     case "prefs":
@@ -1183,19 +1439,24 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
       value = jobsMod.shown(v, c);
       break;
     case "jobLog":
-      value = jobsMod.log(v, c);
+      value = jobsMod.log(v, c, topic.lines);
       break;
     case "slackApp":
       if (isObject(v)) value = { ...v, sections: slackSections() };
       break;
-    // A web link's card: when a pull request or an issue last changed, in words (3 小时前).
-    case "linkPreview":
-      if (isObject(v) && typeof v.updatedAt === "number" && v.updatedAt > 0) value = { ...v, time: { updatedAt: stamp(v.updatedAt, c) } };
+    // A web link's card: when a pull request or an issue last changed, in words (3 小时前); its pictures by their tokens,
+    // their bytes asked beside (peek-pictures.ts).
+    case "linkPreview": {
+      const shown = linkShown(v);
+      value = isObject(shown) && typeof shown.updatedAt === "number" && shown.updatedAt > 0 ? { ...shown, time: { updatedAt: stamp(shown.updatedAt, c) } } : shown;
       break;
-    // A file's card: when it was last written, in words.
-    case "filePeek":
-      if (isObject(v) && typeof v.mtime === "number" && v.mtime > 0) value = { ...v, time: { mtime: stamp(v.mtime, c) } };
+    }
+    // A file's card: when it was last written, in words; its picture by its token, as a link's.
+    case "filePeek": {
+      const shown = peekShown(v);
+      value = isObject(shown) && typeof shown.mtime === "number" && shown.mtime > 0 ? { ...shown, time: { mtime: stamp(shown.mtime, c) } } : shown;
       break;
+    }
     // One message's card: who said it, when, and its words as a chat's row has them. No such message: nothing.
     case "messagePeek":
       value = messagePeek(v, c);
@@ -1224,6 +1485,10 @@ function overview(value: J, c: Clock, station: string | null): J {
   const elevation = elevationShown(v.elevation);
   if (elevation === undefined) delete v.elevation;
   else v.elevation = elevation;
+  // Where its chats are copied (copies.ts); none said, none shown.
+  const copies = copiesShown(v.copies, c);
+  if (copies === undefined) delete v.copies;
+  else v.copies = copies;
   const decided = v.automaticDecisions;
   if (isObject(decided)) {
     const shown: J = { ...decided };
@@ -1242,7 +1507,6 @@ function overview(value: J, c: Clock, station: string | null): J {
         ? t("core-views.present.processes.none")
         : t("core-views.present.processes.running", { n: processes.length, size: mb >= 1024 ? `${format.fixed1(mb / 1024)} GB` : `${mb} MB` });
   }
-  if (isObject(v.footprint)) v.footprint = footprint.brief(v.footprint);
   const connects = arr(v.connects);
   if (connects) v.connects = connects.map(connect);
   const updates = arr(v.updates);
@@ -1252,9 +1516,19 @@ function overview(value: J, c: Clock, station: string | null): J {
   const kindOf = (p: J) => PROFILE_GROUPS.indexOf(get(p, "group"));
   const profiles = listed?.map(profile).sort((a, b) => kindOf(a) - kindOf(b) || Number(get(a, "trouble") === null) - Number(get(b, "trouble") === null));
   if (profiles) v.profiles = profiles;
+  const logins = arr(v.machineLogins);
+  if (logins) v.machineLogins = loginsOffered(logins, profiles ?? []);
+  return v;
+}
+
+/// A station's own logins (an overview's `machineLogins`), each with whether it is offered as a profile (signed in, on a
+/// plan, its runtime not run by the machine's own profile already, its account not a subscription one of `profiles`
+/// is) and its plan in words: an overview's as it is decorated, and the accounts' list's beside its kept rows (views.ts
+/// #offeredOf), which hold of each profile what this reads.
+export function loginsOffered(logins: J[], profiles: J[]): J[] {
   const subscriptions: [J, string][] = [];
   const taken: J[] = [];
-  for (const p of profiles ?? []) {
+  for (const p of profiles) {
     if (get(get(p, "access"), "kind") === "subscription") {
       const runtime = get(p, "runtime");
       const email = str(get(p, "email"));
@@ -1262,9 +1536,8 @@ function overview(value: J, c: Clock, station: string | null): J {
     }
     if (get(p, "machine") === true && get(p, "runtime") !== undefined) taken.push(get(p, "runtime"));
   }
-  const logins = arr(v.machineLogins);
-  if (logins) {
-    v.machineLogins = logins.map((l) => {
+  {
+    return logins.map((l) => {
       const plan = knownPlan(get(l, "plan"));
       const email = str(get(l, "email"));
       const offered =
@@ -1277,7 +1550,6 @@ function overview(value: J, c: Clock, station: string | null): J {
       return isObject(l) ? { ...l, offered, planText } : l;
     });
   }
-  return v;
 }
 
 /// A subscription's plan as its vendor names it. Codex's `prolite`, `pro` and `promax` distinguish the three ChatGPT
@@ -1398,7 +1670,9 @@ export function installView(runtime: string, updates: J[], manages: boolean): J 
   const name = str(v.name) ?? format.runtimeLabel(runtime);
   if (v.state === "updating") {
     const percent = u64(v.percent);
-    return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(percent !== undefined ? { percent } : {}) };
+    // While its download is measured, how much of it is in, in words (正在下载 1.5.6：60/88 MB).
+    const step = percent !== undefined ? str(v.progress) : null;
+    return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(step ? { note: step } : {}), ...(percent !== undefined ? { percent } : {}) };
   }
   if (v.installed === true) return { runtime, state: "installed", title: t("core-views.install.installed", { name }) };
   const can = manages && v.updatable === true;

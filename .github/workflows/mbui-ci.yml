@@ -1,4 +1,4 @@
-# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
+# mbui (libs/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # Every platform but Windows (windows.yml) on each push: the tests, the macOS
 # apps with Core Text's text and the host's picture against mbui's own, the iOS
 # simulator app, and the Android APK; each job's time is what this measures too
@@ -8,13 +8,17 @@ name: mbui-ci
 on:
   push:
     branches: [main]
-    paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-ci.yml", ".github/actions/mbui-moonbit/**"]
+    paths: ["libs/mbui/**", ".github/workflows/mbui-ci.yml", ".github/actions/mbui-moonbit/**"]
   pull_request:
-    paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-ci.yml", ".github/actions/mbui-moonbit/**"]
+    paths: ["libs/mbui/**", ".github/workflows/mbui-ci.yml", ".github/actions/mbui-moonbit/**"]
   # (android-streams-real's day, below)
   schedule:
     - cron: "41 3 * * *"
   workflow_dispatch:
+# main: one run at a time, the newest waiting (a run covers every merge since the one before it); a pull request's own
+concurrency:
+  group: ${{ github.event_name == 'push' && 'mbui-ci-main' || format('mbui-ci-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 
 
@@ -25,7 +29,7 @@ jobs:
     # (every step's script run with no network: a test that reaches for it fails every time, scripts/offline.sh)
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
         shell: bash scripts/offline.sh {0}
     steps:
       - uses: actions/checkout@v4
@@ -49,12 +53,14 @@ jobs:
         run: bash scripts/ios-terminate-test.sh
       - name: "Android's frame pacing (FramePacer, MBView's) on a clock of its own: each refresh a new frame while the app asks, the display's rate, a phone's recorded frames replayed (scripts/framepacer_test.sh; its known list only shortens)"
         run: sh scripts/framepacer_test.sh
+      - name: "Android's soft keyboard request in full screen and multi-window"
+        run: sh scripts/ime_request_test.sh
       - name: Check
         run: moon version --all && moon check --target native --output-json 2>&1 | scripts/chk errs
       - name: "Check, the web's (the browser host, src/host's js files: what scripts/web.sh builds and scripts/textdiff.sh web needs)"
         run: moon check --target js --output-json 2>&1 | scripts/chk errs
-      - name: "The browser host handles scale, pointer layers, stream restoration, browser zoom, voice input and the soft keyboard"
-        run: node --test test/host/web-scale.test.mjs test/web/keys.test.mjs test/web/wheel.test.mjs test/web/pointer.test.mjs test/web/context.test.mjs test/web/ime.test.mjs
+      - name: "The browser host handles scale, pointer layers, stream restoration, browser zoom, voice input, the soft keyboard and what is posted told between frames"
+        run: node --test test/host/web-scale.test.mjs test/web/keys.test.mjs test/web/wheel.test.mjs test/web/pointer.test.mjs test/web/context.test.mjs test/web/ime.test.mjs test/web/posted.test.mjs test/web/text_menu.test.mjs
       - name: "Unicode text (UAX #29, #14, #9 against Unicode's own tests)"
         run: |
           set -o pipefail
@@ -82,18 +88,33 @@ jobs:
   native:
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
     # the same tests on native, on Linux: a test's program links no host's code (its host the Tester's fake,
     # mbui/hostapi), so it builds anywhere
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    name: native${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}
+    # (and the same tests again with frames drawn on run_for's way while the app asks for them (scripts/fps_check.sh),
+    # at 120, at 60, and at 24 then 7, a runner each beside it: what a test asserts at a moment the same however many
+    # frames came before it. On main after a merge (the user, 2026-11-11: 「直接合，帧率在 main 上合并后跑」, as
+    # mbui-check's), the day's run and one by hand; a pull request's pushes at the default rate alone)
+    strategy:
+      fail-fast: false
+      matrix:
+        fps: ${{ fromJSON(github.event_name == 'pull_request' && '[""]' || '["", "120", "60", "24 7"]') }}
     # (what it builds kept between runs, as mbui-check's native job keeps the app's: moon's own build (moonc's C) and the
     # units each test's C is split into, by content (MBC_STORE: main's newest and a branch's own together). Without,
     # every run compiled all of mbui's C again: a change to ui 154 units of ui's blackbox tests and 230 of its whitebox
     # tests, ~180 s of compile of the job's 5 minutes, and the job stopped at them (#3953, #3955, 2026-11-04))
     env:
-      MBC_STORE: ${{ github.workspace }}/apps/mbui/mbui/_build/native/release/mbc-store
+      MBC_STORE: ${{ github.workspace }}/libs/mbui/_build/native/release/mbc-store
       CACHE_PREFIX: mbui-ci-native-store-
+      # (at 60 and 120 how what moves goes is counted on every frame too, none failing: tester_fps.mbt)
+      MBUI_TEST_MOTION: ${{ (matrix.fps == '120' || matrix.fps == '60') && 'count' || '' }}
+      # (and at the default rate each file's bars and what was found under them said too, where motion-bars sets them
+      # beside the rates': a bar holds what the default run's frames find as well)
+      MBUI_TEST_BARS: ${{ matrix.fps == '' && inputs.rates != 'no' && github.event_name != 'pull_request' && '1' || '' }}
+      MOTION_OUT: ${{ github.workspace }}/motion.txt
       OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
     steps:
       - uses: actions/checkout@v4
@@ -107,9 +128,9 @@ jobs:
         id: moon
         with:
           path: |
-            apps/mbui/mbui/_build
+            libs/mbui/_build
             !${{ env.MBC_STORE }}
-            !apps/mbui/mbui/_build/**/*.mbc
+            !libs/mbui/_build/**/*.mbc
           key: mbui-ci-native-moon-${{ github.sha }}
           restore-keys: mbui-ci-native-moon-
       - shell: bash
@@ -146,10 +167,19 @@ jobs:
         shell: bash scripts/offline.sh {0}
         run: |
           touch "$RUNNER_TEMP/start"
-          scripts/test_native.sh
-      - name: "The same tests with the display's frames drawn on the way, at 60, 120, 24 and 7 a second (scripts/fps_check.sh): the same results, the same programs as above run again"
-        shell: bash scripts/offline.sh {0}
-        run: bash scripts/fps_check.sh
+          if [ -z "${{ matrix.fps }}" ]; then scripts/test_native.sh; else FPS="${{ matrix.fps }}" bash scripts/fps_check.sh; fi
+      # (what the run counted of how what moves goes, MBUI_TEST_MOTION=count: in the summary; and that and what it said of
+      # the bars, MBUI_TEST_BARS too, whole as an artifact, for motion-bars)
+      - name: How what moves goes
+        if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
+        shell: bash
+        run: |
+          [ "$MBUI_TEST_MOTION" != count ] || bash scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at ${{ matrix.fps }} fps" >> "$GITHUB_STEP_SUMMARY"
+          touch "$MOTION_OUT"
+      - if: always() && (env.MBUI_TEST_MOTION == 'count' || env.MBUI_TEST_BARS == '1')
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with: { name: "motion-mbui-${{ matrix.fps || 'default' }}", path: "${{ env.MOTION_OUT }}", retention-days: 7 }
       # (the units this run used, older ones gone (only after a run that went through: one stopped early used few), kept
       # under a key by what they are: main's, and a branch's for its next push)
       - name: The units kept
@@ -173,20 +203,70 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            apps/mbui/mbui/_build
+            libs/mbui/_build
             !${{ env.MBC_STORE }}
-            !apps/mbui/mbui/_build/**/*.mbc
+            !libs/mbui/_build/**/*.mbc
           key: mbui-ci-native-moon-${{ github.sha }}
 
+  # (each per-file bar of mbui's set beside the most one Tester of its file found under it in the runs at 60, 120 and the
+  # default rate, together (scripts/motion_bars.sh): a bar to fall or a file to leave motion_counted fails it, once the
+  # tables were clean on main (the coordinator of the migration, 2026-11-12), and what merged since is said by rates-said)
+  motion-bars:
+    name: native (mbui's bars against what was found)
+    needs: native
+    if: ${{ always() && inputs.rates != 'no' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with: { sparse-checkout: libs/mbui/scripts }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { pattern: "motion-mbui-*", path: "${{ runner.temp }}/motion" }
+      # (failing where a bar is to fall or a file to leave the list, once every run it was given went through: one cut
+      # short found less than there is, and a bar it set beside that would be said to fall for nothing)
+      - env:
+          STRICT: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && '0' || '1' }}
+          NAME: "mbui's bars"
+        run: |
+          find "$RUNNER_TEMP/motion" -type f | xargs -r cat > "$RUNNER_TEMP/motion.txt"
+          MOTION_BARS_FAIL=$STRICT bash libs/mbui/scripts/motion_bars.sh "$RUNNER_TEMP/motion.txt" "mbui's bars against what 60, 120 and the default rate found" >> "$GITHUB_STEP_SUMMARY" ||
+            { echo "::error title=$NAME::a bar to fall or a file to leave motion_counted: this job's summary says which, and the one line to change for each"; exit 1; }
+
+  # On main, after a merge: what failed and what merged since the last run that went through, the likeliest first
+  # (scripts/rates-said.sh), for whoever brought it to mend forward; it holds no pull request back
+  rates-said:
+    needs: [test, native, macos, android, motion-bars]
+    if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions: { contents: read, actions: read }
+    steps:
+      - uses: actions/checkout@v5
+      - env: { GH_TOKEN: "${{ github.token }}" }
+        run: bash scripts/rates-said.sh mbui-ci
   macos:
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
     runs-on: macos-15
     timeout-minutes: 5
+    # (the C units its four builds compile, kept by content (scripts/mbc's MBC_STORE): main's last run's, taken by every
+    # run. Without it each run compiled all of them anew, 0 up to date, on a runner whose speed differs run to run: 2:57
+    # to 3:28 on #5754 to #5776, then 5:02 on #5779 (each step 1.4 to 1.9 times as long: macOS apps 125 s where it was
+    # 85-90, the iOS app's 133 units 52 s for 28-32), cancelled at its five minutes, 2026-11-12)
+    env:
+      MBC_STORE: ${{ github.workspace }}/libs/mbui/_build/mbc-store-mac
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/cache/restore@v4
+        id: store
+        with:
+          path: ${{ env.MBC_STORE }}
+          key: mbui-ci-macos-store-${{ github.sha }}
+          restore-keys: mbui-ci-macos-store-
+      - run: mkdir -p "$MBC_STORE" && touch "$RUNNER_TEMP/start"
       - name: macOS apps
         run: |
           for app in demo textdiff kitdemo; do
@@ -203,19 +283,32 @@ jobs:
         run: scripts/render_check.sh
       - name: iOS simulator app
         run: scripts/ios.sh build
+      # (main's run keeps what it used, the units it took or compiled, and lets the rest go: the store no larger than one
+      # run's; a branch's run keeps nothing, so each takes main's newest)
+      - name: The units kept
+        if: success() && github.event_name == 'push'
+        run: |
+          find "$MBC_STORE" -name '*.lock' -delete
+          find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +
+      - if: success() && github.event_name == 'push'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.MBC_STORE }}
+          key: mbui-ci-macos-store-${{ github.sha }}
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: macos-shots
           path: |
-            apps/mbui/mbui/out/textdiff/
-            apps/mbui/mbui/out/render-check/
+            libs/mbui/out/textdiff/
+            libs/mbui/out/render-check/
           if-no-files-found: ignore
 
   android:
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -233,12 +326,12 @@ jobs:
         run: |
           TC=$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
           scripts/mbc check "--cc=$TC/aarch64-linux-android30-clang" --nm="$TC/llvm-nm" --obj=out/mbc-check \
-            "--cflags=-I$MOON_HOME/include -Isrc/host -fPIC -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM -Dmain=mbui_main" \
+            "--cflags=-I$MOON_HOME/include -Isrc/host -fPIC -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_MIMALLOC -Dmain=mbui_main" \
             out/android/mod/_build/native/release/build/demo/demo.c
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: apps/mbui/mbui/android/app/build/outputs/apk/debug/*.apk
+          path: libs/mbui/android/app/build/outputs/apk/debug/*.apk
 
   # Android's device checks on an emulator (no machine of ours): the streams' (scripts/android-streams.sh:
   # plain, reopen, away, anew, thrown) over streamdemo, the soft keyboard's (scripts/android-keyboard.sh: up, back,
@@ -249,7 +342,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -278,11 +371,12 @@ jobs:
         run: APP=streamdemo scripts/android.sh build && APP=streamdemo bash scripts/android-streams.sh
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: android-devices
           path: |
-            apps/mbui/mbui/out/android/streams/
-            apps/mbui/mbui/out/android/keyboard/
+            libs/mbui/out/android/streams/
+            libs/mbui/out/android/keyboard/
 
   # The oldest Android the apps run on (minSdk 30, Android 11): the demo started there and its first frame shown, or
   # its crash. The other jobs' emulator is API 34's, so a call newer than the oldest system has went unseen until a
@@ -293,7 +387,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -331,7 +425,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     defaults:
       run:
-        working-directory: apps/mbui/mbui
+        working-directory: libs/mbui
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -352,6 +446,7 @@ jobs:
         run: REAL=1 APP=streamdemo bash scripts/android-streams.sh
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: android-streams-real
-          path: apps/mbui/mbui/out/android/streams-real/
+          path: libs/mbui/out/android/streams-real/

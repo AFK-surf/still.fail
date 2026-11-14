@@ -120,8 +120,8 @@ export function stationHost(answers: Answers) {
     if (!(key in answers) && /^GET \/sessions\/[^/?]+\?turns=\d+(&jobs=now)?$/.test(key)) key = key.split("?")[0]!;
     // The archive a page at a time (`&page=`): as a station from before, the whole list, unless the test answers pages.
     if (!(key in answers) && /^GET \/chats\?archived=1&page=/.test(key)) key = "GET /chats?archived=1";
-    // The sidebar's marks (`marks=1`): as a station from before, the sidebar made, unless the test answers marks.
-    if (!(key in answers) && /^GET \/chats\?marks=1/.test(key)) key = "GET /chats";
+    // The sidebar's marks (`marks=1`): none, unless the test answers them (the sidebar made here of the summaries held).
+    if (!(key in answers) && /^GET \/chats\?marks=1/.test(key)) return jsonResponse(200, MARKS);
     // The open jobs without their chats (`chats=0`): as a station from before, the list as the test answers it.
     if (!(key in answers) && key === "GET /jobs?chats=0") key = "GET /jobs";
     if (key in answers) return answers[key] instanceof Status ? jsonResponse((answers[key] as Status).code, (answers[key] as Status).body) : jsonResponse(200, answers[key]);
@@ -129,11 +129,12 @@ export function stationHost(answers: Answers) {
     return jsonResponse(404, { error: "no" });
   };
   // How its events stream answers: opens, fails (the station is not reached), hangs (a try that takes long), a status
-  // of its own, or the station's refusal of the link (a CoreError, as the mesh says it: a security mode's); `resumes`:
+  // of its own (a number, saying 没有权限; a `Status`, its body), or the station's refusal of the link (a CoreError, as the mesh says it: a security mode's); `resumes`:
   // one asked `since` an event says it was told first what came after it; `marks`: one not resumed is told where the
   // log is, an id alone (station/src/api/events.ts); `follows`: one asked `running=1` says it follows the sessions at work
-  // itself (FOLLOWS).
-  const gate: { stream: "open" | "fail" | "hang" | number | CoreError; resumes: boolean; marks: boolean; follows: boolean } = { stream: "open", resumes: false, marks: false, follows: false };
+  // itself (FOLLOWS); `build`: the build its stream's answer says (`stillfail-build`, oldest.ts), none unless given;
+  // `head`: where its log was as a resumed one joined (`stillfail-head`), what it tells up to it told again.
+  const gate: { stream: "open" | "fail" | "hang" | number | Status | CoreError; resumes: boolean; marks: boolean; follows: boolean; shared: boolean; build?: string; head?: string } = { stream: "open", resumes: false, marks: false, follows: true, shared: false };
   let marked = 0;
   // What it tells as events besides its events stream (GET /resources asked as events), by path: those named here tell
   // what is offered on them (`tell`); one it has an answer for answers that whole, as a station from before does.
@@ -160,10 +161,12 @@ export function stationHost(answers: Answers) {
       if (gate.stream === "fail") return yield* Effect.fail(new HostError("connection refused"));
       if (gate.stream instanceof CoreError) return yield* Effect.fail(gate.stream);
       if (gate.stream === "hang") return yield* Effect.never;
-      if (typeof gate.stream === "number") {
-        const said = new TextEncoder().encode('{"error":"没有权限"}');
+      const build: [string, string][] = gate.build !== undefined ? [["stillfail-build", gate.build]] : [];
+      if (typeof gate.stream === "number" || gate.stream instanceof Status) {
+        const code = typeof gate.stream === "number" ? gate.stream : gate.stream.code;
+        const said = new TextEncoder().encode(typeof gate.stream === "number" ? '{"error":"没有权限"}' : JSON.stringify(gate.stream.body));
         let given = false;
-        return { status: gate.stream, headers: [], body: { take: Effect.sync(() => (given ? null : ((given = true), said))) } };
+        return { status: code, headers: build, body: { take: Effect.sync(() => (given ? null : ((given = true), said))) } };
       }
       const queue = yield* Queue.unbounded<Uint8Array | null>();
       const path = req.url.replace("https://stillfail.test/admin/api", "");
@@ -173,25 +176,66 @@ export function stationHost(answers: Answers) {
       // It opens as the station's does (a reader of zstd starts once it has 18 bytes), and asked compressed, each chunk
       // goes as it comes.
       Queue.offerUnsafe(queue, new TextEncoder().encode("retry: 3000\n\n"));
+      // As every station's since 0.1.6968: it leaves the sidebar to the device and keeps its marks (`shared`: makes the
+      // chat list once for everyone).
+      Queue.offerUnsafe(queue, new TextEncoder().encode(`event: made\ndata: ${JSON.stringify({ rows: true, marks: true, ...(gate.shared ? { shared: true } : {}) })}\n\n`));
       const resumed = gate.resumes && path.includes("since=");
       if (gate.marks && !resumed) Queue.offerUnsafe(queue, new TextEncoder().encode(`id: abcdef.${++marked}\n\n`));
       const compress = asksCompressed(req) ? zstdBlocks() : null;
       const body: Pull<Uint8Array> = { take: Effect.map(Queue.take(queue), (c) => (c && compress ? compress(c) : c)) };
       const follows = gate.follows && path.includes("running=1");
-      const headers: [string, string][] = [...(resumed ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(follows ? [["stillfail-follows", "running"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
+      const headers: [string, string][] = [...build, ...(resumed ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(resumed && gate.head !== undefined ? [["stillfail-head", gate.head] as [string, string]] : []), ...(follows ? [["stillfail-follows", "running"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
       return { status: 200, headers, body };
     }),
   );
-  /// Sends an event on the newest open stream.
-  const push = (name: string, data: unknown) => {
+  /// Sends an event on the newest open stream; `id`: its place in the station's log.
+  const push = (name: string, data: unknown, id?: string) => {
     const s = [...streams].reverse().find((x) => !x.closed)!;
-    Queue.offerUnsafe(s.queue, new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
+    Queue.offerUnsafe(s.queue, new TextEncoder().encode(`${id !== undefined ? `id: ${id}\n` : ""}event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
   };
   const end = () => {
     const s = streams[streams.length - 1];
     Queue.offerUnsafe(s.queue, null);
   };
   return { host, streams, push, end, gate, changes, batches, cloud, told, tell };
+}
+
+/// What a station keeps beside the summaries, none of it (GET /chats?marks=1).
+export const MARKS = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
+
+/// What makes the sidebar rows `rows` (as they were once told whole: `id`, `thread`, `session`, `title`, `agents`,
+/// `lastActiveAt`, `last`, `unread`, `need`, `card`), as a station since 0.1.6968 gives them: its sessions, its threads
+/// and its marks (station/rows-made.ts). A row made so is named by its first agent's session.
+export function chatsOf(rows: { id?: string; thread: number | null; session?: string; title?: string | null; agents?: { key: string; process?: string; [k: string]: unknown }[]; lastActiveAt?: number; last?: { seq: number; text?: string } | null; unread?: boolean; mine?: boolean; connect?: string | null; origin?: { channel?: string; threadTs?: string } | null; need?: unknown; card?: unknown; xshare?: unknown; creator?: { id: string; [k: string]: unknown } }[]): Answers {
+  const sessions = new Map<string, unknown>();
+  const threads: unknown[] = [];
+  const need: Record<string, unknown> = {}, card: Record<string, unknown> = {}, shares: Record<string, unknown> = {};
+  for (const r of rows) {
+    const at = r.lastActiveAt ?? 1;
+    const agents = r.agents && r.agents.length > 0 ? r.agents : [{ key: r.session ?? r.id ?? "k1" }];
+    if (r.xshare !== undefined) shares[agents[0]!.key] = r.xshare;
+    for (const a of agents) {
+      const { key, ...rest } = a;
+      // (the viewer's, started by them, unless it says otherwise; one in no chat titled as its row)
+      const own = r.creator !== undefined ? { creator: r.creator } : r.mine === false ? {} : { creator: { id: "a@x.com", name: "A", email: "a@x.com", via: "cloud" } };
+      if (!sessions.has(key)) sessions.set(key, { ...session(key), lastActiveAt: at, ...own, ...(r.thread === null ? { title: r.title ?? null } : {}), ...rest });
+    }
+    if (r.thread === null) continue;
+    const last = r.last?.seq ?? 0;
+    const view = threadView(r.thread, last, r.unread ? Math.max(0, last - 1) : last, r.unread ? 1 : 0);
+    // (a Slack thread its agents came from: theirs is a row of no chat, titled after it)
+    const slack = typeof r.connect === "string" && r.connect !== "ember";
+    threads.push({
+      ...view, title: r.title ?? null,
+      ...(r.creator !== undefined ? { creator: r.creator, createdBy: r.creator.id } : {}),
+      ...(slack ? { surface: "slack:T1", channel: r.origin?.channel ?? "C1", threadTs: r.origin?.threadTs ?? "1.0" } : {}),
+      sessions: agents.map((a) => ({ thread: r.thread, session: a.key, connect: slack ? r.connect : "ember", joinedAt: 1 })),
+      lastMessage: view.lastMessage === null ? null : { ...view.lastMessage, text: r.last?.text ?? "…", createdAt: at },
+    });
+    if (r.need !== undefined) need[String(r.thread)] = r.need;
+    if (r.card !== undefined) card[String(r.thread)] = r.card;
+  }
+  return { "GET /sessions": [...sessions.values()], "GET /threads": threads, "GET /chats?marks=1": { ...MARKS, need, card, shares } };
 }
 
 /// A session as the station lists it (core/tests.rs `session`).
@@ -213,11 +257,9 @@ export function base(): Answers {
     "GET /overview": overview,
     "GET /sessions": [session("k1")],
     "GET /sessions/k1": { session: session("k1"), threads: [], turns: [], jobs: [] },
-    "GET /threads": [threadView(7, 3)],
-    "GET /chats": [{ id: "7", thread: 7, session: "k1", title: "部署", agents: [], lastActiveAt: 1 }],
+    "GET /threads": [{ ...threadView(7, 3), title: "部署" }],
     "GET /chats?archived=1": [],
     "GET /jobs": [],
-    "GET /footprint": {},
     "GET /threads/7/entries?limit=50": { last: 3, entries: entries(1, 3) },
     "GET /sessions/k1/timeline?before=1000000000000000&limit=200&brief=1": { start: 0, entries: [] },
   };

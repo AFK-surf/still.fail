@@ -1,5 +1,5 @@
 // slack_api: any Slack Web API method, as the session's bot (or the bot of one of its Slack
-// conversations, `to`; a still.fail chat's, the station's Slack bot, `bot`). The method's shape, what is not for agents, and the threads rule for writes (WRITES) are
+// conversations, `to`; a still.fail chat's, the station's Slack bot, `bot`). The method's shape, what is not for agents, and the threads rule for writes (mcp.ts `isSlackWrite`) are
 // src/sessions/conversations.ts's `slackApi`.
 import { jsString } from "../sessions/args.ts";
 import { slackApi, target } from "../sessions/conversations.ts";
@@ -9,7 +9,7 @@ import type { Tool } from "./mcp.ts";
 export const SLACK_API = {
   name: "slack_api",
   description:
-    "Call any Slack Web API method as your Slack bot, e.g. conversations.history, users.info, reactions.add, chat.update, chat.postMessage in a channel, conversations.open then chat.postMessage for a direct message. A chat that did not start in Slack (a still.fail chat) calls as the station's Slack bot. Writes in a thread another session takes part in are refused; posting in a thread nobody else is in, or a new message, makes that thread one of your conversations (its replies come to you). Prefer chat_post to answer the thread you are working in. To see a file in another thread (a screenshot), read it with save_files: its url_private does not open for you.",
+    "Call any Slack Web API method as your Slack bot, e.g. conversations.history, users.info, reactions.add, chat.update, chat.postMessage in a channel, conversations.open then chat.postMessage for a direct message. A chat that did not start in Slack calls as the station's Slack bot. Writes in a thread another session takes part in are refused; posting in a thread nobody else is in, or a new message, makes that thread one of your conversations. Prefer chat_post to answer the thread you are working in. To see a file in another thread (a screenshot), read it with save_files: its url_private does not open for you.",
   inputSchema: {
     "type": "object",
     "properties": {

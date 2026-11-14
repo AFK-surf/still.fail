@@ -30,7 +30,7 @@ fn index_of(s : String, sub : String, from : Int) -> Int {
   let mut i = from
   while i + m <= n {
     let mut j = 0
-    while j < m && s.unsafe_charcode_at(i + j) == sub.unsafe_charcode_at(j) {
+    while j < m && s.unsafe_get(i + j).to_int() == sub.unsafe_get(j).to_int() {
       j += 1
     }
     if j == m {
@@ -71,7 +71,7 @@ fn elements(name : String, text : String) -> Array[El] {
       i = end + 3
       continue
     }
-    let next = if lt + 1 < n { text.unsafe_charcode_at(lt + 1) } else { 0 }
+    let next = if lt + 1 < n { text.unsafe_get(lt + 1).to_int() } else { 0 }
     if next == 0x2F || next == 0x3F || next == 0x21 {
       // a closing tag, the XML declaration, a doctype
       let gt = index_of(text, ">", lt)
@@ -79,34 +79,34 @@ fn elements(name : String, text : String) -> Array[El] {
       continue
     }
     let mut j = lt + 1
-    while j < n && is_name(text.unsafe_charcode_at(j)) {
+    while j < n && is_name(text.unsafe_get(j).to_int()) {
       j += 1
     }
     let tag = text.unsafe_substring(start=lt + 1, end=j)
     let attrs : Array[(String, String)] = []
     while true {
-      while j < n && is_space(text.unsafe_charcode_at(j)) {
+      while j < n && is_space(text.unsafe_get(j).to_int()) {
         j += 1
       }
       if j >= n {
         fail("\{name}: <\{tag}> not closed")
         return out
       }
-      let c = text.unsafe_charcode_at(j)
+      let c = text.unsafe_get(j).to_int()
       if c == 0x3E || c == 0x2F {
         break
       }
       let k0 = j
-      while j < n && is_name(text.unsafe_charcode_at(j)) {
+      while j < n && is_name(text.unsafe_get(j).to_int()) {
         j += 1
       }
       let key = text.unsafe_substring(start=k0, end=j)
-      if key == "" || j >= n || text.unsafe_charcode_at(j) != 0x3D {
+      if key == "" || j >= n || text.unsafe_get(j).to_int() != 0x3D {
         fail("\{name}: <\{tag}>'s attributes are not as an SVG has them")
         return out
       }
       j += 1
-      let q = if j < n { text.unsafe_charcode_at(j) } else { 0 }
+      let q = if j < n { text.unsafe_get(j).to_int() } else { 0 }
       if q != 0x22 && q != 0x27 {
         fail("\{name}: <\{tag}> \{key}= not quoted")
         return out
@@ -239,7 +239,7 @@ fn web(icons : Array[(String, Array[El])], stations : Array[(String, String, Arr
 fn lexical(a : String, b : String) -> Int {
   let n = if a.length() < b.length() { a.length() } else { b.length() }
   for i in 0..<n {
-    let d = a.unsafe_charcode_at(i) - b.unsafe_charcode_at(i)
+    let d = a.unsafe_get(i).to_int() - b.unsafe_get(i).to_int()
     if d != 0 {
       return d
     }

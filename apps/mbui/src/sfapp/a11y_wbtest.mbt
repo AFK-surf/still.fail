@@ -17,9 +17,9 @@ test "a screen reader on home: the bar's buttons named as Android's, told to the
     said
     .split("\n")
     .any(fn(v) {
-      let l = v.to_string()
+      let l = v.to_owned()
       // (its actions the line's last field: a press among them, the focus too where it takes it)
-      let actions = l.split("\u{1F}").to_array().last().map(fn(a) { a.to_string() }).unwrap_or("")
+      let actions = l.split("\u{1F}").to_array().last().map(fn(a) { a.to_owned() }).unwrap_or("")
       l.contains("\u{1F}Button\u{1F}") && l.contains(tr("android-chat.home.settings")) && actions.contains("a")
     }),
     msg=said,

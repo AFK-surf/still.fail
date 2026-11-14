@@ -10,7 +10,7 @@
 //                             one JSON line: the main display's resolution {width, height, modes: [{width, height}…]}
 //                             (landscape, at its depth, the largest first), set to `WxH` first when it is given (one of
 //                             its modes; for now, not kept in the registry); or {error}
-//   stillfail-screen view     a JSON line {codec: "h265"|"h264"|"jpeg", maxWidth, maxHeight, bitrate?, fps?, audio?: true, encoder?: "software"}
+//   stillfail-screen view     a JSON line {codec: "h265"|"h264"|"jpeg", maxWidth, maxHeight, bitrate?, fps?, audio?: true, audioCodec?: "opus", encoder?: "software"}
 //                             (`fps`: the most pictures a second, 1…120, captured at it, the encoder set for it up
 //                             to 60: pace.rs; none, as many as the display draws, the encoder set for 60), then
 //                             messages
@@ -41,8 +41,10 @@
 //                             show, as it was cut (null the whole), said before a frame whose part is another than the
 //                             last one's (that frame a key frame)
 //
-//   out  8 audio config JSON  {codec:"pcm_s16le", sampleRate:48000, channels:2}, or {error}
-//        9 audio     8 bytes timestamp (µs), then 3840 bytes stereo PCM16 little-endian
+//   out  8 audio config JSON  {codec:"pcm_s16le"|"opus", sampleRate:48000, channels:2}, or {error}; "opus" where
+//                             the view asked `audioCodec: "opus"`
+//        9 audio     8 bytes timestamp (µs), then 3840 bytes stereo PCM16 little-endian, or one Opus packet of those
+//                             20 ms (audio_packets.rs); none for digital silence
 //
 // Windows.Graphics.Capture captures the main display (the cursor drawn in, no border), a picture only when the screen
 // changed (an HDR display's as FP16, made SDR by a pixel shader: hdr.rs); the GPU's video processor scales it into the
@@ -58,6 +60,8 @@ mod hevc;
 mod audio;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod audio_queue;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod audio_packets;
 #[cfg(windows)]
 mod capture;
 #[cfg(windows)]

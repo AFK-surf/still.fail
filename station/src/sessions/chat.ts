@@ -21,6 +21,9 @@ export type InboundMessage = {
   files?: InboundFile[];
   /// The model it was sent to (Slack's `/sf`): a session it starts runs it instead of its connect's.
   model?: ModelChoice;
+  /// The message it replies to by quoting it (Feishu's 回复), by its platform id: brought in with it (`quoted`) where
+  /// the conversation does not have it.
+  quoted?: string;
 };
 
 /// A model a person picks for a new chat on a platform: its runtime, and its model (null: the runtime's default).
@@ -133,6 +136,9 @@ export interface ChatSurface {
   /// Messages in the thread strictly before `before`, oldest first, at most `limit`: what was said before the station
   /// joined a thread. Undefined where the platform cannot say (the station cannot join late there).
   history?(thread: ThreadRef, before: string, limit: number): Promise<ChatMessage[]> | undefined;
+  /// The message a reply quotes (`InboundMessage.quoted`), its words and files; null where it cannot be read or is a
+  /// bot's (the agent's own answers are in its context already). Never throws.
+  quoted?(thread: ThreadRef, ts: string): Promise<ChatMessage | null>;
   stop?(): Promise<void>;
 }
 

@@ -4,7 +4,7 @@
 
 ///|
 test "30-new-chat" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("new-chat"), seed~)
     f.see("端到端测试")
     f.tap("icon:ling")
@@ -26,7 +26,7 @@ test "30-new-chat" {
     f.see("answered the question that was asked")
     f.see("端到端测试")
     // the bottom bar's springs and tweens to their declared end
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

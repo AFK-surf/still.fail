@@ -46,7 +46,7 @@ pub fn t_around(key : String, name : String, args? : Array[(String, String)] = [
   let mark = "\u{E000}"
   let whole = t(key, args=[..args, (name, mark)])
   match whole.find(mark) {
-    Some(i) => (whole.view(end_offset=i).to_owned(), whole.view(start_offset=i + mark.length()).to_owned())
+    Some(i) => (whole.exact_view(end=i).to_owned(), whole.exact_view(start=i + mark.length()).to_owned())
     None => (whole, "")
   }
 }

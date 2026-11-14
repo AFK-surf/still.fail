@@ -14,12 +14,12 @@ export type ToolPart =
   | { kind: "path"; path: string; extra?: string }
   /** Lines: ` ` the same, `-` taken out, `+` put in, `@` a file's or a hunk's header. */
   | { kind: "diff"; rows: [string, string][] }
-  /** Words as Markdown. */
-  | { kind: "markdown"; text: string }
+  /** Words as Markdown, optionally with dispatch card metadata (`target` recipient/agent, `targetId` for navigation, and `summary`). */
+  | { kind: "markdown"; text: string; target?: string; targetId?: string; summary?: string }
   /** A list of things to do: completed, in_progress, or anything else. */
   | { kind: "plan"; items: { text: string; status: string }[] }
-  /** Fields one to a row: short in a line, long as a block, nested data as JSON. */
-  | { kind: "fields"; rows: { key: string; value: string; form: "short" | "long" | "json" }[] }
+  /** Fields one to a row: short in a line (`prose`: natural-language text), long as a Markdown block, nested data as JSON. */
+  | { kind: "fields"; rows: { key: string; value: string; form: "short" | "long" | "json"; prose?: true }[] }
   /** The one thing it asked about (a search's words, an address), in a line of its own. */
   | { kind: "lead"; text: string }
   /** Nothing to show, said. */
@@ -65,6 +65,84 @@ export function closeCut(json: string): string {
   return out + open.reverse().join("");
 }
 
+/** A workspace path stripped of its session workspace root (`/Users/.../.stillfail/sessions/.../workspace/(stillfail/)?`). */
+export function cleanPath(p: string): string {
+  const ws = /^(?:\/Users\/[^/]+|\/home\/[^/]+|\/var\/[^/]+|~)?\/?\.(?:stillfail|ember)\/sessions\/[^/]+\/[^/]+\/workspace(?:\/stillfail)?(?:\/(.+))?$/.exec(p);
+  if (ws) return ws[1] || ".";
+  const brain = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/agy\/\.gemini\/antigravity-cli\/brain\/[^/]+\/(?:\.system_generated\/)?(.+)$/.exec(p);
+  if (brain?.[1]) return brain[1];
+  const builtin = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/agy\/\.gemini\/antigravity-cli\/builtin\/(.+)$/.exec(p);
+  if (builtin?.[1]) return builtin[1];
+  const agent = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/agent\/(.+)$/.exec(p);
+  if (agent?.[1]) return agent[1];
+  const grokMem = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/grok\/memory[^/]*\/workspaces\/[^/]+\/(.+)$/.exec(p);
+  if (grokMem?.[1]) return `memory/${grokMem[1]}`;
+  const homeRuntime = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/homes\/[^/]+\/([^/]+)\/(?:sessions\/[^/]+\/)?(.+)$/.exec(p);
+  if (homeRuntime?.[1] && homeRuntime[2]) return `${homeRuntime[1]}/${homeRuntime[2]}`;
+  const shared = /^(?:\/Users\/[^/]+|\/home\/[^/]+|~)?\/?\.(?:stillfail|ember)\/(?:repos|transcripts)\/(.+)$/.exec(p);
+  if (shared?.[1]) return shared[1];
+  const overflow = /^(?:\/private)?\/var\/folders\/[^/]+\/[^/]+\/T\/devin-overflows-[^/]+\/(.+)$/.exec(p);
+  if (overflow?.[1]) return `devin-overflow/${overflow[1]}`;
+  const userHome = /^(?:\/Users|\/home)\/[^/]+\/(.+)$/.exec(p);
+  if (userHome?.[1]) return `~/${userHome[1]}`;
+  return p;
+}
+
+/** A command stripped of a leading `cd /absolute/workspace &&` prefix when present. */
+export function cleanCommand(cmd: string): string {
+  const m = /^cd\s+(?:"[~/][^"]*"|'[~/][^']*'|[~/][^\s;&|]*)\s*(?:&&|;)\s*([\s\S]+)$/.exec(cmd);
+  return m && m[1] ? m[1] : cmd;
+}
+
+/** One-line summary of a shell command for collapsed step rows, skipping leading `export` / `cd` / comment lines. */
+export function summaryCommand(cmd: string): string {
+  const cleanWs = (s: string): string =>
+    s
+      .replace(
+        /(?:\/Users\/[^/\s"']+|\/home\/[^/\s"']+|~)\/\.(?:stillfail|ember)\/sessions\/[^/\s"']+\/[^/\s"']+\/workspace(?:\/stillfail)?\/?/g,
+        "",
+      )
+      .replace(
+        /(?:\/Users\/[^/\s"']+|\/home\/[^/\s"']+|~)\/\.(?:stillfail|ember)\/(?:repos|homes\/[^/\s"']+)\//g,
+        "",
+      );
+  const cleaned = cleanCommand(cmd.trim());
+  const lines = cleaned
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("#"));
+  const stripSetup = (line: string): string => {
+    let s = line;
+    while (true) {
+      const next = s
+        .replace(/^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*)/, "")
+        .replace(/^(?:(?:export\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]*)\s+)+)/, "")
+        .replace(/^(?:cd\s+(?:"[^"]*\/[^"]*"|'[^']*\/[^']*'|[^\s;&|]*\/[^\s;&|]*|~[^\s;&|]*)\s*(?:&&|;)\s*)/, "")
+        .replace(/^(?:(?:\.|source)\s+[^\s;&|]*env\.sh\s*(?:&&|;)\s*)/, "");
+      if (next === s) break;
+      s = next.trim();
+    }
+    return s;
+  };
+  const isSetupOnly = (line: string): boolean =>
+    /^(?:export\s+[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|]+)|cd\s+(?:"[^"]*"|'[^']*'|[^\s;&|]+)|set\s+-[euo]+(?:\s+pipefail)?)$/.test(
+      line,
+    );
+  const idx = lines.findIndex((l) => {
+    const stripped = stripSetup(l);
+    return stripped.length > 0 && !isSetupOnly(stripped);
+  });
+  const firstIdx = idx >= 0 ? idx : 0;
+  const first = cleanWs(stripSetup(lines[firstIdx] ?? ""));
+  if (/(?:-[ec]\s+['"]|<<-?\s*['"]?\w+['"]?)$/.test(first) && firstIdx + 1 < lines.length) {
+    const bodyLine = lines
+      .slice(firstIdx + 1)
+      .find((l) => !/^(?:import\s|from\s+\S+\s+import\s|['"]use strict['"])/.test(l) && !/^[)}'"]+$/.test(l));
+    if (bodyLine) return `${first} ${cleanWs(bodyLine)}`;
+  }
+  return first || cleanWs(lines[0] ?? "");
+}
+
 const isArgs = (v: unknown): v is Args => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string | undefined => typeof v === "string" ? v : undefined;
 
@@ -77,11 +155,12 @@ function languageOf(path: string | undefined): string | undefined {
 
 /** A command as it would be typed: `["bash", "-lc", "ls"]` is `ls`. */
 function commandOf(a: Args): string | undefined {
-  const c = a.command ?? a.cmd;
-  if (typeof c === "string") return c;
+  const c = a.command ?? a.cmd ?? a.CommandLine;
+  if (typeof c === "string") return cleanCommand(c);
   if (Array.isArray(c) && c.every((p) => typeof p === "string")) {
     const parts = c as string[];
-    return /^(ba|z)?sh$/.test(parts[0]?.replace(/.*\//, "") ?? "") && parts[1] === "-lc" ? parts.slice(2).join(" ") : parts.join(" ");
+    const joined = /^(ba|z)?sh$/.test(parts[0]?.replace(/.*\//, "") ?? "") && parts[1] === "-lc" ? parts.slice(2).join(" ") : parts.join(" ");
+    return cleanCommand(joined);
   }
   return undefined;
 }
@@ -128,16 +207,194 @@ function patch(text: string): ToolPart {
   return { kind: "diff", rows };
 }
 
-/** Fields one to a row: short ones inline, long text as a block, nested data as compact JSON. */
-function fields(a: Args, skip: string[], say: Say): ToolPart {
-  const rows = Object.entries(a).filter(([k, v]) => !skip.includes(k) && v !== null && v !== undefined && v !== "");
+const PROSE_FIELD_KEYS = new Set([
+  "summary",
+  "description",
+  "title",
+  "reason",
+  "about",
+  "role",
+  "Role",
+  "explanation",
+  "note",
+  "question",
+]);
+
+const LONG_TEXT_KEYS = new Set([
+  "message",
+  "Message",
+  "prompt",
+  "Prompt",
+  "text",
+  "body",
+  "content",
+  "Content",
+  "reason",
+  "notes",
+  "brief",
+  "task",
+  "SystemPrompt",
+]);
+
+const DISPATCH_TOOLS = new Set([
+  "Agent",
+  "Task",
+  "SendMessage",
+  "send_message",
+  "subagent",
+  "spawn_agent",
+  "invoke_subagent",
+  "followup_task",
+  "session_send",
+  "chat_create",
+]);
+
+const ID_FIELD_KEYS = new Set([
+  "to",
+  "recipient",
+  "Recipient",
+  "agent_id",
+  "agentId",
+  "conversationId",
+]);
+
+const SKIP_RECIPIENT_WORDS = new Set([
+  "the",
+  "all",
+  "our",
+  "this",
+  "that",
+  "user",
+  "them",
+  "him",
+  "her",
+  "it",
+  "me",
+  "us",
+  "about",
+  "how",
+  "why",
+  "what",
+  "when",
+  "where",
+  "whether",
+  "if",
+]);
+
+/** Whether `s` is an opaque internal identifier (hex hash, UUID, or raw session key) rather than a human-readable name. */
+export function isOpaqueId(s: string): boolean {
+  const v = s.trim();
+  if (!v) return false;
+  if (/^[0-9a-f]{8,}$/i.test(v)) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return true;
+  if (/^(?:agent|task|subagent|call|toolu|msg|req|r|s|c)[-_][0-9a-f]{8,}$/i.test(v)) return true;
+  if (/\/chats\/c-[0-9a-f]{8,}/i.test(v)) return true;
+  return false;
+}
+
+/** Infers a human-readable recipient name from a dispatch summary when only an opaque ID was passed in `to`. */
+function inferRecipientFromSummary(summary: string | undefined): string | undefined {
+  if (!summary) return undefined;
+  const s = summary.trim();
+  const en = /^(?:Tell|Ask|Message|Reply to|Send to|Notify|Instruct|Update|Ping)\s+(?:the\s+)?([A-Za-z][A-Za-z0-9_-]{1,24})(?:\s+(?:sub-?agent|agent|worker))?\b/i.exec(s);
+  if (en?.[1] && !SKIP_RECIPIENT_WORDS.has(en[1].toLowerCase()) && !isOpaqueId(en[1])) {
+    return en[1];
+  }
+  const zh = /^(?:让|通知|告诉|向|给|回复|发给)\s*([^\s，,。：:]{2,16}?)(?:\s*(?:发送|发消息|汇报|继续|去|把|修|查|看))/.exec(s);
+  if (zh?.[1] && !isOpaqueId(zh[1])) {
+    return zh[1];
+  }
+  return undefined;
+}
+
+export function resolveDispatchTarget(
+  name: string,
+  a: Args,
+  summary?: string,
+): { target?: string; targetId?: string } {
+  const rawId =
+    str(a._targetId) ??
+    str(a.to) ??
+    str(a.recipient) ??
+    str(a.Recipient) ??
+    str(a.agent_id) ??
+    str(a.chat);
+  const rawCandidate =
+    str(a._target) ??
+    str(a.recipient_name) ??
+    str(a.to) ??
+    str(a.recipient) ??
+    str(a.Recipient) ??
+    str(a.agent_id) ??
+    str(a.subagent_type) ??
+    str(a.TypeName) ??
+    str(a.task_name) ??
+    str(a.chat) ??
+    str(a.name);
+  if (rawCandidate === undefined || rawCandidate.trim() === "") {
+    return {};
+  }
+  if (!isOpaqueId(rawCandidate)) {
+    return {
+      target: rawCandidate,
+      ...(rawId && rawId !== rawCandidate ? { targetId: rawId } : {}),
+    };
+  }
+  const named = [
+    a._target,
+    a.recipient_name,
+    a.name,
+    a.subagent_type,
+    a.TypeName,
+    a.task_name,
+    a.Role,
+    a.role,
+  ]
+    .map(str)
+    .find((s) => s !== undefined && s.trim() !== "" && !isOpaqueId(s) && s !== summary);
+  const inferred = named ?? inferRecipientFromSummary(summary);
+  const isChat =
+    name === "session_send" ||
+    name === "chat_create" ||
+    rawCandidate.includes("/chats/") ||
+    /^c-[0-9a-f]{8,}/i.test(rawCandidate.trim());
+  const fallback = isChat ? (name === "chat_create" ? "新对话" : "其他对话") : "子 Agent";
+  return {
+    target: inferred ?? fallback,
+    targetId: rawId ?? rawCandidate,
+  };
+}
+
+function isLongFieldText(key: string, value: string): boolean {
+  if (value.includes("\n") || value.length > 90) return true;
+  if (LONG_TEXT_KEYS.has(key) && value.length > 40) return true;
+  if (value.length > 40 && /[`*_#[\]]/.test(value)) return true;
+  return false;
+}
+
+/** Fields one to a row: short ones inline, long text as a full-width Markdown block, nested data as compact JSON. */
+function fields(a: Args, skip: string[], say: Say, resolvedTarget?: string): ToolPart {
+  const fieldSkip = skip.filter((k) => k !== "description" && k !== "summary");
+  const rows = Object.entries(a).filter(([k, v]) => !k.startsWith("_") && !fieldSkip.includes(k) && v !== null && v !== undefined && v !== "");
   if (!rows.length) return { kind: "none", text: say("web-main.tool.noArgs") };
   return {
     kind: "fields",
-    rows: rows.map(([k, v]) => typeof v === "string"
-      ? { key: k, value: v, form: v.includes("\n") || v.length > 120 ? "long" : "short" }
-      : typeof v === "object" ? { key: k, value: JSON.stringify(v, null, 2), form: "json" }
-      : { key: k, value: String(v), form: "short" }),
+    rows: rows.map(([k, v]) => {
+      if (typeof v === "string") {
+        const displayVal =
+          ID_FIELD_KEYS.has(k) && isOpaqueId(v)
+            ? resolvedTarget ?? (/\/chats\/|^c-[0-9a-f]{8,}/i.test(v.trim()) ? "其他对话" : "子 Agent")
+            : v;
+        const long = isLongFieldText(k, displayVal);
+        return long
+          ? { key: k, value: displayVal, form: "long" as const }
+          : { key: k, value: displayVal, form: "short" as const, ...(PROSE_FIELD_KEYS.has(k) ? { prose: true as const } : {}) };
+      }
+      if (typeof v === "object") {
+        return { key: k, value: JSON.stringify(v, null, 2), form: "json" as const };
+      }
+      return { key: k, value: String(v), form: "short" as const };
+    }),
   };
 }
 
@@ -149,30 +406,94 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
     return call.trim() ? [code(call, name === "exec" ? "js" : undefined)] : [];
   }
   const a = parsed;
-  const skip = said ? ["description"] : [];
+  const skip = said ? ["description", "toolSummary", "explanation"] : ["toolSummary"];
   const command = commandOf(a);
-  const file = str(a.file_path) ?? str(a.notebook_path) ?? str(a.path);
-  if (command !== undefined) return [code(command, "sh"), ...facts(a, [...skip, "command", "cmd"])];
-  if (file && typeof a.old_string === "string" && typeof a.new_string === "string") {
-    return [path(file, a.replace_all ? say("web-main.tool.replaceAll") : undefined), diff(a.old_string, a.new_string)];
+  const rawFile = str(a.file_path) ?? str(a.notebook_path) ?? str(a.target_file) ?? str(a.path) ?? str(a.Path);
+  const file = rawFile !== undefined ? cleanPath(rawFile) : undefined;
+  if (command !== undefined) return [code(command, "sh"), ...facts(a, [...skip, "command", "cmd", "CommandLine", "WaitMsBeforeAsync"])];
+  const oldStr = str(a.old_string) ?? str(a.Target);
+  const newStr = str(a.new_string) ?? str(a.Replacement);
+  if (file && oldStr !== undefined && newStr !== undefined) {
+    return [path(file, a.replace_all ? say("web-main.tool.replaceAll") : undefined), diff(oldStr, newStr)];
   }
   if (file && Array.isArray(a.edits)) {
-    return [path(file), ...a.edits.filter(isArgs).map((e) => diff(str(e.old_string) ?? "", str(e.new_string) ?? ""))];
+    return [path(file), ...a.edits.filter(isArgs).map((e) => diff(str(e.old_string) ?? str(e.Target) ?? "", str(e.new_string) ?? str(e.Replacement) ?? ""))];
   }
-  if (file && typeof a.content === "string") return [path(file), code(a.content, languageOf(file))];
+  const fileContent = str(a.content) ?? str(a.Content);
+  if (file && fileContent !== undefined) return [path(file), code(fileContent, languageOf(file))];
   if (Array.isArray(a.todos) || Array.isArray(a.plan)) {
     const items = ((a.todos ?? a.plan) as unknown[]).filter(isArgs).map((t) => ({ text: str(t.content) ?? str(t.step) ?? "", status: str(t.status) ?? "" }));
     return [...(typeof a.explanation === "string" ? [{ kind: "markdown", text: a.explanation } as ToolPart] : []), { kind: "plan", items }];
   }
-  if (typeof a.prompt === "string" && (name === "Agent" || name === "Task" || name === "subagent" || a.prompt.length > 200)) {
-    return [...facts(a, [...skip, "prompt"]), { kind: "markdown", text: a.prompt }];
+  const dispatchBody =
+    str(a.prompt) ??
+    str(a.Prompt) ??
+    str(a.message) ??
+    str(a.Message) ??
+    str(a.brief) ??
+    str(a.task) ??
+    (DISPATCH_TOOLS.has(name) ? str(a.text) ?? str(a.content) : undefined);
+  if (
+    dispatchBody !== undefined &&
+    (DISPATCH_TOOLS.has(name) ||
+      ((a.prompt !== undefined || a.Prompt !== undefined) && dispatchBody.length > 200))
+  ) {
+    const summary =
+      str(a.summary) ??
+      str(a.description) ??
+      str(a.Role) ??
+      str(a.role) ??
+      str(a.title);
+    const { target, targetId } = resolveDispatchTarget(name, a, summary);
+    const consumed = [
+      ...skip,
+      "_target",
+      "_targetId",
+      "recipient_name",
+      "prompt",
+      "Prompt",
+      "message",
+      "Message",
+      "brief",
+      "task",
+      "text",
+      "content",
+      "to",
+      "recipient",
+      "Recipient",
+      "agent_id",
+      "subagent_type",
+      "TypeName",
+      "task_name",
+      "chat",
+      "name",
+      "summary",
+      "description",
+      "Role",
+      "role",
+      "title",
+    ];
+    return [
+      ...facts(a, consumed),
+      {
+        kind: "markdown",
+        text: dispatchBody,
+        ...(target ? { target } : {}),
+        ...(targetId && targetId !== target ? { targetId } : {}),
+        ...(summary ? { summary } : {}),
+      },
+    ];
   }
   if (typeof a.text === "string" && a.text.length > 0 && Object.values(a).filter((v) => typeof v === "string" && v.length > 120).length <= 1) {
     return [...facts(a, [...skip, "text"]), { kind: "markdown", text: a.text }];
   }
-  if (file && Object.keys(a).every((k) => ["file_path", "path", "notebook_path", "offset", "limit", ...skip].includes(k))) {
-    const from = typeof a.offset === "number" ? a.offset : undefined;
-    const count = typeof a.limit === "number" ? a.limit : undefined;
+  if (file && Object.keys(a).every((k) => ["file_path", "target_file", "path", "Path", "notebook_path", "offset", "limit", "StartLine", "EndLine", "ByteOffset", "start_line", "end_line", ...skip].includes(k))) {
+    const startLine = typeof a.StartLine === "number" ? a.StartLine : typeof a.start_line === "number" ? a.start_line : undefined;
+    const endLine = typeof a.EndLine === "number" ? a.EndLine : typeof a.end_line === "number" ? a.end_line : undefined;
+    const from = startLine ?? (typeof a.offset === "number" ? a.offset : undefined);
+    const count = startLine !== undefined && endLine !== undefined && endLine >= startLine
+      ? endLine - startLine + 1
+      : typeof a.limit === "number" ? a.limit : undefined;
     const range = from !== undefined && count !== undefined ? say("web-main.tool.linesFromCount", { from, n: count })
       : from !== undefined ? say("web-main.tool.linesFrom", { from }) : count !== undefined ? say("web-main.tool.lines", { n: count }) : undefined;
     return [path(file, range)];
@@ -181,16 +502,23 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
   if (Array.isArray(a.queries) && a.queries.length > 0 && a.queries.every((q) => typeof q === "string")) {
     return [...(a.queries as string[]).map((q): ToolPart => ({ kind: "lead", text: q })), ...facts(a, [...skip, "queries"])];
   }
-  if (typeof a.pattern === "string" || typeof a.query === "string" || typeof a.url === "string") {
-    const main = str(a.pattern) ?? str(a.query) ?? str(a.url) ?? "";
-    const key = typeof a.pattern === "string" ? "pattern" : typeof a.query === "string" ? "query" : "url";
-    return [{ kind: "lead", text: main }, fields(a, [...skip, key], say)];
+  const searchKey = ["pattern", "Pattern", "query", "Query", "url"].find((k) => typeof a[k] === "string");
+  if (searchKey !== undefined) {
+    const main = str(a[searchKey]) ?? "";
+    return [{ kind: "lead", text: main }, fields(a, [...skip, searchKey], say)];
   }
   return [fields(a, skip, say)];
 }
 
-/** Codex's command output: how it ended in a header, then the output. */
+/** Codex's or Antigravity's command output: how it ended in a header, then the output. */
 function commandOutput(text: string, say: Say): { facts: string[]; output: string } | null {
+  const agy = /^(?:The tool's output was truncated[^\n]*\n\nHere is a preview[^\n]*\n)?Created At:\s*(\S+)\r?\nCompleted At:\s*(\S+)\r?\nCommand exited with code (-?\d+)\.?(?:(?:\r?\n)+Command output:\r?\n?)?/.exec(text);
+  if (agy && agy[3] !== undefined) {
+    return {
+      facts: [say("web-main.tool.exitCode", { code: agy[3] })],
+      output: text.slice(agy[0].length),
+    };
+  }
   const m = /^(?:Chunk ID: .*\n)?(?:Wall time: (.*)\n)?(?:Process exited with code (-?\d+)\n)?(?:Original token count: .*\n)?Output:\n?/.exec(text);
   if (!m || (!m[1] && !m[2])) return null;
   return { facts: [m[2] !== undefined ? say("web-main.tool.exitCode", { code: m[2] }) : "", m[1] ? say("web-main.tool.took", { time: m[1] }) : ""].filter(Boolean), output: text.slice(m[0].length) };
@@ -221,11 +549,29 @@ function readLines(text: string, numbered = /^\s*\d+(→|\t)/): string | null {
   return lines.slice(0, end).map((l) => l.replace(numbered, "")).join("\n");
 }
 
+const FILE_STEP_NAMES = new Set([
+  "Read",
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "NotebookRead",
+  "NotebookEdit",
+  "read",
+  "edit",
+  "write",
+  "read_file",
+  "edit_file",
+  "write_file",
+  "search_replace",
+]);
+
 /** What a call gave back. */
 export function toolResult(name: string, call: string, result: string, failed: boolean, say: Say): ToolPart[] {
-  if (!result.trim()) return [{ kind: "none", text: say("web-main.tool.noOutput") }];
+  const isFileStep = FILE_STEP_NAMES.has(name) || name.startsWith("File ");
+  if (!result.trim()) return !failed && isFileStep ? [] : [{ kind: "none", text: say("web-main.tool.noOutput") }];
   const args = parse(call);
-  const file = isArgs(args) ? str(args.file_path) ?? str(args.path) : undefined;
+  const rawFile = isArgs(args) ? str(args.file_path) ?? str(args.target_file) ?? str(args.path) ?? str(args.Path) : undefined;
+  const file = rawFile !== undefined ? cleanPath(rawFile) : undefined;
   const output = (text: string, red: boolean): ToolPart => (red ? { kind: "output", text, failed: true } : { kind: "output", text });
   const codex = commandOutput(result, say) ?? (name === "bash" ? exitMarker(result, say) : null);
   if (codex) {
@@ -234,14 +580,54 @@ export function toolResult(name: string, call: string, result: string, failed: b
       codex.output.trim() ? output(codex.output, failed) : { kind: "none", text: say("web-main.tool.noOutput") },
     ];
   }
-  const read = !failed && (name === "Read" || name === "NotebookRead") ? readLines(result) : null;
+  const stripped = result.replace(/^(?:The tool's output was truncated[^\n]*\n\nHere is a preview[^\n]*\n)?Created At:\s*\S+\r?\nCompleted At:\s*\S+(?:\r?\n)+/, "");
+  const agyReadBody = stripped
+    .replace(
+      /(?:^|\r?\n)(?:(?:The tool's output was truncated[^\n]*\n\nHere is a preview[^\n]*\n)?Created At:\s*\S+\r?\nCompleted At:\s*\S+(?:\r?\n)+)?(?:Partial read[^\n]*\r?\n)?Showing lines \d+-\d+ of \d+\r?\n/g,
+      "\n",
+    )
+    .replace(/^\n+/, "");
+  const read = !failed && (name === "Read" || name === "NotebookRead" || name === "read_file" || name.startsWith("File "))
+    ? (readLines(result) ?? (agyReadBody !== stripped ? readLines(agyReadBody, /^\d+: ?/) : null))
+    : null;
   if (read !== null) return [code(read, languageOf(file))];
+  if (!failed && (name === "Edit" || name === "edit" || name === "edit_file" || name === "search_replace" || name.startsWith("File "))) {
+    const cleanStripped = stripped
+      .replace(/(?:^|\r?\n)Created At:\s*\S+\r?\nCompleted At:\s*\S+(?:\r?\n)+/g, "\n")
+      .trim();
+    const agyEdit = /^Made \d+ replacements? in .+ starting at line (\d+) \(\+(\d+)\/-(\d+) lines\)\.\s*$/.exec(cleanStripped);
+    if (agyEdit) {
+      return [{ kind: "facts", items: [{ key: `第 ${agyEdit[1]} 行 · +${agyEdit[2]} / -${agyEdit[3]}`, plain: true }] }];
+    }
+    if (cleanStripped.split(/\r?\n/).every((l) => /^Made \d+ replacements? in [^\n]+$/.test(l.trim()))) {
+      return [];
+    }
+    if (/^(?:The file\b[^\n]*\bhas been (?:updated|edited|modified|created)|File (?:updated|edited|modified|created|written) successfully)\.?$/i.test(cleanStripped)) {
+      return [];
+    }
+  }
   const inner = !failed && (name === "read" || name === "write") ? unwrap(result) : null;
   if (inner !== null) {
     const lines = name === "read" ? readLines(inner, /^\d+: ?/) : null;
     return [lines !== null ? code(lines, languageOf(file)) : output(inner, false)];
   }
-  const parsed = failed ? undefined : parse(result);
-  if (parsed !== undefined) return [isArgs(parsed) ? fields(parsed, [], say) : { kind: "json", text: JSON.stringify(parsed, null, 2) }];
-  return [output(result, failed)];
+  const rawBody = stripped.trim() !== "" ? stripped : result;
+  const parsedRaw = failed ? undefined : parse(rawBody);
+  const unwrappedRaw =
+    Array.isArray(parsedRaw) &&
+    parsedRaw.length > 0 &&
+    parsedRaw.every((item) => isArgs(item) && item.type === "text" && typeof item.text === "string")
+      ? parsedRaw.map((item) => (item as { text: string }).text).join("\n")
+      : rawBody;
+  const unwrapped = unwrappedRaw
+    .replace(/\n*agentId:\s*[A-Za-z0-9_-]+(?:\s*\([^)\n]*\))?\s*$/i, "")
+    .replace(/\n*<usage>[\s\S]*?<\/usage>\s*$/i, "");
+  const resolvedTarget = isArgs(args)
+    ? resolveDispatchTarget(name, args, str(args.summary) ?? str(args.description) ?? str(args.Role) ?? str(args.title)).target
+    : undefined;
+  const parsed = failed ? undefined : parse(unwrapped);
+  if (parsed !== undefined) {
+    return [isArgs(parsed) ? fields(parsed, [], say, resolvedTarget) : { kind: "json", text: JSON.stringify(parsed, null, 2) }];
+  }
+  return [output(unwrapped, failed)];
 }

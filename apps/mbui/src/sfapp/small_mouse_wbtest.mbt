@@ -8,7 +8,7 @@ test "small with a mouse: a chat's row right clicked opens its menu where it was
   assert_false(@sfdesk.is_wide(t.ctx()))
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
-  assert_true(t.find("复制会话链接") is Some(_), msg="\{t.drawn_text()}")
+  assert_true(t.find("分享…") is Some(_), msg="\{t.drawn_text()}")
   assert_eq(app.nav.depth(), 1)
   // (a mouse holds nothing: no haptic)
   assert_eq(t.haptics(), [])
@@ -21,7 +21,7 @@ test "small with a mouse: a chat's row held is no long press, a click that opens
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.press_at(x, y)
   t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
-  assert_true(t.find("复制会话链接") is None)
+  assert_true(t.find("分享…") is None)
   t.release(x, y)
   t.run_for(@ui.move_most_ms)
   match app.nav.top() {

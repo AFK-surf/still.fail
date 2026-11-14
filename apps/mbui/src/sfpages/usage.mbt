@@ -20,8 +20,10 @@
 /// whether all the chats are shown, and the one seen alone (its list and key; "" none).
 priv struct UsagePick {
   days : @signals.Signal[Int]
+  summary : @signals.Signal[Bool]
   year : @signals.Signal[Int]
   split : @signals.Signal[String]
+  rank : @signals.Signal[String]
   day : @signals.Signal[String]
   all : @signals.Signal[Bool]
   only : @signals.Signal[(String, String)]
@@ -31,8 +33,10 @@ priv struct UsagePick {
 // kept across runs: said by the page's picks; usage_reset puts it back
 let usage_pick : UsagePick = {
   days: @signals.signal(7, same=fn(a, b) { a == b }),
+  summary: @signals.signal(false, same=fn(a, b) { a == b }),
   year: @signals.signal(0, same=fn(a, b) { a == b }),
   split: @signals.signal("", same=fn(a, b) { a == b }),
+  rank: @signals.signal("chats", same=fn(a, b) { a == b }),
   day: @signals.signal("", same=fn(a, b) { a == b }),
   all: @signals.signal(false, same=fn(a, b) { a == b }),
   only: @signals.signal(("", ""), same=fn(a, b) { a == b }),
@@ -41,8 +45,10 @@ let usage_pick : UsagePick = {
 ///|
 fn usage_reset() -> Unit {
   usage_pick.days.set(7)
+  usage_pick.summary.set(false)
   usage_pick.year.set(0)
   usage_pick.split.set("")
+  usage_pick.rank.set("chats")
   usage_pick.day.set("")
   usage_pick.all.set(false)
   usage_pick.only.set(("", ""))
@@ -54,22 +60,40 @@ fn usage_reset() -> Unit {
 let usage_days_choices : Array[Int] = [7, 30]
 
 ///|
-/// What the page asks the core's `usage` view for: its workspace's `days`, split as picked, of the one picked alone, of
-/// the day picked. The chart keeps the whole period and all its parts, so picks do not replace its legend or scale.
-fn usage_args(here : Here, days : Int, chart? : Bool = false) -> Map[String, Json] {
+/// What the page asks of the core (a topic and its params): its `usage` view of its workspace's `days`, `split` ("" the
+/// core's choice), of the one picked alone (`only`: its list and key), of the day picked (`day`). The chart's is asked
+/// with neither: it keeps the whole period and all its parts, so picks do not replace its legend or scale.
+fn usage_ask(
+  here : Here,
+  days : Int,
+  split : String,
+  only? : (String, String) = ("", ""),
+  day? : String = "",
+) -> (String, Map[String, Json]) {
   let args : Map[String, Json] = { "scope": str(here.workspace), "days": Json::number(days.to_double()) }
-  let (only_list, only_key) = usage_pick.only.get()
-  if !chart && only_list != "" {
-    args["only"] = { "list": str(only_list), "key": str(only_key) }
+  if only.0 != "" {
+    args["only"] = { "list": str(only.0), "key": str(only.1) }
   }
-  if usage_pick.split.get() != "" {
-    args["split"] = str(usage_pick.split.get())
+  if split != "" {
+    args["split"] = str(split)
   }
-  if !chart && usage_pick.day.get() != "" {
-    args["day"] = str(usage_pick.day.get())
+  if day != "" {
+    args["day"] = str(day)
   }
-  args
+  ("usage", args)
 }
+
+///|
+/// What the page reads as it is drawn with these picks (usage_ask's): what was spent, then the chart's.
+fn usage_reads(here : Here, days : Int, split : String, only : (String, String), day : String) -> Array[(String, Map[String, Json])] {
+  [usage_ask(here, days, split, only~, day~), usage_ask(here, days, split)]
+}
+
+///|
+/// What usage_node's readers say they have read anew by, what a choice pressed asked handed to them (sfbase's
+/// switch_answered, shown_read).
+// kept across runs: a name, never written
+let usage_shown_at : String = "usage"
 
 ///|
 /// The part picked in this chart, if the pick belongs to its split.
@@ -179,10 +203,6 @@ let ug_change : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Med
 let ug_change_versus : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let ug_sum_title : @ui.TextStyle = @ui.text_style(size=Lg, leading=L7, weight=Semibold, color=Fg, wrap=false, w=Cut)
-
-///|
 /// A figure: its value large and bold, what it is muted under it (Codex's bold over secondary), both in the middle.
 // kept across runs: a value (no field of it changes)
 let ug_figure_value : @ui.TextStyle = @ui.text_style(size=Xl2, leading=L8, weight=Bold, color=Fg, wrap=false)
@@ -257,11 +277,11 @@ let ug_cost : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibol
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_more_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
+let ug_more_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Link, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_more_lit : @ui.TextStyle = ug_more_words.then(@ui.text_style(color=Fg))
+let ug_more_lit : @ui.TextStyle = ug_more_words.then(@ui.text_style(color=Link))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -275,3 +295,20 @@ let ug_empty : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted
 /// A station's name over its prices (priceStation: the title's size, semibold).
 // kept across runs: a value (no field of it changes)
 let up_station : @ui.TextStyle = @ui.text_style(size=Ui, leading=L7, weight=Semibold, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_tile_value : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_tile_label : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_legend_cost : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Medium, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_scale_label : @ui.TextStyle = @ui.text_style(size=Caption, leading=L3, color=Subtle, wrap=false)
+

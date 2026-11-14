@@ -30,7 +30,87 @@ pub(all) struct Asked {
   filename : String
   typed : Bool
   station : String
+  /// one to rename the item or change its about (secret_describe): its name as it would be (`new_name`), its about
+  /// as it would be and as it was (`new_about`, `was_about`)
+  describe : Bool
+  new_name : String
+  new_about : String
+  was_about : String
+  /// one to delete the item (secret_delete)
+  remove : Bool
 }
+
+///|
+/// Whether what is asked writes the item (one to keep, one to rename): answered once, with no length of use.
+pub fn Asked::writes(self : Asked) -> Bool {
+  self.save_kind != "" || self.describe || self.remove
+}
+
+///|
+/// One to rename the item: whether its name would change.
+fn Asked::renames(self : Asked) -> Bool {
+  self.describe && self.new_name != "" && self.new_name != self.name
+}
+
+///|
+/// One to rename the item: whether its about would change.
+fn Asked::reabouts(self : Asked) -> Bool {
+  self.describe && self.new_about != self.was_about
+}
+
+///|
+/// One to rename the item, its title (the user, 2026-11-12: 「这 ui…是人能看懂的吗」, 「遣词正经一点」): 修改密钥的名称与说明, 修改密钥的名称, or 修改密钥 … 的说明
+/// (its name heavier than the words around it), what changes said under it a part each.
+fn describe_title_runs(ask : Asked, named : (String) -> @ui.Run, words : (String) -> @ui.Run) -> Array[@ui.Run] {
+  if ask.renames() && ask.reabouts() {
+    [words(tr("android-settings.vault.ask.describe.both"))]
+  } else if ask.renames() {
+    [words(tr("android-settings.vault.ask.describe.name"))]
+  } else {
+    fill_named("android-settings.vault.ask.describe.about", [("name", ask.name)], named, words)
+  }
+}
+
+///|
+/// A part's line as it was (`was`: crossed out, quiet) or as it would be (`strong`: heavier, a name's): each on a line of
+/// its own, all of them where the card's words start, so the card has one edge (the user, 2026-11-12:
+/// 「感觉视觉上还不够清晰」, 「你这样会导致对齐是错的」).
+fn describe_words_runs(was : Bool, words : String, strong? : Bool = false) -> Array[@ui.Run] {
+  let t = @sf.theme()
+  if was {
+    [@ui.span(words, color=t.p.muted, strike=true)]
+  } else {
+    [@ui.span(words, weight=if strong { 600 } else { 400 }, color=t.p.text)]
+  }
+}
+
+///|
+/// Its name's lines: as it is, then as it would be.
+fn describe_name_lines(ask : Asked) -> Array[Array[@ui.Run]] {
+  [describe_words_runs(true, ask.name), describe_words_runs(false, ask.new_name, strong=true)]
+}
+
+///|
+/// Its about's lines: as it was where it said one, then as it would be (that it goes, quiet).
+fn describe_about_lines(ask : Asked) -> Array[Array[@ui.Run]] {
+  let out = if ask.was_about != "" { [describe_words_runs(true, ask.was_about)] } else { [] }
+  if ask.new_about == "" {
+    out.push([@ui.span(tr("android-settings.vault.ask.describe.noAbout"), color=@sf.theme().p.muted)])
+  } else {
+    out.push(describe_words_runs(false, ask.new_about))
+  }
+  out
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let ask_describe_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
+
+///|
+/// A part of what renaming changes, apart from what is over it by room alone (no ground of its own: the card's one edge
+/// for all its words): what it is (名称, 说明), quiet, over its lines.
+// kept across runs: a value (no field of it changes)
+let ask_describe_part : @ui.Style = @ui.css("w=Full gap=S0_5 pt=S3")
 
 ///|
 /// A secret to keep that the person types in here (`save.typed`: the agent has none): its kind, and the account the
@@ -88,12 +168,14 @@ fn Asked::picks_file(self : Asked) -> Bool {
 }
 
 ///|
-/// The length of use picked for each request; put back by `reset`.
-let vault_picked : Map[String, String] = {}
+/// The length of use picked for each request (a rig's, a phone's too, keyed `rig/<id>`, `phone/<id>`): read by what is
+/// made once of a card as by the old view's; put back by `reset`.
+let vault_picked : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
-/// The unit chosen for each requested timeout.
-let vault_timeout_minutes : Map[String, Int] = {}
+/// How long each requested timeout is chosen to be, in minutes (授权时限's): read by what is made once of a card as by
+/// the old view's; put back by `reset`.
+let vault_timeout_minutes : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
 
 ///|
 // kept across runs: an immutable style
@@ -111,11 +193,8 @@ let vault_typed : @sf.LiveMap[String, @ui.Field] = @sf.LiveMap::new()
 
 ///|
 /// The file picked for each request whose secret is a file the person picks: its bytes in base64 and its name, kept
-/// only till it went with `vault.approve`; and the system's picker while it asks. Put back by `reset`.
+/// only till it went with `vault.approve`. Put back by `reset`.
 let vault_files : @sf.LiveMap[String, (String, String)] = @sf.LiveMap::new()
-
-///|
-let vault_file_picks : Map[String, @ui.Pick] = {}
 
 ///|
 fn vault_ask_reset() -> Unit {
@@ -125,7 +204,6 @@ fn vault_ask_reset() -> Unit {
   vault_pending.clear()
   vault_typed.clear()
   vault_files.clear()
-  vault_file_picks.clear()
 }
 
 ///|
@@ -144,6 +222,7 @@ fn typed_field(request : String, part : String) -> @ui.Field {
 
 ///|
 /// How a request is answered here, what its card's foot is.
+#derive(Eq, Debug)
 pub(all) enum Answer {
   /// 允许 / 存入 and 拒绝 / 不存: a use given for as long as `lasts` at the longest (unused for a secret to keep)
   Approve(String)
@@ -158,7 +237,7 @@ pub(all) enum Answer {
   Decided
   /// another's to answer: whose (the card's 由…决定)
   Theirs(String)
-} derive(Eq, Show)
+}
 
 ///|
 /// How a request is answered here as its card says it (`answer`, `lasts`: its `vaultAsk`'s), the core having answered
@@ -204,7 +283,8 @@ fn topic_answer(core : Core, ws : String, request : String, mine : Bool, who : S
       ),
     )
   }
-  let save = field(row, "save") is Some(_)
+  // (one to rename the item is answered as one to keep: written into the vault, by a device set up)
+  let save = field(row, "save") is Some(_) || field(row, "describe") is Some(_) || flag(row, "remove")
   let typed = typed_of(field(row, "save"))
   if save && !flag(view, "plain") && !flag(view, "setUp") {
     Some((SetUp, save, typed))
@@ -232,7 +312,7 @@ pub fn vault_ask(
   @sf.card(c, fill=ask.picks_file(), fn() {
     vault_asked(c, ask)
     match answer {
-      Some((a, save, _)) => vault_foot(c, core, ws, request, a, save, typed=ask.typed_in(), timeout_kind=ask.timeout_kind, timeout_seconds=ask.timeout_seconds, extra~, foot=a is (Approve(_) | SetUp))
+      Some((a, save, _)) => vault_foot(c, core, ws, request, a, save, typed=ask.typed_in(), timeout_kind=ask.timeout_kind, timeout_seconds=ask.timeout_seconds, extra~, foot=a is (Approve(_) | SetUp), describe=ask.describe, remove=ask.remove)
       None => ()
     }
   })
@@ -256,7 +336,7 @@ pub fn vault_card(
   @sf.card(c, fill=ask.picks_file(), fn() {
     vault_asked(c, ask)
     answered_in_place(c, "vault/" + request, ended.map(fn(e) { (e.0 == "granted", vault_outcome_words(ask, e.0, e.1)) }), fn() {
-      vault_foot(c, core, ws, request, answer, ask.save_kind != "", typed=ask.typed_in(), timeout_kind=ask.timeout_kind, timeout_seconds=ask.timeout_seconds, foot=answer is (Approve(_) | SetUp))
+      vault_foot(c, core, ws, request, answer, ask.writes(), typed=ask.typed_in(), timeout_kind=ask.timeout_kind, timeout_seconds=ask.timeout_seconds, foot=answer is (Approve(_) | SetUp), describe=ask.describe, remove=ask.remove)
     })
   })
   |> ignore
@@ -266,8 +346,8 @@ pub fn vault_card(
 /// A card's answer at its foot (`answer`), answered while the card shows (`ended`: whether it was granted, and how it
 /// went in words): its answer fades out where it is (answered_fade_ms, Leave), only drawn, then how it went fades in
 /// after it over the room it leaves, its dot and its words in the middle of it. The answer stays laid out (unseen):
-/// the card keeps its size to the point, and the list it is in changes its height only once it is out of sight
-/// (sfbase's list_turns.mbt Turns::in_turn).
+/// the card keeps its size to the point. In a chat's list the card itself goes as its room closes from the moment it
+/// was decided, one line in its place (sfpages' decision.mbt vault_ask_card, Turns::in_turn).
 pub fn answered_in_place(c : @ui.Ctx, key : String, ended : (Bool, Array[@ui.Run])?, answer : () -> Unit) -> Unit {
   let was = @motion.presence(
     c,
@@ -331,7 +411,11 @@ fn vault_asked(c : @ui.Ctx, ask : Asked, full_command? : Bool = false) -> Unit {
   c.box(style=@sf.ask_what, fn() {
     let named = fn(n) { @ui.span(n, weight=600, color=t.p.text) }
     let words = fn(w) { @ui.span(w, weight=400, color=t.p.text) }
-    let runs = if save {
+    let runs = if ask.remove {
+      fill_named("android-settings.vault.ask.remove", [("name", ask.name)], named, words)
+    } else if ask.describe {
+      describe_title_runs(ask, named, words)
+    } else if save {
       fill_named(
         "android-settings.vault.ask.save",
         [("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)), ("name", ask.name)],
@@ -352,10 +436,29 @@ fn vault_asked(c : @ui.Ctx, ask : Asked, full_command? : Bool = false) -> Unit {
     if ask.command != "" {
       c.rich([@ui.span(ask.command, mono=true)], style=if full_command { @sf.ask_note } else { ask_command }, breaks=full_command) |> ignore
     }
-    if ask.how_text != "" {
+    // (one to rename: what changes, a part each, in place of how it is given)
+    if ask.renames() {
+      c.box(style=ask_describe_part, fn() {
+        c.text(tr("android-settings.vault.ask.describe.nameLabel"), style=@sf.ask_note) |> ignore
+        for runs in describe_name_lines(ask) {
+          c.rich(runs, style=ask_describe_words) |> ignore
+        }
+      })
+      |> ignore
+    }
+    if ask.reabouts() {
+      c.box(style=ask_describe_part, fn() {
+        c.text(tr("android-settings.vault.ask.describe.aboutLabel"), style=@sf.ask_note) |> ignore
+        for runs in describe_about_lines(ask) {
+          c.rich(runs, style=ask_describe_words) |> ignore
+        }
+      })
+      |> ignore
+    }
+    if ask.how_text != "" && !ask.describe && !ask.remove {
       c.text(ask.how_text, style=@sf.ask_note) |> ignore
     }
-    let risky = !save && (ask.mode == "env" || ask.mode == "file")
+    let risky = !ask.writes() && (ask.mode == "env" || ask.mode == "file")
     let elsewhere = ask.station != ""
     if risky || elsewhere {
       let runs : Array[@ui.Run] = []
@@ -419,6 +522,11 @@ pub fn vault_outcome_words(ask : Asked, status : String, scope : String) -> Arra
   let scope = if scope == "once" || scope == "hour" { scope } else { "chat" }
   let said = fn(key, args) { fill_named(key, args, ended_name, fn(w) { @ui.span(w) }) }
   match status {
+    "withdrawn" => [@ui.span(tr("android-settings.vault.ask.withdrawn"))]
+    "granted" if ask.remove => said("android-settings.vault.ask.removed", [("name", ask.name)])
+    "denied" if ask.remove => said("android-settings.vault.ask.notRemoved", [("name", ask.name)])
+    "granted" if ask.describe => said("android-settings.vault.ask.changed", [("name", ask.name)])
+    "denied" if ask.describe => said("android-settings.vault.ask.notChanged", [("name", ask.name)])
     "granted" if save =>
       said("android-settings.vault.ask.kept", [
         ("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)),
@@ -454,7 +562,7 @@ fn ended_name(name : String) -> @ui.Run {
 pub fn vault_actions(c : @ui.Ctx, core : Core, ws : String, request : String, mine : Bool, who? : String? = None) -> Unit {
   let row = items(vaults_of(core, ws), "requests").iter().find_first(fn(r) { text(Some(r), "id") == request })
   match topic_answer(core, ws, request, mine, who) {
-    Some((a, save, typed)) => vault_foot(c, core, ws, request, a, save, typed~, timeout_kind=text(row, "timeoutKind"), timeout_seconds=count(row, "timeoutSeconds"))
+    Some((a, save, typed)) => vault_foot(c, core, ws, request, a, save, typed~, timeout_kind=text(row, "timeoutKind"), timeout_seconds=count(row, "timeoutSeconds"), describe=field(row, "describe") is Some(_), remove=flag(row, "remove"))
     None => ()
   }
 }
@@ -477,6 +585,8 @@ pub fn vault_foot(
   timeout_seconds? : Int = 0,
   extra? : (() -> Unit)? = None,
   foot? : Bool = false,
+  describe? : Bool = false,
+  remove? : Bool = false,
 ) -> Unit {
   let note = fn(words : String) { c.text(words, style=@sf.ask_note) |> ignore }
   let lasts = match answer {
@@ -560,22 +670,11 @@ pub fn vault_foot(
           }
           let words = tr("android-settings.vault.ask.typed." + ty.kind)
           if ty.kind == "file" {
-            // the system's picker answered: the file it gave (one too big said so, and none kept)
-            match vault_file_picks.get(request) {
-              Some(p) =>
-                if take_picked_file(core, p, fn(content, name) { vault_files[request] = (content, name) }) {
-                  vault_file_picks.remove(request)
-                }
-              None => ()
-            }
             // (the button the same before and after, the card as wide (it fills its column): what was picked fades in
             // beside it, the row no higher)
             c.box(style=ask_file, fn() {
               @sf.button(c, words, key="vault/" + request + "/file", tone=Plain, disabled=under, on_press=fn() {
-                match @ui.pick(Files) {
-                  Some(p) => vault_file_picks[request] = p
-                  None => ()
-                }
+                pick_vault_file(core, fn(content, name) { vault_files[request] = (content, name) })
               })
               match vault_files.get(request) {
                 Some((content, name)) => {
@@ -584,7 +683,7 @@ pub fn vault_foot(
                   // (faded in as it is drawn)
                   let shown = @kit.presence(c, "vault/" + request + "/file/" + name, true).t
                   let i = c.rich([@ui.span(name + " · " + file_size(content), color=@sf.theme().p.text)], style=ask_file_name)
-                  c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get()))) })
+                  c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get(c)))) })
                 }
                 None => ()
               }
@@ -602,12 +701,12 @@ pub fn vault_foot(
       })
     _ => ()
   }
-  let empty = typed is Some(_) && secret.trim(chars=" \n\t").to_string() == ""
+  let empty = typed is Some(_) && secret.trim(chars=" \n\t").to_owned() == ""
   // (what goes with the approval: an object, never kept among what the core is doing)
   let given : Json? = match typed {
     Some(_) => {
       let words : Array[(String, Json)] = [("secret", str(secret))]
-      if username.trim(chars=" ").to_string() != "" {
+      if username.trim(chars=" ").to_owned() != "" {
         words.push(("username", str(username)))
       }
       if filename != "" {
@@ -642,63 +741,7 @@ pub fn vault_foot(
         fill("android-settings.vault.timeout.button." + scope, [("time", duration)])
       }
       let open_panel = fn() {
-        let unit : Ref[String] = Ref(if minutes % 60 == 0 { "hours" } else { "minutes" })
-        let field = @ui.Field::new(text=(if unit.val == "hours" { minutes / 60 } else { minutes }).to_string())
-        let chosen : Ref[String] = Ref(if scope == "fixed" { "fixed" } else { "idle" })
-        let duration : Ref[String] = Ref(if scope == "once" { "once" } else { minutes.to_string() })
-        let duration_words = fn(n : Int) -> String {
-          let days = n % 1440 == 0
-          let hours = n % 60 == 0
-          fill(if days { "android-settings.vault.timeout.nDays" } else if hours { "android-settings.vault.timeout.nHours" } else { "android-settings.vault.timeout.nMinutes" }, [("n", (if days { n / 1440 } else if hours { n / 60 } else { n }).to_string())])
-        }
-        @sf.panel(tr("android-settings.vault.timeout.title"), from=Unanchored, form=true, fn(pc, close) {
-          ignore(close)
-          pc.box(style=@sf.panel_words_in().then(vault_timeout_panel), fn() {
-            @sf.field(pc, tr("android-settings.vault.timeout.duration"), fn() {
-              let presets = [60, 1440, 2160, 10080, 43200]
-              let values = presets.filter(fn(n) { n <= max_minutes && n != minutes && (presets.contains(minutes) || n != 2160) })
-              values.push(minutes)
-              values.sort()
-              let options = [("once", tr("android-settings.vault.scope.once"))]
-              for n in values { options.push((n.to_string(), duration_words(n))) }
-              options.push(("custom", tr("android-settings.vault.timeout.custom")))
-              @sf.select(pc, "vault-timeout-duration", duration.val, options, fn(v) { duration.val = v }, label=tr("android-settings.vault.timeout.duration"))
-            })
-            if duration.val == "custom" {
-              @sf.field(pc, tr("android-settings.vault.timeout.custom"), aside=fn() {
-                let id = "vault/" + request + "/panel-unit"
-                let entries = ["hours", "minutes"].map(fn(u) { @kit.menu_radio(u, u == unit.val, label=tr("android-settings.vault.timeout." + u)) })
-                let menu = @sf.chooser(pc, id, tr("android-settings.vault.timeout." + unit.val), entries, fn() { vault_menu.val == id }, fn(on) { vault_menu_set(id, on) })
-                match menu.chosen {
-                  Some(u) if u != unit.val => {
-                    let current = if field.text().length() > 5 { 0 } else { int_of(field.text(), 0) * (if unit.val == "hours" { 60 } else { 1 }) }
-                    field.set(if u == "hours" && current % 60 != 0 { "" } else { (if u == "hours" { current / 60 } else { current }).to_string() })
-                    unit.val = u
-                    vault_menu.val = ""
-                  }
-                  _ => ()
-                }
-              }, fn() { @sf.input(pc, "vault-timeout-value", solid=true, field~).text |> ignore })
-            }
-            if duration.val != "once" {
-              @sf.field(pc, tr("android-settings.vault.timeout.method"), fn() {
-                for k in ["idle", "fixed"] {
-                  @sf.choice_row(pc, "vault-timeout-kind/" + k, chosen.val == k, tr("android-settings.vault.timeout." + k), note=tr("android-settings.vault.timeout.detail." + k), on_press=fn() { chosen.val = k })
-                }
-              })
-            }
-          }) |> ignore
-        }, foot=fn(pc, close) {
-          let n = if duration.val == "custom" {
-            if field.text().length() > 5 { 0 } else { int_of(field.text(), 0) * (if unit.val == "hours" { 60 } else { 1 }) }
-          } else { int_of(duration.val, 0) }
-          let once = duration.val == "once"
-          @sf.button(pc, tr("android-settings.vault.timeout.done"), key="vault-timeout-done", tone=Primary, disabled=!once && (n < 1 || n > max_minutes), on_press=fn() {
-            vault_picked[request] = if once { "once" } else { chosen.val }
-            if !once { vault_timeout_minutes[request] = n }
-            close()
-          })
-        })
+        vault_timeout_open(request, minutes, max_minutes, scope)
       }
       @sf.chooser(c, "vault/" + request + "/scope", words, [], fn() { false }, fn(on) { if on { open_panel() } }, disabled=under) |> ignore
     } else if picks {
@@ -718,9 +761,9 @@ pub fn vault_foot(
           (core.push)(Route::Vault)
         })
       } else {
-        let yes = if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
+        let yes = if remove { "android-settings.vault.act.remove" } else if describe { "android-settings.vault.act.change" } else if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
         let approve = fn() {
-          let what = tr(if save { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
+          let what = tr(if remove { "android-settings.vault.act.removeWhat" } else if describe { "android-settings.vault.act.changeWhat" } else if save { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
           let chosen_scope = if !timed || scope == "once" { if save { "once" } else { scope } } else if minutes <= 60 { "hour" } else { "chat" }
           let params : Array[(String, Json)] = [("workspace", str(ws)), ("request", str(request)), ("scope", str(chosen_scope))]
           if timed && scope != "once" {
@@ -731,13 +774,13 @@ pub fn vault_foot(
           }
           act(true, "vault.approve", what, obj(params))
         }
-        @sf.button(c, tr(yes), key="vault/" + request + "/yes", tone=Primary, busy=busy(true), disabled=under || empty || !valid_time, on_press=approve)
+        @sf.button(c, tr(yes), key="vault/" + request + "/yes", tone=if remove { DangerSolid } else { Primary }, busy=busy(true), disabled=under || empty || !valid_time, on_press=approve)
         if entered && !under && !empty && valid_time {
           // (told once the frame's builds are over: Enter in the field is seen by the build it came to)
           c.tell("vault/" + request + "/approve", approve)
         }
       }
-      let no = if save { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }
+      let no = if remove { "android-settings.vault.act.dontRemove" } else if describe { "android-settings.vault.act.dontChange" } else if save { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }
       @sf.button(c, tr(no), key="vault/" + request + "/no", tone=Ghost, busy=busy(false), disabled=under, on_press=fn() {
         act(false, "vault.deny", tr("android-settings.vault.act.denyWhat"), obj([("workspace", str(ws)), ("request", str(request))]))
       })
@@ -871,3 +914,117 @@ let ask_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Subtle")
 ///|
 // kept across runs: a value (no field of it changes)
 let ask_dot_on : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive")
+
+///|
+/// The length of use of request `request` chosen in a panel (授权时限, a form: in the window's middle, a sheet with a
+/// finger), as `minutes` (at most `max_minutes`) and `scope` (once, idle, fixed) say it now: 时长, one of the presets or
+/// 自定义 (its minutes or hours typed, the unit at the head's end: a choice of the two, what is typed turned into the
+/// other as it is chosen); 失效方式 (idle or fixed) where it is not once. 完成 keeps them for the card (vault_picked,
+/// vault_timeout_minutes), not pressed while what is typed is out of bounds. What it holds nodes of the window's tree,
+/// made once as it opens (@sf.panel_nodes), its choices signals of its own: what it shows as 完成 closes it is what it
+/// shows on its way out.
+fn vault_timeout_open(request : String, minutes : Int, max_minutes : Int, scope : String) -> Unit {
+  let same = fn(a : String, b : String) { a == b }
+  let unit = @signals.signal(if minutes % 60 == 0 { "hours" } else { "minutes" }, same~)
+  let field = @ui.Field::new(text=(if minutes % 60 == 0 { minutes / 60 } else { minutes }).to_string())
+  // (what the field holds, as it is typed and as it is put in it here: what binds reads this)
+  let typed = @signals.signal(field.text(), same~)
+  let chosen = @signals.signal(if scope == "fixed" { "fixed" } else { "idle" }, same~)
+  let duration = @signals.signal(if scope == "once" { "once" } else { minutes.to_string() }, same~)
+  let duration_words = fn(n : Int) -> String {
+    let days = n % 1440 == 0
+    let hours = n % 60 == 0
+    fill(if days { "android-settings.vault.timeout.nDays" } else if hours { "android-settings.vault.timeout.nHours" } else { "android-settings.vault.timeout.nMinutes" }, [("n", (if days { n / 1440 } else if hours { n / 60 } else { n }).to_string())])
+  }
+  let presets = [60, 1440, 2160, 10080, 43200]
+  let values = presets.filter(fn(n) { n <= max_minutes && n != minutes && (presets.contains(minutes) || n != 2160) })
+  values.push(minutes)
+  values.sort()
+  let options = [("once", tr("android-settings.vault.scope.once"))]
+  for n in values {
+    options.push((n.to_string(), duration_words(n)))
+  }
+  options.push(("custom", tr("android-settings.vault.timeout.custom")))
+  // (what is typed in minutes, as the unit it is in says: none where it is longer than five figures)
+  let typed_minutes = fn(words : String, u : String) {
+    if words.length() > 5 { 0 } else { int_of(words, 0) * (if u == "hours" { 60 } else { 1 }) }
+  }
+  @sf.panel_nodes(
+    tr("android-settings.vault.timeout.title"),
+    from=Unanchored,
+    form=true,
+    fn(v, _) {
+      v.box(fn(b) {
+        @sf.style_node(b, fn() { @sf.panel_words_in_node(b).then(vault_timeout_panel) })
+        @sf.field_node(b, fn() { tr("android-settings.vault.timeout.duration") }, fn(f) {
+          @sf.select_node(f, fn() { duration.get() }, fn() { options }, fn(x) { duration.set(x) }, label=fn() {
+            tr("android-settings.vault.timeout.duration")
+          })
+        })
+        b.show(fn() { duration.get() == "custom" }, fn(s) {
+          @sf.field_node(
+            s,
+            fn() { tr("android-settings.vault.timeout.custom") },
+            fn(f) {
+              @sf.input_node(f, field, label=tr("android-settings.vault.timeout.custom"), solid=true, edited=fn(w) {
+                typed.set(w)
+              })
+              |> ignore
+            },
+            aside=fn(a) {
+              @sf.chooser_node(
+                a,
+                fn() { tr("android-settings.vault.timeout." + unit.get()) },
+                fn() { ["hours", "minutes"].map(fn(u) { (u, tr("android-settings.vault.timeout." + u)) }) },
+                fn() { unit.get() },
+                fn(u) {
+                  let was = unit.untracked()
+                  if u != was {
+                    let current = typed_minutes(field.text(), was)
+                    field.set(if u == "hours" && current % 60 != 0 { "" } else { (if u == "hours" { current / 60 } else { current }).to_string() })
+                    typed.set(field.text())
+                    unit.set(u)
+                  }
+                },
+              )
+              |> ignore
+            },
+          )
+        })
+        b.show(fn() { duration.get() != "once" }, fn(s) {
+          @sf.field_node(s, fn() { tr("android-settings.vault.timeout.method") }, fn(f) {
+            for k in ["idle", "fixed"] {
+              @sf.choice_row_node(
+                f,
+                fn() { tr("android-settings.vault.timeout." + k) },
+                fn() { chosen.get() == k },
+                note=fn() { tr("android-settings.vault.timeout.detail." + k) },
+                press=fn() { chosen.set(k) },
+              )
+            }
+          })
+        })
+      })
+      |> ignore
+    },
+    foot=fn(v, close) {
+      let n = fn() { if duration.get() == "custom" { typed_minutes(typed.get(), unit.get()) } else { int_of(duration.get(), 0) } }
+      let once = fn() { duration.get() == "once" }
+      @sf.button_node(
+        v,
+        fn() { tr("android-settings.vault.timeout.done") },
+        fn() {
+          let o = once()
+          vault_picked[request] = if o { "once" } else { chosen.untracked() }
+          if !o {
+            vault_timeout_minutes[request] = @signals.untracked(n)
+          }
+          close()
+        },
+        tone=Primary,
+        disabled=fn() { !once() && (n() < 1 || n() > max_minutes) },
+      )
+      |> ignore
+    },
+  )
+}

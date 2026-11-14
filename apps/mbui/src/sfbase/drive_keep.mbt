@@ -87,7 +87,7 @@ pub fn keeps_frame(c : @ui.Ctx) -> Unit {
 pub fn keep_way_of(name : String) -> @hostapi.KeepWay {
   let lower = @sf.lower(name)
   let ext = match lower.rev_find(".") {
-    Some(i) if i > 0 => lower.view(start_offset=i + 1).to_owned()
+    Some(i) if i > 0 => lower.exact_view(start=i + 1).to_owned()
     _ => ""
   }
   let album = [
@@ -247,3 +247,15 @@ pub fn download_drive_zip(c : @ui.Ctx, src : Source, station : String, root : St
 }
 
 
+
+///|
+/// `bytes` kept as keep_bytes keeps them, asked of the host at once: from a press's handler outside any build (a node of
+/// the window's tree's), where there is no build to wait the end of.
+pub fn keep_now(name : String, mime : String, bytes : Bytes) -> Unit {
+  let way = keep_way_of(name)
+  let (saved, failed) = keep_words(way)
+  match @ui.keep(name, mime, bytes, way~) {
+    Some(k) => keepings.push({ keep: k, name, saved, failed, then: fn(_) {  } })
+    None => toast_later(failed)
+  }
+}

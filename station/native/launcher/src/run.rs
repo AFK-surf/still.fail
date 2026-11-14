@@ -140,6 +140,8 @@ struct System {
     parent: i32,
     /// What this launcher is (its executable's bytes, hashed), told apart from the release's (`renew`).
     own: Option<u64>,
+    /// The station's endpoint kept for the Nodes (front.rs), where one runs.
+    front: Option<crate::front::Front>,
 }
 
 /// Where the release has its launcher (scripts/station-bundle.sh: the Rust station's path).
@@ -203,6 +205,10 @@ impl Os for System {
         // its environment for what it starts (main.ts).
         #[cfg(target_os = "macos")]
         command.env("MallocSpaceEfficient", "1");
+        match &self.front {
+            Some(front) => command.env("STILLFAIL_MESH_FRONT", &front.socket),
+            None => command.env_remove("STILLFAIL_MESH_FRONT"),
+        };
         let given = [self.mcp.as_raw_fd(), self.admin.as_raw_fd(), theirs.as_raw_fd()];
         // SAFETY: only dup2 (async-signal-safe) between fork and exec. The sources are all at 10 and up, so none is
         // overwritten before it is copied; the copies are not close-on-exec.
@@ -257,6 +263,7 @@ impl Os for System {
             "mcp": self.mcp.as_raw_fd(),
             "admin": self.admin.as_raw_fd(),
             "parent": self.parent,
+            "front": self.front.as_ref().map(|f| f.state()),
             "node": {"pid": serving.pid, "control": serving.control.as_raw_fd(), "pending": serving.pending, "outgoing": *serving.outgoing.borrow(), "version": version, "served": served},
         });
         let mut args = vec![release.as_os_str().to_owned()];
@@ -266,7 +273,8 @@ impl Os for System {
         let mut pointers: Vec<*const libc::c_char> = argv.iter().map(|a| a.as_ptr()).collect();
         pointers.push(std::ptr::null());
         log::info(&format!("the release has a new launcher; this one becomes it ({})", release.display()));
-        let fds = [self.lock.as_raw_fd(), self.mcp.as_raw_fd(), self.admin.as_raw_fd(), serving.control.as_raw_fd()];
+        let mut fds = vec![self.lock.as_raw_fd(), self.mcp.as_raw_fd(), self.admin.as_raw_fd(), serving.control.as_raw_fd()];
+        fds.extend(self.front.iter().flat_map(|f| f.fds()));
         hold_signals(true);
         inheritable(&fds, true);
         // SAFETY: execv with NUL-ended strings that live through the call; it returns only when it failed.
@@ -297,6 +305,7 @@ struct Resumed {
     mcp: OwnedFd,
     admin: OwnedFd,
     parent: i32,
+    front: Option<crate::front::Front>,
     node: Node,
     version: String,
     served: Vec<(String, u16)>,
@@ -319,10 +328,12 @@ impl Resumed {
         let served: Vec<(String, u16)> = serde_json::from_value(node["served"].clone()).ok()?;
         let version = node["version"].as_str()?.to_string();
         let parent = state["parent"].as_i64().and_then(|n| i32::try_from(n).ok())?;
+        // (none from a launcher from before it, or where none ran)
+        let front = crate::front::Front::resumed(&state["front"]);
         inheritable(&[lock, mcp, admin, control], false);
         // SAFETY: the descriptors the launcher before handed on, owned by this one from here.
         let (lock, mcp, admin, control) = unsafe { (File::from_raw_fd(lock), OwnedFd::from_raw_fd(mcp), OwnedFd::from_raw_fd(admin), OwnedFd::from_raw_fd(control)) };
-        Some(Resumed { lock, mcp, admin, parent, node: Node { pid, control, pending, outgoing: RefCell::new(outgoing), open: true }, version, served })
+        Some(Resumed { lock, mcp, admin, parent, front, node: Node { pid, control, pending, outgoing: RefCell::new(outgoing), open: true }, version, served })
     }
 }
 
@@ -403,6 +414,11 @@ fn socketpair() -> Result<(OwnedFd, OwnedFd)> {
     Ok((ours, theirs))
 }
 
+/// A descriptor handed on (`renew`) made close-on-exec again here, as Resumed's are.
+pub fn cloexec_on(fd: RawFd) {
+    inheritable(&[fd], false);
+}
+
 fn cloexec(fd: RawFd) -> Result<()> {
     // SAFETY: fcntl on a descriptor the caller owns.
     if unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) } != 0 {
@@ -441,8 +457,33 @@ fn keep_low_fds() {
     }
 }
 
+/// Raises the open-file soft limit from macOS launchd's 256 so the launcher, its front and Node do not run out.
+fn nofile_targets(limit: libc::rlimit, most: libc::rlim_t) -> [libc::rlim_t; 3] {
+    let cap = if limit.rlim_max == libc::RLIM_INFINITY { most } else { limit.rlim_max.min(most) };
+    [cap, cap.min(10240), cap.min(4096)]
+}
+
+fn raise_nofile() {
+    let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    // SAFETY: getrlimit writes into a live `rlimit` struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } != 0 {
+        return;
+    }
+    for target in nofile_targets(limit, 65536) {
+        if target <= limit.rlim_cur {
+            return;
+        }
+        let next = libc::rlimit { rlim_cur: target, rlim_max: limit.rlim_max };
+        // SAFETY: setrlimit reads a live `rlimit` struct.
+        if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &next) } == 0 {
+            return;
+        }
+    }
+}
+
 pub fn run(mut options: Options) -> i32 {
     keep_low_fds();
+    raise_nofile();
     let run = options.data.join("run");
     if let Some(state) = options.resume.take() {
         return resume(options, run, &state);
@@ -501,7 +542,8 @@ pub fn run(mut options: Options) -> i32 {
     // SAFETY: getppid has no preconditions.
     let parent = unsafe { libc::getppid() };
     let own = std::env::current_exe().ok().and_then(|exe| hash_of(&exe));
-    let mut station = Lifecycle::new(System { options, lock, mcp, admin, parent, own }, Times::of_env(), run, with_parent);
+    let front = crate::front::Front::start(&options.app, &options.data);
+    let mut station = Lifecycle::new(System { options, lock, mcp, admin, parent, own, front }, Times::of_env(), run, with_parent);
     station.start();
     serve(&mut station, signals)
 }
@@ -528,8 +570,12 @@ fn resume(options: Options, run: PathBuf, state: &str) -> i32 {
     let with_parent = options.with_parent;
     // This launcher is the release's (it was run from there).
     let own = hash_of(&options.app.join(LAUNCHER_IN_APP));
-    let Resumed { lock, mcp, admin, parent, node, version, served } = resumed;
-    let mut station = Lifecycle::new(System { options, lock, mcp, admin, parent, own }, Times::of_env(), run, with_parent);
+    let Resumed { lock, mcp, admin, parent, front, node, version, served } = resumed;
+    // None handed on (a launcher from before the front, or one whose front would not run), or one handing streams as
+    // a release before this one: one started here, before the Node the handover starts, so a station that only ever
+    // updates comes to have one without being started again.
+    let front = front.and_then(crate::front::Front::current).or_else(|| crate::front::Front::start(&options.app, &options.data));
+    let mut station = Lifecycle::new(System { options, lock, mcp, admin, parent, own, front }, Times::of_env(), run, with_parent);
     station.adopt(node, version, served);
     // A Node that ended meanwhile (its SIGCHLD held, then come) is reaped as signals come.
     station.start_next();
@@ -606,6 +652,12 @@ fn reap(station: &mut Lifecycle<System>) {
         let pid = unsafe { libc::waitpid(-1, &mut status, libc::WNOHANG) };
         if pid <= 0 {
             return;
+        }
+        if station.os.front.as_ref().is_some_and(|f| f.pid == pid) {
+            let front = station.os.front.take().unwrap();
+            let (app, data) = (station.os.options.app.clone(), station.os.options.data.clone());
+            station.os.front = front.ended(&app, &data, &describe(status), Times::of_env().front);
+            continue;
         }
         // What it said before it ended (what it carried over at a handover) is the lifecycle's first.
         if let Some(said) = station.processes_mut().into_iter().find(|(_, node)| node.pid == pid && node.open).map(|(_, node)| node.read()) {
@@ -697,5 +749,13 @@ mod tests {
         read_now(&theirs, &mut got);
         let lines: Vec<Value> = got.split(|b| *b == b'\n').filter(|l| !l.is_empty()).map(|l| serde_json::from_slice(l).unwrap()).collect();
         assert_eq!(lines, vec![carried, json!({ "op": "handover" })]);
+    }
+
+    #[test]
+    fn nofile_targets_respect_hard_limit_and_infinity() {
+        assert_eq!(nofile_targets(libc::rlimit { rlim_cur: 256, rlim_max: libc::RLIM_INFINITY }, 65536), [65536, 10240, 4096]);
+        assert_eq!(nofile_targets(libc::rlimit { rlim_cur: 256, rlim_max: 8192 }, 65536), [8192, 8192, 4096]);
+        assert_eq!(nofile_targets(libc::rlimit { rlim_cur: 1024, rlim_max: 2048 }, 65536), [2048, 2048, 2048]);
+        raise_nofile();
     }
 }

@@ -18,6 +18,7 @@
 #   stillfail station id
 #   stillfail lock status|reset                         the workspace lock on this station: what is pinned, or taking
 #                                                       it away (when every device that could sign is lost)
+#   stillfail lock reset --workspace <id>               the lock of a workspace it joined, taken away alike
 #   stillfail heap                                      a heap snapshot of the running station's main thread, written
 #                                                       to <data>/run (only the latest kept; it holds the station's
 #                                                       tokens): what its memory holds, for Chrome's DevTools
@@ -47,7 +48,7 @@ case "${1:-} ${2:-}" in
     while IFS='=' read -r key value; do
       case $key in
         script) script=$value ;;
-        STILLFAIL_ORIGIN|STILLFAIL_CHANNEL|STILLFAIL_RELEASE_SHA256|STILLFAIL_NODE_SHA256|STILLFAIL_INSTALL_LANG) export "$key=$value" ;;
+        STILLFAIL_ORIGIN|STILLFAIL_CHANNEL|STILLFAIL_RELEASE_SHA256|STILLFAIL_NODE_SHA256|STILLFAIL_INSTALL_LANG|STILLFAIL_ARCHIVE) export "$key=$value" ;;
       esac
     done <<PLAN
 $plan
@@ -57,10 +58,10 @@ PLAN
   "station enroll") shift 2; exec "$station" enroll "$@" --data "$data" ;;
   "status "*|"station status") exec "$station" status --data "$data" ;;
   "station id") exec "$station" id --data "$data" ;;
-  "lock status"|"lock reset") exec "$station" lock "$2" --data "$data" ;;
+  "lock status"|"lock reset") what=$2; shift 2; exec "$station" lock "$what" "$@" --data "$data" ;;
   "heap "*)
     node=${STILLFAIL_NODE:-$here/node/bin/node}
     [ -x "$node" ] && [ -f "$here/station/main.js" ] || { echo "stillfail heap: $here is not an installed release (no node/bin/node or station/main.js)" >&2; exit 1; }
     exec "$node" "$here/station/main.js" heap --data "$data" ;;
-  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] [--lock <hash>] [--join | --stay] | stillfail station id | stillfail lock status|reset | stillfail heap" >&2; exit 2 ;;
+  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] [--lock <hash>] [--join | --stay] | stillfail station id | stillfail lock status | stillfail lock reset [--workspace <id>] | stillfail heap" >&2; exit 2 ;;
 esac

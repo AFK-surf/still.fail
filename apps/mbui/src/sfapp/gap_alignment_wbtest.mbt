@@ -17,7 +17,7 @@ test "row alignment catches words too far out on a list card" {
   }, w=400.0, h=300.0, corners_held=false)
   t.draw()
   let faults = t.gap_faults().filter(fn(f) { f.contains("rule 8:") })
-  assert_true(faults.length() > 0, msg="\{faults}")
+  assert_true(faults.length() > 0, msg="\{Repr(faults)}")
 }
 
 ///|

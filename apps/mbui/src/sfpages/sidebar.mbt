@@ -29,58 +29,13 @@ pub fn filter_at(src : Source, w : Workspace) -> Int {
 }
 
 ///|
-/// One of a list's lines.
-priv enum Line {
-  /// room for the bar over the list, and at its foot
-  Top
-  Foot
-  /// what the frame puts in it
-  Part(ListPart)
-  /// read the first time: the rows to come, what the core waits on or cannot read, what went wrong
-  Wait(ListNote?, String?)
-  Empty(ChatsView)
-  Heading(String)
-  Row(ChatItem)
-}
-
-///|
-/// The lists first shown once with their rows (scrolled past what is tucked over them).
-// kept across runs: put back by sidebar_reset (reset)
-let placed : Map[String, Bool] = {}
-
-///|
-/// How far each list made once is scrolled to tuck its search out of view, by its key, as it was first placed: the room
-/// its foot keeps so it goes that far with fewer rows than it is tall.
-// kept across runs: put back by sidebar_reset (reset)
-let tucked_by : Map[String, Double] = {}
-
-///|
 fn sidebar_reset() -> Unit {
   list_scrolls.clear()
-  tucked_by.clear()
   rows_rest_at.val = -1.0
-  placed.clear()
-  rows_laid.clear()
-  list_rows.clear()
-  lists_had.clear()
   filter_menu_serial.val = -1
+  archived_here.set(None)
+  archived_n.val = 0
 }
-
-///|
-/// A list's days as lines (a heading and its rows each), made once for the days shown (the very array: a view's, read
-/// once a version, or the order held while a finger is on it), not every frame: as many as the list has rows, of
-/// which a frame builds only those in view. Their keys among the list's lines and the chats in them.
-priv struct DayLines {
-  days : Array[ChatDay]
-  lines : Array[Line]
-  keys : Array[String]
-  shown : Array[ChatItem]
-}
-
-///|
-/// Each list's days as lines, as last laid out (DayLines).
-// kept across runs: put back by sidebar_reset (reset)
-let rows_laid : Map[String, DayLines] = {}
 
 ///|
 /// The chat in the page pane, if one is.
@@ -94,16 +49,6 @@ fn open_chat() -> ChatRef? {
   }
   None
 }
-
-///|
-/// Each list's rows as given and as the list made of them (ListRows: what came, went, went ahead), by the list's key.
-// kept across runs: put back by sidebar_reset (reset)
-let list_rows : Map[String, @ui.ListRows[Line]] = {}
-
-///|
-/// Whether each list had rows of days the last time it was built.
-// kept across runs: put back by sidebar_reset (reset)
-let lists_had : Map[String, Bool] = {}
 
 ///|
 /// Room in a list, `h` high (for the bar over it, at its foot).
@@ -178,7 +123,7 @@ pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> 
     along=End,
   )
   filter_menu_serial.val = @sf.last_presented()
-  filter_menu_opened.set(@signals.untracked(fn() { filter_menu_opened.get() }) + 1)
+  filter_menu_opened.set(filter_menu_opened.untracked() + 1)
 }
 
 ///|
@@ -195,5 +140,5 @@ pub fn set_filter(src : Source, w : Workspace, f : String) -> Unit {
     return
   }
   app.filters[w.id] = f
-  (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), fn(_) {  })
+  (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), @sfbase.answer_unread)
 }

@@ -80,12 +80,15 @@ test "styles: how many values of each kind the app's screens use" {
   // 外观's 主题色 draws each accent other than the orange as a dot of its own colour, by day and by night (@sf.accents:
   // four of them, eight colours), and 自定义's outline round its ＋ (the ink at 24%, by day and by night): what the
   // setting shows, not a style's.
+  // A station's dials, wide, are still 36 apart (dials_node's dl_row_wide), but as nodes that is a row's gap across,
+  // which the tree's census does not count (Tree::styled: a node's paddings and its gap down only); the old view's
+  // dials were its last 36.
   inspect(counts.to_string(), content=(
-    #|text 37
+    #|text 36
     #|weight 4
-    #|space 25
+    #|space 23
     #|radius 21
-    #|color 80
+    #|color 73
     #|
 
 

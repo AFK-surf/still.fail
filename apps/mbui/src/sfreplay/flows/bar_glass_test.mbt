@@ -5,7 +5,7 @@
 
 ///|
 test "50-bar-glass" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("bar-glass"), seed~)
     f.see("端到端测试")
     f.tap("icon:folder")
@@ -21,12 +21,12 @@ test "50-bar-glass" {
     f.see("=已归档")
     f.run_for(@ui.move_most_ms)
     // the bar chosen lands on its own spring, untouched by a finger: the panel is drawn up again once it has
-    f.run_to(@sfapp.bar_landed())
+    f.run_to(@sfapp.bar_landed)
     f.drag("icon:chart", -100.0, -64.0, steps=bar_draw_steps)
     f.run_for(@sfapp.switch_fade_ms)
     f.see("端到端测试")
     // the bottom bar's springs and tweens to their declared end (the ball's ride on the bar chosen included)
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

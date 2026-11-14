@@ -2,22 +2,23 @@
 // OutsideShare.tsx useOutsideShare, OutsideList; ChatRef.css.ts outsideList, outsideItem, outsideCannot, refChip,
 // refChipStation): the presenters' panel, 分享对话 and what sharing does, then each chat as a reference shows (`@` and its title in
 // the accent) and whose it is, those the viewer may not share saying so; 取消, and 分享并发送 (仍然发送 with none to
-// share), Enter again saying yes. What is asked of the core and what the yes does are sfbase's (outside.mbt).
+// share), Enter again saying yes. What is asked of the core and what the yes does are sfbase's (outside.mbt). What it
+// holds and its buttons are nodes of the window's tree, made once as it opens (@sf.panel_nodes).
 
 ///|
 /// The asking for draft `key`'s send, while it asks (and as it goes): the presenters' panel (a sheet with a finger short
-/// of Large, else a dialog in the middle), put up once as it opens, what it says read anew each frame it is drawn;
+/// of Large, else a dialog in the middle), put up once as it opens, what it says bound to what it asks;
 /// taken down once it is decided.
-fn outside_dialog(c : @ui.Ctx, src : Source, key : String) -> Unit {
+fn outside_dialog(_c : @ui.Ctx, src : Source, key : String) -> Unit {
   guard @sfbase.outside_asking(key) is Some(s) else { return }
   match outside_up.get(key) {
     None if s.open.get() => {
-      @sf.panel(
+      @sf.panel_nodes(
         @sf.t("web-main.outside.title"),
-        fn(c, _) { outside_body(c, key) },
+        fn(v, _) { outside_body(v, s) },
         from=Unanchored,
         description=@sf.t("web-main.outside.lead"),
-        foot=fn(c, _) { outside_foot(c, src, key) },
+        foot=fn(v, _) { outside_foot(v, src, s) },
         // (closed unsaid: its scrim, back, Escape) as 取消
         gone=fn() {
           outside_up.remove(key)
@@ -45,7 +46,7 @@ fn outside_dialog(c : @ui.Ctx, src : Source, key : String) -> Unit {
 ///|
 /// The askings up, by draft key: their presented panel (@sf.last_presented).
 // kept across runs: put back by outside_reset
-let outside_up : Map[String, Int] = {}
+let outside_up : Map[String, Int] = Map([])
 
 ///|
 fn outside_reset() -> Unit {
@@ -53,55 +54,76 @@ fn outside_reset() -> Unit {
 }
 
 ///|
-/// What it asks about: each chat as a reference shows and whose it is, those the viewer may not share saying so; why
-/// sharing failed under them.
-fn outside_body(c : @ui.Ctx, key : String) -> Unit {
-  guard @sfbase.outside_asking(key) is Some(s) else { return }
-  c.box(style=outside_list, fn() {
-    for x in s.chats {
-      c.box(style=outside_item, flow=true, fn() {
-        c.box(style=outside_chip, fn() {
-          c.text("@", style=outside_hash) |> ignore
-          c.text(x.title, style=outside_title) |> ignore
+/// What asking `s` asks about, in node `v` (the panel's body's): each chat as a reference shows and whose it is, those
+/// the viewer may not share saying so; why sharing failed under them, while it did.
+fn outside_body(v : @view.View, s : @sfbase.OutsideAsk) -> Unit {
+  v.box(fn(list) {
+    @sf.style_node(list, fn() { outside_list })
+    // (the chats an asking is about are said before it opens, and are its own: one asked again is another asking, in
+    // another panel)
+    for x in s.chats.iter() {
+      list.box(fn(item) {
+        @sf.style_node(item, fn() { outside_item })
+        // (wrapping, its lines as far apart as what is on one: an old view's flow)
+        item.wraps(Is(Some(outside_item_gap.px()))) |> ignore
+        item.box(fn(chip) {
+          @sf.style_node(chip, fn() { outside_chip }, in_row=true)
+          @sf.words_node(chip, fn() { "@" }, fn() { outside_hash }) |> ignore
+          @sf.words_node(chip, fn() { x.title }, fn() { outside_title }) |> ignore
         })
         |> ignore
-        c.box(style=outside_whose, fn() {
-          let (before, after) = @sf.t_around("web-main.outside.from", "name")
-          if before != "" {
-            c.text(before, style=outside_whose_words) |> ignore
-          }
-          @sf.workspace_badge(c, x.workspace_name, x.workspace_emoji, x.workspace_icon, outside_whose_mark)
-          c.text(x.workspace_name + after, style=outside_whose_words) |> ignore
+        item.box(fn(whose) {
+          @sf.style_node(whose, fn() { outside_whose }, in_row=true)
+          let around = fn() { @sf.t_around("web-main.outside.from", "name") }
+          whose.show(fn() { around().0 != "" }, at_once=true, fn(w) {
+            @sf.words_node(w, fn() { around().0 }, fn() { outside_whose_words }) |> ignore
+          })
+          @sf.workspace_badge_node(whose, fn() { x.workspace_name }, fn() { x.workspace_emoji }, fn() { x.workspace_icon }, outside_whose_mark)
+          @sf.words_node(whose, fn() { x.workspace_name + around().1 }, fn() { outside_whose_words }) |> ignore
         })
         |> ignore
         if !x.may {
-          c.text(@sf.t("web-main.outside.cannot"), style=outside_cannot) |> ignore
+          // (what is left of its line after them, as a row gives what is as wide as it: outside_cannot's w=Full)
+          item.box(fn(no) {
+            no.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+            @sf.words_node(no, fn() { @sf.t("web-main.outside.cannot") }, fn() { outside_cannot }) |> ignore
+          })
+          |> ignore
         }
       })
       |> ignore
     }
-    if s.error.get() != "" {
-      c.text(s.error.get(), style=outside_cannot) |> ignore
-    }
+    list.show(fn() { s.error.get() != "" }, fn(e) {
+      @sf.words_node(e, fn() { s.error.get() }, fn() { outside_cannot }) |> ignore
+    })
   })
   |> ignore
 }
 
 ///|
-/// 取消, and 分享并发送 (仍然发送 with none to share), turning while it shares.
-fn outside_foot(c : @ui.Ctx, src : Source, key : String) -> Unit {
-  guard @sfbase.outside_asking(key) is Some(s) else { return }
-  // Enter sent it, so Enter again says yes (read in the panel: its keys while it is open)
-  if s.open.get() && c.key_pressed(@ui.key_code_enter) {
+/// 取消, and 分享并发送 (仍然发送 with none to share), turning while it shares, in node `v` (the panel's foot's). Enter
+/// sent the words, so Enter again says yes: the foot's action `outside.yes`, the window's keymap's key for it where an
+/// asking is up (@settings.keymap_of: `OutsideAsk`).
+fn outside_foot(v : @view.View, src : Source, s : @sfbase.OutsideAsk) -> Unit {
+  v
+  .key_context("OutsideAsk")
+  .on_action("outside.yes", fn(_) {
+    guard s.open.get() else { return false }
     @sfbase.outside_yes(src, s)
-  }
-  @sf.button(c, @sf.t("common.cancel"), key="outside/cancel", tone=Ghost, on_press=fn() {
-    @sfbase.outside_no(s)
-  }) |> ignore
-  let label = @sf.t(if @sfbase.outside_sharable(s) { "web-main.outside.share" } else { "web-main.outside.anyway" })
-  @sf.button(c, label, key="outside/yes", tone=Primary, busy=s.busy.get(), on_press=fn() {
-    @sfbase.outside_yes(src, s)
-  }) |> ignore
+    true
+  })
+  |> ignore
+  @sf.button_node(v, fn() { @sf.t("common.cancel") }, fn() { @sfbase.outside_no(s) }, tone=Ghost) |> ignore
+  // (a dialog in the middle of the window opens with the focus on its yes: Enter there presses it; a sheet leaves the
+  // focus in the words' field, Enter the foot's action)
+  @sf.button_node(
+    v,
+    fn() { @sf.t(if @sfbase.outside_sharable(s) { "web-main.outside.share" } else { "web-main.outside.anyway" }) },
+    fn() { @sfbase.outside_yes(src, s) },
+    tone=Primary,
+    busy=fn() { s.busy.get() },
+  )
+  |> @sf.panel_opens_on_node
 }
 
 ///|
@@ -113,6 +135,11 @@ let outside_list : @ui.Style = @ui.css("w=Full gap=S2_5")
 /// One (outsideItem): its reference and whose it is on a line, wrapping, why it may not be shared under them.
 // kept across runs: a value (no field of it changes)
 let outside_item : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
+
+///|
+/// What is on its line that far apart, and its lines (outside_item's gap).
+// kept across runs: a value (no field of it changes)
+let outside_item_gap : @ui.Space = S1
 
 ///|
 /// A reference as it shows (refChip): `@` a little faint (refChipHash, 1 from the title), the title, in the accent.

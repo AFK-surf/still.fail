@@ -196,7 +196,9 @@ test("leaving a workspace checks its live actors without reading session history
     deadlines.set("timer-elsewhere", Effect.runFork(Effect.never));
     const checked: string[] = [];
     rig.store.listSessions = () => { throw new Error("session history was read"); };
-    rig.store.getSession = function (key) { checked.push(key); return get.call(this, key); };
+    // (A session's workspace is asked as `sessionWs`, kept once read: asked here of each, none twice from the database.)
+    const ws = rig.store.sessionWs;
+    rig.store.sessionWs = function (key) { checked.push(key); return ws.call(this, key); };
     await rig.hub.leftWorkspace("W2");
     assert.deepEqual(suspended, ["here"]);
     assert.equal(deadlines.has("here"), false);
@@ -207,6 +209,7 @@ test("leaving a workspace checks its live actors without reading session history
   } finally {
     rig.store.listSessions = list;
     rig.store.getSession = get;
+    delete (rig.store as { sessionWs?: unknown }).sessionWs;
     await rig.close();
   }
 });

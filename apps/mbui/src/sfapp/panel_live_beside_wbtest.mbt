@@ -35,7 +35,7 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: the focus as 
     let first_field = field_id()
     let at = fn() {
       let d = t.query(Dialog).map(fn(s) { (s.label, tenth4(s.rect)) })
-      "\{panel_focus_said(t)} dialog \{d} field same \{field_id() == first_field} text \{pf.text()}"
+      "\{panel_focus_said(t)} dialog \{@ui.some_text(d.map(fn(d) { "(\{d.0}, \{@ui.rect_text(d.1)})" }))} field same \{field_id() == first_field} text \{pf.text()}"
     }
     let open = at()
     t.type_text("甲")
@@ -61,10 +61,9 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: the focus as 
 }
 
 ///|
-test "panel live beside what opened it, 大屏 keyboard and mouse: opened under what opened it, opened flipped over it for want of room below (two panels, each where it was put), and under it with what stands at its head's end; its title none, some, none again (frames as the display draws them): where it is, its title, head's end and words, whether it stands above: as main has it" {
+test "panel live beside what opened it, 大屏 keyboard and mouse: opened under what opened it, opened flipped over it for want of room below (two panels, each where it was put), its title none, some, none again (frames as the display draws them): where it is, its title and words, whether it stands above: as main has it" {
   let out = []
-  let ends = []
-  for (y, end) in [(100.0, false), (780.0, false), (100.0, true)] {
+  for y in [100.0, 780.0] {
     let t = menu_tester(1280.0, 800.0, 0)
     let title = @signals.signal("")
     let up : Array[Bool] = []
@@ -76,7 +75,6 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: opened under 
       },
       from=At(600.0, y, 0.0, 0.0),
       live=fn() { (title.get(), "", "") },
-      head_end?=if end { Some(fn(c : @ui.Ctx) { c.text("尾", style=@sf.paragraph) |> ignore }) } else { None },
     )
     t.run_for(@ui.move_most_ms)
     let w = fn(s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
@@ -84,12 +82,8 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: opened under 
       title.set(s)
       live_frames(t, 30)
       let d = t.query(Dialog).map(fn(s) { (s.label, tenth4(s.rect)) })
-      let line = "\{y} \{s}: dialog \{d} title \{w("面板")} words \{w("面板里的话，长一些，好看它怎么折行")} button \{t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) })} up \{up.last()}"
-      if end {
-        ends.push("\{line} end \{w("尾")}")
-      } else {
-        out.push(line)
-      }
+      let line = "\{y} \{s}: dialog \{@ui.some_text(d.map(fn(d) { "(\{d.0}, \{@ui.rect_text(d.1)})" }))} title \{@ui.list_text(w("面板").map(@ui.rect_text))} words \{@ui.list_text(w("面板里的话，长一些，好看它怎么折行").map(@ui.rect_text))} button \{@ui.some_text(t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) }).map(@ui.rect_text))} up \{@ui.some_text(up.last())}"
+      out.push(line)
     }
   }
   // (as main has it, 2f452a34)
@@ -100,12 +94,6 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: opened under 
     "780 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 706, 296, 68))) title [] words [(616, 712, 264, 22)] button Some((840, 738, 44, 24)) up Some(true)",
     "780 面板: dialog Some((面板 面板里的话，长一些，好看它怎么折行 好的, (600, 676, 296, 98))) title [(616, 688, 264, 20)] words [(616, 712, 264, 22)] button Some((840, 738, 44, 24)) up Some(true)",
     "780 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 706, 296, 68))) title [] words [(616, 712, 264, 22)] button Some((840, 738, 44, 24)) up Some(true)",
-  ])
-  // (what stands at its head's end there only while it has a title: as small_panel heads it; as main has it, 2f452a34)
-  assert_eq(ends, [
-    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 68))) title [] words [(616, 112, 264, 22)] button Some((840, 138, 44, 24)) up Some(false) end []",
-    "100 面板: dialog Some((面板 尾 面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 94))) title [(616, 113, 26, 20)] words [(616, 138, 264, 22)] button Some((840, 164, 44, 24)) up Some(false) end [(654, 112, 236, 22)]",
-    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 68))) title [] words [(616, 112, 264, 22)] button Some((840, 138, 44, 24)) up Some(false) end []",
   ])
 }
 
@@ -135,7 +123,7 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: held short of
   t.run_for(@ui.move_most_ms)
   let w = fn(s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
   let at = fn() {
-    "dialog \{t.query(Dialog).map(fn(s) { tenth4(s.rect) })} title \{w("面板")} row0 \{w("第0行")} row10 \{w("第10行")} button \{t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) })} held \{held.last()}"
+    "dialog \{@ui.some_text(t.query(Dialog).map(fn(s) { tenth4(s.rect) }).map(@ui.rect_text))} title \{@ui.list_text(w("面板").map(@ui.rect_text))} row0 \{@ui.list_text(w("第0行").map(@ui.rect_text))} row10 \{@ui.list_text(w("第10行").map(@ui.rect_text))} button \{@ui.some_text(t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) }).map(@ui.rect_text))} held \{@ui.some_text(held.last())}"
   }
   let (dx, dy, dw, dh) = t.get(Dialog).rect
   t.wheel(dx + dw / 2.0, dy + dh / 2.0, 120.0)
@@ -168,13 +156,14 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: held short of
     t.run_for(@ui.move_most_ms)
   }
   let button = t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) })
-  let bottom = "seen \{rows_seen(t)} title \{w("面板")} button \{button} in window \{button.map(fn(b) { b.1 >= 0.0 && b.1 + b.3 <= 500.0 })}"
+  let seen = rows_seen(t)
+  let bottom = "seen (\{@ui.some_text(seen.0)}, \{@ui.some_text(seen.1)}) title \{@ui.list_text(w("面板").map(@ui.rect_text))} button \{@ui.some_text(button.map(@ui.rect_text))} in window \{@ui.some_text(button.map(fn(b) { b.1 >= 0.0 && b.1 + b.3 <= 500.0 }))}"
   // (a press at its middle, where the hit test finds it: not said to it)
   let (bx, by, bw, bh) = t.get(Button, label="好的").rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.run_for(@ui.move_most_ms)
   // (as main has it, 2f452a34)
-  assert_eq([bottom, "said \{said} presenting \{@sf.presenting()}"], [
+  assert_eq([bottom, "said \{@ui.list_text(said)} presenting \{@sf.presenting()}"], [
     "seen (Some(第20行), Some(第39行)) title [(616, 20, 264, 20)] button Some((840, 456, 44, 24)) in window Some(true)",
     "said [ok] presenting false",
   ])

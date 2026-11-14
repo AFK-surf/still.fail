@@ -7,13 +7,17 @@
 import { consoleAdmin, isAdmin } from "./admin";
 import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type Claims } from "./auth";
 import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
-import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
+import { guestOf } from "./guests";
+import type { Live } from "./account";
+import { EVENTS_PROTOCOLS, ROLES, sockets, type AddedMail, type Role } from "./directory";
 import type { Env } from "./env";
+import { requestLang, tr, type Lang } from "./i18n.ts";
+import { mailConfigured, sendAdded } from "./mail";
 import type { AdminFeedback, FeedbackStatus } from "./types";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature, verifyKeySignature } from "./grants";
 import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { serveModels } from "./models";
-import { receiveFeedback } from "./feedback";
+import { FEEDBACK_LIMITS, receiveFeedback, receiveReply } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
@@ -27,7 +31,7 @@ const STATUS: Record<string, number> = {
   workspace_not_found: 404, member_not_found: 404, user_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
   forbidden: 403, invitation_for_other_email: 403,
   already_member: 409, invalid_name: 400, invalid_emoji: 400, invalid_icon: 400, invalid_role: 400, invalid_email: 400, invalid_relay: 400, invalid_relays: 400, invalid_way: 400, last_relay: 409,
-  last_owner: 409, sole_owner: 409, locked_workspace: 409, not_before_owner: 409,
+  last_owner: 409, sole_owner: 409, locked_workspace: 409, not_before_owner: 409, rig_enrollment: 409, station_enrollment: 409, station_in_others: 409, last_station: 409,
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
   invalid_note: 400, invalid_expiry: 400, invalid_limits: 400,
@@ -50,6 +54,20 @@ function withCommands<T extends { token: string }>(env: Env, made: T, ofBeta: bo
   return { ...made, install: `curl -fsSL ${sh} | sh -s -- ${made.token}`, installWindows: `& ([scriptblock]::Create((irm ${installer("install.ps1")}))) ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
 }
 
+/**
+ * Those `addMembers` added told so by mail (mail.ts `sendAdded`), in the language of the app that added them (the
+ * receiver's is not known): the emails that could not be sent, which the app says, let go of again by the Directory so
+ * adding them again tries again. Nothing is sent by a cloud with no mail (a local one): none is said unsent then.
+ */
+async function mailAdded(env: Env, lang: Lang, workspace: string, mail: AddedMail): Promise<string[]> {
+  if (!mailConfigured(env) || mail.to.length === 0) return [];
+  const sent = await Promise.allSettled(mail.to.map((m) => sendAdded(env, lang, m.email, m.joined, mail.inviter, mail.workspace)));
+  const failed = mail.to.filter((_, i) => sent[i]!.status === "rejected").map((m) => m.email);
+  for (const s of sent) if (s.status === "rejected") console.warn(`an added member's mail not sent: ${(s.reason as { code?: string })?.code ?? s.reason}`);
+  if (failed.length > 0) await env.DIRECTORY.getByName("primary").mailFailed(workspace, failed);
+  return failed;
+}
+
 async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
   try {
     const value = await run();
@@ -61,15 +79,39 @@ async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
   }
 }
 
+/** Requests of the test channel (index.ts): its account's object says whether it is let in, as it says its session is live. */
+export const onTestChannel = new WeakSet<Request>();
+/** What a request's account's object said of its token, asked once a request (index.ts asks first on the test channel). */
+const said = new WeakMap<Request, Promise<Live>>();
+/**
+ * The locks' routes (the workspace's lock, the person's own, the devices that came): kept here only for the stations
+ * and devices from before the stations carried them (the root AGENTS.md, The cloud is the account system), and counted
+ * apart from the account system's requests a minute (account.ts `charge`), which they are not to use up. They go with
+ * what they serve.
+ */
+const LOCK_ROUTE = /^\/v1\/(me\/personal-lock|workspaces\/[^/]+\/(lock(\/.*)?|devices))$/;
+export function liveOf(request: Request, env: Env, claims: Claims): Promise<Live> {
+  let live = said.get(request);
+  if (!live) said.set(request, (live = env.ACCOUNTS.getByName(claims.sub).live(claims, onTestChannel.has(request), LOCK_ROUTE.test(new URL(request.url).pathname))));
+  return live;
+}
+
+/**
+ * The test channel is for the accounts the admin let in (Directory `beta`); any call carrying the token of an account
+ * not let in answers 403 not_beta, which the page takes for "go to the stable one" and an app for "this account cannot
+ * use the test build" (index.ts).
+ */
+export const notBetaReply = (env: Env, request: Request) => reply({ error: "not_beta", message: tr(requestLang(request), "cloud.beta.notLetIn"), stable: env.PUBLIC_ORIGIN }, 403);
+
 /**
  * The account a token signs in, or the answer to give: signed out (401), or over its requests a minute (429, tried
  * again later; it was answered as signed out before, and the apps said 登录已失效 to someone signed in).
  */
-async function account(token: string | null, env: Env): Promise<Claims | Response> {
+async function account(token: string | null, env: Env, request: Request): Promise<Claims | Response> {
   const claims = token ? await verifyToken(env, token, "access") : null;
   if (!claims) return denied();
-  const live = await env.ACCOUNTS.getByName(claims.sub).live(claims);
-  return live === true ? claims : live === "limited" ? limited() : denied();
+  const live = await liveOf(request, env, claims);
+  return live === true ? claims : live === "limited" ? limited() : live === "not_beta" ? notBetaReply(env, request) : denied();
 }
 
 const isUpgrade = (request: Request) => request.headers.get("upgrade")?.toLowerCase() === "websocket";
@@ -120,7 +162,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return directory(async () => ({
       // `locks`: a station that pins a lock in each workspace it joins (one from before would take a locked one's
       // members on this cloud's word).
-      ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version, path === "/v1/stations/join", input.locks === true)),
+      // `rig`: it enrolls as a rig, which a rig's token alone makes (directory.ts `enroll`).
+      ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version, path === "/v1/stations/join", input.locks === true, input.rig === true)),
       station: input.station,
       ...relays(env),
       grant_keys: grantKeys(env),
@@ -139,16 +182,20 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - clock.now() / 1000) > 300) return reply({ error: "invalid_request" }, 400);
     if (!(await verifyAnySignature(station, signature, signedMessages("station-connect-v1", publicOrigins(env), `${station}:${ts}`)))) return reply({ error: "invalid_signature" }, 401);
     const headers = new Headers({ upgrade: "websocket", "x-stillfail-station": station });
+    // On a guest's origin (guests.ts): its state frames name that origin, so the station stays on it.
+    if (guestOf(env, env.PUBLIC_ORIGIN)) headers.set("x-stillfail-origin", env.PUBLIC_ORIGIN);
     const version = header(request, "version");
     if (version) headers.set("x-stillfail-version", version.slice(0, 40));
-    return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
+    if (sockets.where(env) === "primary") return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
+    return env.STATIONS.getByName(station).fetch(new Request("https://station/connect", { headers }));
   }
 
   // Spans from a signed-in client, or from a station signing them with its key (tracing.ts).
+  // (their own budget by sender, tracing.ts: not the account's, which the account system's requests need)
   if (path === "/v1/telemetry/traces" && method === "POST") {
     const token = bearerToken(request);
-    const claims = token ? await account(token, env) : null;
-    if (claims instanceof Response) return claims;
+    const claims = token ? await verifyToken(env, token, "access") : null;
+    if (token && (!claims || !(await env.ACCOUNTS.getByName(claims.sub).signedIn(claims)))) return denied();
     return receiveTraces(request, env, claims?.sub ?? null);
   }
 
@@ -158,13 +205,15 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // A bug report about still.fail itself, from a station's agent (signed with its key) or a signed-in account (feedback.ts).
   if (path === "/v1/feedback" && method === "POST") {
     const token = bearerToken(request);
-    const claims = token ? await account(token, env) : null;
+    const claims = token ? await account(token, env, request) : null;
     if (claims instanceof Response) return claims;
     return receiveFeedback(request, env, claims?.sub ?? null);
   }
 
   // Which of its reports are fixed and out, for a station to tell who reported them; what changed, for anyone (changelog.ts).
   if (path === "/v1/feedback/fixed" && method === "POST") return serveFixed(request, env);
+  // Its agents' answers on its reports (feedback.ts). A station reads none of the team's replies: they are the apps'.
+  if (path === "/v1/feedback/reply" && method === "POST") return receiveReply(request, env);
   if (path === "/v1/changelog" && method === "GET") return serveChangelog(request, env);
   // What models can do and cost, for stations (models.ts): models.dev's, as still.fail reads it. No secret.
   if (path === "/v1/models" && method === "GET") return serveModels(request);
@@ -179,7 +228,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/push/key" && method === "GET") return pushKey(env);
   // This device's push subscription or token, registered with the signed-in account's session, or taken off it.
   if (path === "/v1/push" && (method === "POST" || method === "DELETE")) {
-    const claims = await account(bearerToken(request), env);
+    const claims = await account(bearerToken(request), env, request);
     if (claims instanceof Response) return claims;
     return registration(request, env, claims.sub, claims.sid);
   }
@@ -187,10 +236,18 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/events" && method === "GET") {
     if (!isUpgrade(request)) return reply({ error: "websocket_required" }, 426);
     const socket = socketToken(request);
-    const claims = await account(socket?.token ?? null, env);
-    if (claims instanceof Response) return claims;
-    if (!socket) return denied();
-    return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-protocol": socket.protocol } }));
+    if (sockets.where(env) === "primary") {
+      const claims = await account(socket?.token ?? null, env, request);
+      if (claims instanceof Response) return claims;
+      if (!socket) return denied();
+      return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-protocol": socket.protocol } }));
+    }
+    // On the account's object, which checks the session itself (and, on the test channel, that it is let in).
+    const claims = socket ? await verifyToken(env, socket.token, "access") : null;
+    if (!claims || !socket) return denied();
+    const headers = { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-sid": claims.sid, "x-stillfail-protocol": socket.protocol, ...(onTestChannel.has(request) ? { "x-stillfail-channel": "beta" } : {}) };
+    const answer = await env.ACCOUNTS.getByName(claims.sub).fetch(new Request("https://account/events", { headers }));
+    return answer.status === 403 ? notBetaReply(env, request) : answer;
   }
 
   // ── the pictures put up as icons: to anyone with the address (icons.ts) ──
@@ -202,7 +259,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // ── accounts ────────────────────────────────────────────────────────────
   const isAccountRoute = path === "/v1/me" || path === "/v1/me/personal-lock" || path === "/v1/me/picture" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
-  const claims = await account(bearerToken(request), env);
+  const claims = await account(bearerToken(request), env, request);
   if (claims instanceof Response) return claims;
   let input: Record<string, unknown>;
   try {
@@ -223,7 +280,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     const lock = env.ACCOUNTS.getByName(sub);
     if (method === "GET") return reply({ entries: await lock.personalLock() });
     if (method === "POST") {
-      const said = await lock.appendPersonalLock(sub, input.entries);
+      const said = await lock.appendPersonalLock(sub, input.entries, input.keep === true);
       return "refused" in said ? reply({ error: said.refused }, STATUS[said.refused] ?? 409) : reply(said);
     }
   }
@@ -271,10 +328,23 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       return { ...made, url: `${env.PUBLIC_ORIGIN}/invite#${made.token}` };
     });
   }
+  // The bug reports from the workspace's chats the team replied on, with the replies, for its members' apps to show in
+  // those chats; a member's answer on one: { text }.
+  if (kind === "feedback" && !target && method === "GET") return directory(() => dir.feedbackOf(sub, ws));
+  if (kind === "feedback" && target && action === "reply" && method === "POST") {
+    const said = text("text").trim().slice(0, FEEDBACK_LIMITS.reply);
+    if (!said || !/^[0-9A-Z]{26}$/.test(target)) return reply({ error: "invalid_request" }, 400);
+    return directory(() => dir.memberFeedbackReply(sub, ws, target, said));
+  }
   if (kind === "relays" && !target && method === "PUT") return directory(() => dir.setRelays(sub, ws, input.relays));
   if (kind === "ways" && !target && method === "PUT") return directory(() => dir.setWay(sub, ws, input.way, input.on));
   if (kind === "invitations" && target && method === "DELETE") return directory(() => dir.revokeInvitation(sub, ws, target));
-  if (kind === "members" && !target && method === "POST") return directory(() => dir.addMembers(sub, ws, role(), input.emails));
+  if (kind === "members" && !target && method === "POST") {
+    return directory(async () => {
+      const { mail, ...made } = await dir.addMembers(sub, ws, role(), input.emails);
+      return { ...made, unmailed: await mailAdded(env, input.lang === "zh" || input.lang === "en" ? input.lang : requestLang(request), ws, mail) };
+    });
+  }
   if (kind === "added" && target && method === "DELETE") return directory(() => dir.removeAdded(sub, ws, target));
   if (kind === "members" && target && method === "PATCH") return directory(() => dir.setRole(sub, ws, target, role()));
   if (kind === "members" && target && method === "DELETE") return directory(() => dir.removeMember(sub, ws, target));
@@ -284,6 +354,15 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       // Asked on the test channel (its host, or a beta app's x-stillfail-channel), the installer is the test channel's.
       const beta = betaOrigin(env);
       return withCommands(env, made, (beta !== null && url.origin === beta) || header(request, "channel") === "beta");
+    });
+  }
+  // A rig's enrollment (a station that only runs tasks): the same commands, to which the app adds that it is one with its person's own lock
+  // to pin (`rig:<hash>`, `--rig <hash>`), as it adds a workspace lock's hash: the cloud never says whose lock that is.
+  if (kind === "rigs" && target === "enrollments" && !action && method === "POST") {
+    return directory(async () => {
+      const made = await dir.createRigEnrollment(sub, ws, text("name"));
+      const beta = betaOrigin(env);
+      return { ...withCommands(env, made, (beta !== null && url.origin === beta) || header(request, "channel") === "beta"), rig: true };
     });
   }
   // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
@@ -304,7 +383,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (kind === "lock" && !target) {
     const after = url.searchParams.has("after") ? Number(url.searchParams.get("after")) : -1;
     if (method === "GET") return directory(() => dir.lock(sub, ws, Number.isSafeInteger(after) ? after : -1));
-    if (method === "POST") return directory(() => dir.appendLock(sub, ws, input.entries));
+    if (method === "POST") return directory(() => dir.appendLock(sub, ws, input.entries, input.keep === true));
     if (method === "DELETE") return directory(() => dir.clearLock(sub, ws));
   }
   if (kind === "lock" && target === "requests") {
@@ -314,6 +393,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   }
   if (kind === "devices" && !target && method === "GET") return directory(() => dir.devices(sub, ws));
   if (kind === "stations" && target && validKeyHex(target)) {
+    // (what it is, a whole station or one that only runs tasks: asked alone)
+    if (!action && method === "PATCH" && input.mode !== undefined) return directory(() => dir.setStationMode(sub, ws, target, input.mode));
     if (!action && method === "PATCH") return directory(async () => dir.updateStation(sub, ws, target, { name: input.name, emoji: input.emoji, icon: await icon() }));
     if (!action && method === "DELETE") return directory(() => dir.removeStation(sub, ws, target));
   }
@@ -340,9 +421,43 @@ export async function feedbackList(env: Env): Promise<AdminFeedback[]> {
   return dir.adminFeedback();
 }
 
+/** Where a report's status is marked: the console's admin's, and the feedback monitor's with its token (index.ts). */
+export const FEEDBACK_STATUS_PATH = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/status$/;
+
+/**
+ * Marks where a report is. Only its status: a station is told of a fix only once the changelog marks it (markFixed,
+ * fixedUntold), and a report marked otherwise is not told of until it is marked fixed again.
+ */
+export async function setFeedbackStatus(env: Env, id: string, status: unknown): Promise<Response> {
+  if (!FEEDBACK_STATUSES.includes(status as FeedbackStatus)) return reply({ error: "invalid_request" }, 400);
+  return directory(() => env.DIRECTORY.getByName("primary").setFeedbackStatus(id, status as FeedbackStatus));
+}
+
+/** Where the team replies to a report: the console's admin, and the feedback monitor with its token (index.ts). */
+export const FEEDBACK_REPLY_PATH = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/reply$/;
+
+/**
+ * The team's reply on a report, `by` the admin's email or the feedback monitor: { text } → 201 { id, delivery:
+ * "pending" }, shown to the people of the chat it came from in their apps, never to a station or its agents; 409 {
+ * error: "undeliverable", reason } where there is no such chat (`no_station`: an account's report; `no_chat`: one
+ * whose chat or its workspace cannot be told, or the station left it), not kept.
+ */
+export async function replyToFeedback(env: Env, id: string, by: string, text: unknown): Promise<Response> {
+  const said = typeof text === "string" ? text.trim().slice(0, FEEDBACK_LIMITS.reply) : "";
+  if (!said) return reply({ error: "invalid_request" }, 400);
+  try {
+    const made = await env.DIRECTORY.getByName("primary").replyToFeedback(id, by, said);
+    if ("undeliverable" in made) return reply({ error: "undeliverable", reason: made.undeliverable }, 409);
+    return reply(made, 201);
+  } catch (error) {
+    if (error instanceof Error && error.message === "feedback_not_found") return reply({ error: "feedback_not_found" }, 404);
+    throw error;
+  }
+}
+
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
-  const claims = await account(bearerToken(request), env);
+  const claims = await account(bearerToken(request), env, request);
   if (claims instanceof Response || !(await consoleAdmin(request, env, claims.email))) return notFound();
   let input: Record<string, unknown>;
   try {
@@ -408,11 +523,11 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
   if (path === "/v1/admin/feedback" && method === "GET") {
     return directory(async () => ({ feedback: await feedbackList(env) }));
   }
-  const status = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/status$/.exec(path);
-  if (status && method === "POST") {
-    if (!FEEDBACK_STATUSES.includes(input.status as FeedbackStatus)) return reply({ error: "invalid_request" }, 400);
-    return directory(() => dir.setFeedbackStatus(status[1]!, input.status as FeedbackStatus));
-  }
+  const status = FEEDBACK_STATUS_PATH.exec(path);
+  if (status && method === "POST") return setFeedbackStatus(env, status[1]!, input.status);
+  // A reply to the session that reported it: { text }.
+  const replied = FEEDBACK_REPLY_PATH.exec(path);
+  if (replied && method === "POST") return replyToFeedback(env, replied[1]!, claims.email, input.text);
   // How loaded the relays are (relay-load.ts).
   if (path === "/v1/admin/relays" && method === "GET") return reply(await relaysLoad(env));
   const revoke = /^\/v1\/admin\/invite-codes\/([A-Za-z0-9-]{1,32})\/revoke$/.exec(path);

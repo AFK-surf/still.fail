@@ -9,7 +9,7 @@ test "on the tape 一台 station 的记忆 made once: its rows the tree's own; w
     assert_eq(marks, 1, msg="its mark at \{w}")
     let own = tree_words_drawn()
     for word in [@sf.t("web-main.memory.global"), "习惯", "发布流程", "周报", "pdf、xlsx"] {
-      assert_true(own.iter().any(fn(o) { o.contains(word) }), msg="\{word} not the tree's own at \{w}: \{own}")
+      assert_true(own.iter().any(fn(o) { o.contains(word) }), msg="\{word} not the tree's own at \{w}: \{Repr(own)}")
     }
   }
 }

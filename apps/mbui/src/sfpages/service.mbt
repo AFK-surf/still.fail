@@ -44,7 +44,7 @@ pub fn service_view(
   file? : FilePage? = None,
   close? : (() -> Unit)? = None,
 ) -> Unit {
-  svc_keep.val = fn(patch) { (src.call)("prefs.set", patch, fn(_) {  }) }
+  svc_keep.val = fn(patch) { (src.call)("prefs.set", patch, @sfbase.answer_unread) }
   let p = service_page_for(station, job, prefs=src.topic("prefs", {}).get().value)
   p.port = port
   p.name = name
@@ -227,9 +227,9 @@ fn service_page_bar(
     if c.left_out(size_slot) {
       gone.push(
         Some(
-          bar_line(size_said(p), if p.moving { "move" } else { "devices" }, disabled=false, on_press=fn() {
-            if p.moving {
-              p.moving = false
+          bar_line(size_said(p), if p.moving.get() { "move" } else { "devices" }, disabled=false, on_press=fn() {
+            if p.moving.get() {
+              p.moving.set(false)
             } else {
               service_sizes_panel(service_key(p.station, p.job), Of(more))
             }
@@ -298,7 +298,7 @@ fn service_foot_bar(
     back_forward(c, site, n)
     address_or_marking(c, src, p, site, name, fixed, n, end=Some(fn() { reload_key(c, site) }), part=load_part(load))
     mark_key_of(c, p, site)
-    if p.moving {
+    if p.moving.get() {
       size_key_of(c, p)
     } else {
       foot_more(c, src, p, station, port, load)
@@ -458,7 +458,7 @@ fn address_or_marking(
 ///|
 /// What the size key says: its size, or, while a finger moves the page, that a press stops it.
 fn size_said(p : ServicePage) -> String {
-  if p.moving {
+  if p.moving.get() {
     svc("android-chat.preview.moveOff")
   } else {
     svc("android-chat.preview.size.title")
@@ -473,19 +473,19 @@ fn size_key_of(c : @ui.Ctx, p : ServicePage) -> Unit {
   let t = @sf.theme()
   let sid = c.id("service/size")
   c.on_press(sid, fn() {
-    if p.moving {
-      p.moving = false
+    if p.moving.get() {
+      p.moving.set(false)
     } else {
       service_sizes_panel(service_key(p.station, p.job), Of(sid))
     }
   })
-  let sb = c.box(style=if p.moving { size_key_moving } else if p.viewport is Some(_) { size_key_sized } else { size_key }, id=sid, fn() {
-    @sf.icon(c, if p.moving { "move" } else { "devices" }, size=bar_icon_size, color=if p.moving { t.p.accent_text } else { t.p.text }) |> ignore
+  let sb = c.box(style=if p.moving.get() { size_key_moving } else if p.viewport.get() is Some(_) { size_key_sized } else { size_key }, id=sid, fn() {
+    @sf.icon(c, if p.moving.get() { "move" } else { "devices" }, size=bar_icon_size, color=if p.moving.get() { t.p.accent_text } else { t.p.text }) |> ignore
     // (its size in words, as its panel says it too: short of room they leave it, its icon staying)
-    match p.viewport {
+    match p.viewport.get() {
       Some(v) =>
         c.box(drop=bar_drop_size_words, fn() {
-          c.text(dims(v.width, v.height), style=if p.moving { size_key_words_moving } else { size_key_words }) |> ignore
+          c.text(dims(v.width, v.height), style=if p.moving.get() { size_key_words_moving } else { size_key_words }) |> ignore
         })
         |> ignore
       None => ()
@@ -603,9 +603,9 @@ fn service_stage(
   c.cursor(stage, Arrow)
   // who takes a finger on the page: all its own fitted; a sized page's two fingers the canvas's, all of it while it is
   // moved by a finger
-  let touch = match p.viewport {
+  let touch = match p.viewport.get() {
     None => @ui.Touch::All
-    Some(_) if p.moving => @ui.Touch::Through
+    Some(_) if p.moving.get() => @ui.Touch::Through
     Some(_) => @ui.Touch::PinchOut
   }
   // (once the frame's builds are over, as the last of them has it; told the host only when it changes)
@@ -625,13 +625,13 @@ fn service_stage(
   }
   // (a page filling it, once drawn, on nothing of the stage's: a ground under it showed along its edges, where the
   // host's cut and the hole's meet within a pixel, a line round the page)
-  let under = match p.viewport {
+  let under = match p.viewport.get() {
     Some(_) => Some(ground)
     None => if site.shown() { None } else { Some(t.p.card) }
   }
   c.box(w=Fill(1.0), h=Fill(1.0), style?=round, bg?=under, clip=true, id=stage, fn() {
     // (the stage's place as this frame lays it out: read back, built again once it is)
-    let placed = match (p.viewport, c.laid_size(stage)) {
+    let placed = match (p.viewport.get(), c.laid_size(stage)) {
       (Some(v), Some((sw, sh))) => {
         let w = v.width.to_double()
         // a page of no height of its own: as high as the stage leaves it at the scale its width is fitted at
@@ -642,10 +642,10 @@ fn service_stage(
             dmax(240.0, ((sh - 32.0) / fitted).floor())
           }
         }
-        p.view.boxed(sw, sh)
-        p.view.natural(w, h)
+        p.view.boxed(sw, sh, at=c.moment())
+        p.view.natural(w, h, at=c.moment())
         // (its scale as it shows, a glide's or a fling's way too: what its place says, Zoom::rect)
-        match p.view.rect() {
+        match p.view.rect(c) {
           // (fitted: on whole points)
           Some((x, y, rw, _)) if p.view.fitted => Some(({ x: x.round(), y: y.round(), scale: rw / w, w, h } : Placed))
           Some((x, y, rw, _)) => Some(({ x, y, scale: rw / w, w, h } : Placed))
@@ -657,7 +657,7 @@ fn service_stage(
     p.placed = placed
     match placed {
       Some(pl) => {
-        let corner = corner_of(p.viewport.map(fn(v) { v.width }).unwrap_or(0), pl.scale)
+        let corner = corner_of(p.viewport.get().map(fn(v) { v.width }).unwrap_or(0), pl.scale)
         // (told once the frame's builds are over, as the last laid the stage out)
         c.after_build("scale", fn() { site.set_scale(pl.scale) })
         // its white, its shadow and its screen's corners under it; the page where they are
@@ -686,7 +686,7 @@ fn service_stage(
         |> ignore
       }
       None =>
-        if p.viewport is None {
+        if p.viewport.get() is None {
           c.after_build("scale", fn() { site.set_scale(1.0) })
           c.native(site, corners?=r) |> ignore
         }
@@ -742,7 +742,7 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
       None => 0.0
     }
     if !on_page && travelled < stage_tap_slop {
-      p.view.fit_now()
+      p.view.fit_now(at=c.moment())
     }
   })
   let (px, py, _) = c.pointer()
@@ -762,10 +762,10 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
           on_page,
         })
         if at.length() == 1 && (at[0].0 != dx || at[0].1 != dy) {
-          stage_moved(p, at)
+          stage_moved(c, p, at)
         }
       }
-      Some(_) => stage_moved(p, at)
+      Some(_) => stage_moved(c, p, at)
     }
   } else {
     p.hold = None
@@ -776,7 +776,7 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
 /// The fingers now at `at` (from the stage's top left): one moves the page as far as it went, two zoom it by how far
 /// apart they went about the point between them, moving it as that point did; a finger come or gone,
 /// from there on.
-fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
+fn stage_moved(c : @ui.Ctx, p : ServicePage, at : Array[(Double, Double)]) -> Unit {
   let h = match p.hold {
     Some(h) => h
     None => return
@@ -789,7 +789,7 @@ fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
     let (x0, y0) = h.was[0]
     let (x1, y1) = at[0]
     h.travelled = h.travelled + ((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)).sqrt()
-    p.view.pan(x1 - x0, y1 - y0)
+    p.view.pan(x1 - x0, y1 - y0, at=c.moment())
   } else {
     let mid = fn(ps : Array[(Double, Double)]) { ((ps[0].0 + ps[1].0) / 2.0, (ps[0].1 + ps[1].1) / 2.0) }
     let apart = fn(ps : Array[(Double, Double)]) {
@@ -799,7 +799,7 @@ fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
     }
     let (m0x, m0y) = mid(h.was)
     let (m1x, m1y) = mid(at)
-    p.view.transform(m0x, m0y, apart(at) / apart(h.was), m1x - m0x, m1y - m0y)
+    p.view.transform(m0x, m0y, apart(at) / apart(h.was), m1x - m0x, m1y - m0y, at=c.moment())
   }
   h.was = at
 }
@@ -860,91 +860,119 @@ fn preset_of(v : Viewport?) -> String? {
 }
 
 ///|
-/// All the sizes, the same on every screen: as big as the preview, the presets, 自定义; a
-/// page laid out at a size of its own moved by a finger in place of used (移动页面: what the toolbar under the page had)
-/// and fitted again once moved or zoomed. Its rows a row's room, its words the theme's (Rows, its ui and meta: a touch
-/// device's a finger's and a size up), a sheet on a phone and beside the size key with keyboard and mouse (the presenters').
-fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  let r = t.rows
+/// All the sizes, the same on every screen, in node `v` (the panel's body), `close` closing it: as big as the preview,
+/// the presets, 自定义; a page laid out at a size of its own moved by a finger in place of used (移动页面: what the
+/// toolbar under the page had) and fitted again once moved or zoomed. Its rows a row's room, its words the theme's
+/// (Rows, its ui and meta: a touch device's a finger's and a size up), a sheet on a phone and beside the size key with
+/// keyboard and mouse (the presenters'). What it shows follows the page's size, whether a finger moves it and whether it
+/// is fitted as they change (signals: ServicePage's `viewport`, `moving`, its view told).
+fn page_sizes(v : @view.View, key : String, close : () -> Unit) -> Unit {
   let p = service_pages.get(key)
-  let current = match p {
-    Some(x) => x.viewport
-    None => None
+  let current = fn() {
+    match p {
+      Some(x) => x.viewport.get()
+      None => None
+    }
   }
-  let preset = preset_of(current)
-  c.box(style=sizes_room, fn() {
-    let option = fn(k : String, checked : Bool, name : String, note : String, v : Viewport?) {
-      let id = c.id("service/size/" + k)
-      c.on_press(id, fn() {
-        match p {
-          Some(x) => {
-            // a size chosen is fitted anew; the page no longer moved by a finger
-            x.moving = false
-            x.view.fit_now()
-            x.viewport = v
-            keep_size(key, v)
-          }
-          None => ()
-        }
-        close()
-      })
-      c.box(style=size_option.then(@sf.panel_row_in()).then(@ui.style(min_h=Fixed(@sf.theme().items.least))), id~, fn() {
-        c.box(style=@ui.style(w=Fixed(r.check), align=ACenter), fn() {
-          if checked {
-            @sf.icon(c, "check", size=size_check_icon, color=t.p.accent) |> ignore
+  // what shows as it stands: the tools of a page laid out at a size of its own (移动页面), and among them 适应 where the
+  // page is not fitted
+  let tools_now = fn(x : ServicePage) { x.viewport.get() is Some(_) }
+  let unfitted = fn(x : ServicePage) {
+    // (whether it is fitted, as the view is told it: Zoom::told follows each change of where it shows)
+    x.view.told()
+    !x.view.fitted
+  }
+  // (closed by a press that changes what it shows: what it showed as it was closed is what it shows on its way out, no
+  // more and no less, its rows not opening nor closing their way under a panel going; the check follows the row
+  // chosen)
+  let left : @signals.Signal[(Bool, Bool)?] = @signals.signal(None)
+  // the panel closed after `change`, what shows as it stands kept first
+  let leave = fn(change : () -> Unit) {
+    match (p, left.get()) {
+      (Some(x), None) => left.set(Some((tools_now(x), unfitted(x))))
+      _ => ()
+    }
+    change()
+    close()
+  }
+  v.box(fn(room) {
+    @sf.style_node(room, fn() { sizes_room })
+    let option = fn(checked : () -> Bool, name : () -> String, note : () -> String, size : Viewport?) {
+      size_option_node(room, checked, name, note, fn() {
+        leave(fn() {
+          match p {
+            Some(x) => {
+              // a size chosen is fitted anew (at the press's moment); the page no longer moved by a finger
+              x.moving.set(false)
+              x.view.fit_now(at=room.cause_at())
+              x.viewport.set(size)
+              keep_size(key, size)
+            }
+            None => ()
           }
         })
-        |> ignore
-        c.box(style=custom_name, fn() { c.text(name, style=if checked { r.title.then(size_name_on) } else { r.title.then(size_name) }) |> ignore })
-        |> ignore
-        c.text(note, style=r.note) |> ignore
-        // the row clickable over its clip
-        @motion.ripple(c, id, size_option_corner)
       })
-      |> ignore
     }
-    option("fit", current is None, svc("android-chat.preview.fit"), svc("android-chat.preview.fit.note"), None)
+    option(fn() { current() is None }, fn() { svc("android-chat.preview.fit") }, fn() { svc("android-chat.preview.fit.note") }, None)
     for pr in svc_presets {
       option(
-        pr.0,
-        preset == Some(pr.0),
-        svc("android-chat.preview.preset." + pr.0),
-        dims(pr.1, Some(pr.2)),
+        fn() { preset_of(current()) == Some(pr.0) },
+        fn() { svc("android-chat.preview.preset." + pr.0) },
+        fn() { dims(pr.1, Some(pr.2)) },
         Some({ width: pr.1, height: Some(pr.2) }),
       )
     }
-    c.box(style=custom_gap, fn() {  }) |> ignore
+    room.box(fn(g) { @sf.style_node(g, fn() { custom_gap }) }) |> ignore
     match p {
       Some(x) => {
-        custom_size(c, x, key)
+        custom_size(room, x, key)
         // laid out at a size of its own: moved by a finger, fitted again (the toolbar's tools that were)
-        if x.viewport is Some(_) {
-          c.box(style=sizes_tools, fn() {
-            let moving = @sf.switch_row(
-              c,
-              "service/move",
-              svc("android-chat.preview.move"),
-              x.moving,
-              note=svc("android-chat.preview.move.note"),
-            )
-            if moving != x.moving {
-              x.moving = moving
-              // (on: what it changes is the page under the panel, so the panel goes)
-              if moving {
-                close()
-              }
-            }
-            if !x.view.fitted {
-              @sf.button(c, svc("android-chat.preview.fitView"), key="service/fit-view", w=Fill(1.0), on_press=fn() {
-                x.view.fit_now()
-                x.moving = false
-                close()
-              }) |> ignore
-            }
-          })
-          |> ignore
+        let tools_shown = fn() {
+          match left.get() {
+            Some((tools, _)) => tools
+            None => tools_now(x)
+          }
         }
+        room.show(tools_shown, fn(tools) {
+          @sf.style_node(tools, fn() { sizes_tools })
+          @sf.panel_switch_noted_node(
+            tools,
+            fn() { svc("android-chat.preview.move") },
+            fn() { x.moving.get() },
+            fn(on) {
+              // (on: what it changes is the page under the panel, so the panel goes)
+              if on {
+                leave(fn() { x.moving.set(true) })
+              } else {
+                x.moving.set(false)
+              }
+            },
+            note=fn() { svc("android-chat.preview.move.note") },
+          )
+          let fit_shown = fn() {
+            match left.get() {
+              Some((_, fit)) => fit
+              None => unfitted(x)
+            }
+          }
+          tools.show(
+            fit_shown,
+            fn(b) {
+              @sf.button_node(
+                b,
+                fn() { svc("android-chat.preview.fitView") },
+                fn() {
+                  leave(fn() {
+                    x.view.fit_now(at=b.cause_at())
+                    x.moving.set(false)
+                  })
+                },
+                across=true,
+              )
+              |> ignore
+            },
+          )
+        })
       }
       None => ()
     }
@@ -953,18 +981,50 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
 }
 
 ///|
+/// A size's row in `parent` (the page's own: its check before its name, its note at its end), chosen while `checked()`:
+/// its check's column on its words' line, its name a row's title (500 chosen), its note a row's note; as tall as a
+/// row's least, its words as far in as the panel's (@sf.panel_words_in_node: panel_row_in's), the hover's ground under
+/// the hand, rippling round its corner under a press; `press` done as it is pressed, read out a button named by it.
+fn size_option_node(
+  parent : @view.View,
+  checked : () -> Bool,
+  name : () -> String,
+  note : () -> String,
+  press : () -> Unit,
+) -> Unit {
+  parent.box(fn(o) {
+    @sf.style_node(o, fn() {
+      size_option.then(@sf.panel_row_in_node(o)).then(@ui.style(min_h=Fixed(@sf.theme().items.least)))
+    })
+    o.ground(By(fn() { if @sf.lit_node(o) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
+    // (read out by its name and its size, as the old row was)
+    @sf.rippled_node(o, press, @sf.row_corner, fn() { name() + " " + note() })
+    // (its check's column, the check in its middle while chosen: along the row, at once)
+    o.box(fn(k) {
+      k.width(By(fn() { Some(@sf.theme().rows.check) })).row(Is(true)).lies_along(Is(Middle)) |> ignore
+      k.show(checked, fn(i) { @sf.icon_node(i, "check", size_check_icon, By(fn() { @sf.theme().p.accent })) |> ignore })
+    })
+    |> ignore
+    o.box(fn(n) {
+      @sf.style_node(n, fn() { custom_name }, in_row=true)
+      @sf.words_node(n, name, fn() { @sf.theme().rows.title.then(if checked() { size_name_on } else { size_name }) }) |> ignore
+    })
+    |> ignore
+    @sf.words_node(o, note, fn() { @sf.theme().rows.note }) |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// The sizes' room (under them the presenter's foot); a size's row: at the panel's rows' edge, its check's column on
-/// its words' line (@sf.panel_row_in), 8 apart, concentric with the panel; its name a row's title (500 chosen), its
-/// note a row's note (Rows); the check 16.
+/// its words' line (@sf.panel_row_in_node), 8 apart, concentric with the panel; its name a row's title (500 chosen),
+/// its note a row's note (Rows); the check 16.
 // kept across runs: a value (no field of it changes)
 let sizes_room : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let size_option : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 radius=Inner align=ACenter")
-
-///|
-let size_option_corner : Double = 12.0
+let size_option : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
 
 ///|
 let size_check_icon : Double = 16.0
@@ -1019,22 +1079,90 @@ let custom_by : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=fal
 let custom_turn : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let custom_turn_off : @ui.Style = custom_turn.then(@ui.css("opacity=O35"))
-
-///|
-/// Any size, typed: the width, and the height (empty: as high as the preview leaves it), each
-/// put once its field is let go of or done; turned by the button. 72 × 36 fields on the chip's ground.
-fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
-  let t = @sf.theme()
-  let r = t.rows
-  let wk = "service/custom-w"
-  let hk = "service/custom-h"
-  let typing = c.editor_focused(wk) || c.editor_focused(hk)
-  // what it is, unless someone is typing there
-  if !typing {
-    let (w, h) = match p.viewport {
-      Some(v) => (v.width.to_string(), v.height.map(fn(x) { x.to_string() }).unwrap_or(""))
+/// Any size, typed, in node `v`: the width, and the height (empty: as high as the preview leaves it), put as Enter is
+/// pressed in either field; turned by the button. 72 × 36 fields on the chip's ground. While neither field has the
+/// keys, they say the size the page is at, as it changes (what was typed and not put goes then, as it always went).
+fn custom_size(v : @view.View, p : ServicePage, key : String) -> Unit {
+  let r = fn() { @sf.theme().rows }
+  // (the two fields' nodes, as they are made below)
+  let fields : Array[@view.View] = []
+  // (put at the moment of the key that put it)
+  let commit = fn(at : Double) {
+    let ws = p.custom_w.text()
+    let hs = p.custom_h.text()
+    let width = size_of(ws)
+    let height = if hs == "" { Some(None) } else { size_of(hs).map(fn(x) { Some(x) }) }
+    match (width, height) {
+      (Some(w), Some(h)) => {
+        let size : Viewport = { width: clamp_size(w), height: h.map(clamp_size) }
+        let same = match p.viewport.get() {
+          Some(x) => x.width == w && x.height == h
+          None => false
+        }
+        if !same {
+          p.moving.set(false)
+          p.view.fit_now(at~)
+          p.viewport.set(Some(size))
+          keep_size(key, Some(size))
+        }
+      }
+      _ => ()
+    }
+  }
+  v.box(fn(row) {
+    @sf.style_node(row, fn() { custom_row.then(@ui.style(min_h=Fixed(@sf.theme().items.least))) })
+    // (its name where the sizes' names are: past a column as wide as their check)
+    row.box(fn(g) { g.width(By(fn() { Some(r().check) })) |> ignore }) |> ignore
+    row.box(fn(n) {
+      @sf.style_node(n, fn() { custom_name }, in_row=true)
+      @sf.words_node(n, fn() { svc("android-chat.preview.custom") }, fn() { r().title }) |> ignore
+    })
+    |> ignore
+    let field = fn(parent : @view.View, f : @ui.Field, hint : String) {
+      parent.box(fn(b) {
+        @sf.style_node(b, fn() { custom_field.then(@ui.style(w=r().field_w, h=r().field_h)) })
+        fields.push(@ui.field(
+          b,
+          f,
+          placeholder_by=fn() { svc(hint) },
+          max_lines=1,
+          enter_sends=true,
+          ime_action=@hostapi.ime_action_number,
+          size_by=fn() { @sf.theme().t.ui },
+          colors_by=fn() {
+            let k = @sf.theme().p
+            (k.text, k.subtle, k.accent)
+          },
+          // (digits alone, as they are typed)
+          edited=fn(words) {
+            let digits = size_digits(words)
+            if digits != words {
+              f.set(digits)
+            }
+          },
+          submitted=fn(_) {
+            commit(b.cause_at())
+            f.let_go()
+          },
+        ))
+      })
+      |> ignore
+    }
+    row.box(fn(fs) {
+      @sf.style_node(fs, fn() { custom_fields }, in_row=true)
+      field(fs, p.custom_w, "android-chat.preview.width")
+      @sf.words_node(fs, fn() { "×" }, fn() { custom_by }) |> ignore
+      field(fs, p.custom_h, "android-chat.preview.auto")
+    })
+    |> ignore
+    custom_turn_node(row, p, key)
+  })
+  |> ignore
+  // what it is, unless someone is typing there (as of each change of the size or of whether either field has the keys)
+  v.reacts(fn() { (p.viewport.get(), fields.iter().any(fn(f) { f.focused() })) }, fn(now) {
+    guard !now.1 else { return }
+    let (w, h) = match now.0 {
+      Some(x) => (x.width.to_string(), x.height.map(fn(n) { n.to_string() }).unwrap_or(""))
       None => ("", "")
     }
     if p.custom_w.text() != w {
@@ -1043,158 +1171,130 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
     if p.custom_h.text() != h {
       p.custom_h.set(h)
     }
-  }
-  let commit = fn() {
-    let ws = p.custom_w.text()
-    let hs = p.custom_h.text()
-    let width = size_of(ws)
-    let height = if hs == "" { Some(None) } else { size_of(hs).map(fn(x) { Some(x) }) }
-    match (width, height) {
-      (Some(w), Some(h)) => {
-        let v : Viewport = { width: clamp_size(w), height: h.map(clamp_size) }
-        let same = match p.viewport {
-          Some(x) => x.width == w && x.height == h
-          None => false
-        }
-        if !same {
-          p.moving = false
-          p.view.fit_now()
-          p.viewport = Some(v)
-          keep_size(key, Some(v))
-        }
-      }
-      _ => ()
-    }
-  }
-  // put once let go of (it was being typed in the frame before)
-  if p.custom_typing && !typing {
-    commit()
-  }
-  p.custom_typing = typing
-  c.box(style=custom_row.then(@ui.style(min_h=Fixed(@sf.theme().items.least))), fn() {
-    // (its name where the sizes' names are: past a column as wide as their check)
-    c.box(style=@ui.style(w=Fixed(r.check)), fn() {  }) |> ignore
-    c.box(style=custom_name, fn() { c.text(svc("android-chat.preview.custom"), style=r.title) |> ignore }) |> ignore
-    let field = fn(k : String, f : @ui.Field, hint : String) {
-      c.box(style=custom_field.then(@ui.style(w=r.field_w, h=r.field_h)), fn() {
-        let r = c.editor(
-          k,
-          font_size=t.t.ui,
-          max_lines=1,
-          plain=true,
-          ime_action=@hostapi.ime_action_number,
-          placeholder=hint,
-          color=t.p.text,
-          placeholder_color=t.p.subtle,
-          caret_color=t.p.accent,
-          field=f,
-        )
-        let digits = size_digits(r.text)
-        if digits != r.text {
-          f.set(digits)
-        }
-        match r.submitted {
-          Some(_) => {
-            commit()
-            c.blur()
-          }
-          None => ()
-        }
-      })
-      |> ignore
-    }
-    c.box(style=custom_fields, fn() {
-      field(wk, p.custom_w, svc("android-chat.preview.width"))
-      c.text("×", style=custom_by) |> ignore
-      field(hk, p.custom_h, svc("android-chat.preview.auto"))
-    })
-    |> ignore
-    let turnable = match p.viewport {
-      Some(v) => v.height is Some(_)
+  })
+}
+
+///|
+/// The turn key in `parent` (24 round, its icon in the words' ink): the width and the height of a size with both
+/// swapped, fitted anew at the press's moment; faint, taking no press and read out disabled where there is nothing to
+/// turn; its name by it in the panel's tips.
+fn custom_turn_node(parent : @view.View, p : ServicePage, key : String) -> Unit {
+  let turnable = fn() {
+    match p.viewport.get() {
+      Some(x) => x.height is Some(_)
       None => false
     }
-    let turn = c.id("service/custom-turn")
-    c.on_press(turn, fn() {
-      if turnable {
-        match p.viewport {
-          Some({ width, height: Some(h) }) => {
-            let v : Viewport = { width: h, height: Some(width) }
-            p.view.fit_now()
-            p.viewport = Some(v)
-            keep_size(key, Some(v))
-          }
-          _ => ()
+  }
+  let label = fn() { @sf.t("web-main.viewport.turn") }
+  parent.box(fn(k) {
+    @sf.style_node(k, fn() { custom_turn })
+    k.alpha(By(fn() { if turnable() { 1.0 } else { @ui.Opacity::O35.value() } })) |> ignore
+    @sf.presses_node(k, on=turnable, fn() {
+      match p.viewport.get() {
+        Some({ width, height: Some(h) }) => {
+          let size : Viewport = { width: h, height: Some(width) }
+          p.view.fit_now(at=k.cause_at())
+          p.viewport.set(Some(size))
+          keep_size(key, Some(size))
         }
+        _ => ()
       }
     })
-    let tb = c.box(style=if turnable { custom_turn } else { custom_turn_off }, id=if turnable { turn } else { 0 }, fn() {
-      @sf.icon(c, "landscape", size=custom_turn_icon, color=t.p.text) |> ignore
-    })
-    // (named)
-    c.semantics(tb, Button, id=if turnable { turn } else { 0 }, label=@sf.t("web-main.viewport.turn"), disabled=!turnable)
-    if turnable {
-      @sf.tip(c, "service/custom-turn/tip", turn, @sf.t("web-main.viewport.turn"))
-    }
+    k.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
+    @sf.icon_node(k, "landscape", custom_turn_icon, By(fn() { @sf.theme().p.text })) |> ignore
+    @sf.panel_tip_node(k, label)
   })
   |> ignore
 }
 
 ///|
-/// How the page's resources came, each of them: as tall as they are, scrolled past the web's
-/// most (Preview.css.ts loadList: min(320px, 55vh)) on every screen.
-fn load_list(c : @ui.Ctx, src : Source, station : String, port : Int) -> Unit {
-  let t = @sf.theme()
-  let v = src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value
-  let all = items(v, "resources")
-  let row = fn(rr : Json?) {
-    let failed = text(rr, "error") != "" || number(rr, "status") >= 400.0
-    let color = if failed { t.p.red } else { t.p.muted }
-    let ended = field(rr, "ended") is Some(Number(_, ..))
-    c.box(w=Fill(1.0), pt=6.0, pb=6.0, fn() {
-      c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
-        c.box(w=Fill(1.0), fn() { c.text(text(rr, "path"), size=@sf.theme().t.meta, color~, max_lines=1) |> ignore }) |> ignore
-        c.text(
-          if !ended {
-            svc("common.reading")
-          } else if text(rr, "error") != "" {
-            svc("android-chat.load.failed")
-          } else {
-            number(rr, "status").to_int().to_string()
-          },
-          size=@sf.theme().t.caption,
-          color~,
-          wrap=false,
-        )
-        |> ignore
-        if ended {
-          let ms = dmax(0.0, number(rr, "ended") - number(rr, "since")).to_int64()
-          c.text("\{ms} ms", size=@sf.theme().t.caption, color~, wrap=false) |> ignore
-        }
-      })
-      |> ignore
-      if text(rr, "error") != "" {
-        c.text(text(rr, "error"), size=@sf.theme().t.caption, color~) |> ignore
-      }
-    })
-    |> ignore
-  }
-  let rows = fn() {
-    for r in all {
-      row(Some(r))
-    }
+/// How the page's resources came, each of them, in node `v` (the panel's body): as tall as they are, scrolled past the
+/// web's most (Preview.css.ts loadList: min(320px, 55vh)) on every screen. Each resource a row of its own by its id
+/// (the core's, never used again), made as it comes and let go as the core lists it no more (the page loaded anew),
+/// what it says bound to what the core says of it now.
+fn load_list(v : @view.View, src : Source, station : String, port : Int) -> Unit {
+  let load = fn() {
+    src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value
   }
   // (its words on the panel's words' line wherever it is drawn)
-  c.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() {
-    c.text(svc("android-chat.load.note"), size=t.t.caption, color=t.p.muted) |> ignore
-    c.box(w=Fill(1.0), pt=12.0, fn() {
-      if number(v, "total") <= 0.0 {
-        c.text(svc("android-chat.load.waiting"), size=t.t.meta, color=t.p.muted) |> ignore
-      }
-      c.capped("service/load", dmin(load_list_most, load_list_share * c.window_size().1), rows) |> ignore
+  v.box(fn(o) {
+    @sf.style_node(o, fn() { @sf.panel_words_in_node(o) })
+    @sf.sized_words_node(o, fn() { svc("android-chat.load.note") }, fn() { @sf.theme().t.caption }, fn() { @sf.theme().p.muted }) |> ignore
+    o.box(fn(l) {
+      l.padding(Is((0.0, 12.0, 0.0, 0.0))) |> ignore
+      l.show(fn() { number(load(), "total") <= 0.0 }, fn(w) {
+        @sf.sized_words_node(w, fn() { svc("android-chat.load.waiting") }, fn() { @sf.theme().t.meta }, fn() { @sf.theme().p.muted })
+        |> ignore
+      })
+      // (the old view's capped box's: no taller than its most, what it holds scrolling in it)
+      @sf.capped_node(l, fn() { dmin(load_list_most, load_list_share * l.window().1) }, fn(b) {
+        b.each(fn() { items(load(), "resources") }, fn(r) { number(Some(r), "id").to_int() }, fn(row, r) {
+          // (in a box of no padding of its own: a row that comes or goes closes its way to none of it)
+          row.box(fn(b) { load_row(b, fn() { Some(r.get()) }) }) |> ignore
+        })
+      })
+      |> ignore
     })
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// A resource's row in node `b`, `rr` what the core says of it now: its path, what came of it (正在读取 till it ended,
+/// then its status or 失败) and how long it took on its line, why it failed under it; red where it failed.
+fn load_row(b : @view.View, rr : () -> Json?) -> Unit {
+  let error = fn() { text(rr(), "error") }
+  let ink = fn() {
+    let t = @sf.theme()
+    if error() != "" || number(rr(), "status") >= 400.0 {
+      t.p.red
+    } else {
+      t.p.muted
+    }
+  }
+  let ended = fn() { field(rr(), "ended") is Some(Number(_, ..)) }
+  let caption = fn() { @sf.theme().t.caption }
+  b.padding(Is((0.0, 6.0, 0.0, 6.0))) |> ignore
+  b.box(fn(line) {
+    line.row(Is(true)).gap(Is(10.0)).lines_up(Is(Some(Middle))) |> ignore
+    // (its path on its one line, cut short where the line leaves it less: the old one's max_lines=1)
+    @sf.sized_words_node(line, fn() { text(rr(), "path") }, fn() { @sf.theme().t.meta }, ink, cut=true)
+    .grow(Is(1.0))
+    .basis(Is(Some(0.0)))
+    |> ignore
+    @sf.sized_words_node(
+      line,
+      fn() {
+        if !ended() {
+          svc("common.reading")
+        } else if error() != "" {
+          svc("android-chat.load.failed")
+        } else {
+          number(rr(), "status").to_int().to_string()
+        }
+      },
+      caption,
+      ink,
+      wrap=false,
+    )
+    |> ignore
+    line.show(ended, fn(m) {
+      @sf.sized_words_node(
+        m,
+        fn() {
+          let ms = dmax(0.0, number(rr(), "ended") - number(rr(), "since")).to_int64()
+          "\{ms} ms"
+        },
+        caption,
+        ink,
+        wrap=false,
+      )
+      |> ignore
+    })
+  })
+  |> ignore
+  b.show(fn() { error() != "" }, fn(e) { @sf.sized_words_node(e, error, caption, ink) |> ignore })
 }
 
 ///|
@@ -1247,13 +1347,13 @@ fn service_load_panel(src : Source, station : String, port : Int, from : @sf.Anc
   let words = fn() {
     load_label(src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value)
   }
-  @sf.panel(words(), fn(c, _) { load_list(c, src, station, port) }, from~, live=fn() { (words(), "", "") })
+  @sf.panel_nodes(words(), fn(v, _) { load_list(v, src, station, port) }, from~, live=fn() { (words(), "", "") })
 }
 
 ///|
 /// The page's sizes (a phone's to a desktop's, 自定义 typed, turned), beside what
 /// opened them; one chosen, they go.
 pub fn service_sizes_panel(key : String, from : @sf.Anchor) -> Unit {
-  @sf.panel(svc("android-chat.preview.size.title"), fn(c, close) { page_sizes(c, key, close) }, from~, focus=false)
+  @sf.panel_nodes(svc("android-chat.preview.size.title"), fn(v, close) { page_sizes(v, key, close) }, from~, focus=false)
 }
 

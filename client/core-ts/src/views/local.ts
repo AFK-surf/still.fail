@@ -779,6 +779,29 @@ export class Local {
     return this.archivedChanging(station, thread, session) === false;
   }
 
+  /// The threads and sessions of a station's chats whose rows show otherwise here than their records say: changed or
+  /// being archived from here (asChanging, beingArchived, restoring: matched by these), or made from a chat asked for
+  /// here (pendingKey: its key here, by its session). What reads rows by their columns reads these apart, by their keys,
+  /// as their lists read them (views.ts #chats, archive.ts). More than those may be named, never fewer.
+  overlaid(station: string): { threads: number[]; sessions: string[] } {
+    this.#seen.changing.read(station);
+    this.#seen.archiving.read();
+    this.#seen.pending.read();
+    const threads: number[] = [];
+    const sessions: string[] = [];
+    const add = (thread: number | null, session: string | null) => {
+      if (thread !== null) threads.push(thread);
+      else if (session !== null) sessions.push(session);
+    };
+    for (const c of this.#changing) if (c.station === station) add(c.thread, c.session);
+    for (const [s, thread, session] of this.#archiving) if (s === station) add(thread, session);
+    for (const [key, chat] of this.#pending) {
+      if (chat.station !== station || !chat.made) continue;
+      sessions.push(chat.made[0], key);
+    }
+    return { threads, sessions };
+  }
+
   /// Changes not answered when the core last stopped: their answers will not come; refused, as they were.
   forgetUnanswered(): void {
     for (let i = this.#changing.length - 1; i >= 0; i--) {

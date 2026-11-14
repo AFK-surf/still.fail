@@ -8,7 +8,7 @@
 ///|
 /// The presenter asking for each draft's sharing (@sf.last_presented), while it is drawn.
 // kept across runs: emptied as each goes (outside_sheet); reset by the app with the presenters (outside_reset)
-let outside_shown : Map[String, Int] = {}
+let outside_shown : Map[String, Int] = Map([])
 
 ///|
 /// No sheet asking (the app begun again).

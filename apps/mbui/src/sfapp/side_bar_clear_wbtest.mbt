@@ -36,3 +36,15 @@ test "the chats' list's scroll bar runs clear of 新建对话 over it, parts kep
   let (top, band) = side_bar_run(true, true)
   assert_true(top >= band, msg="thumb at \{top}, 新建对话 to \{band}")
 }
+
+///|
+test "the chats' list scrolled under 新建对话's band: the pointer over the band's top margin does not hover or press the chat row under it" {
+  let t = wide_tester([], h=360.0)
+  t.draw()
+  t.wheel(160.0, 250.0, 120.0)
+  t.run_for(@ui.scrollbar_fade_ms)
+  let (nx, _, _, _) = t.rect_of("新建对话").unwrap()
+  t.move_to(nx, 4.0)
+  t.run_for(@sf.dur_ms)
+  assert_eq(t.cursor(), Arrow, msg="over band top margin: arrow, not the scrolled row's hand")
+}

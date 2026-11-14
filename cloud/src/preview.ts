@@ -1,7 +1,7 @@
 // The preview host (PREVIEW_ORIGIN): where a client shows a web service
 // running on a station's machine, framed, on an origin of its own so the
 // service's scripts reach nothing of still.fail's (no login, no storage). A static
-// Worker of its own (ember-preview): these files, written out by
+// Worker of its own (stillfail-preview): these files, written out by
 // build-static.ts, with the headers in its _headers.
 //
 // It serves four files and nothing else. /_stillfail/frame is the frame a client
@@ -14,20 +14,14 @@
 // the service passes through here. /_stillfail/annotate.js, which the frame
 // loads, marks the service's page for a chat (web/src/annotate/frame.ts).
 //
-// A service's WebSockets are not requests a service worker sees: /_ember/socket.js,
+// A service's WebSockets are not requests a service worker sees: /_stillfail/socket.js,
 // which the service worker puts first in each of the service's pages, carries
 // those to the preview's own host the same way (a dev server's live reload),
 // through the frame. Answers come as they are sent (an event stream, a long
 // poll), and a request its page gave up is stopped at the station.
 //
-// Clients from before the rename open /_ember/frame: the same files are
-// under /_ember/ too, and the frame loads its script and service worker from
-// beside itself, so each stays under the prefix it was opened with. The
-// messages between the frame, its service worker and the client keep their
-// "ember-preview-*" types (clients and service workers of either age are
-// running at once); the frame and the service worker also take
-// "stillfail-preview-*" ones. The tag the service worker puts in a page stays
-// /_ember/socket.js (the desktop app answers that path too).
+// The messages between the frame, its service worker and the client are
+// "stillfail-preview-*".
 //
 // Its limits: cookies the service sets are not sent back (the service
 // worker's requests carry none).
@@ -46,8 +40,8 @@ const FRAME = `<!doctype html>
 </style>
 <script src="annotate.js"></script>
 <script>
-  const is = (data, name) => data?.type === "stillfail-preview-" + name || data?.type === "ember-preview-" + name;
-  const annotator = () => window.stillfailAnnotate || window.emberAnnotate;
+  const is = (data, name) => data?.type === "stillfail-preview-" + name;
+  const annotator = () => window.stillfailAnnotate;
   const params = new URLSearchParams(location.search);
   const nonce = params.get("n") || "";
   let port = null;
@@ -56,7 +50,7 @@ const FRAME = `<!doctype html>
   let next = 0;
   // Each request's port back to the service worker, by the id it was sent to the client with.
   const waiting = new Map();
-  // Each WebSocket's page (/_ember/socket.js), by its id.
+  // Each WebSocket's page (/_stillfail/socket.js), by its id.
   const sockets = new Map();
   const fromClient = (event) => {
     const data = event.data;
@@ -100,10 +94,9 @@ const FRAME = `<!doctype html>
     const { method, path, headers, body, cache } = event.data;
     port.postMessage({ id, method, path, headers, body, cache }, body ? [body.buffer] : []);
   });
-  // A WebSocket of the service's page (/_ember/socket.js, same origin: it calls this): through the client to the
-  // station. \`on\` hears it open, its messages and its close; what is returned sends and closes. Under both names, as
-  // annotate.js is: a page's socket.js from before the rename looks for \`emberPreviewSocket\`.
-  window.stillfailPreviewSocket = window.emberPreviewSocket = (path, protocols, on) => {
+  // A WebSocket of the service's page (/_stillfail/socket.js, same origin: it calls this): through the client to the
+  // station. \`on\` hears it open, its messages and its close; what is returned sends and closes.
+  window.stillfailPreviewSocket = (path, protocols, on) => {
     const sid = crypto.randomUUID();
     if (!port || !streams) {
       setTimeout(() => on.close(1006, "", true));
@@ -147,7 +140,7 @@ const FRAME = `<!doctype html>
     const state = path + "|" + here + "|" + trail.length;
     if (state === said) return;
     said = state;
-    parent.postMessage({ type: "ember-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1, annotate: !!annotator() }, "*");
+    parent.postMessage({ type: "stillfail-preview-at", nonce, path, back: here > 0, forward: here < trail.length - 1, annotate: !!annotator() }, "*");
   };
   const replace = (path) => {
     moving = true;
@@ -164,7 +157,7 @@ const FRAME = `<!doctype html>
   async function start() {
     await navigator.serviceWorker.register("sw.js", { scope: "/" });
     const worker = (await navigator.serviceWorker.ready).active;
-    worker.postMessage({ type: "ember-preview-frame", nonce });
+    worker.postMessage({ type: "stillfail-preview-frame", nonce });
     inner = document.createElement("iframe");
     inner.src = params.get("path") || "/";
     inner.addEventListener("load", () => { report(); moving = false; });
@@ -173,16 +166,16 @@ const FRAME = `<!doctype html>
     annotator()?.attach(inner, nonce);
     setInterval(report, 500);
   }
-  parent.postMessage({ type: "ember-preview-ready", nonce, streams: true }, "*");
+  parent.postMessage({ type: "stillfail-preview-ready", nonce, streams: true }, "*");
 </script>
 <body></body>
 `;
 
 const WORKER = `
 // The frame, under the prefix of either name; the host's own files are under them.
-const FRAMES = ["/_stillfail/frame", "/_ember/frame"];
-const OWN = /^\\/_(stillfail|ember)\\//;
-const is = (data, name) => data?.type === "stillfail-preview-" + name || data?.type === "ember-preview-" + name;
+const FRAMES = ["/_stillfail/frame"];
+const OWN = /^\\/_stillfail\\//;
+const is = (data, name) => data?.type === "stillfail-preview-" + name;
 // Which outer frame each of the service's frames belongs to (by client id), and the last frame that started.
 const owners = new Map();
 let latest = null;
@@ -214,7 +207,7 @@ async function frameOf(nonce) {
 function plain(status, text) {
   return new Response(text, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 }
-// What puts the service's pages' WebSockets through still.fail (/_ember/socket.js) into them: previewSocket.ts's.
+// What puts the service's pages' WebSockets through still.fail (/_stillfail/socket.js) into them: previewSocket.ts's.
 ${SOCKET_TAG_JS}
 async function relay(event, url) {
   const frame = await frameOf(nonceOf(event));
@@ -248,7 +241,7 @@ async function relay(event, url) {
       resolve({ status: reply.status, headers: reply.headers, whole: reply.body });
     };
   });
-  frame.postMessage({ type: "ember-preview-fetch", streams: true, cache: request.cache, method: request.method, path: url.pathname + url.search, headers: [...request.headers], body }, [channel.port2, ...(body ? [body.buffer] : [])]);
+  frame.postMessage({ type: "stillfail-preview-fetch", streams: true, cache: request.cache, method: request.method, path: url.pathname + url.search, headers: [...request.headers], body }, [channel.port2, ...(body ? [body.buffer] : [])]);
   const reply = await head;
   if (reply.error) return plain(502, reply.error);
   const empty = request.method === "HEAD" || [101, 204, 205, 304].includes(reply.status);
@@ -269,16 +262,16 @@ const SOCKET = socketScript(`(() => {
   try {
     for (let w = window; w !== w.parent; ) {
       w = w.parent;
-      if (!["/_stillfail/frame", "/_ember/frame"].includes(w.location.pathname)) continue;
-      const link = w.stillfailPreviewSocket || w.emberPreviewSocket;
+      if (w.location.pathname !== "/_stillfail/frame") continue;
+      const link = w.stillfailPreviewSocket;
       if (typeof link === "function") return link;
     }
   } catch {}
   return null;
 })()`);
 
-/** Where the host's own files are: the new prefix, and the one clients from before the rename open. */
-export const PREVIEW_PREFIXES = ["_stillfail", "_ember"] as const;
+/** Where the host's own files are. */
+export const PREVIEW_PREFIXES = ["_stillfail"] as const;
 
 /** The preview host's files, by path under its assets directory. */
 export function previewFiles(annotate = ""): Record<string, string> {
@@ -292,7 +285,7 @@ export function previewFiles(annotate = ""): Record<string, string> {
     ])),
     // Only reached before the service worker runs, or when a frame opens this host by itself.
     "404.html": `<!doctype html><meta charset="utf-8"><title>still.fail preview</title><p>${tr("zh", "cloud.preview.host")}</p><script>document.querySelector("p").textContent = ${browserWords("cloud.preview.host")};</script>`,
-    // The service worker is the whole host's, from under either prefix.
+    // The service worker is the whole host's.
     "_headers": PREVIEW_PREFIXES.map((prefix) => `/${prefix}/sw.js\n  Service-Worker-Allowed: /\n  Cache-Control: no-cache\n/${prefix}/frame\n  Cache-Control: no-cache\n/${prefix}/annotate.js\n  Cache-Control: no-cache\n/${prefix}/socket.js\n  Cache-Control: no-cache\n`).join(""),
   };
 }

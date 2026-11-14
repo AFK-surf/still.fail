@@ -17,7 +17,7 @@ import type { Updates } from "../updates/updates.ts";
 import { type RootView, rootView, rootsOf } from "../drive/drive.ts";
 import { sees } from "../store/rows.ts";
 import { titleOf } from "../read/views.ts";
-import { policyView } from "../sessions/archive-policy.ts";
+import { type PolicyChecks, policySince, policyView } from "../sessions/archive-policy.ts";
 import { agentEnvView } from "./routes/agent-env.ts";
 import { networkView } from "../mesh/settings.ts";
 import { contextView } from "./routes/context.ts";
@@ -107,7 +107,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
   }
   const counts = counted;
   const sessionsOf = (connect: unknown) => connect === null ? counts.total : typeof connect === "string" ? counts.byConnect.get(connect) ?? 0 : 0;
-  const states = [...d.hub.processes()].filter(([key]) => sees(viewer, d.store.getSession(key)?.ws ?? null)).map(([, state]) => state);
+  const states = [...d.hub.processes()].filter(([key]) => sees(viewer, d.store.sessionWs(key) ?? null)).map(([, state]) => state);
   // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
   const processes = d.store.listProcesses().filter((p) => p.runtime !== "job");
   const memory = await keptMemory(d, processes.map((p) => p.pgid));
@@ -116,6 +116,10 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     const runtime = c.bind?.runtime;
     const nonEmpty = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
     const kind = typeof c.kind === "string" && c.kind !== "" ? c.kind : "slack";
+    const bindProfiles: string[] = Array.isArray(c.bind?.profiles)
+      ? [...new Set<string>(c.bind.profiles.filter((x: unknown): x is string => typeof x === "string" && x.trim() !== "").map((x: string) => x.trim()))]
+      : [];
+    const singleProfile = nonEmpty(c.bind?.profile) ?? (bindProfiles.length === 1 ? bindProfiles[0]! : null);
     const shown = {
       id: c.id,
       // What it is known by (its bot's name on its platform, and its workspace there), as its kind says: its id till then.
@@ -126,7 +130,13 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
       kind,
       mode,
       requireMention: mode === "multi-session" ? true : (c.requireMention ?? true),
-      bind: { runtime, model: nonEmpty(c.bind?.model), effort: nonEmpty(c.bind?.effort), profile: nonEmpty(c.bind?.profile) },
+      bind: {
+        runtime,
+        model: nonEmpty(c.bind?.model),
+        effort: nonEmpty(c.bind?.effort),
+        profile: singleProfile,
+        ...(bindProfiles.length > 1 ? { profiles: bindProfiles } : {}),
+      },
       // Every connect has Slack's tokens for the pages (masked: connects/part.ts; none for another kind's).
       slack: { appToken: "", botToken: "" },
       connection: c.enabled === false ? { state: "disabled" } : { state: "starting" },
@@ -151,13 +161,13 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     profiles,
     sessionRuntimeChange: true,
     connectRuntimeChange: true,
+    accountSubsets: true,
     // Who made each model its profiles run, and its series, as the model catalog says (accounts/catalog.ts): the
     // clients group and mark models by them, and by the names alone where it says none.
     modelMakers: modelMakers(profiles),
     // What a chat can be kept to less context on (sessions/context-cap.ts): the runtimes that take it, and each model's
     // whole window as the model catalog says it, the most it can be. A station from before says none: none offered.
     contextCaps: { runtimes: CONTEXT_RUNTIMES, least: CONTEXT_LEAST, windows: modelWindows(profiles) },
-    footprint: null,
     processes: processes.map((p) => {
       const kb = memory.get(p.pgid);
       return { ...p, rssMb: kb === undefined ? null : Math.round(kb / 1024) };
@@ -240,8 +250,11 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
   const was = kept.get(whose);
   if (was !== undefined && was.stamp === stamp && now - was.at < DECISIONS_KEPT_MS) return structuredClone(was.view);
   const notReady = Symbol("decision sessions not ready");
+  // The policy's checks counted by a reader, before the view is made (none: counted as it is made).
+  const manages = viewer.role === "owner" || viewer.role === "admin";
+  const checks = manages && d.hub.policyChecks != null ? await d.hub.policyChecks(policySince(now), viewer) : null;
   const make = (name: (session: string) => string, visible?: Map<string, boolean>) => {
-    try { return madeDecisionsView(d, viewer, name, visible); }
+    try { return madeDecisionsView(d, viewer, name, visible, checks ?? undefined); }
     catch (error) { if (error instanceof DecisionSessionsUnavailable) return notReady; throw error; }
   };
   let view: unknown;
@@ -277,7 +290,7 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
       d.store.db.exec("SAVEPOINT overview_chat_names");
       try {
         if (waited) for (const [session, was] of visible) {
-          if (sees(viewer, d.store.getSession(session)?.ws ?? null) !== was) { moved = true; break; }
+          if (sees(viewer, d.store.sessionWs(session) ?? null) !== was) { moved = true; break; }
         }
         if (!moved) for (const session of placeholders.keys()) {
           // A historical check can name a session deleted while the worker was preparing it. It has no scope to
@@ -315,11 +328,11 @@ const DECISIONS_KEPT_MS = 60_000;
 const decisionsKept = new WeakMap<object, Map<string, { at: number; stamp: string; view: unknown }>>();
 
 function madeDecisionsView(d: OverviewDeps, viewer: Viewer, name: (session: string) => string,
-  visible = new Map<string, boolean>()): unknown {
+  visible = new Map<string, boolean>(), checks?: PolicyChecks): unknown {
   const mine = (session: unknown) => {
     if (typeof session !== "string") return false;
     let isMine = visible.get(session);
-    if (isMine === undefined) visible.set(session, (isMine = sees(viewer, d.store.getSession(session)?.ws ?? null)));
+    if (isMine === undefined) visible.set(session, (isMine = sees(viewer, d.store.sessionWs(session) ?? null)));
     return isMine;
   };
   const titles = new Map<string, string>();
@@ -331,7 +344,7 @@ function madeDecisionsView(d: OverviewDeps, viewer: Viewer, name: (session: stri
   const view = d.accounts!.automaticDecisionsView(viewer, { includePolicy: false, visible: mine, title });
   const manages = viewer.role === "owner" || viewer.role === "admin";
   if (manages) {
-    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, title, viewer);
+    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, title, viewer, checks);
     view.canEditPolicy = manages;
   }
   return view;

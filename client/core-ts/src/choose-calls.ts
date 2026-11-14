@@ -59,6 +59,8 @@ export function installChoose(inner: Inner): Choose {
           return Effect.as(attempt(() => choose.set(field("station"), field("of"), params)), null);
         case "pick.like":
           return Effect.as(attempt(() => choose.like(field("station"), field("model"), params.liked === true)), null);
+        case "pick.forget":
+          return Effect.as(attempt(() => choose.forget(field("station"), params)), null);
         case "pick.repick":
           return Effect.gen(function* () {
             const [op, said] = yield* attempt(() => choose.repick(field("station"), field("of")));
@@ -74,7 +76,10 @@ export function installChoose(inner: Inner): Choose {
           return Effect.gen(function* () {
             const saved = yield* attempt(() => choose.save(field("station"), field("of"), params));
             if ("done" in saved) return saved.done;
-            yield* Effect.tapError(handlers.op!(inner, { kind: "op", op: saved.op }, progress, at, ctx), () => Effect.sync(() => choose.unsaved(field("station"), field("of"))));
+            yield* Effect.ensuring(
+              Effect.tapError(handlers.op!(inner, { kind: "op", op: saved.op }, progress, at, ctx), () => Effect.sync(() => choose.unsaved(field("station"), field("of")))),
+              Effect.sync(() => choose.settled(field("station"), field("of"))),
+            );
             return { saved: true };
           });
       }

@@ -36,7 +36,7 @@ fn photo_sent(
   new_run()
   let photo = flight_photo()
   let a = if tall { { ..photo, width: 400.0, height: 2000.0 } } else { photo }
-  @sfbase.sent_pictures[@sfbase.sent_key("ws1/st1", a.path)] = "sent-key"
+  @sfbase.sent_picture_kept(@sfbase.sent_key("ws1/st1", a.path), "sent-key")
   let base = fixture("chat")
   let src : Source = {
     ..base,
@@ -151,12 +151,12 @@ test "a picture sent from here flies out as its message shows it: the picture pi
   assert_eq(pv_hidden.get(), id)
   // halfway: the same picture (the message's hidden under it), on its way to its place on the stage
   t.run_for(@ui.move_most_ms / 2.0)
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(t.locate("img:sent-key").length() > 0)
   let on_way = t
     .drawn_images()
     .filter(fn(i) { i[8] > 0.5 && i[2] > th.w + 0.5 && i[2] < to.2 - 0.5 && (i[3] / i[2] - to.3 / to.2).abs() < 0.01 })
-  assert_eq(on_way.length(), 1, msg="\{t.drawn_images()}")
+  assert_eq(on_way.length(), 1, msg="\{Repr(t.drawn_images())}")
   let mid = on_way[0]
   let (cx, cy) = (mid[0] + mid[2] / 2.0, mid[1] + mid[3] / 2.0)
   assert_true(cx > dmin(th.x + th.w / 2.0, to.0 + to.2 / 2.0) - 0.5 && cx < dmax(th.x + th.w / 2.0, to.0 + to.2 / 2.0) + 0.5)
@@ -174,7 +174,7 @@ fn video_corner_black(t : @ui.Tester) -> Double raise {
     let a = p.1
     a[5] == 4.0 && a[11] > 0.99 && a[24] > 1.0 && a[2] > 100.0
   })
-  assert_eq(pictures.length(), 1, msg="rounded video pictures: \{pictures}")
+  assert_eq(pictures.length(), 1, msg="rounded video pictures: \{Repr(pictures)}")
   let (index, picture) = pictures[0]
   let (x, y, right, foot) = (picture[16], picture[17], picture[18], picture[19])
   let frame = picture.copy()
@@ -261,7 +261,7 @@ test "a picture's whole come once it is in takes its stand-in's place once decod
   let v = viewer.get().unwrap()
   t.run_for(@ui.move_most_ms)
   assert_true(!v.flies)
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(drawn_at(t, to))
   // its whole comes: in the frame it is here and not yet decoded, what stood in for it is still drawn there
   match held.val {
@@ -269,19 +269,19 @@ test "a picture's whole come once it is in takes its stand-in's place once decod
     None => fail("its whole was not asked for")
   }
   t.frame()
-  assert_true(drawn_at(t, to), msg="\{t.drawn_images()}")
+  assert_true(drawn_at(t, to), msg="\{Repr(t.drawn_images())}")
   // (the message's under the viewer, and the one standing in for its whole: drawn, the viewer's its node's, which the
   // old views' images (Tester::locate) do not hold)
   let stood = drawn_of(t, "sent-key")
-  assert_eq(stood.length(), 2, msg="\{stood}")
-  assert_true(stood.iter().any(fn(r) { at_rect(r, to.0, to.1, to.2, to.3) }), msg="what stands in, at \{to}: \{stood}")
+  assert_eq(stood.length(), 2, msg="\{Repr(stood)}")
+  assert_true(stood.iter().any(fn(r) { at_rect(r, to.0, to.1, to.2, to.3) }), msg="what stands in, at \{Repr(to)}: \{Repr(stood)}")
   // decoded: the whole there in its place
   t.frame()
   assert_true(drawn_at(t, to))
   let whole = drawn_of(t, "mem:preview/ws1/st1/s-c1/uploads/fx/photo.jpg")
-  assert_eq(whole.length(), 1, msg="\{whole}")
-  assert_true(at_rect(whole[0], to.0, to.1, to.2, to.3), msg="the whole, at \{to}: \{whole}")
-  assert_eq(drawn_of(t, "sent-key").length(), 1, msg="\{drawn_of(t, "sent-key")}")
+  assert_eq(whole.length(), 1, msg="\{Repr(whole)}")
+  assert_true(at_rect(whole[0], to.0, to.1, to.2, to.3), msg="the whole, at \{Repr(to)}: \{Repr(whole)}")
+  assert_eq(drawn_of(t, "sent-key").length(), 1, msg="\{Repr(drawn_of(t, "sent-key"))}")
 }
 
 ///|
@@ -302,7 +302,7 @@ test "the chat moved under the viewer: the picture flies back to where its thumb
   t.back()
   // landed: drawn this once where the thumbnail is now, then the thumbnail itself
   t.run_for(@ui.move_most_ms)
-  assert_true(drawn_at(t, (now.x, now.y, now.w, now.h)), msg="\{t.drawn_images()}")
+  assert_true(drawn_at(t, (now.x, now.y, now.w, now.h)), msg="\{Repr(t.drawn_images())}")
   assert_true(pv_leaving.get() is None)
   assert_eq(pv_hidden.get(), "")
   t.draw()
@@ -321,17 +321,17 @@ test "the chat's bars under the viewer's ground while the picture is grown, the 
   // on its way back, grown still: the bar the page's, drawn under the picture (and under the ground over the page)
   t.run_for(@ui.move_most_ms / 4.0)
   let v = pv_leaving.get().unwrap()
-  assert_true(v.flies && v.flying() > 0.0 && v.flying() < 1.0)
+  assert_true(v.flies && v.flying(t.ctx()) > 0.0 && v.flying(t.ctx()) < 1.0)
   let order = t.drawn_order()
   let picture = order.search_by(fn(i) { i.0 == 4 && i.5 > 0.5 }).unwrap()
   let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
-  assert_true(bar is Some(b) && b < picture, msg="\{order}")
+  assert_true(bar is Some(b) && b < picture, msg="\{Repr(order)}")
   // landed: the bar whole, in its place over the list
   t.run_for(@ui.move_most_ms)
   assert_true(pv_leaving.get() is None)
   let order = t.drawn_order()
   let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
-  assert_true(bar is Some(b) && order[b].5 > 0.99, msg="\{order}")
+  assert_true(bar is Some(b) && order[b].5 > 0.99, msg="\{Repr(order)}")
 }
 
 ///|
@@ -346,10 +346,10 @@ test "the way back is a move of its own: most of it as it sets out, at rest as i
   let back = t.time()
   // a quarter of its time out: over half of its way back, the bars over it as much
   t.run_for(@ui.move_most_ms / 4.0)
-  assert_true(v.flying() < 0.5, msg="\{v.flying()}")
+  assert_true(v.flying(t.ctx()) < 0.5, msg="\{v.flying(t.ctx())}")
   // its last tenth: hardly any of the way left, so the thumbnail and the bars come back by nothing at the end
   t.run_for(back + @ui.move_most_ms * 0.9 - t.time())
-  assert_true(v.flying() < 0.02, msg="\{v.flying()}")
+  assert_true(v.flying(t.ctx()) < 0.02, msg="\{v.flying(t.ctx())}")
   t.run_for(back + @ui.move_most_ms - t.time())
   assert_true(pv_leaving.get() is None)
 }
@@ -375,16 +375,16 @@ test "a picture under the composer goes out from under it at its own size first,
   // (a hair each side of where the going out ends: a fortieth of its time)
   let near = out * open_ms / 40.0
   t.run_for(out * open_ms - near)
-  assert_eq(v.flying(), 0.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
   assert_true(v.lifted_at(t.ctx().moment()) > 0.95, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(composer_over_picture(t))
   t.run_for(near * 2.0)
-  assert_true(v.flying() > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
+  assert_true(v.flying(t.ctx()) > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   // growing: the composer the page's, under the ground and the picture
   assert_true(!composer_over_picture(t))
   // then grown to its place on the stage
   t.run_for(start + open_ms - t.time())
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(drawn_at(t, to))
   // back: shrunk, then in under the composer to its thumbnail, one move of its own on the same curve
   t.back()
@@ -392,10 +392,10 @@ test "a picture under the composer goes out from under it at its own size first,
   let lift = v.fly_lift
   let close_ms = fly_ms_of(t, v)
   t.run_for(way_at(1.0 - lift) * close_ms - near)
-  assert_true(v.flying() > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
+  assert_true(v.flying(t.ctx()) > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   assert_true(!composer_over_picture(t))
   t.run_for(near * 2.0)
-  assert_eq(v.flying(), 0.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
   assert_true(v.lifted_at(t.ctx().moment()) < 1.0)
   assert_true(composer_over_picture(t))
   t.run_for(back + close_ms - t.time())
@@ -418,14 +418,14 @@ test "a picture going back in under the composer keeps its corners round: what i
   let v = pv_leaving.get().unwrap()
   let lift = v.fly_lift
   t.run_for(way_at(1.0 - lift / 2.0) * fly_ms_of(t, v))
-  assert_eq(v.flying(), 0.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
   assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   let clips = t.drawn_image_clips()
   let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })
   assert_true(flying.length() > 0)
   for p in flying {
     let (_, (r0, r1, r2, r3)) = p.1
-    assert_true(r0 > 0.0 && r1 > 0.0 && r2 > 0.0 && r3 > 0.0, msg="\{p.1}")
+    assert_true(r0 > 0.0 && r1 > 0.0 && r2 > 0.0 && r3 > 0.0, msg="\{Repr(p.1)}")
   }
 }
 
@@ -472,7 +472,7 @@ test "a picture cut by its card's foot: what shows of it said as where it shows,
   assert_true(th.h > 150.0, msg="\{th.h}")
   // its box whole, what shows of it cut at the card's foot
   match th.seen {
-    Some((_, y, _, h)) => assert_true((y + h - 150.0).abs() < 0.5, msg="\{th.seen}")
+    Some((_, y, _, h)) => assert_true((y + h - 150.0).abs() < 0.5, msg="\{Repr(th.seen)}")
     None => fail("nothing said of what shows of it")
   }
   let at = t.locate("img:sent-key")
@@ -483,7 +483,7 @@ test "a picture cut by its card's foot: what shows of it said as where it shows,
   t.run_for(@ui.move_most_ms / 2.0)
   match pv_leaving.get().unwrap().fly_from {
     Some({ seen: Some((_, y, _, h)), .. }) => assert_true((y + h - 150.0).abs() < 0.5)
-    other => fail("\{other.map(fn(f) { f.seen })}")
+    other => fail("\{Repr(other.map(fn(f) { f.seen }))}")
   }
 }
 
@@ -497,9 +497,9 @@ test "a video taken down and let go goes from where the finger left it: its pict
   let (x, y, w, h) = t.holes()[0]
   // taken down past the line, the picture with the finger
   t.press_at(195.0, 300.0)
-  t.move(195.0, 380.0)
-  t.move(195.0, 460.0)
-  t.move(195.0, 500.0)
+  t.move_to(195.0, 380.0)
+  t.move_to(195.0, 460.0)
+  t.move_to(195.0, 500.0)
   let down = t.holes()[0].1
   assert_true(down > y + 120.0, msg="\{down} from \{y}")
   // let go: closing, the frame it shows grabbed first, its picture where the finger left it meanwhile
@@ -507,13 +507,13 @@ test "a video taken down and let go goes from where the finger left it: its pict
   assert_true(viewer.get() is None)
   let left = t.holes()
   assert_eq(left.length(), 1)
-  assert_true((left[0].1 - down).abs() < 0.5, msg="\{left} taken down to \{down}")
+  assert_true((left[0].1 - down).abs() < 0.5, msg="\{Repr(left)} taken down to \{down}")
   // grabbed: the frame flies back from where the finger left it
   let frame = fixture_file_png("演示录屏.mp4")
   assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"\{hex_bytes(frame)}\"}"))
   t.draw()
   assert_eq(t.holes().length(), 0)
-  assert_true(drawn_at(t, (x, down, w, h)), msg="\{t.drawn_images()}")
+  assert_true(drawn_at(t, (x, down, w, h)), msg="\{Repr(t.drawn_images())}")
 }
 
 ///|
@@ -532,7 +532,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   let near = way_at(lift) * open_ms / 40.0
   // halfway out from under the bar: at its own size, the bar over it, its corners round
   t.run_for(way_at(lift / 2.0) * open_ms)
-  assert_eq(v.flying(), 0.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
   assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(head_over_picture(t))
   let clips = t.drawn_image_clips()
@@ -540,20 +540,20 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   assert_true(flying.length() > 0)
   for p in flying {
     let (i, ((_, top, _, foot), (r0, r1, r2, r3))) = p
-    assert_true(r0 > 0.0 && r1 > 0.0 && r2 > 0.0 && r3 > 0.0, msg="\{p.1}")
+    assert_true(r0 > 0.0 && r1 > 0.0 && r2 > 0.0 && r3 > 0.0, msg="\{Repr(p.1)}")
     // its box whole, moved down
-    assert_true(top <= i[1] + 0.5 && foot >= i[1] + i[3] - 0.5 && i[1] > th.y + 0.5, msg="\{p}")
+    assert_true(top <= i[1] + 0.5 && foot >= i[1] + i[3] - 0.5 && i[1] > th.y + 0.5, msg="\{Repr(p)}")
   }
   // out: clear of the bar, at its own size (a hair before, on the ms of its time a motion's is read at: its time from
   // its start in whole ms, Spec::value_at)
   t.run_for(start + (way_at(lift) * open_ms - near).ceil() - t.time())
   assert_true(v.lifted_at(t.ctx().moment()) > 0.95, msg="\{v.lifted_at(t.ctx().moment())}")
-  assert_true(drawn_at(t, (th.x, flight_bar_h + 12.0, th.w, th.h)) || v.lifted_at(t.ctx().moment()) < 1.0, msg="\{t.drawn_images()}")
+  assert_true(drawn_at(t, (th.x, flight_bar_h + 12.0, th.w, th.h)) || v.lifted_at(t.ctx().moment()) < 1.0, msg="\{Repr(t.drawn_images())}")
   t.run_for(near * 2.0)
-  assert_true(v.flying() > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
+  assert_true(v.flying(t.ctx()) > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   assert_true(!head_over_picture(t))
   t.run_for(start + open_ms - t.time())
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(drawn_at(t, to))
   // back: shrunk, then in under the bar, its corners round halfway in
   t.back()
@@ -562,7 +562,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   let lift = v.fly_lift
   let close_ms = fly_ms_of(t, v)
   t.run_for(way_at(1.0 - lift / 2.0) * close_ms)
-  assert_eq(v.flying(), 0.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
   assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(head_over_picture(t))
   let clips = t.drawn_image_clips()
@@ -570,7 +570,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   assert_true(flying.length() > 0)
   for p in flying {
     let (_, (_, (r0, r1, r2, r3))) = p
-    assert_true(r0 > 0.0 && r1 > 0.0 && r2 > 0.0 && r3 > 0.0, msg="\{p.1}")
+    assert_true(r0 > 0.0 && r1 > 0.0 && r2 > 0.0 && r3 > 0.0, msg="\{Repr(p.1)}")
   }
   t.run_for(back + close_ms - t.time())
   assert_true(pv_leaving.get() is None)
@@ -621,8 +621,8 @@ test "a picture mostly under the chat's bar goes out from under it as quick as i
     m / step
   }
   let out = speed(joint - step * 2.0)
-  assert_true(v.flying() == 0.0)
+  assert_true(v.flying(t.ctx()) == 0.0)
   let grow = speed(joint + step)
-  assert_true(v.flying() > 0.0)
+  assert_true(v.flying(t.ctx()) > 0.0)
   assert_true(out < grow * 1.25 && grow < out * 1.25, msg="going out \{out}, growing \{grow}")
 }

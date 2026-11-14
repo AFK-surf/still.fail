@@ -5,12 +5,13 @@
 
 ///|
 test "03-send-text" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("send-text"), seed~)
     f.tap("端到端测试")
-    // the chat pushed over Home: in place once its push is over
-    f.run_for(@ui.move_most_ms)
+    // the chat pushed over Home (once what it shows is answered: sfapp's page_ready), in place once its push is
+    // over: as long as a push takes from when it is seen
     f.see("=willow")
+    f.run_for(@ui.move_most_ms)
     f.tap("发消息")
     f.type_text("第一条来自 mbui 的消息 064618")
     // a row already there (the agent's name over its answer: the chat's title has its words too): where it is across,

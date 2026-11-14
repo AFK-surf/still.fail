@@ -256,6 +256,12 @@ export const routes = (tools: Tools): Route[] => {
       return error(500, (e as Error).message);
     }
   };
+  /// Refused while this station hands the asker's workspace's chats to another (replica/retire.ts): the device keeps
+  /// the message as one not sent (the core's outbox sends again by itself only what found no station), and its words
+  /// say to send it again in the chat on the station they go to.
+  const retiring = (r: Request, a: AgentsParts) => {
+    if (r.viewer.workspace !== null && a.hub.quietIn(r.viewer.workspace)) throw new Refused(503, tr(r.lang, "station.retire.moving"));
+  };
   /// A session there, and in the asker's workspace (one of another is none for them: api/seen.ts).
   const session = (s: Store, key: string, r: Request) => {
     if (s.getSession(key) === null || !sessionSeen(s, r.viewer, key)) throw new Refused(404, `unknown session ${key}`);
@@ -392,14 +398,23 @@ export const routes = (tools: Tools): Route[] => {
       pattern: /^\/sessions$/,
       handle: (r) =>
         write(async (_s, a) => {
+          retiring(r, a);
           const i = input(r);
           const given = (k: string) => (typeof i[k] === "string" && i[k] !== "" ? (i[k] as string) : null);
+          const profiles = i.profiles === undefined
+            ? undefined
+            : i.profiles === null
+              ? null
+              : Array.isArray(i.profiles) && i.profiles.every((x) => typeof x === "string")
+                ? i.profiles
+                : (() => { throw new Refused(400, "profiles must be a list of profile ids or null"); })();
           const [key, chat] = await as(400, () =>
             newSession(
               a.hub,
               {
                 runtime: runtime(r, i),
                 profile: given("profile"),
+                profiles,
                 model: given("model"),
                 effort: given("effort"),
                 fast: typeof i.fast === "boolean" ? i.fast : null,
@@ -516,7 +531,7 @@ export const routes = (tools: Tools): Route[] => {
     ),
     {
       method: "POST",
-      pattern: /^\/*sessions\/+([^/]+)\/+(stop|cancel-retry|evict|warm|compact|clear|settings)(?:\/.*)?$/,
+      pattern: /^\/*sessions\/+([^/]+)\/+(stop|cancel-retry|retry|evict|warm|compact|clear|settings)(?:\/.*)?$/,
       handle: (r, [k, action]) =>
         write(async (s, a) => {
           const key = segment(k!);
@@ -529,6 +544,14 @@ export const routes = (tools: Tools): Route[] => {
               const { thread, seq } = input(r);
               if (!Number.isSafeInteger(thread) || !Number.isSafeInteger(seq) || (thread as number) <= 0 || (seq as number) <= 0) throw new Refused(400, "invalid retry notice");
               await a.hub.cancelRetry(key, thread as number, seq as number);
+              return ok({ ok: true });
+            }
+            // A failed turn's notice pressed (重试): taken up again where it stopped.
+            case "retry": {
+              session(s, key, r);
+              const { thread, seq } = input(r);
+              if (!Number.isSafeInteger(thread) || !Number.isSafeInteger(seq) || (thread as number) <= 0 || (seq as number) <= 0) throw new Refused(400, "invalid failure notice");
+              await a.hub.retryFailed(key, thread as number, seq as number);
               return ok({ ok: true });
             }
             case "evict":
@@ -561,8 +584,14 @@ export const routes = (tools: Tools): Route[] => {
               const effort = pick("effort");
               if (model !== undefined) change.model = model;
               if (effort !== undefined) change.effort = effort;
-              // A profile's id keeps the session to it; null gives the choice back to the station.
+              // A profile's id keeps the session to it; `profiles` keeps it to a chosen set; null gives the choice back to the station.
               if (typeof i.profile === "string" || i.profile === null) change.profile = i.profile;
+              if ("profiles" in i) {
+                if (i.profiles !== null && (!Array.isArray(i.profiles) || i.profiles.some((x) => typeof x !== "string"))) {
+                  throw new Refused(400, "profiles must be a list of profile ids or null");
+                }
+                change.profiles = i.profiles;
+              }
               // Given back to the station and its account picked again now.
               if (i.repick === true) change.repick = true;
               // Whether it goes on afresh once its cache is over: null gives it back to the station's setting.
@@ -602,6 +631,7 @@ export const routes = (tools: Tools): Route[] => {
         write(async (s, a) => {
           const t = thread(s, segment(rawId!));
           if (t.surface !== STILLFAIL_SURFACE) throw new Refused(400, tr(r.lang, "station.admin.postOnlyStillfail"));
+          retiring(r, a);
           const i = input(r);
           const said = text(i.text).trim();
           const files = await attachments(r, s, a, t.id, i.attachments);

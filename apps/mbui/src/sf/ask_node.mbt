@@ -32,7 +32,7 @@ pub fn ask_node(
   covered? : () -> Bool = fn() { false },
 ) -> Unit {
   // (the line as it is now, trimmed: followed as it changes)
-  let words = fn() { line.text().trim(chars=" \t\n").to_string() }
+  let words = fn() { line.text().trim(chars=" \t\n").to_owned() }
   let can = fn() { ask_can(words(), value, empty) }
   let said = Ref(false)
   let go = fn() {
@@ -47,10 +47,10 @@ pub fn ask_node(
     let field : Ref[@view.View?] = Ref(None)
     across.box(fn(d) {
       d
-      .width(By(fn() { Some(dmin(dialog_w, layer.window().0 - dialog_margin)) }))
+      .width(By(fn() { Some(dmin(dialog_w, over_room(layer).0 - dialog_margin)) }))
       // (no taller than the window leaves it, dialog_room: what it holds scrolls in itself past that, its title and its
       // buttons staying)
-      .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - dialog_room)) }))
+      .max_height(By(fn() { Some(dmax(0.0, over_room(layer).1 - dialog_room)) }))
       // (dialog_box: 24 over its title; 24 in at its sides, each part's own, what it holds scrolling out to them)
       .padding(Is((0.0, dialog_pad, 0.0, 0.0)))
       .radius(Is(dialog_r))
@@ -60,10 +60,9 @@ pub fn ask_node(
       .alpha(By(fn() { look().alpha }))
       .scale(By(fn() { look().sx }))
       .offset(By(fn() { (look().dx, look().dy) }))
-      // (a press on it its own: not outside it)
-      .presses(Is(true))
-      .on_press(fn() {  })
       .says(Is(Some(@view.said(Dialog, label=title))))
+      // (a press on it its own: not outside it)
+      |> ground_node
       |> ignore
       let words_in = fn() { look().words }
       // (its title's row: dialog_head's, 1 under its padding's top, as tall as a close button's room at least)
@@ -93,8 +92,13 @@ pub fn ask_node(
         body.alpha(By(words_in)) |> ignore
         body.scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
         b.padding(Is((panel_words, @ui.Space::px(S4_5), panel_words, 0.0))).gap(Is(@ui.Space::px(S4))) |> ignore
-        // (its field the library's line, as wide as what it holds: Enter says it, at that key's moment)
-        field.val = Some(input_node(b, line, placeholder~, secret~, submitted=fn(_) { go() }))
+        // (its field the library's line, as wide as what it holds: Enter says it, at that key's moment; read out by the
+        // question's title where it shows no placeholder)
+        field.val = Some(
+          input_node(b, line, placeholder~, label=if placeholder == "" { title } else { "" }, secret~, submitted=fn(_) {
+            go()
+          }),
+        )
         if hint != "" {
           b.box(fn(t) {
             t.words(Is(hint), look=toast_words_look(Meta, L5, 400, true)).ink(By(fn() { theme().color(Muted) })) |> ignore

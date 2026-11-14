@@ -1,7 +1,9 @@
 ///|
 test "station SVGs preserve strokes, filled details and rounded corners" {
   let (lines, dots) = svg_glyph(
-    #|<svg fill="none" stroke="currentColor"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M10 6H14"/></svg>
+    (
+      #|<svg fill="none" stroke="currentColor"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M10 6H14"/></svg>
+    ),
   )
   assert_eq(lines.length(), 2)
   assert_eq(dots.length(), 1)

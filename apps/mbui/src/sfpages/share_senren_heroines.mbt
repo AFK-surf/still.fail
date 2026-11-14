@@ -21,21 +21,21 @@ fn hero_marked(whole : String, marks : Array[(String, @ui.Run)], scale? : Double
     match rest.find("{") {
       None => break
       Some(i) => {
-        let after = rest.view(start_offset=i + 1).to_owned()
+        let after = rest.exact_view(start=i + 1).to_owned()
         match after.find("}") {
           None => break
           Some(j) => {
-            let name = after.view(end_offset=j).to_owned()
+            let name = after.exact_view(end=j).to_owned()
             match marks.iter().find_first(fn(m) { m.0 == name }) {
               Some(m) => {
                 if i > 0 {
-                  runs.push(@ui.span(rest.view(end_offset=i).to_owned(), scale~))
+                  runs.push(@ui.span(rest.exact_view(end=i).to_owned(), scale~))
                 }
                 runs.push(m.1)
               }
-              None => runs.push(@ui.span(rest.view(end_offset=i + j + 2).to_owned(), scale~))
+              None => runs.push(@ui.span(rest.exact_view(end=i + j + 2).to_owned(), scale~))
             }
-            rest = after.view(start_offset=j + 1).to_owned()
+            rest = after.exact_view(start=j + 1).to_owned()
           }
         }
       }

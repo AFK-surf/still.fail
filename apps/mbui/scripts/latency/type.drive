@@ -1,0 +1,7 @@
+# A long chat's composer pressed, then typed into: a key every 60 to 140 ms (mac_latency.h, Latency.java)
+timeout 20000
+until 发消息
+tap 发消息
+latency type 发消息
+timeout 600000
+ends

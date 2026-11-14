@@ -40,8 +40,9 @@ fn activity_extreme_clock_positions(
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=if two_agents { 0 } else { platform })
   t.run_for(squeeze_opening)
   if two_agents {
-    let (x, y, _, h) = t.rect_of(before).unwrap()
-    t.move(x + 2.0, y + h / 2.0)
+    // (the pointer over the end of its line's words: the line found as it is read out, its words drawn elsewhere too)
+    let (x, y, w, h) = t.get(Button, label="Claude：" + before).rect
+    t.move_to(x + w - 2.0, y + h / 2.0)
     t.frame()
     assert_true(t.all(Button).iter().any(fn(s) { s.label == "停止 Claude" }), msg="the stop control is visible")
   }
@@ -70,7 +71,7 @@ fn activity_extreme_clock_does_not_follow_hidden_words(growing : Bool) -> Unit r
   let a = if growing { activity_extreme_clock_positions(short, long) } else { activity_extreme_clock_positions(long, short) }
   let b = if growing { activity_extreme_clock_positions(short, longer) } else { activity_extreme_clock_positions(longer, short) }
   for i in 0..<a.length() {
-    assert_true((a[i] - b[i]).abs() < 0.5, msg="invisible words moved the clock at frame \{i}: \{a} / \{b}")
+    assert_true((a[i] - b[i]).abs() < 0.5, msg="invisible words moved the clock at frame \{i}: \{Repr(a)} / \{Repr(b)}")
   }
 }
 
@@ -94,11 +95,11 @@ fn activity_extreme_clock_moves_through_the_change(growing : Bool) -> Unit raise
   let end = positions[positions.length() - 1]
   let left = dmin(start, end)
   let right = dmax(start, end)
-  assert_true(right - left > 2.0, msg="the two steps take different room: \{positions}")
-  assert_true(middle > left + 0.5 && middle < right - 0.5, msg="the clock should move through the change: \{positions}")
+  assert_true(right - left > 2.0, msg="the two steps take different room: \{Repr(positions)}")
+  assert_true(middle > left + 0.5 && middle < right - 0.5, msg="the clock should move through the change: \{Repr(positions)}")
   for i in 1..<positions.length() {
     let advanced = if growing { positions[i] - positions[i - 1] } else { positions[i - 1] - positions[i] }
-    assert_true(advanced >= -0.5, msg="the clock should not jump back: \{positions}")
+    assert_true(advanced >= -0.5, msg="the clock should not jump back: \{Repr(positions)}")
   }
 }
 
@@ -120,7 +121,7 @@ test "activity: a stop control keeps its room while a short step becomes long" {
   let a = activity_extreme_clock_positions(short, long, two_agents=true)
   let b = activity_extreme_clock_positions(short, longer, two_agents=true)
   for i in 0..<a.length() {
-    assert_true((a[i] - b[i]).abs() < 0.5, msg="invisible words moved the clock: \{a} / \{b}")
+    assert_true((a[i] - b[i]).abs() < 0.5, msg="invisible words moved the clock: \{Repr(a)} / \{Repr(b)}")
   }
 }
 
@@ -131,11 +132,11 @@ test "activity: a short step opens smoothly into a long one on a wide screen" {
   let longer = "正在检查项目并核对结果".repeat(64)
   let a = activity_extreme_clock_positions(short, long, w=1100.0, h=800.0, platform=0)
   let b = activity_extreme_clock_positions(short, longer, w=1100.0, h=800.0, platform=0)
-  assert_true(a[2] > a[0] + 0.5 && a[2] < a[a.length() - 1] - 0.5, msg="the clock moves through the change: \{a}")
+  assert_true(a[2] > a[0] + 0.5 && a[2] < a[a.length() - 1] - 0.5, msg="the clock moves through the change: \{Repr(a)}")
   for i in 0..<a.length() {
-    assert_true((a[i] - b[i]).abs() < 0.5, msg="invisible words moved the clock: \{a} / \{b}")
+    assert_true((a[i] - b[i]).abs() < 0.5, msg="invisible words moved the clock: \{Repr(a)} / \{Repr(b)}")
     if i > 0 {
-      assert_true(a[i] >= a[i - 1] - 0.5, msg="the clock should not jump back: \{a}")
+      assert_true(a[i] >= a[i - 1] - 0.5, msg="the clock should not jump back: \{Repr(a)}")
     }
   }
 }

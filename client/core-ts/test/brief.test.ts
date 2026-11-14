@@ -8,21 +8,21 @@ holdLanguage();
 const MIN = 60_000;
 const turn = (startedAt: number, minutes: number | null) => ({ id: `t${startedAt}`, kind: "input", startedAt, endedAt: minutes === null ? null : startedAt + minutes * MIN });
 
-test("work_counts_turns_and_the_time_finished_ones_took", () => {
+test("work_counts_the_time_finished_turns_took", () => {
   assert.equal(workText([]), null);
-  assert.equal(workText([turn(0, 0.2)]), "1 轮");
-  assert.equal(workText([turn(0, 5), turn(10 * MIN, 7), turn(30 * MIN, null)]), "3 轮 · 共工作 12 分钟");
-  assert.equal(workText([turn(0, 50), turn(60 * MIN, 22)]), "2 轮 · 共工作 1 小时 12 分");
+  assert.equal(workText([turn(0, 0.2)]), "工作不到 1 分钟");
+  assert.equal(workText([turn(0, 5), turn(10 * MIN, 7), turn(30 * MIN, null)]), "共工作 12 分钟");
+  assert.equal(workText([turn(0, 50), turn(60 * MIN, 22)]), "共工作 1 小时 12 分");
 });
 
 test("work_as_its_summary_counts_it_where_its_station_says_so", () => {
-  // Its detail lists its latest turn alone; its summary says how many and how long all of them ran.
-  assert.equal(workText([turn(0, 5)], { turns: 2, workMs: 72 * MIN }), "2 轮 · 共工作 1 小时 12 分");
+  // Its detail lists its latest turn alone; its summary says how long all of them ran.
+  assert.equal(workText([turn(0, 5)], { turns: 2, workMs: 72 * MIN }), "共工作 1 小时 12 分");
   assert.equal(workText([], { turns: 0, workMs: 0 }), null);
-  // One with turns from before its station kept the work: how many alone.
-  assert.equal(workText([], { turns: 3, workMs: null }), "3 轮");
+  // One with turns from before its station kept the work: omitted when no duration is known.
+  assert.equal(workText([], { turns: 3, workMs: null }), null);
   // A station from before says no work: what its detail lists, all its turns, added up.
-  assert.equal(workText([turn(0, 5)], { turns: 2 }), "1 轮 · 共工作 5 分钟");
+  assert.equal(workText([turn(0, 5)], { turns: 2 }), "共工作 5 分钟");
 });
 
 test("jobs_at_work_by_what_they_are", () => {
@@ -43,7 +43,7 @@ test("the_card_says_what_it_did_cost_and_used", () => {
   };
   const live = { usage: { modelCalls: 40, inputTokens: 1_200_000, cachedTokens: 1_080_000, outputTokens: 34_000, contextTokens: 190_000, contextWindow: 200_000, cost: 4.2, unpricedCalls: 0 } };
   const c = card(agent, live);
-  assert.equal(c.work, "2 轮 · 共工作 12 分钟");
+  assert.equal(c.work, "共工作 12 分钟");
   assert.equal(c.cost, "$4.20");
   assert.equal(c.tokens, "输入 1.2M · 输出 34K");
   assert.deepEqual(c.cache, { percent: 90, text: "90%", level: "ok" });

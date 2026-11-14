@@ -2,7 +2,7 @@
 // add_to_thread, say, bind_single, configure, archive, archive_chat, auto_archive, delete_session,
 // continue_machine_session). Archiving here is the record (archived, hidden) and what goes with it (the process ends,
 // other stations are told); packing an archived session's files is the hub's ColdStorage.
-import { type PresetCopy, keepCopy } from "./presets.ts";
+import { type PresetCopy, keepCopy, presetRefusal } from "./presets.ts";
 import { copyFileSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { rm } from "node:fs/promises";
@@ -16,7 +16,7 @@ import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/
 import { usageNow } from "../read/usage.ts";
 import { readTimeline, sessionPlaces, sharedTranscripts, transcriptSources } from "../read/transcript.ts";
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
-import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
+import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow, type WorkOf, type ArchiveLook, type SessionRow } from "../store/store.ts";
 import { sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { archiveMarksReady } from "../store/archive-mark-index.ts";
 import type { SessionChange } from "./accounts.ts";
@@ -33,6 +33,7 @@ import { STATION_AUTHOR } from "../store/rows.ts";
 export type NewChat = {
   runtime: Runtime;
   profile?: string | null;
+  profiles?: string[] | null;
   model?: string | null;
   effort?: string | null;
   fast?: boolean | null;
@@ -147,32 +148,46 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   const runtime = options.runtime;
   const all = config.profiles.filter((p) => p.runtimes.includes(runtime));
   if (all.length === 0) throw new Error(`no ${runtime} profile configured`);
-  const pinned = options.profile ?? null;
-  const requested = all.find((p) => p.id === pinned);
-  if (requested?.enabled === false) throw new Error(tr(lang, "station.profile.disabled", { profile: requested.name }));
+  const rawList = Array.isArray(options.profiles) ? [...new Set(options.profiles.map((x) => x.trim()).filter((x) => x !== ""))] : [];
+  const wantedProfiles = rawList.length > 0 ? rawList : options.profile ? [options.profile] : null;
+  if (wantedProfiles !== null) {
+    for (const id of wantedProfiles) {
+      const requested = all.find((p) => p.id === id);
+      if (requested?.enabled === false) throw new Error(tr(lang, "station.profile.disabled", { profile: requested.name }));
+    }
+  }
   const here = new Set(hub.profilesIn(options.ws ?? null).map((p) => p.id));
   const profiles = all.filter((p) => here.has(p.id));
   if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
   const model = trimmed(options.model);
+  // (what its preset binds it to, held here too: an app from before or another way in changes none of it)
+  const preset = trimmed(options.preset);
+  const bound = options.presetCopy ?? (preset !== null ? hub.presets.get(options.ws ?? hub.workspaces()[0] ?? null, preset) : null);
+  const refused = bound === null ? null : presetRefusal(bound, hub.station(), { runtime, model }, lang);
+  if (refused !== null) throw new Error(refused);
   let profile;
-  if (pinned !== null) {
-    profile = profiles.find((p) => p.id === pinned);
-    if (!profile) {
-      const there = all.find((p) => p.id === pinned);
-      throw new Error(there ? tr(lang, "station.profile.notHere", { profile: there.name }) : `no ${runtime} profile ${pinned}`);
+  if (wantedProfiles !== null) {
+    const subset = [];
+    for (const id of wantedProfiles) {
+      const found = profiles.find((p) => p.id === id);
+      if (!found) {
+        const there = all.find((p) => p.id === id);
+        throw new Error(there ? tr(lang, "station.profile.notHere", { profile: there.name }) : `no ${runtime} profile ${id}`);
+      }
+      if (model !== null && !runs(found, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: found.name, model }));
+      subset.push(found);
     }
-    if (model !== null && !runs(profile, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: profile.name, model }));
+    profile = subset.length === 1 ? subset[0]! : hub.accounts.pick(subset, model, true);
   } else profile = hub.accounts.pick(profiles, model, true);
   const effort = options.effort ? options.effort : null;
   checkContext(runtime, options.context, lang);
   if (effort !== null) {
-    const allowed = hub.accounts.modelEfforts(runtime, model, pinned, (p) => here.has(p.id));
+    const allowed = hub.accounts.modelEfforts(runtime, model, wantedProfiles, (p) => here.has(p.id));
     if (!allowed.includes(effort)) throw new Error(`effort must be one of ${allowed.join(", ")}`);
   }
   const workspace = chatWorkspace(config.dataDir, key);
   mkdirSync(workspace, { recursive: true });
   // (before its rows: one that names no preset of its workspace makes no chat)
-  const preset = trimmed(options.preset);
   if (options.presetCopy) keepCopy(workspace, options.presetCopy);
   else if (preset !== null) hub.presets.keepFor(workspace, options.ws ?? hub.workspaces()[0] ?? null, preset);
   mkdirSync(join(config.dataDir, "repos"), { recursive: true });
@@ -191,7 +206,8 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     createdBy: options.createdBy,
     runtime,
     profile: profile.id,
-    profilePinned: pinned !== null,
+    profilePinned: wantedProfiles?.length === 1,
+    profiles: wantedProfiles,
     model: model ?? profile.model ?? null,
     effort,
     fast: FAST_RUNTIMES.includes(runtime) ? (options.fast ?? null) : null,
@@ -224,7 +240,7 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
     log.info("hub", "going on afresh once its cache is over set", { session: key, afresh: afresh ?? "station's" });
     if (Object.keys(rest).length === 0) return;
   }
-  const { row, runtime, model, effort, profile, pinned, repick } = hub.accounts.change(key, change, lang);
+  const { row, runtime, model, effort, profile, profiles, pinned, repick } = hub.accounts.change(key, change, lang);
   const movedRuntime = runtime !== row.runtime && typeof profile === "string";
   const recapped = change.context !== undefined && change.context !== row.context;
   // Its runtime compacts on its own only some calls into a new process: what it holds over a lower most is compacted
@@ -232,18 +248,19 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
   const over = !movedRuntime && typeof change.context === "number" && (usageNow(hub.store, key)?.contextTokens ?? 0) > change.context;
   if (movedRuntime) {
     if (row.runtimeSessionId) hub.store.ranIn(key, row.runtimeSessionId, row.profile);
-    hub.store.setSessionRuntime(key, runtime, profile, pinned === true, model, effort, change.fast ?? null, change.context ?? null);
+    hub.store.setSessionRuntime(key, runtime, profile, pinned === true, model, effort, change.fast ?? null, change.context ?? null, profiles ?? null);
     hub.store.setSessionContextBefore(key, null);
   } else {
-    if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
+    const leftPool = profiles !== undefined && profiles !== null && profiles.length > 1 && !profiles.includes(row.profile);
+    if (profiles !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null, profiles);
     if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);
     if (change.fast !== undefined) hub.store.setSessionFast(key, change.fast);
     if (recapped) {
       hub.store.setSessionContext(key, change.context ?? null);
       hub.store.setSessionContextBefore(key, over ? (row.contextBefore ?? row.context ?? 0) : null);
     }
-    if (repick) hub.accounts.repick(key);
-    else if (profile === null) hub.accounts.runOn(key);
+    if (repick || leftPool) hub.accounts.repick(key);
+    else if (profile === null) hub.accounts.runOn(key, false, true);
   }
   // Another most context is what its process starts with (Claude Code's settings, a Codex thread's config): only a new
   // one takes it.
@@ -273,8 +290,8 @@ const transcriptCopy = (hub: Hub, key: string) => join(hub.store.archiveDir(), "
 /// Hides a session from lists, or shows it again; `by` is MANUAL or AUTO. Archiving also ends its idle process and
 /// hands its files to cold storage once it is idle; they are restored before the next runtime starts, and before it is
 /// shown again (a promise then, when cold storage takes its time: the session is shown once they are back).
-export function archiveBy(hub: Hub, key: string, archived: boolean, by: string): void | Promise<void> {
-  const row = hub.store.getSession(key);
+export function archiveBy(hub: Hub, key: string, archived: boolean, by: string, known?: SessionRow): void | Promise<void> {
+  const row = known ?? hub.store.getSession(key);
   if (!row) throw new Error(`unknown session ${key}`);
   if (!archived) {
     const shown = () => {
@@ -364,9 +381,11 @@ export async function relieveArchived(hub: Hub, free: () => number): Promise<voi
 /// it. Anything new said brings it back. Returns when the next one not idle long enough yet will have (null: none, or
 /// auto-archiving off): what is idle but not done by now is not on a clock, so it is looked at again after a while.
 /// A session heard only in Slack goes after slackArchiveMs even when stopped at a block: nobody answers it from here.
-/// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats.
+/// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats. Of a session, its
+/// recent chats (store `recentSessionThreads`) are what is looked at, as the review looks at them, however many it joined.
 export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: number) => void, prepareBindings?: () => void,
-  prepareJobs?: (session: string) => void, prepareMarks?: () => void, prepareLast?: (thread: number) => void): number | null {
+  prepareJobs?: (session: string) => void, prepareMarks?: () => void, prepareLast?: (thread: number) => void,
+  look?: ArchiveLook): number | null {
   const { store } = hub;
   const { autoArchiveMs: after, slackArchiveMs, autoArchiveReviewed, automaticDecisions } = hub.config();
   if (after <= 0 && slackArchiveMs <= 0) return null;
@@ -383,21 +402,28 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
     if (answer === null) { prepareUnread?.(t.id); return true; }
     return answer;
   };
+  // A reader's look (`look`): what it read of every session shown and chat of its own, and of those idle long enough
+  // what the rest needs; nothing of them is read here but of those archived.
+  if (look !== undefined) {
+    if (!look.marksReady) { prepareMarks?.(); return null; }
+    for (const thread of look.ownUnknown) prepareLast?.(thread);
+    next = look.next;
+  }
   // Over the sessions shown and the chats of their own (and those chats' sessions), never every one ever archived.
-  const live = store.liveSessions();
-  const own = store.chatsOfTheirOwn();
-  if (live.length === 0 && own.length === 0) return null;
+  const live = look !== undefined ? [] : store.liveSessions();
+  const own = look !== undefined ? look.own : store.chatsOfTheirOwn();
+  if (look === undefined && live.length === 0 && own.length === 0) return null;
   // An old station's reverse mark lookup may be incomplete. Never guess that a chat is unpinned or not kept.
-  if (!archiveMarksReady(store.db)) { prepareMarks?.(); return null; }
-  const bindingsReady = live.length === 0 || sessionBindingsReady(store.db);
+  if (look === undefined && !archiveMarksReady(store.db)) { prepareMarks?.(); return null; }
+  const bindingsReady = look !== undefined || live.length === 0 || sessionBindingsReady(store.db);
   const waitingForBindings = !bindingsReady && prepareBindings !== undefined;
   if (waitingForBindings) prepareBindings?.();
   const oldBindings = !bindingsReady && !waitingForBindings ? store.listBindings() : null;
   // Each session's undelivered messages and last turn, read for those idle long enough alone, once each: read for every
   // session shown and every member of their chats at each look, the station's thread was held 17 s on a station short of
   // memory (2026-11-03), what was said meanwhile waiting.
-  const statsRead = new Map<string, ReturnType<typeof store.workOf>>();
-  const statOf = (key: string) => {
+  const statsRead = new Map<string, WorkOf | undefined>();
+  const statOf = (key: string): WorkOf | undefined => {
     if (!statsRead.has(key)) statsRead.set(key, store.workOf(key));
     return statsRead.get(key);
   };
@@ -420,17 +446,40 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
     return row.running || hub.processState(key) === "running" || stat?.pending === true || (last !== null && last.endedAt === null) || hasUpJob(key);
   };
   const busy = (key: string) => working(key) || statOf(key)?.lastTurn?.declared === "block";
-  // A chat someone pinned stays in the lists until put away by hand.
-  const { pinned, kept } = store.archiveMarks();
+  // A chat someone pinned stays in the lists until put away by hand. (Read as a chat of its own needs it, where a reader
+  // says it of the sessions.)
+  let marks: ReturnType<typeof store.archiveMarks> | null = null;
+  const pinned = (key: string) => (marks ??= store.archiveMarks()).pinned(key);
+  const kept = (thread: number) => (marks ??= store.archiveMarks()).kept(thread);
   // Where only what the archive review recommended goes (`autoArchiveReviewed`): none while the review is off.
   const recommended = (thread: number) => !autoArchiveReviewed || (automaticDecisions.completion.enabled && store.archiveSuggested(thread));
+  // Those the look found idle long enough, with what the reader read of each (null: its index not built yet).
+  for (const { row: s, quiet, quietLong, facts: f } of look?.sessions ?? []) {
+    if (f.work === null) continue;
+    if (f.bound === null) { prepareBindings?.(); continue; }
+    if (f.pinned === null || f.kept === null) { prepareMarks?.(); continue; }
+    if (f.bound || f.pinned) continue;
+    if (f.upJob === null) prepareJobs?.(s.key);
+    const last = f.work.lastTurn;
+    const workingNow = s.running || hub.processState(s.key) === "running" || f.work.pending || (last !== null && last.endedAt === null) || f.upJob !== false;
+    const busyNow = workingNow || last?.declared === "block";
+    const threads = f.threads;
+    const slack = threads.length > 0 && threads.every((t) => t.thread.surface !== STILLFAIL_SURFACE);
+    const done = quiet && !busyNow;
+    const lingering = slack && quietLong && !workingNow;
+    if (!done && !lingering) continue;
+    if (!lingering && !threads.every((t) => recommended(t.thread.id))) continue;
+    if (threads.some((t) => f.kept!.includes(t.thread.id) || unread(t.thread))) continue;
+    log.info("hub", "archiving an idle session", { session: s.key });
+    archiveBy(hub, s.key, true, AUTO, s);
+  }
   for (const s of live) {
     if (waitingForBindings || (bindingsReady ? store.preparedSessionBound(s.key) : oldBindings!.has(s.key)) || pinned(s.key)) continue;
     // Idle long enough by its times alone, before anything else of it is read.
     const quiet = idle([s.lastActiveAt, s.shownAt]);
     const quietLong = idle([s.lastActiveAt, s.shownAt], slackArchiveMs);
     if (!quiet && !quietLong) continue;
-    const threads = store.sessionThreads(s.key);
+    const threads = store.recentSessionThreads(s.key).threads;
     const slack = threads.length > 0 && threads.every((t) => t.thread.surface !== STILLFAIL_SURFACE);
     const done = quiet && !busy(s.key);
     const lingering = slack && quietLong && !working(s.key);
@@ -438,13 +487,17 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
     if (!lingering && !threads.every((t) => recommended(t.thread.id))) continue;
     if (threads.some((t) => kept(t.thread.id) || unread(t.thread))) continue;
     log.info("hub", "archiving an idle session", { session: s.key });
-    archiveBy(hub, s.key, true, AUTO);
+    archiveBy(hub, s.key, true, AUTO, s);
   }
   for (const t of own) {
-    if (kept(t.id)) continue;
-    const said = store.lastMessageAtForArchive(t.id);
-    if (!said.known) { prepareLast?.(t.id); continue; }
-    if (!idle([t.createdAt, said.at, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
+    // (A reader's look gives those idle long enough and not kept alone.)
+    if (look === undefined) {
+      if (kept(t.id)) continue;
+      const said = store.lastMessageAtForArchive(t.id);
+      if (!said.known) { prepareLast?.(t.id); continue; }
+      if (!idle([t.createdAt, said.at, t.shownAt])) continue;
+    }
+    if (unread(t) || !recommended(t.id)) continue;
     if (store.threadSessions(t.id).some((m) => pinned(m.session) || busy(m.session))) continue;
     log.info("hub", "archiving an idle chat", { thread: t.id });
     store.setThreadHidden(t.id, true, AUTO);
@@ -456,7 +509,8 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
 export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: () => void): () => void },
   readers: { prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void>; prepareSessionBindings(signal?: AbortSignal): Promise<void>;
     prepareSessionUpJobs(sessions: readonly string[], signal?: AbortSignal): Promise<void>; prepareArchiveMarks?(signal?: AbortSignal): Promise<void>;
-    prepareArchiveLast?(threads: readonly number[], signal?: AbortSignal): Promise<void> }): () => void {
+    prepareArchiveLast?(threads: readonly number[], signal?: AbortSignal): Promise<void>;
+    read?(op: string, args: Record<string, unknown>, lang: string): Promise<string> }): () => void {
   const cancel = new AbortController();
   let timer: (() => void) | null = null;
   let preparing = false;
@@ -464,12 +518,30 @@ export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: (
   let preparingJobs = false;
   let preparingMarks = false;
   let preparingLast = false;
+  let reading = false;
   const schedule = (ms: number) => {
     timer?.();
     timer = time.after(ms, check);
   };
+  // A look: what to look at read by a reader where there is one (`archiveLook`), the archiving done here.
   const check = () => {
     timer = null;
+    const read = readers.read;
+    if (read === undefined) return pass(undefined);
+    if (reading) return;
+    reading = true;
+    const { autoArchiveMs, slackArchiveMs } = hub.config();
+    void read.call(readers, "archiveLook", { now: hub.now(), after: autoArchiveMs, slackAfter: slackArchiveMs }, "zh").then((answer) => {
+      reading = false;
+      if (!cancel.signal.aborted) pass(JSON.parse(answer) as ArchiveLook);
+    }, (error) => {
+      reading = false;
+      if (cancel.signal.aborted) return;
+      log.warn("hub", "reading what to auto-archive failed", { error: (error as Error).message });
+      schedule(600_000);
+    });
+  };
+  const pass = (look: ArchiveLook | undefined) => {
     let next: number | null = null;
     const missing = new Set<number>();
     const missingJobs = new Set<string>();
@@ -478,7 +550,7 @@ export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: (
     let missingMarks = false;
     try {
       next = autoArchive(hub, hub.now(), (thread) => missing.add(thread), () => { missingBindings = true; }, (session) => missingJobs.add(session),
-        () => { missingMarks = true; }, (thread) => missingLast.add(thread));
+        () => { missingMarks = true; }, (thread) => missingLast.add(thread), look);
     } catch (error) {
       log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
     }

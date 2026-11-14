@@ -30,7 +30,8 @@ pub fn page_viewer_ink() -> ViewerInk {
 /// they are pointed at: ViewerBar.tsx's title), `tools` at its end (viewer_tool, viewer_download); `hidden`, gone up
 /// out of the way. Its last tool stands at the window's top right corner as a page's bar's last button does
 /// (window_end_in: following the window's corner, as far in as from the bar's top), or clear of it where the last is
-/// a capsule of words (`capsule_end`: window_clear_in). `on_back` as its way back is pressed.
+/// a capsule of words (`capsule_end`: window_clear_in). `on_back` as its way back is pressed. `middle`: what stands in
+/// the name's place instead, from beside the way back to the tools, as wide as they leave it (a screen's tabs).
 pub fn viewer_bar(
   c : @ui.Ctx,
   key : String,
@@ -43,6 +44,7 @@ pub fn viewer_bar(
   title? : String = "",
   capsule_end? : Bool = false,
   on_back? : () -> Unit = fn() {  },
+  middle? : () -> Unit,
 ) -> Unit {
   // (gone up as it is drawn: told as it is built, read where it is painted)
   let gone = @motion.told(c, key + "/gone", if hidden { 1.0 } else { 0.0 }, spec=@motion.tween(
@@ -76,7 +78,7 @@ pub fn viewer_bar(
       if @ui.window_keys_left() {
         c.box(style=viewer_bar_buttons, fn() {  }) |> ignore
       }
-      c.box(style=viewer_bar_start, fn() {
+      c.box(style=if middle is Some(_) { viewer_bar_start_held } else { viewer_bar_start }, fn() {
         let id = c.id(key + "/back")
         if live {
           c.on_press(id, on_back)
@@ -93,18 +95,24 @@ pub fn viewer_bar(
         c.semantics(b, Button, id~, label=back)
       })
       |> ignore
-      // the middle, as wide as what it says, the sides kept for the way back and the tools
-      let most = dmax(viewer_none, c.width - viewer_bar_sides)
-      let middle = c.id(key + "/name")
-      c.box(style=viewer_bar_middle.then(@ui.style(max_w=Fixed(most))), id=if live && title != "" { middle } else { 0 }, taps=false, points=true, fn() {
-        c.text(name, style=viewer_name_words.then(@ui.text_style(color=Data(ink.ink)))) |> ignore
-        if meta != "" {
-          c.text(meta, style=viewer_meta_words.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
+      match middle {
+        // what stands in the name's place (a screen's tabs): grown between the way back and the tools
+        Some(made) => c.box(style=viewer_bar_held, made) |> ignore
+        None => {
+          // the middle, as wide as what it says, the sides kept for the way back and the tools
+          let most = dmax(viewer_none, c.width - viewer_bar_sides())
+          let middle = c.id(key + "/name")
+          c.box(style=viewer_bar_middle.then(@ui.style(max_w=Fixed(most))), id=if live && title != "" { middle } else { 0 }, taps=false, points=true, fn() {
+            c.text(name, style=viewer_name_words.then(@ui.text_style(color=Data(ink.ink)))) |> ignore
+            if meta != "" {
+              c.text(meta, style=viewer_meta_words.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
+            }
+          })
+          |> ignore
+          if live {
+            tip(c, key + "/name-tip", middle, title)
+          }
         }
-      })
-      |> ignore
-      if live {
-        tip(c, key + "/name-tip", middle, title)
       }
       // clear of the window's buttons at its right where they are the app's (Windows': window_keys); else at the
       // window's corner as a page's bar's last is
@@ -126,7 +134,7 @@ pub fn viewer_bar(
     |> ignore
   })
   c.look_by(node, fn() {
-    let gone = gone.get()
+    let gone = gone.get(c)
     @ui.look(alpha=1.0 - gone, dy=-(viewer_bar_h + top) * gone)
   })
 }
@@ -278,8 +286,14 @@ pub let viewer_bar_saturation : Double = 1.4
 
 ///|
 /// What the middle leaves its sides at least: the way back's and the tools' room either side (as the grid's equal
-/// sides keep it in the middle).
-let viewer_bar_sides : Double = 320.0
+/// sides keep it in the middle); a phone's (a tablet's) 90 more each side, for its one more tool (分享).
+pub fn viewer_bar_sides() -> Double {
+  if picture_to_album() {
+    500.0
+  } else {
+    320.0
+  }
+}
 
 ///|
 let viewer_none : Double = 0.0
@@ -343,6 +357,16 @@ pub fn viewer_bar_start_in(alone : Double, roots : @ui.CornerRoots) -> Double {
 let viewer_bar_start : @ui.Style = @ui.style(row=true, w=grow, align=ACenter, clip=true)
 
 ///|
+/// The same beside what stands in the name's place (viewer_bar's `middle`): as wide as the way back alone.
+// kept across runs: a value (no field of it changes)
+let viewer_bar_start_held : @ui.Style = @ui.css("row align=ACenter")
+
+///|
+/// What stands in the name's place: grown to what the way back and the tools leave it, cut where it has not the room.
+// kept across runs: a value (no field of it changes)
+let viewer_bar_held : @ui.Style = @ui.style(row=true, w=grow, align=ACenter, clip=true)
+
+///|
 /// Its tools at its end, as far apart as makes each a press's room across (keys_gap).
 fn viewer_bar_end() -> @ui.Style {
   @ui.style(row=true, w=grow, gap=keys_gap(), align=ACenter, justify=JEnd)
@@ -378,9 +402,9 @@ let viewer_tool_h : Double = 32.0
 /// A tool (page.css.ts iconBtn): 32, round, as a bar's buttons are (in the corner of a bar 44 high, 6 in, as round as
 /// it is there), the bar's hover under the pointer, its chosen ground on (viewer_lit).
 // kept across runs: a value (no field of it changes)
-let viewer_tool_box : @ui.Style = @ui.css(
+let viewer_tool_box : @ui.Style = @ui.css((
   #|w=S8 h=S8 radius=Full align=ACenter justify=JCenter disabled{opacity=O35}
-)
+))
 
 ///|
 /// What a bar's buttons are under the pointer and while on: its ink's hover and chosen grounds.

@@ -93,7 +93,7 @@ fn recording_paths(v : @rjson.Value, checkout : String, work : String, home : St
   }
   // A service or tool can live beside the checkout. Never replace home itself or a shared /tmp directory.
   let parent = match checkout.rev_find("/") {
-    Some(k) => checkout.view(end_offset=k).to_string()
+    Some(k) => checkout.exact_view(end=k).to_owned()
     None => ""
   }
   if home.length() > 1 && parent.has_prefix(home + "/") && !work_roots.contains(parent) {
@@ -107,7 +107,7 @@ fn recording_paths(v : @rjson.Value, checkout : String, work : String, home : St
       if source.length() > 1 && path.has_prefix(source + "/") {
         for dest in work_roots {
           if dest.length() > 1 && dest != source {
-            paths.push((dest + path.view(start_offset=source.length()).to_owned(), replacement))
+            paths.push((dest + path.exact_view(start=source.length()).to_owned(), replacement))
           }
         }
       }
@@ -121,7 +121,7 @@ fn recording_paths(v : @rjson.Value, checkout : String, work : String, home : St
   for station_path in known_stations {
     for source in work_roots {
       if source.length() > 1 && (station_path == source || station_path.has_prefix(source + "/")) {
-        let suffix = station_path.view(start_offset=source.length()).to_owned()
+        let suffix = station_path.exact_view(start=source.length()).to_owned()
         for dest in work_roots {
           if dest.length() > 1 && dest != source { stations.push(dest + suffix) }
         }
@@ -183,12 +183,12 @@ fn query_kept(path : String) -> String {
   match path.find("?") {
     None => path
     Some(q) => {
-      let head = path.view(end_offset=q).to_string()
-      let fields = path.view(start_offset=q + 1).to_string().split("&").map(fn(f) {
-        let f = f.to_string()
+      let head = path.exact_view(end=q).to_owned()
+      let fields = path.exact_view(start=q + 1).to_owned().split("&").map(fn(f) {
+        let f = f.to_owned()
         match f.find("=") {
-          Some(e) if secret_name(f.view(end_offset=e).to_string()) =>
-            f.view(end_offset=e).to_string() + "=-"
+          Some(e) if secret_name(f.exact_view(end=e).to_owned()) =>
+            f.exact_view(end=e).to_owned() + "=-"
           _ => f
         }
       })
@@ -229,7 +229,7 @@ fn hex_bytes(h : String) -> Array[Int] {
 ///|
 fn to_hex(bs : Array[Int]) -> String {
   let hex = "0123456789abcdef".to_array()
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for b in bs {
     sb.write_char(hex[b >> 4])
     sb.write_char(hex[b & 15])
@@ -259,7 +259,7 @@ fn body_kept(b : Array[Int]) -> Array[Int] {
   }
   if s.contains("=") && !s.contains(" ") && !s.contains("\n") {
     let k = query_kept("?" + s)
-    let k = k.view(start_offset=1).to_string()
+    let k = k.exact_view(start=1).to_owned()
     return if k == s { b } else { k.to_array().map(fn(c) { c.to_int() }) }
   }
   if secret_name(s) {
@@ -323,7 +323,7 @@ fn preview_kept(ev : @rjson.Value) -> @rjson.Value {
 ///|
 fn basename(p : String) -> String {
   match p.rev_find("/") {
-    Some(k) => p.view(start_offset=k + 1).to_string()
+    Some(k) => p.exact_view(start=k + 1).to_owned()
     None => p
   }
 }
@@ -338,7 +338,7 @@ fn abspath(p : String) -> String {
   }
   let parts = []
   for part in full.split("/") {
-    let part = part.to_string()
+    let part = part.to_owned()
     if part == "" || part == "." {
       continue
     }
@@ -407,7 +407,7 @@ fn make(args : Array[String]) -> Unit {
   } else {
     let b = basename(src)
     let b = match b.rev_find(".") {
-      Some(k) => b.view(end_offset=k).to_string()
+      Some(k) => b.exact_view(end=k).to_owned()
       None => b
     }
     re("^\\d+-").sub(b, "")
@@ -450,11 +450,11 @@ fn make(args : Array[String]) -> Unit {
   let lines : Array[String] = []
   let texts : Array[String] = []
   for line in log.split("\n") {
-    let line = line.to_string()
+    let line = line.to_owned()
     // (what the host answered, as its text recording kept it (MBUI_TEXT_RECORD=1): a Tester answers the same)
     match line.find("TEXTREC ") {
       Some(t) => {
-        match parse(line.view(start_offset=t + 8).to_string()) {
+        match parse(line.exact_view(start=t + 8).to_owned()) {
           Some(j) =>
             match recording_text(j, checkout, work, home, station, work_alias, work_real, station_real, work_paths, station_paths) {
               Some(kept) => texts.push(compact(Obj([("textrec", kept)])))
@@ -470,7 +470,7 @@ fn make(args : Array[String]) -> Unit {
       Some(i) => i
       None => continue
     }
-    let raw = match parse(line.view(start_offset=i + 10).to_string()) {
+    let raw = match parse(line.exact_view(start=i + 10).to_owned()) {
       Some(v) => v
       None => {
         die("trace: a CORETRACE line that is not JSON: \{line}")
@@ -544,7 +544,7 @@ fn make(args : Array[String]) -> Unit {
 // ---------------------------------------------------------------- diff
 
 ///|
-let volatile : Array[String] = [
+let changing_keys : Array[String] = [
   "id", "ts", "at", "createdAt", "updatedAt", "startedAt", "endedAt", "w", "time",
   "now", "nonce", "clientKey", "key", "session", "thread", "station",
 ]
@@ -586,7 +586,7 @@ fn calm(v : @rjson.Value) -> @rjson.Value {
         sorted.map(fn(kv) {
           (
             calm_str(kv.0),
-            if volatile.contains(kv.0) {
+            if changing_keys.contains(kv.0) {
               Str("…")
             } else {
               calm(kv.1)
@@ -615,7 +615,7 @@ fn truthy(v : @rjson.Value?) -> Bool {
 ///|
 /// The app's asks of a trace (by kind and params, counted), and how many messages came in
 fn asks(path : String) -> (Map[String, Int], Int) {
-  let out : Map[String, Int] = Map::new()
+  let out : Map[String, Int] = Map([])
   let mut n_in = 0
   let text = match read(path) {
     Some(t) => t
@@ -625,7 +625,7 @@ fn asks(path : String) -> (Map[String, Int], Int) {
     }
   }
   for line in text.split("\n") {
-    let line = strip_ws(line.to_string())
+    let line = strip_ws(line.to_owned())
     if line == "" {
       continue
     }
@@ -755,7 +755,7 @@ fn mark(args : Array[String]) -> Unit {
   }
   let words = read(args[0]).unwrap_or("")
   let trace = read(args[1]).unwrap_or("")
-  let counts : Map[String, Int] = Map::new()
+  let counts : Map[String, Int] = Map([])
   for m in re("(?<!\\d)(\\d{6})(?!\\d)").findall(trace) {
     if words.contains(m) {
       counts[m] = counts.get_or_default(m, 0) + 1
@@ -777,7 +777,7 @@ fn maxbytes(args : Array[String]) -> Unit {
   let mut most = 16384
   for path in args {
     for line in read(path).unwrap_or("").split("\n") {
-      let line = strip_ws(line.to_string())
+      let line = strip_ws(line.to_owned())
       if line == "" {
         continue
       }
@@ -800,7 +800,7 @@ fn main {
   if args.length() < 2 {
     die("trace make LOG [NAME] | diff OLD NEW | mark TEST TRACE | maxbytes TRACE…")
   }
-  let rest = args[2:].to_array()
+  let rest = args[2:].to_owned()
   match args[1] {
     "make" => make(rest)
     "diff" => diff(rest)

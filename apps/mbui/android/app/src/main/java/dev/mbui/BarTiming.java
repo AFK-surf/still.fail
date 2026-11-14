@@ -70,6 +70,8 @@ final class BarTiming {
         final long at;
         long arrived;
         int bytes = -1;
+        /** Of a heavy value, where its bytes are: {path: bytes} as JSON (src/core/weights.mbt); "" none. */
+        String parts = "";
         boolean failed;
 
         Topic(String name, long at) {
@@ -187,8 +189,9 @@ final class BarTiming {
         }
     }
 
-    /** Its first message taken (decoded) at {@code now}: its value's size in bytes, or -1 (it could not be read). */
-    static void decoded(int id, int bytes, long now) {
+    /** Its first message taken (decoded) at {@code now}: its value's size in bytes, or -1 (it could not be read);
+     *  {@code parts}: of a heavy one, where its bytes are. */
+    static void decoded(int id, int bytes, String parts, long now) {
         synchronized (lock) {
             Switch s = on;
             if (s == null) return;
@@ -196,6 +199,7 @@ final class BarTiming {
             if (t == null || t.arrived != 0L) return;
             t.arrived = now;
             t.bytes = bytes;
+            t.parts = parts == null ? "" : parts;
             t.failed = bytes < 0;
             settle(s);
         }
@@ -254,6 +258,7 @@ final class BarTiming {
                     put(j, "core_ms", ms(t.at, t.arrived));
                     put(j, "tap_shown_ms", ms(s.tap, t.arrived));
                     if (t.bytes >= 0) j.put("bytes", t.bytes);
+                    if (!t.parts.isEmpty()) j.put("parts", new JSONObject(t.parts));
                     if (t.failed) j.put("failed", true);
                     ts.put(j);
                 }

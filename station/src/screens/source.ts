@@ -16,7 +16,12 @@ export type Codec = "h265" | "h264" | "jpeg";
 export type FrameConfig = { codec: Codec; width: number; height: number; description?: Uint8Array; region?: Region };
 
 /// A part of the screen, 0..1 of its width and height: its left, its top, its width, its height.
-export type AudioFrame = { ts: number; data: Uint8Array };
+/// A 20 ms packet of system output: 3840 bytes of interleaved stereo PCM16, or one Opus packet (RFC 6716) of those 960
+/// frames where the view asked `opus` and the source encodes it (`codec` says which).
+export type AudioFrame = { ts: number; data: Uint8Array; codec: AudioCodec };
+export type AudioCodec = "pcm_s16le" | "opus";
+/// The longest Opus packet (RFC 6716 3.2.1).
+export const OPUS_MAX = 1275;
 
 export type Region = { x: number; y: number; w: number; h: number };
 
@@ -43,9 +48,11 @@ export type ScreenInput =
 /// source.
 /// `fit`: the viewer's own screen (a phone), in its CSS pixels and their scale: a source that lays itself out (a tab of
 /// the browser) does so for it while the view is open, as that phone's browser would; others take no notice.
+/// `opus`: the viewer decodes Opus too (with `audio`): a source that encodes it sends the sound so (about 64 kbit/s,
+/// where PCM is 1.5 Mbit/s), the others PCM.
 /// `gamut: "p3"`: the viewer shows a video tagged Display P3 as such: a source that has wider colours (this Mac's
 /// desktop) may send them; the others' stay sRGB, as they are without it.
-export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fps?: number; fit?: ViewFit; audio?: boolean; gamut?: "p3" };
+export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fps?: number; fit?: ViewFit; audio?: boolean; opus?: boolean; gamut?: "p3" };
 export type ViewFit = { width: number; height: number; scale: number };
 
 /// The codec a source that makes `own` (best first) sends a view: the first of them the view takes; for a preview
@@ -87,7 +94,7 @@ export function clipFits(clip: Clip): boolean {
 export interface ScreenView {
   /// The next frame once there is a new one, or null when the view ended (the source went away).
   next(): Promise<Frame | null>;
-  /// Negotiated system output: 48 kHz stereo PCM16, one bounded packet, null when unavailable.
+  /// Negotiated system output: 48 kHz stereo, PCM16 or Opus, one bounded packet, null when unavailable.
   nextAudio?(): Promise<AudioFrame | null>;
   /// Starts the next frame as a key frame (a client's decoder lost its state).
   keyframe(): void;
@@ -117,6 +124,11 @@ export interface ScreenView {
   /// Hears how far a device's picture is turned clockwise, in quarter turns, as it changes and at once, until the returned
   /// function: a simulator's, whose case is drawn turned with it.
   watchTurn?(heard: (turn: number) => void): () => void;
+  /// Hears a desktop's windows and the one shown alone as they change and at once, until the returned function: a
+  /// source that shows one window alone (still.fail Helper's), where `window` picks one.
+  watchWindows?(heard: (windows: ScreenWindows) => void): () => void;
+  /// One window shown alone from now on (one of those `watchWindows` said), or the whole display again (null).
+  window?(id: number | null): void;
   /// Shows a file in the machine's file manager (a file dropped into the view, put on the machine): the source's
   /// `reveal` says it can.
   reveal?(path: string): Promise<void>;
@@ -134,6 +146,8 @@ export interface ScreenView {
   /// Answers the ask `a.id` with what the person's app signed (or that it signed nothing), if the page is still where
   /// it asked.
   passkey?(a: PasskeyAnswer): Promise<void>;
+  /// Hears a child screen (`browser:<id>`) this tab opened while driven (a link to a new window or an OAuth popup).
+  watchChild?(heard: (screenId: string) => void): () => void;
 }
 
 /// A login field in focus: the site's host (as the browser has its address, not as the page says it), and which field.
@@ -161,6 +175,33 @@ export type ScreenVideo = { capture: string; encoder?: string; hardware?: boolea
 
 /// Where a screen's pointer is, 0..1 of the screen, and its shape as CSS names it.
 export type ScreenCursor = { x: number; y: number; shape: string };
+
+/// The key an app makes for a person's tab of the station's browser it opens (`browser:<key>`), as the browser's
+/// user-tabs.ts `#freshKey` makes them.
+export const USER_TAB_ID = /^u_[0-9a-f]{12}$/;
+
+/// An app's window on a desktop, as a view may show it alone (`ScreenView.window`): its id (the system's), its app's
+/// name and its title.
+export type ScreenWindow = { id: number; app: string; title: string };
+/// A desktop's windows as its view says them, and the one it shows alone (null: the whole display).
+export type ScreenWindows = { windows: ScreenWindow[]; window: number | null };
+/// The most windows said (the rest left out), and the longest app's name or title (cut there).
+export const WINDOWS_MOST = 60;
+export const WINDOW_WORDS_MOST = 200;
+
+/// A desktop's windows as a helper said them, checked: at most WINDOWS_MOST, each with a whole id, words cut.
+export function windowsOf(v: unknown): ScreenWindow[] {
+  if (!Array.isArray(v)) return [];
+  const out: ScreenWindow[] = [];
+  for (const w of v) {
+    if (out.length >= WINDOWS_MOST) break;
+    if (w === null || typeof w !== "object") continue;
+    const { id, app, title } = w as Record<string, unknown>;
+    if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) continue;
+    out.push({ id, app: typeof app === "string" ? app.slice(0, WINDOW_WORDS_MOST) : "", title: typeof title === "string" ? title.slice(0, WINDOW_WORDS_MOST) : "" });
+  }
+  return out;
+}
 
 /// A display's scale as its system has it (Windows' Settings › Display › Scale): now, the one recommended, and the
 /// steps it takes, in percent.
@@ -195,6 +236,23 @@ export interface ScreenSource {
   readonly peek?: boolean;
   /// The session that opened it (a tab of the browser an agent opened), when known.
   openedBy?(): string | undefined;
+  /// A browser tab a person opened on this station (kept in Chrome's persistent profile, hidden from agents).
+  readonly userTab?: boolean;
+  /// Whether this user tab is hibernated (its Chrome page closed to free memory until opened again).
+  sleeping?(): boolean;
+  /// The site (`hostname[:port]`) of a browser tab, without path, query or hash.
+  site?(): string | undefined;
+  /// A browser tab's whole address, as its address bar shows it (`about:blank` on a new tab's page).
+  address?(): string;
+  /// Navigates a browser tab to `url` (an address, or words searched for, as a browser's address bar takes them).
+  openUrl?(url: string): Promise<void>;
+  /// Reloads a browser tab.
+  reload?(): Promise<void>;
+  /// Goes back, or forward, a page in a browser tab's history (nothing where it has none that way).
+  back?(): Promise<void>;
+  forward?(): Promise<void>;
+  /// Hibernates a user tab now, closing its underlying Chrome page while keeping its saved address and title.
+  sleep?(): Promise<void>;
   /// Closes it for good (a tab of the browser, a simulator shut down); none: it is not closed from a person's app (the
   /// desktop).
   discard?(): Promise<void>;
@@ -224,6 +282,12 @@ export interface ScreenSource {
   readonly panels?: readonly Panel[];
 }
 
+/// The station's browser as `ScreenHub` reaches it without importing `browser/`.
+export interface ScreenBrowser {
+  available(): boolean;
+  openUserTab(url: string, id?: string): Promise<string>;
+}
+
 /// The station's sources: parts add theirs (the desktop at start, the browser per tab) and take them away.
 export interface Screens {
   add(source: ScreenSource): () => void;
@@ -231,6 +295,8 @@ export interface Screens {
   get(id: string): ScreenSource | undefined;
   /// Called with the list each time a source comes or goes (or its title changes).
   watch(listener: (sources: ScreenSource[]) => void): () => void;
+  /// Registers the station's browser so members can open persistent user pages (`POST /screens/browser`).
+  setBrowser?(browser: ScreenBrowser | null): void;
 }
 
 export function makeScreens(): Screens & { changed(): void } {

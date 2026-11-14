@@ -10,10 +10,11 @@
 
 ///|
 /// How a page is laid out: as the web's narrow app is (`Narrow`), or its desktop pages (`Wide`).
+#derive(Eq, Debug)
 pub(all) enum Look {
   Narrow
   Wide
-} derive(Eq, Show)
+}
 
 ///|
 /// The arrangements of the pages being drawn, the innermost last (a page's frame says its own as it draws what it
@@ -104,10 +105,11 @@ pub(all) struct PageFrame {
 /// What a page made once says of itself to the frame that names it (its bar: `named`), as it changes: its title, what
 /// it is for said by a mark beside it ("" none; not its lead, what it holds says under its title). Compared by what it
 /// says.
+#derive(Eq)
 pub(all) struct PageSaid {
   title : String
   about : String
-} derive(Eq)
+}
 
 ///|
 /// A frame that gives a page nothing: nowhere back, no room over or under it.
@@ -471,13 +473,14 @@ pub let page_list_opened : Ref[(@ui.Ctx, String, Int) -> Unit] = Ref(fn(_, _, _)
 ///|
 /// The keys of the blocks of the page being drawn (`page`'s `keys`: each block's own and what it shows), taken by the
 /// list its blocks are laid out in (keyed_blocks); None: its blocks by their places.
-// kept across runs: set by each page as it is drawn and taken by its list in the same build
+// kept across runs: set by each page as it is drawn and taken by its list in the same build; put back by
+// page_rows_reset, as a run begins (run_begin)
 let page_keyed : Ref[Array[(String, String)]?] = Ref(None)
 
 ///|
 /// Each page's blocks as given and as its list made of them, by the list's key (keyed_blocks).
-// kept across runs: put back by page_rows_reset (the app's reset)
-let page_lists : Map[String, @ui.ListRows[(String, () -> Unit)]] = {}
+// kept across runs: put back by page_rows_reset, as a run begins (run_begin)
+let page_lists : Map[String, @ui.ListRows[(String, () -> Unit)]] = Map([])
 
 ///|
 /// What every page's blocks were forgets (a run anew).
@@ -512,7 +515,7 @@ fn keyed_blocks(
     }
   }
   let keys = Array::makei(chrome, fn(i) { "~" + i.to_string() })
-  let versions : Map[String, String] = {}
+  let versions : Map[String, String] = Map([])
   for k in ks {
     keys.push(k.0)
     versions[k.0] = k.1
@@ -1885,9 +1888,9 @@ fn row_line(narrow : Bool) -> @ui.Style {
   } else if in_small_panel() {
     panel_row_in()
   } else if in_card.val == 0 && words_in_now.val > 0.0 {
-    panel_words_in()
+    panel_words_in().then(panel_row_rounds(0.0))
   } else if reach > 0.0 {
-    @ui.style(mx=room(-reach), px=room(reach))
+    @ui.style(mx=room(-reach), px=room(reach)).then(panel_row_rounds(reach))
   } else {
     no_reach
   }
@@ -2310,6 +2313,16 @@ let dl_label : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium
 ///|
 // kept across runs: a value (no field of it changes)
 let dl_reset : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
+/// A dial's name and its note in lines of dials (dials_node's `lines`): as wide as its dial, going on under themselves
+/// where they are longer, never cut.
+// kept across runs: a value (no field of it changes)
+let dl_label_lines : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dl_reset_lines : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2881,7 +2894,13 @@ pub let desk_mark : Double = 14.0
 /// A card of a panel's, on its ground as its other cards are (the ink at 5%: info_list's, a choice's): a card's own ground is
 /// the panel's, unseen on it.
 // kept across runs: a value (no field of it changes)
-let panel_card_group : @ui.Style = @ui.css("w=Full bg=A(Fg,O5) clip").then(@ui.style(radius=rounded(card_corner)))
+let panel_card_group : @ui.Style = panel_card_ground.then(@ui.style(radius=rounded(card_corner)))
+
+///|
+/// A card of a panel's, its ground alone (panel_card_group's, its corners left to what draws it: a card's piece,
+/// card_piece_node).
+// kept across runs: a value (no field of it changes)
+let panel_card_ground : @ui.Style = @ui.css("w=Full bg=A(Fg,O5) clip")
 
 ///|
 // kept across runs: a value (no field of it changes)

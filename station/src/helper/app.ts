@@ -18,7 +18,8 @@
 // A refusal is an Error with the answer's fields (`code`, and what the op adds).
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,7 +39,7 @@ const REVIVALS_MS = 60_000;
 /// The release's helper app: STILLFAIL_HELPER, or beside the station's code in a release.
 export function helperApp(env: NodeJS.ProcessEnv = process.env): string | null {
   const candidates = [env.STILLFAIL_HELPER, fileURLToPath(new URL(`./${HELPER_APP}`, import.meta.url))];
-  return candidates.find((p) => p && existsSync(join(p, "Contents/Info.plist"))) ?? null;
+  return candidates.find((p) => p && existsSync(join(p, "Contents/Info.plist"))) ?? null; // sync: once, as the station starts
 }
 
 /// How the app is started: by LaunchServices, a new instance, in the background, with its socket and token.
@@ -52,24 +53,26 @@ export const openApp: Launch = (app, env) =>
 /// The files that say an installed copy is the release's: its code and its signature.
 const CODE = ["Contents/MacOS/stillfail-helper", "Contents/Info.plist", "Contents/_CodeSignature/CodeResources"];
 
-/// The release's app copied into `dir`, unless the copy there is the same; whether it was copied.
-export function install(app: string, dir: string): { path: string; replaced: boolean } {
+/// The release's app copied into `dir`, unless the copy there is the same; whether it was copied. Off the station's
+/// thread: its code is megabytes, compared at every start of the app.
+export async function install(app: string, dir: string): Promise<{ path: string; replaced: boolean }> {
   const path = join(dir, basename(app));
-  const same = CODE.every((f) => {
+  const same = await Promise.all(CODE.map(async (f) => {
     try {
-      return readFileSync(join(app, f)).equals(readFileSync(join(path, f)));
+      const [ours, there] = await Promise.all([readFile(join(app, f)), readFile(join(path, f))]);
+      return ours.equals(there);
     } catch {
       return false;
     }
-  });
-  if (same) return { path, replaced: false };
-  mkdirSync(dir, { recursive: true });
+  }));
+  if (!same.includes(false)) return { path, replaced: false };
+  await mkdir(dir, { recursive: true });
   const staging = join(dir, `.staging-${randomBytes(4).toString("hex")}`);
-  cpSync(app, staging, { recursive: true, verbatimSymlinks: true });
+  await cp(app, staging, { recursive: true, verbatimSymlinks: true });
   const old = `${path}.old-${randomBytes(4).toString("hex")}`;
-  if (existsSync(path)) renameSync(path, old);
-  renameSync(staging, path);
-  rmSync(old, { recursive: true, force: true });
+  await rename(path, old).catch((error) => { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; });
+  await rename(staging, path);
+  await rm(old, { recursive: true, force: true });
   return { path, replaced: true };
 }
 
@@ -100,7 +103,7 @@ export class HelperApp {
     this.#clock = options.clock ?? liveClock;
     if (options.onBack) this.#backs.add(options.onBack);
     try {
-      this.#token = readFileSync(join(options.dir, "token"), "utf8").trim() || null;
+      this.#token = readFileSync(join(options.dir, "token"), "utf8").trim() || null; // sync: once, as the station starts
     } catch {
       this.#token = null;
     }
@@ -134,7 +137,7 @@ export class HelperApp {
 
   /// The running app's process, null when none answers.
   async pid(): Promise<number | null> {
-    if (this.#token === null || !existsSync(this.socket)) return null;
+    if (this.#token === null) return null;
     return this.#ask({ op: "hello" }).then((a) => (typeof a?.pid === "number" ? a.pid : null), () => null);
   }
 
@@ -227,7 +230,7 @@ export class HelperApp {
     // process's own and only this replaces the copy. Up since, each request only asks it (the comparison, at every
     // request, held the station's thread for a second on a machine short of memory, 2026-10-25).
     if (this.#installed !== null && (await this.#hello())) return;
-    const { path, replaced } = install(this.app, this.dir);
+    const { path, replaced } = await install(this.app, this.dir);
     this.#installed = path;
     const up = await this.#hello();
     // Its code changed: the one running is the old one.
@@ -236,10 +239,10 @@ export class HelperApp {
     // The token stays what it is: an app started by macOS itself reads it beside it.
     if (this.#token === null) {
       const token = randomBytes(32).toString("hex");
-      writeFileSync(join(this.dir, "token"), token, { mode: 0o600 });
+      await writeFile(join(this.dir, "token"), token, { mode: 0o600 });
       this.#token = token;
     }
-    rmSync(this.socket, { force: true });
+    await rm(this.socket, { force: true });
     log.info("helper", "starting still.fail Helper", { app: path });
     await this.#launch(path, { STILLFAIL_HELPER_SOCKET: this.socket, STILLFAIL_HELPER_TOKEN: this.#token });
     await this.back();
@@ -259,7 +262,8 @@ export class HelperApp {
   }
 
   async #hello(): Promise<boolean> {
-    if (this.#token === null || !existsSync(this.socket)) return false;
+    // (No socket there: the connection is refused at once.)
+    if (this.#token === null) return false;
     try {
       return (await this.#ask({ op: "hello" }))?.ok === true;
     } catch {

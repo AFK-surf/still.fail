@@ -16,10 +16,12 @@ fn settings_rows_shown(t : @ui.Tester, labels : Array[String], edge : Double) ->
 
 ///|
 /// Every row's words in the list's order (the settings' fixture's: 林, 星火工作室) with keyboard and mouse.
+/// 共享调试 among them on a computer too (every app's but the web's, 2026-11-10: the devices that approve phone
+/// debugging are its page's, their own page under 安全 gone).
 // kept across runs: a table, never written
 let settings_list_order : Array[String] = [
   "林", "星火工作室", "安全", "密钥", "Station", "连接", "Profile", "自动决策", "记忆", "归档", "用量", "外观", "通知", "快捷键",
-  "本机 Station", "本机缓存", "关于",
+  "本机 Station", "共享调试", "本机缓存", "关于",
 ]
 
 ///|
@@ -132,4 +134,21 @@ test "the settings' list: how things stand at each row's end, what is wrong in r
   // what has a page of its own elsewhere: not a row of its own
   assert_true(t.find("更新日志") is None)
   assert_true(t.find("权限") is None)
+}
+
+///|
+test "settings list shows 本机 Station on Windows and Linux as well as Mac" {
+  for platform in [0, 3, 5] {
+    new_run()
+    let src = fixture_app("settings-home")
+    let t = @ui.Tester::new(
+      fn(c) { view(c, src) },
+      tree=app_tree(src),
+      w=390.0,
+      h=2400.0,
+      platform~,
+    )
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("本机 Station") is Some(_), msg="platform \{platform}")
+  }
 }

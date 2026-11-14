@@ -1,15 +1,15 @@
 // Sharing a chat with keyboard and mouse (sfpages xshare.mbt): from the chat's info, the workspaces
-// it may be shared with, ticked as it is shared; 完成 tells the core (chat.xshare).
+// it may be shared with, ticked as it is shared; 完成 tells the core (chat.xshare) and copies the chat's link.
 
 ///|
-test "wide: 分享给其他 workspace from the chat's info: a dialog lists the workspaces, ticked as shared; 完成 sends chat.xshare" {
+test "wide: 分享给其他 workspace from the chat's info: a dialog lists the workspaces, ticked as shared; 完成 sends chat.xshare and copies its link" {
   new_run()
   let calls : Array[Made] = []
   let base = fixture("chat-info")
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -19,6 +19,7 @@ test "wide: 分享给其他 workspace from the chat's info: a dialog lists the w
   t.click(Button, label="更多")
   t.frame()
   t.frame()
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   // (the dialog come in, @kit.dialog_in, and still: the corner rule holds every frame drawn so, its tick rows' boxes
   // clear of their corners)
@@ -33,6 +34,8 @@ test "wide: 分享给其他 workspace from the chat's info: a dialog lists the w
   let sent = named(calls, "chat.xshare")
   assert_eq(sent.length(), 1)
   assert_eq(field(Some(sent[0].params), "to"), Some(Json::array([Json::string("ws3")])))
+  assert_true(t.clipboard().has_prefix("[整理发布清单]("), msg=t.clipboard())
+  assert_true(t.clipboard().contains("/st1/s-c1)"), msg=t.clipboard())
   // (the dialog goes as a presenter does: back the way it came, @kit.pop_out)
   t.run_for(@kit.pop_out_ms)
   t.frame()

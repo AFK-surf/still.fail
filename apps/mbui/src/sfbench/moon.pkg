@@ -4,7 +4,11 @@ import {
   "stillfail/sf",
   "stillfail/sfkept",
   "stillfail/sfapp",
+  "stillfail/sffixture",
+  "stillfail/sfrealsize",
   "mbui/wasmrt",
+  "mbui/view",
+  "mbui/signals",
 }
 
 options(

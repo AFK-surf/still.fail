@@ -32,7 +32,7 @@ fn bar_placed(from : String, place : String) -> Unit {
     Some(t) => {
       (t.placed)(from, place)
       bar_timed.val = Some(place)
-      bar_timed_said.set(@signals.untracked(fn() { bar_timed_said.get() }) + 1)
+      bar_timed_said.set(bar_timed_said.untracked() + 1)
     }
     None => ()
   }

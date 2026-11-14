@@ -86,11 +86,71 @@ test("a chat with no preset is told of none, and one naming no preset of its wor
   await r.close();
 });
 
-test("a preset is a name and directories of this station", () => {
+test("a chat opened with a preset that names its model or its stations is opened only so, saying how to have it otherwise", async () => {
+  const r = new Rig();
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus", "sonnet"];
+  });
+  const bound = r.hub.presets.add(null, { name: "Review", dirs: [], instructions: "", model: { model: "opus", runtime: "claude" } }, "local");
+  const before = r.store.listSessions().length;
+  assert.throws(() => newSession(r.hub, { runtime: "claude", model: "sonnet", createdBy: "local", preset: bound.id }), /Review/);
+  assert.throws(() => newSession(r.hub, { runtime: "claude", createdBy: "local", preset: bound.id }), /Review/, "none named is not the one it names");
+  assert.equal(r.store.listSessions().length, before, "nothing made");
+  newSession(r.hub, { runtime: "claude", model: "opus", createdBy: "local", preset: bound.id });
+
+  // its stations, by id or by address: this one (`st`) among them, or not
+  const here = r.hub.presets.add(null, { name: "Here", dirs: [], instructions: "", stations: ["ws/st", "other"] }, "local");
+  newSession(r.hub, { runtime: "claude", createdBy: "local", preset: here.id });
+  const far = r.hub.presets.add(null, { name: "Far", dirs: [], instructions: "", station: "other" }, "local");
+  assert.throws(() => newSession(r.hub, { runtime: "claude", createdBy: "local", preset: far.id }), /Far/);
+
+  // another station's preset, as the app gives it: what it binds held the same
+  const copy = (o: object) => presetCopyInput({ id: "p9", name: "Theirs", dirs: [], instructions: "", ...o });
+  assert.throws(() => newSession(r.hub, { runtime: "claude", model: "sonnet", createdBy: "local", presetCopy: copy({ model: { model: "opus" } }) }), /Theirs/);
+  assert.throws(() => newSession(r.hub, { runtime: "claude", createdBy: "local", presetCopy: copy({ stations: ["other"] }) }), /Theirs/);
+  newSession(r.hub, { runtime: "claude", model: "opus", createdBy: "local", presetCopy: copy({ model: { model: "opus" }, stations: ["st"] }) });
+  await r.close();
+});
+
+test("a preset is a name and optional directories, station policy and model", () => {
   const dir = mkdtempSync(join(tmpdir(), "presets-"));
   assert.throws(() => presetInput({ name: " ", dirs: [dir] }), /needs a name/);
   assert.throws(() => presetInput({ name: "x", dirs: [join(dir, "gone")] }), /no directory on this station/);
   assert.deepEqual(presetInput({ name: " x ", dirs: [dir, { path: dir }] }), { name: "x", dirs: [{ path: dir, repo: null }], instructions: "" });
+  assert.deepEqual(presetInput({ name: "Code Review", dirs: [], instructions: "Check edge cases." }), { name: "Code Review", dirs: [], instructions: "Check edge cases." });
+  assert.deepEqual(
+    presetInput({
+      name: "Full",
+      dirs: [],
+      autoStation: true,
+      model: { model: "fable-5-2", runtime: "claude", effort: "high" },
+    }),
+    {
+      name: "Full",
+      dirs: [],
+      instructions: "",
+      autoStation: true,
+      model: { model: "fable-5-2", runtime: "claude", effort: "high" },
+    },
+  );
+  assert.deepEqual(
+    presetInput({ name: "Subset", dirs: [], stations: ["st1", "st2", "st1"] }),
+    { name: "Subset", dirs: [], instructions: "", stations: ["st1", "st2"] },
+  );
+  assert.deepEqual(
+    presetInput({ name: "Single", dirs: [], stations: ["st1"] }),
+    { name: "Single", dirs: [], instructions: "", station: "st1" },
+  );
+  const home = mkdtempSync(join(tmpdir(), "presets-store-"));
+  const store = new Presets(() => home, () => 100);
+  const p = store.add(null, { name: "Preset", dirs: [], autoStation: true, model: { model: "fable-5-2", runtime: "claude", effort: "high" } }, "local");
+  assert.equal(p.autoStation, true);
+  assert.deepEqual(p.model, { model: "fable-5-2", runtime: "claude", effort: "high" });
+  const cleared = store.put(null, p.id, { name: "Preset", dirs: [] });
+  assert.equal(cleared.autoStation, undefined);
+  assert.equal(cleared.station, undefined);
+  assert.equal(cleared.stations, undefined);
+  assert.equal(cleared.model, undefined);
   assert.equal(repoName("https://github.com/acme/app.git"), "github.com/acme/app");
   assert.equal(repoName("git@github.com:acme/app.git"), "github.com/acme/app");
 });

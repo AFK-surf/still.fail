@@ -13,64 +13,8 @@ inputs:
 runs:
   using: composite
   steps:
-    # The pinned Node put in the runner's tool cache when its image has none there (macos-15 has no 24.22.1, xcode-27
-    # has), for setup-node to find: nodejs.org's tarball, checked against the release's SHASUMS256.txt, unpacked in
-    # place. setup-node's own download unpacked it and copied it there file by file: 8.8 s of the mac job (2026-10-24,
-    # 40076678382).
-    # (Each curl here given up and tried again when its connection stalls, under 1 KB/s for 20 s: --retry alone acts only
-    # on an error, and a stalled download is none; nodejs.org's tarball held the mac job until its 10 minutes ran out,
-    # main 91434fca, 40642483751.)
-    # Kept in the Actions cache by its version once fetched (a key never made again: whichever run fetched it first
-    # saves it), so nodejs.org is reached once a version, not every run's mac job's.
-    - id: mac-node
-      if: runner.os == 'macOS'
-      shell: bash
-      run: |
-        v=$(tr -d 'v[:space:]' < .node-version); a=$(uname -m | sed 's/x86_64/x64/')
-        d="$RUNNER_TOOL_CACHE/node/$v/$a"
-        echo "dir=$d" >> "$GITHUB_OUTPUT"
-        echo "key=node-darwin-$a-$v" >> "$GITHUB_OUTPUT"
-        [ ! -f "$d.complete" ] || echo "kept=true" >> "$GITHUB_OUTPUT"
-    - if: runner.os == 'macOS' && steps.mac-node.outputs.kept != 'true'
-      uses: actions/cache@v4
-      with:
-        path: |
-          ${{ steps.mac-node.outputs.dir }}
-          ${{ steps.mac-node.outputs.dir }}.complete
-        key: ${{ steps.mac-node.outputs.key }}
-    - if: runner.os == 'macOS'
-      shell: bash
-      run: |
-        t0=$(date +%s)
-        v=$(tr -d 'v[:space:]' < .node-version); a=$(uname -m | sed 's/x86_64/x64/')
-        d="$RUNNER_TOOL_CACHE/node/$v/$a"
-        [ ! -f "$d.complete" ] || exit 0
-        f=node-v$v-darwin-$a.tar.gz
-        curl -fsSL --retry 3 --speed-limit 1024 --speed-time 20 -o "$RUNNER_TEMP/$f" "https://nodejs.org/dist/v$v/$f"
-        curl -fsSL --retry 3 --speed-limit 1024 --speed-time 20 "https://nodejs.org/dist/v$v/SHASUMS256.txt" | grep " $f\$" > "$RUNNER_TEMP/$f.sha256"
-        (cd "$RUNNER_TEMP" && shasum -a 256 -c --quiet "$f.sha256") || { echo "$f: not the SHA-256 nodejs.org lists"; exit 1; }
-        rm -rf "$d" && mkdir -p "$d" && tar -xzf "$RUNNER_TEMP/$f" --strip-components 1 -C "$d" && touch "$d.complete"
-        rm -f "$RUNNER_TEMP/$f"
-        echo "Node $v in the tool cache in $(( $(date +%s) - t0 )) s"
-    # Windows: the image's Node of that version, from its tool cache, put on the PATH as it is. setup-node prints npm's
-    # and yarn's versions, their first start on the runner: 45 s of the release's Windows job beside cl compiling the
-    # app (main dd3caeef, 40599181003; preview.yml's own Node step says the same of 29-81 s, 2026-10-25). setup-node when
-    # the image has not that Node.
-    - id: node
-      if: runner.os == 'Windows'
-      shell: bash
-      run: |
-        d="$(cygpath -u "$RUNNER_TOOL_CACHE")/node/$(tr -d 'v[:space:]' < .node-version)/x64"
-        [ -x "$d/node.exe" ] || exit 0
-        cygpath -w "$d" >> "$GITHUB_PATH"
-        echo "kept=true" >> "$GITHUB_OUTPUT"
-    - if: steps.node.outputs.kept != 'true'
-      uses: actions/setup-node@v5
-      with:
-        # The Node the station ships (.node-version), not whichever 24 the runner has cached: node:sqlite on Linux
-        # bound TextEncoder's empty Uint8Array as NULL in 24.13 (core-ts's bridge test, 2026-10-04), not in 24.15.
-        node-version-file: .node-version
-        package-manager-cache: false
+    # The pinned Node (.github/actions/node: the tool cache's, the Actions cache's, or nodejs.org's once a version)
+    - uses: ./.github/actions/node
     # Windows' pnpm.exe kept in the Actions cache by its version: github.com's release fetched once a version, not every
     # run's (one run's fetch could not connect to github.com for 21 s, main c6764347, 40661676439)
     - id: win-pnpm

@@ -11,6 +11,8 @@
 // reads back what it needs: afresh.ts); on one nearly full it moves before a turn only when that loses little: its
 // runtime has just compacted its context, or is about to (`cheapToLeave`).
 // Also the reasoning levels a model offers, which the pool's accounts decide.
+import { agyBaseModel } from "../agents/agy.ts";
+import { splitDevinFusion } from "../agents/devin.ts";
 import { type Profile, runs, sameModel } from "./config.ts";
 import { billedPerUse } from "../agents/profiles.ts";
 import { COMPACTED_FROM } from "../store/rows.ts";
@@ -40,9 +42,10 @@ const MIN_WEIGHT = 0.01;
 
 export const windowsOf = (quota: Json | null | undefined): Json[] => (quota && quota.state === "ok" && Array.isArray(quota.windows) ? quota.windows : []);
 
-/// How much of its tightest window a profile has used, 0–100; unknown counts as half.
-function used(quota: Json | null | undefined): number {
-  const windows = windowsOf(quota);
+/// How much of its tightest window a profile has used, 0–100; unknown counts as half. With `now`, a window whose
+/// refill is due (an allowance read before it) counts as empty.
+function used(quota: Json | null | undefined, now?: number): number {
+  const windows = windowsOf(quota).map((w) => (now !== undefined && typeof w.resetsAt === "number" && w.resetsAt <= now ? { ...w, usedPercent: 0 } : w));
   if (windows.length > 0) return windows.reduce((max: number, w: Json) => Math.max(max, Number(w.usedPercent)), -Number.MAX_VALUE);
   return 50;
 }
@@ -101,11 +104,17 @@ export function cheapToLeave(calls: ContextCall[], points: Map<string, number>):
   });
 }
 
-/// Whether a profile can run now: it signs in, its key was not rejected, none of its windows is used up, and no turn
-/// ran into its allowance since.
-export function usable(health: ProfileHealth): boolean {
+/// Whether a profile signs in: its login is not over and its key was not rejected.
+export function signsIn(health: ProfileHealth): boolean {
   const state = health.check?.state;
-  return !health.spent && state !== "login" && state !== "failed" && used(health.quota) < 100;
+  return state !== "login" && state !== "failed";
+}
+
+/// Whether a profile can run now: it signs in, its key was not rejected, none of its windows is used up, and no turn
+/// ran into its allowance since. `now`: a used-up window whose refill is due by then no longer counts (the allowance
+/// is read every few minutes: a session woken at the refill would find its account still full).
+export function usable(health: ProfileHealth, now?: number): boolean {
+  return !health.spent && signsIn(health) && used(health.quota, now) < 100;
 }
 
 /// A chosen model needs the profile to run it; no model means the profile's own default.
@@ -121,12 +130,12 @@ export function pickProfile(candidates: Profile[], model: string | null | undefi
     if (strict) throw new Error(`no profile has ${model ?? ""} enabled; enable it on a profile first`);
     serving = rank.map((_, i) => i);
   }
-  const fit = serving.filter((i) => usable(rank[i]![1]));
+  const now = signals.now();
+  const fit = serving.filter((i) => usable(rank[i]![1], now));
   // What is paid for already is spent first, however full: one billed per use only when none of those can run now.
   const paid = fit.filter((i) => !billedPerUse(rank[i]![0]));
   // Nothing healthy serves it: still pick one that has it enabled, so the failure shows in the session.
   const pool = paid.length > 0 ? paid : fit.length > 0 ? fit : serving;
-  const now = signals.now();
   const urgencies = new Map(pool.map((i) => [i, urgency(rank[i]![1].quota, now)]));
   // Each profile's sessions over its weight, with the new one: the least is where it adds the least crowding.
   const share = (i: number) => (signals.load(rank[i]![0].id) + 1) / urgencies.get(i)!.weight;
@@ -160,7 +169,16 @@ export function fallbackEfforts(runtime: string): string[] {
 export function reportedEfforts(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] | null {
   const models = catalog?.[runtime];
   if (model === null || model === undefined || !models) return null;
-  const levels = models[model] ?? Object.entries(models).find(([id]) => sameModel(id, model))?.[1];
+  const base =
+    runtime === "agy"
+      ? agyBaseModel(model).model
+      : runtime === "devin"
+        ? (splitDevinFusion(model)?.lead ?? model)
+        : model;
+  const levels =
+    models[model] ??
+    models[base] ??
+    Object.entries(models).find(([id]) => sameModel(id, model) || (base !== model && sameModel(id, base)))?.[1];
   return levels ? [...levels] : null;
 }
 

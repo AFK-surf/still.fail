@@ -37,7 +37,7 @@ fn held_row(id : String, seq : Int, mine : Bool) -> Json {
 
 ///|
 test "a chat the viewer writes in goes ahead at once, though a pointer rests on the list" {
-  new_run()
+  fresh_app()
   let key = "held/wrote"
   let first = held_rows([held_row("a", 3, false), held_row("b", 5, true)])
   ignore(@sfbase.held_order(key, first.days, false))
@@ -56,7 +56,7 @@ test "a chat the viewer writes in goes ahead at once, though a pointer rests on 
 
 ///|
 test "a held list's order is the very same while nothing comes, made again only as something does" {
-  new_run()
+  fresh_app()
   let key = "held/test"
   let first = held_view(["a", "b"])
   let shown = @sfbase.held_order(key, first.days, false)

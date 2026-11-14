@@ -9,7 +9,7 @@ import type { Tool } from "./mcp.ts";
 export const SCREEN = {
   name: "screen",
   description:
-    "The screens of this station a person can see and drive from their still.fail app (this machine's display; tabs of the station's browser; the iOS Simulators booted on this Mac), each with who is viewing or controlling it now and the link that opens it there. When a person has to act on one (log in, solve a captcha, approve a prompt), post its link on a line of its own (people see the screen's card) with chat_post kind=need_human and end your turn; call this again to see whether someone is on it. To see and operate one yourself, use the computer tool with its id.",
+    "The screens of this station a person can see and drive from their still.fail app (this machine's display; tabs of the station's browser; the iOS Simulators booted on this Mac), each with who is viewing or controlling it now and the link that opens it there. When a person has to act on one (log in, solve a captcha, approve a prompt), post its link on a line of its own with chat_post kind=need_human and end your turn; call this again to see whether someone is on it. To see and operate one yourself, use the computer tool with its id.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -24,9 +24,12 @@ export const SCREEN = {
 /// What the agent is told: the screens (one, with `id`), and how to hand one to a person. `base`: this station's place
 /// in its control plane's pages (`<cloud>/w/<workspace>/s/<station>`), none when it has no pages.
 export function described(hub: ScreenHub, base: string | null, id?: string): string {
-  const all = hub.listed("en").screens;
+  const all = hub.listed("en").screens.filter((s) => !s.userTab);
   const shown = id === undefined ? all : all.filter((s) => s.id === id);
-  if (id !== undefined && shown.length === 0) throw new Error(`no screen ${id} on this station (it has: ${all.map((s) => s.id).join(", ") || "none"})`);
+  if (id !== undefined && shown.length === 0) {
+    if (hub.get(id)?.userTab) throw new Error(tr("en", "station.screen.userOnly"));
+    throw new Error(`no screen ${id} on this station (it has: ${all.map((s) => s.id).join(", ") || "none"})`);
+  }
   const screens = shown.map(({ access, views, ...s }: any) => ({
     ...s,
     on: (views as ViewShown[]).map((v) => ({ view: v.id, who: v.name, ...(v.agent ? {} : { where: viewOn(v) }), controlling: v.control })),
@@ -45,6 +48,7 @@ export function described(hub: ScreenHub, base: string | null, id?: string): str
 /// A person's request carried out: `action` of the views of `id`, `by` the agent (as they are told who ended their view).
 export function letGo(hub: ScreenHub, by: string, id: unknown, action: string, view: unknown): string {
   if (typeof id !== "string" || id === "") throw new Error(`${action} needs id, the screen`);
+  if (hub.get(id)?.userTab) throw new Error(tr("en", "station.screen.userOnly"));
   const one = () => {
     if (typeof view !== "string" || view === "") throw new Error(`${action} needs view, a view's id from the list`);
     return view;
@@ -52,7 +56,7 @@ export function letGo(hub: ScreenHub, by: string, id: unknown, action: string, v
   try {
     switch (action) {
       case "take_control":
-        return `${hub.takeControl(id)} people's views of ${id} now only look; your input goes through until one of them takes it back. Tell them when you are done.`;
+        return `${hub.takeControl(id, by)} people's views of ${id} now only look; your input goes through until one of them takes it back. Tell them when you are done.`;
       case "disconnect":
         hub.endView(id, one(), by);
         return `View ${view} of ${id} disconnected; it is not opened again by itself.`;

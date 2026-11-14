@@ -39,7 +39,7 @@ jobs:
   plan:
     # Trusted repository pushes only. Never add pull_request or pull_request_target here:
     # deployment jobs use production secrets; local signing stays isolated.
-    if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.repository_owner == 'AFK-surf' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -54,13 +54,15 @@ jobs:
       win_beta: ${{ steps.plan.outputs.win_beta }}
       natives: ${{ steps.natives.outputs.natives }}
       windows_natives: ${{ steps.plan.outputs.windows_natives }}
+      kit: ${{ steps.plan.outputs.kit }}
       mbui: ${{ steps.plan.outputs.mbui }}
+      station_tests: ${{ steps.plan.outputs.station_tests }}
+      core_tests: ${{ steps.plan.outputs.core_tests }}
       release_smoke: ${{ steps.plan.outputs.release_smoke }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true, filter: "blob:none" } # (the history's commits and trees: the range, the paths it changed; a blob read is fetched then)
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ./.github/actions/node
       # Whether the natives job has anything to do: a part this run uses that the release native-artifacts lacks (the
       # keys are the sources' hashes: scripts/native.ts). None, and it is skipped (~25 s on macos-ci that everything
       # building waited for).
@@ -84,8 +86,9 @@ jobs:
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: macos-ci's cache is shared by its runners and the checks beside this job wait
-  # for a build under way rather than doing it again). main publishes them, and keeps the newest 20 of each; a branch
-  # publishes nothing, and passes what it built to its other jobs as a run artifact. Seconds when none changed.
+  # for a build under way rather than doing it again). main publishes them, and keeps the newest 20 of each (as every
+  # publisher does: native.ts prune); a branch publishes nothing, and passes what it built to its other jobs as a run
+  # artifact. Seconds when none changed.
   natives:
     needs: plan
     if: needs.plan.outputs.natives == 'needed'
@@ -109,7 +112,6 @@ jobs:
         run: |
           if [ "$GITHUB_REF" = refs/heads/main ]; then
             node scripts/native.ts ensure --publish
-            node scripts/native.ts prune 20
           else
             # What a branch's checks and builds use (BRANCH_NATIVES).
             node scripts/native.ts ensure --outbox "$RUNNER_TEMP/natives" $BRANCH_NATIVES
@@ -152,8 +154,7 @@ jobs:
       # the keys are git's blobs: the checkout as git has it
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ./.github/actions/node
       # (the Windows engine and shell in the native cache, as a run before fetched them: a download is not every run's
       # to break off, 39431384793)
       - name: The Windows natives' keys
@@ -232,9 +233,10 @@ jobs:
   # 4-5 minutes, and with it every job of the run, GitHub's too (2026-10-16).
   # No job may take over 5 minutes (2026-10-31, as asked: the aim is 3; 10 since 2026-10-16): one that does is stuck,
   # and on macos-ci it holds one of four runners every run waits on.
-  # The full check (scripts/check.sh) in two jobs: the parts that need a Mac (the station with its native parts' own
-  # tests, client/'s Rust) here on macos-ci, the rest beside it on Linux (check-linux). In each, the steps run side by
-  # side, so a part the range leaves alone costs nothing. Rust builds in targets under the job's own (setup-mac,
+  # The full check (scripts/check.sh) in three: the parts that need a Mac (the station's typecheck, its programs in
+  # MoonBit, its native parts' own tests and the few of its tests only a Mac runs; client/'s Rust) here on macos-ci, the
+  # station's tests in slices on Linux runners of their own (check-station), the rest beside them on Linux
+  # (check-linux). In each, the steps run side by side, so a part the range leaves alone costs nothing. Rust builds in targets under the job's own (setup-mac,
   # check.sh), through sccache. The native parts come from macos-ci's cache, the release or the natives job running beside
   # it (scripts/native.ts).
   check:
@@ -320,11 +322,72 @@ jobs:
       - name: The MoonBit reader on Linux
         run: node station/mb/test/smoke.mjs "$(node scripts/native.ts file reader linux-x64)"
 
+  # The station's tests (station/test: scripts/check.sh's station-tests), a slice to a job, each on a Linux runner of
+  # its own. They ran in `check` on macos-ci, whose four runners are one Mac: 2.3 to 4.1 minutes by what else ran
+  # there, and three checks at once went past the job's five (6 of some 18 in half a day, 2026-11-09), with the test
+  # files doubled in five days (271 to 581). Measured on these runners (2026-11-10): six slices, 57 to 99 s of tests
+  # each, the same whatever else runs; every test passes here as on a Mac but the 8 of the Rust station's archive
+  # command (prebuilt for darwin alone), which `check` keeps. More files: more slices (here, in `shard` and in
+  # STILLFAIL_STATION_SHARD), not a longer job.
+  check-station:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.station_tests == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      STILLFAIL_CHECK_PART: station-tests
+      STILLFAIL_STATION_SHARD: ${{ matrix.shard }}/6
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, filter: "blob:none" }
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/natives
+      - name: The station's tests, slice ${{ matrix.shard }} of 6
+        run: |
+          range='${{ needs.plan.outputs.range }}'
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
+          # (exec: the runner's signal when the job's time is up reaches the check, which says what was still running)
+          if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
+
+  # The core's tests (client/core-ts/test: scripts/check.sh's core-tests), a slice to a job on a Linux runner of its
+  # own, as the station's. In check-linux beside the rest of ts they ran three files at a time on its 4 vCPUs with the
+  # web's and cloud's beside them: 180 to 250 s, then past the job's five minutes as files were added (179 files; main
+  # 6045382883, 43272321433, 2026-11-12). More files: more slices (here, in `shard` and STILLFAIL_CORE_SHARD).
+  check-core:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.core_tests == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      STILLFAIL_CHECK_PART: core-tests
+      STILLFAIL_CORE_SHARD: ${{ matrix.shard }}/3
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, filter: "blob:none" }
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/natives
+      - name: The core's tests, slice ${{ matrix.shard }} of 3
+        run: |
+          range='${{ needs.plan.outputs.range }}'
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
+          if [ "$range" = all ]; then exec sh scripts/check.sh all; else exec sh scripts/check.sh full "$range"; fi
+
   # The mbui app's check and tests, on native, on Linux: mbui-check.yml, main's there on its own.
   check-mbui:
     needs: plan
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && needs.plan.outputs.mbui == 'true' }}
     uses: ./.github/workflows/mbui-check.yml
+    # (at the default rate alone: the rates run on main after the merge, mbui-check.yml's head)
+    permissions: { contents: read, actions: read }
+    with: { rates: "no" }
 
   # A branch: what main would deploy, built and bundled beside the check (not after it: the build is most of the run);
   # nothing sent, no secrets.
@@ -379,7 +442,7 @@ jobs:
   # 2026-10-22): every job a branch runs, one skipped as passing, one failed or cancelled failing it. Its list
   # is the branch's jobs: a job added to them goes here too, or the protection does not wait for it.
   gate:
-    needs: [plan, natives, windows-natives, ui-windows, check, check-linux, check-mbui, bundle, mac-build, mbui-web, static, desktop-build, desktop]
+    needs: [plan, natives, windows-natives, ui-windows, check, check-linux, check-station, check-core, check-mbui, bundle, mac-build, mbui-web, static, desktop-build, desktop]
     if: always() && github.ref != 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -397,10 +460,10 @@ jobs:
   # The API and the web wait for the checks of what they are made of, not the Android app's (2026-10-17, as asked: its
   # lint on GitHub's runners held a release's web back for minutes); the apps' releases (put) wait for all.
   api:
-    needs: [plan, check, check-linux]
+    needs: [plan, check, check-linux, check-station, check-core]
     # Not on the implicit success(): a skipped job before it (natives, when nothing native changed) would
     # skip it too (2026-10-04 to 05: the API was not deployed for a day). The checks it needs passed or were not needed.
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -413,14 +476,20 @@ jobs:
           STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
           DEPLOY_KEYS_JSON: ${{ secrets.DEPLOY_KEYS_JSON }}
           GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
-          AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
+          GCP_TELEMETRY_JSON: ${{ secrets.GCP_TELEMETRY_JSON }}
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
           APNS_JSON: ${{ secrets.APNS_JSON }}
+          FCM_SERVICE_ACCOUNT_MORE_JSON: ${{ secrets.MONOID_FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_MORE_JSON: ${{ secrets.MONOID_APNS_JSON }}
           APPLE_JSON: ${{ secrets.APPLE_JSON }}
           REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
+          # Once still.fail's accounts moved into monoid's cloud (the variable CLOUD_MOVED on: workflows/move-cloud.yml),
+          # its API forwards there (cloud/src/guests.ts).
+          FORWARD_TO: ${{ vars.CLOUD_MOVED == 'on' && 'https://app.monoid.build' || '' }}
+          FORWARD_SECRET: ${{ vars.CLOUD_MOVED == 'on' && secrets.CLOUD_FORWARD_SECRET || '' }}
         run: sh .github/deploy.sh api
 
   # The app for the browser (each of the web's pages: apps/mbui/scripts/web-app.sh), built where MoonBit's cache is
@@ -428,7 +497,7 @@ jobs:
   # 41173786825) and handed to the static job.
   mbui-web:
     needs: [plan]
-    if: ${{ !cancelled() && !failure() && ((github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true') || needs.plan.outputs.release_smoke == 'true') }}
+    if: ${{ !cancelled() && !failure() && ((github.ref == 'refs/heads/main' && (needs.plan.outputs.static == 'true' || needs.plan.outputs.kit == 'true')) || needs.plan.outputs.release_smoke == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -438,11 +507,18 @@ jobs:
       - run: bash apps/mbui/scripts/web-app.sh
       - uses: actions/upload-artifact@v4
         with: { name: "mbui-web-${{ github.sha }}", path: web/public/mbui, retention-days: 7 }
+      # (the component library's page beside it, what monoid-kit deploys: built after the app, the packages they share
+      # compiled once)
+      - if: github.ref == 'refs/heads/main' && needs.plan.outputs.kit == 'true'
+        run: bash apps/mbui/scripts/kit-web.sh dist/kit
+      - if: github.ref == 'refs/heads/main' && needs.plan.outputs.kit == 'true'
+        uses: actions/upload-artifact@v4
+        with: { name: "mbui-kit-${{ github.sha }}", path: dist/kit, retention-days: 7 }
 
   static:
-    needs: [plan, natives, check, check-linux, api, mbui-web]
+    needs: [plan, natives, check, check-linux, check-station, check-core, api, mbui-web]
     # After the API (a page may need what it adds), or without it when it did not change.
-    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.mbui-web.result == 'success' && ((github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)) || needs.plan.outputs.release_smoke == 'true') }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.mbui-web.result == 'success' && ((github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result)) || needs.plan.outputs.release_smoke == 'true') }}
     runs-on: ubuntu-24.04
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     timeout-minutes: 5
@@ -476,8 +552,8 @@ jobs:
 
   # monoid's cloud (deploy.py CLOUDS: monoid.build, its test channel monoid.zone), in the company's Cloudflare account:
   # the same API and static parts, after still.fail's, as their own jobs (each fits its 5 minutes on its own). Its
-  # secrets are its own token and keys.json; the Google client, the push keys, PostHog and Axiom are still.fail's (one
-  # app). Its test channel's site (monoid.zone: website/ named monoid.zone; monoid.build's with the stable release),
+  # secrets are its own token, keys.json, Google client and FCM service account (monoid-build's); APNs, PostHog and
+  # the Google Cloud telemetry account are still.fail's. Its test channel's site (monoid.zone: website/ named monoid.zone; monoid.build's with the stable release),
   # not still.fail's status page, nor its relay (by hand, as ours).
   # monoid's jobs (monoid-*) run only while the repository's variable MONOID_CI is on (turned off 2026-11-04, as asked).
   monoid-api:
@@ -494,15 +570,22 @@ jobs:
           STILLFAIL_CLOUD: monoid
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
           STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
-          DEPLOY_KEYS_JSON: ${{ secrets.MONOID_DEPLOY_KEYS_JSON }}
+          # Once still.fail's accounts moved in (CLOUD_MOVED on: workflows/move-cloud.yml): still.fail's keys, and answered
+          # as still.fail too (cloud/src/guests.ts).
+          DEPLOY_KEYS_JSON: ${{ vars.CLOUD_MOVED == 'on' && secrets.DEPLOY_KEYS_JSON || secrets.MONOID_DEPLOY_KEYS_JSON }}
+          FORWARD_SECRET: ${{ vars.CLOUD_MOVED == 'on' && secrets.CLOUD_FORWARD_SECRET || '' }}
+          GUEST_GOOGLE_OAUTH_JSON: ${{ vars.CLOUD_MOVED == 'on' && secrets.GOOGLE_OAUTH_JSON || '' }}
           GOOGLE_OAUTH_JSON: ${{ secrets.MONOID_GOOGLE_OAUTH_JSON || secrets.GOOGLE_OAUTH_JSON }}
-          AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
+          GCP_TELEMETRY_JSON: ${{ secrets.GCP_TELEMETRY_JSON }}
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
-          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
-          APNS_JSON: ${{ secrets.APNS_JSON }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.MONOID_FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_JSON: ${{ secrets.MONOID_APNS_JSON }}
+          FCM_SERVICE_ACCOUNT_MORE_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_MORE_JSON: ${{ secrets.APNS_JSON }}
           APPLE_JSON: ${{ secrets.APPLE_JSON }}
           REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
         run: sh .github/deploy.sh api
 
   monoid-static:
@@ -542,6 +625,26 @@ jobs:
       - if: contains(steps.parts.outputs.parts, 'web-beta')
         uses: actions/upload-artifact@v4
         with: { name: "monoid-cloud-web-${{ github.sha }}", path: dist/cloud-web, include-hidden-files: true, retention-days: 90 }
+
+  # The component library's page (apps/mbui/scripts/kit-web.sh, as mbui-web built it) on kit.monoid.zone: monoid's
+  # alone (the user, 2026-11-13), in monoid's Cloudflare account (cloud/wrangler.kit.jsonc). Needs no check: it reads
+  # nothing of anyone's and holds no secret.
+  monoid-kit:
+    needs: [plan, mbui-web]
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.kit == 'true' && needs.mbui-web.result == 'success' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with: { name: "mbui-kit-${{ github.sha }}", path: dist/kit }
+      - name: Deploy kit to monoid
+        env:
+          STILLFAIL_CLOUD: monoid
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+        run: sh .github/deploy.sh kit
 
   # The test channel's releases are built beside the check (the builds are most of a release: before 2026-10-04 they
   # waited for the check and the API). The apps' files, named by their version, go in the bucket at once (nothing points
@@ -607,6 +710,12 @@ jobs:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh android
+      # (what it weighs and takes once idle: mbui-size.yml, after this run, recorded, never a gate: its upload's failure
+      # is not the release's. Studio's connection to GitHub's artifact service reset stopped a release that had built and
+      # signed its APK, main a3e59ea9 43157398296 and three times before on 2026-11-11 and 12)
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with: { name: "mbui-apk-${{ github.sha }}", path: "${{ runner.temp }}/release/android/*.apk", retention-days: 1, compression-level: 0 }
       - name: Put its files (named by its version, nothing points at them until put writes the feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -638,8 +747,8 @@ jobs:
   # monoid's beta Android app (build.monoid.android.beta), built by android from its own build, put whole in monoid's
   # bucket once the check passed.
   monoid-android:
-    needs: [plan, check, check-linux, android]
-    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.android.result == 'success' }}
+    needs: [plan, check, check-linux, check-station, check-core, android]
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && needs.android.result == 'success' }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -648,11 +757,12 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { name: "monoid-android-${{ github.sha }}", path: "${{ runner.temp }}/monoid" }
-      - name: Put it in monoid's bucket (its files, then its feed)
+      - name: Put it in monoid's bucket (its files and deltas, then its feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/release-deltas.ts "$RUNNER_TEMP/monoid" --releases https://app.monoid.build/releases --deadline 150
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
   # The Mac app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place), on mac/beta/latest.json and
@@ -663,8 +773,8 @@ jobs:
   # program, Hermes, bytecode and icon, its own Info.plist, program name and updater id (apps/mbui/scripts/mac-app.sh
   # MBUI_MAC_FROM), signed and notarized as monoid.zone, put in monoid's bucket.
   monoid-desktop:
-    needs: [plan, check, check-linux, desktop]
-    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.desktop.result == 'success' }}
+    needs: [plan, check, check-linux, check-station, check-core, desktop]
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && needs.desktop.result == 'success' }}
     runs-on: macos-26
     environment: production
     timeout-minutes: 5
@@ -693,7 +803,9 @@ jobs:
     if: ${{ !cancelled() && !failure() && ((github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true') || needs.plan.outputs.release_smoke == 'true') }}
     runs-on: macos-26
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 5
+    # (a run by hand compiles what main's store has none of whole: once the units' commands named mbui at libs/mbui,
+    # 2026-11-13, none of the store's were theirs, 441 of 831 units, cut at 5 on a push)
+    timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
     env:
       MBUI_FRESH: 1
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
@@ -785,6 +897,7 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-next-moon-mac-${{ github.sha }}
           restore-keys: mbui-next-moon-mac-
       - uses: actions/cache/restore@v4
@@ -794,12 +907,14 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-mac-moon-${{ github.sha }}
           restore-keys: mbui-mac-moon-
       - run: |
           bash apps/mbui/scripts/moon-mtimes.sh
           bash .github/mac-release-prebuild.sh ready
       - uses: ./.github/actions/setup
+      - run: bash .github/mac-release-prebuild.sh packages
       - uses: actions/cache@v4
         with:
           path: apps/mbui/out/mac/AppIcon-*
@@ -852,6 +967,7 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-mac-moon-${{ github.sha }}
   # The expensive build is already handed over; keep signing, notarization and release checks in their own budget.
   desktop:
@@ -922,7 +1038,7 @@ jobs:
         run: |
           build=$(git rev-list --count HEAD)
           cache=${MBUI_MAC_CACHE:-"$HOME/stillfail-ci/mbui-mac-beta"}
-          work=${WORK:-"$cache/work"}
+          work=${WORK:-"$cache/tree/apps/mbui"}
           if [ "${MBUI_FRESH:-}" = 1 ]; then work="$GITHUB_WORKSPACE/apps/mbui"; fi
           export STILLFAIL_RELEASE_CACHE_KEY="desktop/stillfail-beta-0.1.$build-arm64-mac.zip"
           export STILLFAIL_RELEASE_CACHE_SOURCE="$work/out/mac/stillfail-beta-$build-arm64-mac.zip"
@@ -947,7 +1063,9 @@ jobs:
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' }}
     runs-on: windows-2025
     environment: production
-    timeout-minutes: 5
+    # (a run by hand, or the day's, compiles what main's store has none of whole: once the units' commands named mbui at
+    # libs/mbui, 2026-11-13, none of the store's were theirs, and a push's 5 minutes did not see it through)
+    timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
     defaults:
       run:
         shell: bash
@@ -955,8 +1073,10 @@ jobs:
       MSYS: winsymlinks:nativestrict
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
     steps:
-      # (the natives' keys are git's blobs: the checkout as git has it)
-      - run: git config --global core.autocrlf false
+      # (the natives' keys are git's blobs: the checkout as git has it; when the job began, for monoid's deadline below)
+      - run: |
+          git config --global core.autocrlf false
+          echo "JOB_BEGAN=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, filter: "blob:none" } # its build is the commits in the history
       - uses: ./.github/actions/setup
@@ -977,8 +1097,8 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: |
-            apps/mbui/mbui/_build
-            apps/mbui/mbui/out
+            libs/mbui/_build
+            libs/mbui/out
           key: mbui-win-build-mono-${{ github.sha }}
           restore-keys: mbui-win-build-mono-
       - uses: actions/cache/restore@v4
@@ -1002,21 +1122,34 @@ jobs:
         with: { name: "release-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
       # monoid's (build.monoid.desktop.beta): the same program, linked again with its own resources (its id, name and
       # environment: apps/mbui/scripts/win.sh), nothing compiled again; put by monoid-desktop-win once the check passed.
+      # Only while the job's 5 minutes leave room for it (some 30 s): it never holds still.fail's release back, which is
+      # put and handed on above. 3b0992b9's job was 304 s with it, stopped at its 5 minutes, and the release with it
+      # (43054413565, 2026-11-11): left out, monoid's Windows app comes with the next release.
       - name: Pack and sign monoid's beta Windows app from the same build
+        id: monoid
         if: vars.MONOID_CI == 'on'
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           RELEASE_DIR: ${{ runner.temp }}/monoid
-        run: sh scripts/release.sh --product monoid --beta desktop-win
-      - if: vars.MONOID_CI == 'on'
+        run: |
+          used=$(( $(date +%s) - JOB_BEGAN ))
+          if [ "$used" -gt 220 ]; then
+            echo "::warning::monoid's beta Windows app left for the next release: this job has used ${used} s of its 300"
+            exit 0
+          fi
+          sh scripts/release.sh --product monoid --beta desktop-win
+          echo "packed=1" >> "$GITHUB_OUTPUT"
+      - if: steps.monoid.outputs.packed == '1'
         uses: actions/upload-artifact@v4
         with: { name: "monoid-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/monoid", retention-days: 1 }
+    outputs:
+      monoid: ${{ steps.monoid.outputs.packed }}
 
   # monoid's beta Windows app (build.monoid.desktop.beta), packed by desktop-win from its own build, put whole in monoid's
   # bucket once the check passed.
   monoid-desktop-win:
-    needs: [plan, check, check-linux, desktop-win]
-    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.desktop-win.result == 'success' }}
+    needs: [plan, check, check-linux, check-station, check-core, desktop-win]
+    if: ${{ !cancelled() && vars.MONOID_CI == 'on' && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && needs.desktop-win.result == 'success' && needs.desktop-win.outputs.monoid == '1' }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -1025,16 +1158,74 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { name: "monoid-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/monoid" }
-      - name: Put it in monoid's bucket (its files, then its feed)
+      - name: Put it in monoid's bucket (its files and deltas, then its feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/release-deltas.ts "$RUNNER_TEMP/monoid" --releases https://app.monoid.build/releases --deadline 150
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
+  # The deltas of each release (scripts/release-deltas.ts: from the builds before, at https://app.still.fail/releases),
+  # a job a part, beside the checks: 10 bases a feed (the owner, 2026-11-11; the station's 4 archives ×10), four makers
+  # at once on a runner's 4 cores, inside --deadline 200. A pair was ~40 s of a core for an app's package (Android's
+  # with the Java applier's check) and ~25 s for a station's archive at 3 bases; the station's is under half that since
+  # its files found whole are not sorted (scripts/delta.ts). All four parts in put's job were ~5 minutes more at 3
+  # bases. Each takes its part's release as put will (its hand, its artifact; the station's archives taken back from
+  # staged/), puts the deltas (and the station's archives under their own names: nothing points at them until put
+  # writes the feed) and hands put the amended feeds (deltas-<part>-<sha>). Never a reason to hold a release back:
+  # put goes on without what this did not make.
+  deltas:
+    needs: [plan, station, android, desktop, desktop-win]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [station, android, desktop, desktop-win]
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - if: needs[matrix.part].result == 'success'
+        uses: actions/checkout@v5
+      - if: needs[matrix.part].result == 'success'
+        uses: ./.github/actions/setup
+      - if: needs[matrix.part].result == 'success' && matrix.part == 'desktop-win'
+        uses: actions/download-artifact@v4
+        with: { name: "release-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/release" }
+      - name: Its release, as put will have it
+        if: needs[matrix.part].result == 'success' && matrix.part != 'desktop-win'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HANDED: ${{ needs[matrix.part].outputs.hand }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          # shellcheck disable=SC2086 # names, one word each
+          sh scripts/release-put.sh --unhand "$RUNNER_TEMP/release" $HANDED
+          sh scripts/release-put.sh --unstage "$RUNNER_TEMP/release"
+      # (a deadline of its own, inside the job's: what is not made by then is left out, the job green)
+      - name: Its deltas
+        if: needs[matrix.part].result == 'success'
+        run: node scripts/release-deltas.ts "$RUNNER_TEMP/release" --into "$RUNNER_TEMP/deltas" --deadline 200
+      - name: Put them (nothing points at them until put writes the feeds)
+        if: needs[matrix.part].result == 'success'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          [ -d cloud/node_modules ] || (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh --files "$RUNNER_TEMP/deltas"
+      - if: needs[matrix.part].result == 'success'
+        uses: actions/upload-artifact@v4
+        with: { name: "deltas-${{ matrix.part }}-${{ github.sha }}", path: "${{ runner.temp }}/deltas", if-no-files-found: ignore, retention-days: 1 }
+
+  # (the Mac's beta holds no other part's back: its job waits on Apple's notary service, which took the whole of its five
+  # minutes four runs in a row from 12:29 UTC on 2026-11-12 (41 s before), and put skipped every part's release with it,
+  # none out for over an hour and a half. A desktop failed or cancelled leaves the Mac's feed as it was, handing nothing;
+  # it is main's red as any job's, and `done` waits for it, so deployed/beta stays and the next run plans the Mac again)
   put:
-    needs: [plan, check, check-linux, api, static, station, android, desktop-build, desktop, desktop-win]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
+    needs: [plan, check, check-linux, check-station, check-core, api, static, station, android, desktop-build, desktop, desktop-win, deltas]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -1057,6 +1248,10 @@ jobs:
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           # shellcheck disable=SC2086 # names, one word each
           sh scripts/release-put.sh --unhand "$RUNNER_TEMP/release" $HANDED
+      # the feeds with their deltas (the deltas job's), over the ones handed; none, and they go out without
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { pattern: "deltas-*-${{ github.sha }}", path: "${{ runner.temp }}/release", merge-multiple: true }
       - name: Put the releases (their files, then their feeds)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -1071,6 +1266,13 @@ jobs:
       - name: Put changelog.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: sh scripts/changelog-put.sh
+      # monoid's cloud reads its own account's bucket, and answers for still.fail too once CLOUD_MOVED is on: the same
+      # changelog put there (before, its /v1/changelog was empty, the apps' 更新日志 with it, 2026-11-13)
+      - name: Put changelog.json in monoid's bucket
+        if: vars.MONOID_CI == 'on'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: sh scripts/changelog-put.sh
       - name: Delete old installers and beta blockmaps (scripts/release-prune.ts says which stay)
         env:
@@ -1093,8 +1295,8 @@ jobs:
   # The changelog, when nothing was released (put, which puts it after the releases, did not run): a fix in still.fail
   # cloud counts as out as soon as it is listed, not before the API carrying it is deployed.
   changelog:
-    needs: [plan, check, check-linux, api, static, put]
-    if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
+    needs: [plan, check, check-linux, check-station, check-core, api, static, put]
+    if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -1106,11 +1308,18 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: sh scripts/changelog-put.sh
+      # monoid's cloud reads its own account's bucket, and answers for still.fail too once CLOUD_MOVED is on: the same
+      # changelog put there (before, its /v1/changelog was empty, the apps' 更新日志 with it, 2026-11-13)
+      - name: Put changelog.json in monoid's bucket
+        if: vars.MONOID_CI == 'on'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+        run: sh scripts/changelog-put.sh
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, api, static, monoid-api, monoid-static, station, android, desktop-build, desktop, desktop-win, put]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
+    needs: [plan, natives, check, check-linux, check-station, check-core, api, static, monoid-api, monoid-static, monoid-kit, station, android, desktop-build, desktop, desktop-win, put]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-static.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-kit.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 5
     permissions:
@@ -1135,7 +1344,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, android, desktop-build, desktop, desktop-win, put, changelog, done]
+    needs: [plan, natives, check, check-linux, check-station, check-core, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, android, desktop-build, desktop, desktop-win, deltas, put, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -1144,9 +1353,8 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@v5
-        with: { sparse-checkout: "scripts/ci-time.ts\n.node-version", sparse-checkout-cone-mode: false }
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .node-version, package-manager-cache: false }
+        with: { sparse-checkout: "scripts/ci-time.ts\n.node-version\n.github/actions/node", sparse-checkout-cone-mode: false }
+      - uses: ./.github/actions/node
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -1158,7 +1366,7 @@ jobs:
       # main: every part the plan said changed went out, or this run fails (a job skipped where it should have run went
       # unnoticed for a day: the API, 2026-10-04 to 05). Skipped is right only for a part the plan left alone, or when a
       # check before it failed (the run has failed then anyway).
-      - if: github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success'
+      - if: github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && (needs.plan.outputs.core_tests != 'true' || needs.check-core.result == 'success')
         run: |
           missed=""
           planned() { [ "$1" = true ] && [ "$2" = skipped ] && missed="$missed $3"; return 0; }

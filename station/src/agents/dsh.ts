@@ -4,7 +4,9 @@
 //
 // Behaviour pinned against dsh 0.2:
 // - `open` makes the session (dsh names it) or resumes a persisted one; the station's tools are dsh's mcp-client in the
-//   patch, the session's token read from the environment;
+//   patch, the session's token read from the environment. dsh starts that client beside the driver, not before it: the
+//   driver answers `open` only once the client registered the station's tools, and refuses it where the client could
+//   not (the station unreachable), so the first prompt's request to the model carries them (dsh-bridge.mjs `mounted`);
 // - `prompt` queues a message for the next turn (one starts at once when none runs); `steer` puts one in the running
 //   turn, read after the step it is in (a tool call ends first); `cancel` stops the turn, which ends aborted;
 // - the turn's bounds and tool calls come as the session's events (turn/start, turn/end with its reason, tool/call,
@@ -15,7 +17,9 @@ import { mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { facts } from "../accounts/catalog.ts";
 import { seesImages } from "../accounts/models.ts";
+import { Said, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { LiveFromDsh, chars, type DshLiveState } from "./live.ts";
@@ -41,6 +45,10 @@ const DEEPSEEK_MODEL = "deepseek-v4-flash";
 /// copies it).
 export const BRIDGE = fileURLToPath(new URL("./dsh-bridge.mjs", import.meta.url));
 
+/// The patch's entry for the station's tools (dsh's MCP client).
+const TOOLS = "stillfail-tools";
+/// The driver refusing a request because dsh did not mount the station's tools (its answer's `lacks`).
+class NoTools extends Error {}
 /// The id of the request that opens the session; the others carry their own.
 const OPEN = "open";
 /// Where the patch's header for the station's tools reads the session's token.
@@ -68,6 +76,19 @@ const literal = (text: string) => text.replaceAll("{{", "{​{");
 /// for (none: dsh's default), with the effort in the route's terms (none: the route's default).
 export type DshSetup = { patch: Json[]; provider?: string; model?: string; effort?: string };
 
+/// A model's window and most output as the model catalog says them, for a model pi-ai has no entry of its own for (any
+/// on the station's route). Without them it takes its default window (256K before dsh 0.2.2, 1M since) and 128K of
+/// output: a 200K model was never compacted before its provider refused it, and Opus 5.5 (1M) on dsh 0.2.1 had a turn
+/// failed as an overflow once a request's input passed 256K (FB-17). The output only where it leaves room in the
+/// window; none known, pi-ai's own.
+function capacity(model: string): { contextWindow?: number; maxTokens?: number } {
+  const known = facts(model);
+  const window = known?.context;
+  if (window === undefined || !Number.isInteger(window) || window <= 0) return {};
+  const output = known?.output;
+  return { contextWindow: window, ...(output !== undefined && Number.isInteger(output) && output > 0 && output < window ? { maxTokens: output } : {}) };
+}
+
 /// The patch for a session: dsh's ACP server off and the station's driver in; the profile's provider as a route of
 /// its own and its model; the station's instructions after dsh's own; transcripts kept uncompressed (read/transcript.ts
 /// reads them). A profile that brings its own configuration (custom variables) keeps dsh's routes.
@@ -75,13 +96,14 @@ export function dshSetup(route: DshRoute | null, model: string | undefined, effo
   const tools = { transport: "streamable-http", serverName: "stillfail", url: mcpUrl, headers: { Authorization: TOKEN_HEADER }, failOnStartupError: true };
   const patch: Json[] = [
     { id: "acp", disabled: true },
-    { insert: [{ id: "stillfail-bridge", name: bridge }, { id: "stillfail-tools", name: "@deepseek-ai/dsh-mcp-client", config: tools }] },
+    // The driver is told which entry the station's tools are: it opens no session before that one is up.
+    { insert: [{ id: "stillfail-bridge", name: bridge, config: { tools: TOOLS } }, { id: TOOLS, name: "@deepseek-ai/dsh-mcp-client", config: tools }] },
   ];
   let chosen: { provider: string; model: string } | undefined;
   let chosenEffort: string | undefined;
   if (route?.kind === "pi") {
     if (model === undefined) throw new Error("the profile names no model for DeepSeek Harness");
-    const entry: Json = { id: model, ...(seesImages(model) ? { input: ["text", "image"] } : {}) };
+    const entry: Json = { id: model, ...(seesImages(model) ? { input: ["text", "image"] } : {}), ...capacity(model) };
     const provider: Json = { displayName: route.name, api: route.api, baseURL: route.baseURL, apiKeyEnv: DSH_KEY, models: [entry] };
     if (route.headers) provider.headers = expandRoute(route.headers, sessionRoute);
     // pi-ai gives a reasoning model's instructions the "developer" role on an OpenAI protocol at an address it does not
@@ -223,11 +245,17 @@ export class DshDriver extends OwnProcessDriver<DshSession> {
         ...(options.resume !== undefined ? { resume: options.resume } : {}),
         ...(setup.provider !== undefined ? { provider: setup.provider, model: setup.model } : {}),
         ...(setup.effort !== undefined ? { effort: setup.effort } : {}),
-      }, "dsh did not open the session (its driver plugin did not load?)");
+      }, "dsh did not open the session (its driver plugin did not load, or the station's tools never answered its MCP client?)");
       if (typeof opened?.session !== "string" || opened.session === "") throw new Error("dsh named no session");
       session.named(opened.session);
     } catch (error) {
       await session.dispose();
+      // Refused for the station's tools: said as that, with what to do, not as whatever its reason reads like (a
+      // connection refused there is this machine's own, and was told as the model provider's).
+      if (error instanceof NoTools) {
+        log.warn("agents::dsh", "dsh could not mount the station's tools", { session: options.key, error: error.message });
+        throw new Said(tr(stationLang(), "station.dsh.noTools"));
+      }
       throw error;
     }
     return session;
@@ -240,11 +268,11 @@ export class DshDriver extends OwnProcessDriver<DshSession> {
   }
 
   /// What the station before had handled says the session and where its turn stands.
-  protected crashed(options: OpenOptions, lines: Iterable<string>, _info: RunnerInfo, events: Events) {
+  protected async crashed(options: OpenOptions, lines: AsyncIterable<string>, _info: RunnerInfo, events: Events) {
     const turn: Turn = { busy: false, prompted: false, aborting: false, closed: false };
     const live = new LiveFromDsh();
     let sessionId = options.resume ?? "";
-    for (const line of lines) {
+    for await (const line of lines) {
       const message = parseLine("dsh", line);
       if (message === undefined) continue;
       if (message.id === OPEN && typeof message.session === "string") sessionId = message.session;
@@ -270,7 +298,7 @@ export class DshSession extends OwnProcessSession<Turn> {
 
   /// A request whose answer is waited for: an error answer rejects.
   request(id: string, op: string, params: Json, late?: string): Promise<Json> {
-    const answer = this.waiting.wait(id, (m) => (typeof m?.error === "string" ? new Error(`dsh ${op}: ${m.error}`) : null), late);
+    const answer = this.waiting.wait(id, (m) => (typeof m?.error !== "string" ? null : m.lacks === "tools" ? new NoTools(`dsh ${op}: ${m.error}`) : new Error(`dsh ${op}: ${m.error}`)), late);
     this.proc.write(JSON.stringify({ id, op, ...params }));
     return answer;
   }

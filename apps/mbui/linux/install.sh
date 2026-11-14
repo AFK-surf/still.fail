@@ -20,6 +20,7 @@ app=$data/$id/app
 mkdir -p "$data/$id" "$data/applications" "$data/icons/hicolor/512x512/apps"
 rm -rf "$app.new"
 mkdir -p "$app.new"
+# (what is copied is what an update's delta is made from: scripts/release-deltas.ts LINUX_INSTALLED, changed with it)
 cp "$from/stillfail" "$from"/lib*.so* "$from/core.hbc" "$from/VERSION" "$app.new/"
 rm -rf "$app" && mv "$app.new" "$app"
 cp "$from/icon.png" "$data/icons/hicolor/512x512/apps/$id.png"

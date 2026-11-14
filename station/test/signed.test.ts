@@ -2,7 +2,7 @@
 // scripts/release-sign.ts as CI signs it, and `stillfail-station update` saying what to run.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -10,9 +10,11 @@ import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { RELEASE_KEYS, Unverified, allowed, expected, keyId, sha256, trustedKeys, verifyFeed, verifySigned } from "../src/updates/signed.ts";
+import { gunzipSync } from "node:zlib";
+import { storedZip } from "../../scripts/delta.ts";
 import { updateCommand } from "../src/updates/command.ts";
 import { platform } from "../src/updates/versions.ts";
-import { KEY, OTHER, SHA_A, SHA_B, feedOf, signed, trusted, words } from "./release-fakes.ts";
+import { KEY, OTHER, SHA_A, SHA_B, feedOf, nextRelease, programBytes, signed, trusted, withDeltas, words } from "./release-fakes.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const temp = () => realpathSync(mkdtempSync(join(tmpdir(), "stillfail-signed-")));
@@ -45,6 +47,18 @@ describe("signed releases", () => {
     unverified(() => expected(r, "plan9-mips"), /no build for plan9-mips/);
   });
 
+  test("a build may say its raw archive (what a delta makes), both its words well formed or neither", () => {
+    const raw = { rawSha256: "c".repeat(64), rawSize: 4096 };
+    assert.deepEqual(expected(verifyFeed(feedOf(1310, raw), trusted), platform()), { sha256: SHA_A, size: 1, nodeSha256: SHA_B, ...raw });
+    // From before (none said): as it was.
+    assert.equal(expected(verifyFeed(feedOf(1310), trusted), platform()).rawSha256, undefined);
+    for (const bad of [{ rawSha256: "nope", rawSize: 1 }, { rawSha256: "c".repeat(64) }, { rawSize: 1 }, { rawSha256: "c".repeat(64), rawSize: -1 }, { rawSha256: "c".repeat(64), rawSize: "1" }, { rawSha256: "C".repeat(64), rawSize: 1 }]) {
+      unverified(() => verifyFeed(feedOf(1310, bad as object), trusted), /not well formed/);
+    }
+    // The feed's deltas are not the signed words': whatever they say, the release verifies as it is.
+    assert.equal(verifyFeed({ ...feedOf(1310, raw), deltas: { [platform() ?? "darwin-arm64"]: [{ from: 1300, file: "x", sha256: "nope", size: -1 }] } }, trusted).build, 1310);
+  });
+
   test("the station takes only the release keys and those its environment adds; placeholders none", () => {
     assert.deepEqual([...trustedKeys({}).values()], RELEASE_KEYS.filter((k) => !k.startsWith("__")));
     const added = trustedKeys({ STILLFAIL_RELEASE_KEYS: ` ${KEY.raw} , ` });
@@ -69,8 +83,11 @@ describe("signed releases", () => {
     // Two platforms' archives, and their Nodes as node-dist.sh keeps them: bin/node in a tarball, node.exe in
     // nodejs.org's zip.
     const node = "24.21.0";
-    writeFileSync(join(dir, "mac.tar.gz"), "the mac archive");
-    writeFileSync(join(dir, "win.zip"), "the windows archive");
+    // The archives as scripts/release.sh packs them: a .tar.gz, and Windows' zip (deflated).
+    mkdirSync(join(dir, "r", "stillfail"), { recursive: true });
+    writeFileSync(join(dir, "r", "stillfail", "VERSION"), "the release ".repeat(100));
+    execFileSync("tar", ["-czf", join(dir, "mac.tar.gz"), "-C", join(dir, "r"), "stillfail"]);
+    execFileSync("zip", ["-qr", join(dir, "win.zip"), "stillfail"], { cwd: join(dir, "r") });
     mkdirSync(join(dir, "n", "bin"), { recursive: true });
     writeFileSync(join(dir, "n", "bin", "node"), "a node binary");
     execFileSync("tar", ["-czf", join(dir, "node.tar.gz"), "-C", join(dir, "n"), "bin/node"]);
@@ -88,9 +105,13 @@ describe("signed releases", () => {
     assert.deepEqual([feed.version, feed.build, feed.key], ["0.1.1310", 1310, keyId(KEY.raw)]);
     const r = verifyFeed(feed, trusted);
     const hex = (s: string) => sha256(Buffer.from(s));
+    const [mac, win] = [readFileSync(join(dir, "mac.tar.gz")), readFileSync(join(dir, "win.zip"))];
+    // Their raw forms: the tar inside, the zip stored (scripts/delta.ts rawOf).
+    const [macRaw, winRaw] = [gunzipSync(mac), storedZip(win)];
+    assert.ok(!winRaw.equals(win), "the zip's entries were deflated");
     assert.deepEqual(r.builds, {
-      "darwin-arm64": { sha256: hex("the mac archive"), size: 15, nodeSha256: hex("a node binary") },
-      "win32-x64": { sha256: hex("the windows archive"), size: 19, nodeSha256: hex("a node.exe") },
+      "darwin-arm64": { sha256: sha256(mac), size: mac.length, nodeSha256: hex("a node binary"), rawSha256: sha256(macRaw), rawSize: macRaw.length },
+      "win32-x64": { sha256: sha256(win), size: win.length, nodeSha256: hex("a node.exe"), rawSha256: sha256(winRaw), rawSize: winRaw.length },
     });
     assert.equal(r.node, node);
     // Without a key: refused in CI, and outside it unless an unsigned release is asked for (a dev cloud's).
@@ -165,5 +186,67 @@ describe("signed releases", () => {
       console.error = error;
     }
     assert.ok(asked.every((a) => a === "/stations/releases/station-beta.json"), asked.join());
+  });
+
+  test("`stillfail-station update` takes a delta from the build it runs, and says what it made for the installer", { skip: process.platform === "win32" && "a .tar.gz release" }, async (t) => {
+    const data = temp();
+    const app = join(data, "app");
+    mkdirSync(join(app, "bin"), { recursive: true });
+    mkdirSync(join(app, "station"));
+    mkdirSync(join(data, "mesh"));
+    writeFileSync(join(app, "BUILD"), "1300\n");
+    writeFileSync(join(app, "bin", "install.zh.sh"), "");
+    writeFileSync(join(app, "station", "main.js"), programBytes(200_000));
+    const release = nextRelease(join(data, "release"), app);
+    let feed: object = withDeltas(feedOf(1310, release.build), [release.entry(1300)]);
+    const server = createServer((req, res) => {
+      if (req.url === "/releases/station.json") return void res.end(JSON.stringify(feed));
+      if (req.url === "/releases/station/next.delta") return void res.end(release.delta);
+      res.writeHead(404).end();
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    t.after(() => server.close());
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    writeFileSync(join(data, "mesh", "cloud.json"), JSON.stringify({ origin }));
+    const said: string[] = [];
+    const log = console.log;
+    console.log = (s: string) => said.push(s);
+    t.after(() => (console.log = log));
+    assert.equal(await updateCommand(["update", "--app", app, "--data", data], data, trusted), 0);
+    const told = Object.fromEntries(said.pop()!.split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2) as [string, string]));
+    assert.equal(told.STILLFAIL_RELEASE_SHA256, release.build.rawSha256);
+    assert.match(told.STILLFAIL_ARCHIVE!, /[\\/]stillfail-handed\.[0-9a-f]+[\\/]stillfail\.tar\.gz$/);
+    assert.ok(readFileSync(told.STILLFAIL_ARCHIVE!).equals(release.raw), "the release's raw archive");
+    rmSync(dirname(told.STILLFAIL_ARCHIVE!), { recursive: true, force: true });
+    // One whose hash is not the feed's: the installer downloads the release, checked by its own hash.
+    feed = withDeltas(feedOf(1310, release.build), [{ ...release.entry(1300), sha256: SHA_A }]);
+    assert.equal(await updateCommand(["update", "--app", app, "--data", data], data, trusted), 0);
+    const plain = said.pop()!;
+    assert.match(plain, new RegExp(`STILLFAIL_RELEASE_SHA256=${release.build.sha256}`));
+    assert.doesNotMatch(plain, /STILLFAIL_ARCHIVE/);
+    // The applier the running station starts apart from itself: what it makes, or why not (exit 1).
+    const out = join(data, "made.tar");
+    writeFileSync(join(data, "d"), release.delta);
+    assert.equal(await updateCommand(["update", "--apply-delta", "--app", app, "--delta", join(data, "d"), "--out", out], data), 0);
+    assert.ok(readFileSync(out).equals(release.raw));
+    const errors: string[] = [];
+    const error = console.error;
+    console.error = (s: string) => errors.push(s);
+    try {
+      writeFileSync(join(app, "station", "main.js"), "changed since");
+      assert.equal(await updateCommand(["update", "--apply-delta", "--app", app, "--delta", join(data, "d"), "--out", out], data), 1);
+      assert.match(errors.pop()!, /old/);
+      assert.equal(await updateCommand(["update", "--apply-delta", "--app", app], data), 2);
+    } finally {
+      console.error = error;
+    }
+  });
+
+  test("`stillfail update` hands the installer the archive a delta made", () => {
+    // What `stillfail-station update` says is given to the installer only as these let it through.
+    for (const file of ["stillfail", "stillfail.ps1"]) {
+      const text = readFileSync(join(root, "bin", file), "utf8");
+      assert.ok(text.includes("STILLFAIL_ARCHIVE"), `bin/${file} passes STILLFAIL_ARCHIVE on`);
+    }
   });
 });

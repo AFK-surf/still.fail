@@ -6,7 +6,7 @@
 // processes are not read: there the server serves on the port as it is).
 import { type ChildProcess, spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -62,8 +62,8 @@ export class GrantServers {
     let stopped = 0;
     for (const k of Array.isArray(left) ? left : []) {
       if (!Number.isSafeInteger(k?.pid) || this.#kept.has(k.pid)) continue;
-      if (typeof k.dir === "string") rmSync(k.dir, { recursive: true, force: true });
-      const started = platform.startTimeOf(k.pid);
+      if (typeof k.dir === "string") await rm(k.dir, { recursive: true, force: true });
+      const started = await platform.startTimeOf(k.pid);
       // Not that process any more (gone, or its pid another's).
       if (started === null || (k.started !== null && Math.abs(started - k.started) > 2000)) continue;
       try {
@@ -141,8 +141,15 @@ export class GrantServers {
       if (up) {
         const pid = child.pid;
         if (pid !== undefined) {
-          this.#kept.set(pid, { pid, port, started: platform.startTimeOf(pid), ...(dir === null ? {} : { dir }) });
+          this.#kept.set(pid, { pid, port, started: null, ...(dir === null ? {} : { dir }) });
           void this.#write();
+          // When it started, for a station after this one to know it is still this process: asked, not waited on.
+          void platform.startTimeOf(pid).then((started) => {
+            const kept = this.#kept.get(pid);
+            if (kept === undefined || started === null) return;
+            kept.started = started;
+            void this.#write();
+          });
         }
         child.once("exit", () => {
           closed();
@@ -187,6 +194,14 @@ export class GrantServers {
       if (id !== undefined) return id;
     }
     return null;
+  }
+
+  /// Done once what was asked written of the record so far is written: a test's wait. Nothing of the station waits on
+  /// it, nor on a server's end, as it stops (`close`): a server that does not end at SIGTERM must not hold a station
+  /// that stops or hands over, whose agents, events and store close after this, and a record left naming a server
+  /// that has ended costs the next station one ps (`reap`).
+  written(): Promise<void> {
+    return this.#writing;
   }
 
   async close(): Promise<void> {

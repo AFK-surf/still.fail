@@ -2,7 +2,8 @@
 // page or the hover's where the hand is on it (dur_ms, eased out, from the moment that changed); faded while it cannot
 // be pressed; at work, a spinner's room opening before its words (a Move as far as that room) and the spinner turning
 // in it, coming in as it opens; its words changed, its ground and its words going together to where they are laid out
-// (moves_for: the same cause, one length); read out a button, pressed where it is laid out.
+// (moves_for: the same cause, one length). All of that is its look, over mbui's headless button (@headless.button),
+// whose it is that it is read out a button, pressed where it is laid out and by the keyboard, and when it is neither.
 
 ///|
 /// The button in `parent`: `label` its words, `tone` its look, `busy` while what it does is under way (not pressed
@@ -12,6 +13,7 @@
 /// words changing go to their place for that cause. `card_words`: in a card's foot corner, its words where the card's
 /// begin (card_foot_words's: its padding as far in as that corner leaves them; one with an icon keeps its ends).
 /// The node.
+#callsite(autofill(loc))
 pub fn button_node(
   parent : @view.View,
   label : () -> String,
@@ -22,25 +24,29 @@ pub fn button_node(
   across? : Bool = false,
   icon? : String = "",
   card_words? : Bool = false,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  button_by(parent, label, fn(_) { press() }, tone, busy, disabled, across, icon, card_words)
+  button_by(loc~, parent, label, fn(_) { press() }, tone, busy, disabled, across, icon, card_words)
 }
 
 ///|
 /// button_node's button that opens what goes beside it (a menu under it): `open` given the button itself as it is
 /// pressed, where it is placed then.
+#callsite(autofill(loc))
 pub fn button_opens_node(
   parent : @view.View,
   label : () -> String,
   open : (@view.View) -> Unit,
   tone? : Tone = Plain,
   icon? : String = "",
+  loc~ : SourceLoc,
 ) -> @view.View {
-  button_by(parent, label, open, tone, fn() { false }, fn() { false }, false, icon, false)
+  button_by(loc~, parent, label, open, tone, fn() { false }, fn() { false }, false, icon, false)
 }
 
 ///|
 /// button_node's button, `press` given the button itself as it is pressed.
+#callsite(autofill(loc))
 fn button_by(
   parent : @view.View,
   label : () -> String,
@@ -51,21 +57,20 @@ fn button_by(
   across : Bool,
   icon : String,
   card_words : Bool,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let live = fn() { !disabled() && !busy() }
   let solid = tone == Primary || tone == DangerSolid
   let height = button_height()
-  parent.box(fn(v) {
-    // (the hand on it, or pressing it: how far its ground has gone towards its lit one; at work, how far its spinner is
-    // in and how far its room is open; how faded it is)
+  // (what it is to the hand, the keyboard and a screen reader is mbui's headless button's: read out a button called by
+  // its label, pressed and focused only while not disabled, Enter and Space pressing it. At work is disabled to all of
+  // those, and told apart by the eye alone: said to the component as disabled, its spinner this look's. Here, its look)
+  @headless.button(made_for=loc, parent, label, press, disabled=fn() { !live() }, fn(v, b) {
+    // (the hand on it, or pressing it (the keyboard's focus shown on it, a pointer over it, a finger or the pointer
+    // held on it: which of the button's states light it is this look's): how far its ground has gone towards its lit
+    // one; at work, how far its spinner is in and how far its room is open; how faded it is)
     let lit = fn() {
-      (busy() && (tone == Ghost || tone == GhostDanger)) ||
-      (live() &&
-      (v.focus_shown() ||
-      (match @ui.pointing() {
-        Mouse => v.pointed() || v.pressed()
-        Finger => v.pressed()
-      })))
+      (busy() && (tone == Ghost || tone == GhostDanger)) || (live() && (b.focus_shown() || b.hovered() || b.pressed()))
     }
     let hand = EdgeWay::new(if @signals.untracked(lit) { 1.0 } else { 0.0 })
     let turning = EdgeWay::new(if @signals.untracked(busy) { 1.0 } else { 0.0 })
@@ -113,22 +118,14 @@ fn button_by(
     .radius(Is(height / 2.0))
     .ground(By(fn() { looks().0 }))
     .alpha(By(fn() { seen.shown(v) }))
-    .presses(By(live))
-    // (the keyboard's focus too while it can be pressed, Enter and Space pressing it: button's c.focusable)
-    .focusable(By(live))
-    .says(By(fn() { Some(@view.said(Button, label=label())) }))
-    .on_press(fn() {
-      if @signals.untracked(live) {
-        press(v)
-      }
-    })
     |> ignore
     if across {
       // (as wide as what holds it, whichever way that lays out: its own height kept)
       v.width_share(Is(1.0)) |> ignore
     } else if v.lent(foot_fills_lent).unwrap_or(false) {
-      // (at a sheet's foot, in a thumb's reach: its share of the foot's width, as the old button's there, foot_fills)
-      v.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+      // (at a sheet's foot, in a thumb's reach: its share of the foot's width, as the old button's there, foot_fills;
+      // never narrower than its words and its ends need, what is beside it giving way first, as the old one's `keep`)
+      v.grow(Is(1.0)).basis(Is(Some(0.0))).keeps_held(Is(true)) |> ignore
     }
     // (what it holds in its middle, however wide it is laid out (as wide as a column, stretched by what holds it): as
     // the old one's justify=JCenter)
@@ -154,7 +151,9 @@ fn button_by(
       )
       s.alpha(By(fn() { turning.shown(v) * seen_at(open.shown(v)) })).scale(By(fn() { dmax(open.shown(v), 0.0) }), about=At(0.0, 0.5)) |> ignore
     })
-    // (its icon before its words where it has one: button's `icon`)
+    // (its icon before its words where it has one: button's `icon`. At work the spinner takes its place: its room
+    // closing as the spinner's opens, the icon going as the spinner comes, never the two side by side (the user,
+    // 2026-11-14: 「这个怪怪的」, a spinner and the refresh mark before 刷新 together))
     if icon != "" {
       // (by its ink: as far in from the end as the words are from the other, the grid's room round its strokes taking
       // none, so the two ends look alike: button's draw_icon by_ink)
@@ -162,12 +161,24 @@ fn button_by(
         Some(d) => @ui.shapes_ink_in(icon_shapes(d, button_icon / 24.0, 0x000000FFL), button_icon)
         None => (0.0, 0.0)
       }
-      icon_node(v, icon, button_icon, By(fn() { looks().2 })).margin(Is((-ink_l, 0.0, -ink_r, 0.0))) |> ignore
-      v.box(fn(g) { g.width(By(fn() { Some(gap()) })) |> ignore }) |> ignore
+      let rest = fn() { dmax(1.0 - open.shown(v), 0.0) }
+      v.show(fn() { rest() > 0.0 }, fn(room) {
+        room
+        .row(Is(true))
+        .lines_up(Is(Some(Middle)))
+        .width(By(fn() { Some((button_icon - ink_l - ink_r + gap()) * rest()) }))
+        |> ignore
+        icon_node(room, icon, button_icon, By(fn() { looks().2 }))
+        .margin(Is((-ink_l, 0.0, -ink_r, 0.0)))
+        .alpha(By(fn() { seen_at(rest()) }))
+        .scale(By(rest), about=At(0.0, 0.5))
+        |> ignore
+        room.box(fn(g) { g.width(By(fn() { Some(gap()) })) |> ignore }) |> ignore
+      })
     }
     let words = v.box(fn(w) {
       w
-      .words(By(label), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false, tracking: @view.letters_own, balance: false })
+      .words(By(label), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
       .ink(By(fn() { looks().2 }))
       |> ignore
     })

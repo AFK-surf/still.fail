@@ -28,10 +28,10 @@ codegen-units = 1
 [patch.crates-io]
 # Android cannot publish the phone's adb key with a hard link (vendor/README.md).
 libadb = { path = "../vendor/libadb" }
-noq-proto = { git = "https://github.com/zzj3720/noq", rev = "d578f818ad7580c49691f26d5ccf8cc3afcc026a" }
+noq-proto = { git = "https://github.com/zzj3720/noq", rev = "76344e6eab7ae651ce524e4f329a2f283f69d7ab" }
 swarm-discovery = { path = "../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../vendor/noq-udp" }
 n0-mainline = { path = "../vendor/n0-mainline" }
-iroh = { git = "https://github.com/zzj3720/iroh", rev = "fddee95da13c92e0ff700d64fc47f474b4d2a62c" }
-iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "fddee95da13c92e0ff700d64fc47f474b4d2a62c" }
+iroh = { git = "https://github.com/zzj3720/iroh", rev = "cbb88bc4d070a4de6999799aada2b5f3dc5680f4" }
+iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "cbb88bc4d070a4de6999799aada2b5f3dc5680f4" }

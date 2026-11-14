@@ -3,12 +3,13 @@
 
 ///|
 /// A folder kept at hand: its station, root, path under it, and its name.
+#derive(Eq)
 pub(all) struct Favorite {
   station : String
   root : String
   path : String
   name : String
-} derive(Eq)
+}
 
 ///|
 /// At most this many.
@@ -69,11 +70,11 @@ fn favorites_json(list : Array[Favorite]) -> String {
 ///|
 fn favorites_keep(src : Source, ws : String, list : Array[Favorite], hidden : Array[Favorite]) -> Unit {
   let kept = if list.length() > favorites_most { list[:favorites_most].to_owned() } else { list }
-  let favorites : Map[String, Json] = {}
-  let removed : Map[String, Json] = {}
+  let favorites : Map[String, Json] = Map([])
+  let removed : Map[String, Json] = Map([])
   favorites[ws] = Json::string(favorites_json(kept))
   removed[ws] = Json::string(favorites_json(hidden))
-  (src.call)("prefs.set", { "driveFavorites": Json::object(favorites), "driveFavoritesHidden": Json::object(removed) }, fn(_) {  })
+  (src.call)("prefs.set", { "driveFavorites": Json::object(favorites), "driveFavoritesHidden": Json::object(removed) }, @sfbase.answer_unread)
 }
 
 ///|

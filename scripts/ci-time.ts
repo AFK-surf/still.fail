@@ -23,7 +23,7 @@ export const BUDGET = {
   release: 480,
 } as const;
 
-const REPO = process.env.GITHUB_REPOSITORY ?? "AFK-surf/still.fail";
+const REPO = process.env.GITHUB_REPOSITORY ?? "AFK-surf/monoid";
 const RELEASES = new Set(["station", "android", "desktop", "desktop-win", "static"]);
 
 type Step = { name: string; started_at: string | null; completed_at: string | null };

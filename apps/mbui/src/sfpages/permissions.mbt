@@ -19,21 +19,11 @@ pub fn permissions_node(
   width? : () -> Double,
 ) -> Unit {
   let state = fn() {
-    let notify = (core.topic)("notify", Map::new()).get().value
+    let notify = (core.topic)("notify", Map([])).get().value
     match text(notify, "permission") {
       "granted" | "denied" | "default" => text(notify, "permission")
       _ => "unknown"
     }
-  }
-  let where_ = fn() {
-    @sf.t(
-      if @ui.platform() == 0 {
-        "web-pages.permissions.where.mac"
-      } else {
-        "web-pages.permissions.where.windows"
-      },
-      args=[("name", "still.fail")],
-    )
   }
   @sf.page_node(
     v,
@@ -51,13 +41,36 @@ pub fn permissions_node(
         fn() { @sf.t("web-pages.permissions.notify.name") },
         fn() { @sf.t("web-pages.permissions.notify.purpose") },
         fn() { @sf.t("web-pages.permissions.notify.without") },
-        where_,
+        notice_where,
         state,
         fn() { (core.notify_ask)() },
-        fn() { @ui.notice_settings() |> ignore },
+        fn() { notice_settings_or_say(core) },
       )
     },
   )
+}
+
+///|
+/// Where this system keeps whether still.fail may show notifications, once refused: a browser's site settings by its
+/// address bar (a page opens none of them), macOS's or the others' settings.
+fn notice_where() -> String {
+  @sf.t(
+    match @ui.platform() {
+      0 => "web-pages.permissions.where.mac"
+      4 => "web-pages.permissions.where.browser"
+      _ => "web-pages.permissions.where.windows"
+    },
+    args=[("name", "still.fail")],
+  )
+}
+
+///|
+/// The system's settings of still.fail's notifications opened, to allow them once refused; where it has none to open
+/// (a browser's page), where to allow them said instead, never nothing.
+fn notice_settings_or_say(core : Core) -> Unit {
+  if !@ui.notice_settings() {
+    (core.say)(notice_where())
+  }
 }
 
 ///|
@@ -191,26 +204,38 @@ pub fn archiving_node(
               @sf.waiting_node(
                 p,
                 fn(s) {
-                  archiving_rows_node(s, core.quiet(), stint, fn() {
-                    [5, 3].mapi(fn(i, n) {
-                      Json::object({
-                        "station": Json::string("sample/" + i.to_string()),
-                        "name": Json::string(@sf.sample_words(n)),
-                        "online": true,
-                        "overview": { "archiving": { "lineText": Json::string(@sf.sample_words(12)) } },
+                  archiving_rows_node(
+                    s,
+                    core.quiet(),
+                    stint,
+                    fn() {
+                      [5, 3].mapi(fn(i, n) {
+                        Json::object({
+                          "station": Json::string("sample/" + i.to_string()),
+                          "name": Json::string(@sf.sample_words(n)),
+                          "online": true,
+                          "overview": {},
+                        })
                       })
-                    })
-                  })
+                    },
+                    fn(_) { Some(Json::object({ "lineText": Json::string(@sf.sample_words(12)) })) },
+                  )
                 },
                 note=fn() { { reading: true, text: @sf.t("common.readingStations"), failing: [] } },
               )
             } else {
-              archiving_rows_node(p, core, stint, fn() {
-                match read() {
-                  Some(Array(a)) => a
-                  _ => []
-                }
-              })
+              archiving_rows_node(
+                p,
+                core,
+                stint,
+                fn() {
+                  match read() {
+                    Some(Array(a)) => a
+                    _ => []
+                  }
+                },
+                fn(station) { @settings.station_part(core, here(), station, "archiving") },
+              )
             }
           })
         })
@@ -219,26 +244,36 @@ pub fn archiving_node(
 }
 
 ///|
-/// `stations`' rows on a card as they are now, by their addresses.
-fn archiving_rows_node(v : @view.View, core : Core, stint : () -> Int, stations : () -> Array[Json]) -> Unit {
+/// `stations`' rows on a card as they are now, by their addresses, each with how it archives (`archiving`: that part
+/// of its overview, asked by each row of its own station).
+fn archiving_rows_node(
+  v : @view.View,
+  core : Core,
+  stint : () -> Int,
+  stations : () -> Array[Json],
+  archiving : (String) -> Json?,
+) -> Unit {
   @sf.group_node(v, fn(g) {
-    g.each(stations, fn(s) { text(Some(s), "station") }, fn(row, s) { archiving_row_node(row, core, stint, fn() { Some(s.get()) }) })
+    g.each(stations, fn(s) { text(Some(s), "station") }, fn(row, s) {
+      let address = text(Some(s.untracked()), "station")
+      archiving_row_node(row, core, stint, fn() { Some(s.get()) }, fn() { archiving(address) })
+    })
   })
 }
 
 ///|
 /// A station's row (StationRow) as a node: online or not where the page is wide, its mark where it has one, before its
-/// name; how it archives on its own in a line (red where it is set to and cannot; or why that is not known); it opens the station's page once it
-/// can say.
-fn archiving_row_node(v : @view.View, core : Core, stint : () -> Int, s : () -> Json?) -> Unit {
-  let view = fn() { if flag(s(), "online") { field(field(s(), "overview"), "archiving") } else { None } }
+/// name; how it archives on its own in a line (`archiving`, its overview's part: red where it is set to and cannot; or
+/// why that is not known); it opens the station's page once it can say.
+fn archiving_row_node(v : @view.View, core : Core, stint : () -> Int, s : () -> Json?, archiving : () -> Json?) -> Unit {
+  let view = fn() { if flag(s(), "online") { archiving() } else { None } }
   let line = fn() {
     match view() {
       Some(Object(_)) as v => text(v, "lineText")
       _ =>
         if !flag(s(), "online") {
           @sf.t("web-pages.automaticDecisions.offline")
-        } else if !(field(s(), "overview") is Some(Object(_))) {
+        } else if !(field(s(), "overview") is Some(Object(_))) || view() is None {
           @sf.t("common.connecting")
         } else {
           @sf.t("web-pages.archiving.upgrade")
@@ -292,8 +327,8 @@ pub fn station_archiving_node(
       m => m
     }
   }
-  let days_offered = fn() { items(view(), "daysOffered").map(fn(n) { n.as_number().unwrap_or(0.0) }) }
-  let slack_offered = fn() { items(view(), "slackDaysOffered").map(fn(n) { n.as_number().unwrap_or(0.0) }) }
+  let days_offered = fn() { items(view(), "daysOffered").map(fn(n) { (if n is Number(n, ..) { Some(n) } else { None }).unwrap_or(0.0) }) }
+  let slack_offered = fn() { items(view(), "slackDaysOffered").map(fn(n) { (if n is Number(n, ..) { Some(n) } else { None }).unwrap_or(0.0) }) }
   // (as it is when a choice is made: what it reads not followed by what chose)
   let locked = fn() {
     @signals.untracked(fn() {
@@ -335,7 +370,7 @@ pub fn station_archiving_node(
     }
   }
   @sf.page_node(v, title, on_back~, frame~, said?, width?, blocks, fn(b, key) {
-    match key.split("/").to_array()[0].to_string() {
+    match key.split("/").to_array()[0].to_owned() {
       "admin" => @sf.page_note_node(b, fn() { @sf.t("web-pages.archiving.adminOnly") })
       // its review: how it stands, the way to it right after its words
       "review" =>

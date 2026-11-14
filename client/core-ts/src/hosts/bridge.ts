@@ -46,7 +46,7 @@
 // And at once (`callSync`, answering {value} or {error}): sql.open {name} → {id} (`:memory:` one in memory);
 //   sql.exec {id, sql}; sql.run {id, sql, params} → changes; sql.all {id, sql, params} → rows (arrays);
 //   sql.close {id}; sql.delete {name}; storage.path {key} → the file it is kept in, or null while none is;
-//   fetch.cancel {id} → whether the pending fetch call was cancelled (a call id, not a handle);
+//   fetch.cancel {id} → whether the pending call (a fetch, iroh.connect's dial) was cancelled (a call id, not a handle);
 //   iroh.endpointId {id}; iroh.addAddr {id, addr};
 //   iroh.relayStatus {id}; conn.remoteId {id};
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go); text.collate {names} →
@@ -55,7 +55,7 @@
 //   an error, and the core signs in JS: Host.ed25519Sign); crypto.verify {alg, key, signature, message} (hex) → whether
 //   it is (libcrux's; a shell without it: an error, and the core checks in JS: Host.verify).
 import type { Recorder } from "../record.ts";
-import { Effect, type Scope } from "effect";
+import { Effect, Fiber, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { FileSource } from "../file-source.ts";
 import { HostError } from "../error.ts";
@@ -99,17 +99,26 @@ export class Bridge {
     this.native = native;
   }
 
-  /// Operation `op`; interrupted, its answer is let go. A fetch is also cancelled in the shell: dropping only this
-  /// waiter would leave its HTTP exchange alive through every subsequent retry on a weak network.
-  call(op: string, json: unknown, bytes: Uint8Array | null = null): Effect.Effect<Answer, HostError> {
-    return Effect.callback<Answer, HostError>((resume) => {
+  /// Operation `op`; interrupted, its answer is let go. A fetch and a dial (iroh.connect) are also cancelled in the
+  /// shell: dropping only this waiter would leave its HTTP exchange alive through every subsequent retry on a weak
+  /// network, and a dial retransmitting for ten minutes. `givenUp`: once it succeeds, the call is cancelled in the
+  /// shell (`fetch.cancel`) and its answer still waited for, the cancellation's error or what came first.
+  call(op: string, json: unknown, bytes: Uint8Array | null = null, givenUp?: Effect.Effect<void>): Effect.Effect<Answer, HostError> {
+    return Effect.suspend(() => {
       const id = this.#next++;
-      this.#waiting.set(id, { resolve: (a) => resume(Effect.succeed(a)), reject: (e) => resume(Effect.fail(e)) });
-      this.native.call(id, op, JSON.stringify(json ?? {}), bytes);
-      return Effect.sync(() => {
-        if (!this.#waiting.delete(id) || op !== "fetch") return;
-        // A shell from before fetch.cancel says an error; it still completes the fetch on its own as before.
-        this.native.callSync("fetch.cancel", JSON.stringify({ id }));
+      // A shell from before fetch.cancel says an error; it still completes the call on its own as before.
+      const cancel = () => void this.native.callSync("fetch.cancel", JSON.stringify({ id }));
+      const answer = Effect.callback<Answer, HostError>((resume) => {
+        this.#waiting.set(id, { resolve: (a) => resume(Effect.succeed(a)), reject: (e) => resume(Effect.fail(e)) });
+        this.native.call(id, op, JSON.stringify(json ?? {}), bytes);
+        return Effect.sync(() => {
+          if (this.#waiting.delete(id) && (op === "fetch" || op === "iroh.connect")) cancel();
+        });
+      });
+      if (givenUp === undefined) return answer;
+      return Effect.gen(function* () {
+        const told = yield* Effect.forkChild(Effect.andThen(givenUp, Effect.sync(cancel)));
+        return yield* Effect.ensuring(answer, Fiber.interrupt(told));
       });
     });
   }
@@ -491,7 +500,7 @@ export function bridgeIroh(bridge: Bridge): Iroh {
   });
   const endpoint = (id: number): IrohEndpoint => ({
     id: () => String(bridge.sync("iroh.endpointId", { id })),
-    connect: (addr: IrohAddr, alpn, additional) => Effect.map(bridge.call("iroh.connect", { id, addr, additional: additional.map(hex) }, alpn), (a) => connection(handle(a), id)),
+    connect: (addr: IrohAddr, alpn, additional, givenUp) => Effect.map(bridge.call("iroh.connect", { id, addr, additional: additional.map(hex) }, alpn, givenUp), (a) => connection(handle(a), id)),
     accept: () =>
       Effect.orElseSucceed(
         Effect.map(bridge.call("iroh.accept", { id }), (a) => ((a.json as J)?.end === true ? null : { connection: connection(handle(a), id), alpn: unhex(String((a.json as J).alpn)) })),
@@ -502,6 +511,14 @@ export function bridgeIroh(bridge: Bridge): Iroh {
     relayStatus: () => (bridge.sync("iroh.relayStatus", { id }) as { url: string; connected: boolean }[]) ?? [],
     dhtSaid: (keep) => (bridge.sync("dht.said", { keep }) as ReturnType<NonNullable<IrohEndpoint["dhtSaid"]>> | null) ?? { lines: [], dropped: 0 },
     setRelayEntries: (entries) => Effect.asVoid(bridge.call("iroh.setRelayEntries", { id, entries })),
+    // (a shell from before says no such op: PCM)
+    opus: () => {
+      try {
+        return bridge.sync("tap.opus", {}) === true;
+      } catch {
+        return false;
+      }
+    },
     close: () => Effect.ignore(bridge.call("iroh.close", { id }), { log: "Unhandled", message: "endpoint closed" }),
   });
   return {

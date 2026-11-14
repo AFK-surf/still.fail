@@ -56,10 +56,7 @@ async function rig(answer: (station: string, key: string, body: any) => unknown)
   const ask = async (name: string, params: Record<string, unknown>) => {
     const id = ++n;
     call(s.core, ui, id, name, params);
-    for (let i = 0; i < 200 && !done.has(id); i++) {
-      await s.host.time.pass(10);
-      take();
-    }
+    await s.host.time.passUntil(2000, () => (take(), done.has(id)));
     await s.host.time.pass(100);
     take();
     return done.get(id);

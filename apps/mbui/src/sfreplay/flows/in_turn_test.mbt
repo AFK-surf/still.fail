@@ -3,12 +3,12 @@
 
 ///|
 test "84-connect after 86-decisions: the decisions page the run before left open drops its draft in that run, not in this" {
-  @sfreplay.orders(flow_86_decisions)
-  @sfreplay.orders(flow_84_connect)
+  @sfreplay.orders(fn(seed) { flow_86_decisions(seed) })
+  @sfreplay.orders(fn(seed) { flow_84_connect(seed) })
 }
 
 ///|
 test "02-home-new-chat after 67-lock-wait: Home's catching up the run before left showing is gone with that run" {
-  @sfreplay.orders(flow_67_lock_wait)
-  @sfreplay.orders(flow_02_home_new_chat)
+  @sfreplay.orders(fn(seed) { flow_67_lock_wait(seed) })
+  @sfreplay.orders(fn(seed) { flow_02_home_new_chat(seed) })
 }

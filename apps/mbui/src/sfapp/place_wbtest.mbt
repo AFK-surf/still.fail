@@ -19,7 +19,7 @@ test "a place gone to at each width on either screen: 文件 the stack's root fr
     assert_true(app.nav.top() is Chat(_), msg=at)
     // laid out Small the bottom bar shows on a place's root only: back to the chats' first; on the tape the chat's page
     // came over to show it, the rail in the sidebar beside it: back brings that over
-    if @sfdesk.wide.tape {
+    if @sfdesk.wide.tape.get() {
       t.back()
       t.run_for(@ui.move_most_ms)
       assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side, msg=at)
@@ -28,7 +28,7 @@ test "a place gone to at each width on either screen: 文件 the stack's root fr
       t.run_for(@ui.move_most_ms)
       assert_eq(app.nav.depth(), 1, msg=at)
     }
-    let place = fn() raise {
+    let place = fn() {
       // (the bottom bar's places are its tabs, the rail's its buttons)
       let n = match t.query(Tab, label="文件") {
         Some(n) => n

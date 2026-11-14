@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply as applyDelta } from "../src/delta.ts";
+import { Core } from "../src/core.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
 import { kindOf, opensOf } from "../src/drive.ts";
 import { wordsAnswer } from "../src/words.ts";
@@ -13,6 +14,7 @@ import { started, stationLater, stationReplies, status } from "./station-fixture
 import { HostError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
 import { JSON_IDLE_MS } from "../src/station/requests.ts";
+import { HostWire } from "../src/station/wire.ts";
 
 const ST = "ws/st";
 const ROOT = "/Users/a/Movies";
@@ -229,7 +231,7 @@ test("the reader's settings are the core's: whole, each in its bounds, one chang
   await host.settle();
   const values = new Map();
   apply(host, values);
-  assert.deepEqual(v(values, 1).reader, { size: 18, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" });
+  assert.deepEqual(v(values, 1).reader, { size: 16, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" });
   call(core, ui, 2, "prefs.set", { reader: { size: 40, paper: "green" } });
   await host.settle();
   call(core, ui, 3, "prefs.set", { reader: { line: 1.93, paper: "nope" } });
@@ -237,6 +239,38 @@ test("the reader's settings are the core's: whole, each in its bounds, one chang
   apply(host, values);
   assert.deepEqual(v(values, 1).reader, { size: 32, line: 1.9, margin: 22, face: "sans", indent: true, paper: "follow" });
   core.close();
+});
+
+test("changing the reader's paper does not make its default size a chosen size", async () => {
+  const { host, core } = await started();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  call(core, ui, 2, "prefs.set", { reader: { paper: "green" } });
+  await host.settle();
+  apply(host, values);
+  const kept = () => (core.inner.data.get({ topic: "prefs" }) as { reader: Record<string, unknown> }).reader;
+  assert.deepEqual(kept(), { paper: "green" }, "the size still follows the default");
+  assert.equal(v(values, 1).reader.paper, "green");
+  call(core, ui, 3, "prefs.set", { reader: { size: 24 } });
+  await host.settle();
+  call(core, ui, 4, "prefs.set", { reader: { line: 1.9 } });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(kept(), { paper: "green", size: 24, line: 1.9 });
+  assert.equal(v(values, 1).reader.size, 24, "a size the reader chose stays chosen");
+  core.close();
+  host.takeEmitted();
+  const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  const ui2 = again.connect();
+  subscribe(again, ui2, 1, { topic: "prefs" });
+  await host.settle();
+  const reopened = new Map();
+  apply(host, reopened);
+  assert.deepEqual(v(reopened, 1).reader, { size: 24, line: 1.9, margin: 22, face: "sans", indent: true, paper: "green" });
+  again.close();
 });
 
 test("what a press on an entry does, by its kind: entered, read, played, previewed, else saved", () => {

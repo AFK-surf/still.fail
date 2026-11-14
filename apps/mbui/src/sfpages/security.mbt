@@ -8,8 +8,8 @@
 
 ///|
 /// 安全 (SecuritySettings, SecurityScreen), made once in node `v` as wide as `width` gives it, in the frame it is given:
-/// the person's own lock first (an app's alone: a web page signs nothing), then the workspace's as the core's `lock`
-/// says it, each part of it a block of its own come and gone as that changes (read the first time: the page as it is
+/// the workspace's lock as the core's `lock` says it (the person's own lock is no row of its own: to people there is one
+/// safe mode, the user, 2026-11-10), each part of it a block of its own come and gone as that changes (read the first time: the page as it is
 /// while the lock is off, in its bones). `stint`: the page's time on top, what a station's picture is asked for on.
 pub fn security_node(
   v : @view.View,
@@ -33,7 +33,7 @@ pub fn security_node(
     width?,
     lead=fn() { @sf.t("web-pages.security.lead") },
     fn() {
-      let out = if @ui.platform() != 4 { ["personal"] } else { [] }
+      let out : Array[String] = []
       let l = lock()
       match l {
         None => out.push("waiting")
@@ -45,6 +45,11 @@ pub fn security_node(
           if flag(me, "waiting") || flag(me, "unsigned") {
             out.push("pair")
           }
+          // (what the upgrade of safe mode waits for, on the owner's device that is to finish it: first after the state,
+          // where one looking for 安全模式 looks first)
+          upgrade_keys(l, out)
+          // (what was just done and is not in effect: after the state and the upgrade)
+          pending_keys(l, out)
           out.push("people")
           out.push("stations")
           out.push("web")
@@ -54,6 +59,7 @@ pub fn security_node(
         }
         Some(_) => {
           out.push("off")
+          pending_keys(l, out)
           out.push("signing")
         }
       }
@@ -61,12 +67,6 @@ pub fn security_node(
     },
     fn(b, key) {
       match key {
-        "personal" =>
-          @sf.group_node(b, fn(g) {
-            @sf.link_row_node(g, fn() { @sf.t("android-misc.personal.heading") }, fn() { (core.push)(PersonalLock) }, note=fn() {
-              @sf.t("android-misc.personal.note")
-            })
-          })
         "waiting" =>
           // (read the first time: the page as it is while the lock is off, the commonest, in its bones)
           @sf.waiting_node(
@@ -90,6 +90,12 @@ pub fn security_node(
         "signing" => signing_node(b)
         "on" => lock_on_node(b, lock)
         "pair" => pair_node(b, core, ws, lock)
+        "upgrade" => @sf.section_heading_node(b, fn() { text(field(lock(), "upgrade"), "titleText") })
+        k if k.has_prefix(upgrade_key) =>
+          upgrade_line_node(b, core, lock, @string.parse_int(k[upgrade_key.length():]) catch { _ => 0 })
+        "upgrade-ask" => upgrade_ask_node(b, core, ws, lock)
+        "pending" => @sf.section_heading_node(b, fn() { text(lock(), "pendingText") })
+        k if k.has_prefix(pending_key) => pending_node(b, core, ws, lock, k.unsafe_substring(start=pending_key.length(), end=k.length()))
         "people" => people_node(b, core, ws, lock)
         "stations" => stations_node(b, core, ws, lock, stint)
         "web" =>
@@ -260,7 +266,7 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
           },
         )
       },
-      fn() { sec_state },
+      fn() { sec_state_lines },
     )
     |> ignore
     let look = @sf.look_node(k)
@@ -276,6 +282,243 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
     .margin(Is((-pad, 0.0, -pad, -pad)))
     |> ignore
   })
+}
+
+///|
+/// 安全模式有一项升级尚未完成 (the core's `upgrade`, on the owner's device that is to finish it), as the page's list's
+/// blocks (`out`, after what is there): its title a heading, then each line it waits for a block of its own by where it
+/// stands (the core's lines have no ids: six at most and how many more), a row a piece of the section's card, and its
+/// button where only the person's ask is lacking, on a card of its own; none while there is none.
+fn upgrade_keys(l : Json?, out : Array[String]) -> Unit {
+  let u = field(l, "upgrade")
+  guard u is Some(Object(_)) else { return }
+  out.push("upgrade")
+  for i, _ in items(u, "lines") {
+    out.push(upgrade_key + i.to_string())
+  }
+  if text(u, "askText") != "" {
+    out.push("upgrade-ask")
+  }
+}
+
+///|
+/// An upgrade's line's block's key: this, then where it stands among the lines.
+let upgrade_key : String = "upgrade/"
+
+///|
+/// How many pieces the upgrade's card is made of: its lines (its button, where only the ask is lacking, on a card of its
+/// own: the core gives no line with it).
+fn upgrade_pieces(u : Json?) -> Int {
+  items(u, "lines").length()
+}
+
+///|
+/// The upgrade's line `i` as `lock` says it now, a piece of the section's card (which by where it stands among the card's
+/// pieces now), as a change not in effect is (pending_node).
+fn upgrade_line_node(parent : @view.View, core : Core, lock : () -> Json?, i : Int) -> Unit {
+  // (where it stands and what it says, as the core says them; gone, as they last were, while its block makes its way
+  // out)
+  let last : Ref[(@sf.CardPiece, Json?)] = Ref((@sf.CardPiece::CardWhole, None))
+  let now = fn() {
+    let u = field(lock(), "upgrade")
+    let lines = items(u, "lines")
+    if i < lines.length() {
+      last.val = (@sf.card_piece_of(i, upgrade_pieces(u)), Some(lines[i]))
+    }
+    last.val
+  }
+  parent.grow(Is(1.0)) |> ignore
+  @sf.card_piece_node(parent, fn() { now().0 }, wide_card=true, wide_gap=sec_rows_gap, fn(k) {
+    sec_upgrade_line_node(k, core, fn() { now().1 })
+  })
+}
+
+///|
+/// What the upgrade waits for, `lv` as it is now: the waiting mark, its sentence whole on as many lines as it takes;
+/// a station's, under it, 更新 where the core says this person may update it from here (as the station's own page offers
+/// its update: `software.update` of its own software, `upgrade_update`), a ring while that is asked, and, once its
+/// update is under way, how much of it is in as its own page draws it (station_node's `software_end_node`).
+fn sec_upgrade_line_node(parent : @view.View, core : Core, lv : () -> Json?) -> Unit {
+  let station = fn() { text(lv(), "station") }
+  let sending : @signals.Signal[Bool] = @signals.signal(false)
+  let updating = fn() { flag(lv(), "updating") }
+  let busy = fn() {
+    sending.get() || updating() || is_doing(core, ["software.update"], [("station", station()), ("id", "station")])
+  }
+  let percent = fn() -> Double? {
+    match field(lv(), "percent") {
+      Some(Number(p, ..)) => Some(p / 100.0)
+      _ => None
+    }
+  }
+  sec_line_node(
+    parent,
+    fn() { text(lv(), "text") },
+    wraps=true,
+    mark=fn(m) {
+      m.box(fn(b) {
+        @sf.style_node(b, fn() { sec_pending_mark }, in_row=true)
+        @sf.icon_node(b, "wait", sec_device_glyph, By(fn() { @sf.theme().p.muted })) |> ignore
+      })
+      |> ignore
+    },
+    // (its update under way with how much of it is in: the bar its own page draws; else 更新, a ring while it is asked)
+    acts=fn(a) {
+      a.pick(fn() { updating() && percent() is Some(_) }, fn(p, drawn) {
+        if drawn {
+          p.box(fn(bar) {
+            bar.width(Is(Some(sw_progress_w))) |> ignore
+            @sf.progress_node(bar, percent, fn() { @ui.tree_theme().line }, fn() { @sf.theme().p.accent }) |> ignore
+          })
+          |> ignore
+        } else {
+          sec_tap_do_node(
+            p,
+            fn() { @sf.t("web-main.versions.update") },
+            fn() { upgrade_update(core, @signals.untracked(station), sending) },
+            busy,
+          )
+        }
+      })
+    },
+    acts_shown=fn() { text(lv(), "of") == "station" && (flag(lv(), "canUpdate") || busy()) },
+  )
+}
+
+///|
+/// 更新 pressed on the upgrade's line of `station`: its own software updated (`software.update`, as the station's own
+/// page does), once: nothing more is sent while that is asked (`sending`), nor while the core says it is under way
+/// (the line's ring in its place); what went wrong said as any act's is.
+fn upgrade_update(core : Core, station : String, sending : @signals.Signal[Bool]) -> Unit {
+  if station == "" || @signals.untracked(fn() { sending.get() }) {
+    return
+  }
+  sending.set(true)
+  (core.call)("software.update", obj([("station", str(station)), ("id", str("station"))]), fn(r) {
+    sending.set(false)
+    match r {
+      Ok(_) => ()
+      Err(e) => {
+        @ui.haptic(Reject)
+        (core.say)(
+          @sf.t("android-misc.act.failed", args=[("what", @sf.t("web-main.stationUpdate.updateAction")), ("error", error_text(e))]),
+        )
+      }
+    }
+  })
+}
+
+///|
+/// The upgrade's button where only the person's ask is lacking (`askText`: `lock.handOver`, which asks them once and
+/// finishes it), on a card of its own (the core gives no line with it); a ring on it while that goes.
+fn upgrade_ask_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> Json?) -> Unit {
+  let label = fn() { text(field(lock(), "upgrade"), "askText") }
+  let asking = fn() { is_doing(core, ["lock.handOver"], [("workspace", ws())]) }
+  @sf.page_card_node(parent, fn(k) {
+    k.box(fn(a) {
+      @sf.style_node(a, fn() { sec_actions })
+      @sf.button_node(a, label, fn() { lock_call(core, @signals.untracked(ws), "handOver", @signals.untracked(label), []) }, tone=Primary, busy=asking)
+      |> ignore
+    })
+    |> ignore
+  })
+}
+
+///|
+/// 以下改动还没有生效, as the page's list's blocks (`out`, after what is there): its heading, then each change this
+/// device made that no station took yet (the core's `pending`, oldest first, of the workspace's lock and the person's
+/// own alike) a block of its own by its id, a row a piece of the section's card (a block is a row: apps/mbui/AGENTS.md),
+/// so one going leaves the others where they are; none while there are none.
+fn pending_keys(l : Json?, out : Array[String]) -> Unit {
+  let rows = items(l, "pending")
+  if rows.length() > 0 {
+    out.push("pending")
+    for r in rows {
+      out.push(pending_key + text(Some(r), "id"))
+    }
+  }
+}
+
+///|
+/// A pending change's block's key: this, then its id.
+let pending_key : String = "pending/"
+
+///|
+/// The pending change `id` as `lock` says it now, a piece of the section's card (which piece by where it stands among
+/// them now: the top, one between, the foot, the whole card), the rows 12 apart wide (sec_rows').
+fn pending_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> Json?, id : String) -> Unit {
+  // (where it stands and what it says, as the core says them; gone, as they last were, while its block makes its way
+  // out)
+  let last : Ref[(@sf.CardPiece, Json?)] = Ref((@sf.CardPiece::CardWhole, None))
+  let now = fn() {
+    let rows = items(lock(), "pending")
+    for j, r in rows {
+      if text(Some(r), "id") == id {
+        last.val = (@sf.card_piece_of(j, rows.length()), Some(r))
+      }
+    }
+    last.val
+  }
+  // (as tall as its block, its piece of the card in it as tall: card_piece_node)
+  parent.grow(Is(1.0)) |> ignore
+  @sf.card_piece_node(
+    parent,
+    fn() { now().0 },
+    wide_card=true,
+    wide_gap=sec_rows_gap,
+    fn(k) {
+      sec_pending_node(k, core, ws, fn() { now().1 })
+    },
+  )
+}
+
+///|
+/// A change not in effect, `pv` as it is now: its mark (waiting, the time's; failed, the warning's in amber), its
+/// sentence whole on as many lines as it takes, why it failed under it where the core says; a failed one's
+/// `dismissText` drops it (`lock.pendingDismiss`), on a line of its own under its words. A waiting one does nothing
+/// pressed: it is taken by itself as a station takes it.
+fn sec_pending_node(parent : @view.View, core : Core, ws : () -> String, pv : () -> Json?) -> Unit {
+  let id = fn() { text(pv(), "id") }
+  let failed = fn() { text(pv(), "state") == "failed" }
+  let dropping = fn() { is_doing(core, ["lock.pendingDismiss"], [("workspace", ws()), ("id", id())]) }
+  let mark = fn() { if failed() { "info" } else { "wait" } }
+  sec_line_node(
+    parent,
+    fn() { text(pv(), "text") },
+    note=fn() { text(pv(), "why") },
+    wraps=true,
+    mark=fn(m) {
+      m.box(fn(b) {
+        @sf.style_node(b, fn() { sec_pending_mark }, in_row=true)
+        @sf.icon_node(b, @signals.untracked(mark), sec_device_glyph, By(fn() {
+          if failed() {
+            @sf.theme().p.warn_ink
+          } else {
+            @sf.theme().p.muted
+          }
+        }), name_now=mark)
+        |> ignore
+      })
+      |> ignore
+    },
+    // (one look at either width: the accent's words, starting where the sentence starts)
+    acts=fn(a) {
+      sec_tap_do_node(
+        a,
+        fn() { text(pv(), "dismissText") },
+        fn() {
+          @settings.act(
+            core,
+            @signals.untracked(fn() { text(pv(), "dismissText") }),
+            "lock.pendingDismiss",
+            obj([("workspace", str(@signals.untracked(ws))), ("id", str(@signals.untracked(id)))]),
+          )
+        },
+        dropping,
+      )
+    },
+    acts_shown=fn() { failed() && text(pv(), "dismissText") != "" },
+  )
 }
 
 ///|
@@ -382,7 +625,9 @@ fn sec_group_node(
 /// (wide; amber while `warn`), `end` at its end; `acts`, what it does (while `acts_shown` says) where its title is
 /// words of no length known (a device's name): at its end wide, narrow a line of its own under its words, the title
 /// never squeezed by it. `over`: the name of the rows it starts, over it at its mark while it says one (a person's
-/// devices of one app: still.fail 桌面版), `apart` from the rows before it. Its words as they are said.
+/// devices of one app: still.fail 桌面版), `apart` from the rows before it. Its words as they are said. `wraps`: its
+/// title a sentence, whole on as many lines as it takes, its note under it and what it does under them at either width
+/// (beside it, that took the room the sentence needs), its mark at its first line (a change not in effect).
 fn sec_line_node(
   parent : @view.View,
   title : () -> String,
@@ -396,6 +641,7 @@ fn sec_line_node(
   acts_shown? : () -> Bool = fn() { true },
   over? : () -> String = fn() { "" },
   apart? : () -> Bool = fn() { false },
+  wraps? : Bool = false,
 ) -> Unit {
   match @sf.look_node(parent) {
     Narrow => {
@@ -419,7 +665,7 @@ fn sec_line_node(
             @sf.style_node(first, fn() { sec_first_line })
             first.box(fn(t) {
               @sf.style_node(t, fn() { sec_title_room }, in_row=true)
-              @sf.words_node(t, title, fn() { narrow_row_title }) |> ignore
+              @sf.words_node(t, title, fn() { if wraps { sec_pending_body } else { narrow_row_title } }) |> ignore
             })
             |> ignore
             // (at the row's top: at a card's first row's end in its corner as far from its top as from its side, and
@@ -442,7 +688,14 @@ fn sec_line_node(
         |> ignore
       }
       parent.box(fn(r) {
-        @sf.style_node(r, fn() { if indent { sec_narrow_row_in } else { @sf.pg_said_row } })
+        @sf.style_node(r, fn() {
+          let row = (if indent { sec_narrow_row_in } else { @sf.pg_said_row }).then(sec_narrow_round)
+          if wraps {
+            row.then(sec_pending_top)
+          } else {
+            row
+          }
+        })
         match acts {
           None => words(r)
           // (its mark beside its title and its note as in a row doing nothing, what it does under them all from where
@@ -451,7 +704,7 @@ fn sec_line_node(
             r.box(fn(wa) {
               @sf.style_node(wa, fn() { sec_with_acts }, in_row=true)
               wa.box(fn(mw) {
-                @sf.style_node(mw, fn() { sec_mark_words })
+                @sf.style_node(mw, fn() { if wraps { sec_mark_words.then(sec_pending_top) } else { sec_mark_words } })
                 words(mw)
               })
               |> ignore
@@ -477,19 +730,48 @@ fn sec_line_node(
         |> ignore
       })
       parent.box(fn(r) {
-        @sf.style_node(r, fn() { sec_row })
+        @sf.style_node(r, fn() { if wraps { sec_pending_row } else { sec_row } })
         match mark {
           Some(f) => f(r)
           None => ()
         }
         r.box(fn(t) {
-          @sf.style_node(t, fn() { sec_row_text }, in_row=true)
+          @sf.style_node(t, fn() { if wraps { sec_pending_words } else { sec_row_text } }, in_row=true)
           t.show(fn() { title() != "" }, fn(w) {
-            @sf.words_node(w, title, fn() { if strong { sec_row_name } else { sec_row_words } }) |> ignore
+            @sf.words_node(w, title, fn() {
+              if wraps {
+                sec_pending_ui
+              } else if strong {
+                sec_row_name
+              } else {
+                sec_row_words
+              }
+            })
+            |> ignore
           })
           t.show(fn() { note() != "" }, fn(w) {
-            @sf.words_node(w, note, fn() { if warn() { sec_warn } else { sec_row_meta } }) |> ignore
+            @sf.words_node(w, note, fn() {
+              if wraps {
+                sec_pending_why
+              } else if warn() {
+                sec_warn
+              } else {
+                sec_row_meta
+              }
+            })
+            |> ignore
           })
+          match acts {
+            Some(f) if wraps =>
+              t.show(acts_shown, fn(a) {
+                a.box(fn(ab) {
+                  @sf.style_node(ab, fn() { sec_acts_under })
+                  f(ab)
+                })
+                |> ignore
+              })
+            _ => ()
+          }
         })
         |> ignore
         match end {
@@ -497,8 +779,8 @@ fn sec_line_node(
           None => ()
         }
         match acts {
-          Some(f) => r.show(acts_shown, f)
-          None => ()
+          Some(f) if !wraps => r.show(acts_shown, f)
+          _ => ()
         }
       })
       |> ignore
@@ -517,16 +799,23 @@ fn sec_do_node(
   primary? : Bool = false,
 ) -> Unit {
   match @sf.look_node(parent) {
-    Narrow =>
-      parent.pick(busy, fn(p, at_work) {
-        if at_work {
-          @sf.spinner_node(p, size=sec_spin) |> ignore
-        } else {
-          @sf.tap_text_node(p, label, press)
-        }
-      })
+    Narrow => sec_tap_do_node(parent, label, press, busy)
     Wide => @sf.button_node(parent, label, press, tone=if primary { Primary } else { Ghost }, busy~) |> ignore
   }
+}
+
+///|
+/// What a row does as words in the link's ink (the library's tap_text_node: its words where the row's start, its room
+/// to be pressed round them), a spinner in their place while it is at work: a narrow row's at its end, and a change
+/// not in effect's 知道了 at either width.
+fn sec_tap_do_node(parent : @view.View, label : () -> String, press : () -> Unit, busy : () -> Bool) -> Unit {
+  parent.pick(busy, fn(p, at_work) {
+    if at_work {
+      @sf.spinner_node(p, size=sec_spin) |> ignore
+    } else {
+      @sf.tap_text_node(p, label, press)
+    }
+  })
 }
 
 ///|
@@ -1020,6 +1309,36 @@ let sec_actions_gap : Double = 10.0
 let sec_open_foot_gap : Double = 12.0
 
 ///|
+/// A change not in effect (pending_node's rows): wide, a card's row with its words from its top; narrow, a group's row
+/// so. Its mark beside its first line, its words the body's on as many lines as they take, why under them the meta's.
+// kept across runs: a value (no field of it changes)
+let sec_pending_row : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(sec_row_least), gap=S3, align=AStart)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_top : @ui.Style = @ui.css("align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_mark : @ui.Style = @ui.css("pt=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_words : @ui.Style = @ui.style(w=@sf.grow, gap=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_ui : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_body : @ui.TextStyle = @sf.body.then(@sf.full_words)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_pending_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
+
+///|
 /// A narrow row's first line: its title and what is at its end (row_lines' row_first_line).
 // kept across runs: a value (no field of it changes)
 let sec_first_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
@@ -1033,6 +1352,12 @@ let sec_lead : @ui.Style = @sf.desk_card.then(@ui.css("mb=S7"))
 /// The state (state: the body's 14 in 500; its meta the ui's 13 muted).
 // kept across runs: a value (no field of it changes)
 let sec_state : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Medium, color=Fg, wrap=false)
+
+///|
+/// The state said alone on its line, the card's first (pair_node's: waiting to be approved, to be made trusted): on
+/// as many lines as it takes where the card has not the room, never cut (a phone's words set larger, in English).
+// kept across runs: a value (no field of it changes)
+let sec_state_lines : @ui.TextStyle = sec_state.then(@sf.in_lines)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1080,6 +1405,10 @@ let sec_point_rest : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color
 /// what it is the meta's 12 muted 6 after it); a person's devices 42 in, 8 apart.
 // kept across runs: a value (no field of it changes)
 let sec_rows : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+/// sec_rows' gap, over a pending change's piece of the card but the first (pending_node).
+let sec_rows_gap : Double = 12.0
 
 ///|
 /// A narrow row's title, taking what its first line leaves what is at its end.
@@ -1196,6 +1525,10 @@ let sec_note_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// it is to be renewed soon; what a row says at its end (the secondary's, on one line).
 // kept across runs: a value (no field of it changes)
 let sec_narrow_row_in : @ui.Style = @ui.css("row w=Full pl=S6 pr=S3 py=S2_5 gap=S3 radius=Inner align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_narrow_round : @ui.Style = @ui.style(radius=@sf.group_row_end_radius)
 
 ///|
 /// Narrow: the app a person's devices under it are, at their marks (sec_narrow_row_in's), 6 over the first (Security.tsx's

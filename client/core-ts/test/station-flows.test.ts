@@ -12,16 +12,17 @@ import { CoreError, HostError } from "../src/error.ts";
 import { encode, request } from "../src/ops.ts";
 import { topicKey } from "../src/protocol.ts";
 import { StationAddr } from "../src/station/addr.ts";
-import { SseParser } from "../src/station/sse.ts";
+import { SseParser } from "../src/sse.ts";
 import { run } from "./run.ts";
-import { Raw, base, entries, entry, overview, session, started, status, stationLater, stationReplies, threadView } from "./station-fixture.ts";
+import { Raw, base, chatsOf, entries, entry, overview, session, started, status, stationLater, stationReplies, threadView } from "./station-fixture.ts";
 import { merge } from "../src/entries.ts";
 import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { COALESCE_MS, EVICT_AFTER_MS } from "../src/store.ts";
 import { dayOf, usageHistoryRange } from "../src/station/usage-part.ts";
-import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
+import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, retryAfter } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
+import { LIMITED_MS } from "../src/sync/cloud.ts";
 import { card } from "../src/views/brief.ts";
 import * as present from "../src/present.ts";
 import { t } from "../src/i18n.ts";
@@ -153,6 +154,38 @@ test("tells_how_far_a_file_has_come", async () => {
   // At the start, then once past 64 KB (the size not given, it comes in one chunk here).
   assert.deepEqual(heard, [[0, null], [bytes.length, null]]);
   core.close();
+});
+
+test("tells_how_far_a_small_file_has_come", async () => {
+  // A chat's thumbnail (13 KB, its size said) coming in pieces: told on its way, not only 0 until it is all here.
+  const whole = 13249;
+  class Pieces extends HostWire {
+    override request(...args: Parameters<HostWire["request"]>) {
+      if (!args[1].path.includes("/sessions/k/files?name=thumb")) return super.request(...args);
+      let at = 0;
+      return Effect.succeed({
+        status: 200,
+        headers: [["content-type", "image/png"], ["content-length", String(whole)]] as [string, string][],
+        via: null,
+        body: { take: Effect.sync(() => {
+          if (at >= whole) return null;
+          const n = Math.min(1400, whole - at);
+          at += n;
+          return new Uint8Array(n).fill(7);
+        }) },
+      });
+    }
+  }
+  const { core } = await started(base(), 0, (h) => new Pieces(h));
+  try {
+    const heard: [number, number | null][] = [];
+    const [, bytes] = await run(core.inner.stations.requests.file(remote(), "k", "thumb", true, (loaded, total) => heard.push([loaded, total]), null));
+    assert.equal(bytes.length, whole);
+    assert.deepEqual(heard[0], [0, whole]);
+    assert.ok(heard.some(([loaded, total]) => loaded > 0 && loaded < whole && total === whole), JSON.stringify(heard));
+    // (a twentieth at a time: never more than some twenty times)
+    assert.ok(heard.length <= 22, JSON.stringify(heard));
+  } finally { core.close(); }
 });
 
 test("tells_how_far_a_part_has_come", async () => {
@@ -371,8 +404,8 @@ test("a_push_brings_its_chat_onto_the_device_whether_the_stream_told_it_or_not",
   call(core, ui, 3, "notice.bring", { station: ST, session: "k1" });
   await host.settle();
   assert.deepEqual(held(7), [1, 2, 3, 4, 5]);
-  // A chat the device has not heard of: the station's chats say which it is, and its latest is read.
-  answers["GET /chats"] = [...answers["GET /chats"], { id: "8", thread: 8, session: "k2", title: "新的", agents: [], lastActiveAt: 2 }];
+  // A chat the device has not heard of: its session's detail says which it is, and its latest is read.
+  answers["GET /sessions/k2?turns=0&jobs=now"] = { session: session("k2"), threads: [{ ...threadView(8, 1), sessions: [{ thread: 8, session: "k2", connect: "ember", joinedAt: 1 }] }], turns: [], jobs: [] };
   answers["GET /threads/8/entries?limit=50"] = { last: 1, entries: [{ ...entry(1, "你好"), thread: 8 }] };
   call(core, ui, 4, "notice.bring", { station: ST, session: "k2", seq: 1 });
   await host.settle();
@@ -428,6 +461,43 @@ test("a_station_the_cloud_lists_online_again_is_tried_at_once_though_its_event_w
   core.close();
 });
 
+test("a_workspace_view_the_cloud_turns_away_for_too_many_asks_is_read_again_a_while_later", async () => {
+  const { host, core, cloud } = await started(base(), 0);
+  // Its lock moved on, told; the account's asks this minute spent (its other devices read at once): turned away once.
+  cloud.also = { lock: { seq: 1, hash: "ab".repeat(32) } };
+  let limited = 1;
+  stationLater(host, (req) => (req.url.endsWith("/v1/workspaces/ws") && limited-- > 0 ? Promise.resolve(jsonResponse(429, { error: "rate_limited" })) : undefined));
+  host.socketSend("/v1/events", JSON.stringify({ type: "workspace", id: "ws" }));
+  await host.time.pass(1_000, 100);
+  assert.equal(limited, 0, "turned away once");
+  const lock = () => (core.inner.data.shared({ topic: "workspace", workspace: "ws" }) as { lock?: { seq: number } }).lock?.seq;
+  assert.equal(lock(), undefined, "not read yet");
+  await host.time.pass(LIMITED_MS, 1_000);
+  assert.equal(lock(), 1, "read again");
+  core.close();
+});
+
+test("a_workspace_whose_lock_alone_moved_on_as_its_event_says_is_not_asked_for_again", async () => {
+  const { host, core } = await started(base(), 0);
+  await host.time.pass(1_000, 100);
+  const reads = () => host.requests.filter((r) => r.url.endsWith("/v1/workspaces/ws")).length;
+  const before = reads();
+  const view = () => core.inner.data.shared({ topic: "workspace", workspace: "ws" }) as Record<string, unknown>;
+  const { lock: _l, locked: _k, ...rest } = view();
+  const head = { seq: 2, hash: "cd".repeat(32), genesis: "ef".repeat(32) };
+  host.socketSend("/v1/events", JSON.stringify({ type: "workspace", id: "ws", lock: { head, locked: true } }));
+  await host.time.pass(1_000, 100);
+  assert.equal(reads(), before, "not asked for again");
+  const { lock, locked, ...after } = view();
+  assert.deepEqual([lock, locked], [head, true], "its lock as said, in place");
+  assert.deepEqual(after, rest, "the rest as it was");
+  // Any other change (one from before says no more): asked for again.
+  host.socketSend("/v1/events", JSON.stringify({ type: "workspace", id: "ws" }));
+  await host.time.pass(1_000, 100);
+  assert.equal(reads(), before + 1);
+  core.close();
+});
+
 test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async () => {
   const { host, core, gate } = await started(base(), 0, undefined, (s) => (s.gate.stream = "fail"));
   const ui = core.connect();
@@ -437,6 +507,7 @@ test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async ()
   apply(host, values);
   assert.equal(linkOf(values, 1), "offline");
   subscribe(core, ui, 3, { topic: "stations", scope: "ws" });
+  subscribe(core, ui, 4, { topic: "station", scope: "ws", station: ST });
   await host.settle();
   apply(host, values);
   const shown = () => (values.get(3) as J[]).find((s) => s.station === ST);
@@ -449,7 +520,7 @@ test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async ()
   apply(host, values);
   assert.equal(linkOf(values, 1), "connecting");
   assert.equal((values.get(1) as J).retrying, true);
-  assert.deepEqual([shown().online, shown().reconnecting, shown().link.retrying], [false, false, true]);
+  assert.deepEqual([shown().online, shown().reconnecting, (values.get(4) as J).link.retrying], [false, false, true]);
   core.close();
 });
 
@@ -479,7 +550,7 @@ test("a station's profile warning follows changes to its quota", async () => {
   const { host, core, push } = await started(base());
   const ui = core.connect();
   const values = new Map();
-  subscribe(core, ui, 1, { topic: "stations", scope: "ws" });
+  subscribe(core, ui, 1, { topic: "station", scope: "ws", station: ST });
   await host.settle();
   apply(host, values);
   const profile = {
@@ -488,7 +559,7 @@ test("a station's profile warning follows changes to its quota", async () => {
     check: { state: "ok", detail: "", checkedAt: 1 },
     quota: { state: "unavailable", windows: [], checkedAt: 1, detail: "No quota returned" },
   };
-  const shown = () => (v(values, 1) as J[]).find((s) => s.station === ST);
+  const shown = () => v(values, 1) as J;
   push("overview", { ...overview, profiles: [profile] });
   await host.settle();
   apply(host, values);
@@ -742,7 +813,7 @@ test("lists_held_are_read_again_as_what_changed_of_them", async () => {
   assert.deepEqual([gets(host, "/admin/api/threads"), heldIn(host, 0, "threads").length], [1, 0]);
   // Held, each row as the station has it (the fields the device keeps apart put back too): read again, every row is
   // held as it is, and the station would send none.
-  const lists: [string, string, string][] = [["chats", "id", "GET /chats"], ["threads", "id", "GET /threads"], ["sessions", "key", "GET /sessions"]];
+  const lists: [string, string, string][] = [["threads", "id", "GET /threads"], ["sessions", "key", "GET /sessions"]];
   const asked = (from: number) => lists.map(([list]) => heldIn(host, from, list).at(-1));
   const as = (rows: J[], id: string) => Object.fromEntries(rows.map((r) => [String(r[id]), digest(r)]));
   let from = host.requests.length;
@@ -755,15 +826,13 @@ test("lists_held_are_read_again_as_what_changed_of_them", async () => {
   again.core.inner.stations.snapshot(ST);
   await host.settle();
   assert.deepEqual(asked(from), lists.map(([, id, get]) => as(answers[get], id)));
-  // One thread on, one new, the chat gone: the device has the lists as the station does.
+  // One thread on, one new: the device has the lists as the station does.
   answers["GET /threads"] = [threadView(7, 4), threadView(8, 1)];
   answers["GET /threads/7/entries?after=3&limit=50"] = { last: 4, entries: [entry(4, "m4")] };
-  answers["GET /chats"] = [];
   again.core.inner.stations.snapshot(ST);
   await host.settle();
   const threads = (again.core.inner.data.get({ topic: "threads", station: ST }) as J[]).map((t) => [t.id, t.last]).sort();
   assert.deepEqual(threads, [[7, 4], [8, 1]]);
-  assert.deepEqual(again.core.inner.data.get({ topic: "chatRows", station: ST }), []);
   assert.deepEqual((again.core.inner.data.get({ topic: "sessions", station: ST }) as J[]).map((x) => x.key).sort(), ["k1", "k2"]);
   assert.equal(host.requests.filter((r) => r.method === "GET" && r.url.endsWith("/admin/api/threads")).length, 1, "whole only the first time");
   again.core.close();
@@ -772,7 +841,7 @@ test("lists_held_are_read_again_as_what_changed_of_them", async () => {
 test("a_station_from_before_is_read_whole_and_asked_again_after_a_while", async () => {
   const { host, core, changes } = await started(base());
   changes.on = false;
-  const lists = ["chats", "threads", "sessions"];
+  const lists = ["threads", "sessions"];
   const asked = (from: number) => lists.map((l) => heldIn(host, from, l).length).reduce((a, b) => a + b, 0);
   const whole = (from: number) => lists.map((l) => host.requests.slice(from).filter((r) => r.method === "GET" && r.url.endsWith(`/admin/api/${l}`)).length);
   let from = host.requests.length;
@@ -780,18 +849,18 @@ test("a_station_from_before_is_read_whole_and_asked_again_after_a_while", async 
   await host.settle();
   // Asked what changed, refused (it has no such route): read whole, and the rest whole at once.
   assert.ok(asked(from) >= 1);
-  assert.deepEqual(whole(from), [1, 1, 1]);
+  assert.deepEqual(whole(from), [1, 1]);
   from = host.requests.length;
   core.inner.stations.snapshot(ST);
   await host.settle();
-  assert.deepEqual([asked(from), whole(from)], [0, [1, 1, 1]]);
+  assert.deepEqual([asked(from), whole(from)], [0, [1, 1]]);
   // Updated since, maybe: asked again after a while.
   changes.on = true;
   host.advance(CHANGES_RETRY_MS);
   from = host.requests.length;
   core.inner.stations.snapshot(ST);
   await host.settle();
-  assert.deepEqual([asked(from), whole(from)], [3, [0, 0, 0]]);
+  assert.deepEqual([asked(from), whole(from)], [2, [0, 0]]);
   core.close();
 });
 
@@ -799,20 +868,20 @@ test("what_changed_answered_no_or_not_adding_up_is_read_whole", async () => {
   const { host, core } = await started(base());
   // A row in the order neither held nor sent.
   let reply: unknown = { order: ["7", "x"], rows: [] };
-  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/admin/api/changed/chats") ? reply : undefined));
-  const whole = (from: number) => host.requests.slice(from).filter((r) => r.method === "GET" && r.url.endsWith("/admin/api/chats")).length;
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/admin/api/changed/threads") ? reply : undefined));
+  const whole = (from: number) => host.requests.slice(from).filter((r) => r.method === "GET" && r.url.endsWith("/admin/api/threads")).length;
   let from = host.requests.length;
   core.inner.stations.snapshot(ST);
   await host.settle();
   assert.equal(whole(from), 1);
-  assert.deepEqual((core.inner.data.get({ topic: "chatRows", station: ST }) as J[]).map((r) => r.id), ["7"]);
+  assert.deepEqual((core.inner.data.get({ topic: "threads", station: ST }) as J[]).map((r) => r.id), [7]);
   // Answered no (too much held, say): read whole, and asked again the next time.
   reply = status(413, { error: "request too large" });
   for (const _ of [1, 2]) {
     from = host.requests.length;
     core.inner.stations.snapshot(ST);
     await host.settle();
-    assert.deepEqual([heldIn(host, from, "chats").length, whole(from)], [1, 1]);
+    assert.deepEqual([heldIn(host, from, "threads").length, whole(from)], [1, 1]);
   }
   core.close();
 });
@@ -865,10 +934,10 @@ test("writes_bring_what_they_touch_up_to_date", async () => {
   await host.settle();
   assert.equal((core.inner.data.get({ topic: "session", station: ST, key: "k 1" }) as J).threads[0].id, 9);
   assert.equal((core.inner.data.get({ topic: "threads", station: ST }) as J)[0].id, 9);
-  // The threads and sessions are not read again for it. (The TS core reads the chat rows, which the station makes, so
-  // the new chat is in the list as the station has it; and the sync brings the new chat's entries onto the device.)
+  // The threads and sessions are not read again for it. (The station's marks of the chats are, which say what only it
+  // can of the new chat; and the sync brings the new chat's entries onto the device.)
   assert.deepEqual(
-    host.requests.slice(reads).map((r) => `${r.method} ${r.url.replace("https://stillfail.test/admin/api", "")}`).filter((r) => !r.includes("/threads/9/entries") && r !== "GET /chats" && r !== "POST /changed/chats"),
+    host.requests.slice(reads).map((r) => `${r.method} ${r.url.replace("https://stillfail.test/admin/api", "")}`).filter((r) => !r.includes("/threads/9/entries") && r !== "GET /chats?marks=1"),
     ["POST /threads"],
   );
   // A read changes nothing.
@@ -927,7 +996,8 @@ test("archive_fallback_updates_the_session_only_after_success", async () => {
 });
 
 /// A log as the station said it (the topic goes out with its last line and when, in words, besides).
-const raw = (log: J) => ({ text: log.text, outputAt: log.outputAt });
+/// A job's log as sent: its lines' words (its last line where it is asked alone), and when it grew.
+const raw = (log: J) => ({ text: log.lines ? log.lines.map((l: J) => l.runs.map((r: J) => r.text).join("")).join("\n") : (log.last ?? ""), outputAt: log.outputAt });
 const sessionOf = (core: J, key: string) => core.inner.data.get({ topic: "session", station: ST, key }) as J;
 const reqs = (host: FakeHost) => host.requests.filter((r) => r.url.includes("/admin/api/")).length;
 
@@ -1092,6 +1162,8 @@ test("a_jobs_log_is_read_once_and_then_kept_current_by_the_stations_events", asy
   apply(host, values);
   assert.deepEqual(raw(v(values, 1)), { text: "a\nb\nc", outputAt: 9 });
   assert.deepEqual(raw(v(values, 2)), { text: "c", outputAt: 9 });
+  // (each line by its number, those there before as they were: a line more is that line)
+  assert.deepEqual(v(values, 1).lines.map((l: J) => l.n), [0, 1, 2]);
   await host.time.pass(5_000, 100);
   assert.deepEqual([gets(host, "/admin/api/jobs/j1/log?lines=400"), gets(host, "/admin/api/jobs/j1/log?lines=1")], [1, 1]);
   // Given up: the stream no longer asks for it (once its grace is over).
@@ -1128,7 +1200,7 @@ test("requests_carry_the_trace_they_are_made_in", async () => {
   for (const [url, parent] of parents) {
     assert.ok(parent.startsWith("00-") && parent.endsWith("-01") && parent.length === 55, `${url}: ${parent}`);
   }
-  const snapshot = ["/events?running=1&views=1&rows=1&shared=1", "/overview", "/sessions", "/threads", "/chats", "/jobs?chats=0"].map((p) => parents.find(([u]) => u === `https://stillfail.test/admin/api${p}`)![1]);
+  const snapshot = ["/events?running=1&views=1&rows=1&shared=1", "/overview", "/sessions", "/threads", "/chats?marks=1", "/jobs?chats=0"].map((p) => parents.find(([u]) => u === `https://stillfail.test/admin/api${p}`)![1]);
   assert.ok(snapshot.every((p) => p.slice(3, 35) === trace), JSON.stringify(snapshot));
   // Each request is a span of its own.
   assert.equal(new Set(snapshot.map((p) => p.slice(36, 52))).size, snapshot.length);
@@ -1146,14 +1218,16 @@ test("topics_are_read_once_and_nothing_runs_on_a_timer", async () => {
     { topic: "session", station: ST, key: "k1" }, { topic: "sessions", station: ST }, { topic: "overview", station: ST }, { topic: "threads", station: ST },
     { topic: "thread", station: ST, thread: 7 }, { topic: "host", station: ST }, { topic: "link", station: ST }, { topic: "live", station: ST, key: "k1" },
   ];
-  const reads = () => host.requests.filter((r) => r.url.includes("/admin/api/") && !r.url.includes("/events")).length;
+  // (an agent's history shown is the sync's to bring, its latest page first: channel-kinds.ts)
+  const counted = (r: { url: string }) => r.url.includes("/admin/api/") && !r.url.includes("/events") && !r.url.includes("/timeline?");
+  const reads = () => host.requests.filter(counted).length;
   const before = reads();
   topics.forEach((t, i) => subscribe(core, ui, i + 1, t));
   await host.settle();
   await host.settle();
-  assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?running=1&views=1&rows=1&shared=1&host=1&live=k1&from=0&last=200&brief=1"]);
-  // Subscribing reads nothing: what is held shows (the stream opened anew for the host and the live session).
-  assert.equal(reads(), before, JSON.stringify(host.requests.filter((r) => r.url.includes("/admin/api/") && !r.url.includes("/events")).slice(before).map((r) => r.url)));
+  assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?running=1&views=1&rows=1&shared=1&host=1"]);
+  // Subscribing reads nothing: what is held shows (the stream opened anew for the host).
+  assert.equal(reads(), before, JSON.stringify(host.requests.filter(counted).slice(before).map((r) => r.url)));
   const requests = reqs(host);
   host.time.sleeps.length = 0;
   await host.time.pass(RECONNECT_MS * 2, 100);
@@ -1227,79 +1301,89 @@ test("thread_events_append_entries_and_refresh_summaries", async () => {
   core.close();
 });
 
-test("a_thread_its_station_tells_the_summary_of_is_not_read_again", async () => {
+test("a_chat_not_in_the_threads_held_waits_for_its_station_and_only_one_it_says_is_gone_is_not_there", async () => {
+  // A chat made since its station's threads were read (elsewhere, while away; its row on the list already): 对话不存在
+  // at once from the list held, while the chat was there to read (2026-11-09).
+  const of8 = (n: number, text: string) => ({ ...entry(n, text), thread: 8 });
+  const answers: J = {
+    ...base(),
+    "GET /threads/8/entries?limit=50": { last: 2, entries: [of8(1, "a"), of8(2, "b")] },
+    "GET /threads/8": threadView(8, 2),
+    "GET /threads/9/entries?limit=50": status(404, { error: "unknown thread 9" }),
+    "GET /threads/9": status(404, { error: "unknown thread 9" }),
+  };
+  const { host, core, ui: id, values, read } = await ui(answers);
+  const errors = new Map<number, J>();
+  const take = host.takeEmitted.bind(host);
+  host.takeEmitted = () => {
+    const out = take();
+    for (const [, m] of out as [number, J][]) if ("error" in m) errors.set(m.id, m.error);
+    return out;
+  };
+  await read();
+  assert.deepEqual(threadsOf(core).map((t) => t.id), [7], "the threads held: read, without 8");
+  subscribe(core, id, 1, { topic: "chat", station: ST, thread: 8 });
+  subscribe(core, id, 2, { topic: "chat", station: ST, thread: 9 });
+  await read();
+  await coalesce(host);
+  await read();
+  assert.equal(errors.get(1), undefined, "a chat not in the threads held is not said to be gone");
+  assert.equal(v(values, 1).thread.id, 8);
+  assert.deepEqual((v(values, 1).messages as J[]).map((m) => m.text), ["a", "b"]);
+  // One its station says is gone: so.
+  assert.equal(errors.get(2)?.code, "http_404");
+  assert.equal(v(values, 2), undefined);
+  core.close();
+});
+
+test("a_chat_asked_by_a_session_its_station_does_not_know_says_so_and_never_waits_for_good", async () => {
+  // A chat opened by a reference the station has no chat for (a job's chat named by another station, a session a
+  // list put in the wrong field): the page waited for good, 「一直 loading」 (2026-11-12). The session is read as the
+  // page asks for it, as a thread's summary is, and the station's no is the page's error.
+  const answers: J = {
+    ...base(),
+    "GET /sessions/nope": status(404, { error: "unknown session nope" }),
+    "GET /sessions/remote%3Aws%3Aother%3Ak1": status(404, { error: "unknown session" }),
+  };
+  const { host, core, ui: id, values, read } = await ui(answers);
+  const errors = new Map<number, J>();
+  const take = host.takeEmitted.bind(host);
+  host.takeEmitted = () => {
+    const out = take();
+    for (const [, m] of out as [number, J][]) if ("error" in m) errors.set(m.id, m.error);
+    return out;
+  };
+  await read();
+  subscribe(core, id, 1, { topic: "chat", station: ST, session: "k1" });
+  subscribe(core, id, 2, { topic: "chat", station: ST, session: "nope" });
+  subscribe(core, id, 3, { topic: "chat", station: ST, session: "remote:ws:other:k1" });
+  await read();
+  await coalesce(host);
+  await read();
+  assert.equal(errors.get(1), undefined, "a chat it knows opens");
+  assert.notEqual(v(values, 1), undefined);
+  for (const n of [2, 3]) {
+    assert.equal(errors.get(n)?.code, "http_404", `chat ${n}: the station's no, not a wait`);
+    assert.equal(errors.get(n)?.message, t("core-views.error.no_chat"));
+    assert.equal(v(values, n), undefined);
+  }
+  core.close();
+});
+
+test("a_thread_its_summary_is_made_of_what_is_said_in_it_is_not_read_again", async () => {
   const { host, core, push, read } = await ui({ ...base(), "GET /threads": [threadView(7, 3)], "GET /threads/7/entries?limit=50": { last: 3, entries: entries(1, 3) } });
   await read();
   const summaries = () => gets(host, "/admin/api/threads/7");
-  // Told after what was said, before or after it: put in place, not read.
+  // The station leaves it to the device: made here from what was said (thread-after.ts), not read.
   push("thread", { id: 7, entries: [entry(4, "m4")] });
-  push("thread-view", { ...threadView(7, 4, 3, 1) });
-  push("thread-view", { ...threadView(7, 5, 3, 2) });
-  push("thread", { id: 7, entries: [entry(5, "m5")] });
-  await host.time.pass(EVENTS_COALESCE_MS + 100, 50);
-  assert.equal(summaries(), 0);
-  const t = threadsOf(core).find((x: J) => x.id === 7);
-  assert.deepEqual([t.last, t.unread], [5, 2]);
-  // Told none (the station leaves it to the device, views=1): made here from what was said (thread-after.ts), not read.
-  push("thread", { id: 7, entries: [entry(6, "m6")] });
   await host.time.pass(EVENTS_COALESCE_MS + 100, 50);
   assert.equal(summaries(), 0);
   const made = threadsOf(core).find((x: J) => x.id === 7);
-  assert.deepEqual([made.last, made.unread, made.lastMessage.text], [6, 2, "m6"], "the viewer's own message: not unread");
+  assert.deepEqual([made.last, made.lastMessage.text], [4, "m4"]);
   // One it cannot make (an entry left out before it): read.
   push("thread", { id: 7, entries: [entry(9, "m9")] });
   await host.time.pass(EVENTS_COALESCE_MS + 100, 50);
   assert.equal(summaries(), 1);
-  core.close();
-});
-
-test("a_station_that_leaves_its_rows_to_the_device_has_them_made_here_from_what_it_tells", async () => {
-  // Made by the station, each change read every row it could touch again for every viewer: 3 to 5 s each on a station short of
-  // memory (2026-11-03). Told what they are made of, the device makes them; what only the station can say is read.
-  const agent = { key: "k1", runtime: "claude", model: null, effort: null, process: "cold", pending: 0, lastTurn: null };
-  const row = { id: "k1", session: "k1", thread: 7, title: "部署", agents: [agent], last: null, unread: false, mine: false, lastActiveAt: 1, people: [], archiveRecommended: false, pinned: null };
-  const answers: J = { ...base(), "GET /chats": [row] };
-  const { host, core, push, read } = await ui(answers);
-  await read();
-  const held = () => core.inner.data.chat(ST, "k1") as J;
-  const asked = () => host.requests.filter((r) => r.url.includes("/admin/api/chats")).map((r) => r.url.replace("https://stillfail.test/admin/api", ""));
-  const before = asked().length;
-  push("made", { rows: true });
-  // What an agent said: its row's latest, unread.
-  push("thread", { id: 7, entries: [{ ...entry(4, "  改好了 "), authorKind: "agent", author: "k1", authorName: "bot" }] });
-  await coalesce(host);
-  assert.deepEqual([held().last, held().unread, held().lastActiveAt], [{ seq: 4, authorKind: "agent", author: "k1", authorName: "bot", text: "改好了", createdAt: 4 }, true, 4]);
-  // Its session at work, the viewer's pin: in place.
-  push("session", { ...session("k1"), process: "running", pending: 1 });
-  push("pin", { session: "k1", at: 9 });
-  await coalesce(host);
-  assert.deepEqual([held().agents[0].process, held().agents[0].pending, held().pinned], ["running", 1, 9]);
-  assert.deepEqual(asked().slice(before), [], "none read");
-  // A card posted: what waits is the station's to say, read for that chat alone.
-  answers["GET /chats?thread=7"] = { rows: [{ ...held(), last: { ...held().last, seq: 5, text: "选一个", createdAt: 5 }, card: { seq: 5, card: { type: "options" } } }], scope: ["k1"] };
-  push("thread", { id: 7, entries: [{ ...entry(5, "选一个"), authorKind: "agent", author: "k1", card: { type: "options" } }] });
-  await coalesce(host);
-  assert.deepEqual(asked().slice(before), ["/chats?thread=7"]);
-  assert.equal(held().card.seq, 5);
-  // The viewer said they will not take it up: in place.
-  push("dismiss", { thread: 7, n: 5 });
-  await coalesce(host);
-  assert.equal(held().card.dismissed, true);
-  // Its sessions changed: that chat's rows read; gone with its thread: out.
-  answers["GET /chats?thread=7"] = { rows: [{ ...held(), title: "部署（二）" }], scope: ["k1"] };
-  push("chat-changed", { thread: 7 });
-  await coalesce(host);
-  assert.deepEqual([asked().slice(before), held().title], [["/chats?thread=7", "/chats?thread=7"], "部署（二）"]);
-  // Gone from the list as the station says (archived): out.
-  answers["GET /chats?session=k1"] = { rows: [], scope: ["k1"] };
-  push("session", { ...session("k1"), archivedAt: 20 });
-  await coalesce(host);
-  assert.deepEqual(asked().slice(before), ["/chats?thread=7", "/chats?thread=7", "/chats?session=k1"]);
-  assert.equal(held(), undefined);
-  // Settings changed (nothing said of what): the list read whole.
-  push("chat-changed", {});
-  await coalesce(host);
-  assert.deepEqual(asked().slice(before).slice(3), ["/chats"]);
   core.close();
 });
 
@@ -1316,15 +1400,13 @@ test("a_station_that_keeps_marks_has_its_sidebar_made_here_from_the_summaries_he
   // Its stream says it keeps the marks: read, and the sidebar made here.
   push("made", { rows: true, marks: true });
   await coalesce(host);
-  assert.deepEqual([held().thread, held().title, held().mine, held().agents.map((a: J) => a.key)], [7, t("core-views.new_chat"), true, ["k1"]]);
+  assert.deepEqual([held().thread, held().title, held().mine, held().agents.map((a: J) => a.key)], [7, "部署", true, ["k1"]]);
   push("hidden", { thread: 7, hidden: true });
   await coalesce(host);
   assert.equal(held().hidden, true);
   push("hidden", { thread: 7, hidden: false });
   await coalesce(host);
   assert.equal(held().hidden, false);
-  // Kept: started again, the device reads the marks at once, not the sidebar made.
-  assert.equal(core.inner.data.record("keepsMarks", ST), true);
   // What an agent said: its row's latest, unread; the viewer's pin: in place. Nothing of the sidebar read.
   push("thread", { id: 7, entries: [{ ...entry(4, "改好了"), authorKind: "agent", author: "k1", authorName: "bot" }] });
   push("pin", { session: "k1", at: 9 });
@@ -1379,6 +1461,30 @@ test("a_station_that_makes_the_chat_list_for_everyone_has_the_sidebar_made_of_it
   core.close();
 });
 
+test("a_shared_row_read_here_is_read_at_once_without_waiting_for_the_streams_read", async () => {
+  // Read on this device, its row unread till the station's stream said the read again: a read whose event never came
+  // left the row unread for good (未读消不掉, 2026-11-10).
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], muted: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: { 7: 2 } };
+  const shared = {
+    id: "k1", session: "k1", thread: 7, title: "", agents: [{ key: "k1", runtime: "claude" }], last: { seq: 3, authorKind: "agent", author: "k1", text: "好", createdAt: 3 },
+    unread: false, mine: false, lastActiveAt: 3, connect: null, origin: null, creator: null, people: [],
+    ws: null, named: { thread: { surface: "ember", title: null, autoTitle: "部署" }, firstText: null, channelName: null },
+    mineOf: [], said: { n: 3, authorKind: "agent", author: "k1", other: 3 }, pinned: null,
+  };
+  const answers: J = { ...base(), "GET /chats?marks=1": marks, "GET /threads": [], "GET /chats?shared=1": [shared], "PUT /threads/7/read": { n: 3 } };
+  answers["GET /chats"] = [];
+  const { host, core, push, read } = await ui(answers);
+  await read();
+  push("made", { rows: true, marks: true, shared: true });
+  await coalesce(host);
+  const held = () => core.inner.data.chat(ST, "k1") as J;
+  assert.equal(held().unread, true);
+  await Effect.runPromise(core.inner.stations.read(ST, 7, 3, null));
+  await coalesce(host);
+  assert.equal(held().unread, false);
+  core.close();
+});
+
 test("a_shared_chat_created_while_the_stream_is_away_is_listed_when_it_cannot_resume", async () => {
   const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: {} };
   const row = {
@@ -1388,7 +1494,8 @@ test("a_shared_chat_created_while_the_stream_is_away_is_listed_when_it_cannot_re
     mineOf: [], said: { n: 1, authorKind: "agent", author: "new-chat", other: 1 },
   };
   const answers: J = { ...base(), "GET /chats": [], "GET /chats?marks=1": marks, "GET /chats?shared=1": [] };
-  const { host, core, push, read, end, streams } = await ui(answers);
+  const { host, core, push, read, end, streams, gate } = await ui(answers);
+  gate.shared = true;
   await read();
   push("made", { rows: true, marks: true, shared: true });
   await coalesce(host);
@@ -1428,7 +1535,8 @@ test("a_failed_shared_list_refresh_keeps_the_old_list_and_retries", async () => 
   const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: {} };
   const row = (id: string) => ({ id, session: id, thread: 8, agents: [{ key: id, runtime: "claude" }], lastActiveAt: 1, ws: null, named: { thread: { surface: "ember", title: id }, firstText: null, channelName: null }, mineOf: [], said: null });
   const answers: J = { ...base(), "GET /chats": [], "GET /chats?marks=1": marks, "GET /chats?shared=1": [row("old")] };
-  const { host, core, push, read, end, streams } = await ui(answers);
+  const { host, core, push, read, end, streams, gate } = await ui(answers);
+  gate.shared = true;
   await read();
   push("made", { rows: true, marks: true, shared: true });
   await coalesce(host);
@@ -1524,42 +1632,25 @@ test("a_gap_is_read_once_and_what_came_meanwhile_waits_for_it", async () => {
   core.close();
 });
 
-test("a_thread_its_summary_says_goes_further_than_what_is_held_is_read_whoever_said_so", async () => {
-  const answers: J = { ...base(), "GET /threads/7/entries?after=3&limit=50": { last: 5, entries: entries(4, 5) } };
+test("a_thread_its_summary_says_goes_further_than_what_is_held_is_read", async () => {
+  const answers: J = { ...base(), "GET /threads": [threadView(7, 3, 1, 2)] };
   const { host, core, push, values, read } = await ui(answers);
   core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
   await read();
   const from = host.requests.length;
-  // Its summary alone says it goes to 5 (the entries were never told): read once the burst is over, not before.
-  push("thread-view", { ...threadView(7, 5, 3, 2) });
-  await host.settle();
-  assert.deepEqual(entryReads(host, from), [], "waits for the burst to end: the entries are mostly on their way");
+  // A read of its summary (after something was read, say) says it goes to 5 (the entries were never told): read.
+  answers["GET /threads/7"] = threadView(7, 5, 3, 2);
+  answers["GET /threads/7/entries?after=3&limit=50"] = { last: 5, entries: entries(4, 5) };
+  push("read", { viewer: "a@x.com", thread: 7, n: 2 });
+  await coalesce(host);
   await coalesce(host);
   await read();
   assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3&limit=50"]);
   assert.deepEqual(nums(values), [1, 2, 3, 4, 5]);
-  // Said with its entries, in either order: they are held by the time the burst is over, and nothing is read.
-  push("thread-view", { ...threadView(7, 6, 3, 3) });
-  push("thread", { id: 7, entries: [entry(6, "m6")] });
-  push("thread", { id: 7, entries: [entry(7, "m7")] });
-  push("thread-view", { ...threadView(7, 7, 3, 4) });
-  await coalesce(host);
-  await read();
-  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3&limit=50"]);
-  assert.deepEqual(nums(values), [1, 2, 3, 4, 5, 6, 7]);
-  // A read of its summary (after something was read, say) says so as well.
-  answers["GET /threads/7"] = threadView(7, 9, 7, 2);
-  answers["GET /threads/7/entries?after=7&limit=50"] = { last: 9, entries: entries(8, 9) };
-  push("read", { viewer: "a@x.com", thread: 7, n: 4 });
-  await coalesce(host);
-  await coalesce(host);
-  await read();
-  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3&limit=50", "/threads/7/entries?after=7&limit=50"]);
-  assert.deepEqual(nums(values), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   core.close();
 });
 
-test("a_thread_not_open_its_summary_says_goes_further_is_read_too_and_one_none_of_which_is_held_waits_to_be_brought", async () => {
+test("a_thread_not_open_its_summary_says_goes_further_is_read_too", async () => {
   const answers: J = {
     ...base(),
     "GET /threads": [threadView(7, 3), threadView(8, 2)],
@@ -1571,9 +1662,9 @@ test("a_thread_not_open_its_summary_says_goes_further_is_read_too_and_one_none_o
   const held = (id: number) => core.inner.data.logNumbers("entry", ST, String(id));
   assert.deepEqual(held(8), [1, 2]);
   const from = host.requests.length;
-  push("thread-view", { ...threadView(8, 3, 2, 1) });
-  // One the device holds nothing of (it is new): brought with the station's history, not by this.
-  push("thread-view", { ...threadView(9, 4, 0, 4) });
+  // Its summary read again says it goes to 3.
+  answers["GET /threads/8"] = threadView(8, 3, 2, 1);
+  core.inner.stations.summaryOf(ST, 8);
   await coalesce(host);
   await host.settle();
   assert.deepEqual(entryReads(host, from), ["/threads/8/entries?after=2&limit=50"]);
@@ -1636,33 +1727,29 @@ test("session_events_update_in_place", async () => {
     "GET /sessions/c": { session: summary("c", 0), threads: [], turns: [] },
   });
   await host.settle();
-  const reads = reqs(host);
-  // The same turns: only the summary changes, without a request. (A session new to the device has its detail brought
-  // in, rule 6.)
-  const renamed = { ...summary("a", 1), title: "新名字", lastTurn: { kind: "chat", outcome: null, declared: null, detail: null, startedAt: 1, endedAt: null } };
+  const detailOfA = gets(host, "/admin/api/sessions/a?turns=0&jobs=now");
+  // The same turns: the summary changes in place, its detail not read. (A session new to the device has its detail
+  // brought in, rule 6.)
+  const renamed = { ...summary("a", 1), title: "新名字", lastTurn: turn };
   push("session", renamed);
   push("session", summary("c", 0));
   await host.settle();
-  assert.equal(reqs(host), reads + 1);
-  assert.equal(gets(host, "/admin/api/sessions/c?turns=0&jobs=now"), 1);
+  assert.equal(gets(host, "/admin/api/sessions/c?turns=0&jobs=now"), 1, "brought in, once");
+  assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), detailOfA);
   const list = () => core.inner.data.get({ topic: "sessions", station: ST }) as J[];
   assert.deepEqual(list().map((s) => s.key), ["c", "a", "b"]);
   assert.equal(list()[1].title, "新名字");
   assert.equal(sessionOf(core, "a").session.title, "新名字");
-  // The turn ended, said by a station from before (its last turn named by no id): the detail's turns are read again.
-  push("session", { ...renamed, lastTurn: { ...renamed.lastTurn, endedAt: 2 } });
-  await host.settle();
-  assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), 2);
-  // Said with its id: the turn put in place, then one more, as they go on; nothing read.
+  // The turn ended, then one more, as they go on, each said with its id: put in place; nothing read.
   push("session", { ...renamed, lastTurn: { ...turn, endedAt: 3 } });
   push("session", { ...renamed, turns: 2, lastTurn: { ...turn, id: "t2", startedAt: 4 } });
   await host.settle();
-  assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), 2);
+  assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), detailOfA);
   assert.deepEqual(sessionOf(core, "a").turns.map((t: J) => [t.id, t.endedAt]), [["t1", 3], ["t2", null]]);
   // Turns it did not hear of (two at once): read again.
   push("session", { ...renamed, turns: 4, lastTurn: { ...turn, id: "t4", startedAt: 9 } });
   await host.settle();
-  assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), 3);
+  assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), detailOfA + 1);
   // Archived: gone from the list. Removed: gone, and its topic says so.
   push("session", { ...summary("b", 0), archivedAt: 5 });
   push("session-removed", { key: "a" });
@@ -1692,12 +1779,12 @@ test("a station that counts a sessions turns has its detail read once, without t
   push("session", counted(10, 80 * 60_000, { ...turn, id: "t10", startedAt: 94 * 60_000, endedAt: 99 * 60_000 }));
   await host.settle();
   assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), once);
-  assert.equal(card(sessionOf(core, "a"), null).work, t("core-views.agent.work", { n: 10, time: t("core-views.agent.hours", { h: 1, m: 20 }) }), "as many turns and as long as the summary says");
-  // One with turns from before its station kept the work: how many alone, still nothing read.
+  assert.equal(card(sessionOf(core, "a"), null).work, t("core-views.agent.work", { time: t("core-views.agent.hours", { h: 1, m: 20 }) }), "as long as the summary says");
+  // One with turns from before its station kept the work: omitted when no duration is known.
   push("session", counted(11, null, { ...turn, id: "t11", startedAt: 100 * 60_000 }));
   await host.settle();
   assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), once);
-  assert.equal(card(sessionOf(core, "a"), null).work, t("core-views.agent.turns", { n: 11 }));
+  assert.equal(card(sessionOf(core, "a"), null).work, null);
   core.close();
 });
 
@@ -1746,7 +1833,7 @@ test("a_station_saying_what_this_core_cannot_read_keeps_its_row_and_says_so", as
   apply(host, values);
   const chats = () => core.inner.store.get({ topic: "chats", scope: "ws", mine: false }) as J;
   const station = () => (values.get(1) as J[]).find((s) => s.station === ST);
-  assert.equal(station().host.hostname, "studio");
+  assert.equal(station().host.os, "macOS 26");
   assert.deepEqual(station().problems, []);
   const { memory: _gone, ...unreadable } = reading;
   push("host", unreadable);
@@ -1764,7 +1851,7 @@ test("a_station_saying_what_this_core_cannot_read_keeps_its_row_and_says_so", as
   push("host", reading);
   await host.settle();
   apply(host, values);
-  assert.equal(station().host.hostname, "studio");
+  assert.equal(station().host.os, "macOS 26");
   assert.deepEqual(station().problems, []);
   assert.equal(chats().trouble ?? null, null);
   core.close();
@@ -1850,7 +1937,7 @@ test("a_stream_taking_over_asks_for_what_came_after_the_last_event_its_predecess
 
 test("a_stream_coming_back_after_its_link_went_is_told_what_it_missed_and_reads_nothing_again", async () => {
   const { host, core, push, streams, end, gate } = await started();
-  const reads = () => ["/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats"].map((p) => gets(host, p));
+  const reads = () => ["/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats?marks=1"].map((p) => gets(host, p));
   const said = (id: string, name: string, data: unknown) =>
     Queue.offerUnsafe(streams.at(-1)!.queue, new TextEncoder().encode(`id: ${id}\nevent: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
   said("1f2e3d4c.9", "overview", { connects: [1] });
@@ -1946,21 +2033,15 @@ test("a_chat_open_is_asked_what_was_said_since_though_its_stream_came_back_told_
   // Its screens are the exception: held in memory only and changing as people come and go, they are asked again
   // whenever the stream was away (a small list; screens.ts).
   const asked = host.requests.slice(from).flatMap(readsOf).filter((url) => url.includes("/admin/api/") && !url.includes("/events") && !url.endsWith("/screens")).map((url) => url.replace("https://stillfail.test/admin/api", ""));
-  assert.deepEqual(asked, ["/threads/7/entries?after=3&limit=50"]);
-  // A stream that takes over from one still heard (an agent started: the stream follows it) was not away: nothing asked.
-  const again = host.requests.length;
-  push("chat", { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [{ key: "k1", process: "running" }] });
-  await host.settle();
-  await host.settle();
-  assert.ok(streams.at(-1)!.path.includes("live=k1"), streams.at(-1)!.path);
-  assert.deepEqual(entryReads(host, again), []);
+  // (and the person's own lock, read of the station as it is reached again: of the cloud before, unseen here)
+  assert.deepEqual(asked.filter((url) => url !== "/lock/person"), ["/threads/7/entries?after=3&limit=50"]);
   core.close();
 });
 
 test("a_stream_taking_over_told_it_missed_what_came_since_reads_the_station_again", async () => {
   const { host, core, push, streams } = await started();
   const ui = core.connect();
-  const reads = () => ["/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats"].map((p) => gets(host, p));
+  const reads = () => ["/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats?marks=1"].map((p) => gets(host, p));
   Queue.offerUnsafe(streams.at(-1)!.queue, new TextEncoder().encode(`id: 1f2e3d4c.9\nevent: overview\ndata: {}\n\n`));
   await host.settle();
   const before = reads();
@@ -2650,48 +2731,38 @@ test("a_removed_thread_and_a_removed_sessions_transcript_are_forgotten", async (
   core.close();
 });
 
-test("chat_rows_come_from_the_station_and_follow_its_events", async () => {
-  const row = (id: string, thread: number | null, last: number, unread: boolean) => ({ id, thread, session: "k1", title: id, agents: [], lastActiveAt: 1, last: last > 0 ? { seq: last, text: "…" } : null, unread });
-  const answers: J = { ...base(), "GET /chats": [row("7", 7, 12, true), row("k", null, 0, false)], "PUT /threads/7/read": { n: 13 } };
+test("chat_rows_come_from_the_station_and_follow_what_is_read_and_written", async () => {
+  const row = (session: string, thread: number | null, last: number, unread: boolean) => ({ session, thread, title: session, lastActiveAt: 1, last: last > 0 ? { seq: last, text: "…" } : null, unread });
+  const answers: J = { ...base(), ...chatsOf([row("k1", 7, 12, true), row("k", null, 0, false)]), "PUT /threads/7/read": { n: 12 } };
   const { host, core, push, streams } = await started(answers);
   await host.settle();
   assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?running=1&views=1&rows=1&shared=1"]);
   const rows = () => core.inner.data.get({ topic: "chatRows", station: ST }) as J[];
   const ids = () => rows().map((r) => r.id);
-  assert.deepEqual(ids(), ["7", "k"]);
-  const reads = reqs(host);
-  // Rows change, come and go as the station says, without a request.
-  push("chat", { ...row("7", 7, 13, true), title: "排查" });
-  push("chat", row("8", 8, 1, false));
-  push("chat-removed", { id: "k" });
-  await host.settle();
-  assert.deepEqual(ids(), ["7", "8"]);
-  assert.equal(rows()[0].title, "排查");
-  assert.equal(reqs(host), reads);
+  assert.deepEqual(ids(), ["k1", "k"]);
   // Read short of the last message: still unread; up to it: read, at once.
-  push("read", { viewer: "a@x.com", thread: 7, n: 12 });
+  push("read", { viewer: "a@x.com", thread: 7, n: 11 });
   await host.settle();
   assert.equal(rows()[0].unread, true);
-  await run(core.inner.stations.read(ST, 7, 13, null));
+  await run(core.inner.stations.read(ST, 7, 12, null));
   assert.equal(rows()[0].unread, false);
   // A new chat is written: the rows are current when the write answers.
-  answers["GET /chats"] = [row("9", 9, 0, false)];
-  answers["POST /threads"] = { ...threadView(9, 0), sessions: [{ thread: 9, session: "k1" }] };
+  answers["POST /threads"] = { ...threadView(9, 0), sessions: [{ thread: 9, session: "k1", connect: "ember", joinedAt: 2 }] };
   await run(core.inner.stations.perform(op("chat.forSession", { session: "k1" }), null));
-  assert.deepEqual(ids(), ["9"]);
-  // So is saying who one is on Slack.
+  assert.ok((core.inner.data.get({ topic: "threads", station: ST }) as J[]).some((t) => t.id === 9));
+  // So is saying who one is on Slack: what the station keeps beside the chats read again.
   answers["PUT /me/slack/U7"] = { ...overview, slackUsers: ["U7"] };
-  const before = gets(host, "/admin/api/chats");
+  const before = gets(host, "/admin/api/chats?marks=1");
   await run(core.inner.stations.perform(op("slack.identity", { user: "U7", bound: true }), null));
-  assert.equal(gets(host, "/admin/api/chats"), before + 1);
+  assert.equal(gets(host, "/admin/api/chats?marks=1"), before + 1);
   core.close();
 });
 
 test("a_read_is_held_on_the_device_as_it_is_asked_not_once_the_station_answers", async () => {
   // A message come into a chat looked at was the list's unread, and its workspace's, for a round trip to the station:
   // marked, and unmarked as the station answered (2026-11-08).
-  const row = (last: number, unread: boolean) => ({ id: "7", thread: 7, session: "k1", title: "7", agents: [], lastActiveAt: 1, last: { seq: last, text: "…" }, unread });
-  const { host, core } = await started({ ...base(), "GET /chats": [row(13, true)] });
+  const row = (last: number, unread: boolean) => ({ thread: 7, session: "k1", title: "7", lastActiveAt: 1, last: { seq: last, text: "…" }, unread });
+  const { host, core } = await started({ ...base(), ...chatsOf([row(13, true)]) });
   await host.settle();
   const rows = () => core.inner.data.get({ topic: "chatRows", station: ST }) as J[];
   assert.equal(rows()[0].unread, true);
@@ -2717,18 +2788,17 @@ test("a_message_read_in_a_chat_looked_at_is_read_on_the_list_at_once_not_after_i
   // Words sent and answered at once: the answer came while the list was still taking the words sent (its end not in
   // view), was the list's and the workspace's unread, and was read on them only once the station took the read, a
   // round trip later (2026-11-08).
-  const row = (last: number, unread: boolean) => ({ id: "7", thread: 7, session: "k1", title: "部署", agents: [], lastActiveAt: last, last: { seq: last, text: "…" }, unread });
-  const { host, core, push, values, read } = await ui({ ...base(), "GET /chats": [row(3, false)] });
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
+  const { host, core, push, values, read } = await ui({ ...base(), "GET /chats?marks=1": marks, "GET /chats": [], "GET /sessions": [{ ...session("k1"), creator: { id: "a@x.com", name: "A", email: "a@x.com", via: "cloud" } }] });
   // the station slow to take the read
   stationLater(host, (req) => (req.method === "PUT" && req.url.endsWith("/threads/7/read") ? new Promise(() => {}) : undefined));
   subscribe(core, 1, 1, { topic: "chat", station: ST, thread: 7 });
   subscribe(core, 1, 2, { topic: "chats", scope: "ws" });
   call(core, 1, 3, "client.focus", { visible: true, focused: true, chat: { station: ST, thread: 7, end: false } });
+  push("made", { rows: true, marks: true });
   await read();
-  const unread = () => (v(values, 2).days as J[]).flatMap((d) => d.items).find((i: J) => i.id === "7")?.unread;
-  push("thread", { id: 7, entries: [entry(4, "来了")] });
-  push("thread-view", threadView(7, 4, 3, 1));
-  push("chat", row(4, true));
+  const unread = () => (v(values, 2).days as J[]).flatMap((d) => d.items).find((i: J) => i.thread === 7)?.unread;
+  push("thread", { id: 7, entries: [{ ...entry(4, "来了"), authorKind: "agent", author: "k1", authorName: "bot" }] });
   await read();
   assert.equal(unread(), true);
   // its end in view: read, on the list too, while the station has not answered
@@ -2944,7 +3014,6 @@ test("live_holds_the_transcript_and_its_usage", async () => {
   core.receive(1, { kind: "subscribe", id: 1, subscribe: liveK });
   await read();
   await read();
-  assert.ok(streamPaths(host).includes("/events?running=1&views=1&rows=1&shared=1&live=k1&from=0&last=200&brief=1"), JSON.stringify(streamPaths(host)));
   const push = (m: J) => s.push("live", { key: "k1", ...m });
   push({ type: "timeline", start: 0, entries: ["a", "b"], usage: { modelCalls: 1, model: "claude-opus" } });
   push({ type: "steps", steps: [], phase: null });
@@ -2958,10 +3027,6 @@ test("live_holds_the_transcript_and_its_usage", async () => {
   push({ type: "timeline", start: 1, entries: ["B", "c", "d"], usage: {} });
   await read();
   assert.deepEqual(liveOf(core).timeline, ["a", "B", "c", "d"]);
-  // Reconnects ask from what is known.
-  s.end();
-  await host.time.pass(RECONNECT_MS + 50, 50);
-  assert.ok(streamPaths(host).includes("/events?running=1&views=1&rows=1&shared=1&live=k1&from=4&last=200&brief=1"), JSON.stringify(streamPaths(host)));
   // Started anew: the kept transcript at once, and only what came after it is asked for.
   let again = await reopen(s);
   const asked = streamPaths(host).length;
@@ -2969,7 +3034,6 @@ test("live_holds_the_transcript_and_its_usage", async () => {
   await again.read();
   await again.read();
   assert.deepEqual(liveOf(again.core).timeline, ["a", "B", "c", "d"]);
-  assert.ok(streamPaths(host).slice(asked).includes("/events?running=1&views=1&rows=1&shared=1&live=k1&from=4&last=200&brief=1"), JSON.stringify(streamPaths(host)));
   // Written anew and shorter: what is kept is cut there too.
   s.push("live", { key: "k1", type: "timeline", start: 1, entries: [], usage: {} });
   await again.read();
@@ -2983,13 +3047,11 @@ test("live_holds_the_transcript_and_its_usage", async () => {
   s.push("live", { key: "k1", type: "timeline", start: 9, entries: ["z"], usage: {} });
   await again.read();
   assert.deepEqual([liveOf(again.core).first, liveOf(again.core).timeline], [9, ["z"]]);
-  const before = streamPaths(host).length;
   again = await reopen({ host, core: again.core });
   again.core.receive(again.ui, { kind: "subscribe", id: 1, subscribe: liveK });
   await again.read();
   await again.read();
   assert.deepEqual([liveOf(again.core).first, liveOf(again.core).timeline], [9, ["z"]]);
-  assert.ok(streamPaths(host).slice(before).includes("/events?running=1&views=1&rows=1&shared=1&live=k1&from=10&last=200&brief=1"), JSON.stringify(streamPaths(host)));
   again.core.close();
 });
 
@@ -3021,7 +3083,6 @@ test("a_transcript_shows_its_latest_page_and_the_ones_before_as_asked", async ()
   await again.read();
   await again.read();
   assert.deepEqual([liveOf(again.core).first, liveOf(again.core).timeline[0]], [300, "e300"]);
-  assert.ok(streamPaths(host).includes("/events?running=1&views=1&rows=1&shared=1&live=k1&from=500&last=200&brief=1"), JSON.stringify(streamPaths(host)));
   assert.equal(await run(again.core.inner.stationTopics.historyOlder(ST, "k1")), true);
   await again.read();
   assert.equal(liveOf(again.core).first, 100);
@@ -3156,9 +3217,10 @@ test("a_history_step_in_brief_is_read_whole_as_it_is_opened_and_shown_so", async
   core.receive(1, { kind: "subscribe", id: 1, subscribe: { topic: "history", station: ST, key: "k1" } });
   await read();
   await read();
-  // In brief, as the station pushes it: the call by what says what it does, the result without what it gave.
+  // In brief, as the station pushes it: the call by what says what it does, the result without what it gave. (After
+  // the agent's words: a page's first calls with none before them go on a group begun on the page before, and wait for it.)
   const call = { at: "2026-10-08T00:00:00Z", kind: "tool_call", text: JSON.stringify({ command: "pnpm test", description: "Run the tests" }), tool: "Bash", callId: "c" };
-  s.push("live", { key: "k1", type: "timeline", start: 7, entries: [{ ...call, brief: true }, { at: "2026-10-08T00:00:03Z", kind: "tool_result", text: "", ok: true, callId: "c", brief: true }], usage: {} });
+  s.push("live", { key: "k1", type: "timeline", start: 6, entries: [{ kind: "assistant", text: "on it" }, { ...call, brief: true }, { at: "2026-10-08T00:00:03Z", kind: "tool_result", text: "", ok: true, callId: "c", brief: true }], usage: {} });
   await read();
   const step = () => {
     const group = (v(values, 1) as J).items.find((i: J) => i.body.kind === "group").body.content;
@@ -3180,7 +3242,7 @@ test("a_stream_silent_past_its_keepalive_is_read_again", async () => {
   subscribe(core, ui, 1, liveK);
   await host.settle();
   await host.settle();
-  const path = "/admin/api/events?running=1&views=1&rows=1&shared=1&live=k1&from=0&last=200&brief=1";
+  const path = "/admin/api/events?running=1&views=1&rows=1&shared=1";
   assert.equal(gets(host, path), 1);
   // The keepalive keeps it open.
   await host.time.pass(STREAM_IDLE_MS / 2, 500);
@@ -3191,6 +3253,33 @@ test("a_stream_silent_past_its_keepalive_is_read_again", async () => {
   // Nothing at all for longer: the link is taken for gone, and it is asked for again.
   await host.time.pass(STREAM_IDLE_MS + RECONNECT_MS + 5_000, 500);
   assert.equal(gets(host, path), 2);
+  core.close();
+});
+
+test("a_stream_silent_past_its_keepalive_takes_its_way_for_gone_and_one_never_answered_is_given_up", async () => {
+  const { host, core, streams } = await started();
+  const ui = core.connect();
+  subscribe(core, ui, 1, liveK);
+  await host.settle();
+  await host.settle();
+  const path = "/admin/api/events?running=1&views=1&rows=1&shared=1";
+  const resets: string[] = [];
+  const wire = core.inner.stations.requests.wire;
+  const reset = wire.reset?.bind(wire);
+  wire.reset = (station) => (resets.push(station.toString()), reset?.(station));
+  // Its station killed and started anew while the connection here stays open: nothing comes, and the next open is
+  // never answered on it.
+  stationLater(host, (req) => (req.url.includes("/admin/api/events") ? new Promise(() => {}) : undefined));
+  await host.time.pass(STREAM_IDLE_MS + RECONNECT_MS + 5_000, 500);
+  assert.equal(gets(host, path), 2, "asked again");
+  assert.deepEqual(resets, [ST], "on a way dialled anew");
+  // That open never answered either: given up as long after, the way dialled anew again, and tried again.
+  stationLater(host, () => undefined);
+  await host.time.pass(STREAM_IDLE_MS - 10_000, 1_000);
+  assert.deepEqual(resets, [ST], "waited on as long as a stream may be silent");
+  await host.time.pass(10_000 + RECONNECT_MAX_MS, 1_000);
+  assert.deepEqual(resets.slice(0, 2), [ST, ST]);
+  assert.ok(gets(host, path) >= 3, "tried again");
   core.close();
 });
 
@@ -3420,22 +3509,6 @@ test("an_old_notification_to_a_missing_or_forbidden_thread_reports_the_failure",
   }
 });
 
-// sync.rs
-test("the_core_keeps_its_workspaces_stations_and_agents_at_work_with_nobody_looking", async () => {
-  const { host, core, push, streams } = await started();
-  // Nobody subscribed: the account's workspaces, their stations, and what each station holds are read.
-  for (const path of ["/v1/me", "/v1/workspaces/ws", "/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats"]) {
-    assert.ok(host.requests.some((r) => r.url.endsWith(path)), path);
-  }
-  assert.equal(core.inner.stations.link(ST)?.state.state, "online");
-  // An agent at work: its live state is kept too (its stream follows it); one idle is not.
-  push("chat", { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [{ key: "k", process: "running" }, { key: "idle", process: "warm" }] });
-  await host.settle();
-  await host.settle();
-  assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?running=1&views=1&rows=1&shared=1&live=k&from=0&last=200&brief=1"]);
-  core.close();
-});
-
 test("how_a_station_was_last_time_is_there_as_its_link_starts_and_an_old_file_of_it_moves_into_the_database", async () => {
   const { host, core } = await started({ ...base(), "GET /overview": { connects: [], profiles: [] } }, 0, undefined, (s) => (s.gate.stream = "fail"));
   await host.settle();
@@ -3482,40 +3555,14 @@ test("a_station_not_reached_for_long_is_tried_seldom_though_the_cloud_says_it_is
   core.close();
 });
 
-test("an_agent_ending_its_turn_keeps_the_stream_one_starting_opens_it_anew", async () => {
-  const { host, core, push, streams } = await started();
-  const open = () => streams.filter((s) => !s.closed).map((s) => s.path);
-  const row = (id: string, agents: unknown[]) => push("chat", { id, thread: Number(id), session: `s${id}`, title: "部署", lastActiveAt: 1, agents });
-  row("7", [{ key: "k", process: "running" }]);
-  await host.settle();
-  await host.settle();
-  assert.deepEqual(open(), ["/events?running=1&views=1&rows=1&shared=1&live=k&from=0&last=200&brief=1"]);
-  const opened = streams.length;
-  // Its turn over: the stream goes on as it is, still following it.
-  row("7", [{ key: "k", process: "warm" }]);
-  await host.settle();
-  await host.settle();
-  assert.equal(streams.length, opened);
-  assert.deepEqual(open(), ["/events?running=1&views=1&rows=1&shared=1&live=k&from=0&last=200&brief=1"]);
-  // Another at work: a stream for what is wanted now, without the one done.
-  row("8", [{ key: "j", process: "running" }]);
-  await host.settle();
-  await host.settle();
-  assert.equal(streams.length, opened + 1);
-  assert.deepEqual(open(), ["/events?running=1&views=1&rows=1&shared=1&live=j&from=0&last=200&brief=1"]);
-  core.close();
-});
-
 test("a_station_that_follows_the_agents_at_work_itself_names_none_and_one_starting_opens_no_stream", async () => {
-  const { host, core, push, streams } = await started(base(), 0, undefined, (s) => (s.gate.follows = true));
+  const { host, core, push, streams } = await started(base());
   const open = () => streams.filter((s) => !s.closed).map((s) => s.path);
   assert.deepEqual(open(), ["/events?running=1&views=1&rows=1&shared=1"]);
-  assert.equal(core.inner.stations.link(ST)?.followsRunning, true);
   const opened = streams.length;
   // Agents starting and ending their turns: the stream goes on as it is.
   for (const process of ["running", "warm", "running"]) {
-    push("chat", { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [{ key: "k", process }] });
-    push("chat", { id: "8", thread: 8, session: "s8", title: "测试", lastActiveAt: 1, agents: [{ key: "j", process }] });
+    push("session", { ...session("k1"), process });
     await host.settle();
     await host.settle();
   }
@@ -3569,23 +3616,6 @@ test("what_a_device_lacks_of_a_transcript_after_what_it_holds_is_read_in_the_bac
   await read();
   assert.equal(timelines().length, asked);
   core.close();
-});
-
-test("a_station_from_before_keeps_a_transcript_as_it_did_its_latest_page_and_what_its_stream_tells", async () => {
-  const items = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => `e${from + i}`);
-  const s = await ui(base());
-  const { host, core, read } = s;
-  const timelines = () => host.requests.filter((r) => r.url.includes("/sessions/k1/timeline")).length;
-  s.push("live", { key: "k1", type: "timeline", start: 0, entries: items(0, 3), usage: {} });
-  await read();
-  const before = timelines();
-  s.push("live", { key: "k1", type: "timeline", start: 9, entries: ["e9"], usage: {} });
-  s.push("session", { ...session("k1"), transcriptLength: 20 });
-  await host.time.pass(EVENTS_COALESCE_MS + 100);
-  await read();
-  assert.equal(timelines(), before, "its holes and what its summary says are not read");
-  assert.equal(core.inner.stations.link(ST)?.followsRunning, false);
-  s.core.close();
 });
 
 test("a_core_started_again_takes_its_stations_up_from_the_last_event_kept_and_reads_nothing_again_when_told", async () => {
@@ -3796,4 +3826,88 @@ test("json_idle_timeout_resets_as_bytes_arrive_on_a_slow_link", async () => {
     assert.equal(result._tag, "Success");
     assert.deepEqual(result._tag === "Success" && result.success, { entries: [] });
   } finally { core.close(); }
+});
+
+test("a_history_whose_first_read_fails_says_why_and_is_read_again_while_its_stream_stays_open", async () => {
+  // A station that follows the sessions at work itself tells nothing of one at rest: its stream staying open, nothing
+  // but the history itself asks again (it stayed in its loading bones for ever).
+  const answers: J = base();
+  const timeline = "GET /sessions/k1/timeline?before=1000000000000000&limit=200&brief=1";
+  answers[timeline] = status(502, { error: "busy" });
+  const s = await ui(answers, (st) => (st.gate.follows = true));
+  const { host, core, read } = s;
+  await read();
+  core.receive(s.ui, { kind: "subscribe", id: 1, subscribe: liveK });
+  await read();
+  assert.deepEqual([liveOf(core).loaded, liveOf(core).failed, liveOf(core).timeline], [false, "busy", []]);
+  const reads = () => host.requests.filter((r) => r.url.includes("/sessions/k1/timeline")).length;
+  const streams = streamPaths(host).length;
+  // Failing again: asked less often each time.
+  const first = reads();
+  await host.time.pass(retryAfter(0) + 50, 50);
+  await read();
+  assert.equal(reads(), first + 1);
+  await host.time.pass(retryAfter(0) + 50, 50);
+  await read();
+  assert.equal(reads(), first + 1, "the second retry waits twice as long");
+  answers[timeline] = { start: 0, entries: ["a", "b"], end: 2 };
+  await host.time.pass(retryAfter(1), 50);
+  await read();
+  assert.deepEqual([liveOf(core).loaded, liveOf(core).failed, liveOf(core).timeline], [true, undefined, ["a", "b"]]);
+  assert.equal(streamPaths(host).length, streams, "read again on its own, not by the stream opening again");
+  core.close();
+});
+
+test("the_page_before_a_history_is_read_on_till_an_item_begins_in_what_came", async () => {
+  // Calls of one group from entry 150 to 699, the agent's words at 149: the page before the latest (300 to 499) is all
+  // within the group and shows nothing more, so the one before it (100 to 299) is read in the same asking.
+  const entry = (n: number) => (n === 149 ? { kind: "assistant", text: "so" } : { kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', callId: `c${n}` });
+  const items = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => entry(from + i));
+  const answers: J = base();
+  const s = await ui(answers);
+  const { host, core, read } = s;
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: liveK });
+  await read();
+  await read();
+  s.push("live", { key: "k1", type: "timeline", start: 500, entries: items(500, 699), usage: {} });
+  await read();
+  assert.equal(liveOf(core).first, 500);
+  answers["GET /sessions/k1/timeline?before=500&limit=200&brief=1"] = { start: 300, entries: items(300, 499) };
+  answers["GET /sessions/k1/timeline?before=300&limit=200&brief=1"] = { start: 100, entries: items(100, 299) };
+  assert.equal(await run(core.inner.stationTopics.historyOlder(ST, "k1")), true);
+  await read();
+  assert.equal(liveOf(core).first, 100);
+  // (the pages before alone: the transcript's channel reads its latest page as well, before=1000000000000000)
+  const pages = host.requests.map((r) => r.url).filter((u) => u.includes("/sessions/k1/timeline?before=") && !u.includes("before=1000000000000000"));
+  assert.deepEqual(pages.map((u) => u.replace(/.*timeline\?/, "")), ["before=500&limit=200&brief=1", "before=300&limit=200&brief=1"]);
+  core.close();
+});
+
+test("the_page_before_a_history_is_read_once_at_a_time_and_a_failure_says_why_and_waits", async () => {
+  const items = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => `e${from + i}`);
+  const answers: J = base();
+  const s = await ui(answers);
+  const { host, core, read } = s;
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: liveK });
+  await read();
+  await read();
+  s.push("live", { key: "k1", type: "timeline", start: 300, entries: items(300, 499), usage: {} });
+  await read();
+  const older = "GET /sessions/k1/timeline?before=300&limit=200&brief=1";
+  const asked = () => host.requests.filter((r) => r.url.includes("timeline?before=300&")).length;
+  answers[older] = status(502, { error: "busy" });
+  await assert.rejects(run(core.inner.stationTopics.historyOlder(ST, "k1")));
+  await read();
+  assert.deepEqual([liveOf(core).older, liveOf(core).olderFailed, liveOf(core).first], ["failed", "busy", 300]);
+  // Asked again before the while is up: nothing is read.
+  assert.equal(await run(core.inner.stationTopics.historyOlder(ST, "k1")), true);
+  assert.equal(asked(), 1);
+  await host.time.pass(retryAfter(0) + 50, 50);
+  await read();
+  assert.equal(liveOf(core).older, undefined);
+  answers[older] = { start: 100, entries: items(100, 299) };
+  assert.equal(await run(core.inner.stationTopics.historyOlder(ST, "k1")), true);
+  await read();
+  assert.deepEqual([liveOf(core).older, liveOf(core).first, asked()], [undefined, 100, 2]);
+  core.close();
 });

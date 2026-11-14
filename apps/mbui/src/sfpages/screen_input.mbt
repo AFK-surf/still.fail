@@ -25,12 +25,15 @@ let mod_shift : Int = 8
 
 ///|
 /// A rect on the stage: left, top, width, height (px).
+// Eq and Debug for its tests
+#warnings("-unused_value")
+#derive(Eq, Debug)
 priv struct SRect {
   x : Double
   y : Double
   w : Double
   h : Double
-} derive(Eq, Show, Debug)
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -140,8 +143,10 @@ fn mods_of_held(held : Int) -> Int {
 
 ///|
 /// The modifier keys of `mods`, each its key going `kind` ("down" before a press, "up" after it), so a click with ⇧ or
-/// ⌘ held is one there too (a key held alone never comes to a key catcher).
+/// ⌘ held is one there too (a key held alone never comes to a key catcher). Each key's event says the modifiers held
+/// after it, as a keyboard's do: a down with itself, an up without itself.
 fn mods_round(send : (Json) -> Unit, mods : Int, kind : String) -> Unit {
+  let mut held = if kind == "down" { 0 } else { mods }
   for k in [
     (mod_meta, "Meta", "MetaLeft"),
     (mod_ctrl, "Control", "ControlLeft"),
@@ -149,7 +154,8 @@ fn mods_round(send : (Json) -> Unit, mods : Int, kind : String) -> Unit {
     (mod_shift, "Shift", "ShiftLeft"),
   ] {
     if (mods & k.0) != 0 {
-      send(key_input(kind, k.1, k.2, mods))
+      held = if kind == "down" { held | k.0 } else { held & k.0.lnot() }
+      send(key_input(kind, k.1, k.2, held))
     }
   }
 }
@@ -237,7 +243,7 @@ fn type_words(send : (Json) -> Unit, held : HeldKeys, words : String) -> Unit {
       stroke(send, "Enter", "Enter", 0)
     }
     if line.length() > 0 {
-      send(text_input(line.to_string()))
+      send(text_input(line.to_owned()))
     }
   }
 }
@@ -257,9 +263,9 @@ fn screen_zoom() -> @kit.Zoom {
 let screen_max_zoom : Double = 5.0
 
 ///|
-/// Where the frame is drawn on the stage now (zoomed), nothing before its size is known.
-fn ScreenUi::shown(self : ScreenUi) -> SRect {
-  match self.zoom.rect() {
+/// Where the frame is drawn on the stage now (zoomed), as the old view `c` has it; nothing before its size is known.
+fn ScreenUi::shown(self : ScreenUi, c : @ui.Ctx) -> SRect {
+  match self.zoom.rect(c) {
     Some((x, y, w, h)) => cased_in({ x, y, w, h }, self.case_x, self.case_y)
     None => srect_zero
   }
@@ -267,9 +273,9 @@ fn ScreenUi::shown(self : ScreenUi) -> SRect {
 
 ///|
 /// The part of the frame in sight while it is zoomed in (0..1 of it each way); None while it is not (all of it is).
-fn ScreenUi::in_sight(self : ScreenUi) -> Part? {
-  let s = self.shown()
-  if !self.zoom.zoomed() || s.w <= 0.0 || s.h <= 0.0 || self.box_w.get() <= 0.0 || self.box_h.get() <= 0.0 {
+fn ScreenUi::in_sight(self : ScreenUi, c : @ui.Ctx) -> Part? {
+  let s = self.shown(c)
+  if !self.zoom.zoomed(c) || s.w <= 0.0 || s.h <= 0.0 || self.box_w.get() <= 0.0 || self.box_h.get() <= 0.0 {
     return None
   }
   let x0 = dmax(0.0, -s.x / s.w)
@@ -291,13 +297,22 @@ fn pad_gain(dp_per_ms : Double) -> Double {
 }
 
 ///|
-/// Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so; where the
-/// station says it is once the finger has been still a moment (something else moved it, or the screen's edge held it).
+/// Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so; `placed` once it
+/// was moved or started where the station said its pointer is. Never set again from the station as it goes: that lags
+/// the pad by the way there and back, and a quick second stroke would jump back.
 priv struct PadPointer {
   mut x : Double
   mut y : Double
-  /// how many times the finger has moved it: the wait for the station's word starts again from each
-  mut moves : Int
+  mut placed : Bool
+}
+
+///|
+/// Started where the station says its pointer is (`at`), when it says.
+fn PadPointer::start_at(self : PadPointer, at : (Double, Double)?) -> Unit {
+  guard at is Some((x, y)) else { return }
+  self.x = clamp01(x)
+  self.y = clamp01(y)
+  self.placed = true
 }
 
 ///|
@@ -307,19 +322,7 @@ fn PadPointer::at(self : PadPointer) -> (Double, Double) {
 
 ///|
 fn PadPointer::by(self : PadPointer, dx : Double, dy : Double) -> Unit {
+  self.placed = true
   self.x = clamp01(self.x + dx)
   self.y = clamp01(self.y + dy)
-  self.moves += 1
-}
-
-///|
-/// The station's word on where the pointer is, taken (once the finger has let it be: the caller says).
-fn PadPointer::follow(self : PadPointer, cursor : (Double, Double)?) -> Unit {
-  match cursor {
-    Some((x, y)) => {
-      self.x = clamp01(x)
-      self.y = clamp01(y)
-    }
-    None => ()
-  }
 }

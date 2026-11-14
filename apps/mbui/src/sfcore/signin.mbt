@@ -62,7 +62,7 @@ pub fn sign_in_now() -> SignIn {
 ///|
 /// `state` changed: told.
 fn told() -> Unit {
-  changed.set(@signals.untracked(fn() { changed.get() }) + 1)
+  changed.set(changed.untracked() + 1)
 }
 
 ///|
@@ -80,13 +80,36 @@ pub let state : SignIn = {
 }
 
 ///|
+/// How the app takes what its core says, the same on a device (start) and in a replay (sfreplay's Flow::start): each
+/// message posted to mbui's queue (core_native.c), handed here as the next frame begins; a topic's change alone, and the
+/// answers of the calls `said` names, taken as they come (what read them built again, not the whole frame, mbui's
+/// messages.mbt); the answers of those `unread` names read by nobody; the values of each `quiet` call its test says
+/// change nothing a frame reads. The app's lists are sfapp's `core_taking`.
+pub fn listen(taking : (Array[String], Array[String], Array[(String, (Json) -> Bool)])) -> Unit {
+  let (said, unread, quiet) = taking
+  @ui.on_message("core", @core.receive)
+  @ui.on_message_said("core", @core.receive_said)
+  for q in quiet {
+    @core.quiet(q.0, q.1)
+  }
+  for name in unread {
+    @core.unread(name)
+  }
+  for name in said {
+    @core.said(name)
+  }
+}
+
+///|
+/// What `start` listens with (listen): the app's lists, given by its main before it starts (sfapp's `core_taking`).
+// kept across runs: set once by the main as it starts
+pub let listening : Ref[(Array[String], Array[String], Array[(String, (Json) -> Bool)])] = Ref(([], [], []))
+
+///|
 /// Starts the core, its changes drawn in the next frame, and reads what the environment asks of signing in. False
 /// when this build has no core linked in (the web's, a fixture's).
 pub fn start() -> Bool {
-  // what the core says is posted to mbui's queue (core_native.c), which hands it here as the next frame begins
-  @ui.on_message("core", @core.receive)
-  // (a topic's change alone taken as it comes: what read it built again, not the whole frame, mbui's messages.mbt)
-  @ui.on_message_said("core", @core.receive_said)
+  listen(listening.val)
   // a screen is settled only once what it asked of the core is in (mbui's effect.mb outside)
   @core.track(what => @ui.runtime().outside_start(what), t => @ui.runtime().outside_end(t))
   let cloud = @ui.env("MBUI_CLOUD")
@@ -130,7 +153,7 @@ pub fn begin() -> Unit {
 /// says the machine's own name (MBUI_DEVICE_NAME: the Mac's, the computer's, the phone's as its settings say), that
 /// takes the place of the model or system, so people can tell their devices apart.
 fn tell_device() -> Unit {
-  let facts : Map[String, Json] = {}
+  let facts : Map[String, Json] = Map([])
   if @ui.env("MBUI_OWN") != "1" {
     facts["client"] = Json::string("still.fail mbui")
   }
@@ -284,7 +307,7 @@ fn by_hand(step : String) -> Unit {
 
 ///|
 /// The browser login waiting to come back, and who to tell.
-let login : Ref[(@hostapi.BrowserLogin, (Result[String, String]) -> Unit)?] = Ref::new(
+let login : Ref[(@hostapi.BrowserLogin, (Result[String, String]) -> Unit)?] = Ref(
   None,
 )
 
@@ -453,6 +476,88 @@ fn ended(r : Result[String, String]) -> Unit {
 pub let started_by : Array[String] = [
   "MBUI_CLOUD", "MBUI_CORE_ACCOUNT", "MBUI_CORE_SIGNIN", "MBUI_AUTH_LOGIN", "MBUI_AUTH_BEGIN", "MBUI_AUTH_COMPLETE",
 ]
+
+///|
+/// What the released app always does that a replay's app does only where its trace's head says its run's app did: a
+/// way of asking the core that a change brought in after traces were recorded, which those traces' replays could not
+/// keep to (their asks are held to what the run asked). A recording's app says each of these is on (src/stillfail's
+/// CORETRACE env); a replay reads one by `trace_switch`, never by its own name, so none goes uncounted. How many traces
+/// still replay without each is held to its bar and only falls (src/sfreplay/flows/trace_switches_test.mbt): a replay
+/// without one tests what no device does any more, its subscriptions' bytes (topic_bytes) included.
+pub let trace_switches : Array[String] = [
+  // (#5227: what the places of the bar open on is kept, and asked ahead for as long as the bar is there; a station
+  // sampled only from a finger on its tab. In the place of #5142's MBUI_PLACES_AHEAD, whose way of asking (worked out
+  // frame by frame) is gone: the one trace recorded with it was recorded again with this one)
+  "MBUI_PLACES_BAR",
+  // (设备: the stations' places and pages ask for the workspace's devices)
+  "MBUI_DEVICES",
+  // (the stations a row each, `station` one whole, `stationPart` one part of its overview, `connects`' Slack apps and
+  // `noProfile`, `profiles`' machine logins: what the app asks since the lists stopped taking the stations whole. Unlike
+  // the others, the app does not branch on it: its old way of asking (`stations` whole, `brief`, `drive`) is
+  // gone from it, so only the replay reads it. A trace without it has its run's `stations` kept by the replay itself
+  // (@core.Replay::keep_stations), the new asks read out of the stations whole it has (src/sfreplay/source.mbt))
+  "MBUI_STATION_ROWS",
+  // (what the places open on (sfbase's `lasting`) is kept as it is let go of and asked again with its version, the
+  // core answering `same` where it has not changed: client/core-ts protocol.ts `keep`, `have`; @core.Client::keep)
+  "MBUI_HAVE_SAME",
+  // (对话目录: an open chat's page on a page wide enough for its rail, and its outline's panel, ask for its outline)
+  "MBUI_OUTLINE",
+  // (the connects a row each, `connect` one whole, `connectCandidates` what its choice of a session lists, asked by a
+  // single-session connect's page while its 更换 row shows: what the app asks since a list stopped taking each connect with every session it could deliver
+  // into. Like MBUI_STATION_ROWS the app does not branch on it, its old way (one connect read out of `connects`' whole
+  // items) gone from it, so only the replay reads it: a trace without it has the app's `connect` and
+  // `connectCandidates` read out of its run's `connects {scope, mine:false}` (src/sfreplay/source.mbt))
+  "MBUI_CONNECT_ROWS",
+  // (a chat, however it is asked, kept as it is let go of as the lists are, the last few of them, and asked again with
+  // its version: the core answering `same`, or what changed from it (`{id, delta, kept}`); sfbase's `topic_kept`)
+  "MBUI_KEEP_CHAT",
+  // (a row of the chats' lists is what it draws, the core's ListedChat: what only a press, a hold, a swipe or a pointer
+  // reads of it (its menu's, its swipe's question, its time in words) is its chat's whole row, `chatRow`, asked as that
+  // begins; the chat's page's "…" asks its own. Like MBUI_CONNECT_ROWS the app does not branch on it, its old way (those
+  // read off the list's rows) gone from it, so only the replay reads it: a trace without it has the app's `chatRow`
+  // read out of its run's `chats` list, whose rows were whole (src/sfreplay/source.mbt))
+  "MBUI_CHAT_ROW",
+  // (a chats' list asked as `chats {scope, mine, watching, hidden}`, how many of its rows go out its window, told the core
+  // before it is asked (`chats.window`: the rows the screen shows and a screen more, sfbase's chats_told_before) and
+  // raised as it is scrolled near its foot, never a `limit` in the topic and a page more another topic. Like
+  // MBUI_CHAT_ROW the app does not branch on it, its old way gone from it, so only the replay reads it: a trace without
+  // it has the app's list answered by its run's `chats` asked with its first `limit` (@core.Replay's twin topics), and
+  // the app's `chats.window` told nothing (src/sfreplay/source.mbt))
+  "MBUI_CHATS_WINDOW",
+  // (the workspaces' marks one topic whichever workspace is shown, held across a switch, each mark with what the others
+  // have waiting: `workspaceMarks` asked with no `workspace`. Like MBUI_CHATS_WINDOW the app does not branch on it, its
+  // old way gone from it, so only the replay reads it: a trace without it has the app's marks answered by its run's,
+  // asked of the workspace then shown (@core.Replay's twin topics))
+  "MBUI_MARKS_ONE",
+  // (an account a row each in the accounts' list, the core's ProfileRow, and one account whole its pages' own ask,
+  // `profile` (by its key, or by a station's profile of it): what the app asks since the list stopped taking each
+  // account with its members, places, stations and allowance's resets. Like MBUI_CONNECT_ROWS the app does not branch
+  // on it, its old way (one account read out of `profiles`' whole items) gone from it, so only the replay reads it: a
+  // trace without it has the app's rows and `profile` read out of its run's `profiles {scope}` (src/sfreplay/source.mbt))
+  "MBUI_PROFILE_ROWS",
+  // (Home's own lists (its chats, its long jobs, the news over them) kept as they are let go of, as the places' are
+  // with MBUI_HAVE_SAME, and asked again with their version: sfbase's `lasting`, home_lasting. A trace without it has
+  // them let go of and asked again whole, as its run's app did (src/sfreplay/source.mbt replay_kept))
+  "MBUI_HOME_SAME",
+  // (a choice that switches what its page reads (用量's days and split, a station's page's parts: sfbase's
+  // switch_answered) asks ahead what the page will read for it, the page as it was till that is answered, then switched
+  // whole. A trace without it has the choice switch at the press, asking nothing ahead, as its run's app did: its core
+  // answers in the run's order, where what the run read after the switch (the part's own asks) was sent before the
+  // answers to what the press now asks ahead came, so a replay asking ahead would wait on itself)
+  "MBUI_SWITCH_AHEAD",
+]
+
+///|
+/// Whether the run a replay plays had `name` on (its trace's head, as its Tester was started with it): `name` one of
+/// `trace_switches`.
+pub fn trace_switch(name : String) -> Bool {
+  if !trace_switches.contains(name) {
+    @halt.saying(
+      "trace_switch: \{name} is not one of sfcore's trace_switches: say it there, and its bar in src/sfreplay/flows/trace_switches_test.mbt",
+    )
+  }
+  @ui.env(name) == "1"
+}
 
 ///|
 /// An environment variable (a Tester's, as its test gives it, the host's else), or the same name with `_B64` given as

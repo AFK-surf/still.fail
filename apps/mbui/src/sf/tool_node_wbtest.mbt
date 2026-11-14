@@ -48,7 +48,7 @@ fn tools_tester(
     tips_made.val = Some(tips)
     root.box(fn(b) {
       b.width(Is(Some(100.0))).height(Is(Some(100.0))).presses(By(fn() { held.get() })) |> ignore
-      b.show(fn() { there.get() }, fn(b) {
+      b.show(at_once=true, fn() { there.get() }, fn(b) {
       tool_node(
         b,
         fn() {
@@ -103,7 +103,7 @@ fn drawn_within(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> Arra
   let (rx, ry, rw, rh) = rect
   let rows : Array[Array[String]] = []
   for line in t.drawlist().split("\n") {
-    let f = line.split(" ").map(fn(v) { v.to_string() }).to_array()
+    let f = line.split(" ").map(fn(v) { v.to_owned() }).to_array()
     if f.length() >= 21 && f[0] == "i" {
       rows.push(f)
     }
@@ -136,7 +136,7 @@ fn drawn_within(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> Arra
       continue
     }
     // (a corner as round as it can be, as said (Full: one far past its half) or as its half: drawn the same)
-    let rest = f[3:13].to_array().mapi(fn(k, v) {
+    let rest = f[3:13].to_owned().mapi(fn(k, v) {
       match (k, number_of(f[3]), number_of(f[4]), number_of(v)) {
         (2, Some(w), Some(h), Some(r)) if r >= (if w < h { w } else { h }) / 2.0 => "half"
         _ => v
@@ -190,16 +190,16 @@ test "a tool as a node beside the old one, in each state and as what it says cha
     let n = t.get(Button, label=s.label + " new")
     // (the pointer over each in turn, or over neither)
     if over {
-      t.move(o.rect.0 + 16.0, o.rect.1 + 16.0)
+      t.move_to(o.rect.0 + 16.0, o.rect.1 + 16.0)
     } else {
       t.leave()
     }
     let old_drawn = drawn_within(t, o.rect)
     if over {
-      t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+      t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
     }
     let new_drawn = drawn_within(t, n.rect)
-    assert_eq(new_drawn, old_drawn, msg="\{name}: new \{new_drawn} old \{old_drawn}")
+    assert_eq(new_drawn, old_drawn, msg="\{name}: new \{Repr(new_drawn)} old \{Repr(old_drawn)}")
     assert_eq((n.role, n.pressed, n.disabled), (o.role, o.pressed, o.disabled), msg="\{name}: read out")
     // (what can be done to it said as it is: the old one says none of it though a screen reader's Activate presses it)
     let can : Array[@ui.Action] = if s.disabled { [] } else { [Activate, Focus] }
@@ -210,7 +210,7 @@ test "a tool as a node beside the old one, in each state and as what it says cha
 ///|
 test "a tool as a node pressed at each way in's moment, no frame drawn: a click, a finger's tap, Enter and Space with the focus, a screen reader's Activate; said unable to be pressed between frames, by none of them, its id read out before asked late" {
   let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), pressed)
   let n = t.get(Button, label="复制 new")
   let (cx, cy) = (n.rect.0 + n.rect.2 / 2.0, n.rect.1 + n.rect.3 / 2.0)
@@ -251,7 +251,7 @@ fn hovered_focused(s : ToolSaid) -> (Array[String], Array[String], Array[String]
   let n = t.get(Button, label=s.label + " new")
   t.leave()
   let rest = drawn_within(t, n.rect)
-  t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+  t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
   let hovered = drawn_within(t, n.rect)
   t.leave()
   t.tab()
@@ -287,7 +287,7 @@ test "a tool as a node's tip: shown as the pointer rests on it tip_delay_ms, not
   let n = t.get(Button, label="复制 new")
   let tip_of = fn(label : String) { t.semantics().filter(fn(s) { s.role == Tooltip && s.label == label }) }
   // (the old one's, rested on long enough)
-  t.move(o.rect.0 + 16.0, o.rect.1 + 16.0)
+  t.move_to(o.rect.0 + 16.0, o.rect.1 + 16.0)
   t.run_for(tip_delay_ms + tip_settled_ms)
   assert_eq(tip_of("复制 old").length(), 1, msg="the old one's shown")
   let old_tip = tip_of("复制 old")[0]
@@ -295,7 +295,7 @@ test "a tool as a node's tip: shown as the pointer rests on it tip_delay_ms, not
   t.leave()
   t.run_for(tip_settled_ms)
   // (the node's: not yet a moment before its time, shown at it)
-  t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+  t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
   t.run_for(tip_delay_ms - tip_short_ms)
   assert_eq(tip_of("复制 new").length(), 0, msg="not yet")
   t.run_for(tip_short_ms + tip_settled_ms)
@@ -305,10 +305,10 @@ test "a tool as a node's tip: shown as the pointer rests on it tip_delay_ms, not
   assert_eq(
     (new_tip.rect.0 - n.rect.0, new_tip.rect.1 - n.rect.1, new_tip.rect.2, new_tip.rect.3),
     (old_tip.rect.0 - o.rect.0, old_tip.rect.1 - o.rect.1, old_tip.rect.2, old_tip.rect.3),
-    msg="where, how big: new \{new_tip.rect} by \{n.rect}; old \{old_tip.rect} by \{o.rect}",
+    msg="where, how big: new \{Repr(new_tip.rect)} by \{Repr(n.rect)}; old \{Repr(old_tip.rect)} by \{Repr(o.rect)}",
   )
   let new_drawn = drawn_within(t, new_tip.rect)
-  assert_eq(new_drawn, old_drawn, msg="drawn: new \{new_drawn} old \{old_drawn}")
+  assert_eq(new_drawn, old_drawn, msg="drawn: new \{Repr(new_drawn)} old \{Repr(old_drawn)}")
   t.leave()
   t.run_for(tip_settled_ms)
   assert_eq(tip_of("复制 new").length(), 0, msg="gone as the pointer left")
@@ -328,7 +328,7 @@ test "a tool as a node's tip: shown at once as the keyboard's focus shows on it;
   assert_false(shown(), msg="shut by a press")
   t.leave()
   t.run_for(tip_settled_ms)
-  t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+  t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
   t.run_for(tip_delay_ms + tip_settled_ms)
   assert_true(shown(), msg="left and rested on again: shown")
   said.set({ icon: "copy", label: "复制", on: false, disabled: true })
@@ -348,7 +348,7 @@ test "a node's tip and an old view's tip share the window: each new cause replac
   t.run_for(tip_settled_ms)
   let node_tip = t.get(Tooltip, label="复制 new").rect
   assert_true(!drawn_within(t, node_tip).is_empty(), msg="the focused node's tip is painted")
-  t.move(old.rect.0 + 16.0, old.rect.1 + 16.0)
+  t.move_to(old.rect.0 + 16.0, old.rect.1 + 16.0)
   t.run_for(tip_delay_ms)
   assert_eq(visible(), ["复制 old"], msg="the old view took the slot")
   assert_true(drawn_within(t, node_tip).is_empty(), msg="the displaced node's tip stops painting at the switch")
@@ -356,11 +356,11 @@ test "a node's tip and an old view's tip share the window: each new cause replac
   assert_eq(visible(), ["复制 old"], msg="the focused node does not take the slot back")
   let old_tip = t.get(Tooltip, label="复制 old").rect
   assert_true(!drawn_within(t, old_tip).is_empty(), msg="the old view's tip is painted")
-  t.move(node.rect.0 + 16.0, node.rect.1 + 16.0)
+  t.move_to(node.rect.0 + 16.0, node.rect.1 + 16.0)
   t.draw()
   assert_eq(visible(), ["复制 new"], msg="a new cause on the still-focused node took it back")
   assert_true(drawn_within(t, old_tip).is_empty(), msg="the displaced old view's tip stops painting at the switch")
-  t.move(old.rect.0 + 16.0, old.rect.1 + 16.0)
+  t.move_to(old.rect.0 + 16.0, old.rect.1 + 16.0)
   t.run_for(tip_delay_ms + tip_settled_ms)
   assert_eq(visible(), ["复制 old"], msg="the slot can pass back again")
 }
@@ -400,7 +400,7 @@ test "a tool as a node's tip, the pointer resting on it pressed and let go there
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), {})
   let n = t.get(Button, label="复制 new")
   let (cx, cy) = (n.rect.0 + 16.0, n.rect.1 + 16.0)
-  t.move(cx, cy)
+  t.move_to(cx, cy)
   t.touch(0, cx, cy)
   t.touch(2, cx, cy)
   t.run_for(tip_delay_ms + tip_settled_ms)
@@ -410,7 +410,7 @@ test "a tool as a node's tip, the pointer resting on it pressed and let go there
     let modal = @signals.signal(false)
     let t = tools_tester(said, @signals.signal(page_viewer_ink()), {}, held~, modal~)
     let n = t.get(Button, label="复制 new")
-    t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+    t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
     t.run_for(tip_short_ms)
     if case == "holder" {
       held.set(false)
@@ -430,7 +430,7 @@ test "a tool as a node's tip, the pointer resting on it pressed and let go there
       modal.set(false)
     }
     t.leave()
-    t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+    t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
     t.run_for(tip_delay_ms + tip_settled_ms)
     assert_true(shown(t), msg="\{case}: rested on anew: shown")
     if case == "holder" {
@@ -451,7 +451,7 @@ test "a tool as a node made and let go again and again, its tip shown each time:
   let layer_kids = fn() { tips_layer.val.unwrap().kids().length() }
   for _ in 0..<3 {
     let n = t.get(Button, label="复制 new")
-    t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+    t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
     t.run_for(tip_delay_ms + tip_settled_ms)
     assert_eq(layer_kids(), 1, msg="its tip's holder")
     there.set(false)
@@ -515,7 +515,7 @@ fn tip_alphas(t : @ui.Tester) -> (Double, Double) {
   let mut ground = 0.0
   let mut words = 0.0
   for line in t.drawlist().split("\n") {
-    let f = line.split(" ").map(fn(v) { v.to_string() }).to_array()
+    let f = line.split(" ").map(fn(v) { v.to_owned() }).to_array()
     if f.length() < 21 || f[0] != "i" {
       continue
     }
@@ -544,7 +544,7 @@ fn tip_turns(dense : Bool, looks : Array[Double]) -> Array[(Double, Double)] rai
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), {})
   let n = t.get(Button, label="复制 new")
   let (cx, cy) = (n.rect.0 + 16.0, n.rect.1 + 16.0)
-  t.move(cx, cy)
+  t.move_to(cx, cy)
   t.run_for(tip_delay_ms)
   let start = t.time()
   let out : Array[(Double, Double)] = []
@@ -584,15 +584,15 @@ test "a tip coming in and going as kit's does: its ground the first half of the 
   assert_eq(tip_turns(false, looks), dense, msg="frames or none, the same")
   // (5 in: its ground part of the way, its words none)
   let (g5, w5) = dense[0]
-  assert_true(g5 > 0.0 && g5 < 1.0 && w5 == 0.0, msg="5 in: \{dense[0]}")
+  assert_true(g5 > 0.0 && g5 < 1.0 && w5 == 0.0, msg="5 in: \{Repr(dense[0])}")
   // (left at 40: as it was the moment before, then going from there)
   assert_eq(dense[2], dense[1], msg="left at 40: from where it was")
   // (going: its words first, as its ground stays)
-  assert_true(dense[3].1 < dense[2].1 && dense[3].0 == dense[2].0, msg="going: its words less at 60 \{dense}")
+  assert_true(dense[3].1 < dense[2].1 && dense[3].0 == dense[2].0, msg="going: its words less at 60 \{Repr(dense)}")
   // (back at 80: from where it was going, no jump)
   assert_eq(dense[5], dense[4], msg="back at 80: from where it was")
   // (whole at last, its words too)
-  assert_true(dense[7].0 == 1.0 && dense[7].1 > 0.0, msg="whole at 400: \{dense}")
+  assert_true(dense[7].0 == 1.0 && dense[7].1 > 0.0, msg="whole at 400: \{Repr(dense)}")
 }
 
 ///|
@@ -609,7 +609,7 @@ fn tip_drawn_turns(which : String) -> Array[String] raise {
     let mut best = ""
     let mut most = 0.0
     for line in t.drawlist().split("\n") {
-      let f = line.split(" ").map(fn(v) { v.to_string() }).to_array()
+      let f = line.split(" ").map(fn(v) { v.to_owned() }).to_array()
       if f.length() < 21 || f[0] != "i" || f[6] != "0" {
         continue
       }
@@ -629,18 +629,18 @@ fn tip_drawn_turns(which : String) -> Array[String] raise {
     }
   }
   let out = []
-  t.move(cx, cy)
+  t.move_to(cx, cy)
   t.run_for(tip_delay_ms + 400.0)
   out.push(look("whole"))
-  t.move(380.0, 190.0)
+  t.move_to(380.0, 190.0)
   t.run_for(@kit.pop_out_ms / 2.0)
   out.push(look("half way gone"))
-  t.move(cx, cy)
+  t.move_to(cx, cy)
   t.run_for(a_moment_ms)
   out.push(look("back on it a moment"))
   t.run_for(tip_settled_ms)
   out.push(look("whole again"))
-  t.move(380.0, 190.0)
+  t.move_to(380.0, 190.0)
   t.run_for(@kit.pop_out_ms * 0.75)
   out.push(look("most of the way gone"))
   out
@@ -650,9 +650,9 @@ fn tip_drawn_turns(which : String) -> Array[String] raise {
 test "a tip going as kit's goes, drawn smaller as it fades about its edge toward its tool (pop_out), whole as it comes back from wherever it was turned: where and how big it is drawn at each turn, as the old one's" {
   let old = tip_drawn_turns("old")
   let new = tip_drawn_turns("new")
-  assert_eq(new, old, msg="new \{new} old \{old}")
+  assert_eq(new, old, msg="new \{Repr(new)} old \{Repr(old)}")
   // (going, smaller than whole: the scale itself, not only the fade)
-  assert_true(new[1] != new[0], msg="half way gone as big as whole: \{new}")
+  assert_true(new[1] != new[0], msg="half way gone as big as whole: \{Repr(new)}")
 }
 
 ///|
@@ -661,7 +661,7 @@ test "a tip going as kit's goes, drawn smaller as it fades about its edge toward
 /// that, and how many times it was pressed.
 fn finger_held_tip(wait : Double, then_press : Bool) -> (Bool, Bool, Bool, Int) raise {
   let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   // (a touch screen's app: the hand a finger's)
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), pressed, platform=1)
   let shown = fn() { t.semantics().any(fn(s) { s.role == Tooltip && s.label == "复制 new" && !s.hidden }) }
@@ -685,7 +685,7 @@ fn finger_held_tip(wait : Double, then_press : Bool) -> (Bool, Bool, Bool, Int) 
 ///|
 test "a tool as a node's tip held open by a finger, as kit's tooltip: shown once held long_press_ms, the press then no tap; on a while after it is let go, gone tooltip_lifted_ms after, or at the next press wherever it lands" {
   let (held, lifted, later, pressed) = finger_held_tip(@kit.tooltip_lifted_ms / 2.0, false)
-  assert_eq((held, lifted, later, pressed), (true, true, true, 0), msg="held, let go, half its while after: still: \{(held, lifted, later, pressed)}")
+  assert_eq((held, lifted, later, pressed), (true, true, true, 0), msg="held, let go, half its while after: still: \{Repr((held, lifted, later, pressed))}")
   let (_, _, gone, _) = finger_held_tip(@kit.tooltip_lifted_ms + @kit.pop_out_ms * 2.0, false)
   assert_true(!gone, msg="its while over: gone")
   let (_, _, pressed_off, _) = finger_held_tip(@kit.pop_out_ms * 2.0, true)
@@ -693,32 +693,41 @@ test "a tool as a node's tip held open by a finger, as kit's tooltip: shown once
 }
 
 ///|
-/// Tool "复制 new" pressed 1 in from its right edge (`platform`: 0 a mouse's, 1 a touch screen's), moved `out` points
-/// right, let go there; held `hold` ms first: how many times it was pressed.
-fn let_go_beside(platform : Int, out : Double, hold? : Double = 0.0) -> Int raise {
+/// Tool "复制 new" (drawn tool_side across) pressed 1 in from its right edge (`platform`: 0 a mouse's, 1 a touch
+/// screen's), moved right to `past` points past that edge, let go there (`past` -1: let go where it went down); held
+/// `hold` ms first: how many times it was pressed.
+fn let_go_past(platform : Int, past : Double, hold? : Double = 0.0) -> Int raise {
   let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
-  let pressed : Map[String, Int] = {}
+  let pressed : Map[String, Int] = Map([])
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), pressed, platform~)
   let n = t.get(Button, label="复制 new")
-  let (x, y) = (n.rect.0 + n.rect.2 - 1.0, n.rect.1 + 16.0)
-  t.touch(0, x, y)
+  assert_eq(n.rect.2, tool_side, msg="the tool drawn tool_side across")
+  let (edge, y) = (n.rect.0 + n.rect.2, n.rect.1 + 16.0)
+  t.touch(0, edge - 1.0, y)
   if hold > 0.0 {
     t.run_for(hold)
   }
-  t.touch(1, x + out, y)
-  t.touch(2, x + out, y)
+  t.touch(1, edge + past, y)
+  t.touch(2, edge + past, y)
   t.draw()
   pressed.get("new").unwrap_or(0)
 }
 
 ///|
-test "a tool as a node pressed only as it is let go on it: from inside its edge moved out a little and let go, no press, by a mouse or a finger; let go where it went down, a press; a mouse held past long_press_ms, a press let go on it, none moved off it" {
-  for p in [0, 1] {
-    assert_eq(let_go_beside(p, 3.0), 0, msg="platform \{p}: let go beside it")
-    assert_eq(let_go_beside(p, 0.0), 1, msg="platform \{p}: let go on it")
+test "a tool as a node pressed only as it is let go on it, its room round it its own: from inside its edge moved out within its room (a mouse's 36 across, a finger's 44) and let go, a press; moved out of its room, none; let go where it went down, a press; a mouse held past long_press_ms, a press let go on it, none moved off it" {
+  // (what a press reaches past each edge of it: half of what its room is wider than it is drawn, the rule's numbers
+  // written here, not asked of what works the room out)
+  for pr in [(0, 36.0), (1, 44.0)] {
+    let (p, room) = pr
+    let reach = (room - tool_side) / 2.0
+    assert_true(reach >= 2.0, msg="platform \{p}: drawn smaller than its room, \{reach} to reach past its edge")
+    assert_eq(let_go_past(p, reach - 1.0), 1, msg="platform \{p}: let go past its edge, in its room")
+    assert_eq(let_go_past(p, reach + 1.0), 0, msg="platform \{p}: let go out of its room")
+    assert_eq(let_go_past(p, -1.0), 1, msg="platform \{p}: let go on it")
   }
-  assert_eq(let_go_beside(0, 10.0, hold=@ui.long_press_ms + 50.0), 0, msg="a mouse held, let go off it")
-  assert_eq(let_go_beside(0, 0.0, hold=@ui.long_press_ms + 50.0), 1, msg="a mouse held, let go on it")
+  assert_eq(let_go_past(0, 9.0, hold=@ui.long_press_ms + 50.0), 0, msg="a mouse held, let go off it")
+  assert_eq(let_go_past(0, -1.0, hold=@ui.long_press_ms + 50.0), 1, msg="a mouse held, let go on it")
+  assert_eq(let_go_past(0, 1.0, hold=@ui.long_press_ms + 50.0), 1, msg="a mouse held, let go in its room")
 }
 
 ///|
@@ -744,7 +753,7 @@ fn held_then(then : (@ui.Tester, @signals.Signal[ToolSaid], Double, Double) -> U
 ///|
 test "a tool as a node's tip a finger held open: called off by the system, gone then, none of it kept; the tool taken from the hand (unable), gone, not shown again as it can be pressed again; Escape, gone" {
   let off = held_then(fn(t, _, x, y) { t.touch(3, x, y) }, fn(_, _) {  })
-  assert_eq(off, (true, true, true), msg="called off: \{off}")
+  assert_eq(off, (true, true, true), msg="called off: \{Repr(off)}")
   let unable = held_then(
     fn(_, s, _, _) { s.set({ icon: "copy", label: "复制", on: false, disabled: true }) },
     fn(t, s) {
@@ -752,13 +761,13 @@ test "a tool as a node's tip a finger held open: called off by the system, gone 
       t.draw()
     },
   )
-  assert_eq(unable, (true, true, true), msg="unable, then able again: \{unable}")
+  assert_eq(unable, (true, true, true), msg="unable, then able again: \{Repr(unable)}")
   let escaped = held_then(fn(t, _, x, y) {
     t.touch(2, x, y)
     t.run_for(a_moment_ms)
     t.key(@ui.key_escape)
   }, fn(_, _) {  })
-  assert_eq(escaped, (true, true, true), msg="let go, Escape: \{escaped}")
+  assert_eq(escaped, (true, true, true), msg="let go, Escape: \{Repr(escaped)}")
 }
 
 ///|

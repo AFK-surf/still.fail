@@ -4,7 +4,7 @@
 
 ///|
 test "07-draft-restart" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("draft-restart"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
@@ -17,7 +17,7 @@ test "07-draft-restart" {
     // (the core told as it changed: composer.text)
     f.answered("composer.text", 1)
     // the bar moved by what this did (the field focused, the chat left) at rest
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

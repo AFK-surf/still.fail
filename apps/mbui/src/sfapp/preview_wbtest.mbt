@@ -61,15 +61,15 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   // 600 × 400 in 390 × 844 with 12 round it: (390 - 24) / 600
   assert_true((shown_scale(t, v.zoom) - 366.0 / 600.0).abs() < 0.001)
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   // (its glide: @ui.move_most_ms from the tap)
   t.run_for(@ui.move_most_ms)
   assert_true((shown_scale(t, v.zoom) - 1.525).abs() < 0.01)
   // (the next two taps a double tap of their own)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   // (its glide: @ui.move_most_ms from the tap)
   t.run_for(@ui.move_most_ms)
@@ -114,12 +114,49 @@ test "the picture held by a finger, Small or Medium: its one menu, 保存到相�
     t.run_for(@ui.long_press_ms + 20.0)
     t.release(w / 2.0, 422.0)
     t.draw()
-    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(@sf.presented_rest() - t.time())
     // (its sheet measures what it holds as it first comes, the frame built again then: that build sees no hold)
     assert_eq(@sf.last_presented() - before, 1, msg="\{w} wide")
     assert_true(t.reachable("保存到相册").length() > 0, msg="\{w} wide")
     assert_true(t.reachable("复制图片").length() == 0, msg="\{w} wide")
   }
+}
+
+///|
+test "分享 on a phone: in the bar beside download and beside 保存到相册 in the picture's held menu, the picture handed whole to the system's share sheet; none on the Mac" {
+  for platform in [1, 2] {
+    let t = preview_tester("image", platform~)
+    assert_true(t.query(Button, label=@sf.t("web-main.preview.download")) is Some(_), msg="platform \{platform}")
+    t.click(Button, label="分享")
+    let shared = t.shared_out()
+    assert_eq(shared.length(), 1, msg="platform \{platform}")
+    assert_eq(shared[0].1, "界面草图.png")
+    assert_true(shared[0].3.length() > 0)
+    // held by a finger: its menu has it beside 保存到相册
+    t.press_at(195.0, 422.0)
+    t.run_for(@ui.long_press_ms + 20.0)
+    t.release(195.0, 422.0)
+    t.draw()
+    t.run_for(@sf.presented_rest() - t.time())
+    assert_true(t.reachable("保存到相册").length() > 0)
+    t.tap_text("分享")
+    t.frame()
+    assert_eq(t.shared_out().length(), 2, msg="platform \{platform}")
+  }
+  // the Mac downloads and copies; its share sheet is not offered here
+  let t = preview_tester("image")
+  assert_true(t.query(Button, label="分享") is None)
+}
+
+///|
+test "分享 on a phone of a file told of: read whole through the core first, then handed to the share sheet" {
+  let t = preview_tester("none", platform=2)
+  assert_true(t.find("下载") is Some(_))
+  t.tap_text("分享")
+  t.frame()
+  let shared = t.shared_out()
+  assert_eq(shared.length(), 1)
+  assert_true(shared[0].3.length() > 0)
 }
 
 ///|
@@ -154,7 +191,7 @@ test "a video plays in the one player (@sf.player_view), its bytes read through 
   assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,33.333,66.667\"}}"))
   t.draw()
   assert_true(t.find(" / 3 帧") is Some(_))
-  let v = viewer.get().unwrap()
+  viewer.get().unwrap() |> ignore
   t.back()
   assert_true(viewer.get() is None)
   // faded out (pv_fade_ms from when it set out), its view closed
@@ -281,8 +318,8 @@ test "a video in the chat says how long it is in its foot's start corner, as its
   let (bw, bh, _) = @sfpages.image_box(a, @sfpages.video_least)
   let h = bh * 300.0 / bw
   let pic = t.drawn_images().iter().find_first(fn(i) { (i[2] - 300.0).abs() < 0.5 && (i[3] - h).abs() < 0.5 }).unwrap()
-  assert_true(lx > pic[0] && lx < pic[0] + 300.0 / 3.0, msg="\{lx} \{pic}")
-  assert_true(ly > pic[1] + h * 2.0 / 3.0 && ly < pic[1] + h, msg="\{ly} \{pic}")
+  assert_true(lx > pic[0] && lx < pic[0] + 300.0 / 3.0, msg="\{lx} \{Repr(pic)}")
+  assert_true(ly > pic[1] + h * 2.0 / 3.0 && ly < pic[1] + h, msg="\{ly} \{Repr(pic)}")
   assert_true(t.find("一段很长") is None)
   assert_eq(t.squeeze_faults(), [])
 }
@@ -332,12 +369,12 @@ test "a video's timeline dragged: paused, the player told a finger is on it, a s
   assert_true(t.views().contains("control 1 9 1"))
   assert_eq(seeks(), ["control 1 3 200"])
   // on within that frame: nothing more asked
-  t.move(x0 + span * 0.27, mid)
+  t.move_to(x0 + span * 0.27, mid)
   assert_eq(seeks().length(), 1)
   // to three quarters: the frame there (700 ms), the head and the frame's count there before the player says it is
   // (it says the seek it is taking up: the first, still)
   t.set_player(1, position=200.0)
-  t.move(x0 + span * 0.75, mid)
+  t.move_to(x0 + span * 0.75, mid)
   assert_eq(seeks(), ["control 1 3 200", "control 1 3 700"])
   assert_true(t.find("8 / 10 帧") is Some(_))
   assert_true(
@@ -395,9 +432,10 @@ test "a video's ‹ and › go to a frame's very start, a frame on from the one 
 ///|
 /// A chat's video (16:9, its still the station's poster) alone on a page, the viewer over it once it is tapped open;
 /// how long it is as its message says, `duration` (none: not said).
-fn video_in_chat(duration? : Double = 0.0) -> @ui.Tester {
+fn video_in_chat(duration? : Double = 0.0, still? : Bool = true) -> @ui.Tester {
   new_run()
-  let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { fixture_file(name) } }
+  // (no still: the station's not come yet, its thumbnail black with its play mark alone)
+  let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { if still { fixture_file(name) } else { "" } } }
   let a : Attachment = {
     name: "演示录屏.mp4",
     path: "uploads/fx/演示录屏.mp4",
@@ -433,7 +471,7 @@ fn video_in_chat(duration? : Double = 0.0) -> @ui.Tester {
 /// The bytes in hex (a host's grabbed frame as a run's line says it: Tester::view_said).
 fn hex_bytes(b : Bytes) -> String {
   let digits = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for x in b {
     out.write_char(digits.get_char(x.to_int() >> 4).unwrap())
     out.write_char(digits.get_char(x.to_int() & 15).unwrap())
@@ -701,14 +739,14 @@ test "a text shown as it comes: its lines whole however its parts cut them, a ch
   while at < log.length() {
     let to = if at + 1000 < log.length() { at + 1000 } else { log.length() }
     f.got = to.to_double()
-    f.take(log[at:to].to_bytes())
+    f.take(log[at:to].to_owned())
     at = to
   }
   assert_eq(f.lines.length(), 12000)
   assert_eq(f.lines[0], "[build] 第 1 行：编译 src/module_1.mbt 完成，用时 1 ms")
   assert_eq(f.lines[11999], "[build] 第 12000 行：编译 src/module_69.mbt 完成，用时 1 ms")
   assert_eq(f.tail, "")
-  assert_eq(@sfbase.utf8_whole(@utf8.encode("行")[0:2].to_bytes()), 0)
+  assert_eq(@sfbase.utf8_whole(@utf8.encode("行")[0:2].to_owned()), 0)
   assert_eq(@sfbase.utf8_whole(@utf8.encode("a行")), 4)
 }
 
@@ -765,7 +803,7 @@ test "a swipe past a fifth of the stage goes to the next; a short one comes back
 ///|
 test "a swipe carries the picture under the finger from where it went down; a second finger takes it back, not left between two" {
   let t = preview_tester("step")
-  let (x, y, w, h) = viewer.get().unwrap().zoom.rect().unwrap()
+  let (x, y, w, h) = viewer.get().unwrap().zoom.rect(t.ctx()).unwrap()
   let at = fn(dx : Double) {
     drawn_pictures(t).any(fn(d) {
       (d.0 - (x + dx)).abs() < 0.001 && (d.1 - y).abs() < 0.001 && (d.2 - w).abs() < 0.001 && (d.3 - h).abs() < 0.001
@@ -788,7 +826,7 @@ test "a swipe carries the picture under the finger from where it went down; a se
 test "a step keeps the bars as they were: hidden by a tap, the next comes without them" {
   let t = preview_tester("step")
   t.tap(195.0, 422.0)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   assert_true(!viewer.get().unwrap().awake)
   t.drag(300.0, 422.0, 100.0, 422.0)
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
@@ -880,10 +918,10 @@ test "the frame a swipe is let go in shows both pictures where the finger left t
 /// to go either way across), the next taps a double tap of their own.
 fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   t.run_for(@ui.move_most_ms)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   let z = viewer.get().unwrap().zoom
   assert_true(z.zoomed_at(t.time()))
   z
@@ -913,10 +951,10 @@ test "zoomed in, let go moving it goes on that way, slowing, to its edge; a fing
   // flung harder: it stops at its edge (its right edge at the stage's), when its way said it ends
   t.drag(250.0, 422.0, 130.0, 422.0, steps=3)
   t.run_for(z.fling_ends() - t.time())
-  let (x, _, w, _) = z.rect().unwrap()
+  let (x, _, w, _) = z.rect(t.ctx()).unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   t.run_for(@kit.zoom_fling_ms)
-  assert_true((z.rect().unwrap().0 - x).abs() < 0.001)
+  assert_true((z.rect(t.ctx()).unwrap().0 - x).abs() < 0.001)
 }
 
 ///|
@@ -927,7 +965,7 @@ test "zoomed in, dragged on past its edge the next comes in; a quick move that c
   t.drag(385.0, 422.0, 5.0, 422.0, steps=4)
   t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
-  let (x, _, w, _) = z.rect().unwrap()
+  let (x, _, w, _) = z.rect(t.ctx()).unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   // from its edge, a short quick move on: the next
   t.drag(300.0, 422.0, 260.0, 422.0, steps=2)
@@ -941,7 +979,7 @@ test "zoomed in, dragged slowly far past its edge it stops there, nothing beside
   t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
   t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
-  let (x, _, w, _) = z.rect().unwrap()
+  let (x, _, w, _) = z.rect(t.ctx()).unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
@@ -953,7 +991,7 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
   marks_start()
   t.draw()
   let v = viewer.get().unwrap()
-  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let (x, y, w, _) = v.zoom.rect(t.ctx()).unwrap()
   let k = w / v.zoom.nw
   // from (100, 100) to (300, 200) in the picture's pixels
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
@@ -994,40 +1032,46 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   let at = t.locate("img:compare.png")
   assert_true(at.length() > 0)
   let (x, y) = at[0]
+  // (its thumbnail at rest: where it is drawn)
+  let (th, _) = pic_at(t, x, y).unwrap()
+  let tc = (th.0 + th.2 / 2.0, th.1 + th.3 / 2.0)
   t.tap(x, y)
   let v = viewer.get().unwrap()
   assert_eq(v.file.name, "compare.png")
-  assert_true(v.flies && !v.fly_back)
+  assert_true(pic_flies(t, v))
   // grown in: @ui.move_most_ms from the tap
   t.run_for(@ui.move_most_ms)
-  assert_true(!v.flies)
-  // where its thumbnail is in the chat under it
-  let th = thumb_of(t.ctx(), v.thumb_id()).unwrap()
-  let tc = (th.x + th.w / 2.0, th.y + th.h / 2.0)
+  assert_true(!pic_flies(t, v))
   t.back()
   // closed as back is taken: only drawn, flying back into its thumbnail
   assert_true(viewer.get() is None)
   assert_true(pv_leaving.get() is Some(_))
-  assert_true(v.flies && v.fly_back)
-  let to = v.zoom.rect().unwrap()
+  assert_true(pic_flies(t, v))
   // each frame of the way back the picture is drawn where its flight is, nearer the thumbnail than the frame before,
   // the last one on it
   let mut last = 1.0e9
   let mut frames = 0
-  // its way back: @ui.move_most_ms from back
-  let end = t.time() + @ui.move_most_ms
+  // its way back: as long as its flight
+  let end = pic_flight_end(t, v)
   while t.time() < end {
     t.frame()
-    let p = v.flying()
-    let ex = th.x + (to.0 - th.x) * p + (th.w + (to.2 - th.w) * p) / 2.0
-    let ey = th.y + (to.1 - th.y) * p + (th.h + (to.3 - th.h) * p) / 2.0
-    let drawn = t
-      .drawn_images()
-      .iter()
-      .any(fn(i) { (i[0] + i[2] / 2.0 - ex).abs() < 0.5 && (i[1] + i[3] / 2.0 - ey).abs() < 0.5 && i[2] > th.w / 2.0 })
-    assert_true(drawn)
-    let d = (ex - tc.0).abs() + (ey - tc.1).abs()
-    assert_true(d <= last)
+    let d = match pic_flight(t, v) {
+      Some(((fx, fy, fw, fh), _)) => {
+        // (drawn there, as big as it flies)
+        let drawn = t
+          .drawn_images()
+          .iter()
+          .any(fn(i) { (i[0] + i[2] / 2.0 - (fx + fw / 2.0)).abs() < 0.5 && (i[1] + i[3] / 2.0 - (fy + fh / 2.0)).abs() < 0.5 && i[2] > th.2 / 2.0 })
+        assert_true(drawn)
+        (fx + fw / 2.0 - tc.0).abs() + (fy + fh / 2.0 - tc.1).abs()
+      }
+      // (landed: in its thumbnail)
+      None => {
+        let (lx, ly, lw, lh) = pic_at(t, tc.0, tc.1).unwrap().0
+        (lx + lw / 2.0 - tc.0).abs() + (ly + lh / 2.0 - tc.1).abs()
+      }
+    }
+    assert_true(d <= last + 0.001)
     last = d
     frames += 1
   }
@@ -1084,7 +1128,7 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   marks_start()
   t.draw()
   let v = viewer.get().unwrap()
-  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let (x, y, w, _) = v.zoom.rect(t.ctx()).unwrap()
   let k = w / v.zoom.nw
   // a line drawn by hand first, then a box from (100, 100) to (300, 200) in the picture's pixels
   marking.tool = Pen
@@ -1167,13 +1211,13 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   marks_start()
   t.draw()
   let v = viewer.get().unwrap()
-  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let (x, y, w, _) = v.zoom.rect(t.ctx()).unwrap()
   let k = w / v.zoom.nw
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
   t.run_for(note_pop_ms)
   t.type_text("这里对齐")
   let tick = t.reachable("icon:check")
-  assert_eq(tick.length(), 1, msg="完成 where a finger reaches it: \{tick}")
+  assert_eq(tick.length(), 1, msg="完成 where a finger reaches it: \{Repr(tick)}")
   t.tap(tick[0].0, tick[0].1)
   t.draw()
   let (px, py, pw, ph) = t.get(Button, label=pv("android-chat.preview.put")).rect
@@ -1249,10 +1293,10 @@ test "a picture said not to decode: why, its glyphs drawn in the theme's muted i
   }
   let said = pv("android-chat.file.image.failed")
   let at = t.words().filter(fn(w) { w.0 == said })
-  assert_eq(at.length(), 1, msg="said once: \{at}")
+  assert_eq(at.length(), 1, msg="said once: \{Repr(at)}")
   let (_, x, y, w, h, _) = at[0]
   let inks = t.drawn_glyphs().filter(fn(g) { g.0 >= x - 1.0 && g.0 <= x + w + 1.0 && g.1 >= y - 1.0 && g.1 <= y + h + 1.0 }).map(fn(g) { g.2 })
   assert_true(inks.length() > 0, msg="its glyphs drawn where it is: \{x} \{y} \{w} \{h}")
   let muted = @sf.theme().p.muted
-  assert_true(inks.iter().all(fn(i) { i == muted }), msg="each in the theme's muted ink \{muted}: \{inks}")
+  assert_true(inks.iter().all(fn(i) { i == muted }), msg="each in the theme's muted ink \{muted}: \{Repr(inks)}")
 }

@@ -70,6 +70,38 @@ test("what is kept is bounded by age, number and size, and what is let go cannot
   assert.deepEqual(ids(big, `1f2e3d4c.${big.state().forgotten}`), Array.from({ length: 40 - big.state().forgotten }, (_, i) => big.state().forgotten + 1 + i));
 });
 
+test("a log told what it keeps is bounded by that, a handed-over one too, and by the station's in what it is not told", () => {
+  assert.deepEqual(new EventLog<string>("1f2e3d4c").keeps, { ms: KEPT_MS, most: KEPT_MOST, bytes: KEPT_BYTES });
+  // By age: a minute.
+  const old = new EventLog<string>("1f2e3d4c", { ms: 60_000 });
+  assert.deepEqual(old.keeps, { ms: 60_000, most: KEPT_MOST, bytes: KEPT_BYTES });
+  old.append("message", { id: 1 }, "all", 0);
+  old.append("message", { id: 2 }, "all", 1_000);
+  old.append("message", { id: 3 }, "all", 60_000);
+  assert.deepEqual(ids(old, "1f2e3d4c.0"), [1, 2, 3], "a minute old is kept");
+  old.append("message", { id: 4 }, "all", 60_500);
+  assert.equal(old.has("1f2e3d4c.0"), false, "1 came after it, and is let go");
+  assert.deepEqual(ids(old, "1f2e3d4c.1"), [2, 3, 4]);
+  // By number: three.
+  const few = new EventLog<string>("1f2e3d4c", { most: 3 });
+  for (let i = 0; i < 5; i++) few.append("message", { id: i }, "all", 0);
+  assert.deepEqual([few.state().kept, few.state().forgotten], [3, 2]);
+  assert.deepEqual(ids(few, "1f2e3d4c.2"), [3, 4, 5]);
+  // By size: what two of these take, and not three.
+  const one = few.after("1f2e3d4c.4")[0]!.text.length;
+  const small = new EventLog<string>("1f2e3d4c", { bytes: 2 * one });
+  for (let i = 0; i < 5; i++) small.append("message", { id: i }, "all", 0);
+  assert.deepEqual(ids(small, "1f2e3d4c.3"), [4, 5]);
+  assert.equal(small.has("1f2e3d4c.2"), false);
+  // Handed over: taken up by what the next one keeps, and kept so from then on.
+  const next = EventLog.from<string>(old.kept(), 61_500, { ms: 60_000, most: 2 });
+  assert.deepEqual(next.keeps, { ms: 60_000, most: 2, bytes: KEPT_BYTES });
+  assert.deepEqual(ids(next, "1f2e3d4c.2"), [3, 4], "2 is let go there");
+  next.append("message", { id: 5 }, "all", 61_500);
+  assert.deepEqual(ids(next, "1f2e3d4c.3"), [4, 5]);
+  assert.equal(next.has("1f2e3d4c.2"), false);
+});
+
 test("let go of whole, nothing before can be gone on from, and it goes on numbering", () => {
   const log = new EventLog<string>("1f2e3d4c");
   log.append("thread", { id: 1 }, "all", 0);

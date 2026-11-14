@@ -26,8 +26,8 @@ export type Offer = { id: string; label?: string | undefined; group?: string | u
 type Named = { group: Group; label: (o: Offer, t: Say) => string; words?: string; typed?: true };
 
 /// The keys' actions never listed, however they are offered: ⌘K itself, Esc (which closes the list), and the moves
-/// only worth a key (back, forward, the chat above or below, the composer, the latest message).
-export const UNLISTED = new Set(["chat.switch", "panel.close", "nav.back", "nav.forward", "chat.prev", "chat.next", "composer.focus", "chat.latest"]);
+/// only worth a key (back, forward, the chat above or below, the composer, the latest message, a person's before or after).
+export const UNLISTED = new Set(["chat.switch", "panel.close", "nav.back", "nav.forward", "chat.prev", "chat.next", "composer.focus", "chat.latest", "chat.said.prev", "chat.said.next"]);
 
 /// Whether a keymap's group is one of the list's parts (the files' keys work in a folder only: not listed).
 const listedGroup = (g: string): g is Group => (GROUPS as readonly string[]).includes(g);

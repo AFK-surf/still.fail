@@ -7,31 +7,31 @@ test("one small task can run beside a busy build, but still waits for critical m
   const build = { id: "build", screen: false };
   const picture = { id: "picture", session: "a", queuedAt: 1, screen: false, small: true };
   const next = { id: "next", session: "b", queuedAt: 2, screen: false, small: true };
-  const room = { busy: 1, pressure: "normal" as Pressure };
+  const room = { pressure: "normal" as Pressure };
   const never = () => null;
-  assert.deepEqual(pick([picture], [build], room, 0, 0, never), { start: picture });
-  assert.deepEqual(pick([next], [build, { id: "picture", screen: false, small: true }], room, 0, 0, never), { wait: "busy", cause: "small" });
-  assert.deepEqual(pick([picture], [build], { ...room, pressure: "critical" }, 0, 0, never), { wait: "memory" });
+  assert.deepEqual(pick([picture], [build], room, never), { start: picture });
+  assert.deepEqual(pick([next], [build, { id: "picture", screen: false, small: true }], room, never), { wait: "small" });
+  assert.deepEqual(pick([picture], [build], { ...room, pressure: "critical" }, never), { wait: "memory" });
 });
 
 test("under high memory pressure a small task still starts, and only it (#4355)", () => {
   const build = { id: "build", screen: false };
   const look = { id: "look", session: "a", queuedAt: 2, screen: false, small: true };
   const other = { id: "other", session: "b", queuedAt: 1, screen: false };
-  const high = { busy: 0, pressure: "high" as Pressure };
+  const high = { pressure: "high" as Pressure };
   const never = () => null;
-  assert.deepEqual(pick([other, look], [build], high, 0, 0, never), { start: look });
-  assert.deepEqual(pick([other], [], high, 0, null, never), { wait: "memory" });
-  assert.deepEqual(pick([look], [build, { id: "x", screen: false, small: true }], high, 0, 0, never), { wait: "busy", cause: "small" });
+  assert.deepEqual(pick([other, look], [build], high, never), { start: look });
+  assert.deepEqual(pick([other], [], high, never), { wait: "memory" });
+  assert.deepEqual(pick([look], [build, { id: "x", screen: false, small: true }], high, never), { wait: "small" });
 });
 
 test("small tasks are fair between sessions and do not hold up a ready ordinary task", () => {
   const a = { id: "a", session: "a", queuedAt: 1, screen: false, small: true };
   const b = { id: "b", session: "b", queuedAt: 2, screen: false, small: true };
   const normal = { id: "normal", session: "a", queuedAt: 3, screen: false };
-  const room = { busy: 0, pressure: "normal" as Pressure };
+  const room = { pressure: "normal" as Pressure };
   const last = (session: string) => session === "a" ? 10 : null;
-  assert.deepEqual(pick([a, b], [], room, 20, null, last), { start: b });
-  assert.deepEqual(pick([a, normal], [{ id: "other", screen: false, small: true }], room, 20, null, last), { start: normal });
-  assert.deepEqual(pick([a], [{ id: "other", screen: false, small: true }], { ...room, pressure: "critical" }, 20, null, last), { wait: "memory" });
+  assert.deepEqual(pick([a, b], [], room, last), { start: b });
+  assert.deepEqual(pick([a, normal], [{ id: "other", screen: false, small: true }], room, last), { start: normal });
+  assert.deepEqual(pick([a], [{ id: "other", screen: false, small: true }], { ...room, pressure: "critical" }, last), { wait: "memory" });
 });

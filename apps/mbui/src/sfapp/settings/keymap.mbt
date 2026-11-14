@@ -5,14 +5,13 @@
 
 ///|
 /// The action whose new keys the next key press is ("" none): the page's, told as it changes (its keys' button says it
-/// records; what else a key does stands aside meanwhile: pressed, window_zoom's).
+/// records; what else a key does stands aside meanwhile: the keymap's, keymap_of, and window_zoom's).
 // kept across runs: put back as a run begins (keymap_reset)
 pub let keys_recording : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 fn keymap_reset() -> Unit {
   keys_recording.set("")
-  action_asked.set("")
 }
 
 ///|
@@ -75,7 +74,7 @@ let key_names : Array[(String, Int)] = [
 ///|
 /// A binding (Shift+Mod+H) as the key's code and the modifiers held, or None for one this app cannot have.
 fn binding_key(binding : String) -> (Int, Int)? {
-  let parts = binding.split("+").map(fn(p) { p.to_string() }).collect()
+  let parts = binding.split("+").map(fn(p) { p.to_owned() }).collect()
   // (a plus itself is no binding: the last part is always the key)
   let key = match parts.last() {
     Some(k) => k
@@ -150,41 +149,82 @@ pub fn binding_of(code : Int, mods : Int) -> String? {
 }
 
 ///|
-/// Whether one of `action`'s keys came since the last frame (with `in_field`, one a focused field took too); none while
-/// the 快捷键 page records new ones.
-pub fn action_pressed(c : @ui.Ctx, prefs : Json?, action : String, in_field? : Bool = false) -> Bool {
-  // chosen from the Mac's menu bar since the last frame: as if one of its keys was
-  if action_asked.get() == action {
-    return true
+/// The window's keymap (mbui's view keymap.mbt) as the core's prefs say it: each action's keys here, where it works by
+/// its group (anywhere; `Chat` in a chat; `Files` in a folder of the files) and with the cursor in a field by its
+/// `typing` (always; never: `!Field`; with the field empty: `!Field || FieldEmpty`); then the app's own, never changed
+/// (Escape the frame's `frame.escape`, a mouse's forward button `nav.forward`, ⌃1 … ⌃9 on a Mac and Alt elsewhere
+/// `workspace.1` … `workspace.9`, a player's, a reader's and the files' keys where they are up: @sf.player_bindings,
+/// reader_bindings, files_bindings). None while the 快捷键 page records new keys: the next key is its.
+pub fn keymap_of(prefs : Json?) -> @view.Keymap {
+  if keys_recording.get() != "" {
+    return @view.Keymap::new([])
   }
-  // (no key came: none of its keys did, its bindings not looked up and read)
-  if @signals.untracked(fn() { keys_recording.get() }) != "" || !c.keys_came() {
-    return false
+  let bindings : Array[@view.Binding] = []
+  let stroke = fn(code, mods) -> @view.Stroke { { code, mods } }
+  bindings.push({ keys: [stroke(@ui.key_escape, 0)], action: "frame.escape", when: Always })
+  bindings.push({ keys: [stroke(@ui.key_forward, 0)], action: "nav.forward", when: Always })
+  let held = if @ui.keys_system() == 0 { @ui.mod_ctrl } else { @ui.mod_alt }
+  for k in 0..<9 {
+    bindings.push({
+      keys: [stroke(@ui.key_of_char((49 + k).unsafe_to_char()), held)],
+      action: "workspace.\{k + 1}",
+      when: Always,
+    })
   }
-  keys_of(prefs, action).iter().any(fn(b) {
-    match binding_key(b) {
-      Some((code, mods)) => c.key_pressed(code, mods~, in_field~)
-      None => false
-    }
+  // (a player's keys where one is up: its own, the library's, sf/player.mbt)
+  bindings.append(@sf.player_bindings())
+  // (a reader's where a text is read: sf/reader.mbt)
+  bindings.append(@sf.reader_bindings())
+  // (the files' own where they are: sfdesk's files.mbt)
+  bindings.append(files_bindings())
+  // (↓ ↑ in a chat's outline, with the cursor in its field too: the row the keys are at, sfpages' outline.mbt)
+  bindings.push({ keys: [stroke(@ui.key_code_down, 0)], action: "outline.down", when: In("Outline") })
+  bindings.push({ keys: [stroke(@ui.key_code_up, 0)], action: "outline.up", when: In("Outline") })
+  // (⇧Enter in ⌘F's bar, with the cursor in its field: the one before, sfpages' find_bar_node.mbt)
+  bindings.push({ keys: [stroke(@ui.key_code_enter, @ui.mod_shift_key)], action: "find.prev", when: In("Find") })
+  // (what a field offers as it is typed in, where it is open: sf's offers_node.mbt)
+  bindings.append(@sf.offers_bindings())
+  // (Escape where a search is up, with the cursor in a field too, or a picture's old viewer, not in a field: sfpages'
+  // search.mbt, sfbase's viewer.mbt)
+  bindings.push({ keys: [stroke(@ui.key_escape, 0)], action: "search.escape", when: In("Search") })
+  // (Enter where a message's sharing is asked, whatever has the focus under it: sfpages' outside.mbt)
+  bindings.push({ keys: [stroke(@ui.key_code_enter, 0)], action: "outside.yes", when: In("OutsideAsk") })
+  bindings.push({
+    keys: [stroke(@ui.key_escape, 0)],
+    action: "viewer.escape",
+    when: All([In("Viewer"), Not(In("Field"))]),
   })
+  for a in key_actions(prefs) {
+    let action = text(Some(a), "action")
+    let group : @view.KeyWhen = match text(Some(a), "group") {
+      "chat" => In("Chat")
+      "files" => In("Files")
+      _ => Always
+    }
+    let typing : @view.KeyWhen = match text(Some(a), "typing") {
+      "no" => Not(In("Field"))
+      "empty" => Any([Not(In("Field")), In("FieldEmpty")])
+      _ => Always
+    }
+    let when : @view.KeyWhen = match (group, typing) {
+      (Always, w) | (w, Always) => w
+      (g, w) => All([g, w])
+    }
+    for b in keys_of(prefs, action) {
+      match binding_key(b) {
+        Some((code, mods)) => bindings.push({ keys: [stroke(code, mods)], action, when })
+        None => ()
+      }
+    }
+  }
+  @view.Keymap::new(bindings)
 }
 
 ///|
-/// The action chosen from the Mac's menu bar since the last frame ("" none: the app's menu_bar.mbt), read by
-/// `action_pressed` as one of its keys: a signal, so that what reads it is built again as one is chosen, a part kept
-/// whatever else the frame builds anew too (a key pressed is the hand's, which builds those anew; a menu's item is not).
-let action_asked : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
-
-///|
-/// One of the menu bar's items chosen: `action` done by the frame after, as if one of its keys was pressed.
+/// One of the menu bar's items chosen: `action` done now by the node of the window's tree that does it (its keymap's
+/// actions: View::on_action, an old view's Ctx::on_action), as if one of its keys was pressed.
 pub fn ask_action(action : String) -> Unit {
-  action_asked.set(action)
-}
-
-///|
-/// The frame that read it built: asked no more.
-pub fn action_asked_done() -> Unit {
-  action_asked.set("")
+  @ui.view_action(action) |> ignore
 }
 
 ///|
@@ -211,4 +251,52 @@ pub fn workspace_keys(prefs : Json?) -> (String, String) {
 /// Whether keys can be changed here (the desktop app's).
 pub fn keys_changeable(prefs : Json?) -> Bool {
   flag(field(prefs, "keymap"), "changeable")
+}
+
+///|
+/// The composer's keys as the core says them (the keymap's `send`): none from a core before it.
+fn send_keys(prefs : Json?) -> Json? {
+  field(field(prefs, "keymap"), "send")
+}
+
+///|
+/// Whether ⌘Enter (Ctrl+Enter elsewhere) sends from the composer, Enter a new line (快捷键's choice, `sendKey`).
+pub fn sends_by_command(prefs : Json?) -> Bool {
+  text(send_keys(prefs), "by") == "mod"
+}
+
+///|
+/// The keys that send and make a new line from the composer, as shown (↩ and ⇧↩ from a core before the choice).
+pub fn send_lines(prefs : Json?) -> (String, String) {
+  let s = send_keys(prefs)
+  if s is None {
+    ("↩", "⇧↩")
+  } else {
+    (text(s, "send"), text(s, "newline"))
+  }
+}
+
+///|
+/// The files' keys, the app's own, never changed (sfdesk's files.mbt and what is open in it): in the files (`Files`),
+/// not with the cursor in a field, ⌘T (Ctrl elsewhere) a new tab, ⌃Tab or ⌘⇧] the next tab and ⌃⇧Tab or ⌘⇧[ the one
+/// before, ⌘⌥D the other side, ⌘⇧G a folder by its path (Finder's 前往文件夹).
+fn files_bindings() -> Array[@view.Binding] {
+  // (not with the cursor in a field, as before: those keys its)
+  let files : @view.KeyWhen = All([In("Files"), Not(In("Field"))])
+  let shift = @ui.mod_shift_key
+  let b = fn(code : Int, mods : Int, action : String, when : @view.KeyWhen) -> @view.Binding {
+    { keys: [{ code, mods }], action, when }
+  }
+  [
+    b(@ui.key_of_char('t'), mod_key(), "files.tab_new", files),
+    b(@ui.key_tab, @ui.mod_ctrl, "files.tab_next", files),
+    b(@ui.key_of_char(']'), mod_key() | shift, "files.tab_next", files),
+    b(@ui.key_tab, @ui.mod_ctrl | shift, "files.tab_back", files),
+    b(@ui.key_of_char('['), mod_key() | shift, "files.tab_back", files),
+    b(@ui.key_of_char('d'), @ui.mod_cmd | @ui.mod_alt, "files.split", files),
+    b(@ui.key_of_char('g'), @ui.mod_cmd | shift, "files.go_to", files),
+    // (↓ ↑ in 前往文件夹, with the cursor in its field: what is chosen under it, sfdesk's files_go.mbt)
+    b(@ui.key_code_down, 0, "files.go_to.down", In("GoTo")),
+    b(@ui.key_code_up, 0, "files.go_to.up", In("GoTo")),
+  ]
 }

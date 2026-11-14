@@ -299,7 +299,7 @@ test("a_marked_chats_read_ignores_changes_to_unmarked_rows", async () => {
   const runner = new Runner(host.time.clock);
   const data = new Data(host, runner, {
     owner: () => "s1",
-    derive: { tone: (row) => row.unread ? "done" : null, asks: () => false },
+    derive: { tone: (row) => row.unread ? "done" : null, asks: () => false, state: () => null, watched: () => false },
   });
   await run(data.open(["s1"]));
   data.set({ topic: "chatRows", station: "w/s" }, [{ id: "a", unread: false, title: "A" }, { id: "b", unread: true, title: "B" }]);

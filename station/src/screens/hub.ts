@@ -5,14 +5,14 @@ import { wall } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { type ChromePictures, picturesOf, toldOf } from "./sim-chrome.ts";
 import type { SimDebug } from "./sim-debug.ts";
-import { type ScreenAccess, type ScreenSource, type ScreenView, type Screens, type ViewOptions, makeScreens } from "./source.ts";
+import { type ScreenAccess, type ScreenBrowser, type ScreenSource, type ScreenView, type Screens, type ViewOptions, makeScreens } from "./source.ts";
 
 /// One view open now: whose, whether its input is taken, and how it is told its people changed. `device`: the member's
 /// device it came over (the credential's, so to be believed); `client`, `app`: the name and kind of app that device says
 /// it is (shown only; none from a client before them). `self`: the device's own main id as it says it, which its link's
 /// `device` is not on a link made for a LAN or a relay (only for it to know its own views). `agent`: an agent's own view (computer.ts). `end` and `watchOnly`:
-/// how a member elsewhere ends it or stops its input being taken, `by` naming them.
-export type Watcher = { name: string; control: boolean; tell(state: Record<string, unknown>): void; device?: string; self?: string; client?: string; app?: string; agent?: boolean; end?(by: string): void; watchOnly?(): void };
+/// how a member elsewhere ends it or stops its input being taken, `by` naming them (for `watchOnly`, who took it, if one did).
+export type Watcher = { name: string; control: boolean; tell(state: Record<string, unknown>): void; device?: string; self?: string; client?: string; app?: string; agent?: boolean; end?(by: string): void; watchOnly?(by?: string): void };
 
 /// One view as members are told of it: `id`, the hub's, to end it by; `at`,
 /// when it opened (ms).
@@ -84,10 +84,17 @@ export class ScreenHub implements Screens {
   readonly #listeners = new Set<() => void>();
   readonly #refreshers = new Set<() => Promise<void>>();
   readonly #stopping = new Set<() => void>();
+  #browser: ScreenBrowser | null = null;
 
   constructor(options: HubOptions = {}) {
     this.#o = options;
     this.#sources.watch(() => this.#changed());
+  }
+
+  setBrowser(browser: ScreenBrowser | null) {
+    if (this.#browser === browser) return;
+    this.#browser = browser;
+    this.#changed();
   }
 
   add(source: ScreenSource): () => void {
@@ -175,7 +182,11 @@ export class ScreenHub implements Screens {
 
   /// POST /admin/api/screens/<id>/views/<view>/watch: the view goes on, only looking.
   watchOnly(id: string, view: string): void {
-    const w = this.#viewOf(id, view);
+    this.#lookOnly(id, this.#viewOf(id, view));
+  }
+
+  /// `w` goes on only looking, its device held from driving again by itself for WATCH_HELD_MS; `by`: who took it.
+  #lookOnly(id: string, w: Watcher, by?: string): void {
     if (!w.control) return;
     w.control = false;
     if (w.device) {
@@ -183,7 +194,7 @@ export class ScreenHub implements Screens {
       for (const [key, until] of this.#held) if (until <= now) this.#held.delete(key);
       this.#held.set(`${w.device}\n${id}`, now + WATCH_HELD_MS);
     }
-    w.watchOnly?.();
+    w.watchOnly?.(by);
     this.#tellPeople(id);
   }
 
@@ -200,12 +211,26 @@ export class ScreenHub implements Screens {
     return false;
   }
 
-  /// An agent asked by a person to take the screen (the `screen` tool's take_control): every person's view that drives it
-  /// goes on only looking; how many did.
-  takeControl(id: string): number {
+  /// Whether a view `device` opens of `id`, asking to drive, drives it: one person's view drives a screen at a time, any
+  /// number look (pengxiao, 2026-11-12). Its person asking (`taken`) takes it: every person's view on another device that
+  /// drives it goes on only looking, told it was `by` (an agent's waits as before). Opened again by itself (a link that
+  /// went, a resize), it drives only while no such view does, and not soon after it was made to only look (`mayDrive`).
+  /// `took`: whose views it took it from.
+  drive(id: string, device: string, taken: boolean, by: string): { control: boolean; took: string[] } {
+    if (!this.mayDrive(id, device, taken)) return { control: false, took: [] };
+    const others = [...(this.#views.get(id)?.values() ?? [])].filter((w) => w.control && !w.agent && w.device !== device);
+    if (others.length === 0) return { control: true, took: [] };
+    if (!taken) return { control: false, took: [] };
+    for (const w of others) this.#lookOnly(id, w, by);
+    return { control: true, took: [...new Set(others.map((w) => w.name))] };
+  }
+
+  /// An agent `by` asked by a person to take the screen (the `screen` tool's take_control): every person's view that
+  /// drives it goes on only looking; how many did.
+  takeControl(id: string, by?: string): number {
     if (this.get(id) === undefined) throw new ScreenRefused(404, "station.screen.notFound");
-    const driving = [...(this.#views.get(id)?.entries() ?? [])].filter(([, w]) => w.control && !w.agent && w.watchOnly !== undefined);
-    for (const [view] of driving) this.watchOnly(id, view);
+    const driving = [...(this.#views.get(id)?.values() ?? [])].filter((w) => w.control && !w.agent && w.watchOnly !== undefined);
+    for (const w of driving) this.#lookOnly(id, w, by);
     return driving.length;
   }
 
@@ -222,6 +247,7 @@ export class ScreenHub implements Screens {
   async openAs(id: string, options: ViewOptions, who: { name: string; control: boolean }): Promise<ScreenView> {
     const source = this.get(id);
     if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    if (source.userTab) throw new ScreenRefused(403, "station.screen.userOnly");
     const view = await source.open(options);
     const leave = this.join(id, { name: who.name, control: who.control, agent: true, tell: () => {} });
     return {
@@ -254,6 +280,52 @@ export class ScreenHub implements Screens {
     await source.discard();
   }
 
+  /// POST /admin/api/screens/browser: opens a persistent user tab in the station's browser (`{ url } -> screen id`).
+  async openBrowser(url: string, id?: string): Promise<string> {
+    if (this.#browser === null || !this.#browser.available()) throw new ScreenRefused(503, "station.screen.noBrowser");
+    return this.#browser.openUserTab(url, id);
+  }
+
+  /// POST /admin/api/screens/<id>/open-url: navigates a browser tab or opens a link on a simulator.
+  async openUrl(id: string, url: string): Promise<void> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    if (source.openUrl !== undefined) {
+      await source.openUrl(url);
+      return;
+    }
+    if (source.debug !== undefined) {
+      if (!(await source.debug.openUrl(url))) throw new ScreenRefused(400, "station.screen.badUrl");
+      return;
+    }
+    throw new ScreenRefused(405, "station.screen.noDebug");
+  }
+
+  /// POST /admin/api/screens/<id>/reload: reloads a browser tab.
+  async reloadScreen(id: string): Promise<void> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    if (source.reload === undefined) throw new ScreenRefused(405, "station.screen.notBrowser");
+    await source.reload();
+  }
+
+  /// POST /admin/api/screens/<id>/back and …/forward: a page back or forward in a browser tab's history.
+  async historyScreen(id: string, delta: -1 | 1): Promise<void> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    const go = delta < 0 ? source.back : source.forward;
+    if (go === undefined) throw new ScreenRefused(405, "station.screen.notBrowser");
+    await go.call(source);
+  }
+
+  /// POST /admin/api/screens/<id>/sleep: hibernates a user tab, closing its live Chrome page while keeping its saved entry.
+  async sleepScreen(id: string): Promise<void> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    if (source.sleep === undefined) throw new ScreenRefused(405, "station.screen.notBrowser");
+    await source.sleep();
+  }
+
   /// A screen's apps' logs and their restart (a simulator's); refused for any other.
   debugOf(id: string): SimDebug {
     const source = this.get(id);
@@ -278,20 +350,28 @@ export class ScreenHub implements Screens {
   /// `closable`, a person may close it (POST …/close); `debug`, its apps' logs and restart are had, `install` where a file to
   /// install on it goes up to; `openedBy`, the session that opened it (an agent's tab); `since`, since when it has been up
 /// (ms: a simulator's boot, an emulator's start).
-  listed(lang: Lang): { screens: Record<string, unknown>[] } {
+  listed(lang: Lang): { browser?: boolean; screens: Record<string, unknown>[] } {
     const folder = this.#o.drop?.() ?? null;
+    const browser = this.#browser?.available() === true;
     return {
+      ...(browser ? { browser: true } : {}),
       screens: this.list().map((s) => {
         const { width, height } = s.size();
         const access = accessShown(s.access?.(), lang);
         const clipboard = s.clipboard?.() ?? [];
         const by = s.openedBy?.();
         const since = s.since?.();
+        const site = s.site?.();
+        const sleeping = s.sleeping?.() === true;
         return {
           id: s.id, kind: s.kind, title: s.title(), width, height, ...this.people(s.id), ...(access ? { access } : {}),
           ...(clipboard.length > 0 ? { clipboard } : {}),
           ...(s.peek ? { peek: true } : {}),
           ...(s.discard ? { closable: true } : {}),
+          ...(s.userTab ? { userTab: true } : {}),
+          ...(sleeping ? { sleeping: true } : {}),
+          ...(site ? { site } : {}),
+          ...(s.openUrl ? { openUrl: true } : {}),
           ...(s.debug ? { debug: true, install: s.debug.installFolder() } : {}),
           ...(s.poses ? { poses: true } : {}),
           ...(s.panels?.length ? { panels: s.panels } : {}),
@@ -303,4 +383,13 @@ export class ScreenHub implements Screens {
       }),
     };
   }
+}
+
+/// The longest address a view's state carries (a longer one is not said: its site still is). The list of screens says
+/// only the site: its path and query may hold what is the page's alone (a token), and only a view shows the page.
+export const ADDRESS_MOST = 2048;
+
+/// A browser tab's address as a view of it is told: none where it has none or it is longer than `ADDRESS_MOST`.
+export function addressShown(address: string | undefined): string | undefined {
+  return address !== undefined && address !== "" && address.length <= ADDRESS_MOST ? address : undefined;
 }

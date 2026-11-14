@@ -14,16 +14,21 @@
 // - each background command and subagent is told as it starts (system/task_started, is_backgrounded; or task_updated
 //   with it later) and as it ends (task_notification, or task_updated with a final status); a subagent's own commands
 //   say owned_by_subagent. They all end with the process.
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { link, mkdir, readdir, realpath, stat, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { REPO_RULES_COMMAND } from "./repo-rules.ts";
+import { fileURLToPath } from "node:url";
+import { REPO_RULES_COMMAND, hookCommand } from "./repo-rules.ts";
+import { SLACK_SPOKEN, SPEAKS, SPEAKS_WRITING } from "../tools/mcp.ts";
+import { RenewRefused } from "../accounts/console.ts";
+import { claudeToken as claudeFileToken } from "../accounts/oauth.ts";
 import { log } from "../ops/log.ts";
 import { claudeProject } from "../read/transcript.ts";
 import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
 import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken } from "./machine-logins.ts";
-import { fileCredentials, takeBack } from "./no-keychain.ts";
+import { fileCredentials, takeBack, takeBackMissing } from "./no-keychain.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, parseLine } from "./own-process.ts";
-import { expandRoute, isMachine, keyFile, profileEnv, profileFast, profileModel, takesFast } from "./profiles.ts";
+import { accessKind, expandRoute, isMachine, keyFile, profileEnv, profileFast, profileModel, takesFast } from "./profiles.ts";
 import type { RunnerInfo } from "./runner.ts";
 import { OVERLOADED, TOOL_SERVERS, cleanEnv, failureRest, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
@@ -94,22 +99,43 @@ export const userMessage = (text: string) => JSON.stringify({ type: "user", mess
 
 /// Claude keeps a session at $CLAUDE_CONFIG_DIR/projects/<encoded cwd>/<id>.jsonl: looked for in the directory of `cwd`
 /// (where it runs on), then in every project's (it ran elsewhere before: many directories on a station, each looked at).
-export function transcriptExists(home: string, sessionId: string, cwd: string): boolean {
+/// Where it is, or null.
+export async function transcriptAt(home: string, sessionId: string, cwd: string): Promise<string | null> {
   const project = claudeProject(cwd);
-  if (project !== null && existsSync(join(home, "projects", project, `${sessionId}.jsonl`))) return true;
+  const here = project === null ? null : join(home, "projects", project, `${sessionId}.jsonl`);
+  if (here !== null && (await isFile(here))) return here;
   let dirs: string[];
   try {
-    dirs = readdirSync(join(home, "projects"));
+    dirs = await readdir(join(home, "projects"));
   } catch {
-    return false;
+    return null;
   }
-  return dirs.some((d) => {
-    try {
-      return statSync(join(home, "projects", d)).isDirectory() && existsSync(join(home, "projects", d, `${sessionId}.jsonl`));
-    } catch {
-      return false;
-    }
-  });
+  for (const d of dirs) {
+    const path = join(home, "projects", d, `${sessionId}.jsonl`);
+    if (await isFile(path)) return path;
+  }
+  return null;
+}
+
+const isFile = (path: string) => stat(path).then((s) => s.isFile(), () => false);
+
+/// A session found in another directory's project (it ran elsewhere before) is linked into `cwd`'s, where `--resume`
+/// looks: an older Claude Code looks only there (2.1.63, on FB-16's station; 2.1.321 looks in every project's) and ends
+/// at once with `error_during_execution` ("No conversation found with session ID"), never reaching the model. Named by
+/// the directory as the process sees it (symbolic links resolved). A hard link, else a symbolic one: the one file goes
+/// on either way, whichever name it is written by. Nothing done where neither can be made.
+export async function bringTranscript(home: string, sessionId: string, cwd: string, found: string): Promise<void> {
+  const project = claudeProject(await realpath(cwd).catch(() => cwd));
+  if (project === null) return;
+  const dir = join(home, "projects", project);
+  const here = join(dir, `${sessionId}.jsonl`);
+  if (here === found) return;
+  try {
+    await mkdir(dir, { recursive: true });
+    await link(found, here).catch(() => symlink(found, here));
+  } catch (e) {
+    log.warn("agents::claude", "could not bring a session's transcript to where claude resumes it", { session: sessionId, error: (e as Error).message });
+  }
 }
 
 /// Anthropic turning the request away before any account is looked at (a region it does not serve, a proxy's address
@@ -130,8 +156,9 @@ export function classifyResult(text: string): FailureReason {
     ["rate limit", "rate-limit", "rate_limit", "ratelimit", "usage limit"].some((s) => lower.includes(s)) ||
     ["session", "weekly", "daily"].some((window) => lower.includes(`hit your ${window} limit`)) ||
     /\bhit your \d+[- ]hour limit\b/.test(lower) ||
-    // A model's own allowance: "You've reached your Fable limit. Switch to another model, or manage usage credits…"
-    /\breached your [\w.\- ]+ limit\b/.test(lower) ||
+    // A model's own allowance: "You've reached your Fable limit. Switch to another model, or manage usage credits…",
+    // since 2026-11-14 also "You've hit your Fable limit · resets Nov 20 at 9am (Asia/Tokyo). Switch to another model…"
+    /\b(?:reached|hit) your [\w.\- ]+ limit\b/.test(lower) ||
     lower.includes("you've hit your limit")
   ) {
     return "rate_limit";
@@ -156,13 +183,66 @@ export const backgroundOf = (turn: Turn): BackgroundTask[] =>
     .filter((t) => t.background)
     .map(({ id, kind, description, startedAt }) => (startedAt === undefined ? { id, kind, description } : { id, kind, description, startedAt }));
 
-/// A token handed to the process (a machine login's, a lent one) is renewed while it runs: started with these, Claude
-/// Code asks its host for a new one on a 401 (an `oauth_token_refresh` control request) and retries with it, so the
-/// process, its background tasks and subagents go on. It honours them only for a few entrypoints; claude-desktop
-/// changes neither its prompt nor its tools (only the entrypoint named in its requests), as checked on 2.1.299.
+/// A token handed to the process (a machine login's, a local subscription's, a lent one) is renewed while it runs:
+/// started with these, Claude Code asks its host for a new one on a 401 (an `oauth_token_refresh` control request) and
+/// retries with it, so the process, its background tasks and subagents go on without racing on `.credentials.json`. It
+/// honours them only for a few entrypoints; claude-desktop changes neither its prompt nor its tools (only the entrypoint
+/// named in its requests), as checked on 2.1.299.
 const RENEWED = { CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH: "1", CLAUDE_CODE_ENTRYPOINT: "claude-desktop" };
 /// A CLI that does not ask (one too old) retries a 401 on its own: past this attempt it is stopped as before.
 const RENEW_ATTEMPTS = 2;
+
+/// What Claude Code reads on a tool of an MCP server's list as "never deferred" (tools/mcp.ts `Listing.loaded`). By
+/// itself it keeps every MCP tool behind its ToolSearch: the first request of a session carries none of the station's
+/// tools, only their names in a reminder, and a turn began with a search for chat_post and chat_state before it could
+/// answer. Observed on 2.1.323, 2026-11-14, in the requests it made to a made-up Messages API, with ENABLE_TOOL_SEARCH
+/// unset as with it true: a tool so marked is in the first request's `tools` whole (description and schema, the mark
+/// itself not sent on), the others stay names, and that request waits for the server's tools/list (one answered 3 s
+/// late was waited for). Not its server-wide `alwaysLoad`: the station's tools together were 73 KB (agents/agy.ts),
+/// which its deferral rightly keeps out of every request. A subagent it starts (its Agent tool; general-purpose and
+/// Explore, same day) is listed as its parent is: the two whole in its first request (10.7 KB as the station declares
+/// them), where it had their names before, and nothing of the station's instructions, which --append-system-prompt
+/// gives the main agent alone: it is shown chat_post unsearched, untold how a chat is posted to, and its call of it
+/// is refused (`SILENT_SUBAGENTS`).
+export const CLAUDE_TOOL_LOADED = Object.freeze({ "anthropic/alwaysLoad": true });
+
+/// The hook that refuses a subagent the tools a session speaks by (./subagent-hook.mjs says how it knows one).
+export const SUBAGENT_HOOK = fileURLToPath(new URL("./subagent-hook.mjs", import.meta.url));
+/// A hook that does not answer is given up on after this many seconds, and the call goes on as if there were none
+/// (2.1.323, 2026-11-14: a hook asleep, the main agent's chat_post made as the time ran out); Claude Code's own limit
+/// is ten minutes, before the main agent's every post. One run takes 26 ms here.
+const SUBAGENT_HOOK_SECONDS = 10;
+/// A subagent never speaks in a chat (tools/mcp.ts `SPEAKS`), and Claude Code gives one every tool of its session: a
+/// PreToolUse hook on exactly those tools, as Claude Code names them, so that no other call starts a process for it,
+/// and on slack_api, whose writes it refuses and whose reads it lets through (the hook is told the methods that
+/// speak: `SLACK_SPOKEN`, the list the threads rule goes by and a streamed message).
+/// On every session that has the station's tools, one continued from a terminal too: with the hook and without, a
+/// session's requests were the same (system prompt, tools, messages; 2.1.323, 2026-11-14), so its cache holds.
+/// `disableAllHooks: false` goes with it wherever it goes (`open`): --settings is read over the user's, the project's
+/// and the local settings file, any of which turned every hook off with `disableAllHooks: true`, this one too, and a
+/// subagent wrote <cwd>/.claude/settings.local.json so and posted (measured, same day; with false said here its next
+/// call was refused as its first). So a person's own hooks, turned off by them in one of those files, run again in a
+/// station's sessions.
+/// What it does not hold: a subagent's shell has the session's token as its parent's has, and a call made from there
+/// is the session's to the station; a managed policy's `disableAllHooks` or `allowManagedHooksOnly`, Claude Code run
+/// bare or in safe mode, and a workspace it does not trust each still turn this hook off (read in 2.1.323's code by
+/// its reviewer, not run); and what goes wrong in the hook lets the call through (its file says why).
+export const SILENT_SUBAGENTS = {
+  PreToolUse: [
+    {
+      matcher: TOOL_SERVERS.flatMap((server) => [...SPEAKS, SPEAKS_WRITING].map((tool) => `mcp__${server}__${tool}`)).join("|"),
+      hooks: [{ type: "command", command: hookCommand(SUBAGENT_HOOK, SLACK_SPOKEN.join(",")), timeout: SUBAGENT_HOOK_SECONDS }],
+    },
+  ],
+};
+
+/// Sets of hooks as one: an event several of them have keeps the entries of each, in their order (a spread would keep
+/// the last set's alone).
+export function hooksOf(...sets: Record<string, unknown[]>[]): Record<string, unknown[]> {
+  const all: Record<string, unknown[]> = {};
+  for (const set of sets) for (const [event, entries] of Object.entries(set)) all[event] = [...(all[event] ?? []), ...entries];
+  return all;
+}
 
 /// What Claude Code brings of its own that a station's chat agent cannot or must not use, kept out of its context (a
 /// fresh session began at 30k tokens, a third of them these; checked on 2.1.289):
@@ -209,6 +289,9 @@ export type ClaudeDriverOptions = {
   /// The machine login's current token, renewed when about to run out or when it is `rejected` (claude_oauth.rs; the
   /// accounts module's).
   machineToken?: (env: Env, rejected?: string) => Promise<MachineToken>;
+  /// A local subscription profile's current token, renewed under one lock by the station so concurrent `claude -p`
+  /// processes neither race on a single-use refresh token nor delete `.credentials.json` on failure.
+  subscriptionToken?: (profile: Profile, rejected?: string) => Promise<MachineToken>;
   /// Another station's subscription, borrowed (share/index.ts): a token lent by the station signed in on it, handed
   /// to the process as the machine's is.
   lent?: { borrowed(profile: Profile): boolean; token(profile: Profile, rejected?: string): Promise<MachineToken> };
@@ -259,7 +342,10 @@ function frameDoes(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void,
   } else if (kind === "system" && subtype === "compact_boundary") {
     emit({ type: "compacted" });
   } else if (kind === "result") {
-    const text = typeof frame.result === "string" ? frame.result : subtype;
+    // A turn that failed outside the model's reply (`error_during_execution`: a session it could not resume, a request
+    // it could not make) has no `result`; what went wrong is in `errors`, the subtype only says that something did.
+    const errors = Array.isArray(frame.errors) ? frame.errors.filter((e: unknown): e is string => typeof e === "string" && e.trim() !== "") : [];
+    const text = typeof frame.result === "string" && frame.result.trim() !== "" ? frame.result : errors.length > 0 ? errors.join("\n") : subtype;
     let outcome: TurnOutcome;
     if (turn.authFailure !== null) outcome = { kind: "failed", reason: refused(turn.authFailure) ? "refused" : "auth", message: turn.authFailure };
     else if (turn.aborting) outcome = { kind: "aborted" };
@@ -282,6 +368,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
   private readonly command: string;
   private readonly env: Env;
   private readonly machineToken: (env: Env, rejected?: string) => Promise<MachineToken>;
+  private readonly subscriptionToken: ClaudeDriverOptions["subscriptionToken"];
   private readonly lent: ClaudeDriverOptions["lent"];
 
   constructor(options: ClaudeDriverOptions) {
@@ -289,6 +376,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     this.command = options.command ?? "claude";
     this.env = options.env ?? process.env;
     this.machineToken = options.machineToken ?? machineClaudeToken;
+    this.subscriptionToken = options.subscriptionToken;
     this.lent = options.lent;
   }
 
@@ -304,9 +392,11 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
   async open(options: OpenOptions, events: Events): Promise<ClaudeSession> {
     const home = options.profile.home;
     mkdirSync(home, { recursive: true });
-    if (options.resume !== undefined && !transcriptExists(home, options.resume, options.cwd)) {
+    if (options.resume !== undefined) {
+      const found = await transcriptAt(home, options.resume, options.cwd);
       // claude would start and exit at once; failing here lets the caller start fresh.
-      throw new Error(`no claude transcript for session ${options.resume}`);
+      if (found === null) throw new Error(`no claude transcript for session ${options.resume}`);
+      await bringTranscript(home, options.resume, options.cwd, found);
     }
     const sessionId = options.resume ?? uuid();
     const mcpConfig = options.textOnly ? { mcpServers: {} } : { mcpServers: { stillfail: { type: "http", url: options.mcpUrl, headers: { Authorization: `Bearer \${${MCP_TOKEN_VAR}}` } } } };
@@ -329,6 +419,8 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     const fast = fastFor(options);
     const settings = {
       ...(ours ? SETTINGS : {}),
+      // With the station's tools, its subagents kept from speaking, whatever a settings file of the machine says of hooks.
+      ...(options.textOnly ? {} : { disableAllHooks: false, hooks: hooksOf(ours ? SETTINGS.hooks : {}, SILENT_SUBAGENTS) }),
       ...(file === undefined ? {} : { apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }),
       // The most context it runs with: it compacts on its own at it (its window for the model, clamped to the model's).
       ...(options.context === undefined ? {} : { autoCompactWindow: options.context }),
@@ -345,17 +437,41 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
     // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
     env.STILLFAIL_RUNTIME_SESSION_ID = sessionId;
-    // A machine profile runs on the machine's own login, handed over as its current token.
-    // Another station's subscription the same way, with the token that station lends.
+    const localSub = !isMachine(options.profile) && !this.lent?.borrowed(options.profile) && accessKind(options.profile) === "subscription";
+    if (!isMachine(options.profile)) fileCredentials(env);
+    // A machine profile runs on the machine's own login, handed over as its current token; a local subscription on its
+    // own login renewed here under one lock; another station's subscription on the token that station lends.
     const renew = this.renewer(options.profile);
-    const machine = renew ? await renew() : undefined;
+    let machine: MachineToken | undefined;
+    let renews = renew !== null;
+    if (renew) {
+      try {
+        machine = await renew();
+      } catch (error) {
+        if (!localSub) throw error;
+        // A local subscription whose refresh failed (or a test home with no token yet): never throw in open(), which
+        // actor.ts treats as a broken --resume or a broken startup without rechecking or failing over. Hand over any
+        // kept access token so Claude Code never touches or deletes .credentials.json itself.
+        const kept = await claudeFileToken(home);
+        if (kept !== undefined) {
+          if (error instanceof RenewRefused) {
+            env.CLAUDE_CODE_OAUTH_TOKEN = kept;
+            renews = false;
+          } else {
+            machine = { token: kept, expiresAt: 0 };
+          }
+        } else {
+          await takeBackMissing(home);
+          renews = false;
+        }
+      }
+    } else if (!isMachine(options.profile)) {
+      // Its own login stays in its home's file when it refreshes it.
+      await takeBack(home);
+    }
     if (machine) {
       env.CLAUDE_CODE_OAUTH_TOKEN = machine.token;
       Object.assign(env, RENEWED);
-    } else {
-      // Its own login stays in its home's file when it refreshes it.
-      await takeBack(home);
-      fileCredentials(env);
     }
     // Its own root certificates, not the system's: read from the macOS keychain by a process outside the desktop
     // session, they took up to 36 s before a new session could start. One the user chose wins.
@@ -366,19 +482,23 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
 
     // Renewed while it runs, it is never started again for its token; one read from a file again after a 401 is not
     // stopped at the first.
-    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false, renews: machine !== undefined || file !== undefined }, null, new LiveFromClaude(), events, options.effort, renew, machine?.token ?? null);
+    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false, renews: (machine !== undefined && renews) || file !== undefined }, null, new LiveFromClaude(), events, options.effort, renews ? renew : null, machine?.token ?? null);
     session.toolsUrl = options.mcpUrl;
     session.fast = fast;
     await this.start(session, options, this.command, args, env);
     return session;
   }
 
-  /// Where a profile whose token is handed to the process gets a current one (null for a profile with its own login):
-  /// the machine login's, or the one lent by the station a borrowed subscription is signed in on.
+  /// Where a profile whose token is handed to the process gets a current one (null for a profile without one):
+  /// the machine login's, a local subscription's renewed here, or the one lent by the station a borrowed subscription
+  /// is signed in on.
   private renewer(profile: Profile): Renew | null {
     if (isMachine(profile)) return (rejected) => this.machineToken(this.env, rejected);
     const lent = this.lent;
     if (lent?.borrowed(profile)) return (rejected) => lent.token(profile, rejected);
+    if (accessKind(profile) === "subscription" && this.subscriptionToken) {
+      return (rejected) => this.subscriptionToken!(profile, rejected);
+    }
     return null;
   }
 
@@ -391,10 +511,10 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
   }
 
   /// What the station before had handled (stdout up to where it acknowledged) says where the turn stands.
-  protected crashed(options: OpenOptions, lines: Iterable<string>, info: RunnerInfo, events: Events) {
+  protected async crashed(options: OpenOptions, lines: AsyncIterable<string>, info: RunnerInfo, events: Events) {
     const turn: Turn = { busy: false, aborting: false, authFailure: null, closed: false };
     const live = new LiveFromClaude();
-    for (const line of lines) {
+    for await (const line of lines) {
       const frame = parseLine("claude", line);
       if (frame === undefined) continue;
       live.feed(frame);

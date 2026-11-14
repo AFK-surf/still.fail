@@ -13,7 +13,7 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       // a chat's answered, nothing more (and a call's parts as the core makes them, kept: history.tool)
       if name == "history.tool" {
         (base.call)(name, params, done)
@@ -39,7 +39,7 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
 test "an option tapped in the chat answers its card (decision.answer)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<6 {
     if t.find("把首页和聊天页的截图都更新") is Some(_) {
       break
@@ -61,7 +61,7 @@ test "an option tapped in the chat answers its card (decision.answer)" {
 test "an option picked away from the chat's end: the list goes there, after the answer (as for words sent)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<6 {
     if t.find("把首页和聊天页的截图都更新") is Some(_) {
       break
@@ -85,7 +85,7 @@ test "an option picked away from the chat's end: the list goes there, after the 
 test "忽略 lets the ask go (decision.dismiss), gone at once" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<6 {
     if t.find("忽略") is Some(_) {
       break
@@ -95,7 +95,7 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
   let felt = t.haptics().length()
   t.tap_text("忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
-  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
+  assert_eq(t.haptics()[felt:].to_owned(), [@ui.Confirm])
   // let go at once (what it showed only drawn as it closes up)
   t.frame()
   assert_eq(@sfpages.dismissed.count(), 1)
@@ -106,7 +106,7 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
 test "the chat's \"…\": the menu a row has, pinning it from it" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-actions")
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   assert_true(t.find("重命名") is Some(_))
   t.tap_text("固定")
   let pinned = named(calls, "chat.pin")
@@ -122,8 +122,8 @@ test "the chat's own sheet: its agents, and on to the agent's card and its histo
   assert_true(t.find("Claude · Opus 5.5") is Some(_))
   t.tap_text("Claude · Opus 5.5")
   assert_true(t.find("费用估算") is Some(_))
-  assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
-  t.tap_text("8 轮 · 共干了 1 小时 12 分")
+  assert_true(t.find("共工作 1 小时 12 分") is Some(_))
+  t.tap_text("共工作 1 小时 12 分")
   t.run_for(@ui.move_most_ms)
   match app.nav.top() {
     History(r, key, _) => {
@@ -134,6 +134,38 @@ test "the chat's own sheet: its agents, and on to the agent's card and its histo
   }
   assert_true(t.find("执行历史") is Some(_))
   // (not idle yet: the chat's sheet is still sinking on its spring (kit/sheet.mbt), till mbui#25 declares its end)
+}
+
+///|
+test "the chat's own sheet, on to its agent's card and to what was said in it: each a step further in, one sheet all the way; back is back to the chat's sheet" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  t.run_for(@ui.move_most_ms)
+  let top0 = sheet_tops(t)
+  assert_eq(top0.length(), 1)
+  for further in [("Claude · Opus 5.5", "费用估算"), (@sf.t("web-main.things.title"), @sf.t("web-main.things.title"))] {
+    let (row, shown) = further
+    assert_true(t.find(row) is Some(_), msg=row)
+    t.tap_text(row)
+    assert_true(t.find(shown) is Some(_), msg=row)
+    for _ in 0..<40 {
+      t.run_for(@ui.frame_period_default)
+      assert_eq(sheet_tops(t).length(), 1, msg="\{row}: \{Repr(sheet_tops(t))}")
+    }
+    // back: the chat's own sheet again, as tall as it was, never two sheets on the way
+    t.back()
+    assert_true(@sf.presenting(), msg=row)
+    for _ in 0..<40 {
+      t.run_for(@ui.frame_period_default)
+      assert_eq(sheet_tops(t).length(), 1, msg="\{row}: \{Repr(sheet_tops(t))}")
+    }
+    assert_true(t.find("Claude · Opus 5.5") is Some(_), msg=row)
+    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{row}: \{Repr(sheet_tops(t))} \{Repr(top0)}")
+  }
+  // back from the chat's own sheet: closed
+  t.back()
+  t.run_for(@ui.move_most_ms * 2.0)
+  assert_true(!@sf.presenting())
 }
 
 ///|
@@ -167,7 +199,10 @@ test "the desk's chat: 忽略 at the end of the line saying what an agent needs,
   assert_true(y >= said_y && y <= said_y + said_h)
   // its words and 忽略 on lines as high as the bell's column (an option's disc, 20), the bell in their middle: on the
   // state line's 18 laid from the top they stood 1 over it
-  let (_, end_y, _, end_h) = t.rect_of("忽略").unwrap()
+  // (the one at the chat's end, the lowest drawn: a post's own 忽略 over it where one shows)
+  let ends = t.words().filter(fn(w) { w.0 == "忽略" })
+  let end = ends.iter().fold(init=ends[0], fn(a, w) { if w.2 > a.2 { w } else { a } })
+  let (end_y, end_h) = (end.2, end.4)
   assert_eq((said_h, end_y, end_h), (20.0, said_y, 20.0))
   t.tap(x, y)
   let made = named(calls, "decision.dismiss")
@@ -234,7 +269,7 @@ test "the chat's sheet and an agent's card as tall as what they show: their last
 test "an options card: nothing drawn between two options (SettingParts.kt DecisionOptions)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   for _ in 0..<6 {
     if t.find("把首页和聊天页的截图都更新") is Some(_) {
       break
@@ -297,7 +332,7 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "chat.relayPlaces" => done(Ok(places))
         "chat.relay" => done(Ok({ "place": "#dev" }))
@@ -310,10 +345,11 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   open_fixture_over("chat-actions", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
+  open_share(t)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
   // (the chat's menu goes, the relay's sheet comes up, to where it rests: the presenters')
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   // (with touch nothing takes the keyboard's focus as it opens: the keyboard would come up over the places)
   assert_true(!t.ctx().field_focused(), msg="a field focused as the relay opened on a phone")
   assert_true(t.find("接力到频道") is Some(_))
@@ -334,12 +370,141 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   assert_eq(relayed.length(), 1)
   assert_eq(text(Some(relayed[0].params), "connect"), "slack-1")
   assert_eq(text(Some(relayed[0].params), "channel"), "C1")
-  // the sheet gone, where it went said
+  // the sheet leaving as it relayed (no more read out as one), where it went said
   t.frame()
-  assert_true(t.find("开头附一句（可选）") is None)
+  assert_true(relay_dialog(t) is None, msg="the sheet not leaving once relayed")
   // (said at once, read out: seen as it has come in, toast_said)
   assert_true(toast_said(t, "已接力到 #dev"))
   t.run_for(@kit.presence_in_ms)
   assert_true(t.find("已接力到 #dev") is Some(_))
+  // the sheet gone once its way out is over (asserted after it, not in the press's frame: what it showed, the note
+  // with it, is kept on that way, where it was emptied before it closed)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("开头附一句（可选）") is None)
 }
 
+
+///|
+/// Where words `s` are drawn across (the first drawn so), if they are.
+fn words_x(t : @ui.Tester, s : String) -> Double? {
+  t.words().iter().find_first(fn(w) { w.0 == s }).map(fn(w) { w.1 })
+}
+
+///|
+/// From the sheet `t` shows, `row` tapped: the next a page of the same sheet
+/// sliding in from its end as the first slides off to its start, every frame one sheet and one scrim, the sheet's top
+/// going from where it stood straight to where the next has it; back: the first sliding back where it was, the sheet
+/// as tall as it was. `scroll`: the first scrolled so far first, as far scrolled after.
+fn steps_in_one_sheet(t : @ui.Tester, row : String, scroll? : Double = 0.0) -> Unit raise {
+  let top0 = sheet_tops(t)
+  assert_eq(top0.length(), 1, msg="\{row}: \{Repr(top0)}")
+  let in_window = fn() { t.words().filter(fn(w) { w.0.length() > 1 && w.1 >= 0.0 && w.1 < 390.0 }) }
+  let shown0 = in_window()
+  let before : Set[String] = Set::from_array(shown0.map(fn(w) { w.0 }))
+  // (in and back once at rest, to know what the next shows of its own and where)
+  t.tap_text(row)
+  t.run_for(@sf.presented_rest() - t.time())
+  let shown1 = in_window()
+  let after : Set[String] = Set::from_array(shown1.map(fn(w) { w.0 }))
+  let own = shown1.filter(fn(w) { !before.contains(w.0) })
+  assert_true(own.length() > 0, msg="\{row}: nothing of its own in \{Repr(t.words().map(fn(w) { w.0 }))}")
+  let (next, next_x) = (own[0].0, own[0].1)
+  // (words of the first page alone: what it is told by as it slides)
+  let firsts = shown0.filter(fn(w) { !after.contains(w.0) })
+  assert_true(firsts.length() > 0, msg="\{row}: the first page's words all still shown")
+  let (first, x0) = (firsts[0].0, firsts[0].1)
+  let top1 = sheet_tops(t)[0]
+  assert_true(t.query(Button, label="返回") is Some(_), msg="\{row}: no back key")
+  t.back()
+  t.run_for(@sf.presented_rest() - t.time())
+  assert_true(@sf.presenting(), msg="\{row}: back closed it")
+  assert_true((words_x(t, first).unwrap() - x0).abs() < 0.5, msg="\{row}: \{first} back at \{Repr(words_x(t, first))}")
+  // (scrolled, where it scrolls: as far scrolled as it comes back)
+  let y0 = t.drawn_of(first).unwrap().1
+  if scroll > 0.0 {
+    t.wheel(195.0, 600.0, scroll)
+    t.run_for(@ui.move_most_ms)
+  }
+  let y_scrolled = t.drawn_of(first).map(fn(p) { p.1 })
+  // in, frame by frame
+  t.tap_text(row)
+  let mut first_x = x0
+  let mut next_at = 10000.0
+  let mut between = false
+  let mut top = top0[0]
+  let up = top1 < top0[0]
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    let tops = sheet_tops(t)
+    assert_eq(tops.length(), 1, msg="\{row}: \{Repr(tops)}")
+    assert_eq(scrim_drawn(t).length(), 1, msg="\{row}")
+    // (its top one way only, from where it stood to where the next has it)
+    if up {
+      assert_true(tops[0] <= top + 0.5, msg="\{row}: \{tops[0]} after \{top}")
+    } else {
+      assert_true(tops[0] >= top - 0.5, msg="\{row}: \{tops[0]} after \{top}")
+    }
+    top = tops[0]
+    match words_x(t, first) {
+      Some(x) => {
+        assert_true(x <= first_x + 0.5, msg="\{row}: \{first} at \{x} after \{first_x}")
+        first_x = x
+      }
+      None => first_x = -10000.0
+    }
+    match words_x(t, next) {
+      Some(x) => {
+        assert_true(x <= next_at + 0.5, msg="\{row}: \{next} at \{x} after \{next_at}")
+        if x > next_x + 20.0 && x < next_x + 370.0 {
+          between = true
+        }
+        next_at = x
+      }
+      None => ()
+    }
+  }
+  assert_true(between, msg="\{row}: \{next} never seen on its way in")
+  assert_true(first_x < x0 - 300.0, msg="\{row}: \{first} not off to the start: \{first_x}")
+  assert_true((next_at - next_x).abs() < 0.5, msg="\{row}: \{next} at \{next_at}, not \{next_x}")
+  assert_true((top - top1).abs() < 0.5, msg="\{row}: top \{top}, not \{top1}")
+  // back, frame by frame: the first in from the start, where it was left
+  t.back()
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    assert_eq(sheet_tops(t).length(), 1, msg="\{row} back: \{Repr(sheet_tops(t))}")
+    assert_eq(scrim_drawn(t).length(), 1, msg="\{row} back")
+  }
+  assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{row}: \{Repr(sheet_tops(t))} \{Repr(top0)}")
+  assert_true((words_x(t, first).unwrap() - x0).abs() < 0.5, msg="\{row}: \{first} back at \{Repr(words_x(t, first))}")
+  let y_back = t.drawn_of(first).map(fn(p) { p.1 })
+  assert_true(
+    match (y_back, y_scrolled) {
+      (Some(a), Some(b)) => (a - b).abs() < 0.5
+      (None, None) => true
+      _ => false
+    },
+    msg="\{row}: \{first} not as it was left: \{Repr(t.drawn_of(first))}, \{Repr(y_scrolled)} (\{y0})",
+  )
+}
+
+///|
+test "小屏: the chat's own sheet on to its agent's card, what its agents wrote and what was said in it: each a page of the same sheet sliding in, the chat's sheet kept as it was left" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-letters-info")
+  t.run_for(@sf.presented_rest() - t.time())
+  for row in ["Claude · Opus 5.5", @sf.t("web-main.letters.title"), @sf.t("web-main.things.title")] {
+    assert_true(t.find(row) is Some(_), msg=row)
+    steps_in_one_sheet(t, row)
+  }
+  t.back()
+  t.run_for(@sf.presented_rest() - t.time())
+  assert_false(@sf.presenter_visible())
+}
+
+///|
+test "小屏: the chat's 任务 on to a job: a page of the same sheet sliding in, the list kept as it was left" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-jobs")
+  t.run_for(@sf.presented_rest() - t.time())
+  steps_in_one_sheet(t, "盯 CI")
+}

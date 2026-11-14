@@ -21,18 +21,27 @@ fn landing_case(mode : String, asked : Bool) -> @ui.Tester {
 }
 
 ///|
-test "no workspace yet as nodes: none yet, asked for a code, an invitation waiting, an account not let in, each its title" {
-  let cases = [
-    ("landing", false, @sf.t("android-misc.workspace.none")),
-    ("landing", true, @sf.t("android-misc.invite.onlyInvited", args=[("app", "still.fail")])),
-    ("landing-invited", false, @sf.t("android-misc.invite.received")),
-    ("blocked", false, "此账号暂未开放测试版"),
+/// Each mode without a workspace with its title found drawn, as landing_case opens it, and each as it should be (all
+/// found): the words of each title read in that mode's own run, once it has begun (read before, they are the run
+/// before's, in its language: read_after_run_wbtest.mbt).
+fn landing_titles() -> (Array[(String, Bool, Bool)], Array[(String, Bool, Bool)]) {
+  let cases : Array[(String, Bool, () -> String)] = [
+    ("landing", false, fn() { @sf.t("android-misc.workspace.none") }),
+    ("landing", true, fn() { @sf.t("android-misc.invite.onlyInvited", args=[("app", "still.fail")]) }),
+    ("landing-invited", false, fn() { @sf.t("android-misc.invite.received") }),
+    ("blocked", false, fn() { "此账号暂未开放测试版" }),
   ]
   let seen = cases.map(fn(k) {
     let t = landing_case(k.0, k.1)
-    (k.0, k.1, t.find(k.2) is Some(_) && t.drawn_glyphs().length() > 0)
+    (k.0, k.1, t.find((k.2)()) is Some(_) && t.drawn_glyphs().length() > 0)
   })
-  assert_eq(seen, cases.map(fn(k) { (k.0, k.1, true) }))
+  (seen, cases.map(fn(k) { (k.0, k.1, true) }))
+}
+
+///|
+test "no workspace yet as nodes: none yet, asked for a code, an invitation waiting, an account not let in, each its title" {
+  let (seen, all) = landing_titles()
+  assert_eq(seen, all)
 }
 
 ///|
@@ -83,7 +92,7 @@ test "no workspace yet as nodes, asked for a code: a code typed in its field, �
 fn landing_button_at(t : @ui.Tester, label : String) -> (Double, Double) {
   match t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == label }) {
     Some(s) => (s.rect.0 + s.rect.2 / 2.0, s.rect.1 + s.rect.3 / 2.0)
-    None => abort("no button read out as \{label}")
+    None => @halt.saying("no button read out as \{label}")
   }
 }
 

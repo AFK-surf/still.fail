@@ -23,12 +23,11 @@ fn setting_tester(
   h? : Double = 900.0,
   ready? : () -> Unit = fn() {  },
   host? : (@ui.Tester) -> Unit = fn(_) {  },
+  env? : Array[(String, String)] = [],
 ) -> @ui.Tester {
   @sfbase.reset()
   reset()
   @settings.reset()
-  // (as the app begins anew: a prior Tester's keyed page rows do not belong to this one)
-  @sf.page_rows_reset()
   @sffixture.fixture_reset()
   @sf.presenters_reset()
   @sf.set_words(@sfbase.fill)
@@ -58,6 +57,7 @@ fn setting_tester(
     w~,
     h~,
     platform~,
+    env~,
   )
   // (what the device's host says from the start: a performance record kept)
   host(t)
@@ -112,7 +112,7 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     StationArchiving(st) => station_archiving_node(p, core, here, st, on_back=core.pop, frame~, width~)
     AutoDecisions => decisions_node(p, core, here, on_back=core.pop, frame~, width~)
     AutoCompletion => completion_node(p, core, here, on_back=core.pop, frame~, width~)
-    Usage => usage_node(p, core, here, on_back=core.pop, frame~, width~)
+    Usage => usage_node(p, core, src, here, on_back=core.pop, frame~, width~)
     Shortcuts => {
       // (recording while it is the one on top, as every frame says it: its stay there as it is made)
       let stay = @signals.untracked(fn() { app.nav.top_stay().1 })
@@ -132,7 +132,8 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     Connects(only) => connects_node(p, src, core, here, only, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
     Connect(station, id) => connect_node(p, src, core, here, station, id, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
     Profile(a, id) => profile_node(p, core, here, a, id, on_back=core.pop, frame~, width~)
-    NewProfile(a) => new_profile_node(p, core, here, a, on_back=core.pop, frame~, width~)
+    NewProfile(a) => new_profile_node(p, core, src, here, a, on_back=core.pop, frame~, width~)
+    Station(a) => station_node(p, core, src, here, a, on_back=core.pop, frame~, width~)
     // (the pages opened from them not made once yet: their old view, hosted)
     _ =>
       @ui.old(p, fn(c) {
@@ -157,7 +158,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Me => me_page(c, core, here, frame)
     Vault => vault_page(c, core, here, frame)
     VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
-    Station(a) => station_page(c, core, here, frame, a)
     _ => ()
   }
 }
@@ -178,7 +178,7 @@ fn laid_wide(w : Double) -> Bool {
 /// pressed.
 fn scrolled_to(t : @ui.Tester, w : Double, words : String) -> Unit {
   let x = w / 2.0
-  t.move(x, 450.0)
+  t.move_to(x, 450.0)
   for _ in 0..<12 {
     match t.find(words) {
       Some((_, y)) if y < 40.0 => t.wheel(x, 450.0, -300.0)

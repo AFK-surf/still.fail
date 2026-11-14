@@ -7,28 +7,21 @@ fn init {
   // The requested whole-panel fade lets the page show through for its last frames. Keep this exception exact: the
   // checker still reports every other overlap, and even this pair outside a closing layer.
   @ui.words_over_closing_expected([
-    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "Opus 5.5"),
-    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "中"),
-    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "GPT-6 Astra"),
-    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "上下文"),
-    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "完整 · 1M"),
-    ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Willow 上使用所选模型新建会话。", "上下文"),
-    ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Willow 上使用所选模型新建会话。", "完整 · 1M"),
-    ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Willow 上使用所选模型新建会话。", "全部模型"),
+    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "DeepSeek V4.1 Flash"),
+    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "GPT-6"),
+    // (the configurations used most a row each: the first level taller, a configuration's capsule over the words)
+    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "DSH · 高"),
+    ("src/sfapp/model_pop_wbtest.mbt", "想让 agent 做什么？", "高"),
+    ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Willow 上使用所选模型新建会话。", "GPT-6 Astra"),
+    ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Willow 上使用所选模型新建会话。", "中"),
+    ("src/sfapp/model_pop_wbtest.mbt", "描述要做的事。它会在 Willow 上使用所选模型新建会话。", "Opus 5.5"),
     // (the card to share's stage fading as it closes, the picture a line higher since its looks are in sets: a day's
     // date under its bar over the new chat's words)
     ("src/sfapp/stations_now_wbtest.mbt", "描述要做的事。它会在 Willow 上使用所选模型新建会话。", "10/26"),
   ])
   @ui.words_over_known([
     ("src/sfapp/composer_wbtest.mbt", 2),
-    ("src/sfapp/newchat_send_wbtest.mbt", 1),
-    ("src/sfapp/preview_wbtest.mbt", 13),
-    ("src/sfapp/publish_wbtest.mbt", 1),
-    ("src/sfapp/quote_image_wbtest.mbt", 2),
-    ("src/sfapp/screens_wbtest.mbt", 42),
-    ("src/sfapp/stations_now_wbtest.mbt", 3),
-    ("src/sfapp/tape.mbt", 1),
-    ("src/sfapp/wide_publish_wbtest.mbt", 3),
-    ("src/sfapp/wide_wbtest.mbt", 3),
+    ("src/sfapp/preview_wbtest.mbt", 1),
+    ("src/sfapp/wide_wbtest.mbt", 2),
   ])
 }

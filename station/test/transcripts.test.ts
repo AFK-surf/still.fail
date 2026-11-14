@@ -432,6 +432,57 @@ test("where a reading stands goes to another thread: a tail made from it reads o
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a line written a part at a time is joined once: what reading it copies is its own size, not its square", (t) => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  // One line of 8 MB that comes 64 KB at a time, read after each part, as a transcript followed while it is written is.
+  const long = said("z".repeat(8 << 20), "m2");
+  const part = 64 * 1024;
+  writeFileSync(path, said("one", "m1"));
+  const tail = new TranscriptTail("claude", path);
+  assert.deepEqual(tail.read()[1].map((e) => e.text), ["one"]);
+  const [concat, from] = [Buffer.concat, Buffer.from];
+  let copied = 0;
+  Buffer.concat = ((list: readonly Uint8Array[], length?: number) => {
+    const joined = concat(list, length);
+    copied += joined.length;
+    return joined;
+  }) as typeof Buffer.concat;
+  Buffer.from = ((value: unknown, ...rest: unknown[]) => {
+    const made = (from as (...args: unknown[]) => Buffer)(value, ...rest);
+    if (value instanceof Uint8Array) copied += made.length;
+    return made;
+  }) as typeof Buffer.from;
+  let state: unknown;
+  try {
+    for (let at = 0; at < long.length - 1; at += part) {
+      appendFileSync(path, long.slice(at, Math.min(at + part, long.length - 1)));
+      assert.deepEqual(tail.read(), [1, []], "a line not ended yet gives nothing");
+      // Half way, where its reading stands is taken, as a station handing over takes it.
+      if (state === undefined && at >= long.length / 2) state = JSON.parse(JSON.stringify(tail.snapshot()));
+    }
+    assert.equal(tail.readBytes, Buffer.byteLength(said("one", "m1")), "only whole lines count as read");
+    appendFileSync(path, "\n" + said("three", "m3"));
+    const [start, entries] = tail.read();
+    Buffer.concat = concat;
+    Buffer.from = from;
+    const whole = readTimeline("claude", path).map((e) => e.text);
+    assert.equal(whole.length, 3);
+    assert.deepEqual([start, entries.map((e) => e.text)], [1, whole.slice(1)]);
+    assert.equal(tail.readBytes, statSync(path).size);
+    t.diagnostic(`copied ${copied} bytes for a line of ${long.length}`);
+    assert.ok(copied <= 3 * long.length, `copied ${copied} bytes for a line of ${long.length}`);
+    // One that goes on from the half-way place reads the same.
+    const here = TranscriptTail.from("claude", state as Parameters<typeof TranscriptTail.from>[1]);
+    const [startHere, entriesHere] = here.read();
+    assert.deepEqual([startHere, entriesHere.map((e) => e.text), here.readBytes], [1, whole.slice(1), statSync(path).size]);
+  } finally {
+    Buffer.concat = concat;
+    Buffer.from = from;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a chain that keeps nothing tells all that follows one of its transcripts that changed, numbered on", () => {
   const dir = temp();
   const [a, b] = ["a", "b"].map((n) => join(dir, `${n}.jsonl`));
@@ -445,5 +496,58 @@ test("a chain that keeps nothing tells all that follows one of its transcripts t
   const [from, told] = chain.read();
   assert.deepEqual([from, told.map((e) => e.text)], [1, ["a2", "b1"]]);
   assert.equal(chain.length, 3);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("ACP/AGY tool calls keep toolSummary, Path, line numbers and timestamps in brief and timeline", () => {
+  const dir = temp();
+  const path = join(dir, "agy.jsonl");
+  const lines = [
+    {
+      time: 1_794_521_282_000,
+      type: "tool",
+      id: "call_1",
+      name: "File station/src/mesh/screens.ts",
+      status: "completed",
+      args: {
+        Path: "/Users/u/workspace/stillfail/station/src/mesh/screens.ts",
+        StartLine: 1,
+        EndLine: 120,
+        ExtraNoise: "x".repeat(700),
+      },
+      result: "Created At: 2026-11-13T04:28:00+08:00\nCompleted At: 2026-11-13T04:28:02+08:00\nShowing lines 1-120",
+    },
+    {
+      time: 1_794_521_290_500,
+      startedAt: 1_794_521_289_100,
+      type: "tool",
+      id: "call_2",
+      name: "cd /Users/u/workspace && git status",
+      status: "completed",
+      args: {
+        CommandLine: "cd /Users/u/workspace && git status",
+        toolSummary: "Git status check",
+        WaitMsBeforeAsync: 5000,
+        ExtraNoise: "y".repeat(700),
+      },
+      result: "ok",
+    },
+  ];
+  writeFileSync(path, lines.map((l) => `${JSON.stringify(l)}\n`).join(""));
+  const whole = readTimeline("agy", path);
+  assert.equal(whole[0]?.at, new Date(Date.parse("2026-11-13T04:28:00+08:00")).toISOString());
+  assert.equal(whole[1]?.at, new Date(Date.parse("2026-11-13T04:28:02+08:00")).toISOString());
+  assert.equal(whole[2]?.at, new Date(1_794_521_289_100).toISOString());
+  assert.equal(whole[3]?.at, new Date(1_794_521_290_500).toISOString());
+  const briefed = whole.map(brief);
+  assert.deepEqual(JSON.parse(briefed[0]!.text), {
+    Path: "/Users/u/workspace/stillfail/station/src/mesh/screens.ts",
+    StartLine: 1,
+    EndLine: 120,
+  });
+  assert.deepEqual(JSON.parse(briefed[2]!.text), {
+    toolSummary: "Git status check",
+    CommandLine: "cd /Users/u/workspace && git status",
+  });
   rmSync(dir, { recursive: true, force: true });
 });

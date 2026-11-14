@@ -13,14 +13,14 @@
 /// for each time on top of a page it is put up on since.
 pub fn core_pictures(ask : (String, (Bytes?) -> Unit) -> Unit) -> (String, Int) -> String {
   // an address's image key once here, "" while it is asked
-  let keys : Map[String, String] = {}
+  let keys : Map[String, String] = Map([])
   // those that could not be had
-  let failed : Map[String, Bool] = {}
+  let failed : Map[String, Bool] = Map([])
   // each address with each page's time on top it was put up in (an address on two pages at once, each its own)
-  let shown : Map[String, Bool] = {}
+  let shown : Map[String, Bool] = Map([])
   // each address's answers so far, followed by all that read it (a node of the window's tree shown by it, read again as
   // its answer comes, whoever asked: an old view reads it every frame it is built)
-  let answers : Map[String, @signals.Signal[Int]] = {}
+  let answers : Map[String, @signals.Signal[Int]] = Map([])
   let answered = fn(url : String) -> @signals.Signal[Int] {
     match answers.get(url) {
       Some(s) => s
@@ -48,7 +48,7 @@ pub fn core_pictures(ask : (String, (Bytes?) -> Unit) -> Unit) -> (String, Int) 
         let asking = Ref(true)
         let told = fn() {
           let s = answered(url)
-          s.set(@signals.untracked(fn() { s.get() }) + 1)
+          s.set(s.untracked() + 1)
         }
         ask(url, fn(bytes) {
           match bytes {

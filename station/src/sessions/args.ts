@@ -224,7 +224,7 @@ export function optionsSaid(options: Json): string {
     const label = `${i + 1}. ${typeof o?.label === "string" ? o.label : ""}`;
     return o?.recommended !== undefined ? `${label} (recommended)` : label;
   });
-  return ` People can pick, numbered as the card shows them: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently). A message in the chat also closes the card, but may be a clarification rather than an answer.`;
+  return ` People can pick, numbered as the card shows them: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently: you are told the choice with what you are next handed). A message in the chat also closes the card, but may be a clarification rather than an answer.`;
 }
 
 /// What chat_post says of the card it posted.
@@ -284,19 +284,3 @@ export function isSlackMethod(method: string): boolean {
   const [first, ...rest] = method.split(".");
   return /^[a-z][A-Za-z]*$/.test(first ?? "") && rest.length > 0 && rest.every((p) => /^[A-Za-z]+$/.test(p));
 }
-
-/// Methods that land in a thread: the threads rule applies to them.
-export const WRITES = [
-  "chat.postMessage",
-  "chat.postEphemeral",
-  "chat.scheduleMessage",
-  "chat.update",
-  "chat.delete",
-  "chat.meMessage",
-  "reactions.add",
-  "reactions.remove",
-  "pins.add",
-  "pins.remove",
-  "files.completeUploadExternal",
-  "assistant.threads.",
-];

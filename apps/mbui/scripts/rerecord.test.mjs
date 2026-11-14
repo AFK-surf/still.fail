@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -78,7 +78,14 @@ if (process.env.RECORD_TEST_KEEP_MISSING !== "1") fs.writeFileSync(process.env.R
     if (options.alreadyKept) writeFileSync(env.RECORD_TEST_SATISFIED, "ok");
     const result = spawnSync("bash", [join(app, "scripts/rerecord.sh"), "demo"], { cwd: app, env, encoding: "utf8" });
     const lines = (path) => { try { return readFileSync(path, "utf8").trim().split("\n").length; } catch { return 0; } };
-    return { status: result.status, output: result.stdout + result.stderr, trace: readFileSync(trace, "utf8"), old, replays: lines(replays), generations: lines(generations) };
+    // (the take a failing replay leaves beside the run's logs, out/rerecord.*/demo.failed.trace: null where none)
+    let failed = null;
+    try {
+      for (const dir of readdirSync(join(app, "out"))) {
+        try { failed = readFileSync(join(app, "out", dir, "demo.failed.trace"), "utf8"); } catch {}
+      }
+    } catch {}
+    return { status: result.status, output: result.stdout + result.stderr, trace: readFileSync(trace, "utf8"), old, failed, replays: lines(replays), generations: lines(generations) };
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -105,6 +112,20 @@ test("rerecord restores the old trace when a replay fails without missing answer
   assert.notEqual(r.status, 0, r.output);
   assert.equal(r.generations, 0);
   assert.equal(r.trace, r.old);
+});
+
+test("rerecord keeps the take its replay fails over, beside the run's logs, and says where", () => {
+  const r = run({ alreadyKept: true, replayFail: true });
+  assert.notEqual(r.status, 0, r.output);
+  assert.equal(r.trace, r.old);
+  assert.equal(JSON.parse(r.failed).which, "new");
+  assert.match(r.output, /the take that fails is kept: .*demo\.failed\.trace/);
+});
+
+test("rerecord keeps no failing take where the replay passes", () => {
+  const r = run({ alreadyKept: true });
+  assert.equal(r.status, 0, r.output);
+  assert.equal(r.failed, null);
 });
 
 test("rerecord restores the old trace when generating answers fails", () => {

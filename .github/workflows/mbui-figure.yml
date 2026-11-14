@@ -5,13 +5,13 @@ on:
     branches: ["**"]
     paths:
       - "apps/mbui/src/**"
-      - "apps/mbui/mbui/src/**"
-      - "apps/mbui/mbui/tools/**"
-      - "apps/mbui/mbui/scripts/**"
+      - "libs/mbui/src/**"
+      - "libs/mbui/tools/**"
+      - "libs/mbui/scripts/**"
       - "apps/mbui/tools/wasm-film/**"
       - "apps/mbui/moon.mod"
       - "apps/mbui/moon.work"
-      - "apps/mbui/mbui/moon.mod"
+      - "libs/mbui/moon.mod"
       - "apps/mbui/scripts/env.sh"
       - "apps/mbui/scripts/mbui.sh"
       - "apps/mbui/scripts/mac.sh"
@@ -33,7 +33,7 @@ jobs:
   # pipeline's check waited 6-20 minutes for one (2026-11-03, as asked: "分支只在改到渲染器时跑"). Main runs them on
   # every change above, and publishes what it built.
   what:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository_owner == 'AFK-surf'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -45,7 +45,7 @@ jobs:
         run: |
           if [ "$GITHUB_REF" = refs/heads/main ] || [ "$GITHUB_EVENT_NAME" != push ]; then echo "run=yes" >> "$GITHUB_OUTPUT"; exit 0; fi
           base=$(git merge-base origin/main HEAD)
-          if git diff --name-only "$base" HEAD | grep -qE '^apps/mbui/mbui/src/(figure|film|media|render)/|^apps/mbui/src/(sffigure|sffilm|sfmedia|sfwasmfilm)[^/]*/|^apps/mbui/tools/wasm-film/|^apps/mbui/scripts/(figure|media)[^/]*\.sh$|^apps/mbui/scripts/wasm-film-build\.sh$|^\.github/workflows/mbui-figure\.yml$|^\.github/actions/mbui-moonbit/'; then
+          if git diff --name-only "$base" HEAD | grep -qE '^libs/mbui/src/(figure|film|media|render)/|^apps/mbui/src/(sffigure|sffilm|sfmedia|sfwasmfilm)[^/]*/|^apps/mbui/tools/wasm-film/|^apps/mbui/scripts/(figure|media)[^/]*\.sh$|^apps/mbui/scripts/wasm-film-build\.sh$|^\.github/workflows/mbui-figure\.yml$|^\.github/actions/mbui-moonbit/'; then
             echo "run=yes" >> "$GITHUB_OUTPUT"
           else
             echo "run=no" >> "$GITHUB_OUTPUT"; echo "the renderers' own code unchanged on this branch: not built here (main builds them)"

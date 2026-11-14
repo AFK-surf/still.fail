@@ -3,8 +3,9 @@
 
 ///|
 /// Whether times say when (pressed, every one in the app says the other: the web's ui.tsx useAbsoluteTime), not how
-/// long ago.
-pub let absolute_times : Ref[Bool] = { val: false }
+/// long ago. A signal: what a node shows of a time follows it.
+// kept across runs: false as a run begins (pages.mbt)
+pub let absolute_times : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// How much of `accent` a reference's `@` has.

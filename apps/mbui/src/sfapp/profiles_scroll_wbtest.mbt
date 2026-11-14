@@ -22,7 +22,7 @@ test "profiles: the sidebar thumb is outside its rows, dragging it scrolls witho
   assert_eq(bar.0 + bar.2, edge - @ui.scroll_bar_inset)
   let x = bar.0 + bar.2 / 2.0
   let y = bar.1 + bar.3 / 2.0
-  t.move(x, y)
+  t.move_to(x, y)
   t.drag(x, y, x, y - 80.0)
   assert_true(profiles_side_bar(t).1 < bar.1)
   assert_eq(@sfdesk.wide.side_w.get(), width)

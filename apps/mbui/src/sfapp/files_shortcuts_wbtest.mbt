@@ -17,13 +17,13 @@ test "a pinned folder and the same favorite appear once in the common places" {
 
 ///|
 test "old pinned folders can be removed from and returned to the personal list without changing the station" {
-  new_run()
+  fresh_app()
   let calls : Array[Made] = []
   let base = fixture("home")
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

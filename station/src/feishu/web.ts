@@ -33,6 +33,18 @@ const RETRIES = 4;
 /// A file sent with a call (multipart).
 export type FilePart = { field: string; bytes: Uint8Array; name: string; mime: string };
 
+/// A non-JSON answer to an agent's OpenAPI call; only the tool puts it in that session's workspace.
+export class FeishuFile {
+  readonly bytes: Uint8Array;
+  readonly contentType: string;
+  readonly disposition: string;
+  constructor(bytes: Uint8Array, contentType: string, disposition: string) {
+    this.bytes = bytes;
+    this.contentType = contentType;
+    this.disposition = disposition;
+  }
+}
+
 export class FeishuClient {
   readonly base: string;
   readonly appId: string;
@@ -66,8 +78,8 @@ export class FeishuClient {
   }
 
   /// A call as Feishu answers it: its JSON with code 0, else a FeishuError. `body` is JSON (or multipart with `files`);
-  /// `query` goes in the address. Rate limits are waited out.
-  private async raw(method: string, path: string, body: Json | null, token: string | null, query?: Record<string, string>, files?: FilePart[]): Promise<Json> {
+  /// `query` goes in the address. Rate limits are waited out. An agent's call can also take non-JSON answers.
+  private async raw(method: string, path: string, body: Json | null, token: string | null, query?: Record<string, string>, files?: FilePart[], takeFile = false): Promise<Json> {
     const url = new URL(this.base + path);
     for (const [k, v] of Object.entries(query ?? {})) url.searchParams.set(k, v);
     for (let attempt = 0; ; attempt++) {
@@ -83,6 +95,24 @@ export class FeishuClient {
         payload = JSON.stringify(body);
       }
       const response = await fetch(url, { method, headers, body: payload, signal: AbortSignal.timeout(files ? 300_000 : 30_000) });
+      const waitLimit = async () => {
+        const said = Number(response.headers.get("x-ogw-ratelimit-reset") ?? response.headers.get("retry-after") ?? "1");
+        await wall.sleep((Number.isFinite(said) && said > 0 ? Math.min(said, 30) : 1) * 1000);
+      };
+      if (response.status === 429 && attempt < RETRIES) {
+        await response.body?.cancel();
+        await waitLimit();
+        continue;
+      }
+      const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+      const isJson = /^(?:application\/json|[^/;\s]+\/[^;\s]+\+json)(?:\s*;|\s*$)/i.test(contentType);
+      if (takeFile && !isJson) {
+        if (!response.ok) {
+          await response.body?.cancel();
+          throw new FeishuError(`${method} ${path}`, response.status, `HTTP ${response.status}`);
+        }
+        return new FeishuFile(new Uint8Array(await response.arrayBuffer()), contentType, response.headers.get("content-disposition") ?? "");
+      }
       const text = await response.text();
       let data: Json = null;
       try {
@@ -91,9 +121,8 @@ export class FeishuClient {
         throw new FeishuError(`${method} ${path}`, response.status, text.slice(0, 200));
       }
       const code = typeof data?.code === "number" ? data.code : response.ok ? 0 : response.status;
-      if ((response.status === 429 || LIMITED.has(code)) && attempt < RETRIES) {
-        const said = Number(response.headers.get("x-ogw-ratelimit-reset") ?? response.headers.get("retry-after") ?? "1");
-        await wall.sleep((Number.isFinite(said) && said > 0 ? Math.min(said, 30) : 1) * 1000);
+      if (LIMITED.has(code) && attempt < RETRIES) {
+        await waitLimit();
         continue;
       }
       if (code !== 0) throw new FeishuError(`${method} ${path}`, code, typeof data?.msg === "string" ? data.msg : `HTTP ${response.status}`);
@@ -101,16 +130,16 @@ export class FeishuClient {
     }
   }
 
-  /// An OpenAPI call as the app (its tenant token): Feishu's whole answer (`{code, msg, data}`).
-  async api(method: string, path: string, body: Json | null = null, query?: Record<string, string>, files?: FilePart[]): Promise<Json> {
+  /// An OpenAPI call as the app (its tenant token): Feishu's whole JSON answer, or a file when `takeFile` is set.
+  async api(method: string, path: string, body: Json | null = null, query?: Record<string, string>, files?: FilePart[], takeFile = false): Promise<Json> {
     const token = await this.tenantToken();
     try {
-      return await this.raw(method, path, body, token, query, files);
+      return await this.raw(method, path, body, token, query, files, takeFile);
     } catch (error) {
       // A token Feishu stopped taking (the secret changed, say): once more with a new one.
       if (error instanceof FeishuError && (error.code === 99991663 || error.code === 99991661)) {
         this.token = null;
-        return this.raw(method, path, body, await this.tenantToken(), query, files);
+        return this.raw(method, path, body, await this.tenantToken(), query, files, takeFile);
       }
       throw error;
     }

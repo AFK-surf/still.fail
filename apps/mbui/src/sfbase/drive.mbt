@@ -5,6 +5,7 @@
 
 ///|
 /// A file of a drive handed to the viewer that previews it (open_file): where it is and what it is.
+#derive(Eq)
 pub(all) struct DriveFile {
   station : String
   root : String
@@ -17,7 +18,7 @@ pub(all) struct DriveFile {
   kind : String
   /// its media type, by its name
   mime : String
-} derive(Eq)
+}
 
 ///|
 /// An entry of a folder (DriveEntry).
@@ -130,9 +131,9 @@ pub fn dv_station(v : Json) -> DvStation {
 }
 
 ///|
-/// The workspace's stations (the `stations` topic), and why they could not be read.
+/// The workspace's stations (their rows: station_rows), and why they could not be read.
 pub fn dv_stations(src : Source, ws : String) -> (Array[DvStation]?, String?) {
-  let t = src.topic("stations", { "scope": Json::string(ws) }).get().snapshot()
+  let t = station_rows(src, ws)
   let error = match t.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None
@@ -140,6 +141,23 @@ pub fn dv_stations(src : Source, ws : String) -> (Array[DvStation]?, String?) {
   match t.value {
     Some(Array(a)) => (Some(a.map(dv_station)), error)
     _ => (None, error)
+  }
+}
+
+///|
+/// The workspace's stations with a drive (their overview says one; one from before the drive has none), this machine's
+/// (`here`) first, then as the workspace lists them (the core's drive-browse.ts withDrive), and why they could not be
+/// read: of the rows every list reads, not a list of the core's own for the files.
+pub fn dv_drive_stations(src : Source, ws : String, here? : String = "") -> (Array[DvStation]?, String?) {
+  let (all, error) = dv_stations(src, ws)
+  match all {
+    Some(a) => {
+      let drives = a.filter(fn(s) { s.drive })
+      let out = drives.filter(fn(s) { here != "" && s.station == here })
+      out.append(drives.filter(fn(s) { !(here != "" && s.station == here) }))
+      (Some(out), error)
+    }
+    None => (None, error)
   }
 }
 
@@ -187,7 +205,7 @@ pub fn dv_join(dir : String, name : String) -> String {
 ///|
 pub fn dv_parent(path : String) -> String {
   match path.rev_find("/") {
-    Some(i) => path.view(end_offset=i).to_owned()
+    Some(i) => path.exact_view(end=i).to_owned()
     None => ""
   }
 }
@@ -196,7 +214,7 @@ pub fn dv_parent(path : String) -> String {
 /// Whether an absolute path names a Windows drive or UNC share. A backslash in a Unix name is not a separator.
 pub fn dv_windows_path(path : String) -> Bool {
   path.has_prefix("\\\\") ||
-  (path.find(":") is Some(1) && (path.view(start_offset=2).has_prefix("\\") || path.view(start_offset=2).has_prefix("/")))
+  (path.find(":") is Some(1) && (path.exact_view(start=2).has_prefix("\\") || path.exact_view(start=2).has_prefix("/")))
 }
 
 ///|
@@ -209,7 +227,7 @@ pub fn dv_name(path : String) -> String {
     _ => None
   }
   match last {
-    Some(i) => path.view(start_offset=i + 1).to_owned()
+    Some(i) => path.exact_view(start=i + 1).to_owned()
     None => path
   }
 }
@@ -370,7 +388,9 @@ pub fn dv_beside_name(
 /// A file whose name was taken in its folder kept beside it (保留两者: dv_beside_name over the others going up there),
 /// then on its way again.
 pub fn dv_keep_both(src : Source, u : DvUpload) -> Unit {
-  let others = ups.uploads.filter(fn(x) { x.serial != u.serial && x.station == u.station && x.root == u.root && x.dir == u.dir })
+  let others = ups.uploads.filter(fn(x) {
+    x.serial != u.serial && x.station == u.station && x.root == u.root && x.dir == u.dir && x.state.get() != "done"
+  })
   u.state.set("naming")
   dv_beside_name(src, u.station, u.root, u.dir, u.name.get(), others.map(fn(x) { x.name.get() }), fn(r) {
     match r {

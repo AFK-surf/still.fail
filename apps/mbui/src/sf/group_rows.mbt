@@ -11,8 +11,8 @@ priv struct GroupRows {
 
 ///|
 /// Each group's rows as last drawn, by the group's key.
-// kept across runs: put back by group_rows_reset (the app's reset)
-let group_rows_of : Map[String, GroupRows] = {}
+// kept across runs: put back by group_rows_reset, as a run begins (run_begin)
+let group_rows_of : Map[String, GroupRows] = Map([])
 
 ///|
 /// What every group's rows were forgets (a run anew).
@@ -23,8 +23,10 @@ pub fn group_rows_reset() -> Unit {
 ///|
 /// Group `key`'s rows, each by its key and what draws it (in a group's body: @sf.group): a row new to it comes where it
 /// is, one gone goes where it was, its room opening and closing on a row's way (@ui.row_size_ms), what is in it in the
-/// middle of its room. As they are the first time.
+/// middle of its room. As they are the first time, and the first time again once it was not drawn (its page left, its
+/// panel gone, another level of it shown), what changed meanwhile not one of its rows' coming or going.
 pub fn group_rows(c : @ui.Ctx, key : String, rows : Array[(String, () -> Unit)]) -> Unit {
+  ignore(c.on_unbuilt(c.id("\u{1}group-rows\u{1}" + key), fn() { group_rows_of.remove(key) }))
   let first = !group_rows_of.contains(key)
   let st = match group_rows_of.get(key) {
     Some(s) => s
@@ -34,11 +36,11 @@ pub fn group_rows(c : @ui.Ctx, key : String, rows : Array[(String, () -> Unit)])
       s
     }
   }
-  let here : Map[String, Bool] = {}
+  let here : Map[String, Bool] = Map([])
   for r in rows {
     here[r.0] = true
   }
-  let was : Map[String, Bool] = {}
+  let was : Map[String, Bool] = Map([])
   for r in st.order {
     was[r.0] = true
   }
@@ -62,11 +64,11 @@ pub fn group_rows(c : @ui.Ctx, key : String, rows : Array[(String, () -> Unit)])
     let name = "group-rows/" + key + "/" + k
     let a = @motion.anim(c, name, if shown { 1.0 } else { 0.0 }, global=true)
     if shown && !was.contains(k) {
-      a.snap(if first { 1.0 } else { 0.0 })
+      a.snap(c, if first { 1.0 } else { 0.0 })
     }
     // (a share of its room: a Move as long as the room is tall, as what is under a post goes)
-    a.follow(if shown { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height(c, name)))
-    let share = a.get()
+    a.follow(c, if shown { 1.0 } else { 0.0 }, @motion.moved().per_unit(@motion.reveal_height(c, name)))
+    let share = a.get(c)
     if !shown && share <= 0.0 {
       continue
     }

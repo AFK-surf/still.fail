@@ -98,11 +98,11 @@ test "desk: a click on the image hides the bar, another brings it back; one roun
   assert_true(v.bars_shown())
   // 600 × 400 in 1280 × 800, fitted 32 in: in the middle as it is
   t.tap(640.0, 400.0)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_click_ms)
   assert_true(viewer.get() is Some(_))
   assert_true(!v.bars_shown())
   t.tap(640.0, 400.0)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_click_ms)
   assert_true(v.bars_shown())
   t.tap(150.0, 700.0)
   assert_true(viewer.get() is None)
@@ -113,12 +113,12 @@ test "desk: the bar hidden by a click shows while the pointer is along the top, 
   let t = desk_tester("chat-preview-image")
   let v = viewer.get().unwrap()
   t.tap(640.0, 400.0)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_click_ms)
   assert_true(!v.bars_shown())
-  t.move(640.0, 20.0)
+  t.move_to(640.0, 20.0)
   t.draw()
   assert_true(v.bars_shown())
-  t.move(640.0, 400.0)
+  t.move_to(640.0, 400.0)
   t.draw()
   assert_true(!v.bars_shown())
 }
@@ -174,6 +174,25 @@ test "desk: a chat's Markdown reads in the reader on its paper, the preview's ow
   assert_true(t.find("源码") is None)
   t.key(@ui.key_escape)
   assert_true(viewer.get() is None)
+}
+
+///|
+test "desk: words picked in a chat's Markdown read over its chat, the pointer taken to where the chat's words lie under the paper: the file's alone, none of the chat's" {
+  let t = desk_tester("chat-preview-md")
+  t.run_for(@sf.reader_place_ms)
+  // (a message of the chat under the reader's paper, over the list's first line)
+  let (_, uy, _, uh) = t.run_rects("截图也一起换掉")[0]
+  let (x, y, _, h) = t.run_rects("换成")[0]
+  assert_true(uy + uh / 2.0 < y, msg="the chat's words under the paper above the line pressed")
+  // (taken to the start of the file's first item, over the line pressed, wherever the chat's page has its messages
+  // under the paper: the chat's own of those words are under it, not drawn)
+  let firsts = t.run_rects("版本号和更新说明").filter(fn(r) { r.1 < y })
+  assert_true(firsts.length() > 0, msg="the file's first item over the line pressed")
+  let (fx, fy, _, fh) = firsts[0]
+  t.drag(x + 1.0, y + h / 2.0, fx + 1.0, fy + fh / 2.0)
+  let picked = t.ctx().selected_text()
+  assert_true(picked.contains("版本号和更新说明"), msg=picked)
+  assert_false(picked.contains("换掉"), msg=picked)
 }
 
 ///|

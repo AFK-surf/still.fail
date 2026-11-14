@@ -120,7 +120,7 @@ fn things_held_seen(t : @ui.Tester, r : ChatRef, name : String, open : () -> Uni
   let menu_lit = lit()
   // (its menu's 在对话中查看 in words: the row's own is its icon alone)
   let menu = t.words().iter().any(fn(w) { w.0 == @sf.t("web-main.things.show") && w.5 > 0.0 })
-  let haptics = t.haptics()[felt:].to_array()
+  let haptics = t.haptics()[felt:].to_owned()
   // (the sheet under the menu: pushed back, its row's words where they are then, and dimmed, the scrim drawn over them)
   let pushed = t.words().filter(fn(w) { w.0 == name }).map(fn(w) { (half(w.1), half(w.2)) })
   let dimmed = match pushed {
@@ -151,8 +151,8 @@ test "小屏: the chat's things whose body is nodes: a file's row held by a fing
   assert_eq(now.2, old.2, msg="lit while its menu is open")
   assert_eq(now.3, old.3, msg="its menu")
   // (the sheet behind it pushed back and dimmed: its row up from where it was, the scrim over it)
-  assert_true(old.4.1.length() > 0 && old.4.1[0].1 < old.4.0, msg="the old one pushed back: \{old.4}")
-  assert_true(old.4.2.length() > 1, msg="the old one dimmed over itself: \{old.4}")
+  assert_true(old.4.1.length() > 0 && old.4.1[0].1 < old.4.0, msg="the old one pushed back: \{Repr(old.4)}")
+  assert_true(old.4.2.length() > 1, msg="the old one dimmed over itself: \{Repr(old.4)}")
   assert_eq(now.4, old.4, msg="pushed back and dimmed")
 }
 
@@ -184,14 +184,14 @@ fn things_first_seen(t : @ui.Tester, r : ChatRef, frame : Bytes, open : () -> Un
   t.run_for(sheet_way_ms(t))
   let grabs = t
     .views()[before:]
-    .to_array()
+    .to_owned()
     .filter_map(fn(l) {
       match l.split(" ").map(fn(p) { p.to_owned() }).to_array() {
         ["control", view, "21", ..] => Some(view)
         _ => None
       }
     })
-  guard grabs is [view, ..] else { fail("no frame asked of a player: \{t.views()}") }
+  guard grabs is [view, ..] else { fail("no frame asked of a player: \{Repr(t.views())}") }
   assert_true(t.view_said("{\"still\":{\"view\":\{view}},\"b\":\"\{hex_bytes(frame)}\"}"), msg="answered")
   t.run_for(@ui.move_most_ms)
   let drawn = things_firsts_drawn(t)
@@ -208,13 +208,14 @@ test "小屏: the chat's things whose body is nodes: a video the station made no
   let frame = fixture_file_png("演示录屏.mp4")
   let old = things_first_seen(t, r, frame, fn() { open_things_old(src, r) })
   let now = things_first_seen(t, r, frame, fn() { open_things(src, r, 7.0) })
-  assert_true(old.0 > 0 && old.1.length() > 0, msg="the old one's first frame: \{old}")
+  assert_true(old.0 > 0 && old.1.length() > 0, msg="the old one's first frame: \{Repr(old)}")
   assert_eq(now, old)
 }
 
 ///|
-/// The chat's things open on a phone used with a mouse (an iPad's, a narrow window's): what shows a link's card.
-fn things_chat_mouse(previews? : Map[String, Json] = {}) -> (@ui.Tester, Source, ChatRef) {
+/// The chat's things open on a phone used with a mouse (an iPad's, a narrow window's): what shows a link's card. Its
+/// pictures (`link.preview.picture`) as `pictures` has them by the link's address and which, its type PNG.
+fn things_chat_mouse(previews? : Map[String, Json] = {}, pictures? : Map[String, Bytes] = {}) -> (@ui.Tester, Source, ChatRef) {
   new_run()
   let base = fixture("chat")
   // (a link's card as `previews` has it by its address, where it has one: the made-up core's otherwise)
@@ -225,6 +226,12 @@ fn things_chat_mouse(previews? : Map[String, Json] = {}) -> (@ui.Tester, Source,
       match previews.get(text(Some(Json::object(params)), "url")) {
         Some(v) if name == "linkPreview" => { ..got, value: Some(v) }
         _ => got
+      }
+    },
+    read_bytes: fn(name, params, done) {
+      match pictures.get(text(Some(params), "url") + "\u{1}" + text(Some(params), "which")) {
+        Some(b) if name == "link.preview.picture" => done(Ok(({ "type": "image/png" }, b)))
+        _ => (base.read_bytes)(name, params, done)
       }
     },
   }
@@ -245,12 +252,12 @@ fn things_peek_seen(t : @ui.Tester, r : ChatRef, kind : String, name : String, o
   t.run_for(sheet_way_ms(t))
   let before = words_below(t, 1.0)
   let at = t.words().filter(fn(w) { w.0 == name && w.2 >= 844.0 * (1.0 - things_share) })
-  guard at is [(_, x, y, w, h, _), ..] else { fail("\{name}: not drawn: \{before}") }
-  t.move(x + w / 2.0, y + h / 2.0)
+  guard at is [(_, x, y, w, h, _), ..] else { fail("\{name}: not drawn: \{Repr(before)}") }
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
   let card = words_below(t, 1.0).filter(fn(w) { !before.contains(w) })
   // (off the row, onto the sheet's head: gone)
-  t.move(x + w / 2.0, 844.0 * (1.0 - things_share))
+  t.move_to(x + w / 2.0, 844.0 * (1.0 - things_share))
   t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
   let gone = words_below(t, 1.0).filter(fn(w) { !before.contains(w) }).length() == 0
   t.key(@ui.key_escape)
@@ -266,8 +273,8 @@ test "小屏 with a mouse: the chat's things whose body is nodes: a link's row a
     let (kind, name) = k
     let old = things_peek_seen(t, r, kind, name, fn() { open_things_old(src, r) })
     let now = things_peek_seen(t, r, kind, name, fn() { open_things(src, r, 7.0) })
-    assert_true(old.0.length() > 0 && old.1, msg="\{kind}: the old one's card, gone after: \{old}")
-    assert_eq(now, old, msg="\{kind}: \{now}, the old one's \{old}")
+    assert_true(old.0.length() > 0 && old.1, msg="\{kind}: the old one's card, gone after: \{Repr(old)}")
+    assert_eq(now, old, msg="\{kind}: \{Repr(now)}, the old one's \{Repr(old)}")
   }
 }
 
@@ -281,10 +288,10 @@ fn things_card_seen(t : @ui.Tester, r : ChatRef, kind : String, name : String, o
   let at = t.words().filter(fn(w) { w.0 == name && w.2 >= 844.0 * (1.0 - things_share) })
   guard at is [(_, x, y, w, h, _), ..] else { fail("\{name}: not drawn") }
   let (px, py) = (x + w / 2.0, y + h / 2.0)
-  t.move(px, py)
+  t.move_to(px, py)
   t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
   let out = seen(px, py)
-  t.move(px, 844.0 * (1.0 - things_share))
+  t.move_to(px, 844.0 * (1.0 - things_share))
   t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
   // (a card as tall as the window is still under the pointer: Escape shuts it first, then the sheet)
   for _ in 0..<2 {
@@ -317,13 +324,13 @@ test "小屏 with a mouse: a link's card whose row is nodes waits for the hand t
     let title = t.words().filter(fn(w) { w.0 == @sf.t("web-main.things.find") })
     guard title is [(_, tx, ty, tw, th, _), ..] else { fail("the sheet's field: not drawn") }
     t.press_at(tx + tw / 2.0, ty + th / 2.0)
-    t.move(x + w / 2.0, y + h / 2.0)
+    t.move_to(x + w / 2.0, y + h / 2.0)
     t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
     let held = t.find(@sf.t("common.link.copy")) is Some(_)
     t.release(x + w / 2.0, y + h / 2.0)
     t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
     let after = t.find(@sf.t("common.link.copy")) is Some(_)
-    t.move(x + w / 2.0, 844.0 * (1.0 - things_share))
+    t.move_to(x + w / 2.0, 844.0 * (1.0 - things_share))
     t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
     t.key(@ui.key_escape)
     t.run_for(sheet_way_ms(t))
@@ -336,9 +343,10 @@ test "小屏 with a mouse: a link's card whose row is nodes waits for the hand t
 }
 
 ///|
-/// A page's icon not square (the made-up still of 演示录屏.mp4, 16:9), as a data address: what its card's square holds.
-fn things_wide_icon() -> String {
-  "data:image/png;base64," + @codec.base64(fixture_file_png("演示录屏.mp4"))
+/// A page's icon not square (the made-up still of 演示录屏.mp4, 16:9), as the core answers it (`link.preview.picture`):
+/// what its card's square holds.
+fn things_wide_icon() -> Bytes {
+  fixture_file_png("演示录屏.mp4")
 }
 
 ///|
@@ -348,11 +356,14 @@ test "小屏 with a mouse: a link's card whose row is nodes holds a page's icon 
     "url": "https://example.com/bench/list",
     "title": "列表滚动的性能数据",
     "site": "Example",
-    "icon": Json::string(things_wide_icon()),
+    "icon": "wide-icon",
   }
-  let (t, src, r) = things_chat_mouse(previews={ "https://example.com/bench/list": page })
-  let key = @sf.data_image(things_wide_icon())
-  let drawn = fn(_x : Double, _y : Double) { media_drawn(t, key).map(fn(b) { "\{b}" }).join(" ") }
+  let (t, src, r) = things_chat_mouse(previews={ "https://example.com/bench/list": page }, pictures={
+    "https://example.com/bench/list\u{1}icon": things_wide_icon(),
+  })
+  // (its image's key, once its card asked it)
+  let key = fn() { @sfbase.link_picture(src, r.station, "https://example.com/bench/list", Some(page), "icon") }
+  let drawn = fn(_x : Double, _y : Double) { media_drawn(t, key()).map(fn(b) { "\{@ui.rect_text(b)}" }).join(" ") }
   let old = things_card_seen(t, r, "links", "列表滚动的性能数据", fn() { open_things_old(src, r) }, drawn)
   let now = things_card_seen(t, r, "links", "列表滚动的性能数据", fn() { open_things(src, r, 7.0) }, drawn)
   assert_true(old != "", msg="the old one's icon")
@@ -389,11 +400,11 @@ test "小屏 with a mouse: a link's card whose row is nodes taller than the wind
         [(_, x, y, w, h), ..] => (x + w / 2.0, y + h / 2.0)
         _ => (0.0, 0.0)
       }
-      t.move(lx, ly)
+      t.move_to(lx, ly)
       t.wheel(lx, ly, things_card_wheel)
       t.run_for(@ui.move_most_ms)
       let wheeled = things_words_drawn(t).filter(fn(w) { w.0.has_prefix("label ") })
-      "\{shown}\n\{wheeled}"
+      "\{@ui.list_text(shown.map(fn(w) { "(\{w.0}, \{w.1}, \{w.2}, \{w.3}, \{w.4})" }))}\n\{@ui.list_text(wheeled.map(fn(w) { "(\{w.0}, \{w.1}, \{w.2}, \{w.3}, \{w.4})" }))}"
     })
   }
   let old = seen(fn() { open_things_old(src, r) })
@@ -412,21 +423,21 @@ test "小屏 with a mouse: a link's card whose row is nodes, its address copied,
     let at = t.words().filter(fn(w) { w.0 == "列表滚动的性能数据" && w.2 >= 844.0 * (1.0 - things_share) })
     guard at is [(_, x, y, w, h, _), ..] else { fail("the link's row: not drawn") }
     let (px, py) = (x + w / 2.0, y + h / 2.0)
-    t.move(px, py)
+    t.move_to(px, py)
     t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
     guard t.all(Button, label=@sf.t("common.link.copy")) is [b, ..] else { fail("its copy: not drawn") }
     let (bx, by, bw, bh) = b.rect
-    t.move(bx + bw / 2.0, by + bh / 2.0)
+    t.move_to(bx + bw / 2.0, by + bh / 2.0)
     t.tap(bx + bw / 2.0, by + bh / 2.0)
     // (off the card and the row: gone; back on the row: shown again)
-    t.move(px, 844.0 * (1.0 - things_share))
+    t.move_to(px, 844.0 * (1.0 - things_share))
     t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
-    t.move(px, py)
+    t.move_to(px, py)
     t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
     let again = t.find(@sf.t("common.copied")) is Some(_)
     t.run_for(@sf.copied_ms)
     let after = t.find(@sf.t("common.link.copy")) is Some(_)
-    t.move(px, 844.0 * (1.0 - things_share))
+    t.move_to(px, 844.0 * (1.0 - things_share))
     t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
     t.key(@ui.key_escape)
     t.run_for(sheet_way_ms(t))
@@ -436,4 +447,28 @@ test "小屏 with a mouse: a link's card whose row is nodes, its address copied,
   let now = seen(fn() { open_things(src, r, 7.0) })
   assert_eq(old, (true, true), msg="the old one's")
   assert_eq(now, old)
+}
+
+///|
+test "小屏 with a mouse: a link's card in the chat's things (web_peek_node): the pointer over its ground is the arrow (@sf.ground_node)" {
+  let (t, src, r) = things_chat_mouse()
+  let seen = fn(_px : Double, _py : Double) {
+    // (the card: the last group read out, drawn over all of the window, as wide as a card at least)
+    match t.semantics().filter(fn(s) { s.role == Group && !s.hidden && s.rect.2 >= 200.0 }).last() {
+      Some(c) => {
+        let (x, y, w, h) = c.rect
+        [(x + 3.0, y + h / 2.0), (x + w / 2.0, y + 3.0), (x + w / 2.0, y + h - 3.0), (x + w - 3.0, y + h / 2.0)]
+        .map(fn(p) {
+          t.move_to(p.0, p.1)
+          t.run_for(@ui.move_most_ms)
+          "\{t.cursor()}"
+        })
+        .join(" ") +
+        " \{Repr(c.rect)}"
+      }
+      None => "none"
+    }
+  }
+  let got = things_card_seen(t, r, "links", "列表滚动的性能数据", fn() { open_things(src, r, 7.0) }, seen)
+  assert_true(got.has_prefix("Arrow Arrow Arrow Arrow "), msg=got)
 }

@@ -11,7 +11,9 @@ import { Deferred, Effect } from "effect";
 import { CoreError, HostError } from "../src/error.ts";
 import { type Entry, entryHash, next, signedBytes } from "../src/lock.ts";
 import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS, personalBegin, personalPairState, personalProve } from "../src/views/pair.ts";
+import { lockSeen, signerOf } from "../src/views/lock.ts";
 import { ME, elsewhere, genesis, pipe, rig } from "./lock-rig.ts";
+import { stationReplies } from "./station-fixture.ts";
 
 /// The owner's phone and computer, apps that sign: the devices that may approve this one.
 const PHONE_APP = "e1".repeat(32);
@@ -34,7 +36,7 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
       { id: PHONE_APP, sub: "s1", kind: "app", label: "still.fail Android · Pixel 8", sign_key: owner.id },
     ]) } : {}),
   }));
-  r.core.inner.mesh = () => Effect.succeed({ deviceId: () => ME, lockClaim: () => null, link: () => Effect.fail(CoreError.plainly("mesh", "this fixture has no station link")) } as never);
+  r.core.inner.mesh = () => Effect.succeed({ deviceId: () => ME, sign: () => ({ publicKey: new Uint8Array(32), signature: new Uint8Array(64) }), link: () => Effect.fail(CoreError.plainly("mesh", "this fixture has no station link")) } as never);
   r.core.inner.cloudSync.credential = () => Effect.succeed({ credential: "signed-member", issued_at: 1000, expires_at: 4102444800, relay_url: "https://relay.example" });
   const dials: Record<string, number> = {};
   const hellos: unknown[] = [];
@@ -226,7 +228,8 @@ test("a trusted device opened after the new device asked shows its code: dialled
   const p = await w.pair();
   assert.equal(p.state, "code");
   assert.deepEqual(p.approvers.map((a: { id: string; showing: boolean }) => [a.id, a.showing]), [[PHONE_APP, true], [LAPTOP_APP, false]]);
-  assert.match(p.approvers[0].nameText, /Pixel 8/);
+  // Each a row of its page's list: a phone or a computer, and which machine.
+  assert.deepEqual(p.approvers.map((a: { kind: string; nameText: string }) => [a.kind, a.nameText]), [["phone", "Pixel 8"], ["computer", "MacBook"]]);
   assert.equal((w.hellos[0] as { t: string }).t, "hello");
   // The phone kept, not dialled again; the laptop still is, a code shown elsewhere or not, PAIR_DIAL_TRIES times in all.
   await w.host.time.pass(10 * PAIR_REDIAL_MS);
@@ -330,6 +333,12 @@ test("a personal lock's code disappears during the search: another device can st
   w.core.inner.adb.personal = () => ({
     makeKey: () => Effect.succeed(`ed25519:${"11".repeat(32)}`),
     approvers: () => [{ id: PHONE_APP, label: "phone" }, { id: LAPTOP_APP, label: "laptop" }],
+    // (the workspaces' locks are shown again as the try goes on: views/pair.ts `changed`)
+    standing: () => "none", root: () => null,
+    // (views/lock.ts `ownLockFor` reads these of it as the locks are read: it begins nothing here)
+    refresh: () => Effect.void, entries: () => [], mayBeginQuietly: () => false,
+    // (and what is pending of it, on the lock's topic, as the workspace's view changes)
+    pendingShown: () => [], stationsChanged: () => {},
   }) as never;
   await Effect.runPromise(personalBegin(w.core.inner, ["s1"]));
   await w.host.time.pass(1_000);
@@ -348,6 +357,12 @@ test("a personal lock's code disappears while it is checked: another device can 
   w.core.inner.adb.personal = () => ({
     makeKey: () => Effect.succeed(`ed25519:${"11".repeat(32)}`),
     approvers: () => [{ id: PHONE_APP, label: "phone" }, { id: LAPTOP_APP, label: "laptop" }],
+    // (the workspaces' locks are shown again as the try goes on: views/pair.ts `changed`)
+    standing: () => "none", root: () => null,
+    // (views/lock.ts `ownLockFor` reads these of it as the locks are read: it begins nothing here)
+    refresh: () => Effect.void, entries: () => [], mayBeginQuietly: () => false,
+    // (and what is pending of it, on the lock's topic, as the workspace's view changes)
+    pendingShown: () => [], stationsChanged: () => {},
   }) as never;
   await Effect.runPromise(personalBegin(w.core.inner, ["s1"]));
   await w.host.time.pass(1_000);
@@ -533,4 +548,59 @@ test("cancelled while credentials are being fetched: no further attempts or dial
   await w.host.time.pass(PAIR_REDIAL_MS);
   assert.deepEqual([...requests].sort(), ["w2", "ws"], "no further credential requests follow cancellation");
   assert.deepEqual(w.hellos, []);
+});
+
+/// An entry the owner's phone signs, kept at the cloud and read here (as addApprover's is).
+async function signedIn(w: Awaited<ReturnType<typeof waiting>>, kind: string, body: unknown) {
+  const entry = next("ws", w.cloud.head("ws"), w.host.nowMs() / 1000, kind, body);
+  w.cloud.chains.set("ws", [...w.cloud.chains.get("ws")!, { ...entry, sig: { key: w.owner.id, alg: "Ed25519", sig: w.owner.signBytes(signedBytes(entryHash(entry))) } }]);
+  const topic = { topic: "workspace", workspace: "ws" };
+  w.core.inner.data.set(topic, { ...(w.core.inner.data.shared(topic) as object), lock: w.cloud.head("ws") });
+  await w.host.time.pass(1_000);
+}
+
+test("where its person bound a lock of their own that this device is not on, it asks to join that lock, from the page that waits there too; approved into the workspace's lock alone it waits still", async () => {
+  // (2026-11-10, a new phone: 发送批准请求 on the page that waits had it approved into the workspace's lock, face to
+  // face, and every station went on refusing it, as they let the person's app devices in on their own lock alone:
+  // 「已经批过了啊」)
+  const w = await waiting({ [PHONE_APP]: "code" }, true);
+  const inner = w.core.inner;
+  stationReplies(w.host, (req) => (req.method === "GET" && req.url.endsWith("/v1/me/personal-lock") ? { entries: [] } : w.cloud.reply(req)));
+  // Their lock as this device read it: the phone on it, this one not. Bound in `ws` (the phone signed that), not in `w2`.
+  let standing = "outside";
+  inner.adb.personal = () => ({
+    makeKey: () => Effect.succeed(`ed25519:${"11".repeat(32)}`),
+    approvers: () => [{ id: PHONE_APP, label: "phone" }],
+    standing: () => standing, root: () => null, entries: () => [], chain: () => null,
+    // (views/lock.ts `ownLockFor` reads these of it as the locks are read: it begins nothing here)
+    refresh: () => Effect.void, mayBeginQuietly: () => false,
+    // (and what is pending of it, on the lock's topic, as the workspace's view changes)
+    pendingShown: () => [], stationsChanged: () => {},
+  }) as never;
+  await signedIn(w, "person", { sub: "s1", person: "ab".repeat(32) });
+  const here = (await w.lock()).me;
+  assert.deepEqual([here.waiting, here.ownLock, here.confirmed], [true, true, false]);
+  const there = (await w.secondLock!()).me;
+  assert.deepEqual([there.waiting, there.ownLock ?? false], [true, false]);
+
+  // Asked from the other workspace: approved there, not into this one's lock, which would let it in nowhere.
+  await w.ask("lock.pair", { workspace: "w2" });
+  await w.host.time.pass(1_000);
+  assert.deepEqual(w.hellos.map((h) => (h as { workspaces: { ws: string }[] }).workspaces.map((x) => x.ws)), [["w2"]]);
+  // Asked from this one's page: its person's own lock is what it asks to join, and the page shows how that goes.
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  const hello = w.hellos.at(-1) as { workspaces: unknown[]; personal?: { subs: string[] } };
+  assert.deepEqual([hello.workspaces, hello.personal?.subs], [[], ["s1"]]);
+  assert.equal((await w.pair()).state, "code", "the page that waits here has the boxes for the code");
+
+  // In the workspace's lock all the same (approved the old way): it waits still, to join their own.
+  await signedIn(w, "device", { id: ME, sub: "s1", kind: "app", label: "this", sign_key: signerOf(inner) });
+  const after = (await w.lock()).me;
+  assert.deepEqual([after.waiting, after.ownLock, after.confirmed], [true, true, false]);
+  // Their lock not read yet (an app just started): what the workspace's lock says stands, no page that waits.
+  standing = "none";
+  lockSeen(inner).touch("lock ws");
+  const started = (await w.lock()).me;
+  assert.deepEqual([started.waiting, started.confirmed], [false, true]);
 });

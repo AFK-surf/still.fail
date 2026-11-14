@@ -48,7 +48,7 @@ import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
 import { request } from "../ops.ts";
 import { conform } from "../conform.ts";
-import { isObject } from "../util.ts";
+import { get, isObject } from "../util.ts";
 import { concat } from "../station/wire.ts";
 
 type Of = Extract<Call, { kind: "download" }>;
@@ -150,10 +150,12 @@ export function shown(d: Download): Record<string, unknown> {
     : d.state === "saving" ? t("core-logic.download.saving", { total: bytes(d.size) })
     : t("core-logic.download.failed", { error: d.error ?? "" });
   const from = d.from;
+  const original = get(get(d.opened, "file"), "name");
+  const title = typeof original === "string" && original !== "" ? original : titleOf(d.name);
   return {
     id: d.id,
     station: d.station,
-    ...(from.kind === "chat" ? { key: from.key, name: from.file, title: titleOf(from.file) } : { root: from.root, path: from.path, name: d.name, title: d.name, ...(from.kind === "zip" ? { zip: true } : {}) }),
+    ...(from.kind === "chat" ? { key: from.key, name: from.file, title } : { root: from.root, path: from.path, name: d.name, title: d.name, ...(from.kind === "zip" ? { zip: true } : {}) }),
     size: d.size,
     loaded: d.loaded,
     progress: d.size > 0 ? d.loaded / d.size : d.state === "going" || d.state === "waiting" ? 0 : 1,

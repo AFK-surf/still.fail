@@ -6,11 +6,12 @@
 ///|
 /// The fixture `mode` with the core's `downloads` as `list` says (what it brings as `keeping`), its calls kept in
 /// `calls`; `download.take` answered as taken, `download.read` (the saving's) answered with `bytes` (of `type`) a part
-/// at a time, `part` at most.
+/// at a time, `part` at most; `list` changed, the core tells its topic changed by `told` set anew.
 fn downloads_src(
   mode : String,
   list : Array[Json],
   calls : Array[(String, Json)],
+  told? : @signals.Signal[Int] = @signals.signal(0),
   keeping? : Array[Json] = [],
   bytes? : Bytes = b"PK\x03\x04",
   part? : Int = 4 * 1024 * 1024,
@@ -20,6 +21,7 @@ fn downloads_src(
     ..base,
     topic_read: fn(name, params) {
       if name == "downloads" {
+        told.get() |> ignore
         { value: Some({ "downloads": Json::array(list), "keeping": Json::array(keeping) }), error: None, version: 1 }
       } else {
         base.topic(name, params).get().snapshot()
@@ -50,6 +52,14 @@ fn downloads_src(
 }
 
 ///|
+/// The middle of the video `name` of a message (its picture, nothing over it there), as a screen reader has it (播放
+/// …), whichever page draws the chat.
+fn video_middle(t : @ui.Tester, name : String) -> (Double, Double) raise {
+  let (x, y, w, h) = t.get(Button, label=tr("web-main.file.play", args=[("name", name)])).rect
+  (x + w / 2.0, y + h / 2.0)
+}
+
+///|
 /// A download as the core lists it.
 fn listed(name : String, state : String, loaded : Double, size : Double, said : String) -> Json {
   {
@@ -74,12 +84,13 @@ test "downloads: a message's file and video offer 下载 by right click and long
       new_run()
       let calls : Array[(String, Json)] = []
       let list : Array[Json] = []
-      let src = downloads_src("chat-download", list, calls)
+      let told = @signals.signal(0)
+      let src = downloads_src("chat-download", list, calls, told~)
       let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=if platform == 0 { 1280.0 } else { 390.0 }, h=844.0, platform~)
       open_fixture_mode("chat-download")
       t.run_for(@ui.move_most_ms)
       let (x, y) = if name == "演示录屏.mp4" {
-        t.reachable(name)[0]
+        video_middle(t, name)
       } else {
         let words = t.words().filter(fn(w) { w.0 == "发布包" })
         (words[0].1 + 4.0, words[0].2 + 4.0)
@@ -90,7 +101,7 @@ test "downloads: a message's file and video offer 下载 by right click and long
         t.press_at(x, y)
         t.run_for(@ui.long_press_ms)
         t.release(x, y)
-        t.run_for(@kit.sheet_rest("sf-present") - t.time())
+        t.run_for(@sf.presented_rest() - t.time())
       }
       t.draw()
       let role : @ui.Role = if platform == 0 { MenuItem } else { Button }
@@ -111,6 +122,7 @@ test "downloads: a message's file and video offer 下载 by right click and long
       assert_true(viewer.get() is None)
       if name == "发布包.zip" {
         list.push(listed(name, "going", 22020096.0, 52428800.0, "正在下载 42% · 50 MB"))
+        told.set(told.get() + 1)
         t.draw()
         assert_true(t.find("正在下载 42% · 50 MB") is Some(_))
         t.click(Button, label=tr("web-main.file.cancelDownload"))
@@ -118,6 +130,7 @@ test "downloads: a message's file and video offer 下载 by right click and long
         assert_eq(calls.filter(fn(m) { m.0 == "download.cancel" }).length(), 1)
       } else {
         list.push(listed(name, "going", 1048576.0, 5242880.0, "正在下载 20% · 5 MB"))
+        told.set(told.get() + 1)
         t.draw()
         t.run_for(@sf.dur_ms)
         assert_true(t.find("20%") is Some(_))
@@ -131,17 +144,12 @@ test "downloads: an image's menu downloads it and its picture shows the download
   new_run()
   let calls : Array[(String, Json)] = []
   let list : Array[Json] = []
-  let src = downloads_src("chat", list, calls)
+  let told = @signals.signal(0)
+  let src = downloads_src("chat", list, calls, told~)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform=0)
   nav_rested(t)
-  let mut tries = 0
-  while t.locate("img:compare.png").length() == 0 && tries < 12 {
-    let (first, _) = t.visible()
-    t.scroll_to(if first > 0 { first - 1 } else { 0 })
-    t.draw()
-    tries += 1
-  }
+  walk_to_image(t, "compare.png")
   let (x, y) = t.locate("img:compare.png")[0]
   t.right_click(x, y)
   t.draw()
@@ -152,6 +160,7 @@ test "downloads: an image's menu downloads it and its picture shows the download
   assert_eq(text(Some(starts[0].1), "name"), "compare.png")
   assert_true(viewer.get() is None)
   list.push(listed("compare.png", "going", 25.0, 100.0, "正在下载 25% · 100 B"))
+  told.set(told.get() + 1)
   t.draw()
   t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
   assert_true(t.find("25%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
@@ -163,12 +172,14 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   let calls : Array[(String, Json)] = []
   let list : Array[Json] = []
   let keeping : Array[Json] = []
-  let src = downloads_src("chat-download", list, calls, keeping~)
+  // (what the core brings changed, told as the core tells its topic changed)
+  let told = @signals.signal(0)
+  let src = downloads_src("chat-download", list, calls, keeping~, told~)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
   // (in its picture's middle: nothing is over it there)
-  let (x, y) = t.reachable("演示录屏.mp4")[0]
+  let (x, y) = video_middle(t, "演示录屏.mp4")
   let video = fn() {
     t.right_click(x, y)
     t.draw()
@@ -213,6 +224,7 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
     Json::object(o)
   }
   keeping.push(brought("going", "正在加载 20% · 5 MB", true))
+  told.set(told.get() + 1)
   t.draw()
   t.run_for(@sf.dur_ms)
   assert_true(t.find("20%") is Some(_))
@@ -232,6 +244,7 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   // brought in the background (opened and let go): the same, one thing whichever way it began
   keeping.clear()
   keeping.push(brought("queued", "后台缓存排队中 · 20%", false))
+  told.set(told.get() + 1)
   t.draw()
   t.run_for(@sf.dur_ms)
   assert_true(t.find("20%") is Some(_))
@@ -279,7 +292,7 @@ test "downloads: a file sent up is saved under its original name" {
       m["title"] = "report.pdf"
       Json::object(m)
     }
-    _ => abort("not a download")
+    _ => @halt.saying("not a download")
   }
   let src = downloads_src("home", [d], calls)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=0)
@@ -307,7 +320,7 @@ test "downloads: on a phone a picture or a film is kept in the photo album, said
     t.frame()
     t.frame()
     assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [(name, way)])
-    assert_true(t.find(said) is Some(_), msg="\{case}: \{t.words().map(fn(w) { w.0 }).join("|")}")
+    assert_true(t.find(said) is Some(_), msg="\{Repr(case)}: \{t.words().map(fn(w) { w.0 }).join("|")}")
   }
 }
 
@@ -432,8 +445,8 @@ test "desk: a file's card has its name's extension right after its stem, not at 
   assert_eq(stem.length(), 1)
   assert_eq(ext.length(), 1)
   // right after three characters of 13 (not some 180 on, where the card's words end)
-  assert_true((ext[0].1 - (stem[0].1 + stem[0].3)).abs() < 0.5, msg="\{stem[0]} \{ext[0]}")
-  assert_true(ext[0].1 - stem[0].1 < 3.0 * 13.0 + 1.0, msg="\{stem[0]} \{ext[0]}")
+  assert_true((ext[0].1 - (stem[0].1 + stem[0].3)).abs() < 0.5, msg="\{Repr(stem[0])} \{Repr(ext[0])}")
+  assert_true(ext[0].1 - stem[0].1 < 3.0 * 13.0 + 1.0, msg="\{Repr(stem[0])} \{Repr(ext[0])}")
 }
 
 ///|

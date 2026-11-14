@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monoid Android FCM configuration from Firebase project monoid-build. These values are public APK configuration.
+     Both monoid variants overlay still.fail's defaults with this project's stable and beta app IDs. -->
+<resources>
+    <string name="fcm_project_id" translatable="false">monoid-build</string>
+    <string name="fcm_sender_id" translatable="false">812412227521</string>
+    <string name="fcm_api_key" translatable="false">AIzaSyDvLgN8dWoJKuJaGVYXNn5Y7S0sLKhfBr0</string>
+    <string name="fcm_stable_app_id" translatable="false">1:812412227521:android:f9611fb9d507777daa2940</string>
+    <string name="fcm_beta_app_id" translatable="false">1:812412227521:android:b86f1436e9773becaa2940</string>
+</resources>

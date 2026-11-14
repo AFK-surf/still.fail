@@ -32,26 +32,35 @@ pub(all) struct ComposerSpec {
 }
 
 ///|
-/// What the composer keeps of its own: the system's picker asked for files (for which draft), when the cursor left it
-/// (it stays a box a moment, LET_GO_MS), when typing last warmed the agent's runtime, each quote's comment field, how
-/// it was laid out as it was last drawn (a new chat's roomy, or a chat's: another, it has moved between the pages),
-/// which chat it was for (another: switched to, the cursor put in it), the archived chats being restored and why
-/// restoring one failed (by their drafts).
+/// What the composer keeps of its own: when the cursor left it (it stays a box a moment, LET_GO_MS), when typing last
+/// warmed the agent's runtime, each quote's comment field, how it was laid out as it was last drawn (a new chat's
+/// roomy, or a chat's: another, it has moved between the pages), which chat it was for (another: switched to, the
+/// cursor put in it), the archived chats being restored and why restoring one failed (by their drafts).
 priv struct Composing {
-  mut picking : (String, @ui.Pick)?
   let_go : @signals.Signal[Bool]
+  /// the moment the box it stayed after the cursor left was last let go of (let_go's end): a change of its own then
+  mut let_go_at : Double
   warmed : Map[String, Int]
+  /// words typed into its field since it was last built (told the core as they were typed: composer_text's
+  /// `on_change`), for its build to warm the agent's runtime
+  mut typed : Bool
   comments : Map[String, @ui.Field]
   mut roomy : Bool?
   mut draft : String
+  /// each draft's page's time on top (Ctx::page_stint) as it was last switched to it there: switched to it again in
+  /// the same stint (two chats' composers built at once, the one under sliding away as another's comes over it), it
+  /// does not take the cursor again; only the page come on top does
+  took : Map[String, Int]
   /// the moment it was last switched to another chat and the one it was for till then (the switch as it was first built:
   /// each build and frame made at that moment starts from that one, frame_body may build it twice)
   mut draft_was : (Double, String)
   /// the moment it was last laid out for another page (a new chat's roomy in the page, a chat's at its foot) and how it
-  /// was laid out and the choices in its row till then (as draft_was)
-  mut roomy_was : (Double, Bool?, (() -> Unit)?)
+  /// was laid out, the choices in its row and whether the soft keyboard was up till then (as draft_was)
+  mut roomy_was : (Double, Bool?, (() -> Unit)?, Bool?)
   /// as they were before what this build is built at changed them (draft_was, roomy_was): as this build has them
   mut roomy_before : Bool?
+  /// whether the soft keyboard was up as it was last built (new_chat.mbt's `wide` reads the same)
+  mut keys_up : Bool?
   mut draft_before : String
   /// whether what waits in it now was in it before it was switched to it at this moment (the same draft): what is put
   /// in since comes in (held_coming), what a draft opened with is there at once
@@ -62,7 +71,7 @@ priv struct Composing {
   /// whether a notice over a chat's composer, new to it, comes in (chat_notices: the chat shown before, composer_was)
   mut notices_new : Bool
   /// what each notice over a chat's composer said as it was last drawn, by its key: drawn so as it leaves
-  notices_said : Map[String, (String, (Int, String, String, Bool)?, String??, String, Array[(Int, String, Bool)], (String, String)?)]
+  notices_said : Map[String, (String, (Int, String, String, Bool)?, (Int, String, Bool)?, String??, String, Array[(Int, String, Bool)], (String, String)?)]
   /// the page's choices in its row as it was last built, as they were before this build's page (roomy_was), and those
   /// of the page it came from that this one has not, while they leave (a new chat's, gone to its chat)
   mut toolbar : (() -> Unit)?
@@ -70,6 +79,15 @@ priv struct Composing {
   mut toolbar_leaving : (() -> Unit)?
   restoring : @sf.LiveMap[String, Bool]
   restore_errors : @sf.LiveMap[String, String]
+  /// the draft its field was last built for and whether it was empty then (composer_foot_room)
+  mut emptied : (String, Bool)
+  /// till when words last sent from which draft held it (composer_held): its ground's ways said before then are theirs,
+  /// none of the list's (composer_way_for_list)
+  mut held_till : (String, Double)
+  /// the draft, its field's lines and whether it was open as it was last built, and when its lines last changed while
+  /// it stayed open (-inf: not since it opened): what words sent stop its shape for (composer_view)
+  mut lines_seen : (String, Int, Bool)
+  mut lines_moved_at : Double
   /// what its field says while empty as it was last drawn, till another is to be said and it has faded out
   /// (composer_text)
   hint_shown : @signals.Signal[String]
@@ -108,16 +126,19 @@ pub fn composer_take_focus() -> Unit {
 
 ///|
 let composing : Composing = {
-  picking: None,
   let_go: @signals.signal(false, same=fn(a, b) { a == b }),
+  let_go_at: @double.neg_infinity,
   warmed: {},
+  typed: false,
   comments: {},
   roomy: None,
   draft: "",
+  took: {},
   roomy_before: None,
+  keys_up: None,
   draft_before: "",
   draft_was: (-1.0, ""),
-  roomy_was: (-1.0, None, None),
+  roomy_was: (-1.0, None, None, None),
   same_draft: false,
   switching: false,
   notices_new: false,
@@ -127,6 +148,10 @@ let composing : Composing = {
   toolbar_leaving: None,
   restoring: @sf.LiveMap::new(),
   restore_errors: @sf.LiveMap::new(),
+  emptied: ("", true),
+  held_till: ("", -1.0),
+  lines_seen: ("", 0, false),
+  lines_moved_at: @double.neg_infinity,
   hint_shown: @signals.signal("", same=fn(a, b) { a == b }),
   taking: @signals.signal(false, same=fn(a, b) { a == b }),
   cc_open: false,
@@ -144,27 +169,35 @@ let composing : Composing = {
 fn composing_reset() -> Unit {
   composer_foot_way.val = None
   composer_set_off.val = ("", 0.0)
-  composing.picking = None
+  picked_waiting.clear()
   composing.let_go.set(false)
+  composing.let_go_at = @double.neg_infinity
   composing.warmed.clear()
+  composing.typed = false
   composing.comments.clear()
   composing.grounds.clear()
   composing.pictures.clear()
   composing.roomy = None
   composing.draft = ""
+  composing.took.clear()
   composing.roomy_before = None
+  composing.keys_up = None
   composing.toolbar = None
   composing.toolbar_before = None
   composing.toolbar_leaving = None
   composing.draft_before = ""
   composing.draft_was = (-1.0, "")
-  composing.roomy_was = (-1.0, None, None)
+  composing.roomy_was = (-1.0, None, None, None)
   composing.same_draft = false
   composing.switching = false
   composing.notices_new = false
   composing.notices_said.clear()
   composing.restoring.clear()
   composing.restore_errors.clear()
+  composing.emptied = ("", true)
+  composing.held_till = ("", -1.0)
+  composing.lines_seen = ("", 0, false)
+  composing.lines_moved_at = @double.neg_infinity
   ref_keyed.val = ""
   composing.cc_open = false
   composing.cold_open.set("")
@@ -220,18 +253,25 @@ pub fn composer(
     composing.draft_was = (c.moment(), composing.draft)
   }
   if composing.roomy != Some(spec.roomy) {
-    composing.roomy_was = (c.moment(), composing.roomy, composing.toolbar)
+    composing.roomy_was = (c.moment(), composing.roomy, composing.toolbar, composing.keys_up)
   }
   composing.draft_before = composer_was(c)
-  let (roomy_at, roomy_was, toolbar_was) = composing.roomy_was
+  let (roomy_at, roomy_was, toolbar_was, keys_up_was) = composing.roomy_was
   composing.roomy_before = if roomy_at == c.moment() { roomy_was } else { composing.roomy }
   composing.toolbar_before = if roomy_at == c.moment() { toolbar_was } else { composing.toolbar }
+  // (the keyboard as it was before this build's moment changed how roomy it is)
+  let keys_up_before = if roomy_at == c.moment() { keys_up_was } else { composing.keys_up }
   composing.same_draft = whose == composing.draft_before
   if whose != composing.draft {
     composing.draft = whose
+    // (once a time its page is on top: built again in the stint it was switched to in, as another chat's is built
+    // beside it, it is the page under that one, not one come to; outside a stack, each switch)
+    let stint = c.page_stint()
+    let come = stint == 0 || composing.took.get(whose) != Some(stint)
+    composing.took[whose] = stint
     // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat; not taken from
     // a field written in, but asked under a modal layer over it all the same: kept for that layer to give back)
-    if !@sf.soft_keyboard() && !c.field_focused_here() {
+    if come && !@sf.soft_keyboard() && !c.field_focused_here() {
       c.focus_field(w.field)
       composing.taking.set(true)
       // (this frame's alone: what reads it built again the frame after, as it has the cursor)
@@ -259,35 +299,49 @@ pub fn composer(
   if focused {
     composing.let_go.set(true)
   }
-  let lost_long = @kit.after(c, "composer/let-go", !focused && !choosing_cache, let_go_ms)
+  let lost_long = @kit.after(c, "composer/let-go", !focused && !w.field.parked() && !choosing_cache, let_go_ms)
   let held = composing.let_go.get() && !focused && !lost_long
+  // (the box it stayed a moment after the cursor left, let go of now: a change of its own, at this moment, whatever
+  // words sent from it are doing meanwhile)
+  if lost_long && composing.let_go.get() {
+    composing.let_go_at = c.moment()
+  }
+  // (as each build at this moment has it: frame_body may build it twice)
+  let let_go_now = lost_long && composing.let_go_at == c.moment()
   if lost_long {
     composing.let_go.set(false)
   }
-  // words just sent from it still in it: as tall as it was then, its field where it was and its ＋ and send at its foot
-  // (composer_hold), so nothing in it moves until it comes down
-  let sent_box = composer_held_box(c, spec.draft)
+  // words just sent from it still in it: laid out as for them, as many lines as they took (composer_held_lines), so it
+  // goes on to the shape it was on its way to and nothing in it moves until it comes down; its shape for the field's
+  // words as they were, not as it is emptied
+  let held_lines = composer_held_lines(c, spec.draft)
+  let held_extras = composer_held_extras(c, spec.draft)
+  composing.emptied = (spec.draft, w.field.text() == "")
   let multiline = spec.roomy ||
     focused ||
     held ||
-    sent_box > 0.0 ||
+    held_lines > 0 ||
     w.text.get() != "" ||
     w.files.get().length() > 0 ||
     w.quotes.get().length() > 0
   // ready as the core says, or as soon as there are words in the field: the core's say comes a moment after them (its
   // topic), and send pressed meanwhile is not lost (what goes is the core's to take: composer.take, nothing taken
   // nothing sent)
-  let ready = (w.ready.get() || (w.text.get().trim() != "" && !w.starting.get())) && !spec.locked
+  let ready_now = fn() { (w.ready.get() || (w.field.text().trim() != "" && !w.starting.get())) && !spec.locked }
+  let ready = ready_now()
   // sent once what it refers to can be read in this workspace (sfbase's outside.mbt): at once when
   // it refers to nothing of another workspace, else once the viewer has said so (outside.mbt's dialog)
   @sfbase.sharing_go(w.key)
   let quote_had = quote_has_focus(c, w)
+  // (asked again as send is pressed, of the field: words typed since this build, a frame not drawn yet, told to the
+  // core first and go with it)
   let submit = fn() {
-    if ready {
+    if ready_now() {
+      writing_text(src, w, w.field.text())
       // (the line of a quote it takes had the focus: the words' field has it from here, as Enter in that line gives
       // it, not lost with the line as its card sets out)
       quote_focus_to_words(c, w, quote_had)
-      @sfbase.send_sharing(src, w.key, spec.station, w.text.get().trim(chars=" \n\t").to_string(), fn() { send(w) })
+      @sfbase.send_sharing(src, w.key, spec.station, w.text.get().trim(chars=" \n\t").to_owned(), fn() { send(w) })
       // (sent in this build, after its field was built: their field's hint and caret gone with them from now, not
       // shown once over them as they set out)
       if @sfbase.flight_hint_away(c, w.key) {
@@ -323,27 +377,39 @@ pub fn composer(
   }
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
   let dragging = !no_files && (@sfbase.drag_carried.val)() is Some(_) && c.lit(cap)
-  // laid out for another page than before (a new chat's roomy in the page): at the moment it was
-  let moved = match composing.roomy_before {
+  // laid out for another page than before (a new chat's roomy in the page, become its chat's at its foot): at the
+  // moment it was. The same draft laid out roomy or not with the soft keyboard as it was (a new chat's page made
+  // narrower or wider by the window, an edge dragged: new_chat.mbt's `wide`) has moved to no other page: what it is
+  // laid out as there at once, nothing in it moving for it (apps/mbui/AGENTS.md, Motion). The keyboard come or gone as
+  // it changed is its taking the focus or letting it go, seen through the keyboard: its own cause, moved as ever
+  let roomy_changed = match composing.roomy_before {
     Some(was) => was != spec.roomy
     None => false
   }
+  let keys_up = c.ime_inset() > 0.0
+  let keys_same = keys_up_before == Some(keys_up)
+  let laid_anew = roomy_changed && composing.same_draft && keys_same
+  let moved = roomy_changed && !laid_anew
   // (gone to its chat's foot as a new chat's first words set out from it: on their way and as long, one motion with
   // them, not a page's quick start that leaves them behind and goes far in its first frame)
   let opening = composer_opening(c, "\{spec.roomy}|\{multiline}")
+  // (words sent letting go of it shape it on their clock only for what they change: the cursor's box let go of
+  // meanwhile (let_go_now) is a change of its own, from now, not one as far on as the time since they let go)
+  let sent_lets_go = composer_let_go(c, spec.draft) && !let_go_now
   let shape = if moved && flight_carried(spec.draft) {
     @motion.tween(flight_desk_ms, ease=Flight)
-  } else if composer_let_go(c, spec.draft) {
-    // (let go by words sent from it: down on their flight's clock, with its room, composer_hold)
+  } else if sent_lets_go {
+    // (let go by words sent from it: down on their flight's clock, with its room, flight_lets_go)
+    // (said where their row's opening is: flight_lets_go)
     // det-ok(motion-length): words sent's own, set with their flight (sf/motion.mbt kind 4)
-    @motion.tween(@sfbase.sent_down_of(spec.draft), ease=Move)
+    @motion.tween(composer_down_ms(spec.draft), ease=Move)
   } else if opening && !moved {
     // (opened from a capsule or let go to one: its field passes by its ＋ and send on their way, kept off them only on
     // this clock so far; on a faster one it cut into ＋, the user 2026-10-30: 「输入框盖住了加号和发送」)
     // det-ok(motion-length): the field opening past ＋ and send kept off them on this clock, till their cutting is mended
     @motion.tween(composer_shape_ms, ease=Move)
   } else {
-    @motion.move()
+    @motion.moved()
   }
   let hint = composer_hint(
     c,
@@ -351,7 +417,8 @@ pub fn composer(
     w,
     focused || held,
     moved,
-    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.get().length()}|\{w.quotes.get().length()}|\{w.error.get() != ""}",
+    laid_anew,
+    "\{spec.roomy}|\{multiline}|\{w.files.get().length()}|\{w.quotes.get().length()}|\{w.error.get() != ""}",
     shape,
   )
   // gone to a page with no choices in its row from one with them (a new chat become its chat, or left for one): they
@@ -361,7 +428,7 @@ pub fn composer(
     composing.toolbar_leaving = if spec.toolbar is None { composing.toolbar_before } else { None }
   }
   let fade = @sfbase.new_fade(c)
-  if fade.over() {
+  if fade.over(c) {
     composing.toolbar_leaving = None
   }
   composing.toolbar = spec.toolbar
@@ -375,24 +442,36 @@ pub fn composer(
   // composer holds even when the number of files and quotes stays the same.
   let quote_pictures = w.quotes.get().map(fn(q) { quote_picture(c, src, w, spec.station, Some(q)) })
   let file_pictures = w.files.get().map(fn(f) { waiting_picture(src, w, Some(f)) })
-  let quote_shapes = w.quotes.get().mapi(fn(i, q) {
-    let v = Some(q)
-    text(v, "id") + "\u{1}" + text(v, "author") + "\u{1}" + text(v, "text") + "\u{1}" + text(v, "role") +
-    (if quote_pictures[i] is Some(_) { "|picture" } else { "|words" })
-  }).join("\u{2}")
-  let file_shapes = w.files.get().mapi(fn(i, f) {
-    text(Some(f), "id") + (if file_pictures[i] is Some(_) { "|picture" } else { "|card" })
-  }).join("\u{2}")
-  let holds = if whose != composing.draft_before && !moved {
+  // (what it is shaped for: what it holds, or what words sent from it held as they were sent while they hold it, so
+  // it is shaped for the same till they let go of it: composer_held_lines)
+  let shapes = @sfbase.flight_held_shaped(c, spec.draft).unwrap_or(composer_shapes(w, quote_pictures, file_pictures))
+  let holds = if (whose != composing.draft_before && !moved) || laid_anew {
     ""
   } else {
-    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{file_shapes}|\{quote_shapes}|\{w.error.get() != ""}|" +
-    w.field.text()
+    "\{spec.roomy}|\{multiline}|\{w.error.get() != ""}|" + shapes
+  }
+  // (sent as it was on its way to another shape (a line more just typed, or one fewer): its shape told to stop there,
+  // on from where it was and as fast, slowing to rest (its place going on), held so till the words let go of it: they
+  // are gone, it grows no further for them, as they were sent, not where a frame drew it)
+  // (only a way its lines set it on: one it is on as it opens or shuts is no line of theirs, and goes on)
+  let lines_now = @sfbase.field_lines_n(w.field)
+  match composing.lines_seen {
+    (d, n, open) if d == spec.draft && open == multiline =>
+      if multiline && n != lines_now {
+        composing.lines_moved_at = c.moment()
+      }
+    _ => composing.lines_moved_at = @double.neg_infinity
+  }
+  composing.lines_seen = (spec.draft, lines_now, multiline)
+  match @sfbase.flight_of(spec.draft) {
+    Some(f) if !f.stopped && held_lines > 0 && composing.lines_moved_at > @double.neg_infinity => {
+      f.stopped = true
+      @motion.stop_for(c, holds, f.sent_at)
+    }
+    _ => ()
   }
   let box = c.box(
-    style=if sent_box > 0.0 {
-      composer_box_open().then(@ui.style(min_h=Fixed(sent_box), justify=JBetween))
-    } else if multiline {
+    style=if multiline {
       composer_box_open()
     } else {
       composer_box.then(capsule_place(c, place))
@@ -401,7 +480,7 @@ pub fn composer(
     glass=@sf.glass_floating(tint?=if dragging { Some(@sf.alpha(p.accent, drag_tint)) } else { None }),
     id=cap,
     fn() {
-      composer_extras(c, src, spec, w, holds, shape, quote_pictures, file_pictures)
+      composer_extras(c, src, spec, w, holds, shape, quote_pictures, file_pictures, held_extras)
       if multiline {
         words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tools_row(), fn() {
@@ -418,7 +497,7 @@ pub fn composer(
             }
             (None, Some(f)) => {
               chosen = c.box(style=choices, fn() { c.hidden_from_semantics(f) })
-              c.look(chosen, @ui.look(alpha=1.0 - fade.get()))
+              c.look(chosen, @ui.look(alpha=1.0 - fade.get(c)))
               c.draw_only(chosen)
             }
             (None, None) => c.box(style=tools_gap, fn() {  }) |> ignore
@@ -452,14 +531,15 @@ pub fn composer(
   // from where they showed to their places; laid out for the other page (a new chat's in the page, a chat's at its
   // foot: dock.tsx), the same from where it was there, one composer changing, and what it holds there that it did not
   // here (a new chat's choices) carried on its ground, what it held there and does not here leaving
-  // on it; words sent from it, as they let go of it (held till then: composer_hold). Moved by nothing of these (the
+  // on it; words sent from it, as they let go of it (held till then: composer_held_lines). Moved by nothing of these (the
   // window, the sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is
   // where it is laid out at once (sf/motion.mbt)
   composing.roomy = Some(spec.roomy)
+  composing.keys_up = Some(keys_up)
   // (at a page's foot down the system's column, not roomy in a new chat's middle: opened from its foot, a keyboard
   // coming in the same frame taken at once, the user 2026-10-30 「以底部为 origin」; there the keyboard lifts it from its
   // first point on, ios_app.m ime_over)
-  // (let go by words sent from it: the moment they let go of it, as composer_hold declared it, handed to the change
+  // (let go by words sent from it: the moment they let go of it, as their way said it (flight_lets_go), handed to the change
   // that makes, its ground down from then on their clock, the list's foot with it, not from the frame that lays it out
   // after; said only while they let go of it, so no other change carries it)
   @motion.reshape(
@@ -470,9 +550,9 @@ pub fn composer(
     spec=shape,
     carry=moved,
     foot=!spec.roomy && @sf.native_side(),
-    at?=if composer_let_go(c, spec.draft) { Some(composer_released_at(c, spec.draft)) } else { None },
+    at?=if sent_lets_go { Some(composer_released_at(spec.draft)) } else { None },
   )
-  composing.shaped = Some((holds, shape))
+  composer_foot_told(c, spec.draft, w, holds, shape, moved || sent_lets_go || held_lines > 0)
   // (its ＋ and send drawn whole on their way, its field going up past them as it opens: composer_hint_wbtest, the user
   // 2026-10-30 「输入框盖住了加号和发送」)
   for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices"), (said, "note")] {
@@ -516,19 +596,17 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String, shaped : (String, @motion.S
 fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool) -> Unit {
   // (what was put into the draft from elsewhere: built again as it is)
   @sfbase.drafts_given_read(w.key)
-  match composing.picking {
-    Some((key, picker)) =>
-      match picker.files() {
-        Some(files) => {
-          composing.picking = None
-          if key == w.key && !no_files {
-            for f in files {
-              writing_add_picked(src, w, spec.station, f)
-            }
+  match picked_waiting.get(w.key) {
+    Some(list) => {
+      picked_waiting.remove(w.key)
+      if !no_files {
+        @signals.untracked(fn() {
+          for f in list {
+            writing_add_picked(src, w, spec.station, f)
           }
-        }
-        None => ()
+        })
       }
+    }
     None => ()
   }
   // files shared into the app from another, for this draft (share.mbt)
@@ -653,6 +731,32 @@ pub fn dropped_of(d : Dragged) -> Json {
 }
 
 ///|
+/// What draft `w`'s composer is shaped for (its box's reshape is for a change of it): its files, its quotes (each with
+/// a picture or not: `file_pictures`, `quote_pictures`) and its field's words.
+fn composer_shapes(w : Writing, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?]) -> String {
+  let quote_shapes = w.quotes.get().mapi(fn(i, q) {
+    let v = Some(q)
+    text(v, "id") + "\u{1}" + text(v, "author") + "\u{1}" + text(v, "text") + "\u{1}" + text(v, "role") +
+    (if quote_pictures[i] is Some(_) { "|picture" } else { "|words" })
+  }).join("\u{2}")
+  let file_shapes = w.files.get().mapi(fn(i, f) {
+    text(Some(f), "id") + (if file_pictures[i] is Some(_) { "|picture" } else { "|card" })
+  }).join("\u{2}")
+  "\{file_shapes}|\{quote_shapes}|" + w.field.text()
+}
+
+///|
+/// What draft `w`'s composer is shaped for as it is sent (composer_shapes, its pictures as it builds them): what words
+/// sent from it hold it shaped for (sfbase's SendFlight `shaped`).
+fn composer_shapes_sent(c : @ui.Ctx, src : Source, w : Writing, station : String) -> String {
+  composer_shapes(
+    w,
+    w.quotes.get().map(fn(q) { quote_picture(c, src, w, station, Some(q)) }),
+    w.files.get().map(fn(f) { waiting_picture(src, w, Some(f)) }),
+  )
+}
+
+///|
 /// The text field (useComposerText's textarea): 14 on 1.5, growing with the text up to 480 or
 /// 40% of the window, then scrolling; with a mouse and nothing focused it says which key brings the cursor back
 /// (useSpaceHint); typed, told to the core (and the agent's runtime warmed, once a minute); Enter sends, ⇧Enter starts a
@@ -671,7 +775,10 @@ fn composer_text(
   let p = @sf.theme().p
   let prefs = src.topic("prefs", {}).get().value
   let hint = space_hint(c, prefs, spec.locked)
+  // (⌘Enter sends, Enter a new line: as chosen in 快捷键)
+  let by_command = @settings.sends_by_command(prefs)
   let away = @sfbase.flight_hint_away(c, w.key)
+  let held_lines = composer_held_lines(c, spec.draft)
   let no_files = spec.locked || spec.offline
   // what it says while empty changed (the cursor gone from it: the key that brings it back; back in it: what to write)
   // fades out, then the other in where it was, never one put for the other at once
@@ -695,10 +802,16 @@ fn composer_text(
   // (what moves with the box is the words' own room, not the room round them: their margins in it are other on one
   // line than opened, and moved from where that room showed, the words jumped by the difference as it set out)
   let mut words = -1
+  // (what is typed set as its message will set it: the theme's words, the system's size of words applied by the editor)
+  let (size, line) = c.style_size(@sf.theme().t.words)
+  // (held by words sent from it: as tall as the lines they took, whatever it holds meanwhile)
+  let own = if held_lines > 0 {
+    text_own.then(@ui.style(min_h=Fixed(held_lines.to_double() * field_line(c))))
+  } else {
+    text_own
+  }
   c.box(style=if multiline { text_open } else { text_shut(c) }, fn() {
-    words = c.box(style=text_own, fn() {
-      // (what is typed set as its message will set it: the theme's words)
-      let (size, line) = c.style_size(@sf.theme().t.words)
+    words = c.box(style=own, fn() {
       let res = c.editor(
         composer_field_key,
         placeholder=said,
@@ -709,9 +822,10 @@ fn composer_text(
         max_lines=text_lines(c),
         plain=true,
         color=p.text,
-        placeholder_color=@sf.alpha(p.subtle, hint_in.get() * said_look.alpha),
+        placeholder_color=@sf.alpha(p.subtle, hint_in.get(c) * said_look.alpha),
         caret_color=if away { @sf.alpha(p.accent, 0.0) } else { p.accent },
-        enter_sends=@sf.enter_sends(),
+        enter_sends=@sf.enter_sends(command=by_command),
+        command_sends=@sf.command_sends(by_command),
         // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick, as each comes: it takes them, Ctx::on_key; what it
         // does not take is the field's)
         files=!no_files,
@@ -722,6 +836,14 @@ fn composer_text(
         // (each edit of it by the person, as the core reads it, at its moment: a mark taken whole, a chat's link
         // pasted, the `@` words at its caret)
         on_edit=fn(e) { @sfbase.refs_edited(src, w.key, w.field, spec.station, spec.locked, e) },
+        // (what is typed told to the core as it is typed, outside the build: the composer built once for it, not again
+        // for what telling it set as it was built)
+        on_change=fn(words) {
+          if words != w.text.get() && !w.starting.get() {
+            writing_text(src, w, words)
+            composing.typed = true
+          }
+        },
       )
       match res.pasted {
         Some(words) => @sfbase.writing_paste(src, w, spec.station, words)
@@ -741,15 +863,20 @@ fn composer_text(
           if res.text != w.text.get() && !w.starting.get() {
             writing_text(src, w, res.text)
             warm(c, src, spec)
+          } else if composing.typed {
+            composing.typed = false
+            warm(c, src, spec)
           }
       }
-      // nothing typed: the chat above or below, as the list shows them now
-      if res.focused && w.text.get() == "" && !(@sfbase.neighbour_held.val)() && !menu {
-        if c.key_pressed(@ui.key_code_up, in_field=true) {
-          (@sfbase.neighbour_go.val)(src, ws, -1)
-        } else if c.key_pressed(@ui.key_code_down, in_field=true) {
-          (@sfbase.neighbour_go.val)(src, ws, 1)
-        }
+      // nothing typed: ↑ ↓ the chat above or below, as the list shows them now, each as it comes, before the field
+      // sees it (Ctx::on_key: what is typed then, whether the chat beside is held then)
+      if res.focused && !menu {
+        c.on_key(c.focused_id(), fn(code, mods) {
+          guard mods == 0 && (code == @ui.key_code_up || code == @ui.key_code_down) else { return false }
+          guard w.text.get() == "" && !(@sfbase.neighbour_held.val)() else { return false }
+          (@sfbase.neighbour_go.val)(src, ws, if code == @ui.key_code_up { -1 } else { 1 })
+          true
+        })
       }
     })
   })
@@ -769,22 +896,25 @@ fn composer_hint(
   w : Writing,
   hidden : Bool,
   moved : Bool,
+  laid_anew : Bool,
   shape : String,
   going : @motion.Spec,
 ) -> @motion.Anim {
   let hint = @motion.anim(c, "composer/hint", 1.0)
-  // (another chat's draft swapped in is no change of shape: it is where it is laid out at once)
+  // (another chat's draft swapped in is no change of shape, nor the same draft laid out roomy or not by the width it is
+  // given (`laid_anew`): it is where it is laid out at once)
   let reshaped = shape != composing.hint_shape &&
     composing.hint_shape != "" &&
+    !laid_anew &&
     ("\u{1}" + spec.session == composing.draft_before || moved)
   composing.hint_shape = shape
   if hidden || @sfbase.flight_hint_away(c, w.key) {
-    hint.snap(0.0)
+    hint.snap(c, 0.0)
   } else if reshaped {
-    hint.snap(0.0)
-    hint.animate(1.0, @motion.tween(@sf.hint_back_ms, ease=Out, delay=going.duration(0.0, 1.0, 0.0)))
+    hint.snap(c, 0.0)
+    hint.animate(c, 1.0, @motion.tween(@sf.hint_back_ms, ease=Out, delay=going.duration(0.0, 1.0, 0.0)))
   } else {
-    hint.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Out))
+    hint.follow(c, 1.0, @motion.tween(@sf.hint_back_ms, ease=Out))
   }
   hint
 }
@@ -814,7 +944,7 @@ fn warm(c : @ui.Ctx, src : Source, spec : ComposerSpec) -> Unit {
   }
   composing.warmed[spec.session] = n + 1
   c.tell("composer/warm", fn() {
-    (src.call)("session.warm", { "station": Json::string(spec.station), "key": Json::string(spec.session) }, fn(_) {  })
+    (src.call)("session.warm", { "station": Json::string(spec.station), "key": Json::string(spec.session) }, @sfbase.answer_unread)
   })
 }
 
@@ -853,12 +983,27 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
 }
 
 ///|
-/// The system's file picker for draft `w`: what is picked comes in as the composer is next drawn (take_in).
-pub fn pick_files(w : Writing) -> Unit {
-  match @ui.pick(Files) {
-    Some(p) => composing.picking = Some((w.key, p))
-    None => ()
+/// Files the system's picker answered for each draft, waiting for its composer (`take_in`).
+// kept across runs: cleared by composing_reset
+let picked_waiting : Map[String, Array[@hostapi.Picked]] = Map([])
+
+///|
+/// Files the system's picker answered for draft `key`, put where its composer takes them (`take_in`) and told (`draft_given`).
+fn picked_into(key : String, files : Array[@hostapi.Picked]) -> Unit {
+  if files.is_empty() {
+    return
   }
+  let list = picked_waiting.get(key).unwrap_or([])
+  list.push_iter(files.iter())
+  picked_waiting[key] = list
+  @sfbase.draft_given(key)
+}
+
+///|
+/// The system's file picker for draft `w`: what is picked wakes its composer as the host's event tells it (`picked_into`).
+pub fn pick_files(w : Writing) -> Unit {
+  let key = w.key
+  @ui.pick(Files, on_got=fn(files) { picked_into(key, files) }) |> ignore
 }
 
 ///|
@@ -869,23 +1014,26 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
   let p = @sf.theme().p
   let id = c.id("composer/send")
   let hot = ready && c.lit(id)
-  if ready {
-    c.on_press(id, fn() {
-      submit()
-    })
-  }
+  // (whatever this build saw: submit asks whether it is ready as it is pressed)
+  c.on_press(id, fn() { submit() })
   @sf.tip(c, "composer/send", id, @sf.t("web-main.composer.send"))
-  let able = @sf.ease_to(c, "composer/send/able", ready)
-  let lit = @sf.ease_to(c, "composer/send/lit", hot)
-  let on = @sf.mix(@sf.mix(p.text, send_hot, p.canvas), lit, p.text)
-  let ground = @sf.mix(on, able, @sf.over(p.raised, @sf.alpha(p.text, send_off)))
-  let b = c.box(style=@sf.round_face().then(@ui.style(bg=Data(ground))), id~, fn() {
+  // (told as it is built, eased as it is painted: what builds the composer is not built again each frame they go, as
+  // its words are sent)
+  let able = @motion.told(c, "composer/send/able", if ready { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+  let lit = @motion.told(c, "composer/send/lit", if hot { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+  let ground_at = fn(able : Double, lit : Double) {
+    let on = @sf.mix(@sf.mix(p.text, send_hot, p.canvas), lit, p.text)
+    @sf.mix(on, able, @sf.over(p.raised, @sf.alpha(p.text, send_off)))
+  }
+  let b = c.box(style=@sf.round_face().then(@ui.style(bg=Data(ground_at(able.target(), lit.target())))), id~, fn() {
     if starting {
       @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore
     } else {
-      @sf.icon(c, "arrow-up", size=@sf.theme().round.glyph, color=@sf.mix(p.canvas, able, p.raised)) |> ignore
+      let arrow = @sf.icon(c, "arrow-up", size=@sf.theme().round.glyph, color=@sf.mix(p.canvas, able.target(), p.raised))
+      c.ink_by(arrow, fn() { @sf.mix(p.canvas, able.get(c), p.raised) })
     }
   })
+  c.bg_by(b, fn() { ground_at(able.get(c), lit.get(c)) })
   c.semantics(b, Button, id~, label=@sf.t("web-main.composer.send"), disabled=!ready)
   b
 }
@@ -927,25 +1075,29 @@ fn quote_focus_to_words(c : @ui.Ctx, w : Writing, had : Bool) -> Unit {
 /// What waits to go with the message (ComposerExtras): the quotes, each with a line for what is said about it (the one
 /// just added takes the focus; Enter in it goes back to the text), then the files: a picture as its picture, pasted
 /// words as their card, a station's file as its card, a link as its card, any other file as its card.
-fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?]) -> Unit {
+fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?], held : Double) -> Unit {
   // The room for what is added is present even when empty, outside the flow then. Its height and position change with
   // the ground; what is new in it grows with it as it opens, whole (held_coming), never cut through by its edge (a
   // picture's foot cut square and faded as it came in, 2026-11-02 the user: 「能看出问题吗」).
-  let empty = w.quotes.get().is_empty() && w.files.get().is_empty()
-  let room = Ref(-1)
+  // (held by words sent from it: as tall as what was added was laid out as they were sent, composer_held_extras)
+  let empty = w.quotes.get().is_empty() && w.files.get().is_empty() && held <= 0.0
+  // (the room, read where it is as what it holds is painted: held_coming)
+  let room : Ref[@ui.NodeHeld?] = Ref(None)
   let area = c.box(
-    style=extras_column,
+    style=extras_room(held),
     left?=if empty { Some(@sf.composer_pad) } else { None },
     top?=if empty { Some(@sf.composer_pad) } else { None },
     fn() { composer_extra_items(c, src, spec, w, holds, shape, quote_pictures, file_pictures, room) },
   )
-  room.val = area
+  room.val = Some(c.node_held(area))
+  // (how tall it is laid out: what words sent hold it as, composer_held_extras)
+  @motion.measure(c, area, "composer/extras/room")
   @motion.scope(c, area)
   @motion.layout(c, area, "composer/extras", spec=shape, by=holds, cut=false)
 }
 
 ///|
-fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?], room : Ref[Int]) -> Unit {
+fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?], room : Ref[@ui.NodeHeld?]) -> Unit {
   if !w.quotes.get().is_empty() {
     let quote_had = quote_has_focus(c, w)
     c.box(style=quotes_column, fn() {
@@ -984,7 +1136,7 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
             picture?=quote_pictures[i].map(fn(own) {
               fn() {
                 let (picture, f) = own
-                let tile = picture_tile(c, picture, going_now(f), gone_up(f), text(f, "error"))
+                let tile = picture_tile(c, picture, going_now(f), gone_up(f), text(f, "error"), going=text(f, "id"))
                 @motion.measure_drawn(c, tile, quote_picture_key(id))
                 composing.pictures[id] = picture
               }
@@ -1031,12 +1183,15 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
 /// own as it comes), though said so as it is (built again the frame after, it was there before). Below what the room
 /// shows as it opens for it (`room`, composer_extras), it grows with it from its top, as a row coming where it is
 /// (@ui.Ctx::held_look's size; faded in by its entrance alone): whole, as far as the room has reached down it.
-fn held_coming(c : @ui.Ctx, i : Int, key : String, room : Ref[Int]) -> Unit {
+fn held_coming(c : @ui.Ctx, i : Int, key : String, room : Ref[@ui.NodeHeld?]) -> Unit {
   @motion.entering(c, i, key + "/in", @sf.waiting_in, at_once=!composing.same_draft)
+  // (it and its room read where they are as it is painted, not where they were built: what holds them kept as its
+  // nodes is put back elsewhere among the frame's as what is built before it makes more nodes or fewer)
+  let held = c.node_held(i)
   c.look_by(i, fn() {
-    match @motion.grown_shown("composer/extras") {
-      Some(shown) if room.val >= 0 => {
-        let (_, top, _, _) = c.node_rect(room.val)
+    match (@motion.grown_shown(c, "composer/extras"), held.at(), room.val.bind(fn(r) { r.at() })) {
+      (Some(shown), Some(i), Some(room)) => {
+        let (_, top, _, _) = c.node_rect(room)
         let (_, y, _, h) = c.node_rect(i)
         if h > 0.0 {
           // (seen from the first, as it comes in: its own entrance fades it, not its room)
@@ -1095,8 +1250,8 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
 
 ///|
 /// A file waiting's picture, if it is drawn as one: the bytes picked or pasted here, else (a draft kept, read again as
-/// the app starts) an image's as the device keeps it (`composer.picture`), "" while that is read; None for any other
-/// file, and an image the device keeps none of (drawn as a file).
+/// the app starts) an image's as the device keeps it (`composer.picture`), "" while that is read, or a video's put up
+/// here while its first frame is read; None for any other file, and an image the device keeps none of (drawn as a file).
 fn waiting_picture(src : Source, w : Writing, v : Json?) -> String? {
   let id = text(v, "id")
   match writing_pictures.get(id) {
@@ -1106,6 +1261,7 @@ fn waiting_picture(src : Source, w : Writing, v : Json?) -> String? {
         "!" => None
         kept => Some(kept)
       }
+    None if file_kind(text(v, "name")) == "video" && @sfbase.writing_put_here(id) && waiting_as(v) is AnyFile => Some("")
     None => None
   }
 }
@@ -1269,6 +1425,7 @@ fn picture_tile(
   pending : Bool,
   part : Double?,
   error : String,
+  going? : String = picture.key,
   id? : Int = 0,
   again? : Int = 0,
 ) -> Int {
@@ -1277,7 +1434,7 @@ fn picture_tile(
     if pending {
       c.layer(fn() {
         c.box(style=thumb_veil, fn() {
-          @sf.progress_spinner(c, "composer/going/" + picture.key, part, size=@sf.theme().round.glyph) |> ignore
+          @sf.progress_spinner(c, "composer/going/" + going, part, size=@sf.theme().round.glyph) |> ignore
         })
         |> ignore
       })
@@ -1320,7 +1477,7 @@ fn composer_picture(
   // (its picture's box, its ✕ hung on its corner as every waiting file's)
   let tile = Ref(-1)
   @sf.with_corner_remove(c, key, @sf.t("web-main.file.remove", args=[("name", name)]), @sf.composer_inner(), w=thumb_side, fn() {
-    tile.val = picture_tile(c, local_media(picture, file_kind(name)), pending, part, error, id=thumb, again~)
+    tile.val = picture_tile(c, local_media(picture, file_kind(name)), pending, part, error, going=id, id=thumb, again~)
   }, on_remove=fn() { writing_remove(src, w, id) })
   if error != "" {
     c.on_press(again, fn() {
@@ -1374,9 +1531,9 @@ let text_most : Double = 480.0
 let text_window_share : Double = 0.4
 
 ///|
-/// How many lines the field grows to before it scrolls.
+/// How many lines the field grows to before it scrolls: as many of its lines as are as tall as it grows to at most.
 fn text_lines(c : @ui.Ctx) -> Int {
-  let n = (dmin(text_most, c.height * text_window_share) / c.style_size(@sf.theme().t.words).1).to_int()
+  let n = (dmin(text_most, c.height * text_window_share) / field_line(c)).to_int()
   if n < 1 {
     1
   } else {
@@ -1449,8 +1606,15 @@ fn capsule_h(c : @ui.Ctx) -> Double {
 /// they are, else as its line), so that they stand as far in at their ends as over and under them, concentric with it;
 /// none while its line is no taller than they are.
 fn capsule_extra(c : @ui.Ctx) -> Double {
-  let (_, line) = c.style_size(@sf.theme().t.words)
-  dmax(0.0, (c.sp(line) - @sf.theme().round.side) / 2.0)
+  dmax(0.0, (field_line(c) - @sf.theme().round.side) / 2.0)
+}
+
+///|
+/// The line the composer's field is laid out on: the theme's words' line (Ctx::style_size) at the system's size of
+/// words, as Ctx::editor takes the line it is given (Ctx::sp: at 1.3, 22 is 25). What is worked out of its lines (how
+/// tall it is opened, how many it grows to) is worked out of this one, not the theme's.
+fn field_line(c : @ui.Ctx) -> Double {
+  c.sp(c.style_size(@sf.theme().t.words).1)
 }
 
 ///|
@@ -1529,8 +1693,7 @@ let composer_box_open_base : @ui.Style = @ui.style(w=Full, p=@sf.composer_pad_ro
 /// as far in over and under as at their ends, concentric with the capsule, not pushed in by a taller line; a line
 /// taller than they are, as tall as it); opened, 8 in and 8 over (text_open).
 fn text_shut(c : @ui.Ctx) -> @ui.Style {
-  let (_, line) = c.style_size(@sf.theme().t.words)
-  @ui.style(w=@sf.grow, h=Fixed(dmax(@sf.theme().round.side, c.sp(line))), pr=S2, justify=JCenter)
+  @ui.style(w=@sf.grow, h=Fixed(dmax(@sf.theme().round.side, field_line(c))), pr=S2, justify=JCenter)
 }
 
 ///|
@@ -1604,6 +1767,24 @@ let round_hot : @ui.Style = @ui.css("bg=Hover")
 let extras_column : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
+/// Where what waits stands (extras_column): in from the padding where the box is too round for it there
+/// (@sf.composer_waiting_in), at least `held` tall.
+fn extras_room(held : Double) -> @ui.Style {
+  let d = @sf.composer_waiting_in()
+  let base = if d > 0.0 {
+    let r = @sf.room_of(d)
+    extras_column.then(@ui.style(pl=r, pr=r, pt=r))
+  } else {
+    extras_column
+  }
+  if held > 0.0 {
+    base.then(@ui.style(min_h=Fixed(held)))
+  } else {
+    base
+  }
+}
+
+///|
 // kept across runs: a value (no field of it changes)
 let quotes_column : @ui.Style = @ui.css("w=Full gap=S1_5")
 
@@ -1613,7 +1794,7 @@ let quotes_column : @ui.Style = @ui.css("w=Full gap=S1_5")
 /// Over the words, at the top of the box: their lines end short of its top right corner (@sf.composer_files_end), so
 /// the last of the first one never stands in it off its circle, however wide the box is.
 fn files_flow() -> @ui.Style {
-  @ui.style(row=true, w=Full, gap=S1_5, pr=@sf.room_of(@sf.composer_files_end()))
+  @ui.style(row=true, w=Full, gap=S1_5, pr=@sf.room_of(@sf.composer_files_end() - @sf.composer_waiting_in()))
 }
 
 ///|
@@ -1687,11 +1868,11 @@ fn remember_sent_pictures(src : Source, w : Writing, station : String) -> Unit {
     if picture == "" || picture == "!" { return }
     let id = text(v, "id")
     if id != "" {
-      @sfbase.sent_pictures["upload\u{1}" + id] = picture
+      @sfbase.sent_picture_kept("upload\u{1}" + id, picture)
     }
     let path = text(field(v, "done"), "path")
     if station != "" && path != "" {
-      @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
+      @sfbase.sent_picture_kept(@sfbase.sent_key(station, path), picture)
     }
   }
   for file in w.files.get() {
@@ -1744,7 +1925,10 @@ fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
           // up, no spinner over it; a card on the composer's ground, as wide as there
           face: fn(c) {
             match picture {
-              Some(p) => picture_tile(c, local_media(p, file_kind(text(v, "name"))), going_now(v), gone_up(v), text(v, "error")) |> ignore
+              Some(p) => {
+                let shown = writing_pictures.get(id).unwrap_or(p)
+                picture_tile(c, local_media(shown, file_kind(text(v, "name"))), going_now(v), gone_up(v), text(v, "error"), going=id) |> ignore
+              }
               None => {
                 c.box(style=@ui.style(w=Fixed(wide)), fn() { waiting_card(c, "flying/" + id, v, restore~) })
                 |> ignore
@@ -1776,7 +1960,7 @@ fn sent_quotes(w : Writing) -> Array[Json] {
     Json::object({
       "author": Json::string(text(v, "author")),
       "text": Json::string(text(v, "text")),
-      "comment": Json::string(text(v, "comment").trim(chars=" \n\t").to_string()),
+      "comment": Json::string(text(v, "comment").trim(chars=" \n\t").to_owned()),
       "ts": Json::string(text(v, "ts")),
       "role": Json::string(text(v, "role")),
       "file": Json::string(file),
@@ -1944,7 +2128,7 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
             // while it waits; a picture already shown does not go back to an empty source when the draft is taken.
             let latest = quote_picture(c, src, w, station, v).map(fn(p) { p.0 }).unwrap_or(picture)
             let shown = if latest.key == "" && picture.key != "" { picture } else { latest }
-            picture_tile(c, shown, going_now(Some(f)), gone_up(Some(f)), text(Some(f), "error")) |> ignore
+            picture_tile(c, shown, going_now(Some(f)), gone_up(Some(f)), text(Some(f), "error"), going=text(Some(f), "id")) |> ignore
           },
           ground: 0L,
           leaving: None,
@@ -1971,35 +2155,42 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   }
   // sent, felt as a key's light tap (a no as something refused)
   @ui.haptic(KeyboardTap)
-  let words = w.text.get().trim(chars=" \n\t").to_string()
+  let words = w.text.get().trim(chars=" \n\t").to_owned()
   let rk = r.station + "\u{1}" + r.session
   remember_sent_pictures(src, w, r.station)
   // (its references as the field's marks, which its flight takes off as; its row's runs as the core read its words)
   let marks = @sfbase.refs_sent_marks(w.key, words)
   let runs = @sfbase.refs_sent_runs(w.key, words)
-  let row = sent_local(c, rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~)
-  // its words take off from the field as they are (before it is emptied), the composer (its box and its room) held as
-  // tall as it shows till they let go of it, as the list's foot over it is: sent on its way to a line more or less,
-  // where it is drawn then, not where that way ends (the rows over it went there at once, in the frame it was sent, or
-  // the composer grew on under them, held where they were)
-  let room = composer_room(c, w.key)
-  let box = @motion.measured(c, "composer/content").unwrap_or(0.0) + @motion.reshaped_over(c, "composer/box")
-  // its quotes fly too, each from its card, and its files that are up, each from its tile
-  let flying = flying_quotes(c, src, w, r.station) + flying_files(c, src, w)
-  @sfbase.flight_start(
-    c,
-    w.key,
-    rk,
-    row,
-    words,
-    room,
-    flying,
-    field=w.field,
-    hold=fn(c, ms) { composer_hold(c, w.key, room, box, ms) },
-    desk=true,
-    marks~,
-    runs~,
-  )
+  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~, now=(src.now)())
+  // its words take off from the field as they are (before it is emptied), the composer held as it is laid out for them
+  // till they let go of it (theirs: composer_held_lines); on its way to another shape (a line more just typed), it
+  // slows to rest from as fast as it went as they are sent (composer_view's @motion.stop_for), its room with it.
+  // On a chat's page made as nodes no flight is started, till the flights' step: nothing there lets one go (its list is
+  // no old list: flight_placed, flight_frame), so the composer was held as tall as the words took in it for good; with
+  // none, it is back at its one line in the press's frame, which its list takes as its foot giving back room in the
+  // change its sent key comes. The flights' step starts the flight on nodes again, and must then either let go in the
+  // sent key's change or have the list keep the room till it lets go.
+  if !@signals.untracked(fn() { @sfbase.chat_page_nodes.get() }) {
+    let room = composer_room(c, w.key)
+    // its quotes fly too, each from its card, and its files that are up, each from its tile
+    let flying = flying_quotes(c, src, w, r.station) + flying_files(c, src, w)
+    @sfbase.flight_start(
+      c,
+      w.key,
+      rk,
+      row,
+      words,
+      room,
+      flying,
+      field=w.field,
+      shaped=composer_shapes_sent(c, src, w, r.station),
+      // (the list's foot drawn over where it comes to stand: the composer's ground on its way, its room at its target)
+      foot_lift=fn(c) { composer_room(c, w.key) - composer_room(c, w.key, settled=true) },
+      desk=true,
+      marks~,
+      runs~,
+    )
+  }
   // At the end, the new row and its neighbours move together with the flight. When reading above it, glide there
   // instead of putting the list at the end in a single frame.
   let list = "chat/" + r.station + "/" + r.session
@@ -2043,54 +2234,26 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
 }
 
 ///|
-/// What was sent from draft `draft`'s composer holds it as tall as it was, its box (`box`) and its room (`room`), for
-/// `ms`: the words are in it till then, and it comes down as they let go of it, not from under them as they set out
-/// . Then its box is laid
-/// out as it is, its ground going down to that (composer's reshape, for this), and its room down on the same curve.
-fn composer_hold(c : @ui.Ctx, draft : String, room : Double, box : Double, ms : Double) -> Unit {
-  @motion.anim(c, "composer/held/" + draft, 0.0, global=true).snap(room)
-  let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
-  a.snap(1.0)
-  // (down on the flight's clock of what was sent, as its ground does: composer_let_go)
-  // det-ok(motion-length): words sent's own, set with their flight (sf/motion.mbt kind 4)
-  a.animate(0.0, @motion.tween(@sfbase.sent_down_of(draft), ease=Move, delay=ms))
-  let b = @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true)
-  b.snap(box)
-  b.animate(0.0, @motion.Snap(ms))
-}
-
-///|
 /// The least room a chat's composer takes at its page's foot: as tall as it takes opened with one line where it is
 /// (its box that tall, what is round it as it is), draft `draft`'s with its own corner (a card's till it is first built).
 fn composer_least(c : @ui.Ctx, draft : String) -> Double {
   let corner = composing.corners.get(draft).unwrap_or(@sf.card_corner)
   let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c, c.width))
   match @motion.measured(c, "composer/content") {
-    Some(box) => foot - box + composer_open_box(c, corner~)
-    None => composer_open_room(c, c.width, corner~)
+    // (its foot round its box, both measured of the same composer: a foot shorter than the box holds them measured of
+    // two, the box a new chat's in its pane's middle, many lines tall, the foot a chat's from before or none yet; that
+    // way round the room came out under 0, a chat's rows over it a height under 0, and the app stopped on the frame a
+    // new chat became its chat, laid out Medium (0.1.8569: newchat_send_wbtest's unfolded))
+    Some(box) if foot >= box => foot - box + composer_open_box(c, corner~)
+    _ => composer_open_room(c, c.width, corner~)
   }
 }
 
-///|
-/// The room under a chat's list for draft `draft`'s composer, `room` as its page has it (composer_room's): let go by
-/// words sent from it, where it comes to stand (opened with one line, emptied), the list's foot going there on the
-/// list's way as they leave it, one move with their row (sfbase's shown_rows, which says when: `let_go`); else as
-/// it is.
-pub fn composer_foot_room(c : @ui.Ctx, draft : String, room : Double, let_go~ : Bool) -> Double {
-  if let_go {
-    // (where it comes to stand: as tall as it is laid out once they let go of it, a line or more typed meanwhile
-    // with it; not a line always, its room opening on as the way was over)
-    ignore(room)
-    composer_room(c, draft, settled=true, held=false)
-  } else {
-    room
-  }
-}
 
 ///|
 /// How long the composer takes to open from a capsule or to be let go to one: its field passing by its ＋ and send is
 /// kept off them on this clock (composer_hint_wbtest).
-let composer_shape_ms : Double = 300.0
+pub let composer_shape_ms : Double = 300.0
 
 ///|
 /// Whether the composer opens or is let go at this moment: `head` (how roomy, a box or not) changed at it, from what
@@ -2117,61 +2280,166 @@ fn composer_was(c : @ui.Ctx) -> String {
 }
 
 ///|
-/// Whether draft `draft`'s composer is let go by words sent from it now (composer_hold: from as they let go of it till
-/// it is down, its declared end), its ground going down with its room.
+/// Whether draft `draft`'s composer is let go by words sent from it now (sfbase's flight_lets_go: from as they let go
+/// of it till it is down, its declared end), its ground going down with its room.
 fn composer_let_go(c : @ui.Ctx, draft : String) -> Bool {
-  let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
-  a.target() == 0.0 && !a.over()
+  match @sfbase.flight_lets_go(draft) {
+    Some((at, ms)) => {
+      // (built again as it is let go and as it is down, in the first frames drawn at or past those moments: their way is
+      // drawn each frame meanwhile)
+      if c.moment() < at {
+        c.shows_from(at)
+      } else if c.moment() < at + ms {
+        c.shows_from(at + ms)
+      }
+      c.moment() >= at && c.moment() < at + ms
+    }
+    None => false
+  }
 }
 
 ///|
-/// When words sent from draft `draft`'s composer let go of its box, the end declared for it (composer_hold; +inf: none
-/// told).
-fn composer_released_at(c : @ui.Ctx, draft : String) -> Double {
-  @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true).ends()
+/// The room under a chat's list for draft `draft`'s composer, `room` as its page has it (composer_room's): let go by
+/// words sent from it, where it comes to stand (its target, as it is laid out), the list's foot going there on the
+/// list's way as they leave it, one move with their row (sfbase's shown_rows, which says when: `let_go`); else as
+/// it is.
+pub fn composer_foot_room(c : @ui.Ctx, draft : String, room : Double, let_go~ : Bool) -> Double {
+  if let_go {
+    ignore(room)
+    composer_room(c, draft, settled=true)
+  } else {
+    room
+  }
 }
 
 ///|
-/// Whether words sent from draft `draft`'s composer hold its room (composer_hold: from as they are sent till it is
-/// down, its declared end): its room theirs, not its ground's as that reshapes.
+/// Whether draft `draft`'s composer has nothing in its field (none typed since what was sent from it).
+fn composing_field_empty(draft : String) -> Bool {
+  let (was, empty) = composing.emptied
+  was != draft || empty
+}
+
+///|
+/// How long draft `draft`'s composer takes to come down as words sent let go of it, as their way said it, the same as
+/// their row's opening and the list's way then (sfbase's flight_lets_go, shown_rows).
+fn composer_down_ms(draft : String) -> Double {
+  match @sfbase.flight_lets_go(draft) {
+    Some((_, ms)) => ms
+    None => @sfbase.sent_down_ms
+  }
+}
+
+///|
+/// When words sent from draft `draft`'s composer let go of it, as their way said it (flight_lets_go; +inf: not said).
+fn composer_released_at(draft : String) -> Double {
+  match @sfbase.flight_lets_go(draft) {
+    Some((at, _)) => at
+    None => @double.infinity
+  }
+}
+
+///|
+/// Whether words sent from draft `draft`'s composer hold its room (from as they are sent till it is down, as their way
+/// said: flight_lets_go): its room theirs, the list's foot under the rows on the list's way with their row, not on its
+/// ground's as that reshapes (sfpages chat_list's `on_foot_way`).
 fn composer_held(c : @ui.Ctx, draft : String) -> Bool {
-  !@motion.anim(c, "composer/hold/" + draft, 0.0, global=true).over()
+  match (@sfbase.flight_of(draft), @sfbase.flight_lets_go(draft)) {
+    (Some(f), _) if f.carried => false
+    (Some(_), Some((at, ms))) => {
+      composing.held_till = (draft, at + ms)
+      // (built again as it is down, in the first frame drawn at or past that moment: their way is drawn each frame
+      // meanwhile)
+      if c.moment() < at + ms {
+        c.shows_from(at + ms)
+      }
+      c.moment() < at + ms
+    }
+    (Some(_), None) => {
+      composing.held_till = (draft, @double.infinity)
+      true
+    }
+    _ => false
+  }
 }
 
 ///|
-/// How tall draft `draft`'s composer box is held for words sent from it, while they are in it (composer_hold); 0 when
-/// it is not.
-fn composer_held_box(c : @ui.Ctx, draft : String) -> Double {
-  @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true).get()
+/// The way draft `draft`'s composer's ground last set out on (@motion.reshape_way), for the list's room under its rows
+/// to go on: none while words sent from it hold it, nor one it set out on while they did (its coming down as they let
+/// go of it: their row's opening's, the list's own way then, sfbase's shown_rows), which is no cause of the list's
+/// once they are gone.
+pub fn composer_way_for_list(c : @ui.Ctx, draft : String) -> (Double, Double)? {
+  if composer_held(c, draft) {
+    return None
+  }
+  match @motion.reshape_way(c, "composer/box") {
+    Some((at, ms)) => {
+      let (was, till) = composing.held_till
+      if was == draft && at < till {
+        None
+      } else {
+        Some((at, ms))
+      }
+    }
+    None => None
+  }
+}
+
+///|
+/// How many lines of its field words sent from draft `draft`'s composer hold it as tall as, while they are in it (as
+/// they took in it as they were sent: sfbase's flight_held_lines, theirs, this send's), at most as many as it shows; 0
+/// when none do. Laid out so (its words' room that tall, whatever its field holds meanwhile), it goes on to the shape it
+/// was on its way to as they were sent and stays there till they let go of it.
+fn composer_held_lines(c : @ui.Ctx, draft : String) -> Int {
+  let n = @sfbase.flight_held_lines(c, draft)
+  if n > text_lines(c) {
+    text_lines(c)
+  } else {
+    n
+  }
+}
+
+///|
+/// How tall what was added to draft `draft`'s composer (its quotes, its files) is held while words sent from it are in
+/// it: as it was laid out with them as they were sent. Read once, in the frame they were sent, as it is built again
+/// once laid out with them (sfbase's flight_start), the layout of that frame's draft, not a frame before; 0 when
+/// nothing holds it.
+fn composer_held_extras(c : @ui.Ctx, draft : String) -> Double {
+  guard composer_held_lines(c, draft) > 0 else { return 0.0 }
+  match @sfbase.flight_of(draft) {
+    Some(f) => {
+      if f.held_extras < 0.0 {
+        f.held_extras = @motion.measured(c, "composer/extras/room").unwrap_or(0.0)
+      }
+      f.held_extras
+    }
+    None => 0.0
+  }
 }
 
 ///|
 /// How much room draft `draft`'s composer takes at its page's foot (what the list leaves free under its last row): as
 /// tall as its place (chat_composer: its box, what it says under it, its margins) with its ground as drawn (a line
 /// more or less: the list's rows go with the ground as it reshapes, the frame it does), at least as tall as that opened
-/// with one line; let go by words sent from it (composer_hold), from as tall as it was then down to that, on its
-/// ground's curve (not `held`: where it comes to stand once let go, whatever was typed in it meanwhile).
-pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false, held? : Bool = true) -> Double {
+/// with one line. Words sent from it hold it as it was laid out for them (composer_held_lines), so its room is theirs
+/// till they let go of it, and comes down with its ground then.
+pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false) -> Double {
+  ignore(draft)
   // (not laid out yet: a capsule's)
   let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c, c.width))
   // never less than it takes opened with one line where it is (its box that tall, what is round it as it is: the web's
   // --composer-room, max(the composer's height, an opened one-line composer's)): opened or let go, a capsule or a box,
   // the list keeps its words where they are; only a line more, a file, a quote, what is said over it move them
   let least = composer_least(c, draft)
+  // (as it comes to stand while words sent from it hold it, nothing typed in it since: as it will once they let go of
+  // it, opened with one line and emptied, not as it is laid out for them (it stops short of the shape it was on its way
+  // to, @motion.stop_for); a new chat's first words as much, the chat it became under them)
+  if settled && composer_held_lines(c, draft) > 0 && composing_field_empty(draft) {
+    return least
+  }
   // (`settled`: as it comes to stand, not where its shape is on its way: a new chat become its chat, the composer
   // coming down from the middle of the pane to its foot, the chat's rows standing over its foot from the first, not over
   // the middle of the pane where the new chat's scene still is)
-  let now = dmax(foot + (if settled { 0.0 } else { @motion.reshaped_over(c, "composer/box") }), least)
-  if !held {
-    return now
-  }
-  let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
-  let share = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true).get()
-  if held > now {
-    now + (held - now) * share
-  } else {
-    now
-  }
+  dmax(foot + (if settled { 0.0 } else { @motion.reshaped_over(c, "composer/box") }), least)
 }
 
 ///|
@@ -2276,7 +2544,7 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
   c.semantics(b, Button, id~, label=([label] + on.map(fn(o) { o.1 })).join(" "), expanded=open)
   let entries = to.map(fn(o) { @kit.menu_check(o.thread.to_string(), o.on, label=o.place) })
   // each its platform's mark before its place, as beside 抄送
-  let marks : Map[String, (@ui.Ctx, Double) -> Unit] = {}
+  let marks : Map[String, (@ui.Ctx, Double) -> Unit] = Map([])
   for o in to {
     let via = o.via
     marks[o.thread.to_string()] = fn(c, _) { cc_mark(c, via) }
@@ -2306,7 +2574,7 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
             "to": Json::number(o.thread),
             "on": Json::boolean(!o.on),
           }
-          c.tell("composer/cc", fn() { (src.call)("chat.cc", params, fn(_) {  }) })
+          c.tell("composer/cc", fn() { (src.call)("chat.cc", params, @sfbase.answer_unread) })
           // one: done once ticked; several: left as it is, open to tick the next (a tick never opens it: closed by
           // then, Escape after the tick, it stays closed)
           if to.length() <= 1 {
@@ -2333,9 +2601,9 @@ fn cc_places(c : @ui.Ctx, on : Array[(String, String)]) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cc_trigger : @ui.Style = @ui.css(
+let cc_trigger : @ui.Style = @ui.css((
   #|row h=S7 px=S2 gap=S1_5 radius=Lg align=ACenter hovered{bg=Hover} selected{bg=Hover}
-)
+))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2450,21 +2718,24 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
     }
     composer_notice(c, width, "unplug", said, None, icon=if v.updating { "updating" } else { "unplug" }, chat=key) |> ignore
   }
-  notices_gone(c, width, key, [v.archived, v.cache_cold is Some(_) && !v.archived, v.offline])
+  // the still.fail team's reply on a bug report sent from it: the chat's people's to read, never its agents'
+  let replied = feedback_notice(c, src, r, width, key)
+  notices_gone(c, width, key, [v.archived, v.cache_cold is Some(_) && !v.archived, v.offline, replied])
 }
 
 ///|
-/// The notices over chat `chat`'s composer no longer said (`now`: whether each of archive, wait, unplug is), drawn as
-/// they were while they leave (composer_notice).
+/// The notices over chat `chat`'s composer no longer said (`now`: whether each of archive, wait, unplug, feedback is),
+/// drawn as they were while they leave (composer_notice).
 fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -> Unit {
-  for i, mark in ["archive", "wait", "unplug"] {
+  for i, mark in ["archive", "wait", "unplug", "feedback"] {
     if now[i] {
       continue
     }
     match composing.notices_said.get("composer/notice/" + chat + "/" + mark) {
-      Some((said, offer, failed, icon, choices, summary)) => {
+      Some((said, offer, dismiss, failed, icon, choices, summary)) => {
         let offer = offer.map(fn(o) { (o.0, o.1, o.2, true) })
-        composer_notice(c, width, mark, said, offer, failed?=failed, icon~, chat~, gone=true, choices~, held=true, summary~) |> ignore
+        let dismiss = dismiss.map(fn(d) { (d.0, d.1, true) })
+        composer_notice(c, width, mark, said, offer, dismiss~, failed?=failed, icon~, chat~, gone=true, choices~, held=true, summary~) |> ignore
       }
       None => ()
     }
@@ -2476,7 +2747,8 @@ fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -
 /// drawn in from the composer's (`width`) so its mark (icon `icon`, else `mark`, which notice it is; `updating`, the
 /// update's mark turning) stands over the composer's ＋ in the middle of its round start, its words quiet where the
 /// composer's are, what it offers at its end (`offer`: its target, its words' key now, its name's key for what reads
-/// the screen, whether it is out of reach) in the words' colour, a step heavier, or a choice of two or more
+/// the screen, whether it is out of reach) in the words' colour, a step heavier, with an optional × concentric with
+/// its round end (`dismiss`: its target, its name's key, whether it is out of reach), or a choice of two or more
 /// (`choices`: each its target, its words' key, whether it is the one taken; `held`, out of reach). The chosen
 /// value is shown in a quiet menu control. Why what it offers failed (`failed`) is under its words, red. `summary`
 /// holds the status and detail as separate words when the core supplies them. The choice's value comes back.
@@ -2486,6 +2758,7 @@ fn composer_notice(
   mark : String,
   said : String,
   offer : (Int, String, String, Bool)?,
+  dismiss? : (Int, String, Bool)? = None,
   failed? : String?,
   icon? : String,
   chat? : String = "",
@@ -2499,7 +2772,7 @@ fn composer_notice(
   // gone, it leaves as a row of a list does, drawn as it was (notices_gone)
   let key = "composer/notice/" + chat + "/" + mark
   if !gone {
-    composing.notices_said[key] = (said, offer, failed, icon, choices, summary)
+    composing.notices_said[key] = (said, offer, dismiss, failed, icon, choices, summary)
   }
   let look = @motion.presence(c, key, !gone, initial=composing.notices_new, enter=@sf.waiting_in, exit=@sf.leave)
   if gone && look is None {
@@ -2581,7 +2854,13 @@ fn composer_notice(
     )
     selected.val = menu.chosen
   }
-  let box_style = if beside { composer_notice_box.then(@ui.style(pr=@sf.room_of(inline_end))) } else { composer_notice_box }
+  let box_style = if beside {
+    composer_notice_box.then(@ui.style(pr=@sf.room_of(inline_end)))
+  } else if dismiss is Some(_) {
+    composer_notice_box_dismiss
+  } else {
+    composer_notice_box
+  }
   let b = c.box(style=box_style.then(round), glass=@sf.glass_floating(), fn() {
     if choices.length() > 0 {
       if beside {
@@ -2597,6 +2876,34 @@ fn composer_notice(
           draw_choice()
         }) |> ignore
       }
+    } else if dismiss is Some((close_id, close_label, close_off)) {
+      c.box(style=composer_notice_line, fn() {
+        c.box(style=@ui.style(w=Fixed(side), h=Fixed(side), align=ACenter, justify=JCenter), fn() {
+          @sf.icon(c, icon, size=composer_notice_mark, color=t.p.muted) |> ignore
+        }) |> ignore
+        c.box(style=composer_notice_words_dismiss, fn() {
+          c.text(said, style=composer_notice_words) |> ignore
+        }) |> ignore
+        c.box(style=composer_notice_actions_dismiss, fn() {
+          match offer {
+            Some((id, words, name, off)) => {
+              let b = c.box(id~, style=composer_notice_offer_dismiss.then(@ui.style(min_w=Fixed(side), min_h=Fixed(side))), fn() {
+                c.text(@sf.t(words), style=if off { composer_notice_quiet } else { composer_notice_button }) |> ignore
+              })
+              c.semantics(b, Button, id~, label=@sf.t(name), disabled=off)
+            }
+            None => ()
+          }
+          let hot = !close_off && c.lit(close_id)
+          if !close_off {
+            @sf.tip(c, key + "/dismiss", close_id, @sf.t(close_label))
+          }
+          let cb = c.box(id=close_id, style=@ui.style(w=Fixed(side), h=Fixed(side), align=ACenter, justify=JCenter), fn() {
+            @sf.icon(c, "close", size=composer_notice_mark, color=if hot { t.p.text } else { t.p.muted }) |> ignore
+          })
+          c.semantics(cb, Button, id=close_id, label=@sf.t(close_label), disabled=close_off)
+        }) |> ignore
+      }) |> ignore
     } else {
       c.box(style=composer_notice_line, fn() {
         draw_mark()
@@ -2657,6 +2964,24 @@ let composer_notice_mark : Double = 16.0
 let composer_notice_offer : @ui.Style = @ui.css("pl=S3")
 
 ///|
+/// A notice's capsule with its × concentric with its round end (composer_notice): its top and bottom room on its words
+/// so its mark and its × stand `side` square at its ends.
+// kept across runs: a value (no field of it changes)
+let composer_notice_box_dismiss : @ui.Style = @ui.css("mb=S2 gap=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_words_dismiss : @ui.Style = @ui.css("row w=Full py=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_actions_dismiss : @ui.Style = @ui.css("row pl=S3 gap=S2_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_offer_dismiss : @ui.Style = @ui.css("align=ACenter justify=JCenter")
+
+///|
 /// Words and choices fit on one line when there is room, otherwise the choices follow the words.
 // kept across runs: a value (no field of it changes)
 let composer_notice_flow : @ui.Style = @ui.css("row w=Full gap=S3 justify=JBetween align=ACenter")
@@ -2714,9 +3039,10 @@ let composer_notice_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Dan
 
 ///|
 /// A chat's composer's place while it is a capsule at the foot of a pane `pane` wide: its buttons (the theme's round
-/// controls) 8 in, 12 over it and its foot's room under it (composer_foot_in).
+/// controls) 8 in, further while its field's line is taller than they are (capsule_extra), 12 over it and its foot's
+/// room under it (composer_foot_in).
 fn capsule_room(c : @ui.Ctx, pane : Double) -> Double {
-  @sf.theme().round.side + 2.0 * 8.0 + 12.0 + composer_foot_in(c, pane)
+  @sf.theme().round.side + 2.0 * (capsule_pad_alone + capsule_extra(c)) + 12.0 + composer_foot_in(c, pane)
 }
 
 ///|
@@ -2762,9 +3088,9 @@ pub fn composer_foot_in(c : @ui.Ctx, pane : Double) -> Double {
     None if way.id == "" => to
     None => {
       let a = @motion.Anim::new(composer_foot_at(pane))
-      a.follow(to, @sf.move_spring)
+      a.follow(c, to, @sf.move_spring)
       composer_foot_way.val = Some((a, way.id, way.ends))
-      a.get()
+      a.get(c)
     }
     Some((a, last, _)) if way.id == "" && last == "" && to != a.target() => {
       composer_foot_way.val = None
@@ -2773,15 +3099,15 @@ pub fn composer_foot_in(c : @ui.Ctx, pane : Double) -> Double {
     // (the way there: on from the moment it is, whichever frame sees it)
     Some((a, last, ends)) if way.id == "" && last != "" => {
       if to != a.target() {
-        a.animate(to, @sf.move_spring, start_at=dmin(ends, c.moment()))
+        a.animate(c, to, @sf.move_spring, start_at=dmin(ends, c.moment()))
       }
       composer_foot_way.val = Some((a, "", 0.0))
-      a.get()
+      a.get(c)
     }
     Some((a, _, _)) => {
-      a.follow(to, @sf.move_spring)
+      a.follow(c, to, @sf.move_spring)
       composer_foot_way.val = Some((a, way.id, way.ends))
-      a.get()
+      a.get(c)
     }
   }
 }
@@ -2817,14 +3143,59 @@ let composer_foot_wide : Double = 16.0
 
 ///|
 /// Its box opened with one line (composer_open_room without what is over and under it): as composer_box_open lays it
-/// out, its padding over the line (text_open: 8 over it), its parts 10 apart, its buttons' row as far from its foot as
-/// makes them concentric with its corners (tools_row).
+/// out, its padding over the line (text_open: 8 over it), its field's one line as it is laid out at the system's size
+/// of words (field_line), its parts 10 apart, its buttons' row as far from its foot as makes them concentric with its
+/// corners (tools_row).
 fn composer_open_box(c : @ui.Ctx, corner? : Double = @sf.composer_corner()) -> Double {
   let t = @sf.theme()
-  @sf.composer_pad + (8.0 + c.style_size(t.t.words).1) + 10.0 + t.round.side + @ui.capsule_in(corner, t.round.side)
+  @sf.composer_pad + (8.0 + field_line(c)) + 10.0 + t.round.side + @ui.capsule_in(corner, t.round.side)
 }
 
 ///|
 /// A chat's foot: 12 over the composer, its room under it its pane's (composer_foot_in).
 // kept across runs: a value (no field of it changes)
 let chat_foot_top : @ui.Style = @ui.css("w=Full pt=S3 align=ACenter")
+
+///|
+/// What draft `draft`'s composer is shaped for and how as it was built (`holds`, its box's reshape's `by` and `spec`):
+/// kept for what stands round it (composing's `shaped`), and its ground setting out for what it holds at this cause
+/// told what holds it in a list's foot on a page made as nodes, whose height goes the same way from the same moment
+/// (sfbase's composer_set_out, foot_resizes), as the old list's foot took composer_way_for_list's. Not where it
+/// `carried` (words sent from it hold it or let go of it; gone to another page), nor as it is emptied (words sent
+/// from it, at the press: the list takes that as its foot giving back room in the change its sent key comes,
+/// composer_sent_nodes_wbtest), whose foot is at once as before; kept through another build at this same moment, said
+/// anew at the next. Nor yet for its first card (its extras opening): its ground's way is declared longer than the
+/// ground is drawn on it, so the foot would come up before the ground does (chat_nodes_read_stays_composer_file_wbtest);
+/// the foot at once there, as before.
+fn composer_foot_told(
+  c : @ui.Ctx,
+  draft : String,
+  w : Writing,
+  holds : String,
+  shape : @motion.Spec,
+  carried : Bool,
+) -> Unit {
+  composing.shaped = Some((holds, shape))
+  let cards = w.files.get().length() + w.quotes.get().length()
+  let opens_extras = composer_cards_n.val == 0 && cards > 0
+  composer_cards_n.val = cards
+  let emptied = cards == 0 && w.field.text() == ""
+  if holds != "" && holds != composer_shaped_by.val && !carried && !emptied && !opens_extras {
+    @sfbase.composer_set_out.val = Some((draft, shape, c.moment(), fn() { @motion.reshape_way(c, "composer/box") }))
+  } else if @sfbase.composer_set_out.val is Some((_, _, at, _)) && at != c.moment() {
+    @sfbase.composer_set_out.val = None
+  }
+  composer_shaped_by.val = holds
+}
+
+///|
+/// What the composer's box was last shaped for as it was built (its reshape's `by`): a change of it is its ground
+/// setting out (composer_foot_told).
+// kept across runs: said again by each build of the composer
+let composer_shaped_by : Ref[String] = Ref("")
+
+///|
+/// How many cards (files, quotes) the composer held as it was last built: its first come is its extras opening
+/// (composer_foot_told).
+// kept across runs: said again by each build of the composer
+let composer_cards_n : Ref[Int] = Ref(0)

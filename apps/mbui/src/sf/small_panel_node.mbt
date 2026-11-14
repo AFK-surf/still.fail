@@ -20,6 +20,15 @@ pub fn small_panel_node(p : @view.View) -> @view.View {
 }
 
 ///|
+/// Node `v` as a ground (a panel's, a menu's, a sheet's, a card's): it takes a press, which is its own (not outside it,
+/// nothing under it pressed), and is no control: nothing is done, the pointer over it the arrow (not the hand
+/// Tree::cursor_of gives what does something pressed), and a ground (View::as_ground): no target of the room a press
+/// takes, none it cuts. What it holds that is pressed is its own as ever, the hand over it. It.
+pub fn ground_node(v : @view.View) -> @view.View {
+  v.presses(Is(true)).on_press(fn() {  }).cursor(Is(Some(Arrow))).as_ground()
+}
+
+///|
 /// A small panel's line round it (its width), and its shadow's blur and how far under it it falls (small_panel's).
 let small_panel_line : Double = 1.0
 
@@ -32,21 +41,21 @@ let small_panel_shadow : (Double, Double) = (16.0, 12.0)
 /// the words' ink where the hand is on it; Accent: the accent's words; Filled: those on the accent's pale ground); read
 /// out a button named by its words, `press` done as it is pressed. Its words changed (复制链接 to 已复制), its ground
 /// and its words go together to where they are laid out (button_reshape, as panel_button's). The node.
+#callsite(autofill(loc))
 pub fn panel_button_node(
   parent : @view.View,
   label : () -> String,
   press : () -> Unit,
   tone? : PanelTone = Plainly,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  @headless.button(made_for=loc, parent, label, fn(_) { press() }, fn(v, _) {
     style_node(v, fn() { if tone == Filled { panel_button_filled } else { panel_button_box } })
     let hot = fn() { lit_node(v) }
     // (its hovered{bg=Hover}: the hover's ground where the hand is on it; Filled's own ground kept)
     if tone != Filled {
       v.ground(By(fn() { if hot() { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
     }
-    presses_node(v, press)
-    v.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
     let words = words_node(v, label, fn() {
       match tone {
         Accent | Filled => panel_button_accent

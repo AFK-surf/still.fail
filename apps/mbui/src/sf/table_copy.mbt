@@ -69,7 +69,7 @@ fn Md::table_key(self : Md, key : String, shot : String, table : MdTable) -> Uni
   let seen = @motion.told(c, key + "/copy-seen", to, spec=nav_fade)
   let label = if copied { t("common.copied") } else { t("web-main.prose.copyTable") }
   c.box(style=@ui.style(px=room_of(table_key_gap), pt=room_of(y)), fn() {
-    if to == 0.0 && seen.over() {
+    if to == 0.0 && seen.over(c) {
       // (its room, nothing in it to press)
       c.box(style=@ui.style(w=Fixed(table_key_size), h=Fixed(table_key_size)), fn() {  }) |> ignore
       return
@@ -82,7 +82,7 @@ fn Md::table_key(self : Md, key : String, shot : String, table : MdTable) -> Uni
       })
       |> ignore
     })
-    c.look_by(b, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, seen.get()))) })
+    c.look_by(b, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, seen.get(c)))) })
   })
   |> ignore
 }

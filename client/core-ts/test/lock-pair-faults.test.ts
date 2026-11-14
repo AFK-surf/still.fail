@@ -14,7 +14,10 @@ import { CoreError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
 import { PAIR_TRIES } from "../src/pair.ts";
 import { pairs } from "../src/views/lock.ts";
-import { type Duplex, keep, PAIR_GRACE_MS, PAIR_WAIT_MS, serveTrusted, trying } from "../src/views/pair.ts";
+import { type Duplex, keep, PAIR_GRACE_MS, PAIR_SIGNED_MS, PAIR_WAIT_MS, serveTrusted, trying } from "../src/views/pair.ts";
+import { jsonResponse } from "../src/testing.ts";
+import { call } from "./helpers.ts";
+import { stationLater } from "./station-fixture.ts";
 import { ME, PHONE, elsewhere, genesis, grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
 
 /// A seeded random (mulberry32): the same seed, the same draws.
@@ -255,6 +258,93 @@ test("signed in in one workspace it waits in and not another: the other's page s
   assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
   assert.equal(pairs.mine(r.core.inner, "ws")?.state, "done");
   assert.deepEqual(pairs.mine(r.core.inner, "w2"), { state: "failed", devices: 0, error: t("core-misc.lock.pairElsewhere", { names: "W" }) });
+});
+
+/// The code typed on the new device as the app sends it, the clock stepped 10 ms at a time (`during` told each step,
+/// the ms since): how long until it was answered (null: none in 60 s), and the answer.
+async function typedTimed(r: Awaited<ReturnType<typeof rig>>, code: string, during?: (ms: number) => void) {
+  const ui = r.core.connect();
+  const id = 9001;
+  call(r.core, ui, id, "lock.pairCode", { workspace: "ws", code });
+  const t0 = r.host.nowMs();
+  let answer: Record<string, unknown> | undefined;
+  while (answer === undefined && r.host.nowMs() - t0 < 60_000) {
+    await r.host.time.pass(10);
+    during?.(r.host.nowMs() - t0);
+    for (const [, m] of r.host.takeEmitted()) {
+      const msg = m as Record<string, unknown>;
+      if (msg.id === id && ("ok" in msg || "error" in msg)) answer = msg;
+    }
+  }
+  return { ms: answer === undefined ? null : r.host.nowMs() - t0, answer };
+}
+
+const phoneSigned = (r: Awaited<ReturnType<typeof rig>>) => r.cloud.posted.filter((p) => p.ws === "ws" && p.kind === "device" && p.id === PHONE).length;
+
+test("signed in, the line gone once the confirmation was there and the cloud taking the entry 2 s later: done as the lock names it, not said to have failed", async (t) => {
+  // (2026-11-12: the new device read the lock once as the line went, before the trusted device's entry landed, and
+  // said its code had failed while it was signed in)
+  const g = grant();
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const inner = r.core.inner;
+  // hello, code, pake, pake, confirm: the line goes once the confirm is there, before the approval comes back.
+  const l = line((e) => void inner.runner.fork(e), [0], 5);
+  const { code } = await metOver(r, g, l, ["ws"]);
+  // The cloud keeps the trusted device's entry, and answers it, 2 s after it was sent (on the core's clock).
+  stationLater(r.host, (req) => req.method === "POST" && new URL(req.url).pathname === "/v1/workspaces/ws/lock"
+    ? new Promise((done) => void inner.runner.fork(Effect.andThen(Effect.sleep(2_000), Effect.sync(() => done(jsonResponse(200, r.cloud.reply(req)))))))
+    : undefined);
+  const { ms, answer } = await typedTimed(r, code);
+  t.diagnostic(`answered after ${ms} ms`);
+  assert.ok(l.cut(), "its answer lost");
+  assert.ok(answer !== undefined && "ok" in answer, `answered after ${ms} ms: ${JSON.stringify(answer)}`);
+  assert.deepEqual((answer.ok as { workspaces: string[] }).workspaces, ["ws"]);
+  assert.equal(pairs.mine(inner, "ws")?.state, "done");
+  assert.equal(phoneSigned(r), 1, "signed in");
+  // As the entry landed, well before PAIR_SIGNED_MS.
+  assert.ok(ms! >= 2_000 && ms! <= 2_500, `answered after ${ms} ms`);
+});
+
+test("the line gone with the confirmation on its way, never at the trusted device: said gone, PAIR_SIGNED_MS after the line went, nothing signed", async (t) => {
+  const g = grant();
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const inner = r.core.inner;
+  // hello, code, pake, pake at once; the confirm (the fifth) 5 s on its way, the line cut 1 s after the code is typed.
+  const l = line((e) => void inner.runner.fork(e), [0, 0, 0, 0, 5_000], null);
+  const { code } = await metOver(r, g, l, ["ws"]);
+  let cutAt: number | null = null;
+  const { ms, answer } = await typedTimed(r, code, (at) => {
+    if (cutAt === null && at >= 1_000) {
+      l.cutNow();
+      cutAt = at;
+    }
+  });
+  t.diagnostic(`answered after ${ms} ms, the line cut at ${cutAt} ms`);
+  assert.ok(answer !== undefined && "error" in answer, `answered after ${ms} ms: ${JSON.stringify(answer)}`);
+  const error = answer.error as { code: string; message: string };
+  assert.deepEqual([error.code, error.message], ["pair_ended", TEXTS.gone]);
+  assert.equal(phoneSigned(r), 0, "nothing signed");
+  const after = ms! - cutAt!;
+  assert.ok(after >= PAIR_SIGNED_MS && after <= PAIR_SIGNED_MS + 200, `answered ${after} ms after the line went`);
+});
+
+test("the line gone at the pake, before the confirmation: said gone at once, nothing waited for", async (t) => {
+  const g = grant();
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const inner = r.core.inner;
+  // hello, code, pake: the line goes as the new device's pake arrives, its answer never sent.
+  const l = line((e) => void inner.runner.fork(e), [0], 3);
+  const { code } = await metOver(r, g, l, ["ws"]);
+  const { ms, answer } = await typedTimed(r, code);
+  t.diagnostic(`answered after ${ms} ms`);
+  assert.ok(answer !== undefined && "error" in answer, `answered after ${ms} ms: ${JSON.stringify(answer)}`);
+  const error = answer.error as { code: string; message: string };
+  assert.deepEqual([error.code, error.message], ["pair_ended", TEXTS.gone]);
+  assert.equal(phoneSigned(r), 0);
+  assert.ok(ms! <= 100, `answered after ${ms} ms`);
 });
 
 const RUNS = Number(process.env.PAIR_FAULT_RUNS ?? 40);

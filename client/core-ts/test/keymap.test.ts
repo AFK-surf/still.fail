@@ -46,6 +46,14 @@ test("the_keymap_is_the_actions_own_keys_and_on_the_desktop_those_changed_there"
   assert.deepEqual(of(km, "chat.new").keys, ["Alt+Mod+N"]);
   assert.deepEqual(of(km, "chat.new").labels, ["Ctrl+Alt+N"]);
   assert.deepEqual(of(km, "chat.find").keys, ["Mod+F"]);
+  assert.deepEqual([of(km, "chat.outline").keys, of(km, "chat.outline").group, of(km, "chat.outline").typing], [["Mod+G"], "chat", "yes"]);
+  assert.equal(of(km, "chat.outline").name, t("web-main.keymap.chat.outline"));
+  // A person's message before and after: not the chats' (Alt+Up, Alt+Down).
+  assert.deepEqual(["chat.said.prev", "chat.said.next"].map((a) => [of(km, a).keys, of(km, a).group, of(km, a).typing, of(km, a).name]), [
+    [["Alt+Shift+Up"], "chat", "empty", t("web-main.keymap.chat.said.prev")],
+    [["Alt+Shift+Down"], "chat", "empty", t("web-main.keymap.chat.said.next")],
+  ]);
+  assert.equal(of(km, "chat.said.prev").labels[0], "Alt+Shift+↑");
   assert.equal(of(km, "chat.find").changed, false);
   assert.equal(of(km, "nav.back").listed, false);
   assert.equal(of(km, "nav.back").text, t("web-main.shortcuts.unset"));
@@ -152,5 +160,44 @@ test("the_desktop_app_changes_its_keys_and_the_prefs_say_its_keymap_anew", async
   await ask(host, core, ui, 10, "prefs.set", { windowZoom: null });
   apply(host, values);
   assert.equal(v(values, 1).windowZoom, undefined);
+  core.close();
+});
+
+test("the_composer_sends_by_enter_or_by_mod_enter_as_chosen_and_says_its_keys", () => {
+  // None chosen: Enter sends, ⇧Enter a new line, as before.
+  let send = (view(desktop(true)) as J).send;
+  assert.equal(send.by, "enter");
+  assert.deepEqual(send.choices.map((c: J) => c.by), ["enter", "mod"]);
+  assert.deepEqual(send.choices.map((c: J) => c.name), [t("web-main.shortcuts.sendWith", { keys: "Enter" }), t("web-main.shortcuts.sendWith", { keys: "⌘ Enter" })]);
+  assert.deepEqual([send.send, send.newline], ["↩", "⇧↩"]);
+  assert.equal(send.text, t("web-main.shortcuts.sendNote", { send: "↩", newline: "⇧↩" }));
+  // ⌘Enter on a Mac: Enter and ⇧Enter each a new line.
+  send = (view({ ...desktop(true), sendKey: "mod" }) as J).send;
+  assert.deepEqual([send.by, send.send, send.newline], ["mod", "⌘↩", "↩ / ⇧↩"]);
+  // Ctrl elsewhere, the web's too.
+  send = (view({ device: { app: "web", mac: false }, sendKey: "mod" }) as J).send;
+  assert.deepEqual([send.send, send.newline, send.choices[1].name], ["Ctrl+↩", "↩ / Shift+↩", t("web-main.shortcuts.sendWith", { keys: "Ctrl+Enter" })]);
+  send = (view(desktop(false)) as J).send;
+  assert.deepEqual([send.send, send.newline], ["↩", "Shift+↩"]);
+});
+
+test("the_way_the_composer_sends_is_kept_on_the_device_and_nothing_else_is_taken", async () => {
+  const { host, core } = await started();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  await ask(host, core, ui, 2, "client.device", { app: "desktop", build: "0.1.9", userAgent: MAC_UA });
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).keymap.send.by, "enter");
+  await ask(host, core, ui, 3, "prefs.set", { sendKey: "mod" });
+  apply(host, values);
+  assert.equal(v(values, 1).sendKey, "mod");
+  assert.deepEqual([v(values, 1).keymap.send.by, v(values, 1).keymap.send.send], ["mod", "⌘↩"]);
+  assert.equal((await ask(host, core, ui, 4, "prefs.set", { sendKey: "enter" })).error.code, "invalid_params");
+  assert.equal((await ask(host, core, ui, 5, "prefs.set", { sendKey: "Mod+Shift+Enter" })).error.code, "invalid_params");
+  await ask(host, core, ui, 6, "prefs.set", { sendKey: null });
+  apply(host, values);
+  assert.equal(v(values, 1).sendKey, undefined);
+  assert.equal(v(values, 1).keymap.send.by, "enter");
   core.close();
 });

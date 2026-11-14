@@ -17,13 +17,15 @@ export interface WayView { id: string; kind: "relay" | "lan" | "tailnet" | "dire
  * first (its home, whose owners and admins manage the machine); absent where this is its home.
  */
 export interface StationView { id: string; name: string; emoji: string | null; icon?: string | null; enrolled_at: number; enrolled_by: string; last_seen: number | null; version: string | null; joined?: true }
+/** A rig (a station that only runs tasks): a machine that only runs what the workspace's stations send it, its person's (`owner`, who added it). */
+export interface RigView { id: string; name: string; enrolled_at: number; owner: string; owner_email: string; owner_name: string; last_seen: number | null; version: string | null }
 export interface MemberView extends UserView { role: Role; added_at: number }
 export interface InvitationView { id: string; role: Role; email: string | null; created_by: string; expires_at: number }
 /** An invitation waiting for the signed-in account's email. */
 export interface PendingInvitation { id: string; workspace: string; name: string; role: Role; inviter: string; expires_at: number }
 /** An email added to a workspace whose account has not signed in yet: a member from its first sign-in on. */
 export interface AddedView { email: string; role: Role; added_by: string; added_at: number }
-export interface WorkspaceView { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; ways_off?: string[]; /** Every way, on or off (setWay). */ ways?: WayView[]; lock?: LockHead | null; /** In security mode now: a lock not turned off. */ locked?: true; lock_requests?: number }
+export interface WorkspaceView { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; /** Absent with none (and from a cloud before them). */ rigs?: RigView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; ways_off?: string[]; /** Every way, on or off (setWay). */ ways?: WayView[]; lock?: LockHead | null; /** In security mode now: a lock not turned off. */ locked?: true; lock_requests?: number }
 
 /** How far the workspace's lock goes as the cloud keeps it: null, none. */
 export interface LockHead { seq: number; hash: string; genesis: string }
@@ -34,12 +36,18 @@ export interface DeviceView { sub: string; email: string; device: string; base: 
 export interface LockRequestView { base: string; sub: string; email: string; kind: string; label: string; sign_key: string | null; endpoints: string[]; code: string; created_at: number }
 
 /** What `/v1/events` pushes: what changed, for the device to refetch. `release`: a release is out (its feeds read
- * again); `relays`: still.fail's own relay's counters were sampled (the operator's 中继 page reads them again). */
+ * again); `relays`: still.fail's own relay's counters were sampled (the operator's 中继 page reads them again).
+ * `workspace` with `lock`: only its lock moved on (the view's `lock` and `locked` as they are now), nothing to refetch
+ * for a device that reads the lock of its stations; one from before refetches as for any change. `workspace` with
+ * `requests`: only its requests to be let in changed (`/lock/requests`, which apps from before ask and drop), nothing
+ * a device of today reads; one from before refetches. */
 export type AccountEvent =
   | { type: "workspaces" }
-  | { type: "workspace"; id: string }
+  | { type: "workspace"; id: string; lock?: { head: LockHead | null; locked: boolean }; requests?: true }
   | { type: "release" }
-  | { type: "relays" };
+  | { type: "relays" }
+  /** The team or someone of the chat replied on a bug report from a chat of the workspace: its replies read again (GET /v1/workspaces/<id>/feedback). */
+  | { type: "feedback"; workspace: string };
 
 /** What a station's presence socket is told besides its state: a release is out (its feed, and its reporters' fixed
  * reports, read again); the models' catalog changed (read again). */
@@ -129,7 +137,38 @@ export interface AdminFeedback {
   fixed_in?: number | null;
   told_at?: number | null;
   created_at: number;
+  /** Moves with a status, a fix or a reply either way: what the feedback monitor watches. */
   updated_at: number;
+  /** The replies on it, oldest first: the team's and the reporter's (feedback.ts). Missing from a cloud from before. */
+  replies?: FeedbackReply[];
+}
+
+/** A reply on a bug report: the team's (the console's admin, or the feedback monitor), or its reporter's agent's. */
+export interface FeedbackReply {
+  id: string;
+  from: "team" | "reporter";
+  /** The admin's email or `feedback-monitor`; of the reporter's side, `session:<key>` (its agent, feedback_reply) or `account:<sub>` (a person, in the app). */
+  by: string;
+  text: string;
+  created_at: number;
+  /** A team's reply: whether a device of the chat's workspace has it yet (it is shown there, never given to an agent). null: the reporter's. */
+  delivery: "pending" | "delivered" | null;
+  delivered_at: number | null;
+}
+
+/**
+ * A bug report sent from a chat of a workspace that the team replied on, as its members' apps show it in that chat
+ * (GET /v1/workspaces/<id>/feedback): which chat (its station and session), and the replies of both sides.
+ */
+export interface WorkspaceFeedback {
+  id: string;
+  number: number;
+  title: string;
+  station: string;
+  session: string;
+  thread: string | null;
+  /** Oldest first. `name`: the person's, for a person's reply; the team's and an agent's say none. */
+  replies: { id: string; from: "team" | "person" | "agent"; name: string; text: string; created_at: number }[];
 }
 
 export interface InviteCodeView {

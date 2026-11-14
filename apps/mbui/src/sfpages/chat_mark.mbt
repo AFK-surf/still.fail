@@ -46,15 +46,15 @@ pub fn row_mark(c : @ui.Ctx, key : String, tone : String) -> Unit {
     Some(was) if was != tone => {
       marks_seen[key] = tone
       if tone != "" && !@ui.reduced_motion() {
-        pop.snap(0.0)
-        pop.animate(1.0, @motion.tween(mark_pop_ms, ease=Out))
+        pop.snap(c, 0.0)
+        pop.animate(c, 1.0, @motion.tween(mark_pop_ms, ease=Out))
       }
     }
     None => marks_seen[key] = tone
     _ => ()
   }
   let mark = chat_mark(c, tone)
-  let v = pop.get()
+  let v = pop.get(c)
   if mark != 0 && v < 1.0 {
     c.look(mark, @ui.look(alpha=@sf.seen_at(pop_scale(v)), scale=pop_scale(v)))
   }
@@ -62,7 +62,7 @@ pub fn row_mark(c : @ui.Ctx, key : String, tone : String) -> Unit {
 
 ///|
 /// The mark each chat has had, as its row was last drawn.
-let marks_seen : Map[String, String] = {}
+let marks_seen : Map[String, String] = Map([])
 
 ///|
 fn marks_reset() -> Unit {
@@ -148,7 +148,7 @@ pub fn state_line(
         // (the theme's lists' lead word: bold with touch, as the phone's Home.kt StateLine; 600 with keyboard and mouse,
         // ChatMark.css.ts)
         c.text(lead_text, style=words.then(look.state_lead)) |> ignore
-        c.text(text.view(start_offset=lead_text.length()).to_owned(), style=words.then(state_rest_cut)) |> ignore
+        c.text(text.exact_view(start=lead_text.length()).to_owned(), style=words.then(state_rest_cut)) |> ignore
       })
       |> ignore
     _ => c.text(text, style=words) |> ignore

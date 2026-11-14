@@ -8,10 +8,12 @@
 // chunks of base64 inside it, one request each.
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import type { Cloud } from "../cloud/state.ts";
+import { type Cloud, NOT_GIVEN, UNPROTECTED } from "../cloud/state.ts";
 import { BYTES, CHECK_BYTES, type Bytes, NoBytes, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
 import { answerLock } from "./lock-sync.ts";
+import { answerMarks, stationMarksOf } from "./station-marks.ts";
+import { answerWays, waysOf } from "./ways.ts";
 import { Reader } from "./serve.ts";
 
 export const PEER_ALPN = Buffer.from("stillfail/station/1");
@@ -27,6 +29,10 @@ const STOPPED = 1;
 const FAILED = 2;
 /// A request answered later than this is said in the log (a caller gives up at 30 s).
 const SLOW_MS = 10_000;
+/// What a rig tells the stations of its workspace besides a task's change: how it is (rigs/module.ts answers them),
+/// and of a command a station sent it to run with a secret, that it used it and how it ended (vault/secrets.ts
+/// `heard`, which takes them only from the machine the command was sent to).
+export const RIG_TELLS: ReadonlySet<string> = new Set(["rig.hello", "rig.changed", "vault.used", "vault.done"]);
 
 /// The workspace a peer is asked or heard in, if it is another station of it now; throws why not. Without one said,
 /// the first workspace of this station's (its home one first) the peer is in too.
@@ -47,8 +53,21 @@ export function member(cloud: Cloud, peer: string, workspace: string | null): st
     of = cloud.membership(workspace);
   }
   if (s === null || of === undefined || of === null) throw new Error("station is outside this workspace");
-  if (!of.peers.some((p) => p?.id === peer) || peer === s.station) throw new Error("peer is not another station in this workspace");
+  if (!of.peers.some((p) => p?.id === peer) || peer === s.station) {
+    // In the control plane's roster, left out only by safe mode: said so, not as if it were none of the workspace's.
+    const where = workspace === null ? cloud.memberships() : [of];
+    if (peer !== s.station && where.some((m) => cloud.unprotected(m.workspace).some((p) => p?.id === peer))) throw new Error(UNPROTECTED);
+    throw new Error("peer is not another station in this workspace");
+  }
   return of.workspace;
+}
+
+/// What `peers` answers (the transport's own roster): the stations of `workspace` (this station's first when null) it
+/// calls, and those of it safe mode leaves out (`unprotected`, only when there are any), which it cannot.
+export function roster(cloud: Cloud, workspace: string | null): { workspace: string; stations: any[]; current: boolean; unprotected?: any[] } {
+  const of = workspace === null ? (cloud.memberships()[0] ?? null) : cloud.membership(workspace);
+  const unprotected = of === null ? [] : cloud.unprotected(of.workspace);
+  return { workspace: of?.workspace ?? "", stations: of?.peers ?? [], current: cloud.peersCurrent, ...(unprotected.length > 0 ? { unprotected } : {}) };
 }
 
 /// All of a stream, at most `limit` bytes.
@@ -129,6 +148,11 @@ export type Outside = { reaches(target: string, workspace: string): boolean };
 /// The workspace a request to `target` goes to: this one's, when it is one of its stations; another, when it is a
 /// station this one shares chats with (`outside`). Throws why not otherwise.
 function workspaceFor(cloud: Cloud, target: string, workspace: string | null, outside: Outside | undefined): string {
+  // A rig of the workspace (a station that only runs tasks): asked as a station is; what it answers a chat is its own to say (rig/grants.ts).
+  if (cloud.peersCurrent) {
+    const rig = cloud.rigOf(target, workspace);
+    if (rig !== null) return rig.workspace;
+  }
   if (workspace === null || cloud.membership(workspace) !== null || outside === undefined) return member(cloud, target, workspace);
   if (cloud.home() === null) throw new Error("station is outside this workspace");
   if (!outside.reaches(target, workspace)) throw new Error("that station is of another workspace that shares no chat with this one");
@@ -185,10 +209,22 @@ export function peerCall(
   };
   return async (target, workspace, request) => {
     if (target === "" && request?.method === "peers") {
-      const of = workspace === null ? (cloud.memberships()[0] ?? null) : cloud.membership(workspace);
-      return { workspace: of?.workspace ?? "", stations: of?.peers ?? [], current: cloud.peersCurrent };
+      const listed = roster(cloud, workspace);
+      const rigs = listed.workspace === "" ? [] : cloud.rigs(listed.workspace);
+      // (in security mode: those named and not signed for yet, so a task sent to one says why it is not taken)
+      const waiting = listed.workspace === "" ? [] : cloud.rigsNamed(listed.workspace).filter((r) => !rigs.some((x) => x.id === r.id));
+      return { ...listed, ...(rigs.length > 0 ? { rigs } : {}), ...(waiting.length > 0 ? { rigsWaiting: waiting } : {}) };
     }
-    const ws = workspaceFor(cloud, target, workspace, outside);
+    // A rig the control plane names in a workspace in security mode, not signed for here yet: asked for what its
+    // person signed for it (`rig.proof`, rigs/adds.ts), and for nothing else until that checks out.
+    const proof = request?.method === "rig.proof" && workspace !== null && cloud.peersCurrent && cloud.rigsNamed(workspace).some((r) => r.id === target);
+    // A joined workspace whose moved chain the plane offered this station, which pins none of it yet (mesh/moved-pin.ts):
+    // its stations as the plane lists them asked the lock's own methods alone, to bring the logs and bodies that would
+    // name this station; it is none of its memberships until it pins the chain (each station asked checks the asker
+    // itself, peer.ts `member`, by the state it holds).
+    const offered = workspace !== null && cloud.peersCurrent && cloud.movedOffered?.has(workspace) === true && typeof request?.method === "string" && request.method.startsWith("lock.")
+      && (cloud.state?.joined ?? []).some((j) => j.workspace === workspace && j.peers.some((p) => p?.id === target));
+    const ws = proof || offered ? workspace : workspaceFor(cloud, target, workspace, outside);
     let conn: Connection | null = null;
     let dial: Promise<Connection> | null = null;
     const late = "peer request timed out; execution may have happened — query the same task key";
@@ -277,9 +313,11 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
       return false;
     }
   };
+  /// Whether it is a rig of one of this station's workspaces now (a station that only runs tasks): heard for what it tells of itself alone.
+  const rig = () => cloud.peersCurrent && cloud.rigOf(peer) !== null;
   // Not to be heard at all: the connection ends. A roster not current yet ends nothing: its requests are refused meanwhile.
   try {
-    inside();
+    if (!rig()) inside();
   } catch (error) {
     if (cloud.peersCurrent) throw error;
   }
@@ -327,13 +365,31 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
         incoming = new Incoming(reader);
         envelope.request[BYTES] = incoming;
       }
-      const ours = inside();
+      // A rig asks nothing of a station: it tells what became of a task it was sent and of its own grants and
+      // settings (rigs/module.ts), and nothing else of it is answered, whatever runs on it.
+      const isRig = rig();
+      const asRig = isRig ? cloud.rigOf(peer, envelope.workspace) : null;
+      if (isRig && asRig === null) throw new Error("a rig asks nothing of a station");
+      const ours = asRig === null && inside();
       const there = ours && cloud.membership(envelope.workspace)?.peers.some((p) => p?.id === peer) === true;
       let result: unknown;
-      if (there || (ours && !remote.hearsOutside?.())) {
+      if (asRig !== null) {
+        const method = envelope.request?.method;
+        if (method !== "task.changed" && !(typeof method === "string" && RIG_TELLS.has(method))) throw new Error("a rig asks nothing of a station");
+        result = await remote.handle(envelope.workspace, peer, envelope.request ?? null);
+      } else if (there || (ours && !remote.hearsOutside?.())) {
         member(cloud, peer, envelope.workspace);
         const method = envelope.request?.method;
-        result = typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace) : await remote.handle(envelope.workspace, peer, envelope.request ?? null);
+        // (a workspace whose chain moved, this station waiting for its root's log or `open`: its chain's stations are
+        // answered only the lock's own, which bring it what it lacks: Cloud `rosterOf`)
+        const w = envelope.workspace && envelope.workspace !== cloud.home() ? envelope.workspace : null;
+        if (cloud.waiting(w) && !(typeof method === "string" && method.startsWith("lock."))) throw new Error(NOT_GIVEN);
+        result = typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace, peer)
+          // The workspace's ways (mesh/ways.ts), kept level between its stations.
+          : typeof method === "string" && method.startsWith("ways.") ? answerWays(waysOf(cloud), envelope.request, envelope.workspace ?? cloud.home() ?? "")
+          // The stations' names and marks (mesh/station-marks.ts), a copy of each kept by the others.
+          : typeof method === "string" && method.startsWith("stationMarks.") ? answerMarks(stationMarksOf(cloud), envelope.request, envelope.workspace ?? cloud.home() ?? "")
+          : await remote.handle(envelope.workspace, peer, envelope.request ?? null);
       } else {
         if (cloud.membership(envelope.workspace) === null) throw new Error("station is outside this workspace");
         result = await remote.handleOutside(peer, envelope.request ?? null, envelope.workspace);

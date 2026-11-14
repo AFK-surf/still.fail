@@ -4,7 +4,7 @@
 
 ///|
 test "64-wide-new-chat" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("wide-new-chat"), seed~, w=1280.0, h=800.0)
     f.see("新建对话")
     f.key("cmd+n")
@@ -17,9 +17,8 @@ test "64-wide-new-chat" {
     f.gone("描述要做的事")
     // its agent's answer in the chat
     f.see("=宽屏新对话的回答 085912")
-    // the agent's avatar lingering after its turn ended: once its answer is out of it and it is home again, there a
-    // moment, then faded and gone
-    f.run_for(@sfapp.emit_out_ms + @sfapp.linger_ms)
+    // the agent's line gone as its answer came out of its avatar, the avatar home to it as it went
+    f.run_for(@sfapp.emit_out_ms)
     f.end()
   })
 }

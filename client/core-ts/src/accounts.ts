@@ -11,10 +11,9 @@
 import { Marks } from "./reactive.ts";
 import { Clock, Deferred, Effect } from "effect";
 import { CoreError, HostError, asCoreError } from "./error.ts";
-import type { Host, HttpResponse } from "./host.ts";
+import { HEDGE, type Host, type HttpResponse } from "./host.ts";
 import { t } from "./i18n.ts";
 import { Kind, type Tracer } from "./trace.ts";
-import { HEDGE } from "./wake.ts";
 import { base64url, isObject, parseJson, pointer, sha256, toJsonBytes, utf8 } from "./util.ts";
 
 export const STORAGE_KEY = "accounts";

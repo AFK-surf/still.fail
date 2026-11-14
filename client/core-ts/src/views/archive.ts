@@ -11,6 +11,7 @@ import type { Value } from "../store.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
 import type { Local } from "./local.ts";
 import type { Views } from "./views.ts";
+import { CHAT_READS } from "../db/chat-reads.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -29,7 +30,6 @@ export function archive(views: Views, local: Local, scope: string, host: Host, q
   if ("err" in ws) return ws;
   const online = (views.stations(scope) ?? []).filter((s) => s.online);
   const named = online.length > 1;
-  const items: J[] = [];
   const errors: J[] = [];
   let loading = false;
   const waiting: string[] = [];
@@ -37,6 +37,9 @@ export function archive(views: Views, local: Local, scope: string, host: Host, q
   const needle = q.trim().toLowerCase();
   const words = needle.split(/\s+/).filter((w) => w !== "");
   const has = (text: string) => words.every((w) => text.toLowerCase().includes(w));
+  // What each station found, by chat and by thread (`hits`), and the stations whose archive is read (`read`).
+  const hitsOf = new Map<string, Map<unknown, string>>();
+  const read: string[] = [];
   for (const s of online) {
     const place = named ? s.name : null;
     // What the station finds in its archive, by chat and by thread: what a message said, "" for a chat found by its name.
@@ -68,7 +71,7 @@ export function archive(views: Views, local: Local, scope: string, host: Host, q
     }
     const stopped = get(state, "archiveFailed");
     if (typeof stopped === "string") errors.push({ station: s.address, text: place !== null ? t("core-views.named_error", { name: place, error: stopped }) : stopped });
-    const v = views.value({ topic: "archivedRows", station: s.address });
+    const v = views.listKnown(s.address, "archived");
     if (v === undefined) {
       loading = true;
       waiting.push(s.name);
@@ -79,36 +82,74 @@ export function archive(views: Views, local: Local, scope: string, host: Host, q
       errors.push({ station: s.address, text: place !== null ? t("core-views.named_error", { name: place, error: v.err.message }) : v.err.message });
       continue;
     }
-    for (const chat of arr(v.ok)) {
-      if (!isObject(get(chat, "archived")) || local.restoring(s.address, chat)) continue;
-      const mark = chat.archived;
-      const atRaw = get(mark, "at") ?? get(chat, "lastActiveAt");
-      const at = typeof atRaw === "number" ? atRaw : 0;
-      const text = (x: J) => (typeof x === "string" ? x : "");
-      const id = text(get(chat, "id"));
-      const found = hits.get(id) ?? (get(chat, "thread") == null ? undefined : hits.get(get(chat, "thread")));
-      const title = text(get(chat, "title"));
-      const lastLine = text(get(get(chat, "last"), "text"));
-      if (needle && !has(title) && !has(lastLine) && found === undefined) continue;
-      items.push({
-        station: s.address,
+    hitsOf.set(s.address, hits);
+    read.push(s.address);
+  }
+  // The archived chats of the stations read, newest first, of their columns (db/chat-reads.ts `archived`: SQLite reading
+  // what is shown of each of their JSON, the `limit` newest alone where nothing is looked for); those overlaid here read
+  // apart by their keys and judged as their records say (local.ts restoring), and counted with the rest.
+  const sorted: { item: J; place: number[] }[] = [];
+  const data = views.data;
+  const threads: string[] = [];
+  const sessions: string[] = [];
+  for (const a of read) {
+    const o = local.overlaid(a);
+    for (const t0 of o.threads) threads.push(`${a}\u0001${t0}`);
+    for (const k of o.sessions) sessions.push(`${a}\u0001${k}`);
+  }
+  const stationOf = new Map(online.map((s) => [s.address, s]));
+  const text = (x: J) => (typeof x === "string" ? x : "");
+  const put = (station: string, id: string, at: number, session: string, thread: J, title: string, lastLine: string, by: J, alone: boolean, ord: number) => {
+    const s = stationOf.get(station)!;
+    const hits = hitsOf.get(station) ?? new Map<unknown, string>();
+    const found = hits.get(id) ?? (thread == null ? undefined : hits.get(thread));
+    if (needle && !has(title) && !has(lastLine) && found === undefined) return;
+    sorted.push({
+      place: [-at, read.indexOf(station), ord],
+      item: {
+        station,
         id,
-        session: text(get(chat, "session")),
-        thread: get(chat, "thread") ?? null,
+        session,
+        thread: thread ?? null,
         title,
         // Found by a message of it: that message, where the words are, not its last line that has none of them.
         last: found && !has(lastLine) ? refs.excerpt(found, words).text : lastLine,
         at,
         clock: format.clock(at, host.utcOffsetMin(at)),
-        how: get(mark, "by") === "auto" ? t("core-views.archive.auto") : t("core-views.archive.manual"),
-        deletable: get(mark, "alone") !== true,
-        place,
+        how: by === "auto" ? t("core-views.archive.auto") : t("core-views.archive.manual"),
+        deletable: !alone,
+        place: named ? s.name : null,
         ...(named && s.emoji ? { stationEmoji: s.emoji } : {}),
         ...(named && s.icon ? { stationIcon: s.icon } : {}),
-      });
+      },
+    });
+  };
+  let total = 0;
+  if (read.length > 0) {
+    const p = { stations: read, threads, sessions, limit: needle || limit <= 0 ? -1 : limit };
+    for (const f of data.chatCounted(CHAT_READS.archived, p)) {
+      const [station, , id, at, session, thread, title, lastLine, by, alone, ord] = f;
+      put(String(station), String(id), Number(at), text(session), thread, text(title), text(lastLine), by, alone === 1, Number(ord));
+    }
+    if (!needle) for (const r of data.chatCounted(CHAT_READS.archivedCount, { ...p, from: Number.MAX_SAFE_INTEGER, offset: 0, day: 1 })) if (r[1] === null) total += Number(r[2]);
+    if (threads.length > 0 || sessions.length > 0) {
+      for (const f of data.chatFound(CHAT_READS.overlaid, { stations: read, archived: true, threads, sessions })) {
+        const chat = f.record;
+        if (!isObject(get(chat, "archived")) || local.restoring(f.station, chat)) continue;
+        const mark = chat.archived;
+        const atRaw = get(mark, "at") ?? get(chat, "lastActiveAt");
+        const before = sorted.length;
+        put(f.station, text(get(chat, "id")), typeof atRaw === "number" ? atRaw : 0, text(get(chat, "session")), get(chat, "thread"), text(get(chat, "title")), text(get(get(chat, "last"), "text")), get(mark, "by"), get(mark, "alone") === true, typeof f.cols[0] === "number" ? f.cols[0] : 0);
+        if (!needle && sorted.length > before) total++;
+      }
     }
   }
-  items.sort((a, b) => b.at - a.at);
+  sorted.sort((a, b) => {
+    for (let i = 0; i < a.place.length; i++) if (a.place[i] !== b.place[i]) return a.place[i] - b.place[i];
+    return a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0;
+  });
+  const items = sorted.map((x) => x.item);
+  if (needle) total = items.length;
   const shown = limit > 0 ? items.slice(0, limit) : items;
   const now = host.nowMs();
   const offset = host.utcOffsetMin(now);
@@ -127,7 +168,7 @@ export function archive(views: Views, local: Local, scope: string, host: Host, q
         : days.length === 0 && errors.length === 0
           ? t(needle ? "core-views.archive.no_match" : "core-views.archive.empty")
           : null;
-  return { ok: { days: days.map(([label, list]) => ({ label, items: list })), errors, note, total: items.length, more: shown.length < items.length, wait: waitNote(waiting, failing, items.length === 0) } };
+  return { ok: { days: days.map(([label, list]) => ({ label, items: list })), errors, note, total, more: shown.length < total, wait: waitNote(waiting, failing, total === 0) } };
 }
 
 /// The chat list's day headings, with the year before this one's.

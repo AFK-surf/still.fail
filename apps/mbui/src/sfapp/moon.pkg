@@ -1,22 +1,17 @@
 import {
-  "moonbitlang/core/cmp",
+  "mbui/halt",
   "moonbitlang/core/double",
   "mbui/pixels",
   "mbui/codec",
-  "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
-  "moonbitlang/core/math",
-  "mbui/dmath",
   "mbui/ui",
   "mbui/signals",
   "mbui/view",
   "mbui/kit",
   "mbui/motion",
   "stillfail/sf",
-  "stillfail/gallery",
   "mbui/hostapi",
-  "mbui/zip",
   "stillfail/sfapp/settings",
   "stillfail/sfbase",
   "stillfail/sfdesk",
@@ -24,4 +19,4 @@ import {
   "stillfail/sffixture",
 }
 
-import { "stillfail/sfkept", "stillfail/sfscreens", "stillfail/core" } for "wbtest"
+import { "stillfail/sfkept", "stillfail/sfscreens", "stillfail/core", "stillfail/sfrealsize", "mbui/dmath", "moonbitlang/core/cmp" } for "wbtest"

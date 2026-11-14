@@ -20,7 +20,7 @@ import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
 import { log } from "../ops/log.ts";
 import type { ContextCall } from "../store/usage.ts";
-import { key as modelKey } from "../../../client/core-ts/src/shapes/model.ts";
+import { key as modelKey, splitAgyTier } from "../../../client/core-ts/src/shapes/model.ts";
 import { STILLFAIL_CONNECT } from "../store/rows.ts";
 
 // ── prices (usage.rs) ──
@@ -39,6 +39,7 @@ const PRICES: [string, Price][] = [
   ["gpt-6-sol", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
   ["gpt-6-luna", { input: 0.1, output: 0.5, cacheRead: 0.01 }],
   ["gpt-5.6-sol", { input: 4.0, output: 20.0, cacheRead: 0.4 }],
+  ["claude-fable-5-2", { input: 8.0, output: 40.0, cacheRead: 0.2 }],
   ["claude-fable-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
   ["claude-mythos-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
   ["claude-fable-5", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
@@ -75,16 +76,24 @@ export function priceTable(lang: Lang, models: (string | null)[] = []): Json {
 }
 
 /// What a model is, however it is spelled (the core's, client/core-ts/src/shapes/model.ts `key`).
-export { modelKey };
+export { modelKey, splitAgyTier };
 
 
-/// price: a model's prices, however a profile spells it (anthropic/claude-opus-5-5, claude-opus-5-5[1m]): the model
-/// catalog's, else the station's own table's; none for a model without a list price in either.
+/// price: a model's prices, however a profile spells it (anthropic/claude-opus-5-5, claude-opus-5-5[1m],
+/// gemini-4-hydrogen-high): the model catalog's, else the station's own table's; none for a model without a list price
+/// in either.
 export function price(model: string): Price | null {
   const told = facts(model)?.cost;
   if (told !== undefined) return { input: told.input, output: told.output, cacheRead: told.cacheRead ?? told.input };
   const name = modelKey(model);
-  return PRICES.find(([prefix]) => name === prefix || (name.startsWith(prefix) && name.slice(prefix.length).startsWith("[")))?.[1] ?? null;
+  const listed = (candidate: string) =>
+    PRICES.find(([prefix]) => candidate === prefix || (candidate.startsWith(prefix) && candidate.slice(prefix.length).startsWith("[")))?.[1] ?? null;
+  const direct = listed(name);
+  if (direct !== null) return direct;
+  const at = name.indexOf("[");
+  const bare = at >= 0 ? name.slice(0, at) : name;
+  const split = splitAgyTier(bare);
+  return split === null ? null : listed(at >= 0 ? `${split.model}${name.slice(at)}` : split.model);
 }
 
 /// cost: what a day's calls of one model would cost at its API prices, in dollars (in the Rust's order of operations).
@@ -425,7 +434,7 @@ export function resourceChats(s: Store, sessions: string[], viewer: InWorkspace 
       out[key] = null;
       continue;
     }
-    const thread = sessionThreads(s, key)[0] ?? null;
+    const thread = sessionThreads(s, key, null, 1)[0] ?? null;
     const [, first] = thread !== null ? (usageThreads(s, [thread.id])[0] ?? [thread, null]) : [null, null];
     const title = thread !== null ? titleOf(thread, first, thread.surface === STILLFAIL_SURFACE ? null : knownChannel(s, threadConnect(s, thread.id), thread.channel)) : null;
     out[key] = { thread: thread?.id ?? null, title };

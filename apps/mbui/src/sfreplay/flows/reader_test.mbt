@@ -5,13 +5,13 @@
 
 ///|
 test "98-reader" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("reader"), seed~)
     // (put in the lent folder before the app starts: a live run's step, the trace has what came of it)
     f.before("drive-gb 105609")
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-105609")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.tap("旧小说-gb.txt")
     // (the reader in, its push over: a live run taps its text only then)
     f.run_for(@ui.move_most_ms)
@@ -28,12 +28,11 @@ test "98-reader" {
     // (among what the device keeps, once it has it: the run's downloads before it are on its list too)
     f.until(fn() { f.t.kept().iter().any(fn(k) { k.0 == "旧小说-gb.txt" }) })
     let kept = f.t.kept().filter(fn(k) { k.0 == "旧小说-gb.txt" })
-    assert_eq(kept.length(), 1)
-    assert_eq(kept[0].2.length(), 4454)
+    f.check(kept.length() == 1 && kept[0].2.length() == 4454, "kept \{Repr(kept.map(fn(k) { (k.0, k.2.length()) }))}")
     // the toast's time shown, then its way out
     f.run_for(@sfapp.toast_ms)
     f.t.draw()
-    f.run_to(@kit.toast_rest("toast"))
+    f.run_to(fn() { @kit.toast_rest("toast") })
     f.end()
   })
 }

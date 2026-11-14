@@ -7,10 +7,10 @@ import { mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, wr
 import { createServer, connect as tcpConnect, type Server, type Socket } from "node:net";
 import { join } from "node:path";
 import { Effect } from "effect";
-import type { Credential } from "../src/cloud.ts";
 import { nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Mesh } from "../src/mesh.ts";
+import { STATION_MESH } from "../src/station/mesh-wire.ts";
 import { Runner } from "../src/runtime.ts";
 import { readAll } from "../src/station/wire.ts";
 import { FakeHost } from "../src/testing.ts";
@@ -95,7 +95,7 @@ try {
   const port = await cloudPort();
   const origin = `http://127.0.0.1:${port}`;
   const cloudLog = openSync(join(work, "cloud.log"), "a");
-  cloud = spawn("pnpm", ["exec", "tsx", "test/dev.ts"], { cwd: join(ROOT, "cloud"), detached: process.platform !== "win32", env: { ...process.env, PORT: String(port), RELAY: direct, AXIOM_TOKEN: "" }, stdio: ["ignore", cloudLog, cloudLog] });
+  cloud = spawn("pnpm", ["exec", "tsx", "test/dev.ts"], { cwd: join(ROOT, "cloud"), detached: process.platform !== "win32", env: { ...process.env, PORT: String(port), RELAY: direct, GCP_TELEMETRY: "" }, stdio: ["ignore", cloudLog, cloudLog] });
   const alice = await until(async () => {
     const r = await fetch(`${origin}/__dev/account?user=alice`);
     return r.ok ? await r.json() as { access: string } : null;
@@ -127,11 +127,11 @@ try {
   const iroh = { bind: (options: Parameters<typeof rawIroh.bind>[0]) => rawIroh.bind({ ...options, lookup: false, relayOnly: true }) };
   const host = new FakeHost();
   runner = new Runner();
-  mesh = await runner.run(Mesh.make({ host, runner, tracer: new Tracer(host, runner, 1), iroh, wakes: new Wakes() }, [direct]));
+  mesh = await runner.run(Mesh.make({ host, runner, tracer: new Tracer(host, runner, 1), iroh, wakes: new Wakes(), ...STATION_MESH }, [direct]));
   mesh.addAddr({ id: stationId, relays: [direct] });
   const credentials = (device: string) => Effect.promise(async () => {
     const c = await api("POST", `/v1/workspaces/${ws}/credential`, { device });
-    return { credential: c.credential, issued_at: c.issued_at ?? 0, expires_at: c.expires_at ?? 0, relay_url: c.relay_url ?? direct } as Credential;
+    return { credential: c.credential, also: null };
   });
   const link = await runner.run(mesh.link(stationId, credentials));
   const request = async () => {

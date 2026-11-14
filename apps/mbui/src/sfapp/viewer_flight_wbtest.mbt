@@ -65,7 +65,7 @@ test "a film flying in: its capsule goes with the still as it leaves its thumbna
   // nearly in, its ground whole: the player's controls coming with it (their clock showing), not after it lands
   let nearly = v.fly.end() - @ui.move_most_ms / 8.0
   t.run_for(nearly - t.time())
-  assert_true(v.flies && v.flying() > @sfbase.bars_from)
+  assert_true(v.flies && v.flying(t.ctx()) > @sfbase.bars_from)
   assert_true(words_show(t, "0:00"))
   t.run_for(@ui.move_most_ms)
   assert_true(words_show(t, "0:00"))
@@ -91,4 +91,70 @@ test "a film closed back into its thumbnail: the player's bars go with it as it 
   assert_true(pv_leaving.get() is None)
   assert_false(words_show(t, "0:04"))
   assert_true(words_show(t, "1:13"))
+}
+
+///|
+test "a film not come yet, no still of it either, closed: it flies back from where it landed, not from a dot in the middle" {
+  let t = video_in_chat(still=false)
+  tap_video(t, "演示录屏.mp4")
+  // the player has read nothing of it yet: no size, no frame
+  t.set_player(1, natural=(0.0, 0.0), shown=false)
+  t.run_for(@ui.move_most_ms)
+  t.back()
+  t.draw()
+  let v = pv_leaving.get().unwrap()
+  assert_true(v.flies && v.fly_back)
+  // from the 16:9 box across the screen it landed as (its size as its message says it)
+  let (_, _, w, h) = v.fly_to.unwrap()
+  assert_true((w - 390.0).abs() < 1.0 && (h - 219.375).abs() < 1.0)
+}
+
+///|
+test "a chat's picture whose own has not come, opened and read whole in the viewer: shown in its message from then on" {
+  for platform in [0, 2] {
+    new_run()
+    let images = @sfbase.ChatImages::new()
+    // (each ask of a picture's own: its name; never answered)
+    let asked : Array[String] = []
+    let base = fixture("chat")
+    let src : Source = {
+      ..base,
+      file: fn(station, key, name) {
+        images.get(station, @sfbase.file_image_id(station, key, name), "mem:test/" + name, fn(_, _) { asked.push(name) })
+      },
+      // (the whole of one read by the viewer: the picture itself)
+      read_going: fn(call, params, heard, done) {
+        if call == "station.file" {
+          done(Ok((Json::object({}), @sffixture.fixture_file_png(text(Some(params), "name")))))
+        } else {
+          (base.read_going)(call, params, heard, done)
+        }
+      },
+      images,
+    }
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+    let t = @ui.Tester::new(
+      fn(c) { view(c, src) },
+      tree=app_tree(src),
+      w=if platform == 0 { 1280.0 } else { 390.0 },
+      h=6000.0,
+      platform~,
+    )
+    t.run_for(@ui.move_most_ms)
+    assert_true(asked.length() > 0, msg="\{platform}: its pictures asked")
+    let name = asked[0]
+    let whole = fn() { t.drawlist_images().filter(fn(i) { i.1.has_prefix("mem:preview/") }).length() }
+    // opened: read whole by the viewer (the fixture's at once)
+    t.click(Button, label=@sf.t("web-main.file.view", args=[("name", name)]))
+    t.run_for(@ui.move_most_ms)
+    assert_true(whole() > 0, msg="\{platform}: the viewer shows \{name} whole")
+    t.back()
+    t.run_for(@ui.move_most_ms + @sf.dur_ms)
+    // back in the chat: its message shows it, its own still not here
+    assert_true(
+      t.all(Button, label=@sf.t("web-main.file.view", args=[("name", name)])).length() > 0,
+      msg="\{platform}: back in the chat",
+    )
+    assert_true(whole() > 0, msg="\{platform}: \{name} shown in its message: \{Repr(t.drawlist_images())}")
+  }
 }

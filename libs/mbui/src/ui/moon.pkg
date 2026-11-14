@@ -1,0 +1,24 @@
+import {
+  "mbui/halt",
+  "moonbitlang/core/double",
+  "moonbitlang/core/env",
+  "mbui/codec",
+  "mbui/paint",
+  "mbui/pixels",
+  "mbui/hostapi",
+  "mbui/text",
+  "mbui/flex",
+  "mbui/effect",
+  "mbui/signals",
+  "mbui/view",
+  "moonbitlang/core/math",
+  "mbui/dmath",
+  "mbui/damage",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
+}
+
+options(
+  // (the test program's own environment read where it has one: not by a Wasm program a shell runs, tester_fps_wasm.mbt)
+  targets: { "tester_fps.mbt": [ "native", "wasm-gc", "js" ], "tester_fps_wasm.mbt": [ "wasm" ] },
+)

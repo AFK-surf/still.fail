@@ -6,7 +6,7 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import test from "node:test";
 import { entryHash, signedBytes, type Entry } from "../../station/src/cloud/lock.ts";
 import { personFold } from "../../station/src/cloud/lock.ts";
-import { extendPersonal, type PersonalEntry } from "../src/personal-lock.ts";
+import { extendPersonal, extendPersonalKept, type PersonalEntry } from "../src/personal-lock.ts";
 
 const SUB = "s1";
 
@@ -62,4 +62,25 @@ test("what is not an entry is refused", () => {
   assert.throws(() => extendPersonal(SUB, [], [{ v: 2 }]), /invalid_lock_entries/);
   assert.throws(() => extendPersonal(SUB, [], [{ v: 2, seq: 0 }]), /lock_refused/);
   assert.throws(() => extendPersonal(SUB, [], "x"), /invalid_lock_entries/);
+});
+
+test("a chain with web devices and a workspace's commitments is kept as it is; one of today as before", () => {
+  // (rules/src/lock/person.mbt: `web {id, label, exp}`, `web.remove {id}`, `ws {t, h}`, signed by a device on the log;
+  // nothing signs them yet, every part takes them from the rules' build on)
+  const a = key();
+  const first = entry(a, 0, null, "genesis", { sub: SUB, device: device(a) });
+  const today = extendPersonal(SUB, [], [first]);
+  assert.deepEqual(personFold(today, SUB).devices.map((d) => d.key), [a.id]);
+  const web = entry(a, 1, hashOf(first), "web", { id: "bb".repeat(32), label: "a browser", exp: 1 + 31 * 86400 });
+  const ws = entry(a, 2, hashOf(web), "ws", { t: "cc".repeat(32), h: "dd".repeat(32) });
+  const gone = entry(a, 3, hashOf(ws), "web.remove", { id: "bb".repeat(32) });
+  const kept = extendPersonal(SUB, today, [web, ws, gone]);
+  assert.equal(kept.length, 4);
+  assert.deepEqual(personFold(kept, SUB).devices.map((d) => d.key), [a.id], "its devices as they were");
+  // As another keeper's, by the fork choice, too.
+  assert.equal(extendPersonalKept(SUB, { entries: today, aside: [] }, [first, web, ws, gone]).entries.length, 4);
+  // Round three's statements in the clear: refused, as before.
+  assert.throws(() => extendPersonal(SUB, kept, [entry(a, 4, hashOf(gone), "ws.member", { ws: "w1", sub: "dan", lock: "ee".repeat(32), role: "member" })]), /lock_refused/);
+  // Past its bounds: refused.
+  assert.throws(() => extendPersonal(SUB, today, [entry(a, 1, hashOf(first), "web", { id: "bb".repeat(32), label: "x", exp: 1 + 31 * 86400 + 1 })]), /lock_refused/);
 });

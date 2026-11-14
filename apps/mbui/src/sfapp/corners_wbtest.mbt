@@ -30,42 +30,67 @@ let corner_windows : Array[(String, Double, Double, Int, String)] = [
 let corner_modes : Array[String] = {
   let modes = [
     // (webdemo: the web's demo workspace, its chats' rows with people's faces, which chat's fixture has none)
-    "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "rail-menu", "landing", "landing-invited", "blocked", "place",
+    "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "new-workspace", "new-workspace-code", "rail-menu", "landing", "landing-invited", "blocked", "place",
     "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
-    "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed",
-    "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-history-side", "chat-info", "chat-job",
+    "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed", "chat-feedback", "chat-image-coming",
+    "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-flash-notice", "chat-history-side", "chat-info", "chat-job",
     "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters", "chat-letters-info", "chat-letters-open",
     "chat-letters-pop", "chat-letters-side", "chat-things", "chat-things-side", "chat-info-pulls", "chat-link-menu", "chat-loading", "chat-login", "chat-long", "chat-md",
     "chat-model-pop", "chat-model-accounts", "chat-need", "chat-peek", "chat-pick", "chat-preview-apk", "chat-preview-audio",
     "chat-preview-code", "chat-preview-csv", "chat-preview-html", "chat-preview-image", "chat-preview-md",
     "chat-preview-none", "chat-preview-pdf", "chat-preview-step", "chat-preview-swipe", "chat-preview-video",
     "chat-publish", "chat-quote", "chat-screens", "chat-sending", "chat-service-side", "chat-station-file", "chat-station-files",
-    "chat-station-ref", "chat-station-sheet", "chat-tabs-side", "chat-update", "chat-vault-typed", "chat-viz", "chat-working", "archived",
+    "chat-station-ref", "chat-station-sheet", "chat-tabs-side", "chat-view-side", "chat-view-side-image", "chat-view-side-video", "chat-view-side-audio", "chat-update", "chat-vault-typed", "chat-viz", "chat-working", "chat-rig",
+    // (对话目录: the long chat away from its end, its rail or round button; its outline open; words found in it)
+    "chat-outline-away", "chat-outline", "chat-outline-find", "archived",
     "history", "history-details", "drive", "drive-roots", "drive-download", "drive-empty", "drive-loading", "drive-sub", "drive-upload",
     "files", "files-add-folder", "files-clash", "files-columns", "files-list", "files-preview", "files-split", "files-transfers",
     "files-tree", "place-stations", "place-profiles", "reader", "reader-bars", "reader-contents", "reader-layout", "reader-md", "newchat", "newchat-files", "newchat-lend", "share-card", "share-card-dark",
-    "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
+    "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station",
+    // (a preset's dialog and its steps further in: 添加目录, the folder picker at a station's home and in a folder of
+    // repositories, 从 Git 克隆, a clone under way and one failed among its folders)
+    "newchat-preset-new", "newchat-preset-new-add", "newchat-preset-new-browse", "newchat-preset-new-browse-repos",
+    "newchat-preset-new-clone", "newchat-preset-new-clones", "player-audio", "player-ended",
     "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
     "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
-    "lock-none", "lock-security", "lock-waiting", "lock-wrong", "screen-agent-driving",
+    "lock-none", "lock-security", "lock-upgrade", "lock-waiting", "lock-wrong", "screen-agent-driving",
     "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
     "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
-    "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-read-only",
-    "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "settings-home", "settings-appearance",
+    "screen-full-tools", "screen-gone", "screen-keys", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-pages", "screen-read-only",
+    "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "screen-user-pages", "screen-user-tabs", "screen-windows", "screen-window", "settings-home", "settings-appearance",
     "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
     "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
-    "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-network", "settings-stations-add",
-    "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing", "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long",
-    "settings-profiles", "settings-profiles-monthly", "settings-profile", "settings-profile-quota",
-    "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed",
+    "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-updated", "settings-station-network", "settings-station-copies", "settings-station-copies-alone",
+    "settings-station-restore", "settings-station-restore-offer", "settings-station-restore-confirm", "settings-station-restore-confirm-long",
+    "settings-station-restored",
+    // (a station retired: its panel, Maple chosen, two up and none chosen, none up, a joined workspace's, a long name;
+    // then 迁移's steps as it goes, sending, all sent waiting for the hand-over, back there after one failed, paused,
+    // failed, its accounts moving, done, done with accounts left; and a
+    // station taking retired ones' chats in)
+    "settings-station-retire-panel", "settings-station-retire-panel-pick", "settings-station-retire-panel-none", "settings-station-retire-panel-joined", "settings-station-retire-panel-long", "settings-station-retire-sending", "settings-station-retire-sent", "settings-station-retire-sent-failed", "settings-station-retire-quiet", "settings-station-retire-failed", "settings-station-retire-accounts", "settings-station-retire-done", "settings-station-retire-done-left", "settings-station-taking", "settings-profile-move", "settings-profile-move-key",
+    "settings-stations-add",
+    "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing", "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long", "settings-adb-lock-two", "settings-adb-idle", "settings-adb-desk",
+    // (a request for the phone waiting on a phone that lacks something; granted, the card under it for each kind of step
+    // left: the switch off, Developer options, Wi-Fi, Wireless debugging (refused the app), the pairing dialog, the code,
+    // the phone's own prompt; and connected)
+    "chat-phone-lacks", "chat-phone-step-off", "chat-phone-step-developer", "chat-phone-step-wifi", "chat-phone-step-wireless",
+    "chat-phone-step-refused", "chat-phone-step-code", "chat-phone-linked-unpaired", "chat-phone-linked-unauthorized",
+    "chat-phone-linked-connected",
+    "settings-profiles", "settings-profiles-monthly", "settings-profiles-fable", "settings-profiles-own3", "settings-profiles-week-fable", "settings-profiles-several",
+    "settings-profile", "settings-profile-fable", "settings-profile-own3", "settings-profile-week-fable", "settings-profile-quota", "settings-profile-quota-kinds",
+    "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed", "settings-profile-copy",
     "settings-profile-blocked", "settings-profile-signin", "settings-profile-key", "settings-new-profile",
+    // (添加账号 with three stations up to choose from, #6030; a key's form with a region and a protocol to choose)
+    "settings-new-profile-stations", "settings-new-profile-key",
     "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode", "settings-connect-run",
     "settings-new-connect", "settings-new-connect-platform", "settings-new-connect-scan", "settings-new-connect-app",
+    // (a Comma connect's model step, and the pages of a Comma and a Feishu connect, none of their sessions yet)
+    "settings-new-connect-comma", "settings-connect-comma", "settings-connect-feishu",
     "settings-slack-app", "settings-memory", "settings-memory-doc", "settings-usage", "settings-archive", "settings-kept",
-    "settings-kept-many", "settings-vault-off", "settings-vault-plain", "settings-vault-words", "settings-vault-add",
+    "settings-kept-many", "settings-vault-off", "settings-vault-plain", "settings-vault-waits", "settings-vault-words", "settings-vault-add",
     "settings-vault-editor", "settings-vault-recover", "settings-lock-prompt", "settings-add-people",
     "settings-workspace-mark", "settings-local-fonts", "settings-policy", "settings-policy-text",
-    "settings-policy-option", "settings-security-join", "settings-security-off",
+    "settings-policy-option", "settings-security-join", "settings-security-off", "settings-security-pending", "settings-security-upgrade-station", "settings-security-upgrade-station-not", "settings-security-upgrade-member", "settings-security-upgrade-device", "settings-security-upgrade-many", "settings-security-upgrade-ask", "settings-security-upgrade-other", "settings-security-upgrade-updating", "settings-stations-tasks", "place-stations-tasks", "settings-station-tasks", "settings-station-tasks-other", "settings-station-tasks-locked", "settings-stations-devices", "place-stations-devices", "settings-station-devices",
     "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts", "settings-fonts-code",
     "settings-decisions", "settings-completion", "settings-bars", "settings-about", "settings-changelog", "settings-prices",
     "settings-notify-off", "settings-notify-denied",
@@ -91,7 +116,7 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
     let squeezed = squeeze_windows.contains(win.0)
     for mode in corner_modes {
       let at = "\{win.0}-\{lang} \{mode}"
-      let t = screen_in(mode, win, lang)
+      let t = screen_in(mode, win, lang, motion_judged=false)
       if press_room {
         // (a press's room, at rest and with what shows only under the hand shown: rooms_known_wbtest.mbt; and the
         // contrast's, in the light theme, once: contrast_wbtest.mbt)
@@ -140,6 +165,11 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
       if squeeze is Some(w) {
         wrong.push(w)
       }
+      // (words a box with its height said does not hold, mbui's Tester::fixed_outgrown, against its bar)
+      match outgrown_wrong(at, t.fixed_outgrown(), corners_outgrown_known, "corners_known_wbtest.mbt") {
+        Some(w) => wrong.push(w)
+        None => ()
+      }
     }
   }
   if press_room {
@@ -181,10 +211,10 @@ fn gap_without_nodes(s : String) -> String {
   let mut rest = s
   let mut out = ""
   while rest.find(", node ") is Some(i) {
-    let after = rest.view(start_offset=i + 7)
+    let after = rest.exact_view(start=i + 7)
     guard after.find(")") is Some(j) else { return out + rest }
-    out = out + rest.view(end_offset=i).to_owned() + ")"
-    rest = after.view(start_offset=j + 1).to_owned()
+    out = out + rest.exact_view(end=i).to_owned() + ")"
+    rest = after.exact_view(start=j + 1).to_owned()
   }
   out + rest
 }
@@ -213,4 +243,26 @@ test "each player failure reason fits without adding a spacing or corner fault" 
       }
     }
   }
+}
+
+///|
+/// What is wrong of `faults`, the words a box with its height said does not hold on screen `at` (mbui's
+/// Tester::fixed_outgrown), against its bar in `known` (kept in `file`): none where they are as many as it says; else
+/// how many, the bar, and each.
+fn outgrown_wrong(at : String, faults : Array[String], known : Map[String, Int], file : String) -> String? {
+  let bar = known.get(at).unwrap_or(0)
+  if faults.length() == bar {
+    return None
+  }
+  Some(
+    "\{at}: \{faults.length()} words a box with its height said does not hold, \{bar} known (" +
+    (if faults.length() < bar {
+      "fewer: its bar comes down in \{file}"
+    } else {
+      "more than its bar: the box grown by its words (a least, min_h, or its height worked out of their line at " +
+      "the system's size of words)"
+    }) +
+    ")\n  " +
+    faults.join("\n  "),
+  )
 }

@@ -7,14 +7,13 @@
 
 ///|
 /// What the chat's page keeps of its own (the rest is the core's): its info's popover open, its services' popover
-/// open, archiving it asked to confirm (its key, "" none: one keeping watch). The popovers' as signals: opened or
+/// open, archiving it asked to confirm (its key, "" none: one keeping watch; asked from its bar's node). All signals: opened or
 /// closed from another island than the page's (an item of the system's bars chosen as the frame under the tape is
 /// built, after the page was: rail_native.mbt), the page's is told and built again, not kept as it was till the hand
 /// comes to it (an iPhone Duo's ⓘ, 2026-11-01: the popover only once a finger moved).
 priv struct ChatOwn {
   info_open : @signals.Signal[Bool]
   jobs_open : @signals.Signal[Bool]
-  mut archive_asking : String
 }
 
 ///|
@@ -22,20 +21,22 @@ priv struct ChatOwn {
 let chat_own : ChatOwn = {
   info_open: @signals.signal(false, same=fn(a, b) { a == b }),
   jobs_open: @signals.signal(false, same=fn(a, b) { a == b }),
-  archive_asking: "",
 }
 
 ///|
 fn chat_page_reset() -> Unit {
   chat_own.info_open.set(false)
   chat_own.jobs_open.set(false)
-  chat_own.archive_asking = ""
+  chat_bar_from.info_node = None
+  chat_bar_from.jobs_node = None
+  chat_pops.info = 0
+  chat_pops.jobs = 0
 }
 
 ///|
 /// The chat's services' popover opened or closed (its keys, ⌘K's 服务和后台任务).
 pub fn toggle_jobs_pop() -> Unit {
-  chat_own.jobs_open.set(!@signals.untracked(fn() { chat_own.jobs_open.get() }))
+  chat_own.jobs_open.set(!chat_own.jobs_open.untracked())
 }
 
 ///|
@@ -57,14 +58,14 @@ pub fn chat_pops_open() -> (Bool, Bool) {
 
 ///|
 /// ⌘F's bar opened in chat `r`: what opens under the bar closed.
-pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
+pub fn chat_find_open(r : ChatRef) -> Unit {
   chat_own.info_open.set(false)
   chat_own.jobs_open.set(false)
-  find_open(c, chat_key(r))
+  find_open(chat_key(r))
 }
 
 ///|
-/// The chat `r` in the pane.
+/// The chat `r` in the pane; its bar the page node's (chat_bar_wide_node), its room alone here.
 fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   let chat = src.topic("chat", chat_params(r)).get().value
   let view = view_of_chat(src, r).0
@@ -74,14 +75,17 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   if find_chat() != "" && find_chat() != key {
     (list.forget)()
   }
-  let prefs = src.topic("prefs", {}).get().value
   match view {
     Some(v) => {
       // coming to need the viewer while open, felt (feel.mbt)
       @sfbase.feel_needed(c, r, v)
-      if @settings.action_pressed(c, prefs, "chat.find") && v.thread is Some(_) {
-        chat_find_open(c, r)
-      }
+      // the chat's keys (keymap.ts's chat group): its actions, the keymap's Chat
+      c.key_context("Chat")
+      c.on_action("chat.find", fn() {
+        guard v.thread is Some(_) else { return false }
+        chat_find_open(r)
+        true
+      })
       chat_keys(c, src, w, r, v, chat)
     }
     None => ()
@@ -91,7 +95,14 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
       let pane = c.id("chat/pane")
       c.box(style=side_panel_style, id=pane, fn() {
         chat_talk(c, src, w, r, pane, fn() {
-          let bar = c.layer(fn() { chat_bar(c, src, w, r, view, chat, list) })
+          // (the bar is the page node's, laid over its room (chat_bar_wide_node): what runs under it keeps clear of it;
+          // the page's Bar all the same, so that what flies in it lands under it; what the bar hands the system's bars,
+          // and what it asks to confirm, as the page is built)
+          let bar = c.layer(fn() {
+            let room = c.box(style=@ui.style(w=Full, h=Fixed(chat_bar_room())), fn() {  })
+            c.floats_over(room)
+            chat_bar_handed(c, src, w, r, view, chat)
+          })
           c.stratum(bar, Bar)
           over_flight(c, bar)
           match view {
@@ -114,33 +125,45 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
 let chat_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
-/// The chat's own keys (keymap.ts): ⌘⇧E into the archive while nothing is left in it, ⌘⇧H
-/// its first agent's history beside it (one in front: the panel closed), ⌘. its agents at work stopped, its services
-/// and jobs (chat.jobs), its station's own display (chat.screen); ⌘U the system's file picker for its draft
-/// (composer.file); Space with no field focused, the composer (composer.focus).
+/// The chat's own keys (keymap.ts), its actions as it is built, each done at its key's moment: ⌘⇧E into the archive
+/// while nothing is left in it, ⌘⇧H its first agent's history beside it (one in front: the panel closed), ⌘. its agents
+/// at work stopped, its services and jobs (chat.jobs), its station's own display (chat.screen); ⌘U the system's file
+/// picker for its draft (composer.file); Space with no field focused (the keymap's `!Field`), the composer
+/// (composer.focus), the page brought over first where the tape has it behind (tape_page_for_key). What it cannot do now passes the key on.
 fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
-  let prefs = src.topic("prefs", {}).get().value
-  if @settings.action_pressed(c, prefs, "chat.jobs") {
+  c.on_action("chat.jobs", fn() {
     toggle_jobs_pop()
-  }
-  if @settings.action_pressed(c, prefs, "chat.screen", in_field=true) {
+    true
+  })
+  c.on_action("chat.screen", fn() {
     chat_screen_first(r, v.screens)
-  }
-  if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
+    true
+  })
+  c.on_action("composer.focus", fn() {
+    guard !switcher_open() else { return false }
+    tape_page_for_key(c.moment())
     composer_focus(c, src, r)
-  }
-  if @settings.action_pressed(c, prefs, "chat.archive", in_field=true) && !v.archived && !v.offline {
-    c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat) })
-  }
-  if @settings.action_pressed(c, prefs, "chat.history", in_field=true) && v.agents.length() > 0 {
+    true
+  })
+  c.on_action("chat.archive", fn() {
+    guard !v.archived && !v.offline else { return false }
+    archive_asked(src, w, r, v, chat)
+    true
+  })
+  c.on_action("chat.history", fn() {
+    guard v.agents.length() > 0 else { return false }
     history_toggle(src, r, v)
-  }
-  if @settings.action_pressed(c, prefs, "chat.stop", in_field=true) {
+    true
+  })
+  c.on_action("chat.stop", fn() {
     stop_agents(src, r, v)
-  }
-  if @settings.action_pressed(c, prefs, "composer.file", in_field=true) && !v.offline {
+    true
+  })
+  c.on_action("composer.file", fn() {
+    guard !v.offline else { return false }
     @sfpages.pick_files(writing(src, r.station + ":" + r.session))
-  }
+    true
+  })
 }
 
 ///|
@@ -182,7 +205,13 @@ fn stop_agents(src : Source, r : ChatRef, v : ChatView) -> Unit {
 /// Into the archive, asked first where the chat keeps watch (in the core's words).
 fn archive_asked(src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   if field(chat, "watch") is Some(Object(_)) {
-    chat_own.archive_asking = chat_key(r)
+    @sf.confirm(
+      @sf.t("web-pages.chat.archiveConfirm", args=[("title", v.title)]),
+      text(field(chat, "watch"), "ask"),
+      @sf.t("web-pages.chat.archive"),
+      fn() { archive(src, w, r, v) },
+      danger=true,
+    )
   } else {
     archive(src, w, r, v)
   }
@@ -230,305 +259,145 @@ fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
 }
 
 ///|
-/// The chat's bar (sidebar.css.ts pageBar: 45 high, its line at its foot): the title, its station
-/// while no agent is in it, its people, its agents; at its end what is done with it, or ⌘F's bar.
-fn chat_bar(
-  c : @ui.Ctx,
+/// What the chat's bar (its node: chat_bar_wide_node) leaves to the page as it is built: its "…"'s row held while the
+/// page is open; its actions handed the system's bars where it has them, each its own button there (rail_native.mbt
+/// bar_chat), the actions of the chat before kept there till its own come (bar_chat_waiting); archiving it asked to
+/// confirm where it keeps watch (in the core's words).
+fn chat_bar_handed(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : Json?) -> Unit {
+  chat_bar_hand(src, w, r, v, chat, fn(key) { bar_menu_from(c, c.id(key)) })
+}
+
+///|
+/// What chat_bar_handed hands where the chat's page is made as nodes (sfbase's chat_page_nodes: its messages'
+/// chat_body_nodes), said at node `v`: as the page comes on top, and again as what the actions show changes while it
+/// is (its view, its row, its services, ⌘F's bar in it, the column's room), not each frame; the actions handed for
+/// another page let go first, as a frame lets them go as the page on top changes (nav_page_for). What opens from them
+/// beside the item chosen (bar_menu_from_node).
+fn chat_bar_handed_node(v : @view.View, src : Source, r : ChatRef) -> Unit {
+  let page : Page = Chat(r)
+  v.reacts(fn() { chat_bar_said(src, r, app.nav.top() == page) }, fn(said) {
+    guard said.0 else { return }
+    @signals.untracked(fn() {
+      guard @sfbase.workspace_in_view(src).0 is Some(w) else { return }
+      nav_page_for(page)
+      chat_bar_hand(src, w, r, view_of_chat(src, r).0, src.topic("chat", chat_params(r)).get().value, fn(_) {
+        bar_menu_from_node(v)
+      })
+    })
+  })
+}
+
+///|
+/// What chat_bar_hand reads of chat `r` (`top` its page on top), as a value: changed, what it hands changes.
+fn chat_bar_said(
+  src : Source,
+  r : ChatRef,
+  top : Bool,
+) -> (Bool, (Bool, Bool, Bool), (String, Double?, Bool, Bool, Bool, String, String)?, (Json?, Json?, Json?)) {
+  let whole = @sfbase.chat_whole_held(src, r)
+  let view = view_of_chat(src, r).0
+  let chat = src.topic("chat", chat_params(r)).get().value
+  let jobs = src.topic("chatJobs", chat_jobs_summary_params(r)).get().value
+  (
+    top,
+    (@sf.native_on(), column_short.get(), find_chat() == chat_key(r)),
+    view.map(fn(v) {
+      (
+        v.title,
+        v.thread,
+        v.archivable,
+        v.archived,
+        v.offline,
+        v.agents.map(fn(a) { a.key }).join(" "),
+        v.screens.map(fn(s) { s.id + (if s.agent { "*" } else { "" }) }).join(" "),
+      )
+    }),
+    (chat, whole.value, jobs),
+  )
+}
+
+///|
+/// chat_bar_handed's, what opens from its "…" and its screens beside where `beside` says (given the page's own id's key
+/// for it).
+fn chat_bar_hand(
   src : Source,
   w : Workspace,
   r : ChatRef,
   v : ChatView?,
   chat : Json?,
-  list : FindList,
+  beside : (String) -> (@sf.Beside, @ui.Along),
 ) -> Unit {
-  // the workspace's stations, as the bar shows the chat's (its tag, its first agent's tile)
-  let station = @sfbase.station_marks(src, w.id)
-    .iter()
-    .find_first(fn(x) { x.address == r.station })
-  let bar = c.id("chat-bar")
-  // the bar's empty part drags the window (in one with its buttons in the app's top row)
-  if @ui.window_inset() {
-    c.window_drag(bar)
-  }
-  // (beside the rail its room as the block moves: page_bar_row)
-  let room = fn(x : Double) { c.box(style=@ui.style(w=Fixed(x), h=Full), fn() {  }) |> ignore }
-  let bar_row = page_bar_row(c, if @sf.in_pane() { chat_bar_row_tape() } else { chat_bar_row }, fn(room_l, room_r) {
-  // (its room at its ends, what is in it 16 apart and not from them: on the tape what ends it, ⌘F's field or a round
-  // button, in the panel's top right corner concentric with it by its own height; in a window's whole, at the window's
-  // corner while no panel is open beside it, following it: @sf.window_end_in; clear of a window's corner too square
-  // for ⌘F's field, a capsule)
-  let finding = match v {
-    Some(view) => find_chat() == chat_key(r) && view.thread is Some(_)
-    None => false
-  }
-  let beside = match v {
-    Some(view) => side_of(view).0.length() > 0
-    None => false
-  }
-  let room_r = if @sf.in_pane() {
-    if finding {
-      @sf.tape_bar_end(bar_in, side=@sfpages.find_field_h)
-    } else {
-      room_r
-    }
-  } else if beside {
-    bar_in
-  } else if finding {
-    @sf.window_clear_in(bar_in)
-  } else {
-    room_r
-  }
-  c.box(style=if @sf.in_pane() { chat_bar_box_tape() } else { chat_bar_box }, id=bar, fn() {
-    room(room_l)
-    c.box(style=chat_bar_inner, fn() {
-      // the title, its people and agents 10 apart, 8 in from the bar's padding (conversation.css.ts pageBarTitle)
-      // (short of room, its people leave first, then its agents but the first, the title cut
-      // short meanwhile)
-      c.box(style=chat_bar_title_row, keep=true, fn() {
-        chat_title(c, src, r, v)
-        match v {
-          Some(view) => {
-            // (who is in it by its title, beside the system's bars too: the user, 2026-10-28)
-            if view.agents.length() == 0 {
-              chat_station(c, r.station, station)
-            }
-            if view.people.length() > 0 {
-              c.box(drop=chat_bar_drop_people, fn() { people_stack(c, src, "bar-people", view.people, 5) }) |> ignore
-            }
-            let (_, front) = side_of(view)
-            for i, a in view.agents {
-              let tile = fn() {
-                agent_tile(c, src, r, a, view.agents.length() > 1 && front == a.key, if i == 0 { station } else { None })
-              }
-              if i == 0 {
-                tile()
-              } else {
-                c.box(drop=chat_bar_drop_agents, tile) |> ignore
-              }
-            }
-          }
+  // (its "…" is its chat's whole row's: held while its page is open, asked as it opens, @sfpages.chat_menu_of)
+  @sfbase.chat_whole_held(src, r) |> ignore
+  match v {
+    // (a chat's ⌘F bar in place of the buttons: nothing of them handed)
+    Some(view) if find_chat() == chat_key(r) && view.thread is Some(_) => ()
+    Some(view) => {
+      let archivable = view.archivable && !view.archived
+      let archive = fn() { archive_asked(src, w, r, view, chat) }
+      let info = fn() { chat_own.info_open.set(!chat_own.info_open.untracked()) }
+      let extra = @sfpages.chat_extra_items(src, r, chat)
+      let more = fn() {
+        let (from, along) = beside("chat-more")
+        @sfpages.open_chat_menu(src, w.id, r, extra, from~, along~)
+      }
+      let rows = if @sf.native_on() {
+        @sfpages.chat_menu_of(src, w.id, r, extra, share_from=fn() { beside("chat-more").0 })
+      } else {
+        []
+      }
+      let screens = view.screens
+      let screen = if screens.length() > 0 {
+        Some(
+          (
+            fn() {
+              let (from, along) = beside("chat-screen")
+              chat_screens_open(r, screens, from~, along~)
+            },
+            chat_screens_driven(screens),
+          ),
+        )
+      } else {
+        None
+      }
+      let jobs_view = src.topic("chatJobs", chat_jobs_summary_params(r)).get().value
+      let jobs = if flag(jobs_view, "hasJobs") || items(jobs_view, "jobs").length() > 0 {
+        Some((jobs_toggle, text(jobs_view, "alarm") != ""))
+      } else {
+        None
+      }
+      // (the short column, no room in it for their own buttons: the first rows of its "…", a line under them; the
+      // user, 2026-11-07: 右上角那两个按钮应该收到右侧边栏)
+      let rows = if @sf.native_on() && column_short.get() {
+        let firsts : Array[@sf.MenuItem?] = []
+        match screen {
+          Some((act, _)) => firsts.push(Some(@sf.menu_item_of(@sf.t("web-pages.chat.screen"), icon="monitor", act)))
           None => ()
         }
-      })
+        match jobs {
+          Some((act, _)) => firsts.push(Some(@sf.menu_item_of(@sf.t("web-pages.chat.services"), icon="web", act)))
+          None => ()
+        }
+        if firsts.length() > 0 {
+          firsts.push(None)
+        }
+        firsts + rows
+      } else {
+        rows
+      }
+      bar_chat(src, r, view.agents, info, rows, more, jobs, screen, if archivable { Some(archive) } else { None })
       |> ignore
-      match v {
-        // ⌘F's bar, in place of the buttons while it is open: it covers none of the chat
-        Some(view) if find_chat() == chat_key(r) && view.thread is Some(th) => find_bar(c, src, r, th, list)
-        Some(view) =>
-          c.box(style=@sf.keys_row(), fn() {
-            // nothing left in it (the core's `archivable`): archived with one press
-            // (each in the system's navigation bar where it has the rail's places: rail_native.mbt bar_action)
-            let archivable = view.archivable && !view.archived
-            let archive = fn() { c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) }) }
-            // (a chat of a Slack or Feishu thread alone too: where it is and its agents, chat_info)
-            let info = fn() { chat_own.info_open.set(!@signals.untracked(fn() { chat_own.info_open.get() })) }
-            // its "…": what is done with it, the menu a row of the sidebar has (from the mark where it was chosen in the
-            // system's bars, rail_native.mbt bar_anchor)
-            let extra = @sfpages.chat_extra_items(src, r, chat)
-            let more = fn() {
-              let (from, along) = bar_menu_from(c, c.id("chat-more"))
-              @sfpages.open_chat_menu(src, w.id, r, extra, from~, along~)
-            }
-            // (each its own in the system's bars where it has them, the "…" a menu of the system's: rail_native.mbt
-            // bar_chat)
-            let rows = if @sf.native_on() { @sfpages.chat_menu_of(src, w.id, r, extra) } else { [] }
-            let screens = view.screens
-            let screen = if screens.length() > 0 {
-              Some(
-                (
-                  fn() {
-                    let (from, along) = bar_menu_from(c, c.id("chat-screen"))
-                    chat_screens_open(r, screens, from~, along~)
-                  },
-                  chat_screens_driven(screens),
-                ),
-              )
-            } else {
-              None
-            }
-            let jobs_view = src.topic("chatJobs", chat_jobs_summary_params(r)).get().value
-            let jobs = if flag(jobs_view, "hasJobs") || items(jobs_view, "jobs").length() > 0 {
-              Some((jobs_toggle, text(jobs_view, "alarm") != ""))
-            } else {
-              None
-            }
-            // (the short column, no room in it for their own buttons: the first rows of its "…", a line under them; the
-            // user, 2026-11-07: 右上角那两个按钮应该收到右侧边栏)
-            let rows = if @sf.native_on() && column_short.get() {
-              let firsts : Array[@sf.MenuItem?] = []
-              match screen {
-                Some((act, _)) => firsts.push(Some(@sf.menu_item_of(@sf.t("web-pages.chat.screen"), icon="monitor", act)))
-                None => ()
-              }
-              match jobs {
-                Some((act, _)) => firsts.push(Some(@sf.menu_item_of(@sf.t("web-pages.chat.services"), icon="web", act)))
-                None => ()
-              }
-              if firsts.length() > 0 {
-                firsts.push(None)
-              }
-              firsts + rows
-            } else {
-              rows
-            }
-            let in_bars = bar_chat(src, r, view.agents, info, rows, more, jobs, screen, if archivable { Some(archive) } else { None })
-            if !in_bars && archivable {
-              @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive", on_press=archive)
-            }
-            // (in the system's bars where the chat's actions are: their own buttons, or rows of the short column's "…",
-            // bar_chat)
-            if !in_bars {
-              jobs_trigger(c, jobs_view)
-              screen_trigger(c, r, view)
-            }
-            if !in_bars {
-              @sf.icon_button(c, "info", key="chat-info", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info"))
-              |> ignore
-              // (pressed: opened or closed as it is let go, as it is then)
-              c.on_press(c.id("chat-info"), info)
-              @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("common.more"), on_press=more)
-              |> ignore
-            }
-            // the side panel's switch while it is closed: the first agent's history in it (none where the chat's actions
-            // are in the system's bars: its history's switch there)
-            if !in_bars && side_of(view).0.length() == 0 && view.agents.length() > 0 {
-              let panel = fn() { side_change(src, r, "open", Some(view.agents[0].key)) }
-              @sf.icon_button(c, "panel-open", key="chat-panel", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.openPanel"), shortcut="chat.history", on_press=panel)
-              |> ignore
-            }
-          })
-          |> ignore
-        // (not read yet: the actions of the chat before it kept in the system's bars till its own come)
-        None => bar_chat_waiting() |> ignore
-      }
-    })
-    |> ignore
-    room(room_r)
-  })
-  |> ignore
-  })
-  // over the messages: their scroll bar keeps clear of it
-  c.floats_over(bar_row)
-  // a chat keeping watch, archived once asked (the core's words)
-  @sf.confirm_dialog(
-    c,
-    "archive-confirm/" + chat_key(r),
-    chat_own.archive_asking == chat_key(r),
-    @sf.t("web-pages.chat.archiveConfirm", args=[("title", match v { Some(view) => view.title; None => r.title })]),
-    text(field(chat, "watch"), "ask"),
-    @sf.t("web-pages.chat.archive"),
-    cancel=@sf.t("common.cancel"),
-    on_confirm=fn() {
-      chat_own.archive_asking = ""
-      match v {
-        Some(view) => archive(src, w, r, view)
-        None => ()
-      }
-    },
-    on_close=fn() { chat_own.archive_asking = "" },
-  )
-}
-
-///|
-/// The chat's name in its bar (ChatTitle): while a new one goes (`chat.rename`), that one, a turning ring beside it; its
-/// own again if it did not, a red mark there a few seconds saying why.
-fn chat_title(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
-  let on = [("station", r.station), ("session", r.session)]
-  let mut renaming = ""
-  for d in items(src.topic("doing", {}).get().value, "doing") {
-    let dv = Some(d)
-    if text(dv, "call") == "chat.rename" &&
-      text(dv, "stage") != "failed" &&
-      on.iter().all(fn(kv) { text(field(dv, "params"), kv.0) == kv.1 }) {
-      renaming = text(field(dv, "params"), "title")
     }
+    // (not read yet: the actions of the chat before it kept in the system's bars till its own come)
+    None => bar_chat_waiting() |> ignore
   }
-  let title = if renaming != "" {
-    renaming
-  } else {
-    match v {
-      Some(view) => view.title
-      None => r.title
-    }
-  }
-  // (42% of the bar at most, 80 at least)
-  let most = dmax(chat_title_least, c.width * chat_title_part)
-  c.box(style=chat_title_room.then(@ui.style(max_w=Fixed(most))), fn() {
-    c.text(title, style=chat_title_words) |> ignore
-  })
-  |> ignore
-  let failed = core_failed(src, ["chat.rename"], on)
-  if renaming != "" || failed is Some(_) {
-    let id = c.id("chat-title/doing")
-    c.box(id~, taps=false, points=true, fn() { @settings.doing_mark(c, renaming != "", failed) }) |> ignore
-    @sf.tip(c, "chat-title/doing", id, match failed {
-      Some(why) => why
-      None => @sf.t("web-pages.settings.stations.renaming")
-    })
-  }
-}
-
-///|
-/// The machine the chat runs on, beside its title while it has no agent to share a tile with (ChatStation): how it is
-/// reached a dot before it, its mark, its name, a quiet tag; its card over it (station_card_on).
-fn chat_station(c : @ui.Ctx, station : String, s : Station?) -> Unit {
-  guard s is Some(s) else { return }
-  let id = c.id("bar-station")
-  station_card_on(c, "bar-station", station, id)
-  let hot = c.lit(id)
-  // (its dot in its round end, concentric with it: as far in from its edge as from its top, the line round it within)
-  let look = if hot { chat_station_hot } else { chat_station_tag }
-  let look = if s.via != "" {
-    look.then(@ui.style(pl=@sf.room_of(chat_station_dot_in)))
-  } else {
-    look
-  }
-  c.box(style=look, id~, label=s.name, fn() {
-    if s.via != "" {
-      via_dot(c, s.via)
-    }
-    if @sf.has_station_mark(s.emoji, s.icon) {
-      @sf.station_mark(c, s.emoji, s.icon, chat_station_mark, if hot { @sf.theme().p.text } else { @sf.theme().p.muted })
-    }
-    c.text(s.name, style=if hot { chat_station_words_hot } else { chat_station_words }) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The card of the station a chat runs on (StationCard): over where the chat names it
-/// (`trigger`) while the pointer rests there; a finger, which rests on nothing, taps it for the card from the
-/// presenters (a sheet short of Large).
-fn station_card_on(c : @ui.Ctx, key : String, station : String, trigger : Int) -> Unit {
-  if @sf.pointer_rests() {
-    // (as wide as it holds: the machine's three chips whole on their line, none cut short)
-    hover(c, key + "/card", trigger, tile=true, padded=false, fn() { @settings.station_peek_card(c, station) }) |> ignore
-  } else {
-    c.on_press(trigger, fn() { @settings.open_station_peek(station, from=Of(trigger)) })
-  }
-}
-
-///|
-/// How a station is reached, as a dot: straight there green, through a relay amber, away red,
-/// else (coming back, a way still chosen) grey.
-fn via_dot(c : @ui.Ctx, via : String) -> Unit {
-  c.box(
-    style=match via {
-      "direct" => via_direct
-      "relay" => via_relay
-      "offline" => via_offline
-      _ => via_waiting
-    },
-    fn() {  },
-  )
-  |> ignore
 }
 
 ///|
 /// People overlapping a little: `most` of them at most, each a 16 circle (their picture, or
 /// their initial), each 4 over the one before; more than that, +n after them; their names in its tip.
 fn people_stack(c : @ui.Ctx, src : Source, key : String, people : Array[Person], most : Int) -> Unit {
-  let shown = if people.length() > most { people[:most].to_array() } else { people }
+  let shown = if people.length() > most { people[:most].to_owned() } else { people }
   let id = c.id(key)
   let t = @sf.theme()
   let ring = people_ring.then(@ui.style(bg=Data(t.p.sidebar)))
@@ -558,156 +427,9 @@ fn people_stack(c : @ui.Ctx, src : Source, key : String, people : Array[Person],
 }
 
 ///|
-/// One of the chat's agents in the bar (AgentTile): its mark (20), pressed its history's tab opens (in front, closes);
-/// its card on hover; marked among several while its history shows. The chat's first, one tile with the station it runs
-/// on (its mark, or its name kept short), how the station is reached a dot on the tile's corner.
-fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, station : Station?) -> Unit {
-  let id = c.id("bar-agent/" + a.key)
-  c.on_press(id, fn() { side_toggle(src, r, a.key) })
-  let chat = src.topic("chat", chat_params(r)).get().value
-  let aj = agent_json(chat, a.key)
-  let said = @sf.t("web-pages.chat.historyOf", args=[("agent", a.who)])
-  let hot = c.lit(id)
-  match station {
-    Some(s) if @sf.tile_whole() => {
-      // (with touch the tile itself the button, as it is drawn: tapped its history's, as the agent's half's click;
-      // held, its card and its station's as one, below)
-      let b = c.box(style=if marked { agent_station_on } else { agent_station }, keep=true, id~, fn() {
-        c.box(style=if hot { agent_station_agent_hot } else { agent_station_agent }, fn() {
-            agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"), joined=true)
-        })
-        |> ignore
-        c.box(style=if hot { agent_station_part_hot } else { agent_station_part }, fn() {
-          if @sf.has_station_mark(s.emoji, s.icon) {
-            @sf.station_mark(c, s.emoji, s.icon, chat_station_mark, @sf.theme().p.muted)
-          } else {
-            c.text(s.name, style=chat_station_words) |> ignore
-          }
-        })
-        |> ignore
-        if s.via != "" {
-          c.layer(fn() {
-            c.box(style=agent_station_dot_room, fn() { c.box(style=corner_dot_of(s.via), fn() {  }) |> ignore })
-            |> ignore
-          })
-          |> ignore
-        }
-      })
-      c.semantics(b, Button, id~, label=said)
-    }
-    Some(s) =>
-      c.box(style=if marked { agent_station_on } else { agent_station }, keep=true, fn() {
-        let b = c.box(style=if hot { agent_station_agent_hot } else { agent_station_agent }, id~, fn() {
-            agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"), joined=true)
-        })
-        c.semantics(b, Button, id~, label=said)
-        let part = c.id("bar-agent-station/" + a.key)
-        let part_hot = c.lit(part)
-        c.box(style=if part_hot { agent_station_part_hot } else { agent_station_part }, id=part, label=s.name, fn() {
-          if @sf.has_station_mark(s.emoji, s.icon) {
-            @sf.station_mark(c, s.emoji, s.icon, chat_station_mark, if part_hot {
-              @sf.theme().p.text
-            } else {
-              @sf.theme().p.muted
-            })
-          } else {
-            c.text(s.name, style=if part_hot { chat_station_words_hot } else { chat_station_words }) |> ignore
-          }
-        })
-        |> ignore
-        station_card_on(c, "bar-agent-station/" + a.key, r.station, part)
-        if s.via != "" {
-          c.layer(fn() {
-            c.box(style=agent_station_dot_room, fn() { c.box(style=corner_dot_of(s.via), fn() {  }) |> ignore })
-            |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    None => {
-      let b = c.box(style=if marked { agent_mark_btn_on } else { agent_mark_btn }, keep=true, id~, fn() {
-        agent_mark(c, a.maker, a.runtime, a.badge, said=text(field(aj, "session"), "badgeText"))
-      })
-      c.semantics(b, Button, id~, label=said)
-    }
-  }
-  // the pointer resting on it: its card; with touch, held, the tile's whole: its card and its
-  // station's as one (the user, 2026-10-27: 它们是一体的), each as the pointer's shows it
-  match station {
-    Some(_) if @sf.tile_whole() =>
-      hover(c, "agent-hover/" + a.key, id, tile=true, padded=false, fn() {
-        match aj {
-          Some(j) => c.box(style=tile_card_agent, fn() { agent_card(c, src, r, j, across=true) }) |> ignore
-          None => ()
-        }
-        // (its head as the agent's: the two start alike)
-        @settings.station_peek_part(c, r.station)
-      })
-      |> ignore
-    _ =>
-      hover(c, "agent-hover/" + a.key, id, tile=true, fn() {
-        match aj {
-          Some(j) => agent_card(c, src, r, j)
-          None => ()
-        }
-      })
-      |> ignore
-  }
-}
-
-///|
-/// The chat's services and jobs' button (JobsPanel): none, nothing in the bar; a dot on it red while one died lately,
-/// amber while a service restarts.
-fn jobs_trigger(c : @ui.Ctx, view : Json?) -> Unit {
-  if !flag(view, "hasJobs") && items(view, "jobs").length() == 0 {
-    return
-  }
-  @sf.icon_button(c, "web", key="chat-jobs", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.services"), shortcut="chat.jobs")
-  |> ignore
-  // (pressed: opened or closed as it is let go, as it is then)
-  c.on_press(c.id("chat-jobs"), jobs_toggle)
-  match text(view, "alarm") {
-    "" => ()
-    alarm =>
-      c.layer(fn() {
-        c.box(style=jobs_alarm_room, fn() {
-          c.box(style=if alarm == "fail" { jobs_alarm_fail } else { jobs_alarm_restart }, fn() {  }) |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-  }
-}
-
-///|
 /// The chat's services' popover opened or closed by its button.
 fn jobs_toggle() -> Unit {
-  chat_own.jobs_open.set(!@signals.untracked(fn() { chat_own.jobs_open.get() }))
-}
-
-///|
-/// The way to the screens of the station the chat runs on (chat_screens.mbt), beside its services': while it has any;
-/// the one alone opened, more a menu of them beside it. Marked while an agent drives one, as it is seen working.
-fn screen_trigger(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Unit {
-  if v.screens.length() == 0 {
-    return
-  }
-  // (the button and its dot in a box of their own: the dot's layer over the button, not the row)
-  c.box(fn() {
-    let screen = c.id("chat-screen")
-    @sf.icon_button(c, "monitor", key="chat-screen", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.screen"), shortcut="chat.screen", on_press=fn() {
-      chat_screens_open(r, v.screens, from=Of(screen))
-    })
-    |> ignore
-    if chat_screens_driven(v.screens) {
-      c.layer(fn() {
-        c.box(style=jobs_alarm_room, fn() { c.box(style=screen_driven_dot, fn() {  }) |> ignore }) |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
+  chat_own.jobs_open.set(!chat_own.jobs_open.untracked())
 }
 
 ///|
@@ -724,16 +446,17 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
     chat_own.info_open.set(false)
     chat_own.jobs_open.set(false)
   }
-  // (its ⋯ in the system's bars: from the mark where it was chosen, rail_native.mbt)
+  // (its ⋯ in the system's bars: from the mark where it was chosen, rail_native.mbt; its button the bar node's, beside
+  // it where it is: chat_bar_by)
   let (info_at, info_side, info_along) = bar_anchor(c.id("chat-info"), Bottom, End)
   // (closed by what was pressed in it; dismissed by the hand, Escape or a press outside it and its button, at that
   // moment)
   c.with_dismissed(fn(_) { chat_own.info_open.set(false) }, fn() {
-    @kit.popover(
+    @sf.popover_from(
       c,
       "chat-info-pop",
       chat_own.info_open.get(),
-      info_at,
+      chat_bar_by(info_at, c.id("chat-info"), chat_bar_from.info_node),
       side=info_side,
       along=info_along,
       look=@sf.beside_look(@ui.Size::Px(chat_info_w)),
@@ -749,11 +472,11 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
 fn chat_jobs_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   // (its button in the system's bars: from the mark where it was chosen, rail_native.mbt)
   let (at, side, along) = bar_anchor(c.id("chat-jobs"), Bottom, End)
-  @kit.popover(
+  @sf.popover_from(
     c,
     "chat-jobs-pop",
     chat_own.jobs_open.get(),
-    at,
+    chat_bar_by(at, c.id("chat-jobs"), chat_bar_from.jobs_node),
     side~,
     along~,
     look=@sf.beside_look(@ui.Size::Px(jobs_pop_w)),
@@ -770,6 +493,17 @@ fn chat_jobs_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     },
   )
   |> ignore
+}
+
+///|
+/// What a popover of the bar opens beside (`at`: bar_anchor's, the system's bars' mark where they have it, else `own`,
+/// the page's own button's id): its button in the bar's node (`node`, while it is made), where that is as it is drawn
+/// (@sf.popover_from); else what bar_anchor says.
+fn chat_bar_by(at : Int, own : Int, node : @view.View?) -> @sf.Beside {
+  match node {
+    Some(v) if at == own && v.alive() => Node(v)
+    _ => Of(at)
+  }
 }
 
 ///|
@@ -803,20 +537,24 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   // line, centred in it)
   let over = @sf.menu_row_over - (info_fact_h - @sf.theme().t.ui_line) / 2.0
   c.box(style=info_facts.then(@ui.style(pt=@sf.room_of(over))), fn() {
-    // (where it came from only when that is not here: a still.fail chat's says nothing)
+    // (where it came from only when that is not here: a still.fail chat's says nothing; a Comma Task's is in no place,
+    // Comma alone)
+    let comma = text(thread, "surface").has_prefix("comma:")
     match text(chat, "place") {
-      "" => ()
+      "" if !comma => ()
       place =>
         fact(@sf.t("web-pages.chat.info.from"), fn() {
           let feishu = text(thread, "surface").has_prefix("feishu:") || text(chat, "feishuUrl") != ""
           c.box(style=info_inline, fn() {
-            if feishu {
+            if comma {
+              @sf.drawable(c, @sf.origin_mark_name("comma"), 13.0, tint=@sf.theme().p.text) |> ignore
+            } else if feishu {
               @sf.feishu_mark(c, 13.0) |> ignore
             } else {
               @sf.slack_mark(c, 13.0) |> ignore
             }
-            let through = if feishu { @sf.t("web-pages.connect.feishu.name") } else { "Slack" }
-            c.text(through + " · " + place, style=info_words) |> ignore
+            let through = if comma { "Comma" } else if feishu { @sf.t("web-pages.connect.feishu.name") } else { "Slack" }
+            c.text(if place == "" { through } else { through + " · " + place }, style=info_words) |> ignore
           })
           |> ignore
         })
@@ -1099,7 +837,7 @@ let chat_bar_box : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.wide_bar_h_
 let chat_bar_inner : @ui.Style = @ui.style(row=true, w=@sf.grow, h=Full, gap=S4, align=ACenter)
 
 ///|
-/// The bar with its room while the folded sidebar is shown a while (page_bar_row), moved with the block.
+/// A bar's row with its room while the folded sidebar is shown a while (page_bar_row), moved with the block.
 // kept across runs: a value (no field of it changes)
 let chat_bar_row : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wide_bar_h_size)
 

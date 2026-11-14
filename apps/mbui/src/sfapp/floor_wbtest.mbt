@@ -29,11 +29,10 @@ fn answer_ys(t : @ui.Tester, ms : Double) -> Array[Double] {
 ///|
 test "an agent's line gone from the chat's end: what is over it makes way, nothing dropped at once" {
   let t = linger_core()
-  // its answer out of its avatar, its turn over: its line stays its moment from there
-  t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + emit_all_ms())
-  assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
+  // its turn over as its answer comes out of its avatar: its line goes as the answer comes into the list
+  t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms)
   assert_true(t.at_end())
-  let ys = answer_ys(t, linger_ms + 100.0)
+  let ys = answer_ys(t, emit_all_ms() + 100.0)
   // gone, its room kept as it goes, given back as the rows over it make way (the rows' spring, from where they stood)
   assert_true(t.find(tr("android-chat.chat.working")) is None)
   assert_true(ys.length() > 1)
@@ -46,7 +45,7 @@ test "an agent's line gone from the chat's end: what is over it makes way, nothi
   }
   // (each frame a step of the spring's, none the line's whole room at once)
   for i in 1..<ys.length() {
-    assert_true((ys[i] - ys[i - 1]).abs() < 20.0, msg="\{ys}")
+    assert_true((ys[i] - ys[i - 1]).abs() < 20.0, msg="\{Repr(ys)}")
   }
   assert_eq(floor_now(), 0.0)
   assert_true(t.at_end())
@@ -57,7 +56,7 @@ test "an agent's line gone from the chat's end: what is over it makes way, nothi
 test "what is sent as the rows make way for an agent's line gone: no room left, the list at its end" {
   // (the list then as it would have been without it: activity_again_wbtest, its line's second turn where its first was)
   let t = linger_core()
-  t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + emit_all_ms() + linger_ms + 100.0)
+  t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms + emit_all_ms() + @ui.move_most_ms + 100.0)
   t.tap_text("发消息")
   t.type_text("测试一下")
   tap_send(t)

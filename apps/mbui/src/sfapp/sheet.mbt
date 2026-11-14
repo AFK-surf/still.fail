@@ -5,6 +5,7 @@
 
 ///|
 /// Which sheet: what it shows and how it sits.
+#derive(Eq)
 priv enum SheetKind {
   NoSheet
   /// what another app shares in, to a chat (the web's mobile/ShareIn.tsx; ShareIn.tsx's panel, 520 wide, with a wide
@@ -12,7 +13,7 @@ priv enum SheetKind {
   ShareSheet
   /// what an invitation's link leads to, before it is accepted: half the screen
   InviteLink
-} derive(Eq)
+}
 
 ///|
 /// How a sheet sits: its share of the screen at first, whether its top drags it between half and full.

@@ -61,7 +61,7 @@ pub fn bytes_length() -> Int { host_bytes.val.length() }
 pub fn bytes_unit(i : Int) -> Int { host_bytes.val[i].to_int() }
 ///|
 fn option(key : Int) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for i in 0..<option_length(key) { out.write_char(option_point(key, i).unsafe_to_char()) }
   out.to_string()
 }
@@ -180,9 +180,12 @@ fn scene_arg(name : String) -> String {
     "MBUI_FILM_AUTOFILL" => option(15)
     "MBUI_CORE_MS" => option(16)
     "MBUI_UPDATES_MS" => option(17)
+    "MBUI_FIX_PACE" => option(18)
+    "MBUI_FIX_CORE" => option(19)
+    "MBUI_FIXTURE_JSON" => option(20)
     // (1Password's answers in a scene: the native film's only)
     "MBUI_FILM_OP" => ""
-    _ => abort("picture: unsupported scene option \{name}")
+    _ => @halt.saying("picture: unsupported scene option \{name}")
   }
 }
 ///|
@@ -209,7 +212,7 @@ pub fn draw() -> Int {
   t.set_frame_period(1000.0 / option_number(6))
   if option_number(10) == 1.0 { t.set_window_inset(true) }
   if option_number(9) > 0.0 { t.set_font_scale(option_number(9)) }
-  if option(8) != "" { t.set_local_station(option(8)) }
+  if option(8) != "" { t.set_app_said("local_station", option(8)) }
   let prepare = option(3)
   let script = option(4)
   let max = option_number(7).to_int()

@@ -64,7 +64,15 @@ const LISTED = {
   ],
 };
 const MODELS = ["swe-2", "claude-opus-5-5", "kimi-k2-6", "glm-5-2"];
-const EFFORTS = { "swe-2": ["medium", "high", "max"], "claude-opus-5-5": ["low", "medium"], "glm-5-2": ["max"] };
+const FUSION = {
+  leads: { "gpt-6-sol": [0, 1] },
+  sides: ["gpt-5-6-luna-high", "swe-2-medium"],
+};
+const EFFORTS = {
+  "swe-2": ["medium", "high", "max"],
+  "claude-opus-5-5": ["low", "medium"],
+  "glm-5-2": ["max"],
+};
 
 let n = 0;
 /// A Devin account signed in (its key in the profile's devin/data, as `devin auth login` leaves it), with a workspace's
@@ -192,25 +200,33 @@ describe("the Devin driver", { concurrency: true }, () => {
       { kind: "thinking", text: "thinking it over" },
       { kind: "assistant", text: "x" },
     ]);
-    // Each turn's counts: its calls' (each said twice, counted once), input less what the cache read; the context its
-    // last call had, of the model's window; then its end.
+    // Each call's counts as it finished (each said twice, counted once), input less what the cache read; the context
+    // each call left, of the model's window; then each turn's end.
     const kept = lines(path!);
     const usage = kept.filter((l) => l.type === "usage");
     assert.deepEqual(usage.map(({ model, usage, calls, context, window }) => ({ model, usage, calls, context, window })), [
-      { model: "swe-2", usage: { inputTokens: 2100, cacheReadTokens: 1200, cacheWriteTokens: 0, outputTokens: 153 }, calls: 3, context: 1252, window: 262000 },
+      { model: "swe-2", usage: { inputTokens: 600, cacheReadTokens: 400, cacheWriteTokens: 0, outputTokens: 50 }, calls: 1, context: 1050, window: 262000 },
+      { model: "swe-2", usage: { inputTokens: 700, cacheReadTokens: 400, cacheWriteTokens: 0, outputTokens: 51 }, calls: 1, context: 1151, window: 262000 },
+      { model: "swe-2", usage: { inputTokens: 800, cacheReadTokens: 400, cacheWriteTokens: 0, outputTokens: 52 }, calls: 1, context: 1252, window: 262000 },
       { model: "swe-2", usage: { inputTokens: 600, cacheReadTokens: 400, cacheWriteTokens: 0, outputTokens: 50 }, calls: 1, context: 1050, window: 262000 },
     ]);
-    const prompts = sent.filter((m) => m.method === "session/prompt").map((m) => m.id.slice("prompt:".length));
-    assert.equal(usage[0].run, prompts[0], "a turn's counts named by its prompt");
+    const prompts = stdin(o.dump).filter((m) => m.method === "session/prompt").map((m) => m.id.slice("prompt:".length));
+    assert.deepEqual(usage.map((u) => u.run), [prompts[0], `${prompts[0]}:2`, `${prompts[0]}:3`, prompts[1]], "each call named by its prompt and call index");
     assert.deepEqual(kept.filter((l) => l.type === "end").map((l) => l.status), ["finished", "finished"]);
     assert.deepEqual(kept[0], { time: kept[0].time, type: "session", id: session.id(), cwd: o.cwd });
     const calls = callsOf("devin", readFileSync(path!, "utf8"), false, { model: null, codexId: null });
     assert.deepEqual(calls.map(({ id, model, input, cacheRead, cacheWrite, output }) => ({ id, model, input, cacheRead, cacheWrite, output })), [
-      { id: `devin:${usage[0].run}`, model: "swe-2", input: 2100, cacheRead: 1200, cacheWrite: 0, output: 153 },
-      { id: `devin:${usage[1].run}`, model: "swe-2", input: 600, cacheRead: 400, cacheWrite: 0, output: 50 },
+      { id: `devin:${prompts[0]}`, model: "swe-2", input: 600, cacheRead: 400, cacheWrite: 0, output: 50 },
+      { id: `devin:${prompts[0]}:2`, model: "swe-2", input: 700, cacheRead: 400, cacheWrite: 0, output: 51 },
+      { id: `devin:${prompts[0]}:3`, model: "swe-2", input: 800, cacheRead: 400, cacheWrite: 0, output: 52 },
+      { id: `devin:${prompts[1]}`, model: "swe-2", input: 600, cacheRead: 400, cacheWrite: 0, output: 50 },
     ]);
-    // Each turn's calls (3 and 1), and the context it ended with, of the model's window: what a chat says of them.
-    assert.deepEqual(calls.map(({ calls, context, window }) => [calls, context, window]), [[3, 1252, 262000], [1, 1050, 262000]]);
+    assert.deepEqual(calls.map(({ calls, context, window }) => [calls, context, window]), [
+      [1, 1050, 262000],
+      [1, 1151, 262000],
+      [1, 1252, 262000],
+      [1, 1050, 262000],
+    ]);
 
     // Between turns, another model (its family's option) and level are set in the process; one it has not, not.
     assert.equal(session.retune?.({ ...o, model: "claude-opus-5-5", effort: "low" }), true);
@@ -220,6 +236,15 @@ describe("the Devin driver", { concurrency: true }, () => {
     assert.deepEqual(configs().map((m) => [m.params.configId, m.params.value]), [["model", "claude-opus-5-5-medium"], ["thought_level", "low"]]);
     await eventually(() => configs().every((m) => said(o.dump).some((a) => a.id === m.id)));
     assert.ok(configs().every((m) => said(o.dump).find((a) => a.id === m.id)?.error === undefined), "Devin took both");
+    // A normalized Fusion model (`fusion-<lead>-sidekick-<side>`) also retunes in-process and sets its lead's thought_level.
+    assert.equal(session.retune?.({ ...o, model: "fusion-gpt-6-sol-sidekick-swe-2-medium", effort: "high" }), true);
+    await eventually(() => configs().length === 4);
+    assert.deepEqual(configs().slice(2).map((m) => [m.params.configId, m.params.value]), [
+      ["model", "fusion-gpt-6-sol-max-sidekick-swe-2-medium"],
+      ["thought_level", "high"],
+    ]);
+    assert.equal(session.retune?.({ ...o, model: "claude-opus-5-5", effort: "low" }), true);
+    await eventually(() => configs().length === 6);
     await session.prompt("say:three");
     await until(ended(3));
     assert.equal(lines(path!).filter((l) => l.type === "usage").at(-1).model, "claude-opus-5-5", "the next turn's counts are the model's");
@@ -422,13 +447,21 @@ describe("the Devin driver", { concurrency: true }, () => {
   });
 
   for (const crashed of [false, true]) {
-    test(`a next driver takes the session up ${crashed ? "after a crash (no snapshot)" : "from its snapshot"}: the turn ends once, no live event twice`, async () => {
+    test(`a next driver takes the session up ${crashed ? "after a crash (no snapshot)" : "from its snapshot"}: live usage kept, the turn ends once, no live event twice`, async () => {
       const first = driver();
       const o = options();
       const a = listen();
       const session = await first.open(o, a.push);
+      const path = transcriptPath("devin", o.profile.home, session.id())!;
       await session.prompt("hold");
       await a.until((e) => deltas(e).join("").includes("holding"));
+      // While the turn is still running, the first call's usage is already on disk for live counting.
+      await eventually(() => lines(path).some((l) => l.type === "usage"));
+      assert.equal(session.busy(), true);
+      assert.deepEqual(
+        callsOf("devin", readFileSync(path, "utf8"), false, { model: null, codexId: null }).map((c) => [c.input, c.cacheRead, c.output, c.context, c.window]),
+        [[600, 400, 50, 1050, 262000]],
+      );
       let snapshot: unknown = null;
       if (!crashed) snapshot = JSON.parse(JSON.stringify(session.snapshot()));
       // Stops: the process goes on under its runner with nobody reading.
@@ -444,6 +477,8 @@ describe("the Devin driver", { concurrency: true }, () => {
       await b.until(ended(1));
       assert.deepEqual(outcome(b.events), { kind: "completed" });
       assert.ok(deltas(b.events).join("").includes("heard: go on"));
+      // Between turns after handover or crash, retune still knows the session's model families.
+      assert.equal(taken.retune?.({ ...o, model: "claude-opus-5-5", effort: "low" }), true);
       // The message's answer comes after the turn's: not another end.
       await taken.prompt("say:after");
       await b.until(ended(2));
@@ -454,6 +489,14 @@ describe("the Devin driver", { concurrency: true }, () => {
       const starts = live(all).filter((e) => e.kind === "start").length;
       assert.equal(live(all).filter((e) => e.kind === "end").length, starts, "every step started ends");
       assert.equal(b.events.filter((e) => e.type === "turnStarted").length, crashed ? 1 : 0);
+      // Every call before and after the handover/crash is kept once, with distinct ids and the retuned model on the next turn.
+      const recorded = callsOf("devin", readFileSync(path, "utf8"), false, { model: null, codexId: null });
+      assert.equal(new Set(recorded.map((c) => c.id)).size, 3, "distinct call ids across handover/crash");
+      assert.deepEqual(recorded.map((c) => [c.model, c.input, c.cacheRead, c.output, c.calls, c.context]), [
+        ["swe-2", 600, 400, 50, 1, 1050],
+        ["swe-2", 700, 400, 51, 1, 1151],
+        ["claude-opus-5-5", 600, 400, 50, 1, 1050],
+      ]);
       await taken.dispose();
       await b.until((e) => e.some((x) => x.type === "closed"));
       assert.ok(!a.events.some((e) => e.type === "closed"), "the first driver hears nothing after letting go");
@@ -473,12 +516,19 @@ describe("what a profile runs Devin on", () => {
     assert.deepEqual(devinArgs("/c.json", undefined, "high"), ["--config", "/c.json", "acp"]);
     assert.deepEqual(devinArgs("/c.json", "glm-5-2", undefined), ["--config", "/c.json", "acp", "--model", "glm-5-2"]);
     assert.deepEqual(devinArgs("/c.json", "swe-2", "max"), ["--config", "/c.json", "acp", "--model", "swe-2-max"]);
+    assert.deepEqual(devinArgs("/c.json", "fusion-gpt-6-sol-max-sidekick-swe-2-medium", undefined), ["--config", "/c.json", "acp", "--model", "fusion-gpt-6-sol-max-sidekick-swe-2-medium"]);
+    assert.deepEqual(devinArgs("/c.json", "fusion-gpt-6-sol-sidekick-swe-2-medium", "high"), ["--config", "/c.json", "acp", "--model", "fusion-gpt-6-sol-high-sidekick-swe-2-medium"]);
     assert.equal(variant("swe-2", "fast"), "swe-2", "not a level: the family at its own");
   });
 
-  test("the account's models are the families at their levels, not the faster ones; a call's counts its input less the cache's", () => {
-    assert.deepEqual(devinCatalog(LISTED), { models: MODELS, efforts: EFFORTS });
-    assert.deepEqual(devinCatalog({}), { models: [], efforts: {} });
+  test("the account's models are the families at their levels, with Fusion pairings apart for opt-in; a call's counts its input less the cache's", async () => {
+    assert.deepEqual(devinCatalog(LISTED), { models: MODELS, efforts: EFFORTS, fusion: FUSION });
+    assert.deepEqual(devinCatalog({}), { models: [], efforts: {}, fusion: null });
+    const { modelName, makerOf } = await import("../src/ops/model-name.ts");
+    assert.equal(modelName("fusion-gpt-6-sol-max-sidekick-swe-2-medium"), "GPT-6 Sol + SWE-2 (中)");
+    assert.equal(modelName("fusion-gpt-6-sol-sidekick-swe-2-medium"), "GPT-6 Sol + SWE-2 (中)");
+    assert.equal(modelName("gpt-oss-120b"), "GPT-OSS 120B");
+    assert.equal(makerOf("fusion-gemini-4-carbon-high-sidekick-gpt-6-sol-low"), "gemini");
     assert.deepEqual(callOf({ sessionUpdate: "usage_update", used: 11193, size: 262000, _meta: { "cognition.ai/inputTokens": 11125, "cognition.ai/outputTokens": 68, "cognition.ai/cachedReadTokens": 128 } }), {
       inputTokens: 10997, cacheReadTokens: 128, cacheWriteTokens: 0, outputTokens: 68,
     });
@@ -523,7 +573,10 @@ describe("what a profile runs Devin on", () => {
       const signedIn = await check();
       assert.equal(signedIn.state, "ok");
       assert.deepEqual(signedIn.models, MODELS);
-      assert.deepEqual(signedIn.modelEfforts, { devin: EFFORTS });
+      assert.deepEqual(signedIn.fusion, { leads: { "gpt-6-sol": [0] }, sides: ["swe-2-medium"] });
+      assert.deepEqual(signedIn.modelEfforts, {
+        devin: { "swe-2": ["medium", "high", "max"], "claude-opus-5-5": ["low", "medium"], "glm-5-2": ["max"] },
+      });
       assert.match(signedIn.detail ?? "", /someone@example\.com/);
       assert.equal(devinEmail(home), "someone@example.com", "noted for naming the account");
       assert.equal(lines(dump).filter((l) => l.argv[0] === "auth" && l.argv[1] === "status").every((l) => l.env.XDG_DATA_HOME === devinData(home)), true);
@@ -543,6 +596,49 @@ describe("what a profile runs Devin on", () => {
     } finally {
       platform.terminal = terminal;
       await logins.close();
+    }
+  });
+
+  test("overview strips unticked Fusion catalogs while GET /profiles/:id/fusion serves them on non-borrowed profiles", async () => {
+    const { mkdirSync } = await import("node:fs");
+    const { Store } = await import("../src/store/store.ts");
+    const { ConfigFile } = await import("../src/ops/config.ts");
+    const { Accounts } = await import("../src/accounts/index.ts");
+    const { routes } = await import("../src/api/routes/accounts.ts");
+    const dir = join(data, "accounts-fusion");
+    mkdirSync(dir, { recursive: true });
+    const store = Store.open(":memory:", null);
+    const config = new ConfigFile(dir);
+    config.update((raw) => {
+      raw.profiles = [
+        { id: "dv", name: "Devin", runtime: "devin", home: join(dir, "dv"), access: { kind: "subscription" }, models: ["fusion-gpt-6-sol-max-sidekick-swe-2-medium"] },
+        { id: "dv-shared", name: "Borrowed", runtime: "devin", home: join(dir, "dvs"), access: { kind: "subscription" }, share: { id: "s1", borrowed: true } },
+      ];
+    });
+    const accounts = new Accounts({
+      data: dir,
+      store,
+      config,
+      machine: null,
+      checkOnStart: false,
+      check: async () => ({ state: "ok", detail: "ok", models: MODELS, fusion: FUSION, modelEfforts: { devin: EFFORTS }, checkedAt: 1000 }),
+    });
+    try {
+      await accounts.check("dv", "en");
+      const views = accounts.profilesView();
+      const dv = views.find((v: any) => v.id === "dv")!;
+      assert.equal(dv.check.fusion, undefined, "overview does not carry raw Fusion catalogs");
+      assert.equal(dv.models.includes("fusion-gpt-6-sol-sidekick-swe-2-medium"), true);
+      assert.equal(dv.models.includes("fusion-gpt-6-sol-max-sidekick-swe-2-medium"), false, "legacy tiered Fusion id migrated to normalized Fusion id");
+      const list = routes({ accounts, overview: () => ({ profiles: accounts.profilesView() }) });
+      const getFusion = list.find((r) => r.method === "GET" && r.pattern.test("/profiles/dv/fusion"))!;
+      const res = await getFusion.handle({ method: "GET", path: "/profiles/dv/fusion", query: [], headers: {}, body: Buffer.alloc(0), viewer: { role: "owner", email: "a@x.test", name: "A", workspace: "w", home: true } as never, lang: "en" }, ["dv"]);
+      assert.equal(res.status, 200);
+      assert.deepEqual(JSON.parse(res.body.toString("utf8")), { fusion: FUSION });
+      assert.equal(accounts.fusionView("dv-shared"), null, "borrowed profiles omit Fusion opt-in catalog");
+    } finally {
+      await accounts.close();
+      store.close();
     }
   });
 });

@@ -1,10 +1,19 @@
 // The one error calls and topics report (error.rs): `code` stable and machine-readable (still.fail cloud's codes pass
 // through as they are), `message` for people in their language, `status` the HTTP status when it came from still.fail
 // cloud or a station.
-import { t } from "./i18n.ts";
-import { dateClockSeconds } from "./format.ts";
+import { t } from "./lang.ts";
 import type { Span } from "./trace.ts";
+import { local, remEuclid } from "./util.ts";
 import { DROPPED, GONE, NETWORK } from "./wake-words.ts";
+
+/// 10月28日 00:40:14, local: a moment said to the second, for an error people may report days later.
+export function dateClockSeconds(ms: number, offsetMin: number): string {
+  const [, month, day, , h, m] = local(ms, offsetMin);
+  // Offsets are whole minutes: the second is the same everywhere.
+  const s = Math.floor(remEuclid(Math.floor(ms), 60_000) / 1000);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return t("core-logic.format.date_time", { date: t(`core-logic.format.date.${month}`, { day }), time: `${two(h)}:${two(m)}:${two(s)}` });
+}
 
 export class CoreError extends Error {
   code: string;
@@ -53,7 +62,7 @@ export class CoreError extends Error {
     return error;
   }
 
-  /// What the system's secure storage or its prompt said no with (host.ts `secureGet`, `secureAsk`): the host's word
+  /// What the system's secure storage or its prompt said no with (host-of.ts `secureGet`, `secureAsk`): the host's word
   /// (`user_cancelled`, `no_device_lock`, `not_in_front`, `key_invalidated`, …) as the code a page goes by, said in the
   /// person's language; what is not such a word, as `otherwise` with what the host said.
   static refused(error: HostError, otherwise: string): CoreError {
@@ -113,12 +122,12 @@ export function asCoreError(error: unknown): CoreError {
   return CoreError.host(error instanceof Error ? error.message : String(error));
 }
 
-/// `span` failed with `error`: what it was (`error.type`), what the transport said (`stillfail.cause`), and the error
-/// said with when (`stamped`).
+/// `span` failed with `error`: what it was (`error.type`), what the transport said (its `cause`, an attribute of the
+/// program's own: `Span.own`), and the error said with when (`stamped`).
 export function failedIn(span: Span, error: CoreError): void {
   span.fail();
   span.set("error.type", error.code);
-  if (typeof error.cause === "string") span.set("stillfail.cause", error.cause);
+  if (typeof error.cause === "string") span.own("cause", error.cause);
   const now = span.host.nowMs();
   error.stamped(now, span.host.utcOffsetMin(now));
 }

@@ -173,6 +173,9 @@ test("the test channel's releases: served by name, installed with ?channel=beta,
   assert.equal(releaseType("desktop/stillfail-beta-mac.yml"), "text/yaml; charset=utf-8");
   // The beta apps' builds, apps of their own.
   assert.equal(releaseType("android/stillfail-beta-1300.apk"), "application/vnd.android.package-archive");
+  // Its native library's symbols (scripts/release.sh) are kept in the bucket for us alone, never served.
+  assert.equal(releaseType("symbols/android/stillfail-beta-1300.syms.xz"), null);
+  assert.equal(releaseType("symbols/android/stillfail-1300.syms.xz"), null);
   assert.equal(releaseType("desktop/stillfail-beta-0.1.1300-arm64-mac.zip"), "application/zip");
   assert.equal(releaseType("desktop/stillfail-beta-0.1.1300-arm64-mac.zip.blockmap"), "application/octet-stream");
   assert.equal(releaseType("android/beta/stillfail-beta-1300.apk"), null);

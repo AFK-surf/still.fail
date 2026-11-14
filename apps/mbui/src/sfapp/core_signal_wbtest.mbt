@@ -2,7 +2,7 @@
 
 ///|
 test "two view-owned sources share a topic until the last view goes" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -32,7 +32,7 @@ test "two view-owned sources share a topic until the last view goes" {
 
 ///|
 test "one view leaving a topic does not release another view's reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -71,7 +71,7 @@ test "one view leaving a topic does not release another view's reader" {
 
 ///|
 test "an independent graph reader outlives a view-owned source" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -89,7 +89,7 @@ test "an independent graph reader outlives a view-owned source" {
 
 ///|
 test "an untracked view reader outlives an independent base graph" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -110,7 +110,7 @@ test "an untracked view reader outlives an independent base graph" {
 
 ///|
 test "a view leaving does not release an independent legacy reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -134,7 +134,7 @@ test "a view leaving does not release an independent legacy reader" {
 
 ///|
 test "a live view-owned reader resubscribes when the client resets" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -160,7 +160,7 @@ test "a live view-owned reader resubscribes when the client resets" {
 
 ///|
 test "an event of a view reads a topic its graph holds as it is then, held no longer than the graph holds it" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -183,7 +183,7 @@ test "an event of a view reads a topic its graph holds as it is then, held no lo
 
 ///|
 test "a view-owned untracked frame read leaves no extra manual hold" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -199,7 +199,7 @@ test "a view-owned untracked frame read leaves no extra manual hold" {
 
 ///|
 test "view owners can leave a topic through its equivalent overridden name" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -228,7 +228,7 @@ test "view owners can leave a topic through its equivalent overridden name" {
 
 ///|
 test "view owners share normalized chat parameters and release independently" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = signal_client_source(client)
@@ -269,7 +269,7 @@ test "view owners share normalized chat parameters and release independently" {
 
 ///|
 test "a view changing parameters explicitly leaves the earlier topic" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -292,7 +292,7 @@ test "a view changing parameters explicitly leaves the earlier topic" {
 
 ///|
 test "a view's raw prefetch ends on cancel and coexists with another owner" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -323,7 +323,7 @@ test "a view's raw prefetch ends on cancel and coexists with another owner" {
 
 ///|
 test "a prefetch made inside a graph outlives that graph until cancelled" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -349,7 +349,7 @@ test "a prefetch made inside a graph outlives that graph until cancelled" {
 
 ///|
 test "a base source prefetch made in a graph remains until explicitly left" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -367,7 +367,7 @@ test "a base source prefetch made in a graph remains until explicitly left" {
 ///|
 test "a direct graph read and an independent base prefetch release differently" {
   for prefetch in [false, true] {
-    new_run()
+    fresh_app()
     let sent : Array[String] = []
     let client = @core.Client::new(fn(s) { sent.push(s) })
     let src = signal_client_source(client)
@@ -394,7 +394,7 @@ test "a direct graph read and an independent base prefetch release differently" 
 
 ///|
 test "a source callback can prefetch a different topic for its view" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = signal_client_source(client)
@@ -426,7 +426,7 @@ test "a source callback can prefetch a different topic for its view" {
 
 ///|
 test "a wrapper can prefetch before forwarding a view graph read" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -455,7 +455,7 @@ test "a wrapper can prefetch before forwarding a view graph read" {
 
 ///|
 test "a wrapper's low-level reads follow the graph without a prefetch" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -480,7 +480,7 @@ test "a wrapper's low-level reads follow the graph without a prefetch" {
 
 ///|
 test "a wrapper can forward a view graph to another topic name" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -502,7 +502,7 @@ test "a wrapper can forward a view graph to another topic name" {
 ///|
 test "one wire subscription preserves each source-side projection" {
   for reverse in [false, true] {
-    new_run()
+    fresh_app()
     let sent : Array[String] = []
     let client = @core.Client::new(fn(s) { sent.push(s) })
     let base = signal_client_source(client)
@@ -535,7 +535,7 @@ test "one wire subscription preserves each source-side projection" {
 
 ///|
 test "a made source keeps its own topic identity" {
-  new_run()
+  fresh_app()
   let src = @sfbase.made_source(topic=fn(name, _) { Some(Json::string(name)) })
   let owner : Ref[Source?] = Ref(None)
   let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
@@ -550,7 +550,7 @@ test "a made source keeps its own topic identity" {
 
 ///|
 fn disposed_owned_source_case(read_kind : Int, independent_base : Bool) -> Unit raise {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -615,7 +615,7 @@ test "a late prefetch and leave do not disturb a base graph" {
 
 ///|
 test "a graph using a view's source stops following when the view is disposed" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -634,7 +634,7 @@ test "a graph using a view's source stops following when the view is disposed" {
 
 ///|
 test "a view source graph drops changed parameters while the view remains" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -659,7 +659,7 @@ test "a view source graph drops changed parameters while the view remains" {
 
 ///|
 test "a view source graph follows updates without another view hold" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -686,7 +686,7 @@ test "a view source graph follows updates without another view hold" {
 
 ///|
 test "a wrapper around a view source preserves its projection" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -717,7 +717,7 @@ test "a wrapper around a view source preserves its projection" {
 
 ///|
 test "a nested view source does not give its parent an extra reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -738,7 +738,7 @@ test "a nested view source does not give its parent an extra reader" {
 
 ///|
 test "a nested view source becomes inert when its parent ends" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let parent : Ref[Source?] = Ref(None)
@@ -842,8 +842,8 @@ fn wide_chat_subscription_case(intermediate : Bool, leave_pending : Bool) -> Uni
   let opened_at = t.time()
   open_chat_beside(chat)
   t.frame()
-  guard client.peek_topic("chat", params=core_params) is Some(sub) else { fail("opening did not subscribe to the chat: \{sent}") }
-  assert_eq(sent.length(), 1, msg="the waiting pane keeps its first chat subscription: \{sent}")
+  guard client.peek_topic("chat", params=core_params) is Some(sub) else { fail("opening did not subscribe to the chat: \{Repr(sent)}") }
+  assert_eq(sent.length(), 1, msg="the waiting pane keeps its first chat subscription: \{Repr(sent)}")
   let opened = try Some(@json.parse(sent[0])) catch { _ => None }
   assert_eq(@sfbase.text(@sfbase.field(opened, "subscribe"), "topic"), "chat")
   assert_eq(@sfbase.number(opened, "id"), sub.id.to_double())
@@ -859,15 +859,15 @@ fn wide_chat_subscription_case(intermediate : Bool, leave_pending : Bool) -> Uni
     t.frame_at(opened_at + 116.0)
     t.frame_at(opened_at + 132.0)
     assert_true(client.peek_topic("chat", params=core_params) is None, msg="leaving while waiting releases the chat")
-    assert_eq(sent.length(), 2, msg="leaving while waiting sends one unsubscribe: \{sent}")
+    assert_eq(sent.length(), 2, msg="leaving while waiting sends one unsubscribe: \{Repr(sent)}")
     let left = try Some(@json.parse(sent[1])) catch { _ => None }
     assert_true(@sfbase.flag(left, "unsubscribe"))
     assert_eq(@sfbase.number(left, "id"), sub.id.to_double())
     open_chat_beside(chat)
     t.frame_at(opened_at + 148.0)
-    guard client.peek_topic("chat", params=core_params) is Some(reopened) else { fail("reopening did not subscribe: \{sent}") }
+    guard client.peek_topic("chat", params=core_params) is Some(reopened) else { fail("reopening did not subscribe: \{Repr(sent)}") }
     assert_true(reopened.id != sub.id, msg="the reopened chat has a new subscription")
-    assert_eq(sent.length(), 3, msg="reopening subscribes once: \{sent}")
+    assert_eq(sent.length(), 3, msg="reopening subscribes once: \{Repr(sent)}")
     let reopened_message = try Some(@json.parse(sent[2])) catch { _ => None }
     assert_eq(@sfbase.text(@sfbase.field(reopened_message, "subscribe"), "topic"), "chat")
     assert_eq(@sfbase.number(reopened_message, "id"), reopened.id.to_double())
@@ -898,7 +898,7 @@ fn wide_chat_subscription_case(intermediate : Bool, leave_pending : Bool) -> Uni
   t.frame()
   assert_true(client.peek_topic("chat", params=core_params) is None, msg="the chat is released when the pane leaves")
   let n = if leave_pending { 4 } else { 2 }
-  assert_eq(sent.length(), n, msg="the chat is unsubscribed once after leaving: \{sent}")
+  assert_eq(sent.length(), n, msg="the chat is unsubscribed once after leaving: \{Repr(sent)}")
   let last = try Some(@json.parse(sent[n - 1])) catch { _ => None }
   assert_true(@sfbase.flag(last, "unsubscribe"))
   assert_eq(@sfbase.number(last, "id"), answered.id.to_double())
@@ -982,7 +982,7 @@ test "reopening a chat reads the current station and follows later updates" {
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = fixture_app("home")
-  let params : Map[String, Json] = { "scope": "ws1", "brief": true }
+  let params : Map[String, Json] = { "scope": "ws1" }
   let src : Source = {
     ..base,
     topic_read: fn(name, p) {
@@ -1052,54 +1052,130 @@ fn signal_client_source(client : @core.Client) -> Source {
 }
 
 ///|
-test "asking for more chats moves the signal reader while a direct reader keeps the first page" {
-  @sfbase.chat_limits_reset()
-  let sent : Array[String] = []
-  let client = @core.Client::new(fn(s) { sent.push(s) })
-  let src = signal_client_source(client)
-  let first_params : Map[String, Json] = { "scope": "ws1", "mine": false, "limit": 50 }
-  let next_params : Map[String, Json] = { "scope": "ws1", "mine": false, "limit": 100 }
-  let direct = client.subscribe("chats", params=first_params)
-  let more = Ref(-1)
-  let stop = @signals.effect(fn() { more.val = @sfbase.chats_more(src, "ws1", "all") })
-  client.receive_json({ "id": Json::number(direct.id.to_double()), "value": { "more": 7 } })
-  assert_eq(more.val, 7)
-  @sfbase.chats_ask_more(src, "ws1", "all", @sfbase.chats_page)
-  assert_true(physical_equal(client.peek_topic("chats", params=first_params).unwrap(), direct), msg="the first page's direct reader remains")
-  guard client.peek_topic("chats", params=next_params) is Some(next) else { fail("the signal did not ask for the next page") }
-  client.receive_json({ "id": Json::number(next.id.to_double()), "value": { "more": 3 } })
-  assert_eq(more.val, 3)
-  client.unsubscribe(direct)
-  assert_true(client.peek_topic("chats", params=first_params) is None, msg="the first page leaves with its last reader")
-  assert_true(client.peek_topic("chats", params=next_params) is Some(_), msg="the next page remains followed")
-  stop()
-  assert_true(client.peek_topic("chats", params=next_params) is None, msg="the next page leaves with its signal reader")
-  @sfbase.chat_limits_reset()
+/// signal_client_source with its calls asked of `client` too.
+fn signal_client_calls(client : @core.Client) -> Source {
+  {
+    ..signal_client_source(client),
+    call: fn(name, params, done) {
+      if @sfbase.unread_answer(done) {
+        client.call(name, params~) |> ignore
+      } else {
+        client.call(name, params~, on_done=done) |> ignore
+      }
+    },
+  }
 }
 
 ///|
-test "a signal keeps the shown chat page until the next page arrives" {
-  @sfbase.chat_limits_reset()
-  let client = @core.Client::new(fn(_) {  })
-  let src = signal_client_source(client)
-  let first_params : Map[String, Json] = { "scope": "ws1", "mine": false, "limit": 50 }
-  let next_params : Map[String, Json] = { "scope": "ws1", "mine": false, "limit": 100 }
-  let shown = Ref("")
-  let stop = @signals.effect(fn() { shown.val = @sfbase.text(@sfbase.chats_topic(src, "ws1").value, "marker") })
-  guard client.peek_topic("chats", params=first_params) is Some(first) else { fail("the first page was not followed") }
-  client.receive_json({ "id": Json::number(first.id.to_double()), "value": { "marker": "first" } })
-  assert_eq(shown.val, "first")
-  @sfbase.chats_ask_more(src, "ws1", "all", @sfbase.chats_page)
-  guard client.peek_topic("chats", params=next_params) is Some(next) else { fail("the next page was not followed") }
-  assert_eq(shown.val, "first", msg="the first page remains visible while the next is pending")
-  assert_true(client.peek_topic("chats", params=first_params) is Some(_))
-  client.receive_json({ "id": Json::number(next.id.to_double()), "value": { "marker": "next" } })
-  assert_eq(shown.val, "next")
-  assert_true(client.peek_topic("chats", params=first_params) is None, msg="the old page leaves after the handoff")
-  assert_true(client.peek_topic("chats", params=next_params) is Some(_))
+/// What of `sent` (a client's messages out) is a chats' list asked, let go of, or told its window: `sub`, `unsub`,
+/// `window <rows>`, in order.
+fn chats_sent(sent : Array[String]) -> Array[String] {
+  let ids : Map[Int, Bool] = Map([])
+  let out : Array[String] = []
+  for text in sent {
+    let j = @json.parse(text) catch { _ => continue }
+    guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
+    match (m.get("subscribe"), m.get("unsubscribe"), m.get("call")) {
+      (Some(Object(t)), _, _) if t.get("topic") == Some(Json::string("chats")) => {
+        ids[n.to_int()] = true
+        out.push("sub")
+      }
+      (_, Some(True), _) if ids.contains(n.to_int()) => out.push("unsub")
+      (_, _, Some(String("chats.window"))) =>
+        match m.get("params") {
+          Some(Object(p)) =>
+            match p.get("rows") {
+              Some(Number(r, ..)) => out.push("window " + r.to_int().to_string())
+              _ => ()
+            }
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  out
+}
+
+///|
+/// A chats' list's value of `n` rows (in one day) and `more` past them.
+fn chats_of_rows(n : Int, more : Int, marker? : String = "") -> Json {
+  let items = Array::makei(n, fn(i) { Json::object({ "station": "ws1/st1", "id": Json::string("c\{i}") }) })
+  { "days": [{ "daysAgo": 0, "items": Json::array(items) }], "more": Json::number(more.to_double()), "marker": Json::string(marker) }
+}
+
+///|
+/// ws1's list of all its chats, holding `held` rows with `more` past them (as read by a reader), scrolled near its foot
+/// (sfpages' list node: chats_grow with what it holds and has more of).
+fn grow(src : Source, held : Ref[Int], more : Ref[Int]) -> Unit {
+  @sfbase.chats_grow(src, "ws1", "all", held.val, more.val)
+}
+
+///|
+test "a chats' list scrolled for more is told a window more on the one subscription its readers share, once till it comes" {
+  @sfbase.chat_windows_reset()
+  @sfbase.window_tall.val = 844.0
+  let first = @sfbase.first_window(844.0)
+  let step = @sfbase.window_step(844.0)
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  client.tells_before(@sfbase.chats_told_before)
+  let src = signal_client_calls(client)
+  let params : Map[String, Json] = { "scope": "ws1", "mine": false }
+  let direct = client.subscribe("chats", params~)
+  let more = Ref(-1)
+  let held = Ref(0)
+  let stop = @signals.effect(fn() {
+    more.val = @sfbase.chats_more(src, "ws1", "all")
+    held.val = @sfbase.chats_held(chats_of(src, "ws1", "all").0)
+  })
+  client.receive_json({ "id": Json::number(direct.id.to_double()), "value": chats_of_rows(first, 7) })
+  assert_eq(more.val, 7)
+  grow(src, held, more)
+  // (asked again before the rows came: told nothing more)
+  grow(src, held, more)
+  assert_true(physical_equal(client.peek_topic("chats", params~).unwrap(), direct), msg="the one subscription remains")
+  client.receive_json({ "id": Json::number(direct.id.to_double()), "value": chats_of_rows(first + 7, 0) })
+  assert_eq(more.val, 0)
+  // (all of it come: none asked)
+  grow(src, held, more)
+  client.unsubscribe(direct)
+  assert_true(client.peek_topic("chats", params~) is Some(_), msg="the signal reader holds it still")
   stop()
-  assert_true(client.peek_topic("chats", params=next_params) is None, msg="the last reader releases the new page")
-  @sfbase.chat_limits_reset()
+  assert_true(client.peek_topic("chats", params~) is None, msg="it leaves with its last reader")
+  assert_eq(chats_sent(sent), ["window \{first}", "sub", "window \{first + step}", "unsub"])
+  @sfbase.chat_windows_reset()
+}
+
+///|
+test "a chats' list's rows stay shown while its window grows: no list asked anew, none let go of" {
+  @sfbase.chat_windows_reset()
+  @sfbase.window_tall.val = 844.0
+  let first = @sfbase.first_window(844.0)
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  client.tells_before(@sfbase.chats_told_before)
+  let src = signal_client_calls(client)
+  let params : Map[String, Json] = { "scope": "ws1", "mine": false }
+  let shown = Ref("")
+  let more = Ref(0)
+  let held = Ref(0)
+  let stop = @signals.effect(fn() {
+    shown.val = @sfbase.text(@sfbase.chats_topic(src, "ws1").value, "marker")
+    more.val = @sfbase.chats_more(src, "ws1", "all")
+    held.val = @sfbase.chats_held(chats_of(src, "ws1", "all").0)
+  })
+  guard client.peek_topic("chats", params~) is Some(list) else { fail("the list was not followed") }
+  client.receive_json({ "id": Json::number(list.id.to_double()), "value": chats_of_rows(first, 9, marker="first") })
+  assert_eq(shown.val, "first")
+  grow(src, held, more)
+  assert_eq(shown.val, "first", msg="its rows shown while the rows added are on their way")
+  client.receive_json({ "id": Json::number(list.id.to_double()), "value": chats_of_rows(first + 9, 0, marker="next") })
+  assert_eq(shown.val, "next")
+  assert_true(physical_equal(client.peek_topic("chats", params~).unwrap(), list))
+  assert_eq(chats_sent(sent).filter(fn(m) { m == "sub" || m == "unsub" }), ["sub"])
+  stop()
+  assert_true(client.peek_topic("chats", params~) is None, msg="the last reader lets it go")
+  @sfbase.chat_windows_reset()
 }
 
 ///|
@@ -1311,7 +1387,7 @@ test "a topic signal keeps following when a direct reader leaves the shared subs
 test "a topic signal still watched when the core client resets subscribes again" {
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
-  let waits : Map[Int, String] = {}
+  let waits : Map[Int, String] = Map([])
   let ticket = Ref(0)
   client.track(fn(what) {
     ticket.val += 1
@@ -1625,7 +1701,7 @@ fn chat_signal_page_case(pop : Bool, intermediate : Bool) -> Unit raise {
   client.receive_json({ "id": Json::number(prefs_sub.id.to_double()), "value": Json::object(prefs_value) })
   t.frame()
   guard client.peek_topic("chat", params=@sfbase.core_topic_params("chat", params)) is Some(chat_sub) else {
-    fail("chat subscription missing after opening: \{sent}")
+    fail("chat subscription missing after opening: \{Repr(sent)}")
   }
   let chat_value = match (base.topic_read)("chat", params).value {
     Some(Object(m)) => m.copy()
@@ -1644,11 +1720,13 @@ fn chat_signal_page_case(pop : Bool, intermediate : Bool) -> Unit raise {
   let refs = @sfbase.writings.get(draft_key(chat)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(@sfbase.text(@sfbase.field(refs.get(0), "ref"), "mode"), "file")
-  assert_eq(sent.length(), before_events, msg="the file-drop frames kept the page subscription; sent=\{sent}")
-  let link = @sfbase.link_target({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "child-session", "service": "j-web" })
+  assert_eq(sent.length(), before_events, msg="the file-drop frames kept the page subscription; sent=\{Repr(sent)}")
+  // (a page over the chat: another chat, by a chat's link, over it on 大屏 as a link in a message opens it,
+  // Nav::push_over; popped or replaced before a frame builds it)
+  let link = @sfbase.link_target({ "opens": "chat", "workspace": "ws1", "station": "st1", "chat": "s-c2" })
   assert_true(@sfbase.open_target(src, link, false, None))
-  assert_true(app.nav.top() == Service("ws1/st1", "j-web"), msg="an agent's link stays over its chat")
-  assert_eq(sent.length(), before_events, msg="event reads share the topics from the page; before=\{before_events}, sent=\{sent}")
+  assert_true(app.nav.top() == Chat(@sfbase.chat_ref("ws1/st1", "s-c2")), msg="another chat's link opens it over the chat")
+  assert_eq(sent.length(), before_events, msg="event reads share the topics from the page; before=\{before_events}, sent=\{Repr(sent)}")
   assert_true(app.nav.pages().iter().any(fn(p) { p is Chat(_) }))
   if pop {
     let start = t.time()
@@ -1749,8 +1827,8 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
   open_drive_fixture("drive")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.frame()
-  guard client.peek_topic("drivePlace", params~) is Some(first) else { fail("the row did not subscribe: \{sent}") }
-  assert_eq(sent.length(), 1, msg="the row subscribes once: \{sent}")
+  guard client.peek_topic("drivePlace", params~) is Some(first) else { fail("the row did not subscribe: \{Repr(sent)}") }
+  assert_eq(sent.length(), 1, msg="the row subscribes once: \{Repr(sent)}")
   let first_ask = try Some(@json.parse(sent[0])) catch { _ => None }
   assert_eq(@sfbase.text(@sfbase.field(first_ask, "subscribe"), "topic"), "drivePlace")
   assert_eq(@sfbase.number(first_ask, "id"), first.id.to_double())
@@ -1765,8 +1843,8 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
   assert_true(physical_equal(first, client.peek_topic("drivePlace", params~).unwrap()), msg="the departing row still has its place")
   t.frame_at(opened_at + @ui.move_ms(390.0))
   t.frame()
-  assert_true(client.peek_topic("drivePlace", params~) is None, msg="the covered list releases its reading place: \{sent}")
-  assert_eq(sent.length(), 2, msg="the covered list unsubscribes once: \{sent}")
+  assert_true(client.peek_topic("drivePlace", params~) is None, msg="the covered list releases its reading place: \{Repr(sent)}")
+  assert_eq(sent.length(), 2, msg="the covered list unsubscribes once: \{Repr(sent)}")
   let left = try Some(@json.parse(sent[1])) catch { _ => None }
   assert_true(@sfbase.flag(left, "unsubscribe"))
   assert_eq(@sfbase.number(left, "id"), first.id.to_double())
@@ -1775,9 +1853,9 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
   if intermediate { t.frame_at(returned_at + 50.0) }
   t.frame_at(returned_at + @ui.move_ms(390.0))
   t.frame()
-  guard client.peek_topic("drivePlace", params~) is Some(current) else { fail("returning did not read the place: \{sent}") }
-  assert_true(current.id != first.id, msg="the returned row has a new subscription: \{sent}")
-  assert_eq(sent.length(), 3, msg="the returned row subscribes once: \{sent}")
+  guard client.peek_topic("drivePlace", params~) is Some(current) else { fail("returning did not read the place: \{Repr(sent)}") }
+  assert_true(current.id != first.id, msg="the returned row has a new subscription: \{Repr(sent)}")
+  assert_eq(sent.length(), 3, msg="the returned row subscribes once: \{Repr(sent)}")
   let again = try Some(@json.parse(sent[2])) catch { _ => None }
   assert_eq(@sfbase.text(@sfbase.field(again, "subscribe"), "topic"), "drivePlace")
   assert_eq(@sfbase.number(again, "id"), current.id.to_double())
@@ -1791,7 +1869,7 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
   assert_true(t.words().iter().any(fn(word) { word.0.contains("80%") && word.5 > 0.0 }), msg="the updated reading place is transparent")
   @ui.run_let_go()
   assert_true(client.peek_topic("drivePlace", params~) is None, msg="ending the run releases the place")
-  assert_eq(sent.length(), 4, msg="ending the run unsubscribes once: \{sent}")
+  assert_eq(sent.length(), 4, msg="ending the run unsubscribes once: \{Repr(sent)}")
   let last = try Some(@json.parse(sent[3])) catch { _ => None }
   assert_true(@sfbase.flag(last, "unsubscribe"))
   assert_eq(@sfbase.number(last, "id"), current.id.to_double())
@@ -1809,7 +1887,7 @@ test "a chat after closing the switcher reads station changes made in the gap" {
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = @sffixture.fixture("home")
-  let params : Map[String, Json] = { "scope": "ws1", "brief": true }
+  let params : Map[String, Json] = { "scope": "ws1" }
   let src : Source = {
     ..base,
     topic_read: fn(name, p) {
@@ -1822,23 +1900,28 @@ test "a chat after closing the switcher reads station changes made in the gap" {
       if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
       if name == "stations" { client.leave_topic(name, params=p) } else { (base.leave)(name, p, @sfbase.TopicLeave::Legacy) } },
     release: fn(name, p) { if name == "stations" { client.release_topic(name, params=p) } else { (base.release)(name, p) } },
+    // (as a device's core: the places' lists kept as last said, which the stations a chat names its own by never take)
+    reads_ahead: fn() { true },
+    asks_devices: fn() { true },
+    asks_outline: fn() { true },
+    switches_ahead: fn() { true },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.frame()
   t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
   t.frame()
-  guard client.peek_topic("stations", params~) is Some(first) else { fail("the switcher did not read stations: \{sent}") }
+  guard client.peek_topic("stations", params~) is Some(first) else { fail("the switcher did not read stations: \{Repr(sent)}") }
   client.receive_json({ "id": Json::number(first.id.to_double()), "value": [{ "station": "ws1/st1", "name": "Cedar" }] })
   t.frame()
   t.key(@ui.key_escape)
   // The switcher closes immediately; inspect its first frame after Escape.
   t.frame()
-  assert_true(client.peek_topic("stations", params~) is None, msg="the switcher's reader was not released before the chat's reader: \{sent}")
+  assert_true(client.peek_topic("stations", params~) is None, msg="the switcher's reader was not released before the chat's reader: \{Repr(sent)}")
   // The server changes after unsubscribe. A late message from the old wire id must not become the new value.
   client.receive_json({ "id": Json::number(first.id.to_double()), "value": [{ "station": "ws1/st1", "name": "Outdated" }] })
   open_chat_beside({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.frame()
-  guard client.peek_topic("stations", params~) is Some(second) else { fail("the chat did not read stations: \{sent}") }
+  guard client.peek_topic("stations", params~) is Some(second) else { fail("the chat did not read stations: \{Repr(sent)}") }
   assert_true(second.id != first.id, msg="the new reader must have its own wire id")
   assert_true(second.value is None, msg="the old value must not be reused before the current answer")
   assert_true(t.shown_of("Outdated") is None, msg="a late answer to the old subscription is not shown")
@@ -1850,4 +1933,102 @@ test "a chat after closing the switcher reads station changes made in the gap" {
   t.frame()
   assert_true(t.shown_of("Pine") is Some(_), msg="the chat follows later station updates")
   @ui.run_let_go()
+}
+
+///|
+test "a place's list let go of and asked again: kept as the core last said it, nothing made of it again when it is the same" {
+  fresh_app()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  client.keep(@sfbase.topic_kept)
+  let src = signal_client_source(client)
+  let params : Map[String, Json] = { "scope": "ws1" }
+  let made = Ref(0)
+  let follow = fn(seen : Array[Json?]) {
+    let live = src.topic("stations", params)
+    // (what a page works out of the list: done again only for another value, not for the same one said again)
+    let value = @signals.computed(fn(_) { live.get().value }, same=fn(a, b) { physical_equal(a, b) })
+    let stop = @signals.effect(fn() {
+      made.val += 1
+      seen.push(value.get())
+    })
+    fn() {
+      stop()
+      value.dispose()
+      live.dispose()
+    }
+  }
+  let first : Array[Json?] = []
+  let stop = follow(first)
+  client.receive_json({ "id": 1, "value": [{ "id": "a", "t": "A" }] })
+  let held = first[first.length() - 1]
+  stop()
+  assert_true(sent[1].contains("\"keep\":true"), msg=sent[1])
+  client.receive_json({ "id": 1, "v": "k:1" })
+  // Asked again with its version: shown at once as it was, then the core's `same`, and nothing made again of it.
+  let second : Array[Json?] = []
+  let made_before = made.val
+  let stop = follow(second)
+  assert_true(sent[2].contains("\"have\":\"k:1\""), msg=sent[2])
+  assert_true(second.length() == 1 && physical_equal(second[0], held), msg="shown at once as it was")
+  client.receive_json({ "id": 2, "same": true })
+  assert_eq(made.val, made_before + 1, msg="the same value said again makes nothing again")
+  // Let go of while a change was on its way to it: that change is in what is kept, and shown once asked again.
+  stop()
+  assert_true(sent[3].contains("\"keep\":true"), msg=sent[3])
+  client.receive_json({ "id": 2, "delta": [{ "path": [], "key": ["id"], "patch": "a", "ops": [{ "path": ["t"], "set": "A2" }] }] })
+  client.receive_json({ "id": 2, "v": "k:2" })
+  let third : Array[Json?] = []
+  let stop = follow(third)
+  assert_true(sent[4].contains("\"have\":\"k:2\""), msg=sent[4])
+  client.receive_json({ "id": 3, "same": true })
+  assert_eq(third[third.length() - 1].unwrap().stringify(), "[{\"id\":\"a\",\"t\":\"A2\"}]")
+  stop()
+}
+
+///|
+test "a chat let go of and asked again: nothing of it shown before the core answers, then what changed applied to what was kept" {
+  fresh_app()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  client.keep(@sfbase.topic_kept)
+  let src = signal_client_source(client)
+  let params : Map[String, Json] = { "station": "ws/a", "session": "s1" }
+  // (the id of the last chat asked, and what it was asked with)
+  let asked = fn() {
+    let last = sent.rev_iter().find_first(fn(s) { s.contains("\"subscribe\"") && s.contains("\"topic\":\"chat\"") }).unwrap()
+    let j = @json.parse(last) catch { _ => Json::null() }
+    match j {
+      Object(m) =>
+        match m.get("id") {
+          Some(Number(d, ..)) => (d.to_int(), last)
+          _ => @halt.saying("no id")
+        }
+      _ => @halt.saying("not JSON")
+    }
+  }
+  let follow = fn(seen : Array[Json?]) {
+    let live = src.topic("chat", params)
+    let stop = @signals.effect(fn() { seen.push(live.get().value) })
+    fn() {
+      stop()
+      live.dispose()
+    }
+  }
+  let first : Array[Json?] = []
+  let stop = follow(first)
+  let (id, _) = asked()
+  client.receive_json({ "id": id, "value": { "title": "A", "n": 1 } })
+  stop()
+  assert_true(sent.iter().any(fn(s) { s.contains("\"id\":\{id},\"unsubscribe\":true,\"keep\":true") }), msg=sent.join("\n"))
+  client.receive_json({ "id": id, "v": "c:1" })
+  let second : Array[Json?] = []
+  let stop = follow(second)
+  let (again, said) = asked()
+  assert_true(again != id && said.contains("\"have\":\"c:1\""), msg=said)
+  // As before it was kept: nothing shown till the core's answer, not what was kept.
+  assert_true(second.iter().all(fn(v) { v is None }), msg="nothing shown early")
+  client.receive_json({ "id": again, "kept": true, "delta": [{ "path": ["n"], "set": 2 }] })
+  assert_eq(second[second.length() - 1].unwrap().stringify(), "{\"title\":\"A\",\"n\":2}")
+  stop()
 }

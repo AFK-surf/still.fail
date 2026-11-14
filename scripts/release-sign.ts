@@ -2,10 +2,14 @@
 // `production` environment), as the station (station/src/updates/signed.ts) and the apps' core
 // (client/core-ts/src/app-release.ts) verify them.
 //   release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST …
-//       the station's feed (station.json): its version, and the signed words naming each platform's archive and the
-//       Node binary in its Node (scripts/node-dist.sh's: bin/node in the tarball, node.exe in nodejs.org's zip)
-//   release-sign.ts file FILE --kind stillfail-desktop-win --build N
-//       FILE.sig: the signed words naming FILE (the Windows desktop app's installer)
+//       the station's feed (station.json): its version, and the signed words naming each platform's archive, its raw
+//       form (rawSha256, rawSize: what a delta to it makes, scripts/delta.ts rawOf: the tar in the .tar.gz, the .zip
+//       with every entry stored), and the Node binary in its Node (scripts/node-dist.sh's: bin/node in the tarball,
+//       node.exe in nodejs.org's zip). The feed's `deltas` are not signed (what a delta makes is checked against these)
+//   release-sign.ts file FILE --kind stillfail-desktop-win --build N [--raw RAW]
+//       FILE.sig: the signed words naming FILE (the Windows desktop app's installer) and, given RAW (its raw form:
+//       `FILE --raw RAW`, apps/mbui/windows/setup.c), `raw` {sha256, size}: what a delta to it makes, which the apps'
+//       core takes from these words alone (client/core-ts src/app-release.ts winReleaseWords; scripts/release-deltas.ts)
 //   release-sign.ts keygen PRIVATE_FILE
 //       a new key: the private one written to PRIVATE_FILE (PEM), the public one (for RELEASE_KEYS) said
 // Without a key: in CI (CI set) an error; elsewhere, with --unsigned-ok, a warning and the feed unsigned (a release for
@@ -16,9 +20,11 @@
 // and stations will not take it; `keygen` makes a test key, which STILLFAIL_RELEASE_KEYS makes a station trust.
 import { spawn } from "node:child_process";
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign } from "node:crypto";
-import { createReadStream, statSync, writeFileSync } from "node:fs";
+import { createReadStream, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
-import { RELEASE_KEYS, keyId, verifySigned } from "../station/src/updates/signed.ts";
+import { createGunzip } from "node:zlib";
+import { type Build, RELEASE_KEYS, keyId, verifySigned } from "../station/src/updates/signed.ts";
+import { storedZip } from "./delta.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => {
@@ -31,7 +37,7 @@ const fail = (why: string): never => {
   process.exit(1);
 };
 const usage = (): never => {
-  console.error("usage: release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST… | file FILE --kind KIND --build N | keygen PRIVATE_FILE");
+  console.error("usage: release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST… | file FILE --kind KIND --build N [--raw RAW] | keygen PRIVATE_FILE");
   process.exit(2);
 };
 
@@ -50,6 +56,16 @@ function hashOf(stream: NodeJS.ReadableStream): Promise<{ sha256: string; size: 
 }
 
 const hashFile = (path: string) => hashOf(createReadStream(path));
+
+/// The sha256 and size of an archive's raw form (scripts/delta.ts rawOf), the .tar.gz's tar hashed as it is gunzipped.
+async function hashRaw(path: string): Promise<{ sha256: string; size: number }> {
+  if (path.endsWith(".zip")) {
+    const raw = storedZip(readFileSync(path));
+    return { sha256: createHash("sha256").update(raw).digest("hex"), size: raw.length };
+  }
+  if (!/\.(tar\.gz|tgz)$/.test(path)) fail(`${path}: not a .tar.gz nor a .zip, whose raw form is known`);
+  return hashOf(createReadStream(path).pipe(createGunzip()));
+}
 
 /// The sha256 of what `program args` writes (a file out of an archive).
 async function hashOut(program: string, list: string[]): Promise<string> {
@@ -107,13 +123,13 @@ switch (positional[0]) {
     const commit = flag("--commit") ?? usage();
     const node = flag("--node") ?? usage();
     const version = `0.1.${n}`;
-    const builds: Record<string, { sha256: string; size: number; nodeSha256: string }> = {};
+    const builds: Record<string, Required<Build>> = {};
     for (const given of positional.slice(2)) {
       const m = /^([a-z0-9-]+)=([^,]+),(.+)$/.exec(given) ?? usage();
       const [, platform, archive, dist] = m;
-      const [file, nodeSha256] = await Promise.all([hashFile(archive!), nodeBinarySha(dist!, node)]);
+      const [file, raw, nodeSha256] = await Promise.all([hashFile(archive!), hashRaw(archive!), nodeBinarySha(dist!, node)]);
       if (file.size !== statSync(archive!).size) fail(`${archive} changed while it was read`);
-      builds[platform!] = { ...file, nodeSha256 };
+      builds[platform!] = { ...file, nodeSha256, rawSha256: raw.sha256, rawSize: raw.size };
     }
     if (Object.keys(builds).length === 0) usage();
     const k = keyOrNone();
@@ -128,8 +144,9 @@ switch (positional[0]) {
     const n = build();
     const k = keyOrNone();
     if (!k) break;
-    const { sha256, size } = await hashFile(file);
-    writeFileSync(`${file}.sig`, `${JSON.stringify(signed({ kind, version: `0.1.${n}`, build: n, file: basename(file), sha256, size }, k))}\n`);
+    const rawFile = flag("--raw");
+    const [{ sha256, size }, raw] = await Promise.all([hashFile(file), rawFile === undefined ? null : hashFile(rawFile)]);
+    writeFileSync(`${file}.sig`, `${JSON.stringify(signed({ kind, version: `0.1.${n}`, build: n, file: basename(file), sha256, size, ...(raw ? { raw } : {}) }, k))}\n`);
     console.error(`release-sign: ${file}.sig: signed by ${keyId(k.raw)}`);
     break;
   }

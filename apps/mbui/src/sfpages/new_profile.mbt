@@ -10,15 +10,17 @@
 /// Where the add page of a station begins, when it is come to with a provider and how (the web's addProfilePath with
 /// its provider and `method`): told to its draft as that is opened.
 // kept across runs: said by the pages that lead to it; reset (pages.mbt) empties it
-pub let add_profile_start : Map[String, Array[(String, Json)]] = {}
+pub let add_profile_start : Map[String, Array[(String, Json)]] = Map([])
 
 ///|
 /// A new profile (AddProfile) on station `address` (another online one where it is not: the first), made once in node
 /// `v`, laid out by the `width` its frame gives it, in the frame it is given: while the stations are read, the providers
-/// in their bones; none online to add it on, back to where it was opened from, at the moment it is made.
+/// in their bones; none online to add it on, back to where it was opened from, at the moment it is made. `src`: what
+/// its core is of (settings_core's), what another station's choice asks that station's flow of before it opens.
 pub fn new_profile_node(
   v : @view.View,
   core : Core,
+  src : Source,
   here : () -> Here,
   address : String,
   on_back~ : () -> Unit,
@@ -63,7 +65,7 @@ pub fn new_profile_node(
         p.at_moment(p.logic_at(), fn() { (core.pop)() }) |> ignore
         @sf.page_node(p, fn() { @sf.t("android-settings.profile.add") }, on_back~, frame~, said?, width?, tips?, fn() { [] }, fn(_, _) {  })
       }
-      st => new_profile_flow_node(p, core, here, st, online, on_back, frame, said, width, tips)
+      st => new_profile_flow_node(p, core, src, here, st, online, on_back, frame, said, width, tips)
     }
   })
 }
@@ -76,6 +78,7 @@ pub fn new_profile_node(
 fn new_profile_flow_node(
   v : @view.View,
   core : Core,
+  src : Source,
   here : () -> Here,
   station : String,
   online : () -> Array[Json]?,
@@ -89,7 +92,10 @@ fn new_profile_flow_node(
   add_profile_start.remove(station)
   let form = n.form
   let s = fn() { @settings.station_of(core, here(), station) }
-  let topic = fn() { (core.topic)("profileFlow", { "station": str(station), "form": str(form) }).get() }
+  let topic = fn() {
+    let (name, params) = new_profile_flow_ask(station, form)
+    (core.topic)(name, params).get()
+  }
   let d = fn() { topic().value }
   let step = fn() { text(d(), "step") }
   let edit = fn(input : Array[(String, Json)]) {
@@ -181,13 +187,14 @@ fn new_profile_flow_node(
               None => ""
             }
           })
-        "stations" => new_profile_stations_node(b, station, online)
+        "stations" => new_profile_stations_node(b, core, src, here, station, online)
         "machine" =>
           machine_offers_node(
             b,
             core,
             station,
             s,
+            fn() { field(field(s(), "overview"), "machineLogins") },
             fn(rt) { edit([("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))]) },
             tips,
           )
@@ -195,7 +202,7 @@ fn new_profile_flow_node(
         "plan" => new_profile_plan_node(b, core, station, n, s, d, install)
         "form" => new_profile_form_node(b, core, station, n, d, edit)
         _ => {
-          let gid = key.view(start_offset=6).to_string()
+          let gid = key.exact_view(start=6).to_owned()
           let group = fn() {
             let all = items(d(), "groups")
             match all.search_by(fn(g) { text(Some(g), "id") == gid }) {
@@ -211,21 +218,83 @@ fn new_profile_flow_node(
 }
 
 ///|
+/// The flow of draft `form` on station `station` (`profileFlow`), as the page reads it: its topic and its arguments.
+fn new_profile_flow_ask(station : String, form : String) -> (String, Map[String, Json]) {
+  ("profileFlow", { "station": str(station), "form": str(form) })
+}
+
+///|
+/// What the add page on station `station`, its draft `form`, reads of the core as it is first made, for a press that
+/// opens it to ask ahead of it (sfbase's open_answered): the draft's flow (its title, hint and step) and the station
+/// whole (its machine's own logins offered over the providers, `overview.machineLogins`: settings' station_read). The
+/// stations' list it chooses from is the page's it is pressed in, held already.
+fn new_profile_asks(here : Here, station : String, form : String) -> Array[(String, Map[String, Json])] {
+  [new_profile_flow_ask(station, form), @settings.station_ask(here, station)]
+}
+
+///|
 /// Which station it is added on (its online ones, a choice each) in node `b`: another is another draft, its page in
-/// this one's place.
-fn new_profile_stations_node(b : @view.View, station : String, online : () -> Array[Json]?) -> Unit {
+/// this one's place. Pressed, that station's draft is opened and its flow asked (`src`), this page as it is meanwhile;
+/// its page comes in this one's place once the flow is answered, whole in the frame it comes, what was asked handed to
+/// it (sfbase's open_answered, press_wait: no page on its bones, no title, hint or providers coming in after it). The
+/// choice shows the station pressed from the press's frame; back to this one where the wait is given up (this page
+/// left, another pressed), that draft let go with it.
+fn new_profile_stations_node(
+  b : @view.View,
+  core : Core,
+  src : Source,
+  here : () -> Here,
+  station : String,
+  online : () -> Array[Json]?,
+) -> Unit {
   let list = fn() { online().unwrap_or([]) }
+  // (the station pressed whose page is waited for, "" none; and what waits for it)
+  let pressed : @signals.Signal[String] = @signals.signal("")
+  let waiting : Ref[@sfbase.PressWait?] = Ref(None)
   b.box(fn(r) {
     @sf.style_node(r, fn() { ap_stations })
     @sf.labelled_field_node(r, fn() { @sf.t("web-pages.addProfile.station") }, fn(f) {
       @sf.page_choice_node(
         f,
         fn() { list().map(fn(s) { text(Some(s), "name") }) },
-        fn() { list().search_by(fn(s) { text(Some(s), "station") == station }).unwrap_or(0) },
+        fn() {
+          let at = match pressed.get() {
+            "" => station
+            p => p
+          }
+          list().search_by(fn(s) { text(Some(s), "station") == at }).unwrap_or(0)
+        },
         fn(i) {
-          match @signals.untracked(list).get(i) {
-            Some(s) if text(Some(s), "station") != station => app.nav.replace(Setting(NewProfile(text(Some(s), "station"))))
-            _ => ()
+          guard @signals.untracked(list).get(i) is Some(s) else { return }
+          let other = text(Some(s), "station")
+          guard other != pressed.untracked() else { return }
+          // (the one pressed before: waited for no more)
+          match waiting.val {
+            Some(w) => {
+              waiting.val = None
+              w.give_up()
+            }
+            None => ()
+          }
+          if other == station {
+            pressed.set("")
+            return
+          }
+          pressed.set(other)
+          let n = @settings.new_profile_opened(core, other, add_profile_start.get(other))
+          let w = @sfbase.open_answered(
+            src,
+            new_profile_asks(@signals.untracked(here), other, n.form),
+            fn() { app.nav.replace(Setting(NewProfile(other))) },
+            let_go=fn() {
+              @settings.left(NewProfile(other))
+              if pressed.untracked() == other {
+                pressed.set("")
+              }
+            },
+          )
+          if w.waiting() {
+            waiting.val = Some(w)
           }
         },
       )
@@ -371,7 +440,7 @@ fn new_profile_plan_node(
             fn() { text(field(d(), "signIn"), "provider") },
             fn() { is_doing(core, ["login.code"], on()) },
             fn(code, sent) {
-              let id = @signals.untracked(fn() { n.login.get() })
+              let id = n.login.untracked()
               if id != "" {
                 @settings.act(
                   core,
@@ -384,7 +453,7 @@ fn new_profile_plan_node(
             },
             copied,
             in_station=(fn() { text(s(), "name") }, fn() { is_doing(core, ["login.browser"], on()) }, fn(what) {
-              let id = @signals.untracked(fn() { n.login.get() })
+              let id = n.login.untracked()
               if id != "" {
                 @settings.act(core, what, "login.browser", obj([("station", str(station)), ("id", str(id))]), then=fn(v) {
                   (core.open_screen)(station, text(Some(v), "screen"))
@@ -592,16 +661,23 @@ fn new_profile_form_node(
 /// The accounts this machine's own Claude Code and Codex are signed in with, not used yet (MachineLoginOffers), in node
 /// `b`: one kept in a file used as it is (a profile on the machine's login, `profile.useMachineLogin`), one kept only in
 /// the keychain offered as a sign-in with the same account (`sign_in`, by its runtime). A refused one is said so. Each a
-/// card: its mark, words and allowance in a row 20 in, its button across its foot corners.
+/// card: its mark, words and allowance in a row 20 in, its button across its foot corners. `logins`: those of station
+/// `s`'s overview (as its page has it, or that part alone where a list shows every station's).
 fn machine_offers_node(
   b : @view.View,
   core : Core,
   station : String,
   s : () -> Json?,
+  logins : () -> Json?,
   sign_in : (String) -> Unit,
   tips : @sf.TipLayer?,
 ) -> Unit {
-  let offers = fn() { items(field(s(), "overview"), "machineLogins").filter(fn(l) { flag(Some(l), "offered") }) }
+  let offers = fn() {
+    match logins() {
+      Some(Array(a)) => a.filter(fn(l) { flag(Some(l), "offered") })
+      _ => []
+    }
+  }
   b.show(fn() { offers().length() > 0 }, fn(x) {
     @sf.style_node(x, fn() { ap_offers })
     @sf.words_node(x, fn() {
@@ -630,9 +706,8 @@ fn machine_offers_node(
               line.fits(Is(true)) |> ignore
               @sf.words_node(line, fn() { @settings.runtime_label(rt) }, fn() { ap_offer_title }) |> ignore
               line.show(fn() { text(lv(), "planText") != "" }, fn(t) {
-                @sf.style_node(t, fn() { pf_tag })
+                @sf.tag_node(t, fn() { text(lv(), "planText") })
                 t.drops(Is(ap_drop_plan)) |> ignore
-                @sf.words_node(t, fn() { text(lv(), "planText") }, fn() { pf_tag_words }) |> ignore
               })
               line.box(fn(p) {
                 p.row(Is(true)).drops(Is(ap_drop_state)) |> ignore
@@ -726,6 +801,7 @@ pub fn profiles_first_node(
       _ => []
     }
   }
+  let profiles = fn() { (core.topic)("profiles", { "scope": str(here().workspace) }).get().value }
   @sf.page_node(v, fn() { "Profile" }, on_back~, frame~, said?, width?, tips?, fn() { ["first"] }, fn(b, _) {
     @sf.first_one_node(
       b,
@@ -761,7 +837,8 @@ pub fn profiles_first_node(
             })
             |> ignore
             row.show(online, fn(m) {
-              machine_offers_node(m, core, address, sv, fn(rt) {
+              // (its logins offered, as the profiles' list the place holds says them)
+              machine_offers_node(m, core, address, sv, fn() { Some(Json::array(@settings.profiles_offers_of(profiles(), address))) }, fn(rt) {
                 // the machine's login signed in again as its vendor's plan, on the add page
                 add_profile_start[address] = [("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))]
                 (core.push)(NewProfile(address))

@@ -8,6 +8,7 @@ rename to still.fail, as do their Durable Objects, bucket and secrets: renaming 
   admin     stillfail-admin     the admin's console, static (wrangler.admin.jsonc)
   preview   stillfail-preview   the preview host, static (wrangler.preview.jsonc)
   status    still-fail-status   still.fail/status, static (wrangler.status.jsonc)
+  kit       stillfail-kit       the component library's page, static (wrangler.kit.jsonc): monoid's alone, kit.monoid.zone
 Each is deployed on its own: deploying the API drops no relay connection and serves no page. (And the official
 site, `site`, still-fail-site; and the test channel's, `site-beta`, youdid-wtf-site on youdid.wtf, only when named.)
 The test channel lives on its own domain, youdid.wtf: until that zone is active on Cloudflare (or with STILLFAIL_BETA=off)
@@ -35,12 +36,14 @@ else ~/stillfail-deploy:
             stations distrust new grants until they re-enroll.
   posthog   <deploy>/posthog.json, {host, key}: PostHog's project key, built into the web app
 . Without it the web app is built without analytics.
-  axiom     <deploy>/axiom.json, {"dataset", "token"}: where traces go.
+  telemetry <deploy>/gcp-telemetry.json: the Google Cloud service account (its JSON key, with
+            roles/telemetry.writer) that writes traces to Cloud Trace and logs to Cloud Logging in its project.
             Without it the cloud takes no traces.
   review    <deploy>/review-accounts.json, [{"email", "password", "name"}]: the accounts that sign in with a
             password (cloud/src/password.ts), App Store review's. Without it nobody signs in that way.
-  feedback  <deploy>/feedback-token: the token that reads the console's bug reports and nothing else
-            (POST /v1/admin/feedback/list, the team's feedback monitor's). Without it nobody reads them so.
+  feedback  <deploy>/feedback-token: the token that reads the console's bug reports and marks their status, and
+            nothing else (POST /v1/admin/feedback/list and /v1/admin/feedback/<id>/status, the team's feedback
+            monitor's). Without it nobody reads or marks them so.
   admin     STILLFAIL_ADMIN_EMAIL, or <deploy>/admin-email: the operator console's Google account.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
@@ -82,14 +85,25 @@ def deploy_dir() -> Path:
 DEPLOY = deploy_dir()
 KEYS = DEPLOY / "keys.json"
 POSTHOG = DEPLOY / "posthog.json"
-AXIOM = DEPLOY / "axiom.json"
+TELEMETRY = DEPLOY / "gcp-telemetry.json"
 # Push notifications: the VAPID key ({public, private, subject}), Firebase's service account
 # and the APNs key ({keyId, teamId, key, topic?}).
 VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"
 APNS = DEPLOY / "apns.json"
+# The other product's apps' push credentials (src/fcm.ts, src/apns.ts): one cloud pushes to both products' apps.
+FCM_MORE = DEPLOY / "fcm-service-account-more.json"
+APNS_MORE = DEPLOY / "apns-more.json"
 REVIEW = DEPLOY / "review-accounts.json"
 FEEDBACK = DEPLOY / "feedback-token"
+# One cloud answering as the other product too (src/guests.ts), once the secret both know is there (forward-secret):
+# the guests its CLOUDS entry lists, with their Google client (guest-google-oauth.json, as google-oauth.json is); for a
+# cloud that moved into another, where it forwards (forward-to: an origin).
+GUEST_GOOGLE = DEPLOY / "guest-google-oauth.json"
+FORWARD_TO = DEPLOY / "forward-to"
+FORWARD_SECRET = DEPLOY / "forward-secret"
+# Present while accounts move between clouds (src/move.ts): every other call answered 503 moving.
+MOVING = DEPLOY / "moving"
 
 
 def admin_email(dry_run: bool) -> str:
@@ -112,11 +126,12 @@ def write_private(path: Path, value) -> None:
     os.replace(tmp, path)
 
 
-PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "status": "wrangler.status.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
-# What a deploy without parts deploys: the web app only to the test channel (promote-web takes it on); not youdid.wtf's site.
-DEFAULT_PARTS = [p for p in PARTS if p not in ("web", "site-beta")]
+PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "status": "wrangler.status.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc", "kit": "wrangler.kit.jsonc"}
+# What a deploy without parts deploys: the web app only to the test channel (promote-web takes it on); not youdid.wtf's
+# site, nor the component library's page (monoid's alone, named by CI: wrangler.kit.jsonc).
+DEFAULT_PARTS = [p for p in PARTS if p not in ("web", "site-beta", "kit")]
 # The test channel's parts, on its own domain (youdid.wtf): deployed only once that zone is on Cloudflare (beta_zone()).
-BETA_PARTS = ("web-beta", "site-beta")
+BETA_PARTS = ("web-beta", "site-beta", "kit")
 # The web app's builds deployed to the test channel, by commit, for promote-web.
 BUILDS = DEPLOY / "builds"
 KEEP_BUILDS = 10
@@ -143,6 +158,9 @@ CLOUDS = {
             "ACCESS_AUD": "53ffdc9eaf8c6827ad4081e898f4019d440e0de828643b995759a222c35f86e5",
             "RELEASES_UPSTREAM": "https://app.still.fail/releases",
         },
+        # Answered as still.fail too once still.fail's accounts moved in (src/guests.ts, src/move.ts; the user,
+        # 2026-11-12): still.fail's hosts stay in its account, its API Worker forwarding here.
+        "guests": [{"origin": "https://app.still.fail", "beta": "https://app.youdid.wtf"}],
     },
 }
 CLOUD = env_var("CLOUD") or ""
@@ -215,12 +233,12 @@ def read_template(name: str = "wrangler.jsonc") -> dict:
 CLOUDFLARE_FAILED = re.compile(r"\[code: 10013\]|\[code: 10500\]|internal server error|API returned a 5\d\d", re.I)
 
 
-def wrangler(*args, env=None, capture=False):
+def wrangler(*args, env=None, capture=False, input=None):
     command = ["pnpm", "exec", "wrangler", *args]
     if capture:
         # Kept apart (deploys run side by side), and shown when it fails.
         for tries in range(3):
-            done = subprocess.run(command, cwd=ROOT, env=env, text=True, capture_output=True)
+            done = subprocess.run(command, cwd=ROOT, env=env, text=True, capture_output=True, input=input)
             if done.returncode == 0 or not CLOUDFLARE_FAILED.search(done.stdout + done.stderr) or tries == 2:
                 break
             print(f"wrangler {' '.join(args)}: Cloudflare failed, asked again", file=sys.stderr, flush=True)
@@ -230,6 +248,20 @@ def wrangler(*args, env=None, capture=False):
             raise subprocess.CalledProcessError(done.returncode, command, done.stdout, done.stderr)
         return done.stdout
     subprocess.run(command, cwd=ROOT, env=env, check=True)
+
+
+# The API's secrets that are there only while something is (src/move.ts MOVING, src/guests.ts the rest): `secret bulk`
+# only adds and changes, so one this deploy does not give is taken away, else a cloud once MOVING stays so.
+SWITCHED = ("MOVING", "FORWARD_TO", "FORWARD_SECRET", "GUESTS")
+
+
+def drop_unset(given: dict, local: Path, env) -> None:
+    listed = wrangler("secret", "list", "--format", "json", "--config", str(local), env=env, capture=True)
+    there = {s["name"] for s in json.loads(listed[listed.index("["):])}
+    for name in SWITCHED:
+        if name in there and name not in given:
+            wrangler("secret", "delete", name, "--config", str(local), env=env, capture=True, input="y\n")
+            print(f"note: secret {name} taken away", flush=True)
 
 
 def account_id() -> str:
@@ -259,12 +291,13 @@ def keys() -> dict:
     return value
 
 
-def axiom() -> dict:
-    if not AXIOM.exists():
-        print(f"note: {AXIOM} is missing; the cloud will take no traces")
+def telemetry() -> dict:
+    if not TELEMETRY.exists():
+        print(f"note: {TELEMETRY} is missing; the cloud will take no traces")
         return {}
-    value = json.loads(AXIOM.read_text())
-    return {"AXIOM_TOKEN": value["token"], "AXIOM_DATASET": value["dataset"]}
+    value = TELEMETRY.read_text()
+    json.loads(value)
+    return {"GCP_TELEMETRY": value}
 
 
 def push() -> dict:
@@ -282,6 +315,10 @@ def push() -> dict:
         value["APNS_KEY"] = APNS.read_text()
     else:
         print(f"note: {APNS} is missing; no pushes to iOS")
+    if FCM_MORE.exists():
+        value["FCM_SERVICE_ACCOUNT_MORE"] = FCM_MORE.read_text()
+    if APNS_MORE.exists():
+        value["APNS_KEY_MORE"] = APNS_MORE.read_text()
     return value
 
 
@@ -297,6 +334,25 @@ def review() -> dict:
 
 def feedback() -> dict:
     return {"FEEDBACK_TOKEN": FEEDBACK.read_text().strip()} if FEEDBACK.exists() else {}
+
+
+def guests() -> dict:
+    value = {}
+    listed = CLOUDS.get(CLOUD, {}).get("guests", [])
+    if listed and FORWARD_SECRET.exists():
+        google = json.loads(GUEST_GOOGLE.read_text())["web"] if GUEST_GOOGLE.exists() else {}
+        client = {"google_client_id": google["client_id"], "google_client_secret": google["client_secret"]} if google else {}
+        value["GUESTS"] = json.dumps([{**g, **client} for g in listed])
+    if FORWARD_TO.exists():
+        value["FORWARD_TO"] = FORWARD_TO.read_text().strip()
+    if MOVING.exists():
+        value["MOVING"] = "1"
+    if FORWARD_SECRET.exists():
+        secret = FORWARD_SECRET.read_text().strip()
+        if len(secret) < 32:
+            sys.exit(f"{FORWARD_SECRET}: 32 characters at least")
+        value["FORWARD_SECRET"] = secret
+    return value
 
 
 @contextmanager
@@ -459,7 +515,7 @@ def main() -> None:
         print("account", account_id())
         print("keys", "present" if KEYS.exists() else "will be created")
         print("posthog", "present" if POSTHOG.exists() else "missing: the web app will have no analytics")
-        print("axiom", "present" if AXIOM.exists() else f"missing: no traces without {AXIOM}")
+        print("telemetry", "present" if TELEMETRY.exists() else f"missing: no traces without {TELEMETRY}")
         print("vapid", "present" if VAPID.exists() else f"missing: no Web Push without {VAPID}")
         print("fcm", "present" if FCM.exists() else f"missing: no pushes to Android without {FCM}")
         print("apns", "present" if APNS.exists() else f"missing: no pushes to iOS without {APNS}")
@@ -502,6 +558,12 @@ def main() -> None:
             print("note: no moon; building without the app (no web app deployed)", flush=True)
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
         rebrand_static()
+    # The component library's page (apps/mbui/scripts/kit-web.sh into dist/kit): as it is when it is there (CI's has it
+    # from mbui-web), else built where MoonBit is.
+    if not args.skip_build and "kit" in parts and not (REPO / "dist" / "kit" / "app.js").exists():
+        if not shutil.which("moon"):
+            sys.exit("no moon and no dist/kit/app.js: the component library's page is built by apps/mbui/scripts/kit-web.sh")
+        subprocess.run(["bash", "apps/mbui/scripts/kit-web.sh", "dist/kit"], cwd=REPO, check=True)
     # The official sites (website/build.mjs SITES): this cloud's (still.fail, monoid.build) into dist/site, its test
     # channel's (youdid.wtf, monoid.zone) into dist/site-beta.
     for part, site in (("site", rehost("still.fail")), ("site-beta", beta_zone())):
@@ -510,7 +572,7 @@ def main() -> None:
     # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
     # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {
-        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review(), **feedback()},
+        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **telemetry(), **push(), **review(), **feedback(), **guests()},
         "relay": lambda: {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:
@@ -534,10 +596,13 @@ def main() -> None:
         if part in ("web", "web-beta"):
             say_web_build(REPO / "dist" / "cloud-web", beta=part == "web-beta")
         if part in secrets_of:
+            given = secrets_of[part]()
             with tempfile.TemporaryDirectory(prefix="stillfail-secrets-") as directory:
                 path = Path(directory) / "secrets.json"
-                write_private(path, secrets_of[part]())
+                write_private(path, given)
                 wrangler("secret", "bulk", str(path), "--config", str(local), env=env, capture=True)
+            if part == "api":
+                drop_unset(given, local, env)
         print(f"deployed {part}", flush=True)
 
     # Docker only builds the relay's image: the other parts deploy without it (a CI runner may have none).
@@ -561,10 +626,11 @@ def main() -> None:
         "web": [f"{origin}/", f"{old}/"],
         "web-beta": [f"{template['vars'].get('BETA_ORIGIN', 'https://app.youdid.wtf')}/"],
         "admin": [f"{admin}/", f"{old_admin}/"],
-        "preview": ["https://preview.still.fail/_stillfail/frame", "https://preview.ember.3720.org/_ember/frame"],
+        "preview": ["https://preview.still.fail/_stillfail/frame", "https://preview.ember.3720.org/_stillfail/frame"],
         "status": ["https://still.fail/status"],
         "site": ["https://still.fail/"],
         "site-beta": [f"https://{beta_zone()}/"],
+        "kit": [f"https://kit.{beta_zone()}/"],
     }
     for part in [] if args.dry_run else parts:
         for url in dict.fromkeys(rehost(u) for u in checks[part] if not dropped(u)):

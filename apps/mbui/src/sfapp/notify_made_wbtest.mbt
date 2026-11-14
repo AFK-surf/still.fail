@@ -29,7 +29,7 @@ test "通知 and 权限 made once on each screen, as a page of the settings and 
           [@sf.t("web-pages.permissions.notify.purpose"), @sf.t("web-pages.permissions.state.granted")]
         }
         for word in words {
-          assert_true(own.iter().any(fn(o) { o.contains(word) }), msg="\{word} not the tree's own at \{at}: \{own}")
+          assert_true(own.iter().any(fn(o) { o.contains(word) }), msg="\{word} not the tree's own at \{at}: \{Repr(own)}")
         }
         if route is Notifications {
           t.click(Button, label=@sf.t("web-pages.notifications.kinds.wait"))

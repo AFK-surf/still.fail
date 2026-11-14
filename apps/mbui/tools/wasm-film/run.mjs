@@ -50,12 +50,14 @@ const script = name => {
 };
 const prepare = script('MBUI_FILM_PREPARE'), drive = script('MBUI_FILM_DRIVE');
 if (frame >= 0 && !drive) throw new Error('a frame requires a scene script');
+const fixtureJson = process.env.MBUI_FIXTURE_JSON_FILE ? fs.readFileSync(process.env.MBUI_FIXTURE_JSON_FILE, 'utf8') : (process.env.MBUI_FIXTURE_JSON ?? '');
 const strings = [process.env.MBUI_FIXTURE ?? '', process.env.MBUI_LOCALE ?? '', process.env.MBUI_DARK ?? '', prepare, drive,
   process.env.MBUI_POINTING ?? '', process.env.MBUI_NATIVE_INPUT ?? '', process.env.MBUI_KEYBOARD ?? '',
   process.env.MBUI_LOCAL_STATION ?? '', process.env.MBUI_WINDOW ?? '', process.env.MBUI_HOLD ?? '',
   process.env.MBUI_FAILED ?? '', process.env.MBUI_FAILED_WHY ?? '', process.env.MBUI_SAID ?? '',
   process.env.MBUI_UPDATE ?? '', process.env.MBUI_FILM_AUTOFILL ?? '',
-  process.env.MBUI_CORE_MS ?? '', process.env.MBUI_UPDATES_MS ?? ''].map(s => Array.from(s, c => c.codePointAt(0)));
+  process.env.MBUI_CORE_MS ?? '', process.env.MBUI_UPDATES_MS ?? '',
+  process.env.MBUI_FIX_PACE ?? '', process.env.MBUI_FIX_CORE ?? '', fixtureJson].map(s => Array.from(s, c => c.codePointAt(0)));
 const numbers = [size[0], size[1], scale, platform, dark, at, fps, max, frame, fontScale, inset, corner, nav, cornersKept];
 let core, scratch = [], pixels;
 function text() {
@@ -133,7 +135,53 @@ const film = {
   // (a bench's measured frame begun or ended: counted only by a profiling host, mbui's wasm_shell.c)
   mark() {},
 };
-const imports = { probe, film, wasi_snapshot_preview1: { fd_write(fd, iovs, count, written) {
+// The core's env as moonrun gives it ("__moonbit_fs_unstable" & co., mbui's scripts/wasmrun.mjs): mbui's ui reads its
+// Tester's frame rate there (MBUI_TEST_FPS, tester_time.mbt), so every program of it asks for them. A film's program has
+// no arguments or environment of its own: none here (its words come through film.arg). Without them the film did not
+// start, main e9649951, 42623942152.
+const END = 'ffi_end_of_/string_array';
+const handles = new Map();
+let handled = 0;
+const handle = v => {
+  handles.set(++handled, v);
+  return handled;
+};
+const fsUnstable = {
+  begin_create_string: () => handle({ s: '' }),
+  string_append_char: (h, c) => { handles.get(h).s += String.fromCharCode(c); },
+  finish_create_string: h => { const { s } = handles.get(h); handles.delete(h); return s; },
+  begin_read_string: s => handle({ s: Array.from(s), i: 0 }),
+  string_read_char: h => { const r = handles.get(h); return r.i < r.s.length ? r.s[r.i++].codePointAt(0) : -1; },
+  finish_read_string: h => { handles.delete(h); },
+  begin_read_string_array: a => handle({ a, i: 0 }),
+  string_array_read_string: h => { const r = handles.get(h); return r.i < r.a.length ? r.a[r.i++] : END; },
+  finish_read_string_array: h => { handles.delete(h); },
+  args_get: () => [],
+  current_dir: () => '',
+  get_env_var: () => '',
+  get_env_var_exists: () => 0,
+  get_env_vars: () => [],
+  set_env_var() {},
+  unset_env_var() {},
+};
+// The core's host (stillfail/core's native_wasm.mbt, "mbhost"): a film has no engine, its core the fixture's, so each
+// answers as core_native.c does with none given it (mbc_use never called): not started, nothing sent, no sign-in. The
+// film's program links them since a test's late core serves the app's client (sffixture's round_trip_again, #5212):
+// without them the film did not start, mbui-media-runtime 42753280921, 2026-11-10.
+const mbhost = {
+  mbc_start: () => 0,
+  mbc_send() {},
+  mbc_send_bytes() {},
+  mbc_stop() {},
+  mbc_has_web_auth: () => 0,
+  mbc_web_auth: () => 0,
+  mbc_now_ms: () => performance.now(),
+  mbc_wall_ms: () => Date.now(),
+  mbc_screen_ack: () => 0,
+  mbc_auth_scheme() { throw new Error('a film signs in to nothing: no auth scheme'); },
+};
+const imports = { probe, film, mbhost, __moonbit_fs_unstable: fsUnstable, __moonbit_sys_unstable: { exit(code) { throw new Exit(code); } },
+  __moonbit_time_unstable: { now: () => BigInt(Date.now()) }, wasi_snapshot_preview1: { fd_write(fd, iovs, count, written) {
   const memory = new DataView(core.memory.buffer); let total = 0;
   for (let i = 0; i < count; i++) {
     const ptr = memory.getUint32(iovs + i * 8, true), len = memory.getUint32(iovs + i * 8 + 4, true);

@@ -149,6 +149,14 @@ pub fn TopicLease::read(self : TopicLease) -> TopicState? {
 }
 
 ///|
+/// The topic as it stands, read where it is read (a binding, an effect: told again as it changes) through this handle's
+/// reader, holding nothing more; None once it is let go of. What reads it so holds the reader with it till it stops.
+pub fn TopicLease::follow(self : TopicLease) -> TopicState? {
+  if !self.active || self.cancelling { return None }
+  Some(self.state.get())
+}
+
+///|
 /// Whether this handle still owns its reader, including after an explicit move to another view.
 pub fn TopicLease::alive(self : TopicLease) -> Bool {
   self.active && !self.cancelling

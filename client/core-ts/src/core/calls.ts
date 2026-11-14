@@ -1,5 +1,7 @@
 // Named calls and their input validation; execution stays in the core (execute.ts).
 import { parseAdb, type AdbCall } from "../adb-parse.ts";
+import { parseRig, type RigCall } from "../rigs.ts";
+import { parseDevice, type DeviceCall } from "../devices.ts";
 import { parseAsk, type Ask } from "../asks-parse.ts";
 import { parseAttend, type AttendCall } from "../attend-parse.ts";
 import { parseScreen, type ScreenCall } from "../screens.ts";
@@ -12,9 +14,11 @@ import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import * as keymap from "../keymap.ts";
 import * as ops from "../ops.ts";
-import type { Topic } from "../protocol.ts";
+import { parseTopic, type Topic } from "../protocol.ts";
 import { LOOK_COLOURS, type MermaidLook } from "../mermaid.ts";
 import { draftAt } from "../refs.ts";
+import { OUTLINE_ROWS } from "../things.ts";
+import { LINK_PICTURES, type LinkPicture } from "../peek-pictures.ts";
 import { StationAddr } from "../station/addr.ts";
 import type { FindAt, FindHit } from "../chat-find.ts";
 import { readConnects, readPeople, type RelayConnect, type RelayPerson } from "../relay-pick.ts";
@@ -58,13 +62,23 @@ export type Call =
   | { kind: "chatDiscardIn"; station: string; session: string; id: string }
   | { kind: "chatRetry"; station: string; thread: number; id: string }
   | { kind: "chatDiscard"; station: string; thread: number; id: string }
-  | { kind: "chatOlder"; station: string; thread: number }
+  /// The page before a chat's window (`rows`: as many of its messages more, else the page whole).
+  | { kind: "chatOlder"; station: string; thread: number; rows: number | null }
   | { kind: "chatNewer"; station: string; thread: number }
   | { kind: "chatLatest"; station: string; thread: number }
   | { kind: "chatPlace"; station: string; thread: number; seq: number | null; offset: number | null }
   | { kind: "chatCc"; station: string; thread: number; to: number; on: boolean }
+  /// How many of a chat list's rows go out (views.ts `chatsWindow`): the list as its topic `chats` names it, its rows.
+  | { kind: "chatsWindow"; list: Topic; rows: number }
+  /// How many of a chat's messages its page opens on at its end (views.ts `chatFirstRows`): the chat as its topic
+  /// `chat` names it (its thread, or its agent's session), its rows.
+  | { kind: "chatWindow"; station: string; thread: number | null; session: string | null; rows: number }
   | { kind: "chatAround"; station: string; thread: number; seq: number }
   | { kind: "chatFind"; station: string; thread: number; query: string; bring: boolean }
+  /// A chat's outline: the rest of the chat read onto the device; what it lists for words looked for.
+  | { kind: "chatBring"; station: string; thread: number }
+  | { kind: "chatOutlineFind"; station: string; thread: number; query: string; bring: boolean }
+  | { kind: "chatOutlineRows"; station: string; thread: number; seqs: number[] }
   | { kind: "historyOlder"; station: string; key: string }
   | { kind: "historyDetail"; station: string; key: string; from: number; to: number }
   | { kind: "stationMeasure"; station: string }
@@ -80,6 +94,9 @@ export type Call =
   /// `quiet`: the core's own (fill.ts), in the background: not waited on, and nothing a viewer let go.
   | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean; keep: number | null; quiet?: boolean; from?: unknown }
   | { kind: "stationPoster"; station: string; key: string; name: string }
+  /// A link's card's picture, or a file's peek's, its bytes beside: out of what the topic's read brought (peek-pictures.ts).
+  | { kind: "linkPicture"; station: string; url: string; which: LinkPicture }
+  | { kind: "peekPicture"; station: string; key: string; path: string; line: number | null }
   | { kind: "fileOpen"; station: string; key: string; path: string; range: { offset: number; length: number } | null }
   /// `keep`: what is read kept on the device and what is kept answered (drive-kept.ts), the file as its folder said it
   /// is (`mtime`, `size`; neither said, nothing kept).
@@ -133,6 +150,7 @@ export type Call =
   | { kind: "keysSet"; action: string | null; keys: string[] | null }
   | { kind: "clientDevice"; facts: unknown }
   | { kind: "changelogSeen" }
+  | { kind: "feedbackDismiss"; workspace: string; id: string; reply: string }
   | { kind: "commandsFind"; query: string; offered: unknown[] }
   /// What a chat's relay picker shows (relay-pick.ts): the connects read, what was typed, all asked for, the bot picked.
   | { kind: "relayView"; connects: RelayConnect[]; query: string; all: boolean; bot: string | null }
@@ -151,6 +169,10 @@ export type Call =
   | { kind: "mermaidLoad"; bytes: Uint8Array }
   | { kind: "ask"; ask: Ask }
   | { kind: "adb"; call: AdbCall }
+  /// A workspace's rigs (rigs.ts): `rig.<name>`.
+  | { kind: "rig"; call: RigCall }
+  /// A workspace's devices (devices.ts): `device.<name>`.
+  | { kind: "device"; call: DeviceCall }
   /// A station's screen seen and driven (screens.ts): `screen.view` and what goes on it.
   | { kind: "screen"; call: ScreenCall }
   /// The workspace lock (views/lock.ts): `lock.<name>` on a workspace, with what it takes.
@@ -158,6 +180,10 @@ export type Call =
   | { kind: "lockPrompt"; name: string; params: Record<string, unknown> }
   /// The vault (views/vault.ts): `vault.<name>` on a workspace, with what it takes.
   | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> }
+  /// A workspace's ways changed from the app (views/ways-stations.ts): on its stations, else on still.fail cloud.
+  | { kind: "ways"; name: "setRelays" | "setWay"; workspace: string; params: Record<string, unknown> }
+  /// A station's name and mark changed from the app (views/station-marks.ts): on the station, else on still.fail cloud.
+  | { kind: "stationMark"; workspace: string; station: string; params: Record<string, unknown> }
   | { kind: "driveTransfer"; action: "start" | "cancel" | "retry"; params: Record<string, unknown> }
   /// A station's files as they are browsed (views/browse.ts): `drive.browse` and the rest of drive-browse.ts's CALLS,
   /// with what each takes.
@@ -273,6 +299,9 @@ export function counts(call: Call, name: string): boolean {
       return false;
     case "vault":
       return call.name !== "state" && call.name !== "lock" && call.name !== "open";
+    case "ways":
+    case "stationMark":
+      return true;
     default:
       return false;
   }
@@ -286,7 +315,7 @@ const FILE_OPEN_PART = 4 * 1024 * 1024;
 export const VAULT_CALLS = ["state", "lock", "setup", "create", "delete", "addDevice", "ask", "hidePrompt", "prompts", "putItem", "deleteItem", "open", "recover", "approve", "deny", "setLasts", "migrate"];
 
 /// The workspace lock's calls (views/lock.ts).
-export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "addStation", "joinStation", "renew", "removeDevice", "disable", "pair", "pairCode", "pairCancel"];
+export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "pendingDismiss", "addStation", "joinStation", "renew", "removeDevice", "disable", "pair", "pairCode", "pairCancel", "handOver", "confirmSigner"];
 
 /// The calls on a new device showing this one's code (views/pair.ts, `lockPrompts`).
 export const LOCK_PROMPT_CALLS = ["deny", "hide", "state"];
@@ -367,6 +396,14 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
     return { kind: "download", action: name.slice(9) as "start" | "retry" | "take" | "read" | "done" | "cancel", params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
   if (name === "fill.want" || name === "fill.stop" || name === "fill.stopAll") return { kind: "fill", action: name === "fill.want" ? "want" : name === "fill.stop" ? "stop" : "stopAll", params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  if (name === "workspace.renameStation") {
+    const p = read(params, [["workspace", S, "req"], ["station", S, "req"]]);
+    return { kind: "stationMark", workspace: p.workspace as string, station: p.station as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  }
+  if (name === "workspace.setRelays" || name === "workspace.setWay") {
+    const p = read(params, [["workspace", S, "req"]]);
+    return { kind: "ways", name: name === "workspace.setRelays" ? "setRelays" : "setWay", workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  }
   if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
     const p = read(params, [["workspace", S, "req"]]);
     return { kind: "vault", name: name.slice(6), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
@@ -443,9 +480,14 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
         ["model", S, "opt"],
         ["effort", S, "opt"],
         ["profile", S, "opt"],
+        ["profiles", "value", "opt"],
       ]);
       const ask: Record<string, unknown> = { runtime: p.runtime };
       for (const k of ["model", "effort", "profile"]) if (typeof p[k] === "string" && p[k] !== "") ask[k] = p[k];
+      if (Array.isArray(p.profiles)) {
+        const ids = [...new Set(p.profiles.filter((x): x is string => typeof x === "string" && x !== ""))];
+        if (ids.length > 0) ask.profiles = ids;
+      }
       return { kind: "chatCreate", station: p.station as string, ask };
     }
   }
@@ -538,14 +580,21 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       ]);
       return { kind: name === "chat.retry" ? "chatRetry" : "chatDiscard", station: p.station as string, thread: p.thread as number, id: p.id as string };
     }
-    case "chat.older":
+    case "chat.older": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["rows", "u32", "opt"],
+      ]);
+      return { kind: "chatOlder", station: p.station as string, thread: p.thread as number, rows: p.rows as number | null };
+    }
     case "chat.newer":
     case "chat.latest": {
       const p = read(params, [
         ["station", S, "req"],
         ["thread", "u64", "req"],
       ]);
-      const kind = name === "chat.older" ? "chatOlder" : name === "chat.newer" ? "chatNewer" : "chatLatest";
+      const kind = name === "chat.newer" ? "chatNewer" : "chatLatest";
       return { kind, station: p.station as string, thread: p.thread as number };
     }
     case "chat.place": {
@@ -566,6 +615,28 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       ]);
       return { kind: "chatCc", station: p.station as string, thread: p.thread as number, to: p.to as number, on: p.on as boolean };
     }
+    case "chats.window": {
+      const p = read(params, [
+        ["scope", S, "req"],
+        ["mine", "bool", "default"],
+        ["watching", "bool", "default"],
+        ["hidden", "bool", "default"],
+        ["rows", "u32", "req"],
+      ]);
+      const list = parseTopic({ topic: "chats", scope: p.scope, mine: p.mine, watching: p.watching, hidden: p.hidden });
+      if (list === null || p.scope === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "scope" }));
+      return { kind: "chatsWindow", list, rows: p.rows as number };
+    }
+    case "chat.window": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "opt"],
+        ["session", S, "opt"],
+        ["rows", "u32", "req"],
+      ]);
+      if (p.thread === null && p.session === null) throw CoreError.invalid(t("core-misc.params.missing", { field: "thread" }));
+      return { kind: "chatWindow", station: p.station as string, thread: p.thread as number | null, session: p.session as string | null, rows: p.rows as number };
+    }
     case "chat.around": {
       const p = read(params, [
         ["station", S, "req"],
@@ -582,6 +653,32 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
         ["bring", "bool", "opt"],
       ]);
       return { kind: "chatFind", station: p.station as string, thread: p.thread as number, query: p.query as string, bring: p.bring === true };
+    }
+    case "chat.outline.find": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["query", S, "req"],
+        ["bring", "bool", "opt"],
+      ]);
+      return { kind: "chatOutlineFind", station: p.station as string, thread: p.thread as number, query: p.query as string, bring: p.bring === true };
+    }
+    case "chat.outline.rows": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["seqs", "u64s", "req"],
+      ]);
+      const seqs = p.seqs as number[];
+      if (seqs.length > OUTLINE_ROWS) throw CoreError.invalid(t("core-misc.params.invalid", { error: `invalid length ${seqs.length}, expected at most ${OUTLINE_ROWS} seqs` }));
+      return { kind: "chatOutlineRows", station: p.station as string, thread: p.thread as number, seqs };
+    }
+    case "chat.bring": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+      ]);
+      return { kind: "chatBring", station: p.station as string, thread: p.thread as number };
     }
     case "history.older": {
       const p = read(params, [
@@ -626,6 +723,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
     case "newChat.migrate":
     case "pick.set":
     case "pick.like":
+    case "pick.forget":
     case "pick.save":
     case "pick.repick":
     case "pick.borrow": {
@@ -752,6 +850,14 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       return { kind: "clientDevice", facts: orEmpty(params) };
     case "changelog.seen":
       return { kind: "changelogSeen" };
+    case "feedback.dismiss": {
+      const p = read(params, [
+        ["workspace", S, "req"],
+        ["id", S, "req"],
+        ["reply", S, "req"],
+      ]);
+      return { kind: "feedbackDismiss", workspace: p.workspace as string, id: p.id as string, reply: p.reply as string };
+    }
     case "history.tool": {
       const p = read(params, [
         ["name", S, "req"],
@@ -987,6 +1093,26 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       const range = p.offset === null && p.length === null ? null : { offset: (p.offset as number | null) ?? 0, length: (p.length as number | null) ?? FILE_OPEN_PART };
       return { kind: "fileOpen", station: p.station as string, key: p.key as string, path: p.path as string, range };
     }
+    // A link's card's picture (`which`: icon, image, avatar) and a file's peek's, as their topics (`linkPreview`,
+    // `filePeek`) read them last, their bytes beside `{ type }`: what those topics say of them is a token alone.
+    case "link.preview.picture": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["url", S, "req"],
+        ["which", S, "req"],
+      ]);
+      if (!(LINK_PICTURES as readonly string[]).includes(p.which as string)) throw CoreError.invalid(`which: ${String(p.which)}`);
+      return { kind: "linkPicture", station: p.station as string, url: p.url as string, which: p.which as LinkPicture };
+    }
+    case "file.peek.picture": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["key", S, "req"],
+        ["path", S, "req"],
+        ["line", "u32", "opt"],
+      ]);
+      return { kind: "peekPicture", station: p.station as string, key: p.key as string, path: p.path as string, line: (p.line as number | null) ?? null };
+    }
     case "station.poster": {
       const p = read(params, [
         ["station", S, "req"],
@@ -1149,6 +1275,10 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
   const p = orEmpty(params);
   const adb = parseAdb(name, p);
   if (adb) return { kind: "adb", call: adb };
+  const rig = parseRig(name, p);
+  if (rig) return { kind: "rig", call: rig };
+  const device = parseDevice(name, p);
+  if (device) return { kind: "device", call: device };
   const screen = parseScreen(name, p, bytes);
   if (screen) return { kind: "screen", call: screen };
   const ask = parseAsk(name, p);

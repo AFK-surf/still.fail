@@ -1,10 +1,16 @@
 name: mbui TestFlight distribute
 # After mbui-testflight.yml's upload. Apple's processing has no event to wait for and can outlast a job's five minutes:
 # a run waits what it may, then dispatches the next (scripts/testflight-distribute.sh).
-run-name: mbui TestFlight distribute ${{ inputs.version }} (${{ inputs.build }}), round ${{ inputs.round }}
+run-name: ${{ inputs.product || 'stillfail' }} TestFlight distribute ${{ inputs.version }} (${{ inputs.build }}), round ${{ inputs.round }}
 on:
   workflow_dispatch:
     inputs:
+      product:
+        description: App identity (TestFlight and App Store share the same app)
+        default: stillfail
+        required: true
+        type: choice
+        options: [stillfail, monoid]
       version:
         description: The uploaded build's marketing version
         required: true
@@ -21,11 +27,19 @@ on:
         description: Which run of its wait this is
         default: "1"
         type: string
+      prepare_monoid:
+        description: Fill missing monoid review contacts and feedback email from still.fail (same Apple team)
+        default: false
+        type: boolean
+# Serialize each app's rounds, including first-time creation of its external group.
+concurrency:
+  group: mbui-testflight-distribute-${{ inputs.product || 'stillfail' }}
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
   distribute:
-    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main'
+    if: github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: ios-testflight
@@ -36,10 +50,12 @@ jobs:
       - uses: actions/checkout@v5
       - run: bash scripts/testflight-distribute.sh
         env:
+          RELEASE_PRODUCT: ${{ inputs.product || 'stillfail' }}
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_BUILD: ${{ inputs.build }}
           RELEASE_EXTERNAL: ${{ inputs.external }}
           RELEASE_ROUND: ${{ inputs.round }}
+          RELEASE_PREPARE_MONOID: ${{ inputs.prepare_monoid }}
           GH_TOKEN: ${{ github.token }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}

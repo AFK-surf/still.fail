@@ -47,7 +47,8 @@ let test_words : Map[String, String] = {
 ///|
 /// The player of `name` among `list` (a folder's films), a phone's (`narrow`: laid out Small) or a desktop's (on a
 /// Mac), what it went to and how often it went back counted; or in `window` (its width, height and platform);
-/// `subtitled`, a subtitle beside it the folder names (read as nothing).
+/// `subtitled`, a subtitle beside it the folder names (read as nothing); `keyed`: hosted in a node of the window's
+/// tree under the player's keymap (player_bindings), as the app hosts it, its keys its actions.
 fn player_tester(
   narrow : Bool,
   name : String,
@@ -58,11 +59,9 @@ fn player_tester(
   facts? : FileFacts = no_facts,
   window? : (Double, Double, Int),
   subtitled? : Bool = false,
+  keyed? : Bool = false,
 ) -> @ui.Tester {
   let (w, h, platform) = window.unwrap_or(if narrow { (390.0, 844.0, 1) } else { (1280.0, 800.0, 0) })
-  viewer_reset()
-  // (no menu left open by the test before: the app begun again)
-  parts_reset()
   set_viewer_host(viewer_host_default())
   set_words(fn(key, args) {
     args.fold(init=test_words.get(key).unwrap_or(key), fn(said, a) { said.replace_all(old="{" + a.0 + "}", new=a.1) })
@@ -70,15 +69,20 @@ fn player_tester(
   let siblings : Array[ViewerEntry] = list.map(fn(n) { { name: n, size: 1.0, mtime: 0.0, mime: "", kind, dir: false } })
   let file = film(name, kind~, facts~)
   let file = if subtitled { { ..file, beside: Some(fn(_, _) {  }) } } else { file }
-  @ui.Tester::new(
-    fn(c) {
-      begin(c) |> ignore
-      player(c, "k", file, siblings, back_label="影片", on_back=fn() { backs.push(1) }, on_go=fn(n) { gone.push(n) })
-    },
-    w~,
-    h~,
-    platform~,
-  )
+  let built = fn(c : @ui.Ctx) {
+    begin(c) |> ignore
+    player(c, "k", file, siblings, back_label="影片", on_back=fn() { backs.push(1) }, on_go=fn(n) { gone.push(n) })
+  }
+  if keyed {
+    let t = @ui.Tester::new(fn(_) {  }, w~, h~, platform~)
+    @ui.set_view_app(fn(root) {
+      root.keymap(Is(@view.Keymap::new(player_bindings()))) |> ignore
+      @ui.old(root, built).grow(Is(1.0)) |> ignore
+    })
+    t
+  } else {
+    @ui.Tester::new(built, w~, h~, platform~)
+  }
 }
 
 ///|
@@ -142,7 +146,7 @@ test "a desktop's timeline dragged: paused, the picture going to the start of ea
   assert_true(told(t, 9, value="1"))
   assert_true(told(t, 3, value="200"))
   let (x1, y1) = at(0.75)
-  t.move(x1, y1)
+  t.move_to(x1, y1)
   assert_true(told(t, 3, value="700"))
   // the frame it is at, of how many, while the finger is on it
   assert_true(t.find("8 / 10 帧") is Some(_))
@@ -256,7 +260,7 @@ test "a desktop's: a double click in the middle of the film plays it, as a phone
 ///|
 test "a desktop's keys: Space plays, paused ← → step a frame, J L 15 s, ↑ the sound, M mutes, ⇧N the next one" {
   let gone = []
-  let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4"], gone, [])
+  let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4"], gone, [], keyed=true)
   t.draw()
   t.key(@ui.key_space)
   assert_true(told(t, 1))
@@ -291,7 +295,7 @@ test "a desktop's: the bar's way back under the pointer lit on the film's black 
   }
   let lit = alpha(media_dark_text, media_hot_share)
   assert_false(under(lit))
-  t.move(x, y)
+  t.move_to(x, y)
   t.frame()
   assert_true(under(lit))
   // (the page's: dark on the black)
@@ -312,13 +316,10 @@ test "a desktop's: the bar says the film's size, length and rate as its message 
 }
 
 ///|
-/// How long a single tap waits to be a double one (@kit.Media's double_tap_ms).
-let double_tap_wait : Double = 300.0
-
-///|
-test "a desktop's on a narrow page with a finger: short of room for its keys a finger apart, 保存此帧 leaves them for their ⋯" {
-  let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4", "E1.srt"], [], [], window=(600.0, 900.0, 2), subtitled=true)
+test "a desktop's on a narrow stage: short of room for its keys, 保存此帧 leaves them for their ⋯" {
+  let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4", "E1.srt"], [], [], window=(780.0, 900.0, 2), subtitled=true)
   t.draw()
+  t.click(Button, label="web-pages.drive.player.list")
   assert_true(t.query(Button, label="android-chat.video.saveFrame") is None)
   // (the speed the last to go)
   assert_true(t.find("1×") is Some(_))
@@ -356,6 +357,6 @@ test "the player's volume read out as a slider whose range is its least, where i
   assert_eq(s.range, Some((desk_none, 0.4, desk_whole)))
   let told = tt.ctx().a11y_lines().split("\n").filter(fn(l) { l.contains("Slider") }).to_array()
   assert_eq(told.length(), 1)
-  let f = told[0].split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+  let f = told[0].split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
   assert_eq([f[12], f[13], f[14]], [desk_none.to_string(), (0.4).to_string(), desk_whole.to_string()])
 }

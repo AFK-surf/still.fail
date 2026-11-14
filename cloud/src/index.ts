@@ -12,15 +12,19 @@ import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, 
 import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login";
 import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
+import { asOrigin, forward, served } from "./guests";
+import { isMoveCall, moveApi, moving } from "./move";
+import { asProductOf } from "./here";
 import type { Env } from "./env";
-import { adminApi, api, blockAccount, feedbackList, socketToken } from "./api";
-import { noted, parseTraceparent, recordCall, relayToAxiom, takeNotes, unverifiedNotes } from "./tracing";
+import { adminApi, api, blockAccount, FEEDBACK_REPLY_PATH, FEEDBACK_STATUS_PATH, feedbackList, liveOf, notBetaReply, onTestChannel, replyToFeedback, setFeedbackStatus } from "./api";
+import { noted, parseTraceparent, recordCall, relayToTelemetry, takeNotes, unverifiedNotes } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
 export { Directory } from "./directory";
 export { LoginAttempt, LoginLimiter } from "./login";
 export { RelayLoad } from "./relay-load";
 export { ServiceStatus } from "./status";
+export { Station } from "./station";
 import { sampleOwnRelay } from "./relay-load";
 import { checkServices } from "./status";
 import { checkModels } from "./models";
@@ -42,17 +46,20 @@ const notFound = () => new Response("Not found", { status: 404 });
 // (app.youdid.wtf), with the API on its paths as on PUBLIC_ORIGIN, and the beta apps (fail.still.android.beta,
 // fail.still.desktop.beta), whose core says `x-stillfail-channel: beta` on every call. Signing in works for anyone
 // (on the test channel's host it starts on PUBLIC_ORIGIN, as from the console, and comes back to its /auth/callback);
-// any other call carrying an account's token answers 403 not_beta for an account not let in, which the page takes for
-// "go to the stable one" and an app for "this account cannot use the test build".
-const notBetaReply = (env: Env, request: Request) => reply({ error: "not_beta", message: tr(requestLang(request), "cloud.beta.notLetIn"), stable: env.PUBLIC_ORIGIN }, 403);
+// any other call carrying an account's token answers 403 not_beta for an account not let in (api.ts notBetaReply).
 
-/** Whether a call of the test channel comes from an account not let in: one with a valid token, not beta. */
+/**
+ * Whether a call of the test channel comes from an account not let in: one with a valid token, not beta, as its
+ * account's object says with whether the token's session is live (asked once: api.ts liveOf). A device's events socket
+ * is its account's object's to refuse (api.ts).
+ */
 async function notBeta(request: Request, env: Env): Promise<boolean> {
-  const token = bearerToken(request) ?? socketToken(request)?.token ?? null;
+  onTestChannel.add(request);
+  const token = bearerToken(request);
   const claims = token ? await verifyToken(env, token, "access") : null;
   // No token, or not a valid one: the call answers as it would anywhere (401 for an account's call).
-  if (!claims) return false;
-  return !(await env.DIRECTORY.getByName("primary").isBeta(claims.sub));
+  if (!claims || new URL(request.url).pathname === "/v1/events") return false;
+  return (await liveOf(request, env, claims)) === "not_beta";
 }
 
 /** The same request on PUBLIC_ORIGIN: where a browser's sign-in goes, so its cookie is on the host Google calls back. */
@@ -62,31 +69,52 @@ export default {
   // A /v1/* call in a recorded trace (a client core's) is a span of it, sent once the answer is out.
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     setCloud(env.PUBLIC_ORIGIN);
-    const parent = new URL(request.url).pathname.startsWith("/v1/") && request.headers.get("upgrade") === null ? parseTraceparent(request.headers.get("traceparent")) : null;
-    const started = Date.now();
-    // What the handler noted for the span never goes out with the answer.
-    const { response, notes } = takeNotes(await handle(request, env));
-    if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
-    return response;
+    // A cloud that moved into another (guests.ts): what reaches it goes there, but for its releases, which stay here.
+    if (env.FORWARD_TO && !new URL(request.url).pathname.startsWith("/releases/")) return forward(request, env);
+    // A request a guest forwarded is answered as made on its origin, as its product (guests.ts).
+    request = served(request, env);
+    const origin = new URL(request.url).origin;
+    env = asOrigin(env, origin);
+    return asProductOf(env.PUBLIC_ORIGIN === origin || betaOrigin(env) === origin ? origin : env.PUBLIC_ORIGIN, () => answer(request, env, ctx));
   },
   // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts; the
   // operator's devices told they were sampled), then the services checked for still.fail/status (status.ts); every
   // PROBE_EVERY_MIN, the relays probed from China's networks (probes.ts), where RELAY_PROBES says so; hourly, the
-  // models' catalog made afresh from models.dev, the stations told when it changed (models.ts).
+  // models' catalog made afresh from models.dev, the stations told when it changed (models.ts). A cloud that moved
+  // into another (FORWARD_TO) has no stations of its own to tell.
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const minute = Math.floor(controller.scheduledTime / 60_000);
-    ctx.waitUntil(
-      sampleOwnRelay(env)
-        .catch(() => [])
-        .then(async (full) => {
-          await env.DIRECTORY.getByName("primary").tellAdmins({ type: "relays" }).catch(() => undefined);
-          await checkServices(env, full);
-        }),
-    );
-    if (minute % 60 === MODELS_MINUTE) ctx.waitUntil(checkModels(env).catch(() => undefined));
-    if (env.RELAY_PROBES === "globalping" && minute % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
+    return scheduled(controller, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
+
+async function answer(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const parent = new URL(request.url).pathname.startsWith("/v1/") && request.headers.get("upgrade") === null ? parseTraceparent(request.headers.get("traceparent")) : null;
+  const started = Date.now();
+  // What the handler noted for the span never goes out with the answer.
+  const { response, notes } = takeNotes(await handle(request, env));
+  if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
+  return response;
+}
+
+async function scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  const minute = Math.floor(controller.scheduledTime / 60_000);
+  ctx.waitUntil(
+    sampleOwnRelay(env)
+      .catch(() => [])
+      .then(async (full) => {
+        await env.DIRECTORY.getByName("primary").tellAdmins({ type: "relays" }).catch(() => undefined);
+        await checkServices(env, full);
+      }),
+  );
+  if (minute % 60 === MODELS_MINUTE && !env.FORWARD_TO) ctx.waitUntil(checkModels(env).catch(() => undefined));
+  if (env.RELAY_PROBES === "globalping" && minute % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
+}
+
+/** Whether the request carries FEEDBACK_TOKEN, the team's feedback monitor's (unset or short: nobody's). */
+async function feedbackMonitor(env: Env, request: Request): Promise<boolean> {
+  const supplied = bearerToken(request);
+  return !!env.FEEDBACK_TOKEN && env.FEEDBACK_TOKEN.length >= 43 && !!supplied && (await digest(supplied)) === (await digest(env.FEEDBACK_TOKEN));
+}
 
 async function handle(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -126,6 +154,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
   const onConsole = adminOrigins(env).includes(url.origin);
   if (path.startsWith("/v1/")) {
     if (!onPublic && !onConsole && !onBeta) return reply({ error: "invalid_origin" }, 421);
+    // Moving into another cloud (move.ts): only the move's own calls and the icons it copies, the rest asked to wait.
+    if (isMoveCall(path)) return moveApi(request, env, path);
+    if (env.MOVING && !path.startsWith("/v1/icons/")) return moving();
     if (path.startsWith("/v1/auth/") && !authConfigured(env)) return reply({ error: "login_not_configured" }, 503);
     // Signing in, refreshing and signing out stay open to it, so a login completes and the page or app can be told.
     const ofBeta = onBeta || header(request, "channel") === "beta";
@@ -165,7 +196,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       }
       if (!validSecret(body.code_challenge) || typeof body.name !== "string") return reply({ error: "invalid_login" }, 400);
       if (!(await consumeLoginRate(env, request))) return reply({ error: "rate_limited" }, 429, { "retry-after": "60" });
-      return env.LOGINS.getByName(body.id).startDevice(body.id, body.code_challenge, body.name);
+      return env.LOGINS.getByName(body.id).startDevice(body.id, body.code_challenge, body.name, env.PUBLIC_ORIGIN);
     } catch {
       return reply({ error: "invalid_request" }, 400);
     }
@@ -223,11 +254,31 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return reply({ error: "invalid_request" }, 400);
     }
   }
-  // The console's bug reports for the team's feedback monitor: FEEDBACK_TOKEN reads them and nothing else.
+  // The console's bug reports for the team's feedback monitor: FEEDBACK_TOKEN reads them, marks their status and replies
+  // to them, and nothing else. A status marked or a reply with another token is the console's admin's, signed in (adminApi).
   if (path === "/v1/admin/feedback/list" && request.method === "POST") {
-    const supplied = bearerToken(request);
-    if (!env.FEEDBACK_TOKEN || env.FEEDBACK_TOKEN.length < 43 || !supplied || (await digest(supplied)) !== (await digest(env.FEEDBACK_TOKEN))) return denied();
+    if (!(await feedbackMonitor(env, request))) return denied();
     return reply({ feedback: await feedbackList(env) });
+  }
+  const feedbackStatus = FEEDBACK_STATUS_PATH.exec(path);
+  if (feedbackStatus && request.method === "POST" && (await feedbackMonitor(env, request))) {
+    let body: Record<string, unknown>;
+    try {
+      body = await readJson(request);
+    } catch {
+      return reply({ error: "invalid_request" }, 400);
+    }
+    return setFeedbackStatus(env, feedbackStatus[1]!, body.status);
+  }
+  const feedbackReply = FEEDBACK_REPLY_PATH.exec(path);
+  if (feedbackReply && request.method === "POST" && (await feedbackMonitor(env, request))) {
+    let body: Record<string, unknown>;
+    try {
+      body = await readJson(request);
+    } catch {
+      return reply({ error: "invalid_request" }, 400);
+    }
+    return replyToFeedback(env, feedbackReply[1]!, "feedback-monitor", body.text);
   }
   // The Android app opens an item's link (/o/…) itself: this says the domain is its (App Links).
   if (path === "/.well-known/assetlinks.json") {
@@ -257,8 +308,8 @@ const assetLinks = () => (cloudProduct().id === "stillfail" ? ["fail.still.andro
   },
 }));
 
-/** The relays probed (probes.ts), each probe's result a `relay probe` line of that relay in Axiom. */
+/** The relays probed (probes.ts), each probe's result a `relay probe` line of that relay in Cloud Logging. */
 async function probeAndSay(env: Env): Promise<void> {
   const found = await probeRelays(relayUrls(env), (input, init) => fetch(input, init), (ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-  for (const [relay, lines] of found) await relayToAxiom(env, relay, null, lines.map((fields) => ({ what: "relay probe", fields })));
+  for (const [relay, lines] of found) await relayToTelemetry(env, relay, null, lines.map((fields) => ({ what: "relay probe", fields })));
 }

@@ -141,15 +141,19 @@ const VIEW_CHATS = 20;
 
 type Viewed = Kept & { latestDecisionsSince(since: number, viewer?: InWorkspace): any[]; now(): number; getSession(key: string): { runtime: string } | null };
 
-/// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace):
-/// its words, its options each with the chats of that workspace (`mine`) the checks of the last days put there (by
-/// their latest check), who changed it last, and how many checks failed.
-export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string, viewer: InWorkspace): any {
-  const saved = store.archivePolicy(ws);
-  const policy = policyFrom(saved);
-  const latest = new Map<string, any>();
-  for (const row of store.latestDecisionsSince(store.now() - VIEW_DAYS * 86_400_000, viewer)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
-  const byOption = new Map<string, any[]>();
+/// Since when the checks a policy's view counts were made.
+export const policySince = (now: number): number => now - VIEW_DAYS * 86_400_000;
+
+/// What the checks since `policySince` say of a workspace's chats (`mine`), each by its latest check: how many chats each
+/// option has and the latest VIEW_CHATS of them, how many were checked and how many checks failed. A reader's
+/// (read/ops-sessions.ts `policyChecks`), off the main thread: a week's checks, 1,341 chats' on a station, read there
+/// held it up to 52 s while memory was short (2026-11-04).
+export type PolicyChecks = { checked: number; failed: number; options: Record<string, { count: number; chats: { session: string; at: number; recommended: boolean }[] }> };
+
+export function policyChecks(rows: readonly { session: unknown; at: number; detail: any }[], mine: (session: string) => boolean = () => true): PolicyChecks {
+  const latest = new Map<string, { at: number; detail: any }>();
+  for (const row of rows) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
+  const options: PolicyChecks["options"] = {};
   let failed = 0;
   for (const [session, row] of [...latest.entries()].reverse()) {
     const picked = typeof row.detail?.result?.selected === "string" ? row.detail.result.selected : null;
@@ -157,21 +161,32 @@ export function policyView(store: Viewed, ws: string | null, mine: (session: str
       failed++;
       continue;
     }
-    const list = byOption.get(picked) ?? [];
-    list.push({ session, at: row.at, recommended: row.detail?.accepted === true });
-    byOption.set(picked, list);
+    const option = (options[picked] ??= { count: 0, chats: [] });
+    option.count++;
+    if (option.chats.length < VIEW_CHATS) option.chats.push({ session, at: row.at, recommended: row.detail?.accepted === true });
   }
+  return { checked: latest.size, failed, options };
+}
+
+/// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace):
+/// its words, its options each with the chats of that workspace (`mine`) the checks of the last days put there (by
+/// their latest check), who changed it last, and how many checks failed: as `checks` says them where a reader has
+/// counted them, else counted here.
+export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string, viewer: InWorkspace, checks?: PolicyChecks): any {
+  const saved = store.archivePolicy(ws);
+  const policy = policyFrom(saved);
+  const counted = checks ?? policyChecks(store.latestDecisionsSince(policySince(store.now()), viewer), mine);
   const by = saved?.change.by;
   return {
     text: policy.policy,
     options: policy.options.map((o) => {
-      const chats = byOption.get(o.id) ?? [];
+      const { count, chats } = counted.options[o.id] ?? { count: 0, chats: [] };
       // Named only as shown: each name is a lookup of the chat's (a week's checks came to many chats on a station).
-      return { ...o, count: chats.length, chats: chats.slice(0, VIEW_CHATS).map(({ session, ...c }) => ({ session, title: title(session), ...c })) };
+      return { ...o, count, chats: chats.filter((c) => mine(c.session)).map(({ session, ...c }) => ({ session, title: title(session), ...c })) };
     }),
     days: VIEW_DAYS,
-    checked: latest.size,
-    failed,
+    checked: counted.checked,
+    failed: counted.failed,
     edited: saved !== null,
     change: saved
       ? { at: saved.change.at, summary: saved.change.summary, by: by?.kind === "agent" ? { kind: "agent", session: by.session, title: title(by.session), runtime: store.getSession(by.session)?.runtime ?? null } : { kind: "person", email: by?.email ?? null, name: by?.name ?? null } }

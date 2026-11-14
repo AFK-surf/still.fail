@@ -1,4 +1,4 @@
-# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
+# mbui (libs/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # What the emulator jobs boot (.github/actions/android-emulator), put in the Actions cache once each: the emulator's
 # build the references were made with (16428233, from Google's repository as a zip) and the x86_64 system images
 # (API 34; API 30, the oldest the apps run on), each by its revision (sdkmanager's, here alone): the one put in kept, a newer

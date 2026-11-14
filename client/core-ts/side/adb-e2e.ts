@@ -14,11 +14,11 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { Adb } from "../src/adb.ts";
-import type { Credential } from "../src/cloud.ts";
 import { nodeTcp } from "../src/hosts/node.ts";
 import { nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Mesh } from "../src/mesh.ts";
+import { STATION_MESH } from "../src/station/mesh-wire.ts";
 import { Runner } from "../src/runtime.ts";
 import { Store } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
@@ -149,13 +149,13 @@ async function phone(alice: Account, ws: string, stationId: string) {
   const host = new FakeHost();
   (host as J).tcp = nodeTcp;
   const runner = new Runner();
-  const env = { host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes: new Wakes() };
+  const env = { host, runner, tracer: new Tracer(host, runner, 1), iroh: nodeIroh()!, wakes: new Wakes(), ...STATION_MESH };
   const mesh = await runner.run(Mesh.make(env, [RELAY]));
   mesh.addAddr({ id: stationId, relays: [RELAY] });
   const credentials = () => (device: string) =>
     Effect.promise(async () => {
       const c = await api(alice, "POST", `/v1/workspaces/${ws}/credential`, { device });
-      return { credential: c.credential, issued_at: c.issued_at ?? 0, expires_at: c.expires_at ?? 0, relay_url: c.relay_url ?? RELAY } as Credential;
+      return { credential: c.credential, also: null };
     });
   const store = new Store(host, runner);
   // THEIRS: a relay of the workspace's own (the same relay under another URL will do): two ways to choose between, so

@@ -39,12 +39,13 @@ let picked_at : Ref[Double] = Ref(-1.0)
 /// What is picked as told (picked): one passage at a time, by an identity of its own (`serial`: a number each passage
 /// picked takes, never one given again; 0 none), the message it is of and where it ran as it was picked (from, to:
 /// a finger's, in its words; -1 a mouse's, the page's selection holding it).
+#derive(Eq, Debug)
 pub(all) struct Picked {
   serial : Int
   ts : String
   a : Int
   b : Int
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Nothing picked.
@@ -112,7 +113,7 @@ pub fn message_menu_on(key : String) -> Bool {
 
 ///|
 /// The turn of a message right clicked offered (share_offered).
-fn share_offer(x : Double, y : Double, go : () -> Unit, link : String, words : String, key : String) -> Unit {
+pub fn share_offer(x : Double, y : Double, go : () -> Unit, link : String, words : String, key : String) -> Unit {
   share_offered.set(Some((x, y, go, link, words, key)))
 }
 
@@ -137,7 +138,7 @@ pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, word
 
 ///|
 /// A message's own items (its ⋯, its right click's): its words, link and turn's picture, where each exists.
-fn message_items(link : String, words : String, go : () -> Unit) -> Array[@sf.MenuItem?] {
+pub fn message_items(link : String, words : String, go : () -> Unit) -> Array[@sf.MenuItem?] {
   let items : Array[@sf.MenuItem?] = []
   if words.trim(chars=" \n\t") != "" {
     items.push(
@@ -281,6 +282,9 @@ pub fn pickable(
   }
   // a mouse picks words as a browser's selection (Ctx::selectable): what of this message it holds is told the pill,
   // whose message it is with it; no long press then
+  // (wrong by the rule, known: a row's build writes `pk` and tells `picked` for what is built elsewhere to read, and
+  // reads where the last frame drew it, which has every message row shown built every frame while a mouse's selection
+  // stands; it goes once the message rows are nodes of the window's tree, a selection let go a handler's there)
   if mouse {
     match c.selection_box() {
       Some((sx, sy, sw, sh)) =>
@@ -380,7 +384,8 @@ pub fn pick_layer(
     pick_pop(c, quote)
     return
   }
-  if pk.ts == "" {
+  // (as told, as pick_pop reads it: a finger's hold picks as a message's row is built)
+  if picked.get().ts == "" {
     return
   }
   // (words held elsewhere since, picked as @ui picks them: this let go, one thing picked at a time)
@@ -412,7 +417,7 @@ pub fn pick_layer(
   let ends = [c.id("pick/start"), c.id("pick/end")]
   // the bar's buttons
   c.on_press(quote_id, fn() {
-    let text = words.slice(pk.sel.a, pk.sel.b).trim(chars=" \n\t").to_string()
+    let text = words.slice(pk.sel.a, pk.sel.b).trim(chars=" \n\t").to_owned()
     if text != "" {
       quote(pk.author, text, pk.source_ts.unwrap_or(pk.ts), pk.role)
     }
@@ -562,8 +567,11 @@ pub fn pick_layer(
 /// mark, quoting it (whose words they are, as the message says: pickable). ⌘C copies it (Ctx::selectable); a press
 /// elsewhere lets it go.
 fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Unit {
+  // (whether a pick stands, as told (picked), not as `pk` holds it: a message's row tells it as it is built, after
+  // what builds this read it, and what holds this is built once more for it, not kept without it)
+  let told = picked.get().ts != ""
   let (x, y) = match c.selection_end() {
-    Some((ex, ey, _)) if pk.ts != "" => (ex, ey - 8.0 - pick_pop_h)
+    Some((ex, ey, _)) if told => (ex, ey - 8.0 - pick_pop_h)
     _ => {
       if pk.ts != "" {
         pk.ts = ""
@@ -574,7 +582,7 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
   }
   let pop = c.id("pick/pop")
   c.on_press(pop, fn() {
-    let text = c.selected_text().trim(chars=" \n\t").to_string()
+    let text = c.selected_text().trim(chars=" \n\t").to_owned()
     if text != "" {
       quote(pk.author, text, pk.source_ts.unwrap_or(pk.ts), pk.role)
     }

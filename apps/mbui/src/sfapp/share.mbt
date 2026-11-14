@@ -18,7 +18,8 @@
 //
 // Out: a file of a drive handed to another app: read whole through the core
 // (`drive.read`), then the system's share sheet (@hostapi.share: Android's chooser, a file of the app's own provider;
-// macOS's sharing picker); 本机没有可打开此文件的应用 when nothing takes it.
+// macOS's sharing picker); 本机没有可打开此文件的应用 when nothing takes it. A chat's picture or file the same from its
+// preview on a phone (sfbase viewer.mbt's Viewer::ask_share: its bar, a picture's held menu, a file told of).
 
 ///|
 fn sh(key : String, args? : Array[(String, String)] = []) -> String {
@@ -94,6 +95,11 @@ let share_window : @ui.Style = @ui.css("w=Full h=Full px=S5 pt=S6 bg=Bg")
 ///|
 /// Over another app, its sheet closed by hand: the app goes once it has sunk away (ShareScreen: onClose after its spring).
 let share_closing : Ref[Bool] = Ref(false)
+
+///|
+/// Its sheet closed (by hand, or a chat picked): what it shows kept as it was while it sinks away, let go of once it has
+/// gone (share_in_frame).
+let share_sinking : Ref[Bool] = Ref(false)
 
 ///|
 /// 打开 still.fail, as a link's words (semibold, the link's ink).
@@ -250,17 +256,17 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       _ => ()
     }
   } else if share_in.raised.get() && sheet_host.kind != ShareSheet && !share_wide.get() && !share_inline() {
-    // closed (the scrim, back, dragged down): let go; over another app, the app goes once the sheet has sunk away
-    share_in.shared.set(None)
-    share_in.files.set([])
+    // closed (the scrim, back, dragged down): what it shows kept as it was while it sinks away, let go of once it has
+    // (below); over another app, the app goes then
     share_in.raised.set(false)
+    share_sinking.val = true
     if share_over.get() {
       share_closing.val = true
     }
   }
   // put up once shared: in a sheet on a Small window or over another app, the wide panel otherwise; filling the window
   // the browser extension opened
-  if share_in.shared.get() is Some(_) && !share_in.raised.get() {
+  if share_in.shared.get() is Some(_) && !share_in.raised.get() && !share_sinking.val {
     if share_inline() {
       ()
     } else if !share_over.get() && !sheet_small(c) {
@@ -269,6 +275,11 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       raise_sheet(ShareSheet)
     }
     share_in.raised.set(true)
+  }
+  if share_sinking.val && !@sf.presented_drawn() {
+    share_sinking.val = false
+    share_in.shared.set(None)
+    share_in.files.set([])
   }
   if share_closing.val && share_over.get() && !@sf.presented_drawn() {
     share_closing.val = false
@@ -613,7 +624,7 @@ fn shared_head(c : @ui.Ctx, source : String, head : String?, look : ShareLook) -
   // (the title said once: what follows it in the words shared under it, a phone's app having put it first)
   let source = match head {
     Some(h) if source.trim().has_prefix(h) && source.trim().length() > h.length() =>
-      source.trim().view(start_offset=h.length()).to_string().trim().to_string()
+      source.trim().exact_view(start=h.length()).to_owned().trim().to_owned()
     _ => source
   }
   c.box(
@@ -783,8 +794,6 @@ fn share_open(
     match r {
       Ok(a) => {
         let key = text(Some(a), "key")
-        // the composer reads what the core keeps anew (Drafts.refresh)
-        drafts.remove(key)
         share_opened(c, station, text(Some(a), "session"), text(Some(a), "title"), files, fn() {  }, key~)
       }
       Err(e) => share_in.error.set(sh("android-misc.shareIn.failed", args=[("error", text(Some(e), "message"))]))
@@ -797,7 +806,7 @@ fn share_open(
 /// on by `pick`): the sheet let go, the chat opened (a new chat rising), the files handed to its composer, which puts
 /// them up.
 fn share_opened(
-  c : @ui.Ctx,
+  _c : @ui.Ctx,
   station : String,
   session : String,
   title : String,
@@ -817,9 +826,9 @@ fn share_opened(
     shared_into[key] = list
     @sfbase.draft_given(key)
   }
-  share_in.shared.set(None)
-  share_in.files.set([])
+  // (what the sheet shows kept as it was while it sinks away, let go of once it has: share_in_frame)
   share_in.raised.set(false)
+  share_sinking.val = true
   share_wide.set(false)
   lower_sheet()
   @hostapi.log("share in: into \{key}, \{files.length()} files")

@@ -16,10 +16,10 @@ test "主题色 蓝色 chosen, laid out narrow and wide, with touch and with a m
     assert_eq(@sf.theme().p.accent, orange.light, msg="\{w}")
     let bg_orange = @sf.theme().p.bg
     assert_eq(t.get(Radio, label="橙色").selected, Some(true))
-    // (each dot a press's least room apart from the next: 36 with a mouse, 44 with touch)
+    // (each dot 8 apart from the next)
     let (x0, _, w0, _) = t.get(Radio, label="橙色").rect
-    let (x1, _, w1, _) = t.get(Radio, label="蓝色").rect
-    assert_eq(x1 + w1 / 2.0 - (x0 + w0 / 2.0), @ui.room_least(), msg="\{w}")
+    let (x1, _, _, _) = t.get(Radio, label="蓝色").rect
+    assert_eq(x1 - (x0 + w0), 8.0, msg="\{w}")
     t.click(Radio, label="蓝色")
     t.frame()
     t.frame()
@@ -60,7 +60,7 @@ test "主题色 蓝色 chosen, laid out narrow and wide, with touch and with a m
 
 ///|
 test "an accent the build does not know (kept by a newer one): still.fail's orange" {
-  new_run()
+  fresh_app()
   @sf.set_accent("indigo")
   assert_eq(@sf.accent_key(), "")
   @sf.set_accent("teal")
@@ -106,7 +106,8 @@ test "主题色 自定义: a hue of one's own, its slider under the dots; a step
     t.frame()
     t.frame()
     assert_eq(@sf.accent_key(), "purple")
-    t.draw()
+    // (the slider closes its way under the dots: gone once it has)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.semantics().filter(fn(s) { s.role == Slider }).is_empty(), msg="\{w}")
     t.click(Radio, label="自定义")
     t.frame()

@@ -48,15 +48,15 @@ fn edge_tip_rects(
   let tip = fn() raise {
     match t.semantics().filter(fn(s) { s.role == Tooltip && s.label == "调整宽度" }) {
       [s, ..] => s.rect
-      [] => fail("no tip: \{t.semantics().map(fn(s) { (s.role, s.label) })}")
+      [] => fail("no tip: \{Repr(t.semantics().map(fn(s) { (s.role, s.label) }))}")
     }
   }
-  t.move(110.0, 100.0)
+  t.move_to(110.0, 100.0)
   t.run_for(edge_tip_ms + tip_settled_ms)
   let first = tip()
   if away {
     // (the pointer off the edge: its tip going, a moment into it)
-    t.move(300.0, 250.0)
+    t.move_to(300.0, 250.0)
     t.run_for(@kit.pop_out_ms / 2.0)
   } else {
     shift.set(by)
@@ -70,7 +70,7 @@ test "an edge's tip by the pointer: beside where the pointer is, its middle leve
   for scale in [1.0, 2.0] {
     let (first, after) = edge_tip_rects(scale, 30.0)
     let (x, y, _, h) = first
-    assert_true((x - (110.0 + edge_tip_gap)).abs() < 0.5 && (y + h / 2.0 - 100.0).abs() < 0.5, msg="scale \{scale}: \{first}")
+    assert_true((x - (110.0 + edge_tip_gap)).abs() < 0.5 && (y + h / 2.0 - 100.0).abs() < 0.5, msg="scale \{scale}: \{Repr(first)}")
     assert_eq(after, first, msg="scale \{scale}: moved under the pointer")
   }
 }
@@ -275,11 +275,11 @@ let edge_slow_ms : Double = 50.0
 test "an edge felt: a finger's hold taken (LongPress), then its most reached (TextHandleMove), its least (again), the way between felt no more; a mouse's needs no hold and nothing is felt but the ends" {
   // (a finger: +60 is its most (300), +70 past it still there (felt once), -40 back between, -100 its least (200))
   let (felt, widths) = edge_felt(2, [30.0, 60.0, 70.0, -40.0, -100.0])
-  assert_eq(felt, [LongPress, TextHandleMove, TextHandleMove], msg="\{felt} \{widths}")
+  assert_eq(felt, [LongPress, TextHandleMove, TextHandleMove], msg="\{Repr(felt)} \{Repr(widths)}")
   assert_eq(widths, [270.0, 300.0, 300.0, 200.0, 200.0, 200.0])
   // (a mouse: no hold, the ends alone)
   let (felt, _) = edge_felt(0, [60.0, -100.0])
-  assert_eq(felt, [TextHandleMove, TextHandleMove], msg="\{felt}")
+  assert_eq(felt, [TextHandleMove, TextHandleMove], msg="\{Repr(felt)}")
   // (held and let go where it went down: nothing felt but the hold; let go after a hold, a drag's end at its width)
   let (felt, widths) = edge_felt(2, [])
   assert_eq((felt, widths), ([LongPress], [240.0]))
@@ -291,5 +291,5 @@ test "an edge's tip by the pointer, the pointer gone off the edge: it goes where
   // (drawn a little smaller as it goes, about its edge by the pointer's point: that edge and its middle where they were)
   let (x, y, _, h) = first
   let (gx, gy, _, gh) = going
-  assert_true((gx - x).abs() < 0.5 && (gy + gh / 2.0 - (y + h / 2.0)).abs() < 0.5, msg="going: \{going} from \{first}")
+  assert_true((gx - x).abs() < 0.5 && (gy + gh / 2.0 - (y + h / 2.0)).abs() < 0.5, msg="going: \{Repr(going)} from \{Repr(first)}")
 }

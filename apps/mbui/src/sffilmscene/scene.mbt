@@ -24,16 +24,22 @@ pub fn source(arg : (String) -> String) -> () -> @sfapp.Source {
             })
           _ => ()
         }
-        let s = @sfapp.fixture_app(mode)
+        let s = if mode == "json" {
+          @sfapp.fixture_json_app(arg("MBUI_FIXTURE_JSON"))
+        } else {
+          @sfapp.fixture_app(mode)
+        }
+        // MBUI_FIX_PACE, MBUI_FIX_CORE: the made-up station's pace (said in the film's record, scripts/media.sh)
+        @sffixture.fix_pace_said(arg("MBUI_FIX_PACE"), arg("MBUI_FIX_CORE"))
         if arg("MBUI_WINDOW") != "" { @sfbase.lone_page.val = @sfbase.window_page(arg("MBUI_WINDOW")) }
         if arg("MBUI_UPDATES_MS") != "" { @sffixture.fixture_updates(ms=whole_ms(arg("MBUI_UPDATES_MS"))) }
         if arg("MBUI_UPDATE") != "" { @sffixture.fixture_update(arg("MBUI_UPDATE")) }
         let s = if late > 0.0 { @sffixture.round_trip(s, late) } else { s }
         let held = arg("MBUI_HOLD")
-        let s = if held != "" { @sffixture.held_topics(s, held.split(",").map(fn(x) { x.to_string() }).collect()) } else { s }
+        let s = if held != "" { @sffixture.held_topics(s, held.split(",").map(fn(x) { x.to_owned() }).collect()) } else { s }
         let failed = arg("MBUI_FAILED")
         let s = if failed != "" {
-          @sffixture.failed_topics(s, failed.split(",").map(fn(x) { x.to_string() }).collect(), arg("MBUI_FAILED_WHY"))
+          @sffixture.failed_topics(s, failed.split(",").map(fn(x) { x.to_owned() }).collect(), arg("MBUI_FAILED_WHY"))
         } else { s }
         let s = if arg("MBUI_SAID") == "1" { @sffixture.said_longest_source(s) } else { s }
         if dark { @sf.set_dark(Some(true)) }

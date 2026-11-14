@@ -1,0 +1,104 @@
+// The system's notifications, as still.fail's Android app shows them (still.fail apps/android app/Notices.kt, Push.kt;
+//): one channel, one notification per tag (a newer one with the same tag replaces the
+// older), tapped it brings the app to the front with what it was shown with (`opens`); whether the system lets the
+// app show them, asking it to; and a push service's token and what it delivered. (A link the system opens the app with
+// comes on the system's channel: system.mbt.)
+//
+// Android: NotificationManager (dev.mbui.Notices: the channel made as a notification is shown, POST_NOTIFICATIONS
+// asked for from the activity, a tap a PendingIntent back to MainActivity). A push service is the app's own (its Java
+// linking Firebase Cloud Messaging hands dev.mbui.Notices the token: still.fail's Push.java, which shows a push itself,
+// as the app's frames stop while it is behind): `push_token` gives what it handed, none where the app links none. macOS: UNUserNotificationCenter (mac_app.m) when the app is a bundle (its .app); a bare
+// executable has no bundle for it, and keeps what would be shown, said on the log (`NOTICE …`), as the page does (no
+// way in there yet). Windows: the system's toasts (win_notify.cpp) when the program is an app (its identity: an id the
+// system shows them under), else kept and said on the log as a bare Mac executable's; no asking (Windows asks no app),
+// no pushes. Linux: the desktop's, through the app's GApplication (GNotification: linux_life.h) when the program is an
+// app (MBUI_APP_ID), else kept as a bare Mac executable's; no asking, no pushes. iOS: UNUserNotificationCenter
+// (ios_app.m), pushes APNs' (the token asked for as the app starts; the system shows them). A scripted run taps one by its words everywhere (@hostapi.drive 6, src/ui/drive.mbt
+// `notice`), as on Android.
+
+///|
+/// Shows a notification in the app's `channel` (its name as the system's settings list it), replacing any with the
+/// same `tag`; tapped, `notice_opened` gives `opens` back once.
+pub fn notice_show(
+  channel~ : String,
+  tag~ : String,
+  title~ : String,
+  body~ : String,
+  opens~ : String,
+) -> Unit {
+  nt_show(channel, tag, title, body, opens)
+}
+
+///|
+/// The notification of `tag` taken off, if it shows.
+pub fn notice_cancel(tag : String) -> Unit {
+  nt_cancel(tag)
+}
+
+///|
+/// What the system lets the app show: "granted", "denied", "ask" (not shown, and the system may never have been asked:
+/// Android 13 on, where the app knows whether it asked), "default" (not shown, never answered, and asking shows the
+/// system's prompt whenever it is asked, a prompt put away leaving it so: a browser's), or "unknown" (this host cannot
+/// tell).
+pub fn notice_permission() -> String {
+  match nt_state(0) {
+    1 => "granted"
+    2 => "denied"
+    3 => "ask"
+    4 => "default"
+    _ => "unknown"
+  }
+}
+
+///|
+/// Asks the system to let the app show notifications (Android's POST_NOTIFICATIONS dialog): false when nothing was
+/// asked (allowed already, or no way to ask here). Its answer comes in `notice_answer`.
+pub fn notice_ask() -> Bool {
+  nt_state(1) != 0
+}
+
+///|
+/// The system's answer to the last `notice_ask`, once: Some(true) allowed, Some(false) refused, None not yet (or none
+/// asked).
+pub fn notice_answer() -> Bool? {
+  match nt_state(2) {
+    1 => Some(true)
+    0 => Some(false)
+    _ => None
+  }
+}
+
+///|
+/// Opens the system's settings of the app's notifications (Android's page of the app's notifications, iOS's, macOS's
+/// Notifications, Windows', a Linux desktop's), where they are allowed again once refused: false where this host has
+/// none to open.
+pub fn notice_settings() -> Bool {
+  nt_state(3) == 1
+}
+
+///|
+/// Whether the system shows the number the app puts on its icon (@hostapi.set_badge: macOS's Dock tile, iOS's home
+/// screen). Not on Android, whose launcher puts a dot of its own on the icon while a notification of the app shows
+/// (no app numbers it, nor turns it off for itself), nor on Windows yet (its taskbar's overlay is not drawn).
+pub fn badge_shown() -> Bool {
+  nt_state(4) == 1
+}
+
+///|
+/// The `opens` of a notification tapped since the last look, once ("" none). A frame is asked for as one comes.
+pub fn notice_opened() -> String {
+  nt_text(0)
+}
+
+///|
+/// This device's push token for the app ("" none: no push service in this build).
+pub fn push_token() -> String {
+  nt_text(1)
+}
+
+///|
+/// The push service that knows `push_token`: "fcm" (Android's Firebase Cloud Messaging), "apns" or "apns-sandbox"
+/// (iOS's, a development build's the sandbox's); "" with no token.
+pub fn push_service() -> String {
+  nt_text(2)
+}

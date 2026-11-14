@@ -27,9 +27,11 @@ function rig() {
   const clock = Effect.runSync(Scope.provide(TestClock.make(), scope));
   const state = { working: true, readings: [] as WorkspaceReading[] };
   const told: [string, string][] = [];
-  const make = () => {
+  /// A watch, once it has read every chat's limit (as it does as the station starts).
+  const make = async () => {
     const watch = new WorkspaceWatch({ data, clock, readings: async () => state.readings, working: () => state.working, notify: (s, text) => void told.push([s, text]) });
     watches.push(watch);
+    await watch.ready();
     return watch;
   };
   return { clock, state, told, make };
@@ -37,7 +39,7 @@ function rig() {
 
 test("a working chat is warned above its limit, reminded hourly, and warned anew after it cleans up", async () => {
   const r = rig();
-  const watch = r.make();
+  const watch = await r.make();
   const reading: WorkspaceReading = { session: "s1", station: "", name: "here", path: "/chat/workspace", bytes: 11 * GIB, complete: true };
   r.state.readings = [reading];
   await watch.look();
@@ -71,16 +73,16 @@ test("a working chat is warned above its limit, reminded hourly, and warned anew
 
 test("limits and reminder state belong to the chat and station, and survive a restart", async () => {
   const r = rig();
-  const first = r.make();
+  const first = await r.make();
   r.state.readings = [
     { session: "s1", station: "", name: "here", path: "/local", bytes: 11 * GIB, complete: true },
     { session: "s1", station: "studio-id", name: "Studio", path: "/remote", bytes: 12 * GIB, complete: true },
     { session: "s2", station: "studio-id", name: "Studio", path: "/other", bytes: 12 * GIB, complete: true },
   ];
-  first.setLimit("s1", "studio-id", 20);
+  await first.setLimit("s1", "studio-id", 20);
   await first.look();
   assert.deepEqual(r.told.map(([session]) => session), ["s1", "s2"]);
-  const next = r.make();
+  const next = await r.make();
   assert.equal(next.limit("s1", "studio-id"), 20 * GIB);
   assert.equal(next.limit("s1", ""), DEFAULT_LIMIT);
   assert.equal(next.limit("s2", "studio-id"), DEFAULT_LIMIT);
@@ -108,11 +110,11 @@ test("a limit raised while a notice is being delivered is kept", async () => {
   watches.push(watch);
   const looking = watch.look();
   await started;
-  watch.setLimit("s1", "", 20);
+  await watch.setLimit("s1", "", 20);
   finish();
   await looking;
   assert.equal(watch.limit("s1", ""), 20 * GIB);
-  assert.equal(r.make().limit("s1", ""), 20 * GIB, "the newer limit survives a restart");
+  assert.equal((await r.make()).limit("s1", ""), 20 * GIB, "the newer limit survives a restart");
 });
 
 test("one undeliverable notice does not prevent other chats being warned", async () => {
@@ -139,8 +141,12 @@ test("the background watch keeps checking an over-limit working chat", async () 
     notify: (session, text) => void r.told.push([session, text]),
   });
   watches.push(watch);
+  // A look ends once what it warned of is written (off the main thread); the next is due CHECK_MS after that.
+  let looked = 0;
+  const look = watch.look.bind(watch);
+  watch.look = async () => { await look(); looked++; };
   const until = async (n: number) => {
-    while (checks < n) await new Promise((resolve) => setImmediate(resolve));
+    while (checks < n || looked < n) await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
   };
   watch.start();
@@ -156,7 +162,7 @@ test("the background watch keeps checking an over-limit working chat", async () 
 
 test("the limit tool uses its caller's chat and validates the new limit", async () => {
   const r = rig();
-  const watch = r.make();
+  const watch = await r.make();
   const remote = { workspaceStation: async (_session: string, named: string) => named === "Studio" ? "studio-id" : "" } as Remote;
   const [tool] = workspaceSizeTools(watch, remote);
   await tool!.run("s1", { station: "Studio", limit_gib: 25 });

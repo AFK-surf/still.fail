@@ -2,7 +2,9 @@
 // one to POST /v1/feedback signed with the station's key like its traces (tag "station-feedback-v1"); a signed-in
 // account may send one with its access token. Either host takes them (app.still.fail and the test channel's
 // app.youdid.wtf): each is marked with the channel it came on. They wait in the admin's console (/v1/admin/feedback),
-// where the team picks them up.
+// where the team picks them up. The team replies on one (api.ts replyToFeedback): shown to the people of the chat it came
+// from in their apps (GET /v1/workspaces/<id>/feedback), never to a station or its agents, which read none of it. They
+// answer there, or have their agent answer (/v1/feedback/reply); both kept with the team's.
 import { readText, reply } from "./auth";
 import { betaOrigin, header } from "./compat";
 import type { Env } from "./env";
@@ -10,7 +12,7 @@ import { stationSender } from "./tracing";
 import type { FeedbackArea } from "./types";
 
 const MAX_BYTES = 128 * 1024;
-export const FEEDBACK_LIMITS = { title: 200, body: 20_000, reporter: 200, context: 8_000, logs: 64 * 1024, key: 64 };
+export const FEEDBACK_LIMITS = { title: 200, body: 20_000, reporter: 200, context: 8_000, logs: 64 * 1024, key: 64, reply: 8_000, session: 200 };
 export const FEEDBACK_AREAS: readonly FeedbackArea[] = ["station", "web", "android", "desktop", "slack", "cloud", "unknown"];
 
 /** A report as the Directory keeps it: checked and cut to size here. */
@@ -83,4 +85,46 @@ export async function receiveFeedback(request: Request, env: Env, account: strin
   }
   if (!made) return reply({ error: "rate_limited" }, 429, { "retry-after": "3600" });
   return reply(made, made.duplicate ? 200 : 201);
+}
+
+/** A station's signed JSON body and who it is: the station, its value, or the answer refusing it. */
+async function stationBody(request: Request, env: Env, tag: string): Promise<{ station: string; value: Record<string, unknown> } | Response> {
+  let raw: string;
+  try {
+    raw = await readText(request, 64 * 1024);
+  } catch {
+    return reply({ error: "too_large" }, 413);
+  }
+  const station = await stationSender(request, env, raw, tag);
+  if (!station) return reply({ error: "invalid_session" }, 401);
+  try {
+    const value = JSON.parse(raw || "{}") as unknown;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("shape");
+    return { station, value: value as Record<string, unknown> };
+  } catch {
+    return reply({ error: "invalid_request" }, 400);
+  }
+}
+
+/**
+ * POST /v1/feedback/reply, from a station, signed like its reports (tag station-feedback-reply-v1): { number, text,
+ * session? } → 201 { id }: its reporter's agent answering FB-<number>, one of this station's; kept with the team's
+ * replies, the report's updated_at moved (what the feedback monitor watches).
+ */
+export async function receiveReply(request: Request, env: Env): Promise<Response> {
+  const sent = await stationBody(request, env, "station-feedback-reply-v1");
+  if (sent instanceof Response) return sent;
+  const { number } = sent.value;
+  const said = text(sent.value.text, FEEDBACK_LIMITS.reply);
+  if (typeof number !== "number" || !Number.isSafeInteger(number) || number < 1 || !said) return reply({ error: "invalid_request" }, 400);
+  const session = text(sent.value.session, FEEDBACK_LIMITS.session) || null;
+  let made: { id: string } | null;
+  try {
+    made = await env.DIRECTORY.getByName("primary").reporterReply(sent.station, number, said, session);
+  } catch (error) {
+    if (error instanceof Error && error.message === "feedback_not_found") return reply({ error: "feedback_not_found" }, 404);
+    throw error;
+  }
+  if (!made) return reply({ error: "rate_limited" }, 429, { "retry-after": "3600" });
+  return reply(made, 201);
 }

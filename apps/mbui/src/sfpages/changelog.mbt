@@ -4,26 +4,33 @@
 // a press opens the changelog; its × lets it go at once and tells the core (`changelog.seen`).
 
 ///|
-/// The news let go here (before the core has it): none shows while the core's is this one.
-let news_gone : Ref[Json?] = Ref(None)
+/// The news let go here (before the core has it): none shows while the core's is this one; what shows it follows it.
+let news_gone : @signals.Signal[Json?] = @signals.signal(None)
 
 ///|
 /// As at the start (tests).
 fn news_reset() -> Unit {
-  news_gone.val = None
+  news_gone.set(None)
+}
+
+///|
+/// The changelog asked for its news alone (the core's `changelog` with `news`: no tab of it made or sent; the whole is
+/// the changelog page's, 125 KB on a phone where this is a few hundred bytes, 2026-11-10).
+pub fn news_params() -> Map[String, Json] {
+  { "news": Json::boolean(true) }
 }
 
 ///|
 /// The news as the core has it, unless let go here.
 pub fn news_of(src : Source) -> Json? {
-  match field(src.topic("changelog", Map::new()).get().value, "news") {
-    Some(Object(_)) as n if news_gone.val != n => n
+  match field(src.topic("changelog", news_params()).get().value, "news") {
+    Some(Object(_)) as n if news_gone.get() != n => n
     _ => None
   }
 }
 
 ///|
-/// Its room in the list: 4 over it, 10 under; its sides those of what stands over the list (changelog_news).
+/// Its room in the list: 4 over it, 10 under; its sides those of what stands over the list (changelog_news_node).
 // kept across runs: a value (no field of it changes)
 let news_room : @ui.Style = @ui.css("w=Full pt=S1 pb=S2_5")
 
@@ -74,118 +81,10 @@ let news_close : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justif
 let news_lines_most : Int = 3
 
 ///|
-/// The news card at a chats' list's top, while there is news.
-pub fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
-  let news = match news_of(src) {
-    Some(n) => Some(n)
-    None => return
-  }
-  let t = @sf.theme()
-  let lines : Array[String] = []
-  for e in items(news, "entries") {
-    for l in items(Some(e), "text") {
-      match l {
-        String(s) => lines.push(s)
-        _ => ()
-      }
-    }
-  }
-  // (on the line of what stands over the list, as the search's field above it: the theme's band_in from its sides)
-  c.box(style=news_room.then(@ui.style(px=@sf.room_of(t.chat_list.band_in))), fn() {
-    c.box(style=news_card, fn() {
-      let open = c.id("changelog-news")
-      c.on_press(open, fn() {
-        open_page(Setting(@settings.Route::Changelog))
-      })
-      c.box(style=news_words, id=open, fn() {
-        c.box(style=news_head, fn() {
-          @sf.icon(c, "sparks", size=16.0, color=t.p.text) |> ignore
-          c.text(
-            match @sfbase.opt_text(news, "build") {
-              Some(b) => @sf.t("android-settings.changelog.updatedTo", args=[("build", b)])
-              None => @sf.t("android-settings.changelog.updated")
-            },
-            style=news_title,
-          )
-          |> ignore
-        })
-        |> ignore
-        for i, l in lines {
-          if i >= news_lines_most {
-            break
-          }
-          c.text(l, style=news_line) |> ignore
-        }
-        if lines.length() > news_lines_most {
-          c.text(@sf.t("android-settings.changelog.more", args=[("n", (lines.length() - news_lines_most).to_string())]), style=news_line)
-          |> ignore
-        }
-        // PageParts.kt ChangelogNews: clickable, cut to the card's corners
-        @motion.ripple(c, open, 0.0)
-      })
-      |> ignore
-      // let go: gone at once, the core told
-      c.layer(fn() {
-        c.box(style=news_close_place, fn() {
-          let close = c.id("changelog-news/close")
-          c.on_press(close, fn() {
-            news_gone.val = news
-            (src.call)("changelog.seen", Json::object({}), fn(_) {  })
-          })
-          c.box(style=news_close, id=close, label=@sf.t("android-settings.changelog.dismiss"), fn() {
-            @sf.icon(c, "close", size=16.0, color=t.p.muted) |> ignore
-            @motion.ripple(c, close, 16.0)
-          })
-          |> ignore
-          // (over it)
-          @sf.tip(c, "changelog-news/close-tip", close, @sf.t("android-settings.changelog.dismiss"), side=Top)
-        })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// Whether the update wants the person over a small screen's list (update_card): the leave to install apps it waits
+/// Whether the update wants the person over a small screen's list (update_card_node): the leave to install apps it waits
 /// for (sfbase updates.mbt: a build ready that Android puts in place by itself once given it).
 pub fn update_card_shown() -> Bool {
   @sfbase.update_now() is Allow(_)
-}
-
-///|
-/// What the update wants of the person, at the top of a small screen's list while it does (update_card_shown), as the
-/// news over it is drawn (changelog_news's card): 允许安装更新 and why; a press does it (@sfbase.update_go: the
-/// system's page for the leave opens, and once it is given the build is put in place as the app is away). No ×: it
-/// goes once given.
-pub fn update_card(c : @ui.Ctx, src : Source) -> Unit {
-  if !update_card_shown() {
-    return
-  }
-  let t = @sf.theme()
-  c.box(style=news_room.then(@ui.style(px=@sf.room_of(t.chat_list.band_in))), fn() {
-    c.box(style=news_card, fn() {
-      let open = c.id("update-card")
-      c.on_press(open, fn() {
-        @sfbase.update_go(src)
-      })
-      c.box(style=update_card_words, id=open, label=@sf.t("android-misc.updates.allow"), fn() {
-        c.box(style=news_head, fn() {
-          @sf.icon(c, "download", size=16.0, color=t.p.text) |> ignore
-          c.text(@sf.t("android-misc.updates.allow"), style=news_title) |> ignore
-        })
-        |> ignore
-        c.text(@sf.t("android-misc.updates.allowWhy", args=[("app", "still.fail")]), style=update_card_line) |> ignore
-        @motion.ripple(c, open, 0.0)
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|

@@ -17,7 +17,8 @@
 // - a Kimi Code profile signed in to Kimi: its token (minutes) renewed with half its life left, looked at every minute
 //   (kimi.ts).
 import { HERMES_MODEL_LIMIT } from "../agents/hermes.ts";
-import { agyEmailIn, agyToken } from "../agents/agy.ts";
+import { agyAccountFile, agyEmailIn, agyToken, classifyFailure as agyClassifyFailure } from "../agents/agy.ts";
+import { expandDevinFusion } from "../agents/devin.ts";
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { createHash, randomBytes } from "node:crypto";
@@ -47,21 +48,29 @@ import { checkAutomaticDecisions } from "./check.ts";
 import { CONSOLE_FILE, consoleIn, readConsole, RenewRefused, renewToken, writeConsole } from "./console.ts";
 import { CURSOR, authFile as cursorAuthFile, cursorIn } from "./cursor.ts";
 import { KIMI_AUTH, kimiDue, readKimi, renewKimiToken, writeKimi } from "./kimi.ts";
-import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
+import { LOGIN_BROWSER_FILE, type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexAccountIdentity, codexClaimsIn, type MachineLogin, MachineLogins } from "./machine.ts";
-import { OUTDATED, uncheckOutdated } from "./models.ts";
+import { facts } from "./catalog.ts";
+import { uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, devinAccountFile, devinNotedIn, grokAuthFile, grokEmailIn, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, codexUsage, lentCodexUsage, machineUsage } from "./quota.ts";
+import { claudeResetWith } from "./claude-reset.ts";
 import { Refused as Refusal } from "../api/request.ts";
 
 export { checkConfig } from "./check.ts";
+export { LOGIN_BROWSER_FILE };
 export type { LoginJob, MachineLogin, ProfileCheck, ProfileQuota };
 
 type Json = any;
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /// How often allowances are asked again while someone follows.
 const QUOTA_EVERY_MS = 5 * 60_000;
+/// How long an allowance read stands while its provider gives no answer (six rounds): past it the failure is said, so
+/// a station long off the network says that, not an allowance of hours ago (the user, 2026-11-11).
+const QUOTA_STANDS_MS = 30 * 60_000;
 /// A Claude token handed to a process (or lent to another station) that cannot renew it is renewed first when it would
 /// last less than this, so it is not swapped soon after.
 const HANDED_MARGIN_MS = 3600_000;
@@ -112,17 +121,19 @@ export type AccountsDeps = {
   /// Hermes reports its configured providers and model IDs in ACP session/new (no model turn).
   hermes?: () => { models(profile: Profile): Promise<string[]> } | undefined;
   /// The Antigravity CLI says whether it is signed in, and the models it offers, in ACP session/new (no model turn).
-  agy?: () => { models(profile: Profile): Promise<string[]> } | undefined;
+  agy?: () => { models(profile: Profile): Promise<string[]>; catalog?(profile: Profile): Promise<{ models: string[]; efforts: Record<string, string[]>; defaults: Record<string, string> }> } | undefined;
   /// Whether someone follows the events or a turn runs (allowances are asked again on a round only then).
   following?: () => boolean;
   /// The station's environment (where the machine's logins are, and the CLIs found); process.env by default.
   env?: Env;
+  /// The installed Claude Code's version (updates.ts), which a Claude subscription's limit resets are asked as.
+  claudeVersion?: () => string | null;
   loginCommands?: LoginCommands;
   urls?: Urls;
   /// Tests: how a profile is checked, its allowance read (null: nobody can ask), its reset asked, its decisions found.
   check?: (request: CheckRequest, lang: Lang) => Promise<ProfileCheck>;
   quota?: ((profile: Profile) => Promise<ProfileQuota>) | null;
-  resetQuota?: ((profile: Profile, key: string) => Promise<Json>) | null;
+  resetQuota?: ((profile: Profile, key: string, kind: string | null) => Promise<Json>) | null;
   discover?: (profile: Profile, check: ProfileCheck) => Promise<Capability>;
   /// The machine's logins (null: none to read); read in `env` with their allowances by default.
   machine?: MachineLogins | null;
@@ -139,6 +150,8 @@ export type AccountsDeps = {
     view(profile: Json): Json | null;
     lendCodex?(profile: Profile, rejected: boolean): Promise<number>;
     quotaReset?(profile: Profile, key: string): Promise<void>;
+    /// A borrowed Claude subscription's token, lent by its host (to use one of its resets with).
+    lendClaude?(profile: Profile, rejected?: string): Promise<MachineToken>;
     loginUpdated?(): void;
     /// Whether the station the profile is another's of did not answer lately.
     hostName?(profile: Json): string | null;
@@ -206,6 +219,9 @@ export class Accounts {
   private checks = new Map<string, ProfileCheck>();
   private quotas = new Map<string, ProfileQuota>();
   private quotaBusy = new Map<string, Promise<void>>();
+  /// The profiles whose allowance was last asked without an answer while the one read before stood: what was said of
+  /// it (told to a person who asks it again: askedQuota) and when (it is not asked again before the next round).
+  private quotaUnanswered = new Map<string, { detail: string; at: number }>();
   /// A host on an older version may know the reset count but not the cards' expiries. Try the borrowed login at most
   /// once a round for the same count, including when the provider cannot supply all of the details.
   private resetDetailsAsked = new Map<string, { at: number; count: number }>();
@@ -231,7 +247,7 @@ export class Accounts {
   private readonly urls: Urls;
   private readonly checkFn: (request: CheckRequest, lang: Lang) => Promise<ProfileCheck>;
   private readonly quotaFn: ((profile: Profile) => Promise<ProfileQuota>) | null;
-  private readonly resetFn: ((profile: Profile, key: string) => Promise<Json>) | null;
+  private readonly resetFn: ((profile: Profile, key: string, kind: string | null) => Promise<Json>) | null;
   private readonly discoverFn: (profile: Profile, check: ProfileCheck) => Promise<Capability>;
 
   private deps: AccountsDeps;
@@ -248,6 +264,7 @@ export class Accounts {
     this.urls = deps.urls ?? URLS;
     // A Cursor sign-in's key is named for this machine in the person's Cursor dashboard (accounts/cursor.ts).
     this.logins = new LoginManager(deps.data, deps.loginCommands, undefined, deps.clock, this.urls.console, this.urls.cursor ?? CURSOR, () => `still.fail · ${hostname()}`, this.urls.kimi ?? KIMI_AUTH);
+    this.logins.setStateFile((id) => this.loginStateFile(id));
     this.machine =
       deps.machine !== undefined ? deps.machine : new MachineLogins(this.env, (runtime, env) => machineUsage(runtime, env, this.urls), undefined, deps.clock);
     this.checkFn =
@@ -257,12 +274,13 @@ export class Accounts {
         ? deps.quota
         : (profile) => {
             const codex = deps.codex?.();
-            return checkQuota(profile, this.env, codex ? (p) => codex.rateLimits(p) : undefined, this.urls);
+            return checkQuota(profile, this.env, codex ? (p) => codex.rateLimits(p) : undefined, this.urls, stationLang(), deps.claudeVersion?.() ?? null);
           };
     this.resetFn =
       deps.resetQuota !== undefined
         ? deps.resetQuota
-        : (profile, key) => {
+        : (profile, key, kind) => {
+            if (profile.runtime === "claude") return this.claudeReset(profile, key, kind);
             const codex = deps.codex?.();
             if (!codex) throw new Refusal(503, tr(stationLang(), "station.quota.resetUnsupported"));
             return codex.resetQuota(profile, key);
@@ -275,7 +293,7 @@ export class Accounts {
     }
   }
 
-  /// Starts what runs on its own: the pool told of profiles' health, the known outdated models unchecked, sign-ins
+  /// Starts what runs on its own: the pool told of profiles' health, the outdated models unchecked, sign-ins
   /// followed, the checks after start, the allowance rounds, the machine's logins read.
   start() {
     this.deps.hub?.accounts.setHealth((id) => this.health(id));
@@ -394,8 +412,7 @@ export class Accounts {
   /// How a profile is doing, told to a station borrowing it: its allowance asked again first when older than a round
   /// (the rounds run only while someone follows this station, and the borrower is not someone).
   async lentHealth(id: string): Promise<ProfileHealth> {
-    const q = this.quotas.get(id);
-    if (q === undefined || this.background.now() - q.checkedAt >= QUOTA_EVERY_MS) await this.refreshQuota(id).catch(() => null);
+    if (!this.quotas.has(id) || this.background.now() - this.quotaAskedAt(id) >= QUOTA_EVERY_MS) await this.refreshQuota(id).catch(() => null);
     return this.health(id);
   }
 
@@ -405,7 +422,8 @@ export class Accounts {
     return { token, expiresAt };
   }
 
-  /// A Claude profile's current token, renewed when about to run out: what a station sharing it lends.
+  /// A Claude profile's current token, renewed when about to run out: handed to its local sessions (`subscriptionToken`)
+  /// and lent when another station shares it.
   async claudeToken(profile: Json, rejected?: string): Promise<MachineToken> {
     if (profile.machine === true) return this.machineToken(this.env, rejected);
     const home = String(profile.home ?? "");
@@ -413,10 +431,34 @@ export class Accounts {
     return { token, expiresAt };
   }
 
+  /// One of a Claude subscription's limit resets used (claude-reset.ts), with its token (a borrowed one's lent by its
+  /// host), renewed and asked again once when the provider says it is not good.
+  private async claudeReset(profile: Profile, key: string, kind: string | null): Promise<Json> {
+    const version = this.deps.claudeVersion?.() ?? null;
+    if (version === null) throw new Refusal(503, tr(stationLang(), "station.quota.resetUnsupported"));
+    const token = (rejected?: string) => {
+      if (!borrowed(profile)) return this.claudeToken(profile, rejected);
+      if (!this.deps.shared?.lendClaude) throw new Refusal(503, tr(stationLang(), "station.quota.resetUnsupported"));
+      return this.deps.shared.lendClaude(profile, rejected);
+    };
+    const first = await token();
+    const result = await claudeResetWith(this.urls.anthropic, first.token, version, key, kind);
+    if (result?.unauthorized !== true) return result;
+    const renewed = await token(first.token);
+    const again = await claudeResetWith(this.urls.anthropic, renewed.token, version, key, kind);
+    if (again?.unauthorized === true) throw new Refusal(502, tr(stationLang(), "station.quota.signInExpired"));
+    return again;
+  }
+
   /// Refused for a copy of another station's profile: it is changed there.
   private own(id: string, lang: Lang) {
-    const p = (Array.isArray(this.deps.config.raw()?.profiles) ? this.deps.config.raw().profiles : []).find((x: Json) => x?.id === id);
+    const p = this.rawProfile(id);
     if (p && borrowed(p)) throw new Refusal(409, tr(lang, "station.share.borrowedEdit"));
+  }
+
+  /// Profile `id` as config.json has it (undefined: none).
+  private rawProfile(id: string): Json | undefined {
+    return (Array.isArray(this.deps.config.raw()?.profiles) ? this.deps.config.raw().profiles : []).find((x: Json) => x?.id === id);
   }
 
   // ── edits ──
@@ -436,10 +478,33 @@ export class Accounts {
   /// those who manage the station only; kept as those of the station's joined workspaces withheld from it, so one it
   /// joins later runs on it too.
   putProfile(id: string, given: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
-    this.own(id, lang);
-    const before = this.profile(id);
     if (given.enabled !== undefined && typeof given.enabled !== "boolean") throw new Refusal(400, "enabled must be a boolean");
+    // A copy of another station's is edited there; only whether this station uses it is its own to say (paused here,
+    // kept as its host's copy is refreshed: share/index.ts placeProfile).
+    const pausing = Object.keys(given).every((k) => k === "enabled") && given.enabled !== undefined;
+    if (!pausing) this.own(id, lang);
+    const before = this.profile(id);
     if (given.enabled !== undefined && before?.machine === true) throw new Refusal(400, "a machine login cannot be paused here");
+    if (pausing && before !== undefined && borrowed(this.rawProfile(id))) {
+      this.save(viewer, `profile ${id}`, (raw) => {
+        const list: Json[] = Array.isArray(raw.profiles) ? raw.profiles : [];
+        const existing = list.find((p) => p?.id === id);
+        if (!existing) return;
+        // Disabled by its host: said so (`hostOff`, share/index.ts placeProfile), or disabled with no pause here, as a
+        // copy placed before `hostOff` was written has it (only its host disabled one then).
+        const hostOff = existing.share.hostOff === true || (existing.enabled === false && existing.share.paused !== true);
+        if (hostOff) existing.share.hostOff = true;
+        if (given.enabled === false) existing.share.paused = true;
+        else delete existing.share.paused;
+        if (given.enabled === false || hostOff) existing.enabled = false;
+        else delete existing.enabled;
+        raw.profiles = list;
+      });
+      if (before.enabled !== false && given.enabled === false) {
+        this.deps.hub?.profileGone?.(id).catch((error) => log.warn("accounts", "moving sessions off a paused copy failed", { profile: id, error: (error as Error).message }));
+      }
+      return;
+    }
     const givenWorkspaces = given.workspaces;
     if (givenWorkspaces !== undefined && !manages(viewer)) throw new Refusal(403, tr(lang, "station.share.managersOnly"));
     if (givenWorkspaces !== undefined && givenWorkspaces !== null && (!Array.isArray(givenWorkspaces) || !givenWorkspaces.every((w) => typeof w === "string" && /^[0-9A-Za-z_-]{1,128}$/.test(w)))) {
@@ -661,6 +726,22 @@ export class Accounts {
 
   // ── sign-ins ──
 
+  /// Where `id`'s isolated sign-in browser context keeps its cookies and passkeys: inside the profile's own home, or
+  /// the pending login's (following its rename once `pendingChanged` creates the profile; null once dropped or failed).
+  private loginStateFile(id: string): string | null {
+    const profile = this.profile(id);
+    if (profile) return profile.machine === true || borrowed(profile) ? null : join(profile.home, LOGIN_BROWSER_FILE);
+    const pending = this.pending.get(id);
+    if (!pending) return null;
+    if (pending.created !== null) {
+      const made = this.profile(pending.created);
+      return made ? join(made.home, LOGIN_BROWSER_FILE) : null;
+    }
+    const state = this.logins.get(id)?.state;
+    if (state === "failed" || state === "cancelled") return null;
+    return join(pending.home, LOGIN_BROWSER_FILE);
+  }
+
   /// POST /profiles/:id/login: a subscription profile signed in (again).
   async startLogin(id: string, viewer: Viewer, lang: Lang = stationLang()): Promise<LoginJob> {
     const profile = this.profile(id);
@@ -675,7 +756,14 @@ export class Accounts {
     if (kind === "opencode-go") return this.logins.startConsole({ id, home: profile.home }, lang);
     if (kimi) return this.logins.startKimi({ id, home: profile.home }, lang);
     if (profile.runtime === "cursor") return this.logins.startCursor({ id, home: profile.home }, lang);
-    return this.logins.start({ id, runtime: profile.runtime, home: profile.home }, lang);
+    let email: string | null = null;
+    if (profile.runtime === "claude") {
+      const fromHome = await accountEmailSoon("claude", profile.home);
+      const fallback = EMAIL_RE.test(profile.name.trim()) ? profile.name.trim() : null;
+      const candidate = (fromHome ?? fallback)?.trim() ?? "";
+      email = EMAIL_RE.test(candidate) ? candidate : null;
+    }
+    return this.logins.start({ id, runtime: profile.runtime, home: profile.home, ...(email ? { email } : {}) }, lang);
   }
 
   /// POST /logins: signing a subscription in before there is a profile; the profile is made once it succeeds.
@@ -902,23 +990,27 @@ export class Accounts {
     });
   }
 
-  /// The known outdated models (models.ts) unchecked on this station's profiles, each once: config.json keeps which were
-  /// (`outdatedUnchecked`), so one checked again by hand stays, and a model added to the table is unchecked when the
-  /// station that has it next starts.
+  /// The models outdated on this station's profiles (models.ts) unchecked, each once: config.json keeps which were
+  /// (`outdatedUnchecked`), so one checked again by hand stays. Worked out at the start and again as a check finds other
+  /// models (a newer one offered, an old one gone).
   private uncheckOutdated() {
-    const found = (id: string) => this.checks.get(id)?.models ?? null;
+    const found = (id: string) => {
+      const c = this.checks.get(id);
+      return c?.models ? [...c.models, ...expandDevinFusion(c.fusion)] : null;
+    };
     const unchecked = (raw: Json) => {
       const done = new Set<string>(Array.isArray(raw?.outdatedUnchecked) ? raw.outdatedUnchecked.filter((k: unknown) => typeof k === "string") : []);
-      const { changes, deferred } = uncheckOutdated(raw, found, done);
-      const now = [...new Set([...done, ...[...OUTDATED.keys()].filter((k) => !deferred.has(k))])].sort();
-      return { changes, now, grew: now.length > done.size };
+      const { changes, unchecked } = uncheckOutdated(raw, found, done);
+      return { changes, now: [...new Set([...done, ...unchecked])].sort() };
     };
     // Worked out on a copy first: config.json is written only when something changes.
-    const { changes, grew } = unchecked(structuredClone(this.deps.config.raw()));
-    if (changes.length === 0 && !grew) return;
+    if (unchecked(structuredClone(this.deps.config.raw())).changes.length === 0) return;
+    let changes: ReturnType<typeof unchecked>["changes"] = [];
     try {
       this.deps.config.update((raw) => {
-        raw.outdatedUnchecked = unchecked(raw).now;
+        const done = unchecked(raw);
+        changes = done.changes;
+        raw.outdatedUnchecked = done.now;
       });
     } catch (e) {
       log.warn("accounts", "could not uncheck the outdated models", { error: (e as Error).message });
@@ -927,12 +1019,52 @@ export class Accounts {
     for (const c of changes) log.info("accounts", "outdated models unchecked", { profile: c.profile, removed: c.removed.join(" "), added: c.added.join(" ") });
   }
 
+  /// The catalog named models it had not (models/module.ts): the profiles whose check found a model of one of their
+  /// makers are checked again, so a model a provider has just begun to offer is offered here, and replaces the one before
+  /// it, without the station starting again (Fable 5.2 came out with the stations up, 2026-11-09).
+  newModels(keys: readonly string[]) {
+    const makers = new Set(keys.flatMap((k) => facts(k)?.maker ?? []));
+    if (makers.size === 0) return;
+    const ids = this.profiles()
+      .filter((p) => p.enabled !== false && (this.checks.get(p.id)?.models ?? []).some((m) => makers.has(facts(m)?.maker ?? "")))
+      .map((p) => p.id);
+    if (ids.length === 0) return;
+    log.info("accounts", "new models in the catalog: their makers' profiles checked again", { models: keys.join(" "), profiles: ids.join(" ") });
+    this.background.spawn(() => this.checkEach(ids, stationLang()).catch(() => undefined));
+  }
+
+  /// Checks the profiles, four at a time; throws the first refusal once all are done.
+  private async checkEach(ids: readonly string[], lang: Lang) {
+    const errors: unknown[] = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < ids.length) {
+        const id = ids[next++]!;
+        try {
+          await this.check(id, lang);
+        } catch (e) {
+          errors.push(e);
+        }
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    if (errors.length > 0) throw errors[0];
+  }
+
   // ── checks and allowances ──
 
   private keepCheck(id: string, check: ProfileCheck) {
     check.checkedAt = this.background.now();
+    const before = this.checks.get(id);
     this.checks.set(id, check);
     this.deps.store.setProfileCheck(id, check);
+    // Other models found: one may now replace one the profile names.
+    if (
+      JSON.stringify(before?.models ?? null) !== JSON.stringify(check.models) ||
+      JSON.stringify(before?.fusion ?? null) !== JSON.stringify(check.fusion ?? null)
+    ) {
+      this.uncheckOutdated();
+    }
     this.changed();
   }
 
@@ -997,17 +1129,31 @@ export class Accounts {
         check.detail = tr(lang, "station.profile.hermesModelsFailed", { error: (e as Error).message });
       }
     }
-    // (One signed out of its Google account is said so by its check: no session asked.)
-    if (profile.runtime === "agy" && check.state !== "login" && this.deps.agy?.()) {
+    // (One signed out of its Google account is said so by its check: no session asked; a subscription whose keychain
+    // sign-in was revoked or removed is found signed out here, while an already-failed key check keeps its refusal.)
+    if (profile.runtime === "agy" && (check.state === "ok" || check.state === "unknown") && this.deps.agy?.()) {
       try {
-        check.models = await this.deps.agy()!.models(profile);
+        const agy = this.deps.agy()!;
+        if (agy.catalog) {
+          const catalog = await agy.catalog(profile);
+          check.models = catalog.models;
+          check.modelEfforts = { agy: catalog.efforts };
+          if (Object.keys(catalog.defaults).length > 0) check.modelEffortDefaults = { agy: catalog.defaults };
+        } else {
+          check.models = await agy.models(profile);
+        }
         check.state = "ok";
         check.detail = tr(lang, "station.profile.works", { n: check.models.length });
       } catch (e) {
         const error = (e as Error).message;
         check.models = null;
-        check.state = "failed";
-        check.detail = tr(lang, "station.profile.agyFailed", { error });
+        if (kind === "subscription" && agyClassifyFailure(error) === "auth") {
+          check.state = "login";
+          check.detail = tr(lang, "station.profile.signedOut");
+        } else {
+          check.state = "failed";
+          check.detail = tr(lang, "station.profile.agyFailed", { error });
+        }
       }
     }
     check.decision = await this.discoverFn(profile, check);
@@ -1023,7 +1169,12 @@ export class Accounts {
     const previous = this.checks.get(id);
     // A list not read this time (the provider not answering a moment, a check that failed) does not take away the models
     // the profile was found to run: the pickers' liked and frequent models are only those it runs.
-    if (check.models === null && previous !== undefined && previous.models !== null) check.models = previous.models;
+    if (check.models === null && previous !== undefined && previous.models !== null) {
+      check.models = previous.models;
+      if (check.modelEfforts === undefined && previous.modelEfforts !== undefined) check.modelEfforts = previous.modelEfforts;
+      if (check.modelEffortDefaults === undefined && previous.modelEffortDefaults !== undefined) check.modelEffortDefaults = previous.modelEffortDefaults;
+      if (check.fusion === undefined && previous.fusion !== undefined) check.fusion = previous.fusion;
+    }
     if (codexSubscription && previous?.codexRevoked) {
       check.state = "login";
       check.detail = previous.detail;
@@ -1096,13 +1247,31 @@ export class Accounts {
     return this.readQuota(id, false);
   }
 
+  /// When a profile's allowance was last asked, answered or not (what stands through a question unanswered keeps the
+  /// time it was read: askQuota).
+  private quotaAskedAt(id: string): number {
+    return Math.max(this.quotas.get(id)?.checkedAt ?? 0, this.quotaUnanswered.get(id)?.at ?? 0);
+  }
+
+  /// The same asked by a person (the route's), who is told what came of it: the question on its way waited for, and
+  /// one that got no answer refused saying so, the allowance read before left standing.
+  async askedQuota(id: string): Promise<ProfileQuota | null> {
+    const busy = this.quotaBusy.get(id);
+    if (busy) await busy;
+    else await this.readQuota(id, false);
+    const unanswered = this.quotaUnanswered.get(id);
+    if (unanswered !== undefined) throw new Refusal(502, unanswered.detail);
+    return this.quotas.get(id) ?? null;
+  }
+
   private readQuota(id: string, afterReset: boolean): Promise<ProfileQuota | null> {
     const busy = this.quotaBusy.get(id);
     if (busy && !afterReset) return Promise.resolve(this.quotas.get(id) ?? null);
     // A read after a reset waits for any older one, so an in-flight snapshot from before cannot win.
     const read = (async () => {
       if (busy) await busy;
-      return this.askQuota(id);
+      // (asked because it changed, a reset used or signed in anew: what was read before is not what stands)
+      return this.askQuota(id, !afterReset);
     })();
     const done: Promise<void> = read.then(
       () => {},
@@ -1115,10 +1284,14 @@ export class Accounts {
     return read;
   }
 
-  private async askQuota(id: string): Promise<ProfileQuota | null> {
+  /// `stands`: whether the allowance read before stands where this question gets no answer.
+  private async askQuota(id: string, stands: boolean): Promise<ProfileQuota | null> {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
-    if (profile.enabled === false) return this.quotas.get(id) ?? null;
+    if (profile.enabled === false) {
+      this.quotaUnanswered.delete(id);
+      return this.quotas.get(id) ?? null;
+    }
     const generation = this.loginGeneration.get(id) ?? 0;
     // Another station's subscription: a Codex one's is read with the login its host lent while that is good; otherwise
     // (none lent yet, run out, refused) it comes with its host's check.
@@ -1160,8 +1333,18 @@ export class Accounts {
       return this.quotas.get(id) ?? null;
     }
     if (!this.quotaFn) return this.quotas.get(id) ?? null;
-    const { signedOut, ...asked } = await this.quotaFn(profile);
+    const { signedOut, unanswered, ...asked } = await this.quotaFn(profile);
     if ((this.loginGeneration.get(id) ?? 0) !== generation) return this.quotas.get(id) ?? null;
+    // No answer (the provider not reached, or in trouble itself) says nothing of the allowance: the one read before
+    // stands, with when it was read, till an answer comes or it is too old to show. One such miss took every Claude
+    // account's allowance and resets off their pages for a round (2026-11-11). Asked again each round as ever: what
+    // stands keeps its `checkedAt`.
+    const before = this.quotas.get(id);
+    if (stands && unanswered === true && before?.state === "ok" && this.background.now() - before.checkedAt < QUOTA_STANDS_MS) {
+      this.quotaUnanswered.set(id, { detail: asked.detail ?? "", at: this.background.now() });
+      return before;
+    }
+    this.quotaUnanswered.delete(id);
     let current = asked;
     let refused = signedOut === true;
     if (profile.runtime === "codex" && accessKind(profile) === "subscription" && refused) {
@@ -1193,8 +1376,7 @@ export class Accounts {
     const now = this.background.now();
     for (const p of this.profiles()) {
       if (p.enabled === false) continue;
-      const q = this.quotas.get(p.id);
-      const fresh = q !== undefined && now - q.checkedAt < QUOTA_EVERY_MS - 1000;
+      const fresh = this.quotas.has(p.id) && now - this.quotaAskedAt(p.id) < QUOTA_EVERY_MS - 1000;
       if (fresh && !all) {
         this.refreshMissingBorrowedResetDetails(p);
         continue;
@@ -1245,14 +1427,15 @@ export class Accounts {
     this.refreshQuotas(false);
   }
 
-  /// POST /profiles/:id/reset-quota: an OpenAI subscription's rate-limit reset redeemed, under the request's key.
-  async resetQuota(id: string, key: string, lang: Lang = stationLang()): Promise<Json> {
+  /// POST /profiles/:id/reset-quota: a subscription's rate-limit reset redeemed (OpenAI's, Claude's), under the request's
+  /// key; `kind`, of the allowance's `resets` (none: any, as a core from before kinds asks).
+  async resetQuota(id: string, key: string, lang: Lang = stationLang(), kind: string | null = null): Promise<Json> {
     const t = (k: string) => tr(lang, k);
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, t("station.profile.notFound"));
-    if (profile.runtime !== "codex" || accessKind(profile) !== "subscription") throw new Refusal(400, t("station.quota.resetOpenAiOnly"));
+    if ((profile.runtime !== "codex" && profile.runtime !== "claude") || accessKind(profile) !== "subscription") throw new Refusal(400, t("station.quota.resetSubscriptionOnly"));
     if (!this.resetFn) throw new Refusal(503, t("station.quota.resetUnsupported"));
-    const result = await this.resetFn(profile, key);
+    const result = await this.resetFn(profile, key, kind);
     const quota = await this.readQuota(id, true).catch((error) => {
       log.warn("accounts", "could not read the allowance after a reset", { profile: id, error: (error as Error).message });
       return null;
@@ -1270,6 +1453,7 @@ export class Accounts {
     }
     if (outcome === "nothingToReset") throw new Refusal(409, t("station.quota.nothingToReset"));
     if (outcome === "noCredit") throw new Refusal(409, t("station.quota.noCredit"));
+    if (outcome === "unavailable") throw new Refusal(409, t("station.quota.resetUnavailable"));
     throw new Refusal(502, t("station.quota.resetUnconfirmed"));
   }
 
@@ -1342,21 +1526,7 @@ export class Accounts {
   /// POST /automatic-decisions/refresh: every profile checked again (four at a time).
   async refreshDecisionModels(viewer: Viewer, lang: Lang = stationLang()) {
     if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnlyRefresh"));
-    const ids = this.profiles().filter((p) => p.enabled !== false).map((p) => p.id);
-    const errors: unknown[] = [];
-    let next = 0;
-    const worker = async () => {
-      while (next < ids.length) {
-        const id = ids[next++]!;
-        try {
-          await this.check(id, lang);
-        } catch (e) {
-          errors.push(e);
-        }
-      }
-    };
-    await Promise.all([worker(), worker(), worker(), worker()]);
-    if (errors.length > 0) throw errors[0];
+    await this.checkEach(this.profiles().filter((p) => p.enabled !== false).map((p) => p.id), lang);
   }
 
   // ── what the overview shows of the accounts ──
@@ -1473,6 +1643,7 @@ export class Accounts {
       let checkView: Json = null;
       if (check) {
         checkView = structuredClone(check);
+        delete checkView.fusion;
         if (isObject(checkView.decision)) delete checkView.decision.fingerprint;
         if (check.decision && check.decision.fingerprint !== fingerprint(p)) checkView.decision = { state: "pending", detail: "Profile 已修改，等待自动检查", reason: "changed" };
       }
@@ -1511,6 +1682,14 @@ export class Accounts {
     // The connects it runs of the viewer's workspace (those of others are not shown there).
     const connects = new Set(config.connects.filter((c) => c.workspace === joined).map((c) => c.id));
     return views.map((v) => ({ ...v, usedBy: v.usedBy.filter((c: string) => connects.has(c)) }));
+  }
+
+  /// GET /profiles/:id/fusion: the Devin Fusion catalog from the profile's last check (null on borrowed or non-Devin profiles).
+  fusionView(id: string): Json {
+    const profile = this.profile(id);
+    if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    if (borrowed(profile)) return null;
+    return this.checks.get(id)?.fusion ?? null;
   }
 
   /// The workspaces the station joined, its home one left out.
@@ -1644,7 +1823,7 @@ function accountFiles(runtime: Runtime, home: string): AccountFile[] {
   if (runtime === "grok") return [{ path: grokAuthFile(home), email: grokEmailIn }];
   if (runtime === "cursor") return [{ path: cursorAuthFile(home), email: (text) => cursorIn(text)?.email ?? null }];
   if (runtime === "devin") return [{ path: devinAccountFile(home), email: devinNotedIn }];
-  if (runtime === "agy") return [{ path: agyToken(home), email: agyEmailIn }];
+  if (runtime === "agy") return [{ path: agyToken(home), email: agyEmailIn }, { path: agyAccountFile(home), email: devinNotedIn }];
   if (runtime === "codex") {
     const email = (text: string) => {
       const claims = codexClaimsIn(text);

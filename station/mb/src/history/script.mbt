@@ -25,7 +25,8 @@ fn is_alphabetic(c : Int) -> Bool {
 }
 
 ///|
-fn is_alphanumeric(c : Int) -> Bool {
+/// [\p{Alphabetic}\p{N}] (read/machine.ts `injected` tests the same).
+pub fn is_alphanumeric(c : Int) -> Bool {
   in_ranges(alphanumeric_ranges, c)
 }
 

@@ -46,7 +46,7 @@ pub fn appearance_node(
     fn() { if wide() { ["settings"] } else { keys() } },
     fn(b, key) {
       if key == "settings" {
-        @sf.group_node(b, fn(g) { g.each(keys, fn(k) { k }, fn(r, k) { appearance_setting(r, core, @signals.untracked(fn() { k.get() })) }) })
+        @sf.group_node(b, fn(g) { g.each(keys, fn(k) { k }, fn(r, k) { appearance_setting(r, core, k.untracked()) }) })
       } else {
         appearance_setting(b, core, key)
       }
@@ -58,7 +58,7 @@ pub fn appearance_node(
 /// One of 外观's settings, by its key: 主题, 主题色, 字体 (the faces chosen, opening their page), 动画, 震动, 语言, 缩放,
 /// 拖入的文件, 侧栏. Each choice the core's prefs (`prefs.set`), shown at once.
 fn appearance_setting(v : @view.View, core : Core, key : String) -> Unit {
-  let prefs = fn() { (core.topic)("prefs", Map::new()).get().value }
+  let prefs = fn() { (core.topic)("prefs", Map([])).get().value }
   // a choice of a few (Segmented, Seg): the kept value, or the one just chosen while the core takes it
   let choice = fn(title : String, note : String, options : Array[(String, String)], now : () -> String) {
     @sf.setting_choice_node(

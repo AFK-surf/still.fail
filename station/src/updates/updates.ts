@@ -6,8 +6,13 @@
 //   scripts/release-sign.ts: a feed that does not is no newer release). Switched back from the beta, the older stable
 //   release is offered as going back (`downgrade`), only then. It is updated as `stillfail update` does (release.ts):
 //   by the installer this release carries, told what the new one must hash to, run apart from the station; only a
-//   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the clone). With `autoUpdate: true` it does so by itself once the
-//   station has been quiet a while (never back from the beta, and a version it already went for, not again).
+//   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the
+//   clone). With `autoUpdate: true` it does so by itself (never back from the beta). A reported installer failure gets
+//   one delayed retry, then waits for a newer release; vault work still holds both attempts back.
+//   With a delta from the build it runs (release.ts takeDelta), the station downloads it and applies it first (the
+//   applying in a process apart, release.ts applyApart), shown as the installer's download step is, and hands the
+//   installer what it made (STILLFAIL_ARCHIVE in a temporary stillfail-handed directory); the update is answered as
+//   started meanwhile. A delta not used is a line in the log, and the installer downloads the release as without.
 // - Claude Code and Codex: `--version`, and the latest their npm packages say (Devin: its installer's manifest); updated
 //   the way each was installed.
 //   Cursor is no command: its SDK's package, in the station's own npm prefix (agents/cursor.ts), its version the package's.
@@ -39,7 +44,7 @@ import { rm } from "node:fs/promises";
 import { type FSWatcher, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, parse } from "node:path";
-import { type Clock, Effect, Fiber } from "effect";
+import { type Clock, Effect, Fiber, Schedule } from "effect";
 import { Fibers } from "../ops/fibers.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
@@ -48,7 +53,8 @@ import { forgetShellPaths, withShellCommand } from "../ops/shell-path.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 import { platform as machine } from "../platform/index.ts";
 import { holding, onLetGo } from "./holds.ts";
-import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
+import { AGY_MANIFESTS, watchAgyDownload } from "./agy-download.ts";
+import { applyApart, planUpdate, readFeed, takeDelta, verifiedOrNull, type Plan } from "./release.ts";
 import { SDK_PACKAGE, sdkPrefix, sdkVersion } from "../agents/cursor.ts";
 import { canSwitchCodex, captureCodex, codexBinary, hasCodexHost, missingCodexHost, restoreCodex, switchCodex, type CodexEntry } from "./codex-repair.ts";
 import {
@@ -95,6 +101,8 @@ export type Timing = {
   doneShown: number;
   /// The slow look at an update under way (beside the watch on run/).
   followLook: number;
+  /// How long the station's delta may take (its download and applying) before the installer downloads the release.
+  deltaLimit: number;
 };
 
 export const TIMING: Timing = {
@@ -103,7 +111,12 @@ export const TIMING: Timing = {
   stationLimit: 20 * 60_000,
   doneShown: 10 * 60_000,
   followLook: 5_000,
+  deltaLimit: 10 * 60_000,
 };
+
+/// A transient handover failure can clear; try once more without repeatedly starting a broken release.
+const STATION_RETRY_MS = 60_000;
+const STATION_RETRY_BACKOFF = Schedule.min([Schedule.exponential("2 minutes"), Schedule.spaced("15 minutes")]); // timer: backoff after a failed update
 
 export type UpdatesOptions = {
   /// The release this station runs from (`--app`).
@@ -120,10 +133,14 @@ export type UpdatesOptions = {
   devinManifest?: string;
   /// Where Claude Code's builds are said (its installer's downloads, for how much of one is in).
   claudeReleases?: string;
+  /// Where the Antigravity CLI's installer reads its builds (agy-download.ts AGY_MANIFESTS), for how much of one is in.
+  agyManifests?: string;
   /// Where Node's builds are (nodejs.org's), for npm where the machine has none (runtimes.ts OwnNode).
   nodeDist?: string;
   /// How many turns run now (the hub's), for what a drain waits on and an automatic update waits for.
   running?: () => number;
+  /// The station's own release only (a rig runs no runtime: rig/main.ts): the runtimes' versions are not read.
+  stationOnly?: boolean;
   /// Told when a runtime was installed or updated here (the machine's logins read again), and whether it is there now.
   runtimeChanged?: (kind: RuntimeKind, installed: boolean, replaced: boolean) => void;
   /// The Codex installation's code-mode host (tests can supply a probe).
@@ -224,6 +241,7 @@ export class Updates {
   private registry: string;
   private devinManifest: string;
   private claudeReleases: string;
+  private agyManifests: string;
   private nodeDist: string;
   /// Node being put in place for npm (installNode), while it is.
   private nodeInstalling: Promise<void> | null = null;
@@ -238,8 +256,12 @@ export class Updates {
   private codexRecovery: Promise<void> | null = null;
   private codexUpdateSerial = 0;
   private listeners = new Set<() => void>();
-  /// The version the station's last update in this process went for: updating by itself, not tried again.
+  /// The version the station's last update in this process went for.
   tried: string | null = null;
+  /// A failed version whose retry is due, and the version whose retry was attempted in this process.
+  private retryDue: string | null = null;
+  private retried: string | null = null;
+  private retrySerial = 0;
   private lastCheck: number | null = null;
   private running: () => number;
   private runtimeChanged: (kind: RuntimeKind, installed: boolean, replaced: boolean) => void;
@@ -256,6 +278,9 @@ export class Updates {
   /// The update of the station followed now: what ends following it.
   private following: (() => void) | null = null;
 
+  /// The runtimes whose versions are read (none on a rig).
+  private readonly kinds: readonly RuntimeKind[];
+
   constructor(o: UpdatesOptions) {
     this.app = o.app;
     this.data = o.data;
@@ -268,10 +293,12 @@ export class Updates {
     this.registry = o.registry ?? "https://registry.npmjs.org";
     this.devinManifest = o.devinManifest ?? DEVIN_MANIFEST;
     this.claudeReleases = o.claudeReleases ?? "https://downloads.claude.ai/claude-code-releases";
+    this.agyManifests = o.agyManifests ?? AGY_MANIFESTS;
     this.nodeDist = o.nodeDist ?? "https://nodejs.org/dist";
     this.timing = { ...TIMING, ...o.timing };
     this.trusted = o.trusted;
     this.running = o.running ?? (() => 0);
+    this.kinds = o.stationOnly === true ? [] : RUNTIMES;
     this.runtimeChanged = o.runtimeChanged ?? (() => {});
     this.codexHostProbe = o.codexHostProbe ?? missingCodexHost;
     // Read before an update can replace the release.
@@ -460,10 +487,10 @@ export class Updates {
 
   private async read(withStation: boolean) {
     const held = this.items.station;
-    let [station, ...runtimes] = await Promise.all([withStation ? this.readStation(this.channel()) : Promise.resolve(held), ...RUNTIMES.map((kind) => this.readRuntime(kind))]);
+    let [station, ...runtimes] = await Promise.all([withStation ? this.readStation(this.channel()) : Promise.resolve(held), ...this.kinds.map((kind) => this.readRuntime(kind))]);
     // Put on another channel while it was read: read from that one.
     while (station.channel !== this.channel()) station = await this.readStation(this.channel());
-    for (const [kind, read] of [["station", station] as const, ...RUNTIMES.map((kind, i) => [kind, runtimes[i]!] as const)]) {
+    for (const [kind, read] of [["station", station] as const, ...this.kinds.map((kind, i) => [kind, runtimes[i]!] as const)]) {
       const item = this.items[kind];
       // One that is updating keeps what it was until it is done; but one not yet read (an update this process took
       // over following) is read.
@@ -514,7 +541,7 @@ export class Updates {
     let latest: string | null = null;
     if (kind === "hermes") return { ...empty(), installed: found !== null, version, latest: null, how: null, note: { key: "station.updates.hermesExternal" } };
     // The Antigravity CLI says no latest version but to itself (`agy update`, which gets it).
-    if (kind === "agy") return { ...empty(), installed: found !== null, version, latest: null, how: found ? (howToUpdate(kind, found, env) as How) : null, ...(found ? {} : { note: { key: "station.updates.agyExternal" } }) };
+    if (kind === "agy") return { ...empty(), installed: found !== null, version, latest: null, how: found ? (howToUpdate(kind, found, env) as How) : (howToInstall(kind, this.env) as How) };
     try {
       // Devin's builds are its installer's, said in its manifest; the others' npm packages.
       const said = await fetchJson(kind === "devin" ? this.devinManifest : `${this.registry}/${kindPackage(kind)}/latest`);
@@ -622,15 +649,16 @@ export class Updates {
 
   /// The version the station updates itself to now, when it does: it updates itself, can be updated from here, is not
   /// updating, and its channel's latest is newer (not an older stable one back from the beta) and not one it already
-  /// went for. Running turns are not waited for: the update hands them over (or, restarting, to the next start). What
-  /// is not handed over is (holds.ts: a command run with a vault grant, whose proxy would go with this process).
+  /// went for, unless that failure's retry is due. Running turns are not waited for: the update hands them over (or,
+  /// restarting, to the next start). What is not handed over is (holds.ts: a command run with a vault grant, whose
+  /// proxy would go with this process).
   toUpdateTo(): string | null {
     if (!this.auto() || holding() > 0) return null;
     const item = this.items.station;
     if (item.note !== null || item.updating !== null || item.channel !== this.channel() || this.runtimeUpdating() !== null) return null;
     if (item.latest === null) return null;
     const [isNewer] = offer(item.version, item.latest, this.channel(), this.installed);
-    return isNewer && this.tried !== item.latest ? item.latest : null;
+    return isNewer && (this.tried !== item.latest || this.retryDue === item.latest) ? item.latest : null;
   }
 
   private autoUpdate(why: string) {
@@ -638,6 +666,33 @@ export class Updates {
     if (to === null) return;
     log.info("updates", `${why}: the station updates itself`, { to });
     this.updateStation(stationLang()).catch((e) => log.warn("updates", "the station not updated by itself", { error: (e as Error).message }));
+  }
+
+  /// Retry one failed installer, rereading the signed feed with backoff if it or the installer's plan is unavailable.
+  private retryStation(version: string) {
+    const serial = ++this.retrySerial;
+    const over = () => this.closed || serial !== this.retrySerial || this.tried !== version || this.retried === version;
+    const attempt = Effect.promise(async () => {
+      if (over()) return true;
+      this.retryDue = version;
+      if (this.auto()) {
+        try {
+          // A runtime-only reading may already be in flight; wait for it, then read the station's feed too.
+          if (this.checking) await this.checking.catch(() => {});
+          if (over()) return true;
+          await this.check();
+          if (!over()) this.autoUpdate("retrying a failed update");
+        } catch (e) {
+          log.warn("updates", "the failed update's release not read", { error: (e as Error).message });
+        }
+      }
+      return over();
+    });
+    // timer: retry after a failed update, then back off if the release cannot be read or its installer started.
+    this.fibers.fork(Effect.sleep(STATION_RETRY_MS).pipe(
+      Effect.andThen(attempt.pipe(Effect.repeat({ schedule: STATION_RETRY_BACKOFF, until: (done) => done }))), // timer: retry after a failed update
+      Effect.asVoid,
+    ));
   }
 
   // ---- updating ----
@@ -846,8 +901,8 @@ export class Updates {
   }
 
   /// Runs `how`, saying where it is as it goes: a download that can be measured, by how much of it is in (Codex's
-  /// build for this machine, fetched here first; Claude Code's, as its installer writes it), else the step the command
-  /// says it is at (Homebrew's, Claude Code's installer's).
+  /// build for this machine, fetched here first; Claude Code's and the Antigravity CLI's, as their installers write
+  /// them), else the step the command says it is at (Homebrew's, Claude Code's installer's).
   private async install(kind: Kind, how: How, givenEnv?: Env): Promise<[boolean, string, number | null]> {
     if (how.node) await this.installNode(kind, how.node);
     const runtimeEnv = givenEnv ?? await withShellCommand(kindCommand(kind), this.env);
@@ -862,7 +917,9 @@ export class Updates {
     const installing = { now: false };
     // Claude Code's own installer (not `claude update`, nor Homebrew).
     const own = how.program === "/bin/sh" || how === machine.claudeInstall;
-    const stop = kind === "claude" && own ? this.watchClaudeDownload(installing) : () => {};
+    const stop = kind === "claude" && own ? this.watchClaudeDownload(installing)
+      : kind === "agy" && how === machine.agyInstall ? this.watchAgyDownload(env)
+      : () => {};
     try {
       return await runLines(how.program, how.args, env, this.timing.runtimeLimit, (line) => {
         const step = stepOf(line);
@@ -999,6 +1056,18 @@ export class Updates {
     }
   }
 
+  /// Says how much of the Antigravity CLI's build its own installer has downloaded (agy-download.ts), then that it
+  /// installs it.
+  private watchAgyDownload(env: Env): () => void {
+    return watchAgyDownload({
+      manifests: this.agyManifests,
+      build: machine.agyBuild,
+      staging: (url) => machine.agyStaging(env, url),
+      after: (ms, f) => this.fibers.after(ms, f),
+      said: (version, got, total) => (got >= total ? this.say("agy", INSTALLING, null) : this.sayDownloading("agy", version, got, total)),
+    });
+  }
+
   /// Says how much of Claude Code's build its installer has downloaded (into ~/.claude/downloads, its size in the
   /// release's manifest; the zstd one when the machine has zstd), until it sets it up. Its installer is another
   /// program writing a file: looked at twice a second while it runs. Gives what stops it.
@@ -1067,15 +1136,63 @@ export class Updates {
       Object.assign(station, before);
       throw e;
     }
+    if (plan.delta === null) {
+      if (!(await this.startPlanned(plan, {}))) {
+        Object.assign(station, before);
+        throw refused(lang, "station.updates.couldNotStart");
+      }
+      return;
+    }
+    // A delta first: answered now, its download shown as the installer's is, and the installer started after it.
+    this.set("station", (i) => {
+      i.step = "download";
+      i.percent = 0;
+    });
+    this.spawn(async () => {
+      if (await this.startPlanned(plan, await this.fromDelta(plan))) return;
+      log.warn("updates", "the station's installer not started");
+      this.set("station", (i) => Object.assign(i, { updating: null, step: null, percent: null, done: null, failed: { key: "station.updates.couldNotStart" } }));
+    });
+  }
+
+  /// What the installer is told of the release the plan's delta made (release.ts takeDelta), applied apart from the
+  /// station; nothing when it was not made.
+  private async fromDelta(plan: Plan): Promise<Record<string, string>> {
+    const over = new AbortController();
+    // timer: a deadline of an outside request (the delta's download) and of the applier; past it the installer
+    // downloads the release.
+    const cancel = this.fibers.after(this.timing.deltaLimit, () => over.abort(new DOMException("timed out", "TimeoutError")));
+    try {
+      return await takeDelta(plan, {
+        app: this.app,
+        apply: applyApart,
+        signal: over.signal,
+        progress: (percent) => this.set("station", (i) => (i.percent = percent)),
+      });
+    } finally {
+      cancel();
+    }
+  }
+
+  /// Starts the installer of `plan`, told `handed` (an archive a delta made) too, and follows it; false when it did not
+  /// start (what it was handed removed).
+  private async startPlanned(plan: Plan, handed: Record<string, string>): Promise<boolean> {
+    const runDir = join(this.data, "run");
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(this.env)) if (v !== undefined) env[k] = v;
-    Object.assign(env, { STILLFAIL_DATA: this.data }, plan.env);
-    const ok = await startInstaller(plan.script, runDir, env, this.app);
+    // Never what an installer gave the station it started (one run without a service passes its own environment on):
+    // an archive long taken, a handing that is not this one's.
+    delete env.STILLFAIL_ARCHIVE;
+    delete env.STILLFAIL_INSTALLER_HANDED;
+    Object.assign(env, { STILLFAIL_DATA: this.data }, plan.env, handed);
+    const ok = !this.closed && (await startInstaller(plan.script, runDir, env, this.app));
     if (!ok) {
-      Object.assign(station, before);
-      throw refused(lang, "station.updates.couldNotStart");
+      if (handed.STILLFAIL_ARCHIVE) await rm(dirname(handed.STILLFAIL_ARCHIVE), { recursive: true, force: true }).catch(() => {});
+      return false;
     }
-    log.info("updates", "updating the station", { origin, channel, to: plan.release.version });
+    log.info("updates", "updating the station", { origin: plan.env.STILLFAIL_ORIGIN, channel: plan.env.STILLFAIL_CHANNEL, to: plan.release.version, delta: handed.STILLFAIL_ARCHIVE !== undefined });
+    if (this.retryDue === plan.release.version) this.retried = plan.release.version;
+    this.retryDue = null;
     this.tried = plan.release.version;
     const started: Started = { at: this.fibers.now(), from: stationVersion(this.app) ?? null };
     try {
@@ -1084,6 +1201,7 @@ export class Updates {
       log.warn("updates", "update.started not written; a handover or restart will not say how the update went", { error: (e as Error).message });
     }
     this.follow(started);
+    return true;
   }
 
   /// An update started before this process, when one is: followed as if started here.
@@ -1180,6 +1298,15 @@ export class Updates {
         i.failed = failed;
         i.done = done;
       });
+      // A timeout alone does not mean the installer exited. It and success also cancel an earlier pending retry.
+      if (code === null || failed === null) {
+        this.retrySerial++;
+        this.retryDue = null;
+        this.retried = this.tried;
+      } else if (this.tried !== null && this.retried !== this.tried) {
+        this.retryDue = null;
+        this.retryStation(this.tried);
+      }
       this.spawn(() => this.check());
       if (done !== null) {
         const shown = done;

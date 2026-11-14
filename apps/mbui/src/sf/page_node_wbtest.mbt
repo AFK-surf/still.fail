@@ -44,7 +44,7 @@ fn rows_drawn(node : Bool, scale : Double) -> Array[String] {
     })
   }
   t.draw()
-  let all = t.drawn_instances().map(fn(a) {
+  let all = t.drawn_instances_keyed().map(fn(a) {
     a
     .mapi(fn(j, x) {
       if a[5] == 1.0 && j == 12 {
@@ -118,7 +118,7 @@ fn page_part_drawn(node : Bool, scale : Double, old : (@ui.Ctx) -> Unit, made : 
     @ui.set_view_app(fn(root) { root.box(fn(b) { page_block(b, made) }) |> ignore })
   }
   t.draw()
-  let all = t.drawn_instances().map(fn(a) {
+  let all = t.drawn_instances_keyed().map(fn(a) {
     a
     .mapi(fn(j, x) {
       if a[5] == 1.0 && j == 12 {
@@ -143,7 +143,7 @@ test "a row with words under it as a node: its title and what it says in a line,
         link_row(c, "a", "判断是否完成", note="标记完成后判断是否推荐归档", value="1 台 station 已启用") |> ignore
         link_row(c, "b", "Willow", value="全局记忆 · 项目记忆") |> ignore
       })
-    }, fn(room) { () })
+    }, fn(_) { () })
     let made = page_part_drawn(true, scale, fn(_) { () }, fn(room) {
       group_node(room, fn(g) {
         link_row_node(g, fn() { "判断是否完成" }, fn() {  }, note=fn() { "标记完成后判断是否推荐归档" }, value=fn() { "1 台 station 已启用" })
@@ -235,7 +235,7 @@ fn head_end_drawn(
     })
   }
   t.run_for(@ui.move_most_ms)
-  let all = t.drawn_instances().map(fn(a) {
+  let all = t.drawn_instances_keyed().map(fn(a) {
     a
     .mapi(fn(j, x) {
       if a[5] == 1.0 && j == 12 {
@@ -258,7 +258,7 @@ test "what a page does at its title's line's end as nodes (a choice of days ther
     let (w, scale, title) = case
     let old = head_end_drawn(false, w, scale, title, ["7 天", "30 天"])
     assert_true(old.length() > 0)
-    seg_same(head_end_drawn(true, w, scale, title, ["7 天", "30 天"]), old, "\{case}")
+    seg_same(head_end_drawn(true, w, scale, title, ["7 天", "30 天"]), old, "\{Repr(case)}")
   }
 }
 
@@ -268,7 +268,7 @@ test "分享 and a choice of days at a page's title's line's end as nodes, the l
     let (w, scale, title) = case
     let old = head_end_drawn(false, w, scale, title, ["7 天", "30 天"], share=true)
     assert_true(old.length() > 0)
-    seg_same(head_end_drawn(true, w, scale, title, ["7 天", "30 天"], share=true), old, "\{case}")
+    seg_same(head_end_drawn(true, w, scale, title, ["7 天", "30 天"], share=true), old, "\{Repr(case)}")
   }
   // (each but the first narrower than they ask: the choice less wide than in a wide window, all on the title's line)
   for case in [(390.0, 2.0, "按 station 的用量"), (340.0, 2.0, "按 station 的用量"), (300.0, 1.0, "按 station 的用量的明细")] {
@@ -277,8 +277,8 @@ test "分享 and a choice of days at a page's title's line's end as nodes, the l
     let (_, _, whole) = ends_drawn(share, seg, title~)
     let (_, _, _, _, share, seg) = titled_ends(w, title~, scale~)
     let (words, sh, sg) = ends_drawn(share, seg, title~)
-    assert_true(sg.2 < whole.2 - 0.5, msg="\{case}: the choice given way: \{sg.2} of \{whole.2}")
-    assert_true(sh.1 < words.1 + words.3 && sg.1 < words.1 + words.3, msg="\{case}: one line: \{words} \{sh} \{sg}")
+    assert_true(sg.2 < whole.2 - 0.5, msg="\{Repr(case)}: the choice given way: \{sg.2} of \{whole.2}")
+    assert_true(sh.1 < words.1 + words.3 && sg.1 < words.1 + words.3, msg="\{Repr(case)}: one line: \{Repr(words)} \{Repr(sh)} \{Repr(sg)}")
   }
 }
 
@@ -356,7 +356,7 @@ fn shorter_seen(node : Bool, steps : Array[ShorterStep]) -> Array[String] {
     at.set(s)
     t.draw()
     t.draw()
-    let drawn = t.drawn_instances().map(fn(a) {
+    let drawn = t.drawn_instances_keyed().map(fn(a) {
       a.mapi(fn(j, x) { if a[5] == 1.0 && (j == 12 || j == 13) { "-" } else { ((x * 100.0).round() / 100.0).to_string() } }).join(",")
     })
     drawn.sort()
@@ -437,7 +437,7 @@ fn shorter_row_seen(node : Bool, said : String, alts : Array[String], widths : A
     w.set(x)
     t.draw()
     t.draw()
-    let drawn = t.drawn_instances().map(fn(a) {
+    let drawn = t.drawn_instances_keyed().map(fn(a) {
       a.mapi(fn(j, v) { if a[5] == 1.0 && (j == 12 || j == 13) { "-" } else { ((v * 100.0).round() / 100.0).to_string() } }).join(",")
     })
     drawn.sort()
@@ -627,6 +627,9 @@ fn titled_ends(
   let made = Ref(0)
   let share : Ref[@view.View?] = Ref(None)
   let seg : Ref[@view.View?] = Ref(None)
+  // (the presenters as the app begins: what a test before this one left presented is over this page else, its press
+  // that one's)
+  presenters_reset()
   let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w~, h=600.0, platform=2)
   t.set_font_scale(scale)
   @ui.set_view_app(fn(root) {
@@ -668,12 +671,12 @@ test "a page's title with 分享 and a choice of days at its line's end, where e
   let (title, sh, sg) = ends_drawn(share, seg)
   for p in [("title", title), ("分享", sh), ("the choice", sg)] {
     let (x, y, w, h) = p.1
-    assert_true(x >= 0.0 && x + w <= 220.0 + 0.01 && y >= 0.0 && w > 0.0 && h > 0.0, msg="\{p.0} within the window: \{p.1}")
+    assert_true(x >= 0.0 && x + w <= 220.0 + 0.01 && y >= 0.0 && w > 0.0 && h > 0.0, msg="\{p.0} within the window: \{Repr(p.1)}")
   }
   // (under the title, 分享 then the choice, the choice's end the line's: 16 in from the window's)
-  assert_true(sh.1 >= title.1 + title.3 && sg.1 >= title.1 + title.3, msg="under the title: \{title} \{sh} \{sg}")
-  assert_true(sh.0 + sh.2 <= sg.0 + 0.01, msg="分享 before the choice: \{sh} \{sg}")
-  assert_true((sg.0 + sg.2 - 204.0).abs() < 0.01, msg="the choice's end the line's: \{sg}")
+  assert_true(sh.1 >= title.1 + title.3 && sg.1 >= title.1 + title.3, msg="under the title: \{Repr(title)} \{Repr(sh)} \{Repr(sg)}")
+  assert_true(sh.0 + sh.2 <= sg.0 + 0.01, msg="分享 before the choice: \{Repr(sh)} \{Repr(sg)}")
+  assert_true((sg.0 + sg.2 - 204.0).abs() < 0.01, msg="the choice's end the line's: \{Repr(sg)}")
   t.tap(sh.0 + sh.2 / 2.0, sh.1 + sh.3 / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(shared.val, 1, msg="分享 pressed once")
@@ -696,7 +699,7 @@ test "a page's title with 分享 and a choice of days at its line's end, where e
 test "a page's title with what it does at its line's end, its window narrowed and widened across where their least has the room beside each other (words twice as large): on one line, the title at its least or more, then under it, each width as it was coming either way; nothing made again" {
   let (t, made, _, _, share, seg) = titled_ends(390.0)
   // (each width, from 390 down to 220 and up again: one line or two, and where each is)
-  let seen : Map[Int, String] = {}
+  let seen : Map[Int, String] = Map([])
   let mut lines_at : Int? = None
   let widths = []
   for w = 390; w >= 220; w = w - 2 {
@@ -711,9 +714,9 @@ test "a page's title with what it does at its line's end, its window narrowed an
     let (title, sh, sg) = ends_drawn(share, seg)
     let one = sh.1 < title.1 + title.3 && sg.1 < title.1 + title.3
     // (the choice's end the line's either way; on one line the title at least 80 wide, before 分享)
-    assert_true((sg.0 + sg.2 - (w.to_double() - 16.0)).abs() < 0.01, msg="\{w}: the choice's end the line's: \{sg}")
+    assert_true((sg.0 + sg.2 - (w.to_double() - 16.0)).abs() < 0.01, msg="\{w}: the choice's end the line's: \{Repr(sg)}")
     if one {
-      assert_true(sh.0 - 16.0 >= 80.0 + 10.0 - 0.01, msg="\{w}: the title at its least: \{title} \{sh}")
+      assert_true(sh.0 - 16.0 >= 80.0 + 10.0 - 0.01, msg="\{w}: the title at its least: \{Repr(title)} \{Repr(sh)}")
     } else {
       assert_true(sh.1 >= title.1 + title.3 && sg.1 >= title.1 + title.3, msg="\{w}: under the title")
     }
@@ -722,7 +725,7 @@ test "a page's title with what it does at its line's end, its window narrowed an
       None => if !one { lines_at = Some(w) }
       Some(under) => if one { assert_true(w > under, msg="\{w}: one line under \{under}") }
     }
-    let now = "\{title} \{sh} \{sg}"
+    let now = "\{@ui.rect_text(title)} \{@ui.rect_text(sh)} \{@ui.rect_text(sg)}"
     match seen.get(w) {
       Some(was) => assert_eq(now, was, msg="\{w}: as it was coming the other way")
       None => seen[w] = now
@@ -730,7 +733,7 @@ test "a page's title with what it does at its line's end, its window narrowed an
     // (and the same frame after frame)
     t.draw()
     let (title2, sh2, sg2) = ends_drawn(share, seg)
-    assert_eq("\{title2} \{sh2} \{sg2}", now, msg="\{w}: still")
+    assert_eq("\{@ui.rect_text(title2)} \{@ui.rect_text(sh2)} \{@ui.rect_text(sg2)}", now, msg="\{w}: still")
   }
   assert_true(lines_at is Some(_), msg="two lines somewhere at 220…390")
   assert_true(seen.get(390).unwrap() != seen.get(220).unwrap())

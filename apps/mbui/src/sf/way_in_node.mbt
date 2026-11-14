@@ -10,8 +10,14 @@
 /// the page's sides, its foot 0.42 of the way down the page and 12 more (as the old one's room above it puts it) or,
 /// where that leaves no room above it, 52 down. What `body` is given: a column 12 apart, its things in its middle, no
 /// wider than a tablet's button. The page's node.
-pub fn way_in_page_node(parent : @view.View, art : () -> String, body : (@view.View) -> Unit) -> @view.View {
-  parent.box(fn(page) {
+#callsite(autofill(loc))
+pub fn way_in_page_node(
+  parent : @view.View,
+  art : () -> String,
+  body : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> @view.View {
+  parent.box(made_for=loc, fn(page) {
     page
     .width_share(Is(1.0))
     .height_share(Is(1.0))
@@ -78,14 +84,15 @@ fn way_in_words(size : @ui.TextSize, weight : Int, line : @ui.Leading?, wrap : B
     None => own
     Some(l) => th.leading(l).unwrap_or(0.0)
   }
-  { size: px, weight, line, wrap, tracking: @view.letters_own, balance: false }
+  { size: px, weight, line, wrap, tracking: @view.letters_own, balance: false, max_lines: 0 }
 }
 
 ///|
 /// A way-in page's title in `body` (way_in_title's): 10 under what is above it, 28, bold, in the ink, in its middle,
 /// as wide as the page's column. The node.
-pub fn way_in_title_node(body : @view.View, title : () -> String) -> @view.View {
-  body.box(fn(b) {
+#callsite(autofill(loc))
+pub fn way_in_title_node(body : @view.View, title : () -> String, loc~ : SourceLoc) -> @view.View {
+  body.box(made_for=loc, fn(b) {
     b.width_share(Is(1.0)).padding(Is((0.0, @ui.Space::px(S2_5), 0.0, 0.0))) |> ignore
     b.box(fn(w) {
       w
@@ -101,8 +108,9 @@ pub fn way_in_title_node(body : @view.View, title : () -> String) -> @view.View 
 
 ///|
 /// What a way-in page says under its title in `body` (way_in_note's): the body's size, muted, in its middle. The node.
-pub fn way_in_note_node(body : @view.View, note : () -> String) -> @view.View {
-  body.box(fn(w) {
+#callsite(autofill(loc))
+pub fn way_in_note_node(body : @view.View, note : () -> String, loc~ : SourceLoc) -> @view.View {
+  body.box(made_for=loc, fn(w) {
     w
     .width_share(Is(1.0))
     .words(By(note), look=way_in_words(Body, 400, None, true))
@@ -119,22 +127,19 @@ pub fn way_in_note_node(body : @view.View, note : () -> String) -> @view.View {
 /// opening before its words (a Move, as a button's), the spinner turning in it, not pressed. A press's ripple from
 /// where it went down, the pill sinking under it. Its words changed, they go to their new place (moves_for, by
 /// its words). `press` done as it is pressed. Read out a button. The node.
+#callsite(autofill(loc))
 pub fn way_in_button_node(
   body : @view.View,
   label : () -> String,
   press : () -> Unit,
   solid? : Bool = true,
   busy? : () -> Bool = fn() { false },
+  loc~ : SourceLoc,
 ) -> @view.View {
   let bare = native_input() is Mouse
-  body.box(fn(v) {
+  @headless.button(made_for=loc, body, label, fn(_) { press() }, disabled=busy, fn(v, b) {
     let theme = fn() { @ui.tree_theme() }
-    let lit = fn() {
-      match @ui.pointing() {
-        Mouse => v.pointed() || v.pressed()
-        Finger => v.pressed()
-      }
-    }
+    let lit = fn() { b.hovered() || b.pressed() }
     let ground = fn() {
       let t = theme()
       match (solid, lit()) {
@@ -157,7 +162,6 @@ pub fn way_in_button_node(
       }
     })
     |> ignore
-    let live = fn() { !busy() }
     v
     .row(Is(true))
     .width_share(Is(1.0))
@@ -167,14 +171,6 @@ pub fn way_in_button_node(
     .radius(By(fn() { theme().corner(Full) }))
     .lines_up(Is(Some(Middle)))
     .ground(By(ground))
-    .presses(By(live))
-    .focusable(By(live))
-    .says(By(fn() { Some(@view.said(Button, label=label())) }))
-    .on_press(fn() {
-      if @signals.untracked(live) {
-        press()
-      }
-    })
     |> ignore
     // (what it holds in its middle: the old one's justify=JCenter)
     v.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
@@ -209,20 +205,20 @@ pub fn way_in_button_node(
     v.gesture(
       @ui.touch_slop(),
       press=fn(d) {
-        if @signals.untracked(live) {
+        if !b.disabled() {
           (rippled.down)(d)
         }
       },
       tap=fn(d) {
         (rippled.tapped)(d)
-        if v.finger_target(d.wx, d.wy) && @signals.untracked(live) {
-          press()
+        if v.finger_target(d.wx, d.wy) {
+          b.press()
         }
       },
       drag=fn(d) {
         // (a mouse's moved on it past the slop: still a press as it is let go on it, as a click is)
-        if d.kind == Up && @ui.pointing() is Mouse && v.finger_target(d.wx, d.wy) && @signals.untracked(live) {
-          press()
+        if d.kind == Up && @ui.pointing() is Mouse && v.finger_target(d.wx, d.wy) {
+          b.press()
         }
       },
     )
@@ -235,8 +231,15 @@ pub fn way_in_button_node(
 ///|
 /// What a way-in page offers last, quietly, in `body` (way_in_link's: 切换账号): a button of words alone, the page's ink,
 /// a ground under the pointer. The node.
-pub fn way_in_link_node(body : @view.View, label : () -> String, press : () -> Unit, busy? : () -> Bool = fn() { false }) -> @view.View {
-  button_node(body, label, press, tone=Ghost, busy~)
+#callsite(autofill(loc))
+pub fn way_in_link_node(
+  body : @view.View,
+  label : () -> String,
+  press : () -> Unit,
+  busy? : () -> Bool = fn() { false },
+  loc~ : SourceLoc,
+) -> @view.View {
+  button_node(loc~, body, label, press, tone=Ghost, busy~)
 }
 
 ///|
@@ -245,6 +248,7 @@ pub fn way_in_link_node(body : @view.View, label : () -> String, press : () -> U
 /// the button (`said`: what it waits on, or why it failed, in the red), coming and going with its room (its words kept as
 /// it closes). Keyboard and mouse's the picture, the button and what is said of it alone; a touch screen's all of it.
 /// `press` done as its button is pressed. The page's node.
+#callsite(autofill(loc))
 pub fn way_in_node(
   parent : @view.View,
   art : () -> String,
@@ -255,9 +259,10 @@ pub fn way_in_node(
   press : () -> Unit,
   busy? : () -> Bool = fn() { false },
   said? : () -> (String, Bool) = fn() { ("", false) },
+  loc~ : SourceLoc,
 ) -> @view.View {
   let bare = native_input() is Mouse
-  way_in_page_node(parent, art, fn(col) {
+  way_in_page_node(loc~, parent, art, fn(col) {
     if !bare {
       way_in_title_node(col, title) |> ignore
       way_in_note_node(col, note) |> ignore

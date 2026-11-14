@@ -18,7 +18,7 @@ import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { SOCKET_RETRY_MS } from "../src/sync/cloud.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { base, entry, overview, session, started, stationHost, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
+import { base, chatsOf, entry, overview, session, started, stationHost, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
@@ -177,6 +177,39 @@ test("a_beta_app_says_so_and_an_account_not_let_in_is_blocked", async () => {
   core.close();
 });
 
+test("the_list_changed_reads_the_account_and_the_workspaces_new_to_it_alone", async () => {
+  // A member added: the cloud tells the list changed and the workspace changed. Each of the person's devices read
+  // /v1/me, its sign-ins, an operator's lists and the workspace twice more besides: seven of them used up the
+  // account's 120 requests a minute, and the owner's next call was refused (the locks' end to end, 2026-11-10).
+  const host = new FakeHost();
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS(host) + 3600)]);
+  let listed = [{ id: "ws", name: "W" }];
+  host.onFetch((req) => {
+    const path = req.url.replace("https://stillfail.test", "");
+    if (path === "/v1/me") return jsonResponse(200, { user: { sub: "s1" }, workspaces: listed, invitations: [], relay_url: "https://relay.test" });
+    if (path.startsWith("/v1/workspaces/")) return jsonResponse(200, { id: path.split("/")[3], name: "W", role: "owner", members: [], stations: [], invitations: [] });
+    if (path === "/v1/auth/sessions") return jsonResponse(200, { sessions: [] });
+    return jsonResponse(404, { error: "not_found" });
+  });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "workspaces" });
+  await host.settle();
+  const asked = () => host.requests.splice(0).map((r) => `${r.method} ${r.url.replace("https://stillfail.test", "")}`).filter((r) => r.includes("/v1/") && !r.includes("/v1/telemetry") && !r.includes("/v1/events")).sort();
+  assert.ok(asked().includes("GET /v1/workspaces/ws"), "read as it was first shown");
+  // A member added to ws: the list and the workspace told.
+  host.socketSend("/v1/events", '{"type":"workspaces"}');
+  host.socketSend("/v1/events", '{"type":"workspace","id":"ws"}');
+  await host.settle();
+  assert.deepEqual(asked(), ["GET /v1/me", "GET /v1/workspaces/ws"]);
+  // A workspace made: the one new to the list read too.
+  listed = [...listed, { id: "ws2", name: "W2" }];
+  host.socketSend("/v1/events", '{"type":"workspaces"}');
+  await host.settle();
+  assert.deepEqual(asked(), ["GET /v1/me", "GET /v1/workspaces/ws2"]);
+  core.close();
+});
+
 test("a_release_missed_while_the_events_socket_was_closed_is_read_again_and_the_app_told", async () => {
   // A Mac asleep through a release: the feed's newest was kept from before, so the app got that build ready, put it in
   // as it quit, and updated again once the new one read the feed (2026-11-09, pengxiao).
@@ -236,13 +269,14 @@ test("an_app_of_its_own_on_the_test_channel_reads_its_changelog_is_named_still_f
   await ask(host, core, ui, 1, "client.device", { app: "android", build: "0.1.1320", client: "still.fail mbui" });
   subscribe(core, ui, 2, { topic: "changelog" });
   subscribe(core, ui, 4, { topic: "prefs" });
+  subscribe(core, ui, 5, { topic: "changelog", part: "station" });
   await host.settle();
   const values = new Map();
   answersOf(host, values);
-  // Each part's tab its own changes.
-  assert.deepEqual(v(values, 2).tabs.map((x: J) => [x.part, x.days.flatMap((d: J) => d.entries.map((e: J) => e.text[0]))]), [
-    ["android", ["修复：安卓的"]], ["desktop", []], ["web", []], ["station", ["修复：station 的"]], ["cloud", []],
-  ]);
+  // Each part's tab its own changes, the tab asked alone with them (this app's where none is said).
+  const said = (id: number) => v(values, id).tabs.map((x: J) => [x.part, x.days.flatMap((d: J) => d.entries.map((e: J) => e.lines[0].text))]);
+  assert.deepEqual(said(2), [["android", ["安卓的"]], ["desktop", []], ["web", []], ["station", []], ["cloud", []]]);
+  assert.deepEqual(said(5), [["android", []], ["desktop", []], ["web", []], ["station", ["station 的"]], ["cloud", []]]);
   assert.equal(brandName(), "still.fail");
   assert.equal(v(values, 4).productName, "still.fail");
   // Its newer builds from its own feed as it names it, not that feed's beta.
@@ -255,6 +289,39 @@ test("an_app_of_its_own_on_the_test_channel_reads_its_changelog_is_named_still_f
   core = await Core.create(host, { clock: host.time.clock, sample: 0 });
   assert.equal(brandName(), "still.fail");
   core.close();
+});
+
+test("a failed turn's notice and its 重试 pass through the real core", async () => {
+  const failed = {
+    id: "turn-1", kind: "input", outcome: "failed", declared: null, detail: "network: fetch failed",
+    about: { thread: 7, seq: 1, ts: "1.0" }, startedAt: 1, endedAt: 2,
+  };
+  const agent = { ...session("k1", 1), lastTurn: failed };
+  const notice = { ...entry(1, "⚠️ 与模型服务的连接中断，回复即可重试"), authorKind: "ember", author: "ember" };
+  const { host, core } = await started({
+    ...base(),
+    "GET /sessions": [agent],
+    "GET /sessions/k1": { session: agent, threads: [], turns: [], jobs: [] },
+    "GET /threads": [threadView(7, 1)],
+    "GET /threads/7/entries?limit=50": { last: 1, entries: [notice] },
+  });
+  try {
+    stationReplies(host, (req) => req.method === "POST" && req.url.endsWith("/sessions/k1/retry") ? { ok: true } : undefined);
+    const ui = core.connect();
+    const values = new Map();
+    subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7, session: null });
+    await host.settle();
+    await host.settle();
+    apply(host, values);
+    assert.equal(v(values, 1).messages[0].notice.againSession, "k1");
+    call(core, ui, 2, "session.retry", { station: "ws/st", key: "k1", thread: 7, seq: 1 });
+    await host.settle();
+    const sent = host.requests.find((req) => req.method === "POST" && req.url.endsWith("/sessions/k1/retry"));
+    assert.ok(sent);
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(sent.body!)), { thread: 7, seq: 1 });
+  } finally {
+    core.close();
+  }
 });
 
 const header = (r: { headers: [string, string][] }, name: string) => r.headers.find(([k]) => k === name)?.[1];
@@ -305,8 +372,9 @@ test("a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets", asyn
   await host.settle();
   const said = host.takeEmitted().map(([, m]) => m as J);
   assert.ok(said.some((m) => m.id === 1 && "value" in m), JSON.stringify(said).slice(0, 500));
-  assert.equal(host.requests.length, before, "opening a chat asks nothing");
-  const reads = ["/events?running=1&views=1&rows=1&shared=1", "/overview", "/sessions", "/threads", "/chats", "/jobs?chats=0"].map((p) => host.requests.find((r) => r.url === `https://stillfail.test/admin/api${p}`)!);
+  // (but its agent's history brought whole behind every other read, the sync's: topics.ts `#wholeHistory`)
+  assert.equal(host.requests.slice(before).filter((r) => !r.url.includes("/timeline?")).length, 0, "opening a chat asks nothing");
+  const reads = ["/events?running=1&views=1&rows=1&shared=1", "/overview", "/sessions", "/threads", "/chats?marks=1", "/jobs?chats=0"].map((p) => host.requests.find((r) => r.url === `https://stillfail.test/admin/api${p}`)!);
   const parents = reads.map((r) => header(r, "traceparent")!);
   const trace = parents[0].slice(3, 35);
   assert.ok(parents.every((p) => p.slice(3, 35) === trace && p.endsWith("-01")), JSON.stringify(parents));
@@ -543,7 +611,7 @@ test("a_decision_is_answered_in_its_chat_and_dismissed_on_the_station", async ()
 test("what_an_agent_needs_let_go_in_its_chat_is_said_let_go_at_once_and_back_when_its_station_refuses", async () => {
   const agent = { ...session("k1"), status: "idle", lastTurn: { id: "t", kind: "input", startedAt: 1, endedAt: 2, outcome: "completed", declared: "block", ending: "need_help", need: "在手机上试新列表" } };
   const need = { seq: 3, message: { seq: 3, thread: 7, ts: "9.000003", authorKind: "agent", author: "k1", authorName: "Claude", text: "你试一下", attachments: [], quotes: [], declared: null, createdAt: 1, editedAt: null }, before: [] };
-  const { host, core } = await started({ ...base(), "GET /chats": [{ id: "7", thread: 7, session: "k1", title: "部署", agents: [agent], lastActiveAt: 1, need }] });
+  const { host, core } = await started({ ...base(), ...chatsOf([{ thread: 7, session: "k1", title: "部署", agents: [agent], lastActiveAt: 1, need }]) });
   // The station's answer held until told: what is said meanwhile is the core's own.
   let answer: (res: ReturnType<typeof jsonResponse>) => void = () => {};
   stationLater(host, (req) => (req.method === "PUT" && req.url.endsWith("/threads/7/dismissed") ? new Promise((r) => (answer = r)) : undefined));
@@ -973,7 +1041,7 @@ const profile = (id: string, runtime: string, models: string[], checked: boolean
   quota: { state: "ok", windows: [{ label: "5 小时", usedPercent: used, resetsAt: null }], detail: null, checkedAt: 1 }, ...extra,
 });
 
-test("the profiles topic gives the app each station once when it has two copies", async () => {
+test("an account's topic gives the app each station once when it has two copies", async () => {
   const email = "same@x.com";
   const profiles = [
     profile("signed", "codex", [], true, 0, { email }),
@@ -983,9 +1051,11 @@ test("the profiles topic gives the app each station once when it has two copies"
   const ui = core.connect();
   const values = new Map();
   subscribe(core, ui, 1, { topic: "profiles", scope: "ws" });
+  subscribe(core, ui, 2, { topic: "profile", scope: "ws", key: `sub:codex:${email}` });
   await host.settle();
   apply(host, values);
-  const row = v(values, 1).items[0];
+  assert.equal(v(values, 1).items.length, 1, "one row");
+  const row = v(values, 2);
   assert.equal(row.members.length, 2);
   assert.deepEqual(row.places.map((p: J) => [p.station, p.profileId, p.usable]), [["ws/st", "signed", true]]);
   core.close();
@@ -993,7 +1063,7 @@ test("the profiles topic gives the app each station once when it has two copies"
 
 /// A core whose station has three profiles: p1 (unchecked) and p2 run Claude Code, p3 Codex (core/tests.rs
 /// `choosing_core`); `speed`: its session on Codex with `fast` as given, p3 offering `fast` as `profileFast`.
-async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null, switchRuntime = false) {
+async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null, switchRuntime = false, contexts = false) {
   const s = (key: string) => (speed ? { ...session(key), runtime: "codex", model: "gpt-6-astra", profile: "p3", fast: sessionFast } : session(key));
   return started({
     ...base(),
@@ -1001,6 +1071,7 @@ async function choosing(speed = false, profileFast = false, sessionFast: boolean
       ...overview,
       sessionRuntimeChange: switchRuntime,
       connectRuntimeChange: switchRuntime,
+      ...(contexts ? { contextCaps: { runtimes: ["claude", "codex"], least: 100_000, windows: { "claude-opus-5-5": 1_000_000 } } } : {}),
       connects: [{ id: "c1", name: "c1", kind: "slack", mode: "multi-session", requireMention: true, enabled: true, bind: { runtime: "claude", model: "claude-opus-5-5" }, connection: { state: "connected" }, slack: { appToken: "", botToken: "" }, sessions: 0 }],
       profiles: [
         profile("p1", "claude", ["claude-opus-5-5", "claude-sonnet-5"], false, 10),
@@ -1061,6 +1132,7 @@ test("a_new_chat_is_made_under_the_key_its_page_had_before_it_was_made_and_its_p
   core.close();
 });
 
+// (the combinations, how hard it thinks and how fast are the core's own value's: its page is sent its model control's, `pick`)
 test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_together", async () => {
   const { host, core } = await choosing();
   let ui = core.connect();
@@ -1069,14 +1141,16 @@ test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_
   await host.settle();
   let values = new Map();
   apply(host, values);
-  assert.deepEqual(v(values, 1).frequent, []);
+  const own = (c: Core) => c.inner.store.get(topic) as J;
+  assert.deepEqual(own(core).frequent, []);
+  assert.deepEqual([v(values, 1).frequent, v(values, 1).effort, v(values, 1).accounts], [undefined, undefined, undefined], "not sent");
   await ask(host, core, ui, 2, "newChat.pick", { scope: "ws", model: "gpt-6-astra", runtime: "codex", effort: "medium", fast: true });
   apply(host, values);
-  assert.deepEqual(v(values, 1).frequent, [], "picking alone is not usage");
+  assert.deepEqual(own(core).frequent, [], "picking alone is not usage");
   core.inner.choose.used("other/st", { model: "claude-opus-5-5", runtime: "claude", effort: "high" });
   await ask(host, core, ui, 3, "newChat.create", { station: "ws/st" });
   apply(host, values);
-  const combos = v(values, 1).frequent;
+  const combos = own(core).frequent;
   assert.equal(combos.length, 1, "another workspace's history must not appear");
   assert.equal(combos[0].effort, "medium");
   await run(core.inner.data.written);
@@ -1088,20 +1162,20 @@ test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_
   await host.settle();
   values = new Map();
   apply(host, values);
-  const combo = v(values, 1).frequent[0];
+  const combo = own(again).frequent[0];
   assert.equal(combo.model, "gpt-6-astra");
   assert.equal(combo.fast, true);
   await ask(host, again, ui, 2, "newChat.pick", { scope: "ws", model: "claude-opus-5-5", effort: "low", fast: false });
   await ask(host, again, ui, 3, "newChat.pick", { scope: "ws", model: combo.model, runtime: combo.runtime, effort: combo.effort, fast: combo.fast });
   apply(host, values);
   assert.equal(v(values, 1).model.model, "gpt-6-astra");
-  assert.equal(v(values, 1).effort, "medium");
-  assert.equal(v(values, 1).fast, true);
-  assert.equal(v(values, 1).frequent[0].selected, true);
+  assert.deepEqual([own(again).effort, own(again).fast, own(again).frequent[0].selected], ["medium", true, true]);
   again.close();
 });
 
-test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran", async () => {
+// What is used most is a configuration, apart from what is starred (the user, 2026-11-10: 「收藏跟常用不一样」「常用包括了
+// 思考深度和速度还有上下文长度」「是一种配置」).
+test("the_model_control_keeps_the_configurations_used_most_near_and_each_model_as_it_last_ran", async () => {
   const { host, core } = await choosing();
   const ui = core.connect();
   const fresh = { topic: "pick", station: "ws/st", of: "new" };
@@ -1115,12 +1189,12 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   const option = (n: number, model: string) => v(values, n).options.find((o: J) => o.model === model);
   // (as it last ran: a field none is left out of the topic)
   const ran = (o: J) => ["runtime", "effort", "fast"].map((f) => o.usual?.[f] ?? null);
-  // (none starred: a starred one is listed among those starred, not here)
+  const combo = (c: J) => [c.model, c.runtime, c.effort ?? null, c.fast ?? null, c.context ?? null];
   for (const [n, m] of [[7, "claude-opus-5-5"], [8, "claude-sonnet-5"], [9, "gpt-6-astra"]] as const) {
     await ask(host, core, ui, n, "pick.like", { station: "ws/st", of: "new", model: m, liked: false });
   }
   apply(host, values);
-  assert.deepEqual(v(values, 1).near, [], "nothing used here yet");
+  assert.deepEqual(v(values, 1).combos, [], "nothing used here yet");
   assert.equal(option(1, "gpt-6-astra").usual ?? null, null);
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
@@ -1128,29 +1202,187 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   core.inner.choose.used("other/st", { model: "claude-opus-5-5", runtime: "claude", effort: null });
   await host.settle();
   apply(host, values);
-  // the used most first, another workspace's not at all
-  assert.deepEqual(v(values, 1).near, ["gpt-6-astra", "claude-sonnet-5"]);
-  assert.equal(option(1, "gpt-6-astra").uses, 2);
+  // the used most first, another workspace's not at all; each said as it runs
+  assert.deepEqual(v(values, 1).combos.map(combo), [["gpt-6-astra", "codex", "medium", null, null], ["claude-sonnet-5", "claude", null, null, null]]);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => [c.name, c.text]), [["GPT-6 Astra", "Codex · 中"], ["Sonnet 5", "CC · 默认深度"]]);
+  assert.equal(option(1, "gpt-6-astra").uses, undefined);
   assert.deepEqual(ran(option(1, "gpt-6-astra")), ["codex", "medium", null]);
-  assert.equal(option(1, "gpt-6-astra").usualText, "中");
-  // a chat's, of the models its runtime runs
-  assert.ok(v(values, 2).near.every((m: J) => m !== "gpt-6-astra"), String(v(values, 2).near));
-  // picked with how it last ran: all of it saved at once
+  assert.equal(option(1, "gpt-6-astra").usualText, "Codex · 中");
+  // a chat's whose runtime is fixed: of its runtime alone
+  assert.deepEqual(v(values, 2).combos.map(combo), [["claude-sonnet-5", "claude", null, null, null]]);
+  // the same model run another way: another, counted on its own
+  core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "high" });
+  await host.settle();
+  apply(host, values);
+  const combos = v(values, 1).combos.map(combo);
+  assert.deepEqual(combos[0], ["gpt-6-astra", "codex", "medium", null, null]);
+  assert.deepEqual(combos.slice(1).sort(), [["claude-sonnet-5", "claude", null, null, null], ["gpt-6-astra", "codex", "high", null, null]].sort());
+  // picked with how it last ran (the newest of it): all of it saved at once
   const [runtime, effort, fast] = ran(option(1, "gpt-6-astra"));
-  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: "gpt-6-astra", runtime, effort, fast });
+  assert.deepEqual([runtime, effort, fast], ["codex", "high", null]);
+  // a configuration of it pressed: all of it saved at once
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: "gpt-6-astra", runtime: "codex", effort: "medium", fast: null, context: null });
   apply(host, values);
   assert.equal(v(values, 3).model.model, "gpt-6-astra");
-  assert.equal(v(values, 3).effort, "medium");
+  assert.equal((core.inner.store.get({ topic: "newChat", scope: "ws" }) as J).effort, "medium");
+  // the one picked exactly as the panel has it drafted, and only that
+  const selected = () => v(values, 1).combos.filter((c: J) => c.selected).map(combo);
+  assert.deepEqual(selected(), [["gpt-6-astra", "codex", "medium", null, null]]);
+  await ask(host, core, ui, 10, "pick.set", { station: "ws/st", of: "new", effort: "high" });
+  apply(host, values);
+  assert.deepEqual(selected(), [["gpt-6-astra", "codex", "high", null, null]]);
+  await ask(host, core, ui, 11, "pick.set", { station: "ws/st", of: "new", fast: true });
+  apply(host, values);
+  assert.deepEqual(selected(), [], "how fast it runs is part of it");
+  await ask(host, core, ui, 12, "pick.set", { station: "ws/st", of: "new", open: true });
   // how hard it thinks changed for it: kept for it, as it runs next time it is picked
   await ask(host, core, ui, 5, "pick.save", { station: "ws/st", of: "new", effort: null });
   await ask(host, core, ui, 6, "pick.save", { station: "ws/st", of: "new", model: "claude-sonnet-5" });
   apply(host, values);
   assert.deepEqual(ran(option(1, "gpt-6-astra")), ["codex", null, null]);
-  assert.equal(option(1, "gpt-6-astra").usualText ?? null, null);
+  assert.equal(option(1, "gpt-6-astra").usualText ?? null, "Codex");
   core.close();
 });
 
-test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_by_its_maker", async () => {
+test("the_configurations_used_most_keep_their_context_each_on_its_own", async () => {
+  const { host, core } = await choosing(false, false, null, false, true);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const opus = { model: "claude-opus-5-5", runtime: "claude", effort: "high" };
+  core.inner.choose.used("ws/st", { ...opus, context: 300_000 });
+  core.inner.choose.used("ws/st", { ...opus, context: 300_000 });
+  core.inner.choose.used("ws/st", { ...opus, context: null });
+  // (one no longer offered: none of it)
+  core.inner.choose.used("ws/st", { ...opus, context: 400_000 });
+  core.inner.choose.used("ws/st", { ...opus, context: 400_000 });
+  core.inner.choose.used("ws/st", { ...opus, context: 400_000 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => [c.model, c.context ?? null, c.text]), [["claude-opus-5-5", 300_000, "CC · 高 · 300K"], ["claude-opus-5-5", null, "CC · 高"]]);
+  // pressed: all of it made what it runs on, picked exactly
+  await ask(host, core, ui, 2, "pick.save", { station: "ws/st", of: "new", ...opus, fast: null, context: 300_000 });
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => c.selected), [true, false]);
+  core.close();
+});
+
+// A configuration used most can be taken out (the user, 2026-11-10: 「常用模型应该是一种特定配置，并且可以删掉，跟模型
+// 没有关系」): that one alone, the model's others, how it last ran and the starred staying.
+test("a_configuration_used_most_is_forgotten_alone_and_counted_anew_when_used_again", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const combo = (c: J) => [c.model, c.runtime, c.effort ?? null];
+  const astra = { model: "gpt-6-astra", runtime: "codex" };
+  for (let i = 0; i < 3; i++) core.inner.choose.used("ws/st", { ...astra, effort: "high" });
+  core.inner.choose.used("ws/st", { ...astra, effort: "medium" });
+  core.inner.choose.used("ws/st", { ...astra, effort: "medium" });
+  await ask(host, core, ui, 2, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: true });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos.map(combo), [["gpt-6-astra", "codex", "high"], ["gpt-6-astra", "codex", "medium"]]);
+  const usual = v(values, 1).options.find((o: J) => o.model === "gpt-6-astra").usual;
+  // the one forgotten, the pushed view without it
+  await ask(host, core, ui, 3, "pick.forget", { station: "ws/st", of: "new", ...astra, effort: "high", fast: null, context: null });
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos.map(combo), [["gpt-6-astra", "codex", "medium"]]);
+  assert.ok(v(values, 1).liked.includes("gpt-6-astra"), "still starred");
+  assert.deepEqual(v(values, 1).options.find((o: J) => o.model === "gpt-6-astra").usual, usual, "how it last ran stays");
+  // one not there: nothing changes
+  const before = v(values, 1).combos;
+  await ask(host, core, ui, 4, "pick.forget", { station: "ws/st", of: "new", ...astra, effort: "low", fast: null, context: null });
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos, before);
+  // a new chat on it again: back, counted from one (after the other, used twice)
+  core.inner.choose.used("ws/st", { ...astra, effort: "high" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos.map(combo), [["gpt-6-astra", "codex", "medium"], ["gpt-6-astra", "codex", "high"]]);
+  core.close();
+});
+
+test("a_model_never_run_here_takes_what_is_set_by_hand_in_its_panel_and_one_that_ran_here_keeps_its_own", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
+  subscribe(core, ui, 3, { topic: "newChat", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const option = (model: string) => v(values, 1).options.find((o: J) => o.model === model);
+  core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(option("claude-sonnet-5").usual ?? null, null, "never run here");
+  // its panel opened, how hard it thinks set by hand in it
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "new", open: true });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", effort: "high" });
+  apply(host, values);
+  const effort = () => (core.inner.store.get({ topic: "newChat", scope: "ws" }) as J).effort;
+  assert.equal(effort(), "high");
+  assert.equal(option("gpt-6-astra").usual.effort, "medium", "one that ran here keeps its own");
+  assert.equal(option("gpt-6-astra").usualText, "Codex · 中");
+  assert.equal(option("claude-sonnet-5").usual.effort, "high", "one that never did takes it");
+  assert.equal(option("claude-sonnet-5").usualText, "CC · 高");
+  // opened again: nothing set by hand in it yet
+  await ask(host, core, ui, 5, "pick.set", { station: "ws/st", of: "new", open: true });
+  apply(host, values);
+  assert.equal(option("claude-sonnet-5").usual ?? null, null);
+  // set to what it already runs with: set by hand all the same
+  await ask(host, core, ui, 6, "pick.save", { station: "ws/st", of: "new", effort: "high" });
+  apply(host, values);
+  assert.equal(option("claude-sonnet-5").usual.effort, "high");
+  // picked as the panel says it runs
+  const u = option("claude-sonnet-5").usual;
+  await ask(host, core, ui, 7, "pick.save", { station: "ws/st", of: "new", model: "claude-sonnet-5", runtime: u.runtime, effort: u.effort, fast: u.fast, context: u.context });
+  apply(host, values);
+  assert.equal(v(values, 3).model.model, "claude-sonnet-5");
+  assert.equal(effort(), "high");
+  core.close();
+});
+
+test("merged_models_across_devin_and_agy_name_their_available_runtimes_and_single_runtime_models_show_theirs_when_multi_runtime", async () => {
+  const dev = profile("dev", "devin", ["gemini-4-carbon", "swe-2"], true, 10, {
+    check: { state: "ok", detail: "", checkedAt: 2, models: ["gemini-4-carbon", "swe-2"], modelEfforts: { devin: { "gemini-4-carbon": ["low", "medium", "high"], "swe-2": ["medium", "high"] } } },
+  });
+  const agy = profile("agy", "agy", ["gemini-4-carbon", "gpt-oss-120b"], true, 10, {
+    check: { state: "ok", detail: "", checkedAt: 2, models: ["gemini-4-carbon", "gpt-oss-120b"], modelEfforts: { agy: { "gemini-4-carbon": ["low", "medium", "high"], "gpt-oss-120b": [] } } },
+  });
+  const { host, core } = await started({ ...base(), "GET /overview": { ...overview, profiles: [dev, agy] } });
+  try {
+    const ui = core.connect();
+    subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
+    subscribe(core, ui, 2, { topic: "newChat", scope: "ws" });
+    await host.settle();
+    const values = new Map();
+    apply(host, values);
+    const opt = (m: string) => v(values, 1).options.find((o: J) => o.model === m);
+    assert.equal(v(values, 1).showRuntime, true);
+    assert.equal(v(values, 2).pick.showRuntime, true);
+    assert.deepEqual(opt("gemini-4-carbon").runtimes, ["devin", "agy"]);
+    assert.equal(opt("gpt-oss-120b").usualText, "AGY");
+    assert.equal(opt("swe-2").usualText, "Devin");
+    // Switch away to swe-2 so gemini-4-carbon is unrun in the list: shows "Devin · AGY"
+    await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "new", model: "swe-2", runtime: "devin", effort: "high" });
+    apply(host, values);
+    assert.equal(opt("gemini-4-carbon").usualText, "Devin · AGY");
+    // Save gemini-4-carbon on agy + high, then view it from swe-2: shows "AGY / Devin · 高"
+    await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: "gemini-4-carbon", runtime: "agy", effort: "high" });
+    await ask(host, core, ui, 5, "pick.save", { station: "ws/st", of: "new", model: "swe-2", runtime: "devin", effort: "high" });
+    apply(host, values);
+    assert.equal(opt("gemini-4-carbon").usualText, "AGY / Devin · 高");
+  } finally {
+    core.close();
+  }
+});
+
+test("the_model_control_lists_every_starred_model_apart_from_the_configurations_used_most_and_every_model_by_its_maker", async () => {
   const { host, core } = await choosing();
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
@@ -1168,23 +1400,24 @@ test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_
   assert.deepEqual(v(values, 1).liked, [], "once changed, as changed");
   // the makers of its models, in their models' order, each with how many
   assert.deepEqual(v(values, 1).makers.map((k: J) => [k.id, k.title, k.count]), [["anthropic", "Anthropic", 2], ["openai", "OpenAI", 1]]);
-  // starred, in the order starred; one used most stays among them and is not listed among those used most again
+  // starred, in the order starred
   await ask(host, core, ui, 2, "pick.like", { station: "ws/st", of: "new", model: "claude-sonnet-5", liked: true });
   await ask(host, core, ui, 3, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: true });
   apply(host, values);
   assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5", "gpt-6-astra"]);
   assert.equal(option("gpt-6-astra").liked, true);
   assert.equal(option("claude-opus-5-5").liked, false);
+  // a starred model's configuration among those used most, and the model still among the starred: the two apart
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: null });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1).near, []);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => [c.model, c.runtime, c.effort ?? null]), [["gpt-6-astra", "codex", null]]);
   assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5", "gpt-6-astra"]);
-  // unstarred: back among those used most
+  // unstarred: gone from the starred, its configuration where it was
   await ask(host, core, ui, 4, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: false });
   apply(host, values);
   assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5"]);
-  assert.deepEqual(v(values, 1).near, ["gpt-6-astra"]);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => c.model), ["gpt-6-astra"]);
   assert.equal(option("gpt-6-astra").liked, false);
   core.close();
 });
@@ -1200,16 +1433,20 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   let values = new Map();
   apply(host, values);
   let n = v(values, 2);
+  // (how hard it thinks, the account kept to and who could run it are the core's own value's: the page's model control
+  // says them, `pick`)
+  const own = (c: Core) => c.inner.store.get(topic) as J;
   assert.deepEqual([n.kept, n.station.id], ["st", "st"]);
-  assert.deepEqual([n.model.model, n.runtime, n.effort], ["claude-sonnet-5", "claude", "low"]);
-  assert.deepEqual([n.waiting, n.blocked ?? null, n.pickAccount], [false, null, false]);
+  assert.deepEqual([n.model.model, n.runtime, own(core).effort], ["claude-sonnet-5", "claude", "low"]);
+  assert.deepEqual([n.waiting, n.blocked ?? null, own(core).pickAccount], [false, null, false]);
+  assert.deepEqual([n.effort, n.pickAccount, n.accounts], [undefined, undefined, undefined], "not sent");
   // Its unchecked profile is checked, once.
   assert.equal(stationPosted(host, "/profiles/p1/check").length, 1);
   assert.equal(stationPosted(host, "/profiles/p2/check").length, 0);
   // An account kept to that does not run the model gives way to the station's pick.
   await ask(host, core, ui, 3, "newChat.pick", { scope: "ws", model: "claude-opus-5-5", profile: "p3" });
   apply(host, values);
-  n = v(values, 2);
+  n = own(core);
   assert.deepEqual([n.model.model, n.effort, n.profile ?? null], ["claude-opus-5-5", "low", null]);
   assert.equal(n.accounts.length, 2);
   assert.equal(n.pickAccount, true);
@@ -1218,7 +1455,7 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   // A model on another runtime takes it, and its default depth.
   await ask(host, core, ui, 4, "newChat.pick", { scope: "ws", model: "gpt-6-astra" });
   apply(host, values);
-  assert.deepEqual([v(values, 2).runtime, v(values, 2).effort ?? null], ["codex", null]);
+  assert.deepEqual([v(values, 2).runtime, own(core).effort ?? null], ["codex", null]);
   // Kept across a restart; what an older page kept does not come in over it.
   await run(core.inner.data.written);
   core.close();
@@ -1244,9 +1481,10 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   assert.equal(v(values, 2).model.model, "gpt-6-astra", "only a draft until saved");
   assert.equal((await ask(host, again, ui, 7, "pick.save", { station: "ws/st", of: "new" })).saved, true);
   apply(host, values);
-  assert.deepEqual([v(values, 2).model.model, v(values, 2).profile], ["claude-opus-5-5", "p2"]);
-  // Kept to an account running low: the control names it, amber.
-  assert.deepEqual(v(values, 5).account, { text: "p2@x.com", auto: false, level: "amber" });
+  assert.deepEqual([v(values, 2).model.model, own(again).profile], ["claude-opus-5-5", "p2"]);
+  // Kept to an account running low: the control names it, amber (that it is not the station's pick the core's own).
+  assert.deepEqual(v(values, 5).account, { text: "p2@x.com", level: "amber" });
+  assert.equal((again.inner.store.get({ topic: "pick", station: "ws/st", of: "new" }) as J).account.auto, false);
   // A chat made there is asked for with it, and the scope's next new chat starts there too.
   const made = await ask(host, again, ui, 8, "newChat.create", { station: "ws/st" });
   assert.ok(String(made.key).startsWith(PENDING_PREFIX), JSON.stringify(made));
@@ -1282,13 +1520,13 @@ test("a connect can switch runtime through its model control when its station su
   const { host, core } = await choosing(false, false, null, true);
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "connect:c1" });
-  subscribe(core, ui, 2, { topic: "connects", scope: "ws" });
+  subscribe(core, ui, 2, { topic: "connect", scope: "ws", station: "ws/st", id: "c1" });
   await host.settle();
   const values = new Map();
   apply(host, values);
   assert.equal(v(values, 1).runtimeFixed, false);
   assert.ok(v(values, 1).options.some((o: J) => o.model === "gpt-6-astra"), "the other runtime's models are offered");
-  assert.equal(v(values, 2).items[0].runtimeChanges, true);
+  assert.equal(v(values, 2).runtimeChanges, true);
   await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect:c1", model: "gpt-6-astra", runtime: "codex" });
   await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect:c1" });
   const put = host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/admin/api/connects/c1")).map((r) => JSON.parse(new TextDecoder().decode(r.body!)));
@@ -1351,10 +1589,16 @@ test("a_sessions_account_is_picked_again_beside_auto_and_says_which", async () =
   await host.settle();
   const values = new Map();
   apply(host, values);
-  // On p1, with p2 able to take it: picked again beside 自动.
+  // On p1, with p2 able to take it: picked again beside 全选; hidden when narrowed to 1 account.
   assert.equal(v(values, 1).repick, "重新分配");
-  // Kept to p1 in the panel, another depth too: the account gives way to the station's pick, the depth stays drafted.
-  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", profile: "p1", effort: "high" });
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", model: "claude-opus-5-5", profile: "p1", effort: "high" });
+  apply(host, values);
+  assert.equal(v(values, 1).repick ?? null, null);
+  await assert.rejects(ask(host, core, ui, 20, "pick.repick", { station: "ws/st", of: "session:k1" }));
+  // Drafted back to 全选 with another depth: repick is offered again, and the depth stays drafted.
+  await ask(host, core, ui, 21, "pick.set", { station: "ws/st", of: "session:k1", profile: null, profiles: null });
+  apply(host, values);
+  assert.equal(v(values, 1).repick, "重新分配");
   assert.deepEqual(await ask(host, core, ui, 3, "pick.repick", { station: "ws/st", of: "session:k1" }), { profile: "p2", said: "已改用 p2@x.com" });
   assert.deepEqual(stationPosted(host, "/sessions/k1/settings"), [{ profile: null, repick: true }]);
   apply(host, values);
@@ -1369,6 +1613,195 @@ test("a_sessions_account_is_picked_again_beside_auto_and_says_which", async () =
   assert.equal(v(values, 5).repick ?? null, null);
   await assert.rejects(ask(host, core, ui, 6, "pick.repick", { station: "ws/st", of: "new" }));
   core.close();
+});
+
+test("model_control_checks_multiple_accounts_collapses_all_to_select_all_and_intersects_across_models", async () => {
+  const s = { ...session("k1"), model: "claude-opus-5-5", profile: "p1" };
+  const { host, core } = await started({
+    ...base(),
+    "GET /overview": {
+      ...overview,
+      sessionRuntimeChange: true,
+      connectRuntimeChange: true,
+      accountSubsets: true,
+      connects: [{ id: "c1", name: "c1", kind: "slack", mode: "multi-session", requireMention: true, enabled: true, bind: { runtime: "claude", model: "claude-opus-5-5" }, connection: { state: "connected" }, slack: { appToken: "", botToken: "" }, sessions: 0 }],
+      profiles: [
+        profile("p1", "claude", ["claude-opus-5-5", "claude-sonnet-5"], true, 10),
+        profile("p2", "claude", ["claude-opus-5-5"], true, 20),
+        profile("p4", "claude", ["claude-opus-5-5"], true, 30),
+        profile("p3", "codex", ["gpt-6-astra"], true, 0),
+      ],
+    },
+    "GET /sessions": [s],
+    "GET /sessions/k1": { session: s, threads: [], turns: [], jobs: [] },
+    "POST /sessions": { key: "k-new", thread: { id: 99 } },
+    "POST /sessions/k1/settings": { ok: true, profile: "p2" },
+    "PUT /connects/c1": { ok: true },
+  });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  subscribe(core, ui, 2, { topic: "pick", station: "ws/st", of: "new" });
+  subscribe(core, ui, 3, { topic: "pick", station: "ws/st", of: "connect:c1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+
+  // Unrestricted starts as 全选, and marks the active account `current: true` in a chat.
+  assert.equal(v(values, 1).who, "全选");
+  assert.deepEqual(
+    v(values, 1).accounts.map((a: J) => [a.id, a.current === true]),
+    [["p1", true], ["p2", false], ["p4", false]],
+  );
+
+  // Checking 2 of 3 accounts keeps the subset `["p1", "p2"]` and saves `profiles` to the station.
+  await ask(host, core, ui, 10, "pick.set", { station: "ws/st", of: "session:k1", profiles: ["p1", "p2"] });
+  apply(host, values);
+  assert.deepEqual([v(values, 1).draft.profiles, v(values, 1).draft.profile ?? null, v(values, 1).who], [["p1", "p2"], null, "2 个账号"]);
+  assert.equal(v(values, 1).autoNote, "在已选账号间自动切换");
+  // Repicking while 2 accounts are checked keeps the 2-account pool on the station.
+  assert.deepEqual(await ask(host, core, ui, 11, "pick.repick", { station: "ws/st", of: "session:k1" }), { profile: "p2", said: "已改用 p2@x.com" });
+  assert.deepEqual(stationPosted(host, "/sessions/k1/settings").at(-1), { profiles: ["p1", "p2"], repick: true });
+  await ask(host, core, ui, 12, "pick.save", { station: "ws/st", of: "session:k1" });
+  assert.deepEqual(stationPosted(host, "/sessions/k1/settings").at(-1), { model: "claude-opus-5-5", effort: null, profile: null, profiles: ["p1", "p2"] });
+
+  // Checking all 3 of 3 accounts automatically collapses to unrestricted 全选 (`profiles: null`, `profile: null`).
+  await ask(host, core, ui, 13, "pick.set", { station: "ws/st", of: "session:k1", profiles: ["p1", "p2", "p4"] });
+  apply(host, values);
+  assert.deepEqual([v(values, 1).draft.profiles ?? null, v(values, 1).draft.profile ?? null, v(values, 1).who, v(values, 1).changed], [null, null, "全选", false]);
+
+  // Intersecting across models: ["p1", "p2"] moved to Sonnet (only p1 runs it) narrows cleanly to p1 without `dropped`.
+  await ask(host, core, ui, 14, "pick.set", { station: "ws/st", of: "session:k1", profiles: ["p1", "p2"], model: "claude-sonnet-5" });
+  apply(host, values);
+  assert.deepEqual([v(values, 1).draft.profile, v(values, 1).draft.profiles ?? null, v(values, 1).dropped ?? null], ["p1", null, null]);
+
+  // Zero intersection: ["p2", "p4"] moved to Sonnet drops back to unrestricted with warning.
+  await ask(host, core, ui, 15, "pick.set", { station: "ws/st", of: "session:k1", profiles: ["p2", "p4"], model: "claude-sonnet-5" });
+  apply(host, values);
+  assert.deepEqual([v(values, 1).draft.profile ?? null, v(values, 1).draft.profiles ?? null, v(values, 1).whoLevel], [null, null, "amber"]);
+  assert.ok(String(v(values, 1).dropped).includes("Sonnet 5"));
+
+  // New chat & connect also persist and send multi-account subsets.
+  await ask(host, core, ui, 16, "pick.save", { station: "ws/st", of: "new", model: "claude-opus-5-5", profiles: ["p1", "p4"] });
+  apply(host, values);
+  assert.equal(v(values, 2).account.text, "2 个账号");
+  await ask(host, core, ui, 17, "newChat.create", { station: "ws/st" });
+  await host.settle();
+  assert.deepEqual(stationPosted(host, "/sessions").at(-1)?.profiles, ["p1", "p4"]);
+
+  await ask(host, core, ui, 18, "pick.save", { station: "ws/st", of: "connect:c1", profiles: ["p2", "p4"] });
+  const put = host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/admin/api/connects/c1")).map((r) => JSON.parse(new TextDecoder().decode(r.body!)));
+  assert.deepEqual(put.at(-1), { bind: { model: "claude-opus-5-5", effort: "", profile: null, profiles: ["p2", "p4"] } });
+
+  // Rapidly toggling to a subset and immediately back to 全选 while the first save is still in flight sends both updates.
+  await ask(host, core, ui, 19, "pick.set", { station: "ws/st", of: "session:k1", open: true });
+  call(core, ui, 30, "pick.save", { station: "ws/st", of: "session:k1", profiles: ["p1", "p2"] });
+  call(core, ui, 31, "pick.save", { station: "ws/st", of: "session:k1", profiles: null, profile: null });
+  await host.settle();
+  assert.deepEqual(
+    stationPosted(host, "/sessions/k1/settings").slice(-2),
+    [
+      { model: "claude-opus-5-5", effort: null, profile: null, profiles: ["p1", "p2"] },
+      { model: "claude-opus-5-5", effort: null, profile: null },
+    ],
+  );
+
+  core.close();
+});
+
+test("multi_account_guards_older_stations_and_saved_subset_repick_to_all", async () => {
+  // 1) A session already saved on a subset `["p1", "p2"]`: drafting 全选 then calling `pick.repick` sends `profile: null` (not stale `["p1", "p2"]`).
+  const subSession = { ...session("k1"), model: "claude-opus-5-5", profile: "p1", profilePinned: false, profiles: ["p1", "p2"] };
+  const r1 = await started({
+    ...base(),
+    "GET /overview": {
+      ...overview,
+      sessionRuntimeChange: true,
+      accountSubsets: true,
+      profiles: [
+        profile("p1", "claude", ["claude-opus-5-5"], true, 10),
+        profile("p2", "claude", ["claude-opus-5-5"], true, 20),
+        profile("p4", "claude", ["claude-opus-5-5"], true, 30),
+      ],
+    },
+    "GET /sessions": [subSession],
+    "GET /sessions/k1": { session: subSession, threads: [], turns: [], jobs: [] },
+    "POST /sessions/k1/settings": { ok: true, profile: "p4" },
+  });
+  const ui1 = r1.core.connect();
+  subscribe(r1.core, ui1, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  await r1.host.settle();
+  const vals1 = new Map();
+  apply(r1.host, vals1);
+  assert.deepEqual(v(vals1, 1).value.profiles, ["p1", "p2"]);
+  await ask(r1.host, r1.core, ui1, 2, "pick.set", { station: "ws/st", of: "session:k1", profiles: null, profile: null });
+  assert.deepEqual(await ask(r1.host, r1.core, ui1, 3, "pick.repick", { station: "ws/st", of: "session:k1" }), { profile: "p4", said: "已改用 p4@x.com" });
+  assert.deepEqual(stationPosted(r1.host, "/sessions/k1/settings").at(-1), { profile: null, repick: true });
+  apply(r1.host, vals1);
+  assert.equal(v(vals1, 1).who, "全选");
+  r1.core.close();
+
+  // 2) An older station (no `accountSubsets` in overview) rejects multi-account subset saves, reverts drafts, and clamps migrated newChat subsets to single-account pin so excluded accounts are never spent.
+  const oldSession = { ...session("k1"), model: "claude-opus-5-5", profile: "p1" };
+  const r2 = await started({
+    ...base(),
+    "GET /overview": {
+      ...overview,
+      sessionRuntimeChange: true,
+      profiles: [
+        profile("p1", "claude", ["claude-opus-5-5"], true, 10),
+        profile("p2", "claude", ["claude-opus-5-5"], true, 20),
+        profile("p4", "claude", ["claude-opus-5-5"], true, 30),
+      ],
+    },
+    "GET /sessions": [oldSession],
+    "GET /sessions/k1": { session: oldSession, threads: [], turns: [], jobs: [] },
+    "POST /sessions": { key: "k-new", thread: { id: 99 } },
+    "POST /sessions/k1/settings": { ok: true, profile: "p1" },
+  });
+  const ui2 = r2.core.connect();
+  subscribe(r2.core, ui2, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  subscribe(r2.core, ui2, 2, { topic: "pick", station: "ws/st", of: "new" });
+  subscribe(r2.core, ui2, 3, { topic: "newChat", scope: "ws" });
+  await r2.host.settle();
+  const vals2 = new Map();
+  apply(r2.host, vals2);
+  await assert.rejects(ask(r2.host, r2.core, ui2, 10, "pick.save", { station: "ws/st", of: "session:k1", profiles: ["p1", "p2"] }), /Station/);
+  assert.deepEqual(stationPosted(r2.host, "/sessions/k1/settings"), []);
+  apply(r2.host, vals2);
+  assert.equal(v(vals2, 1).who, "全选");
+  // Single-account pin (`全不选 -> 点一个`) still works on older stations, and `profiles: []` drafts 全不选 cleanly.
+  await ask(r2.host, r2.core, ui2, 20, "pick.set", { station: "ws/st", of: "session:k1", profiles: [] });
+  apply(r2.host, vals2);
+  assert.deepEqual(
+    [v(vals2, 1).draft.profiles, v(vals2, 1).who, v(vals2, 1).whoLevel, v(vals2, 1).autoNote, v(vals2, 1).repick ?? null, v(vals2, 1).changed, v(vals2, 1).accountText, v(vals2, 1).accountWarn],
+    [[], "未选择", "amber", "请选择至少一个账号", null, false, "未选择", true],
+  );
+  // Saving with 0 accounts drafted is a no-op that preserves the 0-account draft without hitting the station.
+  assert.deepEqual(await ask(r2.host, r2.core, ui2, 21, "pick.save", { station: "ws/st", of: "session:k1" }), { saved: false });
+  assert.deepEqual(stationPosted(r2.host, "/sessions/k1/settings"), []);
+  apply(r2.host, vals2);
+  assert.deepEqual(v(vals2, 1).draft.profiles, []);
+  // Closing the account sub-panel (`open: false`) reverts an incomplete 0-account draft back to the saved accounts.
+  await ask(r2.host, r2.core, ui2, 22, "pick.set", { station: "ws/st", of: "session:k1", open: false });
+  apply(r2.host, vals2);
+  assert.equal(v(vals2, 1).who, "全选");
+  assert.equal(v(vals2, 1).draft.profiles, undefined);
+  // Re-entering 全不选 (`profiles: []`) and tapping one account (`profiles: ["p2"]`) pins `p2` immediately.
+  await ask(r2.host, r2.core, ui2, 23, "pick.set", { station: "ws/st", of: "session:k1", profiles: [] });
+  await ask(r2.host, r2.core, ui2, 11, "pick.save", { station: "ws/st", of: "session:k1", profiles: ["p2"] });
+  assert.deepEqual(stationPosted(r2.host, "/sessions/k1/settings"), [{ model: "claude-opus-5-5", effort: null, profile: "p2" }]);
+  // Migrated local multi-account subset on an older station clamps to the first selected account (`p1`) instead of unrestricted pool.
+  await ask(r2.host, r2.core, ui2, 12, "newChat.migrate", { choices: { st: { model: "claude-opus-5-5", runtime: "claude", profiles: ["p1", "p2"] } } });
+  apply(r2.host, vals2);
+  assert.equal(v(vals2, 2).account.text, "p1@x.com");
+  assert.equal((r2.core.inner.store.get({ topic: "newChat", scope: "ws" }) as J).profile, "p1");
+  assert.equal(v(vals2, 3).pick.account.text, "p1@x.com");
+  await ask(r2.host, r2.core, ui2, 13, "newChat.create", { station: "ws/st" });
+  await r2.host.settle();
+  const created = stationPosted(r2.host, "/sessions").at(-1);
+  assert.equal(created?.profile, "p1");
+  assert.equal(created?.profiles, undefined);
+  r2.core.close();
 });
 
 test("a_chat_referred_to_goes_out_as_a_link_to_it", async () => {
@@ -1400,7 +1833,7 @@ test("an_address_of_a_stations_own_page_kept_from_before_is_said_gone", async ()
 
 test("the_chats_a_few_words_find_are_a_view_of_the_list", async () => {
   const row = (id: string, title: string, at: number) => ({ id, session: id, thread: null, title, agents: [], last: null, unread: false, mine: true, lastActiveAt: at, connect: null, origin: null });
-  const { host, core } = await started({ ...base(), "GET /chats": [row("a", "别的", 3), row("b", "登录页", 2), row("c", "修登录", 1)] });
+  const { host, core } = await started({ ...base(), ...chatsOf([row("a", "别的", 3), row("b", "登录页", 2), row("c", "修登录", 1)]) });
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "登录", exclude: "c" });
   await host.settle();
@@ -1408,6 +1841,40 @@ test("the_chats_a_few_words_find_are_a_view_of_the_list", async () => {
   apply(host, values);
   assert.deepEqual(v(values, 1).items.map((i: J) => i.id), ["b"]);
   assert.equal(v(values, 1).items[0].station, "ws/st");
+  core.close();
+});
+
+// The owner found the `@` menu's order useless: the pinned chats always first, the rest by whichever an agent last
+// touched (the user, 2026-11-10).
+test("the_at_menu_lists_the_chats_opened_here_latest_first_then_the_rest_by_when_they_were_last_active_pinned_or_not", async () => {
+  const row = (id: string, title: string, at: number) => ({ id, session: id, thread: null, title, agents: [], last: null, unread: false, mine: true, lastActiveAt: at, connect: null, origin: null });
+  const answers: J = { ...base(), ...chatsOf([row("p", "置顶的部署", 1), row("a", "部署 甲", 2), row("b", "部署 乙", 4), row("c", "别的", 3)]) };
+  answers["GET /chats?marks=1"] = { ...answers["GET /chats?marks=1"], pins: { p: 9 } };
+  const { host, core } = await started(answers);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "", limit: 8 });
+  subscribe(core, ui, 2, { topic: "chatSearch", scope: "ws", query: "部署", limit: 8 });
+  subscribe(core, ui, 3, { topic: "chats", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const ids = (n: number) => v(values, n).items.map((i: J) => i.id);
+  // The pinned chat is pinned in the list, and in the menu as any other.
+  assert.deepEqual(v(values, 3).days[0].items.map((i: J) => i.id), ["p"]);
+  assert.deepEqual(ids(1), ["b", "c", "a", "p"]);
+  assert.deepEqual(ids(2), ["b", "a", "p"]);
+  // Opened: first, the latest first; the menu made again.
+  call(core, ui, 4, "client.focus", { visible: true, chat: { station: "ws/st", session: "a" } });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(ids(1), ["a", "b", "c", "p"]);
+  call(core, ui, 5, "client.focus", { chat: { station: "ws/st", session: "p" } });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(ids(1), ["p", "a", "b", "c"]);
+  assert.deepEqual(ids(2), ["p", "a", "b"]);
+  // Kept with the workspace, the latest last.
+  assert.deepEqual(core.inner.data.record("chat_ref", "opened:ws"), [["ws/st", "a"], ["ws/st", "p"]]);
   core.close();
 });
 
@@ -1422,9 +1889,9 @@ test("the_at_menu_written_on_one_station_finds_the_chats_of_every_station_of_its
   const { host, core } = await started(base(), 0, wire, (x) => {
     x.cloud.also = { stations: [{ id: "st", name: "studio", online: true, last_seen: null }, { id: "st2", name: "mini", online: true, last_seen: null }] };
     stationReplies(x.host, (req: HttpRequest) => {
-      const [path, query] = req.url.replace("https://stillfail.test/admin/api", "").split("?");
-      if (path !== "/chats" || (query ?? "").includes("archived")) return undefined;
-      return req.headers.some(([k, v]) => k === AT && v === "st2") ? [row("b", "部署 mini", 2)] : [row("a", "部署 studio", 3), row("c", "写在这里", 1)];
+      const asked = `${req.method} ${req.url.replace("https://stillfail.test/admin/api", "")}`;
+      const of = chatsOf(req.headers.some(([k, v]) => k === AT && v === "st2") ? [row("b", "部署 mini", 2)] : [row("a", "部署 studio", 3), row("c", "写在这里", 1)]);
+      return asked in of ? of[asked] : undefined;
     });
   });
   const ui = core.connect();
@@ -1480,8 +1947,7 @@ test("the_messages_a_few_words_find_are_those_of_the_chats_listed_newest_first_a
   const said = (thread: number, n: number, text: string, at: number) => ({ thread, n, kind: "message", ts: `${n}.0`, authorKind: "person", author: "a@x", authorName: "阿甲", text, at });
   const { host, core } = await started({
     ...base(),
-    "GET /chats": [row("a", 7, "别的"), row("b", 8, "登录页")],
-    "GET /threads": [threadView(7, 4, 4, 0), threadView(8, 1, 1, 0)],
+    ...chatsOf([{ ...row("a", 7, "别的"), last: { seq: 4 } }, { ...row("b", 8, "登录页"), last: { seq: 1 } }]),
     "GET /threads/7/entries?limit=50": {
       first: 1,
       last: 4,
@@ -1677,7 +2143,6 @@ test("letters_kept_in_their_own_log_are_no_entries_of_the_chat_and_its_letters_p
   assert.deepEqual(page(), [["备份", [["in", "旧的一封"], ["out", "脚本放好了吗"], ["in", "放好了"]]]]);
   // One told as it is kept: on the page, nothing of it in the chat.
   s.push("letters", { id: 7, letters: [going(3, 45, "谢谢")] });
-  s.push("thread-view", { ...threadView(7, 3), letters: 4, lettersLast: 3 });
   await host.settle();
   apply(host, values);
   assert.deepEqual(page(), [["备份", [["in", "旧的一封"], ["out", "脚本放好了吗"], ["in", "放好了"], ["out", "谢谢"]]]]);
@@ -1910,9 +2375,13 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   const atRest = session("chat:c-1");
   const working = { ...atRest, process: "running", running: true, turns: 1, lastTurn: { id: "t1", kind: "input", startedAt: 5, endedAt: null } };
   const row = (id: string, session: string, thread: number, agents: J[]) => ({ id, session, thread, title: "新对话", agents, last: null, unread: false, mine: true, lastActiveAt: thread, connect: null, origin: null });
-  const answers: J = { ...base(), "GET /chats": [row("7", "k1", 7, [])] };
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
+  const answers: J = { ...base(), "GET /chats": [row("7", "k1", 7, [])], "GET /chats?marks=1": marks };
   const s = await started(answers);
   const { host, core } = s;
+  // A station that keeps the marks: the sidebar made here of the summaries held.
+  s.push("made", { rows: true, marks: true });
+  await host.settle();
   // The station as it is at each moment: what a read is answered with is what it had as it was asked.
   const now = (agent: J) => {
     answers["GET /sessions"] = [session("k1"), agent];
@@ -1940,7 +2409,6 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   // Its agent begins: the station tells it, and has it so from now.
   now(working);
   s.push("session", working);
-  s.push("chat", row("9", "chat:c-1", 9, [working]));
   await host.settle();
   subscribe(core, ui, 4, { topic: "chat", station: "ws/st", thread: 9 });
   await host.settle();
@@ -1948,7 +2416,7 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   for (const r of release) r();
   await host.settle();
   apply(host, values);
-  const item = v(values, 1).days.flatMap((d: J) => d.items).find((i: J) => i.id === "9");
+  const item = v(values, 1).days.flatMap((d: J) => d.items).find((i: J) => i.thread === 9);
   assert.deepEqual([v(values, 4).agents[0].status, item?.state], ["running", "run"]);
   core.close();
 });
@@ -1962,8 +2430,8 @@ test("what_waited_for_a_new_chat_goes_as_soon_as_it_is_made_not_after_the_lists_
     return undefined;
   });
   const ui = core.connect();
-  // A slow link: what the new chat changes (its lists, the footprint) is not read back yet.
-  const release = [host.hold("/admin/api/chats"), host.hold("/admin/api/footprint")];
+  // A slow link: what the new chat changes (its lists) is not read back yet.
+  const release = [host.hold("/admin/api/chats?marks=1")];
   const key = String((await ask(host, core, ui, 1, "chat.create", { station: "ws/st", runtime: "claude", model: "opus" })).key);
   call(core, ui, 2, "chat.send", { station: "ws/st", session: key, text: "修一下登录" });
   await host.settle();
@@ -1978,11 +2446,12 @@ test("what_waited_for_a_new_chat_goes_as_soon_as_it_is_made_not_after_the_lists_
 test("a_chat_being_archived_leaves_the_list_at_once_and_comes_back_if_it_could_not_be", async () => {
   let archived = false;
   let refused = true;
-  const row = (id: string, thread: number) => ({ id, session: id, thread, title: id, agents: [], last: null, unread: false, mine: true, lastActiveAt: 1, connect: null, origin: null });
-  const { host, core } = await started({ ...base(), "GET /chats": [row("k1", 7), row("k2", 8)] });
+  const row = (id: string, thread: number) => ({ id, session: id, thread, title: id, agents: [], last: { seq: 1 }, unread: false, mine: true, lastActiveAt: 15 - thread, connect: null, origin: null });
+  const { host, core } = await started({ ...base(), ...chatsOf([row("k1", 7), row("k2", 8)]) });
   stationReplies(host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (req.method === "GET" && path === "/chats" && archived) return [row("k2", 8)];
+    const left = chatsOf([row("k2", 8)]);
+    if (req.method === "GET" && archived && `GET ${path}` in left) return left[`GET ${path}`];
     if (req.method === "POST" && path === "/threads/7/archive" && !refused) {
       archived = true;
       return { ok: true };
@@ -2009,7 +2478,7 @@ test("a_chat_being_archived_leaves_the_list_at_once_and_comes_back_if_it_could_n
   await host.settle();
   assert.ok("err" in answersOf(host, values).get(2)!);
   assert.deepEqual(ids(), ["k1", "k2"]);
-  // Archived: its station's rows, read again before the answer, no longer have it.
+  // Archived: gone at once, and the station takes it.
   refused = false;
   release = host.hold("/threads/7/archive");
   archive(3);
@@ -2019,7 +2488,6 @@ test("a_chat_being_archived_leaves_the_list_at_once_and_comes_back_if_it_could_n
   release();
   await host.settle();
   assert.ok("ok" in answersOf(host, values).get(3)!);
-  assert.deepEqual(ids(), ["k2"]);
   assert.ok(archived);
   core.close();
 });
@@ -2154,6 +2622,8 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   let ui = core.connect();
   await ask(host, core, ui, 1, "client.device", { app: "android", build: "0.1.1320" });
   subscribe(core, ui, 2, { topic: "changelog" });
+  const asked: Record<string, number> = { desktop: 6, web: 7, station: 8, cloud: 9 };
+  for (const [part, id] of Object.entries(asked)) subscribe(core, ui, id, { topic: "changelog", part });
   await host.settle();
   const values = new Map();
   answersOf(host, values);
@@ -2161,7 +2631,7 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   assert.deepEqual([c.app, c.build, c.loading], ["android", 1320, false]);
   // A tab a part, this app's first; the desktop's carries the web's.
   assert.deepEqual(c.tabs.map((x: J) => [x.part, x.label]), [["android", "安卓"], ["desktop", "桌面"], ["web", "网页"], ["station", "Station"], ["cloud", "云端"]]);
-  const notes = (part: string) => c.tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
+  const notes = (part: string) => v(values, asked[part] ?? 2).tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
   assert.equal(c.tabs[0].days[0].label, "今天");
   // Each day which it is where the device is (its label only says it): the same day for all of today's.
   assert.equal(c.tabs[0].days.length, 1);
@@ -2180,14 +2650,20 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   ui = core.connect();
   await ask(host, core, ui, 3, "client.device", { app: "android", build: "0.1.1335" });
   subscribe(core, ui, 2, { topic: "changelog" });
+  // Asked with `news` (the chats' list's card): that alone, no tab made.
+  subscribe(core, ui, 5, { topic: "changelog", news: true });
   await host.settle();
   answersOf(host, values);
   const news = v(values, 2).news;
   assert.equal(news.build, "0.1.1335");
   assert.deepEqual(news.entries.map((e: J) => e.text[0]), ["修复：列表跳动"]);
+  assert.equal(v(values, 2).tabs.length, 5);
+  assert.deepEqual(v(values, 5).news, news);
+  assert.deepEqual([v(values, 5).app, v(values, 5).build, v(values, 5).tabs, v(values, 5).loading], ["android", 1335, [], false]);
   await ask(host, core, ui, 4, "changelog.seen", {});
   answersOf(host, values);
   assert.equal(v(values, 2).news, undefined);
+  assert.equal(v(values, 5).news, undefined);
   // Read once at each start (the TS core reads it then and as the cloud's socket opens).
   assert.equal(host.requests.filter((r) => r.url.endsWith("/v1/changelog")).length, 2);
   core.close();
@@ -2211,7 +2687,44 @@ test("the_changelog_whose_every_change_is_every_parts_is_one_list", async () => 
   answersOf(host, values);
   const tabs = v(values, 2).tabs;
   assert.deepEqual(tabs.map((x: J) => x.part), ["desktop"]);
-  assert.deepEqual(tabs[0].days.flatMap((d: J) => d.entries.map((e: J) => e.text[0])), ["修复：列表跳动", "新功能：更早的"]);
+  assert.deepEqual(tabs[0].days.flatMap((d: J) => d.entries.map((e: J) => e.lines[0].text)), ["列表跳动", "更早的"]);
+  core.close();
+});
+
+test("the_changelog_sends_the_tab_asked_a_page_at_a_time_and_says_how_many_more", async () => {
+  const host = new FakeHost();
+  const now = Math.round(host.nowMs() / 1000);
+  const entry = (version: number, parts: string[]) => ({ version, commit: "c", at: now - (2000 - version) * 600, text: [`修复：第 ${version} 个`], fixes: [], parts });
+  // Forty of Android's, five of the station's among them.
+  const entries = Array.from({ length: 45 }, (_, i) => entry(2000 - i, i % 9 === 4 ? ["station"] : ["android"]));
+  host.onFetch((req) => req.url.endsWith("/v1/changelog") ? jsonResponse(200, { entries, released: { android: 2000, station: 2000 } }) : jsonResponse(404, {}));
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  await ask(host, core, ui, 1, "client.device", { app: "android", build: "0.1.1990" });
+  subscribe(core, ui, 2, { topic: "changelog" });
+  subscribe(core, ui, 3, { topic: "changelog", part: "station" });
+  subscribe(core, ui, 4, { topic: "changelog", part: "nowhere", limit: 12 });
+  subscribe(core, ui, 5, { topic: "changelog", limit: 60 });
+  await host.settle();
+  const values = new Map();
+  answersOf(host, values);
+  const versions = (id: number) => v(values, id).tabs.map((x: J) => [x.part, x.days.flatMap((d: J) => d.entries.map((e: J) => e.version))]);
+  const android = entries.filter((e) => e.parts[0] === "android").map((e) => e.version);
+  const station = entries.filter((e) => e.parts[0] === "station").map((e) => e.version);
+  const others = (asked: string, shown: number[]) => ["android", "desktop", "web", "station", "cloud"].map((part) => [part, part === asked ? shown : []]);
+  // A page (30) of this app's tab where none is said, the others none, and how many it has past them.
+  assert.deepEqual(versions(2), others("android", android.slice(0, 30)));
+  assert.equal(v(values, 2).more, 10);
+  // Another tab asked: its own, all of them, nothing more.
+  assert.deepEqual(versions(3), others("station", station));
+  assert.equal(v(values, 3).more, undefined);
+  // A tab there is not: this app's; a limit of its own.
+  assert.deepEqual(versions(4), others("android", android.slice(0, 12)));
+  assert.equal(v(values, 4).more, 28);
+  assert.deepEqual(versions(5), others("android", android));
+  assert.equal(v(values, 5).more, undefined);
+  // A day's change is what the page shows of it: its words as written and whether it is this app's are news' alone.
+  assert.deepEqual(Object.keys(v(values, 2).tabs[0].days[0].entries[0]).sort(), ["has", "lines", "note", "version", "versionName"]);
   core.close();
 });
 
@@ -2457,6 +2970,9 @@ test("connect_wizard_offers_comma_where_its_station_has_it_and_adds_a_connect_of
   flow.edit(topic, ui, { comma: { line: "tailcat 1.2.3.4 4750" } });
   assert.equal(flow.value(topic).comma.ready, false);
   assert.throws(() => flow.begin(topic, ui, "create", {}, false), "not a line Comma shows");
+  // Comma's production shows its connector's socket address.
+  flow.edit(topic, ui, { comma: { line: "comma wss://salix.comma.surf salix_conn_abc12345" } });
+  assert.equal(flow.value(topic).comma.ready, true);
   flow.edit(topic, ui, { comma: { line: " comma https://api.comma.surf salix_conn_abc12345 " } });
   view = flow.value(topic);
   assert.deepEqual([view.step, view.back, view.comma.ready], ["commaLine", "commaBind", true]);
@@ -2770,7 +3286,7 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   await host.settle();
   apply(host, values);
   // Off again, every field of the offer gone (the clients' shape takes their absence).
-  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [], screens: [], personal: v(values, 1).personal, toConfirm: 0 });
+  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lends: [], screens: [], personal: v(values, 1).personal, toConfirm: 0 });
   assert.deepEqual(v(values, 1).personal.map((p: J) => [p.standing, p.devices]), [["none", []]]);
   core.close();
 });
@@ -2925,5 +3441,104 @@ test("the_spans_a_core_sends_say_which_build_of_its_app_it_is_once_its_ui_has_sa
   assert.equal(sent.length, 1);
   const resource = JSON.parse(new TextDecoder().decode(sent[0].body!)).resourceSpans[0].resource.attributes as J[];
   assert.deepEqual(resource.find((a) => a.key === "service.version")?.value, { stringValue: "0.1.2420" });
+  core.close();
+});
+
+test("profile_fusion_is_asked_on_demand_and_legacy_tiered_agy_picks_resolve_to_base_models", async () => {
+  const agyProfile = profile("ag1", "agy", ["gemini-4-carbon", "claude-opus-5-5", "gpt-oss-120b"], true, 10, {
+    check: {
+      state: "ok",
+      detail: "ok",
+      models: ["gemini-4-carbon", "claude-opus-5-5", "gpt-oss-120b"],
+      modelEfforts: { agy: { "gemini-4-carbon": ["low", "medium", "high"], "claude-opus-5-5": ["low", "medium", "high"], "gpt-oss-120b": [] } },
+      modelEffortDefaults: { agy: { "gemini-4-carbon": "high", "claude-opus-5-5": "high" } },
+      checkedAt: 1,
+    },
+  });
+  const legacySession = { ...session("k1"), runtime: "agy", model: "gemini-4-carbon-high", effort: null, profile: "ag1" };
+  const stationOv = {
+    ...overview,
+    sessionRuntimeChange: true,
+    connectRuntimeChange: true,
+    profiles: [
+      profile("p2", "claude", ["claude-opus-5-5"], true, 80),
+      agyProfile,
+      profile("dv", "devin", ["gemini-4-carbon"], true, 20, {
+        check: {
+          state: "ok",
+          detail: "ok",
+          models: ["gemini-4-carbon"],
+          fusionSidekicks: { "gemini-4-carbon": ["swe-2-medium"] },
+          checkedAt: 1,
+        },
+      }),
+    ],
+  };
+  const { host, core } = await started({
+    ...base(),
+    "GET /overview": stationOv,
+    "GET /sessions": [legacySession],
+    "GET /sessions/k1": { session: legacySession, threads: [], turns: [], jobs: [] },
+    "GET /profiles/dv/fusion": { fusion: { leads: { "gpt-6-sol-max": [0] }, sides: ["swe-2-medium"] } },
+  });
+  const ui = core.connect();
+  const got = (await ask(host, core, ui, 1, "profile.fusion", { station: "ws/st", id: "dv" })) as J;
+  assert.deepEqual(got, {
+    fusion: {
+      leads: [{ id: "gpt-6-sol", name: "GPT-6 Sol", maker: { id: "openai", name: "OpenAI" }, sides: [0] }],
+      sides: [{ id: "swe-2-medium", name: "SWE-2 · 中", maker: { id: "devin", name: "Cognition" } }],
+    },
+  });
+
+  // Seed legacy tiered agy records (pre-normalization) and subscribe to `pick` for both `new` and legacy session `k1`.
+  core.inner.data.put("choice", "ws:ws:station:st", { runtime: "agy", model: "gemini-4-carbon-medium", effort: "", profile: "", profiles: null, fast: null, context: null }, false);
+  core.inner.data.put(
+    "choice",
+    "ws:ws:frequent",
+    [
+      { model: "gemini-4-carbon-medium", runtime: "agy", effort: null, fast: null, context: null, count: 4, last: 200 },
+      { model: "gpt-oss-120b-medium", runtime: "agy", effort: null, fast: null, context: null, count: 2, last: 100 },
+    ],
+    false,
+  );
+  core.inner.data.put("choice", "ws:ws:liked", ["gemini-4-carbon-high", "gpt-oss-120b-medium"], false);
+
+  const values = new Map();
+  subscribe(core, ui, 2, { topic: "pick", station: "ws/st", of: "new" });
+  subscribe(core, ui, 3, { topic: "pick", station: "ws/st", of: "session:k1" });
+  await host.settle();
+  apply(host, values);
+
+  // New chat pick resolves legacy `gemini-4-carbon-medium` -> `gemini-4-carbon` at `medium`, and retains frequent combos + stars.
+  // Even while drafted on `agy`, `sidekicks` are offered because `gemini-4-carbon` also runs on `devin` with Fusion sidekicks.
+  const newPick = v(values, 2);
+  assert.deepEqual([newPick.value.model, newPick.value.runtime, newPick.value.effort], ["gemini-4-carbon", "agy", "medium"]);
+  assert.deepEqual(newPick.sidekicks.slice(0, 2), [
+    { id: "", text: "无", model: "gemini-4-carbon" },
+    { id: "swe-2-medium", text: "SWE-2 · 中", model: "fusion-gemini-4-carbon-sidekick-swe-2-medium", maker: { id: "devin" } },
+  ]);
+  assert.deepEqual(newPick.liked, ["gemini-4-carbon", "gpt-oss-120b"]);
+  assert.deepEqual(
+    newPick.combos.map((c: J) => [c.model, c.runtime, c.effort, c.text]),
+    [
+      ["gemini-4-carbon", "agy", "medium", "AGY · 中"],
+      ["gpt-oss-120b", "agy", undefined, "AGY · 默认深度"],
+    ],
+  );
+  // Legacy session `k1` with `model: "gemini-4-carbon-high", effort: null` normalizes to `gemini-4-carbon` at `high`.
+  const sessionPick = v(values, 3);
+  assert.deepEqual([sessionPick.value.model, sessionPick.value.runtime, sessionPick.value.effort], ["gemini-4-carbon", "agy", "high"]);
+
+  // Unstarring normalized `gemini-4-carbon` clears legacy `gemini-4-carbon-high`, and forgetting normalized combo clears legacy history.
+  core.inner.choose.like("ws/st", "gemini-4-carbon", false);
+  core.inner.choose.forget("ws/st", { model: "gemini-4-carbon", runtime: "agy", effort: "medium" });
+  await host.settle();
+  apply(host, values);
+  const afterPick = v(values, 2);
+  assert.deepEqual(afterPick.liked, ["gpt-oss-120b"]);
+  assert.deepEqual(afterPick.combos.map((c: J) => c.model), ["gpt-oss-120b"]);
+
+  const { runnableOn } = await import("../src/views/models.ts");
+  assert.equal(runnableOn(stationOv, { runtime: "agy", model: "gemini-4-carbon-high", profile: "ag1" }, 0).length, 1);
   core.close();
 });

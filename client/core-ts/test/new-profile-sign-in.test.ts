@@ -26,11 +26,11 @@ function drain(host: FakeHost, values: Map<number, unknown>) {
   return emitted;
 }
 
-/// The sign-in as the overview topic (the web's page) and the stations topic (the phone's and the desktop's) show it.
+/// The sign-in as the overview topic (the web's page) and its station's `logins` (the app's) show it.
 function shown(values: Map<number, unknown>) {
   const of = (o: any) => (o?.logins ?? []).find((l: any) => l.id === "login-1") ?? null;
   const page = of(v(values, 1));
-  const app = of(v(values, 2)?.find((s: any) => s.station === ST)?.overview);
+  const app = of({ logins: values.get(2) ?? [] });
   assert.deepEqual(app, page, "the same on every page");
   return page;
 }
@@ -40,7 +40,7 @@ test("a new profile's sign-in: started and its code taken show as the calls answ
   const ui = core.connect();
   const values = new Map();
   subscribe(core, ui, 1, { topic: "overview", station: ST });
-  subscribe(core, ui, 2, { topic: "stations", scope: "ws" });
+  subscribe(core, ui, 2, { topic: "stationPart", scope: "ws", station: ST, part: "logins" });
   await host.settle();
   drain(host, values);
   assert.equal(shown(values), null);
@@ -84,7 +84,7 @@ test("a new profile's sign-in: an answer that comes after the station told more 
   const ui = core.connect();
   const values = new Map();
   subscribe(core, ui, 1, { topic: "overview", station: ST });
-  subscribe(core, ui, 2, { topic: "stations", scope: "ws" });
+  subscribe(core, ui, 2, { topic: "stationPart", scope: "ws", station: ST, part: "logins" });
   await host.settle();
   push("overview", told(job("needs_code", { url: AUTHORIZE })));
   await host.settle();

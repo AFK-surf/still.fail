@@ -127,7 +127,7 @@ fn kept_tree(text : String) -> Json? {
 }
 
 ///|
-let markdown_asked : Map[String, Bool] = {}
+let markdown_asked : Map[String, Bool] = Map([])
 
 ///|
 fn init {
@@ -138,20 +138,20 @@ fn init {
 }
 
 ///|
-let parsed : Map[String, Array[MdBlock]] = {}
+let parsed : Map[String, Array[MdBlock]] = Map([])
 
 ///|
 /// The texts parsed lately, oldest first; the drawing data counts toward the budget too.
 let parsed_order : Array[String] = []
 
 ///|
-let core_parsed : Map[String, Bool] = {}
+let core_parsed : Map[String, Bool] = Map([])
 
 ///|
 let parsed_most : Int = 4096
 
 ///|
-let parsed_cost : Map[String, Int] = {}
+let parsed_cost : Map[String, Int] = Map([])
 
 ///|
 let parsed_used : Ref[Int] = Ref(0)
@@ -210,14 +210,14 @@ pub fn path_link(path : String, line : Int?) -> String {
 /// The path and the line a file's chip's link (path_link) carries; None for any other link.
 pub fn path_of_link(href : String) -> (String, Int?)? {
   guard href.has_prefix(path_scheme) else { return None }
-  let rest = href.view(start_offset=path_scheme.length()).to_owned()
+  let rest = href.exact_view(start=path_scheme.length()).to_owned()
   guard rest.find(":") is Some(i) else { return None }
   let mut line : Int? = None
-  for ch in rest.view(end_offset=i) {
+  for ch in rest.exact_view(end=i) {
     guard ch >= '0' && ch <= '9' else { return None }
     line = Some(line.unwrap_or(0) * 10 + (ch.to_int() - '0'.to_int()))
   }
-  Some((rest.view(start_offset=i + 1).to_owned(), line))
+  Some((rest.exact_view(start=i + 1).to_owned(), line))
 }
 
 ///|
@@ -261,16 +261,16 @@ let file_chip_ground : @ui.Ground = { room: 6.0 / 13.2, height: 20.0 / 13.2, cor
 /// The file a link or an image names, by its name (the last part of its
 /// path): `shot.png`, `/w/shot.png`, `file:///w/shot.png`.
 pub fn file_name_of(url : String) -> String {
-  let mut u = url.trim(chars=" ").to_string()
+  let mut u = url.trim(chars=" ").to_owned()
   if u.has_prefix("file://") {
-    u = u.view(start_offset=7).to_string()
+    u = u.exact_view(start=7).to_owned()
   }
   let u = @codec.percent_decoded(u)
   let mut i = u.length()
   while i > 0 && u.at(i - 1).to_int() != 47 {
     i = i - 1
   }
-  u.view(start_offset=i).to_string()
+  u.exact_view(start=i).to_owned()
 }
 
 
@@ -299,14 +299,15 @@ pub(all) struct Placed {
 fn screen_alone(xs : Array[MdInline]) -> (String, LinkTo, String?)? {
   let parts = xs.filter(fn(x) {
     match x {
-      Text(t) => t.trim(chars=" \n\t").to_string() != ""
-      SoftBreak => false
+      Text(t) => t.trim(chars=" \n\t").to_owned() != ""
       _ => true
     }
   })
   guard parts.length() == 1 else { return None }
   match parts[0] {
-    Link(href, c, to) if to.is_card() => {
+    // (a station's 共享调试 no card even alone: a link to its page, 2026-11-11, the card that lent the phone from the
+    // chat gone)
+    Link(href, c, to) if to.is_card() && to.card != "adb" => {
       let words = md_plain(c)
       Some((href, to, if to.bare { None } else { Some(words) }))
     }
@@ -398,7 +399,7 @@ pub fn markdown(
   let t = theme()
   // (in a page's bones, made-up words: each paragraph as it is, asking the core for nothing)
   let tree = if tree is None && c.in_bones() {
-    Some(Json::array(text.split("\n\n").map(fn(p) { Json::array([Json::string("p"), Json::array([Json::string(p.to_string())])]) }).collect()))
+    Some(Json::array(text.split("\n\n").map(fn(p) { Json::array([Json::string("p"), Json::array([Json::string(p.to_owned())])]) }).collect()))
   } else {
     tree
   }
@@ -493,7 +494,7 @@ fn Md::column(self : Md, key : String, pieces : Array[Piece]) -> Int {
 
 ///|
 /// The blocks of the parts drawn lately (`markdown_part`), by their key.
-let parts : Map[String, Array[MdBlock]] = {}
+let parts : Map[String, Array[MdBlock]] = Map([])
 
 ///|
 fn init {
@@ -587,6 +588,12 @@ fn Md::lh(self : Md, size : Double) -> Double {
   }
   let k : Float = 1.65
   (Float::from_double(size) * k).to_double()
+}
+
+///|
+/// A line's height as drawn: a reader's line is a multiple of the drawn size, including the system's scaling.
+fn Md::drawn_lh(self : Md, size : Double) -> Double {
+  if self.line > 0.0 { self.c.sp(size) * self.line } else { self.c.sp(self.lh(size)) }
 }
 
 ///|
@@ -696,30 +703,6 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
         draw: fn() { c.box(h=Px(1.0), bg=web().line, fn() {  }) |> ignore },
       },
     ]
-    // a table (GFM, as the core reads it): a row a line of words, its cells apart by a bar, until the chat
-    // page draws its grid
-    Table(t) => {
-      let out = []
-      let row = fn(cells : Array[Array[MdInline]]) {
-        let xs : Array[MdInline] = []
-        for k, cell in cells {
-          if k > 0 {
-            xs.push(Text(" | "))
-          }
-          for x in cell {
-            xs.push(x)
-          }
-        }
-        for p in self.piece(Paragraph(xs), true, None) {
-          out.push(p)
-        }
-      }
-      row(t.head)
-      for r in t.rows {
-        row(r)
-      }
-      out
-    }
   }
 }
 
@@ -744,8 +727,7 @@ fn Md::placed(
   }
   let parts = xs.filter(fn(x) {
     match x {
-      Text(t) => t.trim(chars=" \n\t").to_string() != ""
-      SoftBreak => false
+      Text(t) => t.trim(chars=" \n\t").to_owned() != ""
       _ => true
     }
   })
@@ -778,8 +760,8 @@ fn Md::placed(
     let nodes = run
     if nodes.iter().any(fn(x) {
         match x {
-          Text(t) => t.trim(chars=" ").to_string() != ""
-          SoftBreak | HardBreak => false
+          Text(t) => t.trim(chars=" ").to_owned() != ""
+          HardBreak => false
           _ => true
         }
       }) {
@@ -907,17 +889,21 @@ fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
         c.box(dir=Row, align=AStart, fn() {
           if l.ordered {
             c.box(dir=Row, min_w=marker_w, pr=md_marker_gap, justify=JEnd, fn() {
-              c.text("\{number}.", size=s, line=self.lh(s), color=ink, wrap=false)
+              c.text(
+                "\{number}.", size=s, color=ink, wrap=false,
+                line?=if self.line > 0.0 { None } else { Some(self.lh(s)) },
+                line_em?=if self.line > 0.0 { Some(self.line) } else { None },
+              )
               |> ignore
             })
             |> ignore
           } else {
             // (on the first line's middle: the line as the words are set, at the system's size of words; Markdown.kt
             // Bullet's lh(textSize).toDp())
-            bullet(c, depth, s, c.sp(self.lh(s)), ink)
+            bullet(c, depth, s, self.drawn_lh(s), ink)
           }
           match task {
-            Some(done) => task_box(c, done, c.sp(self.lh(s)))
+            Some(done) => task_box(c, done, self.drawn_lh(s))
             None => ()
           }
           c.box(w=Fill(1.0), fn() { stack(c, inner, false) }) |> ignore
@@ -1022,7 +1008,7 @@ fn Md::words(
   let p = theme().p
   let runs = []
   // a bare link to a screen reads as its title
-  let titles : Map[String, String] = {}
+  let titles : Map[String, String] = Map([])
   match self.screens {
     Some(sc) => {
       let bare = []
@@ -1067,7 +1053,8 @@ fn Md::words(
     allow_ellipsis~,
     weight=if weight > 0 { weight } else { 400 },
     color=ink,
-    line=self.lh(size),
+    line?=if self.line > 0.0 { None } else { Some(self.lh(size)) },
+    line_em?=if self.line > 0.0 { Some(self.line) } else { None },
     link_color=p.blue,
     pressed_bg=alpha(p.blue, 0.14),
     code_color=p.code_ink,
@@ -1147,7 +1134,6 @@ fn runs_of(
         let words = if alt != "" { alt } else { file_name_of(src) }
         out.push(@ui.span(words, bold~, italic~, strike~, link=src))
       }
-      SoftBreak => out.push(@ui.span(" ", bold~, italic~, strike~, link~))
       HardBreak => out.push(@ui.span("\n", bold~, italic~, strike~, link~))
     }
   }
@@ -1162,11 +1148,48 @@ let code_key_h : Double = 24.0
 let copied_at : LiveMap[Int, Bool] = LiveMap::new()
 
 ///|
+/// The code blocks wrapped at their width (their wrap key pressed), by their id.
+let code_wrapped : LiveMap[Int, Bool] = LiveMap::new()
+
+///|
+/// How far apart a code block's keys stand (4), and its code wrapped at its width: in from its sides as scrolled (14
+/// across, 12 down).
+let code_keys_apart : @ui.Style = @ui.css("w=S1")
+
+///|
+let code_wrapped_box : @ui.Style = @ui.css("w=Full px=S3_5 py=S3")
+
+///|
+/// A key on a code block's bar (code_block's): a capsule code_key_h high, its icon (none: "") and its words in the
+/// muted ink, rippling as it is pressed.
+fn code_key(c : @ui.Ctx, id : Int, icon_name : String, words : String) -> Unit {
+  let w = web()
+  c.box(
+    dir=Row,
+    h=Px(code_key_h),
+    padx=7.0,
+    gap=4.0,
+    align=ACenter,
+    radius=code_key_h / 2.0,
+    bg=alpha(theme().p.canvas, 0.8),
+    id~,
+    fn() {
+      if icon_name != "" {
+        icon(c, icon_name, size=12.0, color=w.muted) |> ignore
+      }
+      c.text(words, size=theme().t.caption, color=w.muted, wrap=false) |> ignore
+      @motion.ripple(c, id, code_key_h / 2.0)
+    },
+  )
+  |> ignore
+}
+
+///|
 /// A code block as the web phone draws it: a quiet
 /// tinted block with no frame; above the code, on a row of its own, its
 /// language and a copy button; the code in the code face, 12 on 18 lines,
-/// in its colours as the core said them (ink.mbt), scrolled sideways rather than
-/// wrapped.
+/// in its colours as the core said them (ink.mbt), scrolled sideways, or wrapped at
+/// its width once its wrap key (before the copy key) is pressed, till it is pressed again.
 pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? = None, face? : Int? = None) -> Unit {
   let t = theme()
   let w = web()
@@ -1178,6 +1201,15 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
     @kit.after(c, copy_key, false, copied_ms) |> ignore
     copied_at[id] = true
   })
+  let wrap_id = c.id("sf-code-wrap/" + code)
+  c.on_press(wrap_id, fn() {
+    if code_wrapped.contains(id) {
+      code_wrapped.remove(id)
+    } else {
+      code_wrapped[id] = true
+    }
+  })
+  let wrapped = code_wrapped.contains(id)
   let copied = copied_at.contains(id) &&
     (if @kit.after(c, copy_key, true, copied_ms) {
       copied_at.remove(id)
@@ -1212,43 +1244,19 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
           |> ignore
         })
         |> ignore
-        c.box(
-          dir=Row,
-          h=Px(code_key_h),
-          padx=7.0,
-          gap=4.0,
-          align=ACenter,
-          radius=code_key_h / 2.0,
-          bg=alpha(t.p.canvas, 0.8),
-          id~,
-          fn() {
-            icon(c, if copied { "check" } else { "copy" }, size=12.0, color=w.muted)
-            |> ignore
-            c.text(
-              // (common.copied, common.copy: the catalog's words)
-              if language() == "en" {
-                if copied { "Copied" } else { "Copy" }
-              } else if copied {
-                "已复制"
-              } else {
-                "复制"
-              },
-              size=theme().t.caption,
-              color=w.muted,
-              wrap=false,
-            )
-            |> ignore
-            @motion.ripple(c, id, code_key_h / 2.0)
-          },
-        )
-        |> ignore
+        // (wrapped at the block's width, or on its lines as written, scrolled across: a press each way)
+        code_key(c, wrap_id, "", md_wrap_words(wrapped))
+        c.box(style=code_keys_apart, fn() {  }) |> ignore
+        // (common.copied, common.copy: the catalog's words)
+        code_key(c, id, if copied { "check" } else { "copy" }, md_copy_words(copied))
       },
     )
   }
   c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, fn() {
     bar() |> ignore
-    // in the colours the core said (ink.mbt), scrolled sideways rather than wrapped (12 on 1.6 on a desktop's width)
-    c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() {
+    // in the colours the core said (ink.mbt), scrolled sideways, or wrapped at its width (12 on 1.6 on a desktop's
+    // width)
+    let words = fn(wrap : Bool) {
       c.rich(
         match colours {
           // (the core coloured it as it read the Markdown)
@@ -1257,14 +1265,18 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
         },
         size=t.t.caption,
         line=if over { code_line_wide } else { 18.0 },
-        wrap=false,
+        wrap~,
         breaks=true,
         color=t.p.text,
         face=face.unwrap_or(0),
       )
       |> ignore
-    })
-    |> ignore
+    }
+    if wrapped {
+      c.box(style=code_wrapped_box, fn() { words(true) }) |> ignore
+    } else {
+      c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() { words(false) }) |> ignore
+    }
   })
   |> ignore
 }
@@ -1289,7 +1301,7 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
   let n = s.length()
   let piece = fn(a : Int, b : Int) {
     if b > a {
-      let w = @ui.text_advance(s.view(start_offset=a, end_offset=b).to_string(), size~, weight~)
+      let w = @ui.text_advance(s.clamped_view(start=a, end=b).to_owned(), size~, weight~)
       if w > least {
         least = w
       }
@@ -1300,8 +1312,9 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
     if u == 32 || u == 10 {
       piece(start, i)
       start = i + 1
-    } else if u >= 0x2E80 && u < 0xFF00 {
-      // a CJK character breaks either side
+    } else if u >= 0x2E80 && u < 0xFF00 && !(u >= 0xD800 && u < 0xE000) {
+      // a CJK character breaks either side (not half of a pair, which that range holds too: an emoji stays whole
+      // in its word, where each half was once measured as a piece of its own)
       piece(start, i)
       piece(i, i + 1)
       start = i + 1
@@ -1555,8 +1568,8 @@ fn Md::cell_images(self : Md, cell : Array[MdInline]) -> Array[(Double, (Double)
   let out = []
   for x in cell {
     match x {
-      Text(t) if t.trim(chars=" \n\t").to_string() == "" => ()
-      SoftBreak | HardBreak => ()
+      Text(t) if t.trim(chars=" \n\t").to_owned() == "" => ()
+      HardBreak => ()
       Image(src, _) =>
         match (self.files)(file_name_of(src)) {
           Some({ image: Some((r, draw)), .. }) => out.push((dmax(dmin(r, 4.0), 0.25), draw))
@@ -1598,7 +1611,7 @@ fn cell_images_width(images : Array[(Double, (Double) -> Unit)]) -> Double {
 /// The links in an agent's words (`tree`, the core's reading of `text`), each once, with what the core says each is to
 /// (their `to`), for what is shown as a link is pointed at (a chat's card, a pull request's).
 pub fn md_links_to(text : String, tree : Json?) -> Map[String, LinkTo] {
-  let out : Map[String, LinkTo] = {}
+  let out : Map[String, LinkTo] = Map([])
   fn inl(xs : Array[MdInline]) -> Unit {
     for x in xs {
       match x {

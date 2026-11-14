@@ -141,7 +141,7 @@ test "a quote sent while the composer opens leaves from where it was seen" {
   tap_send(t)
   assert_true(send_flight.get() is Some(_), msg="the message was not sent")
   let after = quote_once(t)
-  assert_true((after.0 - before.0).abs() < 1.0 && (after.1 - before.1).abs() < 1.0, msg="the quote jumped from \{before} to \{after} on sending")
+  assert_true((after.0 - before.0).abs() < 1.0 && (after.1 - before.1).abs() < 1.0, msg="the quote jumped from \{Repr(before)} to \{Repr(after)} on sending")
 }
 
 ///|
@@ -167,7 +167,7 @@ test "a picture sent while the composer opens leaves from where it was seen" {
   }
   let visible_before = (dmax(before[1], before[17]), dmin(before[1] + before[3], before[19]))
   let visible_after = (dmax(sent[1], sent[17]), dmin(sent[1] + sent[3], sent[19]))
-  assert_true((visible_after.0 - visible_before.0).abs() < 1.0 && (visible_after.1 - visible_before.1).abs() < 1.0, msg="the picture's visible part changed from \{visible_before} to \{visible_after} on sending")
+  assert_true((visible_after.0 - visible_before.0).abs() < 1.0 && (visible_after.1 - visible_before.1).abs() < 1.0, msg="the picture's visible part changed from \{Repr(visible_before)} to \{Repr(visible_after)} on sending")
   assert_true((sent[11] - before[11]).abs() < 0.03, msg="the picture's opacity changed on sending")
 }
 
@@ -212,7 +212,7 @@ test "an existing file stays in place when a quote is added above it" {
 }
 
 ///|
-test "the composer follows a waiting video's picture becoming available" {
+test "a waiting video is a picture tile from the first frame, its composer steady when its still arrives" {
   let calls : Array[Made] = []
   let made : Ref[Source?] = Ref(None)
   let t = fake_core(calls, made~)
@@ -220,6 +220,10 @@ test "the composer follows a waiting video's picture becoming available" {
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_add(src, w, "ws1/st1", "视频.mov", b"video")
   @sfbase.writing_add(src, w, "ws1/st1", "日志.txt", b"log")
+  t.draw()
+  let id = text(Some(w.files.get()[0]), "id")
+  assert_eq(thumb_of(t.ctx(), "ws1/st1//draft:" + id).map(fn(tile) { (tile.w, tile.h) }), Some((56.0, 56.0)))
+  assert_true(t.query(Group, label="视频.mov") is None)
   t.run_for(@ui.move_most_ms)
   let ground = fn() {
     let glasses = t.drawn_glass_corners()
@@ -227,14 +231,12 @@ test "the composer follows a waiting video's picture becoming available" {
     glasses[glasses.length() - 1].1
   }
   let before = ground()
-  let id = text(Some(w.files.get()[0]), "id")
   @sfbase.writing_pictures[id] = "mem:fixture/video-still.png"
   t.draw()
   let first = ground()
   t.run_for(composer_sample_ms)
   let mid = ground()
-  assert_true((first - before).abs() < 1.0, msg="the composer's ground jumped when the video's picture appeared")
-  assert_true((mid - before).abs() > 1.0, msg="the composer's ground did not move with the video's picture")
+  assert_true((first - before).abs() < 1.0 && (mid - before).abs() < 1.0, msg="the composer's ground moved when the video's picture appeared")
 }
 
 ///|

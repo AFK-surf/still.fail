@@ -50,7 +50,7 @@ test "nav bar: back, title and what is at its end on one line (settings' pages)"
         }
         match t.find(title) {
           Some((_, y)) if y > hi + 16.0 => ()
-          at => fail("\{mode}: its title \{title} at \{at}, the head's line at \{hi}")
+          at => fail("\{mode}: its title \{title} at \{Repr(at)}, the head's line at \{hi}")
         }
       }
       None =>
@@ -138,9 +138,9 @@ test "nav bar: the standard head's back on the same line on every page made once
       }
     }
     let said = at.map(fn(m) { m.0 + "@" + m.1.to_string() }).join(", ")
-    println("standard head under \{top}: \{said}; none on the line: \{missing}")
+    println("standard head under \{top}: \{said}; none on the line: \{Repr(missing)}")
     if !missing.is_empty() {
-      fail("no back on the head's line under a \{top} status bar: \{missing}")
+      fail("no back on the head's line under a \{top} status bar: \{Repr(missing)}")
     }
     if at.iter().any(fn(m) { m.1 != at[0].1 }) {
       fail("the standard head's back not on one line under a \{top} status bar: \{said}")

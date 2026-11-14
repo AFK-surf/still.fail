@@ -39,17 +39,17 @@ test "a table's copy key hangs past its right edge, in line with its head; its m
   let (kx, ky, kw, kh) = table_key_of(t)
   let (lx, hy, lw, hh) = t.rect_of("缓存读").unwrap()
   // its gap past the head's last words (nothing after them), within the message's column; its middle on theirs
-  assert_true(kx >= lx + lw + table_key_gap && kx + kw <= 390.0 - 16.0, msg="\{(kx, kw, lx, lw)}")
-  assert_true((ky + kh / 2.0 - (hy + hh / 2.0)).abs() <= 1.0, msg="\{(ky, kh, hy, hh)}")
+  assert_true(kx >= lx + lw + table_key_gap && kx + kw <= 390.0 - 16.0, msg="\{Repr((kx, kw, lx, lw))}")
+  assert_true((ky + kh / 2.0 - (hy + hh / 2.0)).abs() <= 1.0, msg="\{Repr((ky, kh, hy, hh))}")
   t.click(Button, label="web-main.prose.copyTable")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(presented_rest() - t.time())
   t.tap_text("web-main.prose.copyCsv")
   assert_eq(t.clipboard(), "模型,输入,输出,缓存读\nOpus 5.5,$5,$25,$0.5\nSonnet 5,$3,$15,$0.3")
   t.frame()
   // a check a moment
   let _ = table_key_of(t, copied=true)
   t.click(Button, label="common.copied")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(presented_rest() - t.time())
   t.tap_text("web-main.prose.copyMarkdown")
   assert_eq(t.clipboard(), copy_table)
 }
@@ -72,7 +72,7 @@ test "a table as wide as a phone's message: its key over nothing of it, past its
   t.frame()
   let (kx, _, kw, _) = table_key_of(t)
   let (lx, _, lw, _) = t.rect_of("three a long").unwrap()
-  assert_true(kx > lx + lw && kx + kw == 390.0 - 16.0 - table_key_gap, msg="\{(kx, kw, lx, lw)}")
+  assert_true(kx > lx + lw && kx + kw == 390.0 - 16.0 - table_key_gap, msg="\{Repr((kx, kw, lx, lw))}")
 }
 
 ///|
@@ -85,12 +85,12 @@ test "a table as wide as the message on a wide chat: its key out in the margin, 
   t.draw()
   // (pointed at: its key shown)
   let (ox, oy, _, _) = t.rect_of("一").unwrap()
-  t.move(ox, oy)
+  t.move_to(ox, oy)
   t.run_for(dur_ms)
   // past the table's last words, in the margin, whole
   let (kx, _, kw, _) = table_key_of(t)
   let (lx, ly, lw, _) = t.rect_of("three a long").unwrap()
-  assert_true(kx > lx + lw && kx >= 1080.0 - 160.0 && kx + kw <= 1080.0 - 160.0 + table_key_room, msg="\{(kx, kw, lx, lw)}")
+  assert_true(kx > lx + lw && kx >= 1080.0 - 160.0 && kx + kw <= 1080.0 - 160.0 + table_key_room, msg="\{Repr((kx, kw, lx, lw))}")
   // a drag moves nothing: no more to see
   t.drag(600.0, ly, 200.0, ly)
   t.draw()
@@ -119,11 +119,11 @@ test "a table in the message, no card round it: its words in line with the messa
       assert_eq(rule.0, words)
       match t.rect_of("同上") {
         // (where it shows whole: not scrolled out of a phone's message)
-        Some((lx, _, lw, _)) if lx + lw < w => assert_true(rule.0 + rule.2 >= lx + lw, msg="\{(w, rule, lx, lw)}")
+        Some((lx, _, lw, _)) if lx + lw < w => assert_true(rule.0 + rule.2 >= lx + lw, msg="\{Repr((w, rule, lx, lw))}")
         _ => ()
       }
       let under = rects.filter(fn(r) { r.2 < w && r.3 > 1.0 && r.0 <= rule.0 && r.0 + r.2 >= rule.0 + rule.2 && r.1 < rule.1 && r.1 + r.3 > rule.1 })
-      assert_eq(under.length(), 0, msg="\{(w, under)}")
+      assert_eq(under.length(), 0, msg="\{Repr((w, under))}")
     }
   }
 }
@@ -141,13 +141,13 @@ test "a table's copy key with a mouse: shown as the table is pointed at, its men
   assert_eq(keys(), 0)
   // pointed at the table's last row: there, faded in
   let (lx, ly, _, lh) = t.rect_of("Sonnet 5").unwrap()
-  t.move(lx, ly + lh / 2.0)
+  t.move_to(lx, ly + lh / 2.0)
   t.run_for(dur_ms)
   assert_eq(keys(), 1)
   // its menu open, the pointer gone into it: still there
   t.click(Button, label="web-main.prose.copyTable")
   t.run_for(@kit.presence_in_ms)
-  t.move(lx, 780.0)
+  t.move_to(lx, 780.0)
   t.run_for(dur_ms)
   assert_eq(keys(), 1)
   // the menu closed by a press outside it, the pointer off the table: gone
@@ -162,7 +162,7 @@ test "a table's copy key with a mouse: its picture copied whole, the key not in 
   t.draw()
   t.draw()
   let (lx, ly, _, _) = t.rect_of("缓存读").unwrap()
-  t.move(lx, ly)
+  t.move_to(lx, ly)
   t.run_for(dur_ms)
   t.click(Button, label="web-main.prose.copyTable")
   t.run_for(@kit.presence_in_ms)
@@ -175,7 +175,7 @@ test "a table's copy key with a mouse: its picture copied whole, the key not in 
   assert_true(shots[0].iter().any(fn(w) { w.contains("缓存读") }) && shots[0].iter().any(fn(w) { w.contains("Sonnet 5") }))
   assert_true(t.clipboard_png() is Some(_))
   let _ = table_key_of(t, copied=true)
-  t.move(lx, ly)
+  t.move_to(lx, ly)
   t.run_for(copied_ms)
   let _ = table_key_of(t)
 }
@@ -206,7 +206,7 @@ test "two messages' tables: the picture copied is of the table whose key was pre
   t.draw()
   t.draw()
   let (lx, ly, _, _) = t.rect_of("缓存读").unwrap()
-  t.move(lx, ly)
+  t.move_to(lx, ly)
   t.run_for(dur_ms)
   t.click(Button, label="web-main.prose.copyTable")
   t.run_for(@kit.presence_in_ms)
@@ -215,6 +215,6 @@ test "two messages' tables: the picture copied is of the table whose key was pre
   t.frame()
   let shots = t.shots()
   assert_eq(shots.length(), 1)
-  assert_true(shots[0].iter().any(fn(w) { w.contains("缓存读") }), msg="\{shots[0]}")
-  assert_false(shots[0].iter().any(fn(w) { w.contains("three a long") }), msg="\{shots[0]}")
+  assert_true(shots[0].iter().any(fn(w) { w.contains("缓存读") }), msg="\{Repr(shots[0])}")
+  assert_false(shots[0].iter().any(fn(w) { w.contains("three a long") }), msg="\{Repr(shots[0])}")
 }

@@ -4,14 +4,14 @@
 
 ///|
 test "82-station-settings" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("settings-station-settings"), seed~)
     f.tap("icon:settings")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.tap("=Station")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.tap("=willow")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.tap("=设置")
     // (its variables under its permissions and logins: past the window's foot)
     f.wheel_at("=软件与设备", 600.0)
@@ -36,9 +36,12 @@ test "82-station-settings" {
     f.gone("=取消")
     // (back up to its parts: wheeled over 保存, there where it was pressed, whatever else the window's height shows)
     f.wheel_at("=保存", -1200.0)
+    // (what the wheel is for: 软件与设备 come into the window)
+    f.see("=软件与设备")
     f.tap("=软件与设备")
-    // (under its software, a row each: past the window's foot)
+    // (under its software, a row each: past the window's foot, 检查更新 come into it)
     f.wheel_at("=软件与更新", 2000.0)
+    f.see("=检查更新")
     f.tap("=检查更新")
     f.end()
   })

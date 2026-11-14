@@ -8,7 +8,7 @@ fail() { echo "testflight: $*" >&2; exit 1; }
 [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ] || fail 'manual dispatch only'
 [ "${GITHUB_RUN_ATTEMPT:-}" = 1 ] || fail 'reruns forbidden; inspect Apple after an ambiguous upload, then dispatch a fresh build number'
 [ "${GITHUB_REF:-}" = refs/heads/main ] || fail 'select main, not a tag or branch'
-[ "${GITHUB_REPOSITORY:-}" = AFK-surf/still.fail ] || fail 'wrong repository'
+[ "${GITHUB_REPOSITORY_OWNER:-}" = AFK-surf ] || fail 'wrong repository'
 [ "${GITHUB_SHA:-}" = "$RELEASE_SHA" ] || fail 'dispatch SHA does not match approved SHA'
 case ${1:-inputs} in
   inputs) ;;

@@ -10,7 +10,15 @@
 /// The core's `resources` view of the workspace in view, for station `address` (read, the station looking often,
 /// while shown).
 fn resources_of(core : Core, here : Here, address : String) -> Json? {
-  (core.topic)("resources", { "scope": str(here.workspace), "station": str(address) }).get().value
+  let ask = resources_ask(here, address)
+  (core.topic)(ask.0, ask.1).get().value
+}
+
+///|
+/// What the core is asked for station `address`'s figures (resources_of's, its 进程's and its overview's line's): its
+/// `resources` view of the workspace in view.
+fn resources_ask(here : Here, address : String) -> (String, Map[String, Json]) {
+  ("resources", { "scope": str(here.workspace), "station": str(address) })
 }
 
 ///|
@@ -31,29 +39,55 @@ fn rs_columns_of(v : Json?) -> Array[(String, String)] {
 
 ///|
 /// What the page shows, by station: the kind of whose (all, or a ResourceKind's key), every process flat or grouped,
-/// the column sorted by, the groups open.
+/// the column sorted by, the groups open (`opened`: once one is opened or shut; till then the first alone).
 priv struct RsShown {
-  mut kind : String
-  mut flat : Bool
-  mut by : String
-  open : Map[String, Bool]
-  mut opened : Bool
+  kind : String
+  flat : Bool
+  by : String
+  open : Array[String]
+  opened : Bool
 }
 
 ///|
-// kept across runs: said as a station's 进程 is first shown; station_page_reset empties it
-let rs_shown : Map[String, RsShown] = {}
+// kept across runs: said as a station's 进程 is chosen in; station_page_reset empties it
+let rs_shown : @sf.LiveMap[String, RsShown] = @sf.LiveMap::new()
 
 ///|
+/// What station `address`'s 进程 shows now (as at first where nothing was chosen in it).
 fn rs_shown_of(address : String) -> RsShown {
-  match rs_shown.get(address) {
-    Some(s) => s
-    None => {
-      let s = { kind: "all", flat: false, by: "cpu", open: {}, opened: false }
-      rs_shown[address] = s
-      s
+  rs_shown.get(address).unwrap_or({ kind: "all", flat: false, by: "cpu", open: [], opened: false })
+}
+
+///|
+/// Whether group `key` of `groups` (those shown, in the core's order) is open: the first alone till one is opened or
+/// shut.
+fn rs_open(shown : RsShown, groups : Array[Json], key : String) -> Bool {
+  if shown.opened {
+    shown.open.contains(key)
+  } else {
+    match groups {
+      [g, ..] => text(Some(g), "key") == key
+      [] => false
     }
   }
+}
+
+///|
+/// Group `key` opened or shut on station `address`'s 进程 (as it is pressed).
+fn rs_open_or_shut(address : String, groups : Array[Json], key : String) -> Unit {
+  let shown = rs_shown_of(address)
+  let open = if rs_open(shown, groups, key) {
+    groups.filter_map(fn(g) {
+      let k = text(Some(g), "key")
+      if k != key && rs_open(shown, groups, k) { Some(k) } else { None }
+    })
+  } else {
+    groups.filter_map(fn(g) {
+      let k = text(Some(g), "key")
+      if k == key || rs_open(shown, groups, k) { Some(k) } else { None }
+    })
+  }
+  rs_shown[address] = { ..shown, open, opened: true }
 }
 
 ///|
@@ -130,7 +164,7 @@ fn rs_figures_of(c : @ui.Ctx, core : Core, address : String, v : Json?, shown : 
     let at = keys.search(shown.kind).unwrap_or(0)
     let picked = @sf.segmented(c, "resources-kind/" + address, labels, at)
     if picked != at {
-      shown.kind = keys[picked]
+      rs_shown[address] = { ..rs_shown_of(address), kind: keys[picked] }
     }
     let how = @sf.segmented(
       c,
@@ -138,7 +172,9 @@ fn rs_figures_of(c : @ui.Ctx, core : Core, address : String, v : Json?, shown : 
       [@sf.t("web-main.resources.grouped"), @sf.t("web-main.resources.flat")],
       if shown.flat { 1 } else { 0 },
     )
-    shown.flat = how == 1
+    if (how == 1) != shown.flat {
+      rs_shown[address] = { ..rs_shown_of(address), flat: how == 1 }
+    }
   })
   |> ignore
   let groups = items(v, "groups").filter(fn(g) { shown.kind == "all" || text(Some(g), "kind") == shown.kind })
@@ -154,21 +190,27 @@ fn rs_figures_of(c : @ui.Ctx, core : Core, address : String, v : Json?, shown : 
 /// What is seen of the machine while it is read (the library's Waiting, in its bones): the totals and a table of
 /// made-up processes, as rs_figures_of draws them.
 fn rs_sample(c : @ui.Ctx, core : Core) -> Unit {
+  rs_figures_of(c, core.quiet(), "sample", Some(rs_sample_view()), rs_shown_of("sample"))
+}
+
+///|
+/// The made-up machine rs_sample draws (and its node, resources_node's bones).
+fn rs_sample_view() -> Json {
   let w = fn(n : Int) { Json::string(@sf.sample_words(n)) }
-  let use = fn(k : Double) -> Json { { "cpu": Json::number(k), "memory": Json::number(k * 2.0) } }
+  let usage = fn(k : Double) -> Json { { "cpu": Json::number(k), "memory": Json::number(k * 2.0) } }
   let group = fn(i : Int, n : Int, k : Double, processes : Array[Int]) -> Json {
     {
       "key": Json::string("sample" + i.to_string()),
       "title": w(n),
       "kindText": w(2),
-      "use": use(k),
+      "use": usage(k),
       "processes": Json::array(
         processes.mapi(fn(j, m) {
           Json::object({
             "key": Json::string("sample" + i.to_string() + "/" + j.to_string()),
             "name": w(m),
             "pid": Json::number((j + 1).to_double()),
-            "use": use(k / 2.0),
+            "use": usage(k / 2.0),
           })
         }),
       ),
@@ -179,13 +221,12 @@ fn rs_sample(c : @ui.Ctx, core : Core) -> Unit {
     "kinds": [{ "key": "a", "label": w(2) }, { "key": "b", "label": w(2) }],
     "groups": [group(0, 8, 30.0, [6, 9, 5]), group(1, 6, 20.0, [7]), group(2, 10, 10.0, [8])],
   }
-  rs_figures_of(c, core.quiet(), "sample", Some(v), rs_shown_of("sample"))
+  v
 }
 
 ///|
 /// A total, said, with the last minutes' line under it (Tile, Spark).
 fn rs_tile(c : @ui.Ctx, address : String, tv : Json?) -> Unit {
-  let t = @sf.theme()
   let key = text(tv, "key")
   c.box(style=rs_tile_box, fn() {
     c.box(style=rs_tile_head, fn() {
@@ -200,13 +241,7 @@ fn rs_tile(c : @ui.Ctx, address : String, tv : Json?) -> Unit {
       Some((w, _)) => w
       None => 0.0
     }
-    let ink = match key {
-      "cpu" => t.p.accent
-      "memory" => t.p.blue
-      "net" => t.p.green
-      "disk" => t.p.warn_ink
-      _ => t.p.muted
-    }
+    let ink = rs_spark_ink(key)
     c.box(style=rs_spark, id~, fn() {
       if w > 0.0 {
         c.shapes(rs_spark_shapes(number_list(tv, "points"), w, ink), w=Px(w), h=Px(rs_spark_h)) |> ignore
@@ -215,6 +250,19 @@ fn rs_tile(c : @ui.Ctx, address : String, tv : Json?) -> Unit {
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// A total's line's ink, by what it counts.
+fn rs_spark_ink(key : String) -> Int64 {
+  let t = @sf.theme()
+  match key {
+    "cpu" => t.p.accent
+    "memory" => t.p.blue
+    "net" => t.p.green
+    "disk" => t.p.warn_ink
+    _ => t.p.muted
+  }
 }
 
 ///|
@@ -280,9 +328,23 @@ fn rs_layout(
     Some((w, _)) => w
     None => c.width
   }
-  // (their words as drawn: the system's size of words applied, a figure's digits tabular)
-  let head = c.sp(c.text_size(Xs).0)
-  let figure = c.sp(c.text_size(Sm).0)
+  // (their words as drawn: the system's size of words applied)
+  rs_layout_of(room, c.sp(c.text_size(Xs).0), c.sp(c.text_size(Sm).0), rows, columns, by, names)
+}
+
+///|
+/// The layout of a table `room` wide (rs_layout's), its heads' words drawn `head` large and its figures' `figure` (a
+/// figure's digits tabular).
+fn rs_layout_of(
+  room : Double,
+  head : Double,
+  figure : Double,
+  rows : Array[(Json?, Bool)],
+  columns : Array[(String, String)],
+  by : String,
+  names : Int,
+) -> RsLayout {
+  let sp = fn(s : @ui.Space) { s.px() }
   let widths = columns.map(fn(col) {
     let sorted = col.0 == by
     let name = @sf.t("web-main.resources.column." + col.0)
@@ -291,13 +353,13 @@ fn rs_layout(
       let weight = if sorted && r.1 { 600 } else { 400 }
       widest = dmax(widest, @ui.text_advance(text(r.0, col.1), size=figure, weight~, style=@hostapi.style_tabular))
     }
-    widest + 2.0 * c.space(S2)
+    widest + 2.0 * sp(S2)
   })
-  let share_w = c.space(S9) + c.space(S2)
+  let share_w = sp(S9) + sp(S2)
   let sorted = columns.search_by(fn(col) { col.0 == by })
   let figures = widths.fold(init=0.0, fn(s, w) { s + w }) + (if sorted is Some(_) { share_w } else { 0.0 })
-  let left = room - figures - c.space(S8)
-  let beside = left >= c.space(rs_name_least) * names.to_double()
+  let left = room - figures - sp(S8)
+  let beside = left >= sp(rs_name_least) * names.to_double()
   let share = left >= 0.0
   match sorted {
     Some(k) if share => widths[k] = widths[k] + share_w
@@ -359,7 +421,7 @@ fn rs_heads(
     for k, col in columns {
       let id = c.id("resources-by/" + address + "/" + col.0)
       c.on_press(id, fn() {
-        shown.by = col.0
+        rs_shown[address] = { ..rs_shown_of(address), by: col.0 }
       })
       let on = col.0 == shown.by
       let name = @sf.t("web-main.resources.column." + col.0)
@@ -413,11 +475,7 @@ fn rs_figures(
 /// Whose a chat's row is: its chat opened from its title, where it has one.
 fn rs_title(c : @ui.Ctx, core : Core, key : String, g : Json?, style : @ui.TextStyle) -> Unit {
   let chat = field(g, "chat")
-  let thread = match field(chat, "thread") {
-    Some(Number(n, ..)) => n.to_int64().to_string()
-    _ => ""
-  }
-  let session = if thread != "" { thread } else { text(chat, "session") }
+  let session = text(chat, "session")
   if chat is Some(Object(_)) && session != "" {
     let id = c.id("resources-chat/" + key)
     c.on_press(id, fn() {
@@ -440,13 +498,6 @@ fn rs_grouped(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], 
   let by = shown.by
   let sorted = groups.copy()
   sorted.sort_by(fn(a, b) { rs_use(field(Some(b), "use"), by).compare(rs_use(field(Some(a), "use"), by)) })
-  if !shown.opened {
-    shown.opened = true
-    match groups {
-      [g, ..] => shown.open[text(Some(g), "key")] = true
-      [] => ()
-    }
-  }
   let most = sorted.fold(init=0.0, fn(m, g) { @cmp.maximum(m, rs_use(field(Some(g), "use"), by)) })
   // (a group's figures bold, its processes' plain)
   let rows : Array[(Json?, Bool)] = []
@@ -463,14 +514,10 @@ fn rs_grouped(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], 
     for g in sorted {
       let gv = Some(g)
       let key = text(gv, "key")
-      let on = shown.open.get(key).unwrap_or(false)
+      let on = rs_open(shown, groups, key)
       let id = c.id("resources-group/" + address + "/" + key)
       c.on_press(id, fn() {
-        if on {
-          shown.open.remove(key)
-        } else {
-          shown.open[key] = true
-        }
+        rs_open_or_shut(address, groups, key)
       })
       let b = rs_table_row(
         c,
@@ -598,28 +645,32 @@ fn rs_end(c : @ui.Ctx, core : Core, address : String, pv : Json?, gv : Json?, ro
             @sf.t("web-main.resources.endBody", args=[("chat", text(gv, "title"))]),
             @sf.t("web-main.resources.end"),
             danger=true,
-            fn() {
-              let session = text(gv, "session")
-              if session == "" {
-                return
-              }
-              (core.call)(
-                "process.end",
-                obj([("station", str(text(gv, "station"))), ("pid", Json::number(pid)), ("session", str(session))]),
-                fn(r) {
-                  match r {
-                    Ok(_) => (core.say)(@sf.t("web-main.resources.ended", args=[("name", name)]))
-                    Err(e) => (core.say)(@sf.t("web-main.resources.endFailed", args=[("name", name), ("error", error_text(e))]))
-                  }
-                },
-              )
-            },
+            fn() { rs_end_now(core, gv, pid, name) },
           )
         },
       ) |> ignore
     }
   })
   |> ignore
+}
+
+///|
+/// Process `pid` (called `name`) of group `gv`'s chat ended (`process.end`), as its end is confirmed; said how it went.
+fn rs_end_now(core : Core, gv : Json?, pid : Double, name : String) -> Unit {
+  let session = text(gv, "session")
+  if session == "" {
+    return
+  }
+  (core.call)(
+    "process.end",
+    obj([("station", str(text(gv, "station"))), ("pid", Json::number(pid)), ("session", str(session))]),
+    fn(r) {
+      match r {
+        Ok(_) => (core.say)(@sf.t("web-main.resources.ended", args=[("name", name)]))
+        Err(e) => (core.say)(@sf.t("web-main.resources.endFailed", args=[("name", name), ("error", error_text(e))]))
+      }
+    },
+  )
 }
 
 ///|
@@ -760,6 +811,10 @@ let rs_spark_line : Double = 1.25
 ///|
 /// The ground under the line: the ink at 14%.
 let rs_spark_ground : Double = 0.14
+
+///|
+/// Between the lines of the totals and of the choice where they go on in lines (their gap, S2).
+let rs_flow_lines : Double = 8.0
 
 ///|
 /// The choice of whose and of how, apart at its ends, 8 apart, 4 under the totals (bar).
@@ -940,6 +995,10 @@ let rs_uses_figures : @ui.Style = @ui.style(row=true, w=@sf.grow, min_w=S0, gap=
 
 ///|
 let rs_uses_chevron : Double = 14.0
+
+///|
+/// Between its figures' lines where they go on in lines (their gap, S3_5).
+let rs_uses_gap : Double = 14.0
 
 ///|
 /// The ways of saying them, what the line has beside the chevron.

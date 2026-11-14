@@ -3,7 +3,7 @@ export const LIMITS = {
   // A guard for the one relay process's memory (a lite container), not a share of anything: what costs money is the
   // bytes, below. It was 160, sized for a few teams before every device's and station's endpoint was home on every
   // relay (#2580); on 2026-10-30 the budget refused every new connection from 12:22 in Beijing. Its packets wait in it
-  // 200 ms at most (still.fail's iroh-relay), so an idle connection holds little; the relay's minute line in Axiom says
+  // 200 ms at most (still.fail's iroh-relay), so an idle connection holds little; the relay's minute line in Cloud Logging says
   // how many are open, to raise this further or size the container by.
   connections: 2000,
   // Everyone on it back within a minute after it restarts (a deploy drops them all).

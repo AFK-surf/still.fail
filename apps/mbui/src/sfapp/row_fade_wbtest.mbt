@@ -151,7 +151,7 @@ test "a chat row's fade respects reduced motion" {
   t.draw()
   t.run_for(@sfpages.left_lit_ms + t.frame_period())
   assert_eq(fade_row_ground(t), 0L)
-  assert_eq(t.rest_of("row-lit/"), -1.0)
+  assert_true(t.rest_of("row-lit/") <= t.time())
 }
 
 ///|
@@ -165,7 +165,7 @@ test "reducing motion during a chat row's fade puts it at its end" {
   t.set_reduce_motion(true)
   t.draw()
   assert_eq(fade_row_ground(t), 0L)
-  assert_eq(t.rest_of("row-lit/"), -1.0)
+  assert_true(t.rest_of("row-lit/") <= t.time())
 }
 
 ///|

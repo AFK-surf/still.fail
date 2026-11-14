@@ -9,11 +9,10 @@
 # `kit` (macOS) and `web-kit` are the kit (APP=sfkit, a phone's window: rich text, Markdown, pages): kit gives mac-kit
 # (its first page) and mac-kit-swipe (the next page pushed, then swiped halfway back from the left edge). `home` (macOS)
 # and `web-home` are still.fail's Home over made-up chats (APP=sffix, src/sfapp/fixture.mbt) in a phone's window: home
-# gives mac-home (the list), mac-home-sheet (the workspaces' sheet) and mac-home-swipe (a chat pushed, swiped halfway
-# back). `chat` and `web-chat` are a made-up chat open over it (MBUI_FIXTURE=chat, src/sfapp/chat_fixture.mbt): chat
-# gives mac-chat (at its end), mac-chat-up (scrolled up: the way to the newest over it) and mac-chat-loading (being
-# read), its dark look (mac-chat-dark), a picture under the bar's glass (mac-chat-glass) and its glass drawn solid
-# (mac-chat-solid). `composer` and `web-composer` are its composer's states (MBUI_FIXTURE=chat-compose|attach|quote|
+# gives mac-home (the list) and its dark look (mac-home-dark); the screens a press or a scroll comes to are the media
+# jobs' (scripts/media-job.sh: a drive script in the Tester). `chat` and `web-chat` are a made-up chat open over it
+# (MBUI_FIXTURE=chat, src/sfapp/chat_fixture.mbt): chat gives mac-chat (at its end) and mac-chat-loading (being read),
+# its dark look (mac-chat-dark) and its glass drawn solid (mac-chat-solid). `composer` and `web-composer` are its composer's states (MBUI_FIXTURE=chat-compose|attach|quote|
 # sending|failed); `cards` and `web-cards` its cards answered from it, Markdown's tables and code, picking words, a link's menu
 # (MBUI_FIXTURE=chat-cards|answering|md|pick|link-menu). `drive` and `web-drive` the drive's pages over a made-up drive (src/sfapp/drive_fixture.mbt);
 # `decide` and `web-decide` src/sfapp/decide_fixture.mbt's modes; `settings` and `web-settings` the settings' pages
@@ -86,30 +85,23 @@ shoot() {
     home)
       build_mac sffix
       rm -rf out/shot-home; mkdir -p out/shot-home
-      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_SCRIPT=home MBUI_SHOT_DIR=$PWD/out/shot-home on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
-      cp out/shot-home/home-1.png out/shots/mac-home.png
-      cp out/shot-home/home-2-workspaces.png out/shots/mac-home-sheet.png
-      cp out/shot-home/home-4-swipe.png out/shots/mac-home-swipe.png
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=home MBUI_SHOT_DIR=$PWD/out/shot-home on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+      cp out/shot-home/home.png out/shots/mac-home.png
       MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_DARK=1 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=home-dark MBUI_SHOT_DIR=$PWD/out/shot-home on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
       cp out/shot-home/home-dark.png out/shots/mac-home-dark.png
-      names="mac-home mac-home-sheet mac-home-swipe mac-home-dark" ;;
+      names="mac-home mac-home-dark" ;;
     chat)
       build_mac sffix
       rm -rf out/shot-chat; mkdir -p out/shot-chat
-      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_SCRIPT=chat MBUI_SHOT_DIR=$PWD/out/shot-chat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=chat MBUI_SHOT_DIR=$PWD/out/shot-chat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
       MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-loading MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=loading MBUI_SHOT_DIR=$PWD/out/shot-chat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
-      cp out/shot-chat/chat-1.png out/shots/mac-chat.png
-      cp out/shot-chat/chat-2-up.png out/shots/mac-chat-up.png
+      cp out/shot-chat/chat.png out/shots/mac-chat.png
       cp out/shot-chat/loading.png out/shots/mac-chat-loading.png
       MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_DARK=1 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=dark MBUI_SHOT_DIR=$PWD/out/shot-chat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
       MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_GLASS=solid MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=solid MBUI_SHOT_DIR=$PWD/out/shot-chat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
-      # scrolled so a picture is under the bar's glass and messages under the composer's
-      rm -rf out/shot-chat-glass; mkdir -p out/shot-chat-glass
-      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_CHAT_UP=1000 MBUI_SCRIPT=chat MBUI_SHOT_DIR=$PWD/out/shot-chat-glass on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
-      cp out/shot-chat-glass/chat-2-up.png out/shots/mac-chat-glass.png
       cp out/shot-chat/dark.png out/shots/mac-chat-dark.png
       cp out/shot-chat/solid.png out/shots/mac-chat-solid.png
-      names="mac-chat mac-chat-up mac-chat-loading mac-chat-glass mac-chat-dark mac-chat-solid" ;;
+      names="mac-chat mac-chat-loading mac-chat-dark mac-chat-solid" ;;
     glass)
       build_mac sfkit
       rm -rf out/shot-glass; mkdir -p out/shot-glass
@@ -184,7 +176,7 @@ shoot() {
       build_mac sffix
       rm -rf out/shot-newchat; mkdir -p out/shot-newchat
       names=
-      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-add newchat-preset-new-add newchat-preset-new-browse newchat-preset-picked home-bars place; do
+      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-add newchat-preset-new-add newchat-preset-new-browse newchat-preset-new-browse-repos newchat-preset-new-clone newchat-preset-new-clones newchat-preset-picked home-bars place; do
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-newchat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-newchat/$m.png out/shots/mac-newchat-$m.png
         names="$names mac-newchat-$m"
@@ -192,7 +184,7 @@ shoot() {
     web-newchat)
       WAPP=sffix
       names=
-      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-add newchat-preset-new-add newchat-preset-new-browse newchat-preset-picked home-bars place; do
+      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-add newchat-preset-new-add newchat-preset-new-browse newchat-preset-new-browse-repos newchat-preset-new-clone newchat-preset-new-clones newchat-preset-picked home-bars place; do
         web_shot "MBUI_FIXTURE=$m" out/shots/web-newchat-$m.png
         names="$names web-newchat-$m"
       done ;;
@@ -314,15 +306,15 @@ shoot() {
     notify)
       build_mac sffix
       rm -rf out/shot-notify; mkdir -p out/shot-notify
-      for m in chat-flash chat-flash-mine settings-notify-off; do
+      for m in chat-flash chat-flash-mine chat-flash-notice settings-notify-off; do
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-notify on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-notify/$m.png out/shots/mac-notify-${m#chat-}.png
       done
-      names="mac-notify-flash mac-notify-flash-mine mac-notify-settings-notify-off" ;;
+      names="mac-notify-flash mac-notify-flash-mine mac-notify-flash-notice mac-notify-settings-notify-off" ;;
     web-notify)
       WAPP=sffix
       names=""
-      for m in chat-flash chat-flash-mine settings-notify-off; do
+      for m in chat-flash chat-flash-mine chat-flash-notice settings-notify-off; do
         web_shot "MBUI_FIXTURE=$m" out/shots/web-notify-${m#chat-}.png
         names="$names web-notify-${m#chat-}"
       done ;;

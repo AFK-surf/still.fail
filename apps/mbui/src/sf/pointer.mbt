@@ -419,7 +419,7 @@ pub fn pointer_png(c : @ui.Ctx, shape? : String = "default") -> (String, () -> B
 ///|
 /// The pointers' PNGs made, by their keys (pointer_png).
 // kept across runs: each a function of its key alone
-let pointer_pngs : Map[String, Bytes] = {}
+let pointer_pngs : Map[String, Bytes] = Map([])
 
 ///|
 /// The shape's name in its image's key.

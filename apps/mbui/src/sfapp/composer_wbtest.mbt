@@ -8,8 +8,6 @@ priv struct Made {
   params : Json
   bytes : Bytes?
   done : (Result[Json, Json]) -> Unit
-  /// a streamed call's: what it hears before its answer (a part going up: how much of it has gone)
-  heard : ((Json, Bytes?) -> Unit)?
 }
 
 ///|
@@ -22,7 +20,7 @@ fn fake_core(
   now? : Double = 0.0,
   over? : (String, Topic) -> Topic = fn(_, t) { t },
   made? : Ref[Source?] = Ref(None),
-  ups? : Map[String, Json] = Map::new(),
+  ups? : Map[String, Json] = Map([]),
   platform? : Int = 2,
 ) -> @ui.Tester {
   new_run()
@@ -32,7 +30,7 @@ fn fake_core(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "draft.get" => done(Ok(kept))
         // the core's name for the draft (DraftView.id): another once it is put back empty
@@ -58,17 +56,17 @@ fn fake_core(
       }
     },
     call_bytes: fn(name, params, bytes, done) {
-      calls.push({ name, params, bytes: Some(bytes), done, heard: None })
+      calls.push({ name, params, bytes: Some(bytes), done })
       (base.call_bytes)(name, params, bytes, done)
     },
     stream: fn(name, params, bytes, on_value, done) {
       if name != "station.upload.part" {
         return (base.stream)(name, params, bytes, on_value, done)
       }
-      calls.push({ name, params, bytes, done, heard: Some(on_value) })
+      calls.push({ name, params, bytes, done })
       0
     },
-    // the draft's files in the core's composer, as the test moves them on (`ups`: going_up, upped)
+    // the draft's files in the core's composer, as the test moves them on (`ups`)
     // (what the test makes over the made-up core's: what `over` reads of the test's own is a signal it sets, so what
     // reads the topic follows it as it follows the core's)
     topic_read: fn(name, params) {
@@ -101,40 +99,10 @@ fn handed(m : Made) -> Json? {
 }
 
 ///|
-/// The core says the file `m` handed over has `sent` bytes up.
-fn going_up(ups : Map[String, Json], m : Made, sent : Int) -> Unit {
-  let f = handed(m)
-  ups[text(f, "id")] = {
-    "id": Json::string(text(f, "id")),
-    "name": Json::string(text(f, "name")),
-    "size": Json::number(number(f, "size")),
-    "sent": Json::number(sent.to_double()),
-  }
-}
-
-///|
-/// The core says the file `m` handed over is up, at the station's `path` (its uploads' by default).
-fn upped(ups : Map[String, Json], m : Made, path? : String = "") -> Unit {
-  let f = handed(m)
-  let name = text(f, "name")
-  ups[text(f, "id")] = {
-    "id": Json::string(text(f, "id")),
-    "name": Json::string(name),
-    "size": Json::number(number(f, "size")),
-    "sent": Json::number(number(f, "size")),
-    "done": {
-      "name": Json::string(name),
-      "path": Json::string(if path == "" { "uploads/u/" + name } else { path }),
-      "size": Json::number(number(f, "size")),
-    },
-  }
-}
-
-///|
 /// The send button: the capsule's bottom right (opened: under the field).
 fn tap_send(t : @ui.Tester) -> Unit {
   t.click(Button, label=@sf.t("web-main.composer.send")) catch {
-    e => abort("no send button: \{e}")
+    e => @halt.saying("no send button: \{e}")
   }
 }
 
@@ -354,7 +322,7 @@ test "a video waiting is told apart from a picture waiting by its play mark" {
     top = if m.1 < top { m.1 } else { top }
     foot = if m.1 + m.3 > foot { m.1 + m.3 } else { foot }
   }
-  assert_true(((top + foot) / 2.0 - (tiles[1][1] + 28.0)).abs() < 3.0, msg="\{marks} \{tiles[1]}")
+  assert_true(((top + foot) / 2.0 - (tiles[1][1] + 28.0)).abs() < 3.0, msg="\{Repr(marks)} \{Repr(tiles[1])}")
   assert_eq(t.squeeze_faults(), [])
 }
 
@@ -379,7 +347,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   assert_true(t.find("正在发送") is None)
   assert_true(t.find("测试一下") is Some(_))
   // (the station answers fix_answer_ms later: that time passes on the page too, the words landed and the agent's line
-  // come in their turns meanwhile)
+  // come in meanwhile)
   t.run_for(fix_answer_ms)
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
@@ -388,7 +356,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   assert_true(t.find("收到：「测试一下」") is Some(_))
   // (its avatar home: what comes out of avatars is over, its turn too (two frames on), the next words sent go in
   // their turn after it)
-  t.run_for(Pose::Spit.ms() + Pose::Return.ms() + turn_calm_ms)
+  t.run_for(Pose::Spit.ms() + Pose::Return.ms() + 2.0 * @ui.frame_period_default)
   // words with 失败 in them fail first
   t.tap_text("发消息")
   t.type_text("这条会失败")
@@ -494,21 +462,29 @@ test "a video picked or pasted that the host has no picture of shows its first f
   let clip = b"\x00\x00\x00\x14ftypqt  \x00\x00\x00\x08wide"
   @sfbase.writing_add(src, w, r.station, "录屏.mov", clip)
   let id = text(Some(w.files.get()[0]), "id")
+  let seen = "ws1/st1//draft:" + id
   assert_eq(@sfbase.writing_pictures.get(id), None)
-  // the composer built: a player of it made out of sight, reading the bytes from here, its frame at 0 grabbed
+  // the composer built: a 56 × 56 picture tile from the first frame (never a 236 file card while its frame is read);
+  // a player of it made out of sight, reading the bytes from here, its frame at 0 grabbed
   let before = t.views().length()
   t.draw()
+  assert_eq(thumb_of(t.ctx(), seen).map(fn(tile) { (tile.w, tile.h, tile.picture) }), Some((56.0, 56.0, "")))
+  assert_true(t.query(Group, label="录屏.mov") is None)
   // (a player's open: "open <id> 1 <its type's length>", video/quicktime)
-  let opened = t.views()[before:].to_array().filter(fn(l) { l.has_prefix("open ") && l.has_suffix(" 1 15") })
+  let opened = t.views()[before:].to_owned().filter(fn(l) { l.has_prefix("open ") && l.has_suffix(" 1 15") })
   assert_eq(opened.length(), 1)
   let view = (1).until(1000).find_first(fn(i) { opened[0].has_prefix("open \{i} ") }).unwrap()
   let req = t.view_reads(view, 0.0, 1 << 20)
   t.draw()
+  assert_eq(thumb_of(t.ctx(), seen).map(fn(tile) { (tile.w, tile.h, tile.picture) }), Some((56.0, 56.0, "")))
+  assert_true(t.query(Group, label="录屏.mov") is None)
   assert_eq(t.view_answers(view), [(req, clip.length(), clip.length().to_double())])
   assert_true(t.view_said("{\"still\":{\"view\":\{view}},\"b\":\"89504e47\"}"))
   t.draw()
   let still = @sfbase.writing_pictures.get(id).unwrap()
   assert_true(still.has_prefix("mem:pv-first/"))
+  assert_eq(thumb_of(t.ctx(), seen).map(fn(tile) { (tile.w, tile.h, tile.picture) }), Some((56.0, 56.0, still)))
+  assert_true(t.query(Group, label="录屏.mov") is None)
   // sent while it still goes up: its message draws it from here, as a picture's
   let file = attachment_of({
     "name": Json::string("录屏.mov"),
@@ -517,6 +493,21 @@ test "a video picked or pasted that the host has no picture of shows its first f
     "upload": Json::string(id),
   })
   assert_eq(sent_picture(r.station, file), Some(still))
+  // up before its first frame was ready: its message still draws it by the station's path
+  let up = text(field(Some(@sfbase.writing(src, draft_key(r)).files.get()[0]), "done"), "path")
+  assert_true(up != "")
+  assert_eq(
+    sent_picture(
+      r.station,
+      attachment_of({
+        "name": Json::string("录屏.mov"),
+        "path": Json::string("/w/s-c1/" + up),
+        "size": Json::number(clip.length().to_double()),
+        "upload": Json::string(""),
+      }),
+    ),
+    Some(still),
+  )
   // the player let go
   t.draw()
   assert_true(t.views().contains("close \{view}"))
@@ -533,7 +524,6 @@ test "image sizes from their bytes" {
   let gif = Bytes::from_array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 3, 0, 2, 0, 0, 0].map(fn(i) { i.to_byte() }))
   assert_eq(@pixels.image_size(gif), Some((3, 2)))
   assert_eq(@pixels.image_size(b"plain words"), None)
-  assert_eq(uuid("0123456789abcdef0123456789abcdef"), "01234567-89ab-cdef-0123-456789abcdef")
 }
 
 ///|
@@ -560,7 +550,7 @@ test "the app tells the core it is shown and in front, in which workspace, and w
 }
 
 ///|
-test "words sent as the composer grows a line hold its room where it is drawn, the list's foot not ahead of it" {
+test "words sent as the composer grows a line: it slows to rest from as fast as it went, over the list's foot by no more than was left, then down with it" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   t.tap_text("发消息")
@@ -569,26 +559,45 @@ test "words sent as the composer grows a line hold its room where it is drawn, t
     let rows = t.rows()
     rows[rows.length() - 1].2
   }
-  let before = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  let room = fn() { @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") }
+  let before = room()
   let over = foot() - before
   for line in ["第二行", "第三行", "第四行"] {
     t.enter()
     t.type_text(line)
   }
-  // half way through its growing, sent: the composer held as tall as it shows, the rows over it where they were, with
-  // it, till the words let go of it
+  // half way through its growing, sent: the composer slows to rest from as fast as it went (@motion.stop_for); the
+  // list's room under the rows held as it was till the words let go of it, the composer over it by what was left to
+  // grow at most, and down with it from then. Meant, till the composer is a node (send_hold_wbtest's hold_cover)
   t.run_for(@ui.row_size_ms / 2.0)
-  let growing = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  let growing = room()
   assert_true(growing > before)
   assert_eq(foot(), growing + over)
+  let left = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1", settled=true) - growing
   tap_send(t)
   assert_eq(named(calls, "chat.send").length(), 1)
-  // (a while on, the words still in it)
-  t.run_for(@ui.row_size_ms / 4.0)
-  assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
-  assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), growing)
-  // (the words flown, the composer let go of)
-  t.run_for(@ui.move_most_ms)
+  let mut most = growing
+  let mut was = @double.infinity
+  let end = t.time() + @sfbase.flight_most_ms + @ui.move_most_ms
+  while t.time() < end {
+    let cover = room() + over - foot()
+    // (the composer's way and the list's two curves to the same end, half a point apart at most, send_hold_wbtest's
+    // hold_cover_slack)
+    assert_true(cover <= left + 0.5, msg="at \{t.time()}: covers \{cover} of \{left}")
+    match @sfbase.flight_lets_go("ws1/st1:s-c1") {
+      // (let go of: less at every frame on, the list's room and the composer down to the same)
+      Some((go, _)) if t.time() >= go => {
+        assert_true(cover <= was + 0.5, msg="at \{t.time()}: covers \{cover} after \{was}")
+        was = cover
+      }
+      _ => ()
+    }
+    most = if room() > most { room() } else { most }
+    t.frame()
+  }
+  assert_true(was <= 0.5, msg="still over it by \{was} once down")
+  // (carried on past where it was as it was sent, and down since)
+  assert_true(most > growing && room() < most, msg="\{growing} \{most} \{room()}")
   t.run_for(draft_keep_ms)
   t.assert_idle()
 }
@@ -704,7 +713,7 @@ fn plus_opened() -> @ui.Tester raise {
   assert_eq(app.nav.depth(), 2)
   t.click(Button, label=@sf.t("web-main.composer.attach"))
   assert_true(@sf.presenting())
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t
 }
 
@@ -716,7 +725,7 @@ test "back with ＋'s sheet up puts the sheet away, the chat stays; back again l
   t.back()
   assert_true(!@sf.presenting())
   assert_eq(app.nav.depth(), 2)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("整理发布清单") is Some(_))
   t.back()
   t.run_for(@ui.nav_rest() - t.time())
@@ -733,7 +742,7 @@ test "the system's back gesture with ＋'s sheet up puts the sheet away, the cha
   t.back_gesture(200.0, true)
   assert_true(!@sf.presenting())
   assert_eq(app.nav.depth(), 2)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("整理发布清单") is Some(_))
 }
 
@@ -817,6 +826,23 @@ test "lines typed while words sent let go of the composer: the list's foot goes 
   t.run_for(@ui.move_most_ms)
   let over = foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
   t.run_for(draft_keep_ms)
-  assert_eq(foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), over)
+  // (the list's way and the composer's ground's to the same end, a hair apart on their last frames: a hundredth of a
+  // point; the composer stopped where it was going as the words were sent, @motion.stop_for)
+  let now = foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  assert_true((now - over).abs() < 0.01, msg="\{now} after \{over}")
   t.assert_idle()
+}
+
+///|
+test "send pressed before a frame has shown the words typed: they go all the same" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  // (the words told by the input method and send pressed before the composer was built again: the button as it was
+  // with the field empty, as a scripted run's type and tap a few milliseconds apart)
+  t.text_told("马上发出去", t.time())
+  tap_send(t)
+  let sent = named(calls, "chat.send")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "text"), "马上发出去")
 }

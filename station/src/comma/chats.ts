@@ -132,6 +132,8 @@ function routerSaysOnce(hub: Hub, stats: CommaStats, home: string | null, w: { t
   if (recorded !== null) return finish(recorded);
   const had = w.key === "" ? null : stats.said(w.key);
   if (had !== null) return had;
+  // The Task index tells a chat the Router wrote in by this form of its author (read/outflow.ts routerWrote): durable
+  // where comma_router_once is not, and for the writes without a key, which leave none.
   const author = `slack:${w.connect}:${w.requester}`;
   if (w.key === "") {
     const members = hub.store.threadSessions(w.thread);

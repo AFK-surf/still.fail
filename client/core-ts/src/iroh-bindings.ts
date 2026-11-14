@@ -1,7 +1,7 @@
 // The iroh a host binds (iroh.ts) from a binding's promises: station/native/mesh's napi addon on Node
-// (hosts/node-iroh.ts), client/iroh-wasm in a browser (hosts/web.ts). Both have the same calls; this makes them the
+// (hosts/node-addon.ts), client/iroh-wasm in a browser (hosts/web.ts). Both have the same calls; this makes them the
 // core's Effects.
-import { Effect } from "effect";
+import { Effect, Fiber } from "effect";
 import { HostError } from "./error.ts";
 import type { BindOptions, CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohStream } from "./iroh.ts";
 
@@ -25,7 +25,8 @@ export type BoundConnection = {
 };
 export type BoundEndpoint = {
   id(): string;
-  connect(addr: IrohAddr, alpn: never, additional: never[]): Promise<BoundConnection>;
+  /// `givenUp`: resolves when the dial is to be given up (a binding from before takes no such argument and goes on).
+  connect(addr: IrohAddr, alpn: never, additional: never[], givenUp?: Promise<void>): Promise<BoundConnection>;
   /// The addon's alone (iroh-wasm takes no connections): the next one coming, its handshake done, and the ALPN agreed.
   accept?(): Promise<(BoundConnection & { alpn(): Uint8Array }) | null>;
   addAddr(addr: IrohAddr): void;
@@ -85,7 +86,20 @@ export function wrapIroh(bind: (o: BindOptions) => Promise<BoundEndpoint>, bytes
     const accept = e.accept?.bind(e);
     return {
       id: () => e.id(),
-      connect: (addr, alpn, additional) => Effect.map(call(() => e.connect(addr, out(alpn), additional.map(out))), (c) => connection(c, e)),
+      connect: (addr, alpn, additional, givenUp) =>
+        Effect.map(
+          // Given up when `givenUp` succeeds or this is interrupted (its answer let go either way).
+          Effect.gen(function* () {
+            let giveUp = () => {};
+            const given = new Promise<void>((resolve) => (giveUp = resolve));
+            const told = givenUp === undefined ? null : yield* Effect.forkChild(Effect.andThen(givenUp, Effect.sync(() => giveUp())));
+            return yield* call(() => e.connect(addr, out(alpn), additional.map(out), given)).pipe(
+              Effect.onInterrupt(() => Effect.sync(() => giveUp())),
+              Effect.ensuring(told === null ? Effect.void : Fiber.interrupt(told)),
+            );
+          }),
+          (c) => connection(c, e),
+        ),
       // Only where the binding takes connections: a host without has no `accept` (iroh.ts).
       ...(accept && {
         accept: () => Effect.orElseSucceed(Effect.map(call(accept), (c) => (c === null ? null : { connection: connection(c, e), alpn: view(c.alpn()) })), () => null),

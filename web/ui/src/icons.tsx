@@ -249,6 +249,10 @@ export function Keyboard(props: IconProps) {
   return <Svg {...props}><rect x="3.5" y="6" width="17" height="12" rx="3" /><path d="M7 10H7.2 M12 10H12.2 M17 10H17.2 M8 14.5H16" /></Svg>;
 }
 
+export function Keycap(props: IconProps) {
+  return <Svg {...props}><path d="M7.5 4.5H16.5A3 3 0 0 1 19.5 7.5V16.5A3 3 0 0 1 16.5 19.5H7.5A3 3 0 0 1 4.5 16.5V7.5A3 3 0 0 1 7.5 4.5Z M8.5 13.5L12 10L15.5 13.5" /></Svg>;
+}
+
 export function Landscape(props: IconProps) {
   return <Svg {...props}><path d="M6 9H18Q21 9 21 12V16Q21 19 18 19H6Q3 19 3 16V12Q3 9 6 9Z M8 5.5Q12 3 16.5 5.2 M14.8 3.4L16.5 5.2L14.3 6.4" /></Svg>;
 }
@@ -674,6 +678,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "key-swap": KeySwap,
   "key": Key,
   "keyboard": Keyboard,
+  "keycap": Keycap,
   "landscape": Landscape,
   "ling": Ling,
   "link": Link,

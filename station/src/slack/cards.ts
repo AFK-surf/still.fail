@@ -91,9 +91,9 @@ export function loginBlocks(text: string, lang: Lang, page: LoginPage | null = n
 }
 
 /// A login card once its code was handed over: its words, and who entered it; no field any more.
-export function loginEnteredBlocks(text: string, who: string, lang: Lang): Json[] {
+export function loginEnteredBlocks(words: Words, who: string, lang: Lang): Json[] {
   const entered = { type: "context", elements: [{ type: "mrkdwn", text: `✓ ${escape(tr(lang, "station.slack.loginEntered", { name: who }))}` }] };
-  return [markdownOf(text.trim() === "" ? [] : [text]), entered].filter((b) => b !== null);
+  return [...wordsBlocks(words), entered];
 }
 
 /// What a press of a login card's button hands over: the field's words ("" when empty). Null for any other action.
@@ -108,10 +108,22 @@ export function loginCodeOf(payload: Json): string | null {
 /// What a card says above its buttons, in one markdown block (none when it says nothing); the most Slack takes.
 const markdownOf = (parts: string[]): Json | null => (parts.length === 0 ? null : markdown(cut(parts.join("\n\n"), MARKDOWN_CHARS)));
 
+/// A card's words, to be shown again once it is answered: the Markdown the station posted, or, when that is not known
+/// any more (a restart since), the blocks Slack holds of the message. Never the message's `text` Slack hands back with
+/// a press: Slack makes that of the blocks with every line break a space, and as Markdown it reads as one paragraph.
+export type Words = { markdown: string } | { blocks: Json[] };
+
+/// The blocks that show a card's words: its Markdown in a markdown block, or Slack's own blocks of it without what
+/// could be pressed or filled in (its buttons and fields).
+function wordsBlocks(words: Words): Json[] {
+  if ("markdown" in words) return [markdownOf(words.markdown.trim() === "" ? [] : [words.markdown])].filter((b) => b !== null);
+  return words.blocks.filter((b) => b?.type !== "actions" && b?.type !== "input");
+}
+
 /// A question once answered: its words, and who answered what; nothing to press any more.
-export function answeredBlocks(text: string, who: string, said: string, lang: Lang): Json[] {
+export function answeredBlocks(words: Words, who: string, said: string, lang: Lang): Json[] {
   const answered = { type: "context", elements: [{ type: "mrkdwn", text: `✓ ${escape(tr(lang, "station.feishu.answered", { name: who, answer: said }))}` }] };
-  return [markdownOf(text.trim() === "" ? [] : [text]), answered].filter((b) => b !== null);
+  return [...wordsBlocks(words), answered];
 }
 
 /// A question that stopped waiting other than by its button (connects/card-ends.ts): its words, and why it is closed;

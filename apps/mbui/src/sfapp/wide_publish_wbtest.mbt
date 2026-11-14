@@ -9,7 +9,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -19,6 +19,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   t.click(Button, label="更多")
   t.frame()
   t.frame()
+  open_share(t)
   t.tap_text("分享图片")
   t.frame()
   t.frame()
@@ -31,7 +32,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   assert_true(picture_mine_at_end(t), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("已允许使用 Axiom 查询 token") is Some(_))
   // each message's box to tick in a column of its own before them (and before their pictures out in the margin)
-  assert_true(ticks_before_words(t, @sf.message_avatar_reach), msg=t.all(Checkbox, label="放进图片").map(fn(n) { n.rect }).to_string())
+  assert_true(ticks_before_words(t, @sf.message_avatar_reach), msg=Repr(t.all(Checkbox, label="放进图片").map(fn(n) { n.rect })).to_string())
   t.click(Button, label="复制图片")
   t.frame()
   assert_eq(t.shots().length(), 1)
@@ -40,7 +41,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
     Some(png) =>
       match png_size(png) {
         Some((pw, ph)) => {
-          assert_true(pw == 1520 && ph > 600, msg="\{(pw, ph)}")
+          assert_true(pw == 1520 && ph > 600, msg="\{Repr((pw, ph))}")
           assert_eq(t.clipboard_label(), "still.fail")
         }
         None => fail("not a PNG")
@@ -62,13 +63,14 @@ test "wide: a vault request's outcome line has its dot in the middle of its word
   t.click(Button, label="更多")
   t.frame()
   t.frame()
+  open_share(t)
   t.tap_text("分享图片")
   t.frame()
   t.frame()
   // (the words as the theme sets a meta line: the dot by that line's middle, not by a line of a height of its own; the
   // chat's own line under the picture's too)
   let lines = t.text_runs().filter(fn(r) { r.text.contains("本对话内") })
-  assert_true(lines.length() > 0 && lines.all(fn(r) { r.text == "已允许使用 Axiom 查询 token · 本对话内" }), msg="\{lines}")
+  assert_true(lines.length() > 0 && lines.all(fn(r) { r.text == "已允许使用 Axiom 查询 token · 本对话内" }), msg="\{Repr(lines)}")
   for r in lines {
     let mid = (r.top + r.bottom) / 2.0
     let dots = t.boxes().filter(fn(b) { b.w == 6.0 && b.h == 6.0 && b.x < r.x0 && b.y >= r.top - 6.0 && b.y <= r.bottom })
@@ -124,7 +126,7 @@ test "wide: a message right clicked offers 多选, which opens the chat's pictur
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -184,7 +186,7 @@ test "wide: the message header's ⋯ offers the same message actions as a right 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -195,7 +197,7 @@ test "wide: the message header's ⋯ offers the same message actions as a right 
   let before = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
   // (nothing on the head until the pointer rests on the message)
   assert_true(t.query(Button, label="更多操作") is None)
-  t.move(x + 24.0, y + 8.0)
+  t.move_to(x + 24.0, y + 8.0)
   t.frame()
   t.frame()
   assert_eq(t.rect_of("做完了：列表、跳到最新的按钮").unwrap(), before)
@@ -209,7 +211,7 @@ test "wide: the message header's ⋯ offers the same message actions as a right 
   t.tap_text("复制消息")
   t.frame()
   assert_eq(t.clipboard(), "做完了：列表、跳到最新的按钮、加载更早的消息都好了，截图也换了。")
-  t.move(x + 24.0, y + 8.0)
+  t.move_to(x + 24.0, y + 8.0)
   t.frame()
   t.click(Button, label="更多操作")
   t.run_for(@ui.move_most_ms)
@@ -217,7 +219,7 @@ test "wide: the message header's ⋯ offers the same message actions as a right 
   t.frame()
   assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
   assert_eq(named(calls, "chat.publishPreview").length(), 0)
-  t.move(x + 24.0, y + 8.0)
+  t.move_to(x + 24.0, y + 8.0)
   t.frame()
   t.click(Button, label="更多操作")
   t.run_for(@ui.move_most_ms)
@@ -251,7 +253,7 @@ test "wide: the message's ⋯ menu goes out where it hung, closed by Escape or a
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
     t.run_for(@ui.move_most_ms)
     let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
-    t.move(x + 24.0, y + 8.0)
+    t.move_to(x + 24.0, y + 8.0)
     t.frame()
     t.frame()
     t.click(Button, label="更多操作")
@@ -261,7 +263,7 @@ test "wide: the message's ⋯ menu goes out where it hung, closed by Escape or a
       t.key(@ui.key_escape)
     } else {
       // (the pointer away from the message, then a click there: the ⋯ shown only under it goes with the menu)
-      t.move(400.0, 250.0)
+      t.move_to(400.0, 250.0)
       t.frame()
       t.tap(400.0, 250.0)
     }
@@ -285,7 +287,7 @@ test "wide: the message's ⋯ menu closed by its ⋯ pressed again, the pointer 
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
-  t.move(x + 24.0, y + 8.0)
+  t.move_to(x + 24.0, y + 8.0)
   t.frame()
   t.frame()
   // (where the ⋯ is, read before its menu covers the page)
@@ -311,9 +313,22 @@ test "touch: the message header has neither; the held bar copies its position li
   let t = fake_core(calls)
   assert_true(t.query(Button, label="分享图片") is None)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  assert_true(t.query(Button, label="多选") is Some(_))
-  t.click(Button, label="复制链接")
+  // (the bar over what is held, its buttons, where the old page draws the chat; where it is made as nodes, the
+  // system's text menu over it, the page's own items after its copy and select all)
+  match t.query(Button, label="复制链接") {
+    Some(_) => {
+      assert_true(t.query(Button, label="多选") is Some(_))
+      t.click(Button, label="复制链接")
+    }
+    None => {
+      let own = t.text_menu_own()
+      assert_true(own.contains("多选"), msg="\{Repr(own)}")
+      guard own.search("复制链接") is Some(k) else { fail("no 复制链接 over what is held: \{Repr(own)}") }
+      t.key(@hostapi.key_menu_own + k)
+    }
+  }
   assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
   assert_eq(pk.ts, "")
+  assert_eq(@ui.picked_now(), None)
   assert_eq(named(calls, "chat.publishPreview").length(), 0)
 }

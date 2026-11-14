@@ -38,6 +38,12 @@ export const KEYCODES: Record<string, number> = {
 const ARROWS = new Set([0x7b, 0x7c, 0x7d, 0x7e]);
 const FN_KEYS = new Set([0x72, 0x73, 0x74, 0x75, 0x77, 0x79, 0x7a, 0x78, 0x63, 0x76, 0x60, 0x61, 0x62, 0x64, 0x65, 0x6d, 0x67, 0x6f]);
 
+/// The modifier keys by their place, and the flag each holds.
+const MODIFIER_FLAGS: Record<string, number> = {
+  MetaLeft: FLAGS.command, MetaRight: FLAGS.command, ShiftLeft: FLAGS.shift, ShiftRight: FLAGS.shift,
+  AltLeft: FLAGS.alt, AltRight: FLAGS.alt, ControlLeft: FLAGS.ctrl, ControlRight: FLAGS.ctrl,
+};
+
 /// Two downs of a button this close (ms, and in 0..1 of the screen) are one double click (macOS's default interval).
 export const CLICK_MS = 500;
 const CLICK_NEAR = 0.01;
@@ -46,10 +52,35 @@ const CLICK_NEAR = 0.01;
 const BUTTON_OF_BIT: Record<number, number> = { 1: 0, 2: 2, 4: 1 };
 const lowestBit = (bits: number) => bits & -bits;
 
-/// One view's input as it goes: which buttons are held, and the last press (for click counts).
+/// One view's input as it goes: which buttons and modifier keys are held, where the pointer was last, and the last
+/// press (for click counts). macOS takes an event's modifiers from its flags alone: a click posted with none is a bare
+/// click whatever keys went down before it, and a modifier's up posted with its own flag leaves it held.
 export class MacInput {
   #buttons = 0;
+  #held = new Set<string>();
+  #at = { x: 0, y: 0 };
   #press: { at: number; x: number; y: number; button: number; clicks: number } | null = null;
+
+  #heldFlags(): number {
+    let flags = 0;
+    for (const code of this.#held) flags |= MODIFIER_FLAGS[code]!;
+    return flags;
+  }
+
+  /// What lets go of all this view holds down: its buttons at the pointer's last place, then its modifier keys.
+  release(): MacOp[] {
+    const ops: MacOp[] = [];
+    for (const bit of [1, 2, 4]) {
+      if ((this.#buttons & bit) === 0) continue;
+      this.#buttons &= ~bit;
+      ops.push({ op: "mouse", type: "up", x: this.#at.x, y: this.#at.y, button: BUTTON_OF_BIT[bit]!, buttons: this.#buttons, clicks: 1, flags: this.#heldFlags() });
+    }
+    for (const code of [...this.#held]) {
+      this.#held.delete(code);
+      ops.push({ op: "key", keycode: KEYCODES[code]!, down: false, flags: this.#heldFlags() });
+    }
+    return ops;
+  }
 
   /// What `e` is posted as, at `now` (ms).
   ops(e: ScreenInput, now: number): MacOp[] {
@@ -57,7 +88,9 @@ export class MacInput {
       case "pointer": {
         const before = this.#buttons;
         this.#buttons = e.buttons & 7;
-        if (e.kind === "move") return [{ op: "mouse", type: "move", x: e.x, y: e.y, button: 0, buttons: this.#buttons, clicks: 0, flags: 0 }];
+        this.#at = { x: e.x, y: e.y };
+        const flags = this.#heldFlags();
+        if (e.kind === "move") return [{ op: "mouse", type: "move", x: e.x, y: e.y, button: 0, buttons: this.#buttons, clicks: 0, flags }];
         if (e.kind === "down") {
           const bit = lowestBit(this.#buttons & ~before) || 1;
           const button = BUTTON_OF_BIT[bit] ?? 0;
@@ -66,23 +99,29 @@ export class MacInput {
           const clicks = again ? last.clicks + 1 : 1;
           this.#press = { at: now, x: e.x, y: e.y, button, clicks };
           this.#buttons |= bit;
-          return [{ op: "mouse", type: "down", x: e.x, y: e.y, button, buttons: this.#buttons, clicks, flags: 0 }];
+          return [{ op: "mouse", type: "down", x: e.x, y: e.y, button, buttons: this.#buttons, clicks, flags }];
         }
         const bit = lowestBit(before & ~this.#buttons) || lowestBit(before) || 1;
         const button = BUTTON_OF_BIT[bit] ?? 0;
         this.#buttons &= ~bit;
         const clicks = this.#press?.button === button ? this.#press.clicks : 1;
-        return [{ op: "mouse", type: "up", x: e.x, y: e.y, button, buttons: this.#buttons, clicks, flags: 0 }];
+        return [{ op: "mouse", type: "up", x: e.x, y: e.y, button, buttons: this.#buttons, clicks, flags }];
       }
       case "wheel":
-        return [{ op: "scroll", x: e.x, y: e.y, dx: e.dx, dy: e.dy, flags: 0 }];
+        return [{ op: "scroll", x: e.x, y: e.y, dx: e.dx, dy: e.dy, flags: this.#heldFlags() }];
       case "key": {
         const keycode = KEYCODES[e.code];
         if (keycode === undefined) {
           // A key of no known place (another layout's, a phone's keyboard): what it types, when it types one thing.
           return e.kind === "down" && Array.from(e.key).length === 1 && (e.mods & 6) === 0 ? [{ op: "text", text: e.key }] : [];
         }
-        const flags = flagsOf(e.mods) | (ARROWS.has(keycode) ? FLAGS.numericPad | FLAGS.fn : 0) | (FN_KEYS.has(keycode) ? FLAGS.fn : 0);
+        if (MODIFIER_FLAGS[e.code] !== undefined) {
+          // Its own flags are those held after it, whatever `mods` says (an app's up still says the modifier).
+          if (e.kind === "down") this.#held.add(e.code);
+          else this.#held.delete(e.code);
+          return [{ op: "key", keycode, down: e.kind === "down", flags: this.#heldFlags() }];
+        }
+        const flags = flagsOf(e.mods) | this.#heldFlags() | (ARROWS.has(keycode) ? FLAGS.numericPad | FLAGS.fn : 0) | (FN_KEYS.has(keycode) ? FLAGS.fn : 0);
         return [{ op: "key", keycode, down: e.kind === "down", flags }];
       }
       case "text":

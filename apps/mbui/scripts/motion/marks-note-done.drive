@@ -1,0 +1,21 @@
+# A mark's note done in the viewer (sfbase viewer_marks_node.mbt): a box drawn on a picture of the made-up chat, its
+# note written and done; the notes' cards come under the picture, their room opening on its way as the picture is
+# fitted over it.
+timeout 20000
+until 整理发布清单
+wait 600
+tap 整理发布清单
+wait 1000
+wheel -900
+wait 1800
+until img:compare.png
+tap img:compare.png
+wait 1200
+tap icon:edit
+wait 800
+drag 120 360 140 90 300
+until =完成
+type 这里要对齐
+wait 500
+tap =完成
+wait 1500

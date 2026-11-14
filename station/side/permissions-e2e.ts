@@ -117,7 +117,7 @@ async function member(device: Endpoint, station: string, credential: string): Pr
 /// A request on the member's link: its status and answer.
 async function ask(conn: Connection, method: string, path: string, body?: unknown): Promise<{ status: number; answer: any }> {
   const s = await conn.openBi();
-  await writeLine(s, { method, path: `/admin/api${path}`, headers: { "stillfail-lang": "zh" } });
+  await writeLine(s, { method, path: `/admin/api${path}`, headers: { "stillfail-lang": "zh", "stillfail-build": "0.1.0" } });
   if (body !== undefined) await s.write(Buffer.from(JSON.stringify(body)));
   await s.finish();
   const r = new Reader(s);
@@ -129,7 +129,7 @@ async function ask(conn: Connection, method: string, path: string, body?: unknow
 /// One JPEG of the desktop (a view that only looks), as the station sends it.
 async function picture(conn: Connection): Promise<Buffer | null> {
   const stream = await conn.openBi();
-  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "zh" }, screen: { maxWidth: 1920, maxHeight: 1200, codecs: ["jpeg"], control: false } });
+  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "zh", "stillfail-build": "0.1.0" }, screen: { maxWidth: 1920, maxHeight: 1200, codecs: ["jpeg"], control: false } });
   const heard = new Reader(stream);
   const answer = await heard.line();
   if (answer.status !== 200) {

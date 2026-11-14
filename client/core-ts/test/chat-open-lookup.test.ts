@@ -59,7 +59,9 @@ test("a_chat_opens_by_what_it_shows_whatever_else_the_device_holds", async () =>
     }
     const by = [...rowsRead.by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([q, n]) => `${n} ${q.slice(0, 160)}`);
     rowsRead.by = undefined;
-    const spent = { by, rows: rowsRead.count - rows, md: readAfresh.chars - md, checked: verifies.count - checked, asked: host.requests.slice(asked).map((r) => r.url) };
+    const spent = { by, rows: rowsRead.count - rows, md: readAfresh.chars - md, checked: verifies.count - checked, asked: host.requests.slice(asked).map((r) => r.url).filter((u) => !u.includes("/timeline?")) };
+    // (an agent's history brought whole as its chat is used, behind every other read: the sync's, not the opening's,
+    // topics.ts `#wholeHistory`)
     assert.ok(value?.messages?.length === 50, JSON.stringify(spent));
     assert.ok(value.messages.some((m: any) => (m.chats ?? []).some((c: any) => c.archived)), "its links said, an archived one so");
     assert.deepEqual({ md: spent.md, checked: spent.checked, asked: spent.asked }, { md: 0, checked: 0, asked: [] }, JSON.stringify(spent));

@@ -65,7 +65,7 @@ pub(all) struct ViewerHost {
 ///|
 /// The layout kept here while no page keeps it (told as it changes: what reads it, an old view's build or a node,
 /// follows it).
-// kept across runs: the default host's own, put back by viewer_reset
+// kept across runs: the default host's own, put back by viewer_reset, as a run begins (run_begin)
 let style_here : @signals.Signal[ReaderStyle] = @signals.signal(reader_style_default)
 
 ///|
@@ -76,7 +76,7 @@ fn viewer_host_default() -> ViewerHost {
     sheet: None,
     on_link: fn(_) {  },
     reader_style: fn() { style_here.get() },
-    set_reader_style: fn(change) { style_here.set(@signals.untracked(fn() { style_here.get() }).changed(change)) },
+    set_reader_style: fn(change) { style_here.set(style_here.untracked().changed(change)) },
     // (no core: the text as it is, nothing found in it)
     read_book: fn(text, _, done) { done(Ok({ id: 0, text, wrapped: 0, chapters: [], heads: [], md: [] })) },
     search_book: fn(_, _, done) { done([]) },
@@ -105,8 +105,7 @@ pub fn viewer_host() -> ViewerHost {
 }
 
 ///|
-/// Every viewer's state let go of: the texts read, the films played, the layout kept here (the app begun again: a
-/// test's reset).
+/// Every viewer's state let go of: the texts read, the films played, the layout kept here (as a run begins: run_begin).
 pub fn viewer_reset() -> Unit {
   readings_reset()
   players_reset()

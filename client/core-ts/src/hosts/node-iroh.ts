@@ -1,39 +1,11 @@
 // The iroh a Node host gives the core (iroh.ts): the native addon the station in TypeScript ships (station/native/mesh,
-// `mesh.node`), which the client's endpoint shares. Where it is: STILLFAIL_MESH_NATIVE, beside the core's bundle
-// (mesh.node), or where cargo built it in a checkout.
-import { existsSync } from "node:fs";
+// `mesh.node`), which the client's endpoint shares, loaded by the base's hosts/node-addon.ts. Where it is:
+// STILLFAIL_MESH_NATIVE, beside the core's bundle (mesh.node), or where cargo built it in a checkout.
 import { fileURLToPath } from "node:url";
-import type { BindOptions, CloseReason, Iroh, IrohAddr } from "../iroh.ts";
-import { type BoundEndpoint, wrapIroh } from "../iroh-bindings.ts";
-
-type NStream = {
-  read(): Promise<Buffer | null>;
-  write(bytes: Buffer): Promise<void>;
-  finish(): Promise<void>;
-  stopped(): Promise<number | null | void>;
-  reset?(code: number): Promise<void>;
-};
-type NConnection = {
-  remoteId(): string;
-  acceptBi(): Promise<NStream | null>;
-  openBi(): Promise<NStream>;
-  openUni(): Promise<NStream>;
-  close(code: number, reason: string): void;
-  closeReason(): CloseReason | null;
-  closedInfo(): Promise<CloseReason>;
-  paths(): { id: string; selected: boolean; relay?: string | null; ip?: string | null; rttMs?: number | null; txPackets: number; lostPackets: number }[];
-  stats(): { rxBytes: number; txBytes: number };
-};
-type NEndpoint = {
-  id(): string;
-  connect(addr: IrohAddr, alpn: Buffer, additional?: Buffer[]): Promise<NConnection>;
-  accept(): Promise<(NConnection & { alpn(): Buffer }) | null>;
-  addAddr(addr: IrohAddr): void;
-  networkChange(): Promise<void>;
-  relayStatus(): { url: string; connected: boolean }[];
-  close(): Promise<void>;
-};
-type Addon = { bind(options: { secretKey: Buffer; alpns: Buffer[]; relayUrls: string[]; relayEntries?: { entry: string; relay: string }[]; discovery?: boolean; lookup?: boolean; relayOnly?: boolean }): Promise<NEndpoint> };
+// (still.fail's words over the base's own, which the addon's errors say: scripts/base.ts)
+import "../i18n.ts";
+import type { Iroh } from "../iroh.ts";
+import { type Addon, addonAt, addonIroh } from "./node-addon.ts";
 
 let loaded: Addon | null | undefined;
 
@@ -43,31 +15,18 @@ export function loadAddon(): Addon | null {
   // In a CommonJS bundle (the desktop app's) there is no import.meta: there STILLFAIL_MESH_NATIVE says where it is.
   const here = typeof import.meta.url === "string" ? import.meta.url : null;
   const near = (path: string) => (here ? fileURLToPath(new URL(path, here)) : undefined);
-  const candidates = [
+  loaded = addonAt([
     process.env.STILLFAIL_MESH_NATIVE,
     near("./mesh.node"),
     near("../../../../station/native/mesh/target/release/libstillfail_mesh.dylib"),
     near("../../../../station/native/mesh/target/release/libstillfail_mesh.so"),
-  ];
-  const path = candidates.find((p) => p !== undefined && existsSync(p));
-  if (!path) {
-    loaded = null;
-    return null;
-  }
-  const module = { exports: {} as Addon };
-  process.dlopen(module, path);
-  loaded = module.exports;
+  ]);
   return loaded;
 }
 
 /// The iroh of the addon (`addon`: a test's, to see what is bound); null where there is none.
 export function nodeIroh(addon: Addon | null = loadAddon()): Iroh | null {
-  if (addon === null) return null;
-  return wrapIroh(
-    (o: BindOptions) =>
-      addon.bind({ secretKey: Buffer.from(o.secretKey), alpns: (o.alpns ?? []).map((a) => Buffer.from(a)), relayUrls: o.relayUrls, ...(o.relayEntries ? { relayEntries: o.relayEntries } : {}), discovery: false, lookup: o.lookup, relayOnly: o.relayOnly }) as Promise<BoundEndpoint>,
-    (bytes) => Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
-  );
+  return addon === null ? null : addonIroh(addon);
 }
 
 /// A station-side endpoint for tests: accepts the client's ALPNs.

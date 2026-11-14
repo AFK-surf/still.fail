@@ -20,15 +20,23 @@ pub fn fixture_reset() -> Unit {
   new_fix.d_effort = "high"
   new_fix.context = ""
   new_fix.d_profile = ""
+  new_fix.d_profiles.clear()
+  new_fix.d_none = false
   new_fix.made = 0
   new_fix.reading = 0
   new_fix.crowded = false
   new_fix.tall = false
+  new_fix.unmarked = false
   new_fix.preset = ""
   new_fix.presets_late = false
+  new_fix.bound = false
+  new_fix.clones.clear()
+  new_fix.cloned.clear()
   new_fix.liked.clear()
+  fix_forgotten.clear()
   new_fix.providers = false
   new_fix.borrow = false
+  preset_model_cleared.val = false
   fix_presets_said.val = 0
   fix_job_more.val = 0
   new_fix.presets.clear()
@@ -46,9 +54,17 @@ pub fn fixture_reset() -> Unit {
   fix_xshared.clear()
   fix_decided.clear()
   fix_replied.clear()
+  fix_card_replies.clear()
+  fix_reply_at.clear()
+  fix_pace.val = (fix_deliver_ms, fix_answer_ms, fix_turn_end_ms)
+  fix_sent_for.val = -1.0
+  fix_core_for.val = 0.0
   fix_vault.val = ""
   fix_phone.val = ""
+  fix_phone_scope.val = ""
   fix_phone_link.val = ""
+  fix_rig.val = ""
+  fix_rig_asked.clear()
   fix_working_now.val = ("call:1", working_step)
   fix_working_important.val = false
   fix_working_status.val = "running"

@@ -8,11 +8,10 @@
 import { clock, readJson, readText, reply } from "./auth";
 import type { PushDevice, PushRegistration } from "./directory";
 import type { Env } from "./env";
-import { apnsKey, apnsPush } from "./apns";
-import { fcmPush, serviceAccount } from "./fcm";
+import { apnsKeys, apnsPushAny } from "./apns";
+import { fcmPushAny, serviceAccounts } from "./fcm";
 import { langOf, requestLang, type Lang } from "./i18n.ts";
 import { line, noticeBodyFor, shown, showsOf, type Shows } from "./noticeText";
-import { FORMER_NOTICE_PREFIX } from "./compat";
 import { stationSender } from "./tracing";
 import { validAuthSecret, validPoint, webPush, type Outcome, type Vapid } from "./webpush";
 
@@ -122,8 +121,7 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
   } catch {
     return reply({ error: "too_large" }, 413);
   }
-  // (stations from before 2026-11-05 sign them as ember-station-notify-v1)
-  const station = await stationSender(request, env, body, "station-notify-v1", [FORMER_NOTICE_PREFIX]);
+  const station = await stationSender(request, env, body, "station-notify-v1");
   if (!station) return reply({ error: "invalid_signature" }, 401);
   let notices: Notice[];
   let workspace: string | null = null;
@@ -144,9 +142,9 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
   // Enrolled (stationSender says so), but not in the workspace it named.
   if (!targets) return workspace ? reply({ error: "not_in_workspace" }, 403) : reply({ error: "invalid_signature" }, 401);
   const keys = vapid(env);
-  const fcm = serviceAccount(env.FCM_SERVICE_ACCOUNT);
-  const apns = apnsKey(env.APNS_KEY);
-  const pushes: Promise<{ device: PushRegistration; outcome: Outcome }>[] = [];
+  const fcm = serviceAccounts(env.FCM_SERVICE_ACCOUNT, env.FCM_SERVICE_ACCOUNT_MORE);
+  const apns = apnsKeys(env.APNS_KEY, env.APNS_KEY_MORE);
+  const pushes: Promise<{ device: PushRegistration; outcome: Outcome; app?: string }>[] = [];
   for (const n of notices) {
     const base = `${targets.workspace}/${station}`;
     // In each device's language, saying what was said only where it shows that.
@@ -171,12 +169,13 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
       // (a kind it does not show, or of a workspace it turned off, is not sent)
       if (!shown(device.shows, n.kind, targets.workspace)) continue;
       const said = payload(device.lang, device.shows);
-      const push =
-        device.kind === "web" ? (keys ? webPush(keys, device, JSON.stringify(said), said.tag!) : null)
-        : device.kind === "apns" ? (apns ? apnsPush(apns, device.token, device.sandbox, said) : null)
-        : fcm ? fcmPush(fcm, device.token, said) : null;
+      // (an app's push: by whichever of its product's credentials takes its token, the one that took it last first)
+      const push: Promise<{ outcome: Outcome; app?: string }> | null =
+        device.kind === "web" ? (keys ? webPush(keys, device, JSON.stringify(said), said.tag!).then((outcome) => ({ outcome })) : null)
+        : device.kind === "apns" ? (apns.length ? apnsPushAny(apns, device.token, device.sandbox, device.app, said) : null)
+        : fcm.length ? fcmPushAny(fcm, device.token, device.app, said) : null;
       if (!push) continue;
-      pushes.push(push.then((outcome) => ({ device, outcome }), (error) => {
+      pushes.push(push.then(({ outcome, app }) => ({ device, outcome, app }), (error) => {
         console.warn(`push: ${error}`);
         return { device, outcome: "failed" as const };
       }));
@@ -185,5 +184,9 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
   const results = await Promise.all(pushes);
   const gone = results.filter((r) => r.outcome === "gone").map((r) => r.device);
   if (gone.length) await dir.dropPush(gone);
+  // What took each app's token, where it is not the one kept: tried first next time.
+  const took = new Map<string, string>();
+  for (const r of results) if (r.app && r.device.kind !== "web" && r.device.app !== r.app) took.set(r.device.token, r.app);
+  if (took.size) await dir.pushApps([...took].map(([token, app]) => ({ token, app })));
   return reply({ sent: results.filter((r) => r.outcome === "sent").length });
 }

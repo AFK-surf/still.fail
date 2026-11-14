@@ -83,12 +83,11 @@ fn coming_words(n : Int, percent : Int) -> String {
 
 ///|
 /// Their list, while `ftransfers.open.get()`: the library's panel from `from` (beside it, or a sheet from the foot on a
-/// small screen), what is being brought first, then the downloads, then the copies (what is in it read as it is drawn);
-/// closed once there is none. `go`: where a copy's folder is shown. `side`, `along`: where it stands beside `id` (the
+/// small screen), what is being brought first, then the downloads, then the copies (nodes of the window's tree made once
+/// as it opens, each row made as the core lists it, bound to what it says: transfers_body); closed once there is none. `go`: where a copy's folder is shown. `side`, `along`: where it stands beside `id` (the
 /// rail's key: beside the rail, `rail_menu_off` out, its foot level with the key's, as the workspaces' menu under it is;
 /// under it, it lay over the rail, the mark of the workspace in view showing at its edge).
 fn transfers_list(
-  c : @ui.Ctx,
   src : Source,
   ws : String,
   from : @sf.Anchor,
@@ -101,20 +100,9 @@ fn transfers_list(
     ftransfers.open.set(false)
   }
   if ftransfers.open.get() && ftransfers.shown == 0 {
-    @sf.panel(
+    @sf.panel_nodes(
       @sf.t("web-pages.files.transfers"),
-      fn(c, _) {
-        let all = coming(src, ws)
-        for k in all.keeping {
-          keeping_row(c, src, k)
-        }
-        for d in all.downloads {
-          download_row(c, src, d)
-        }
-        for x in all.transfers {
-          transfer_row(c, src, x, go)
-        }
-      },
+      fn(v, _) { transfers_body(v, src, ws, go) },
       from~,
       w=ftransfers_w,
       side~,
@@ -136,7 +124,7 @@ fn transfers_list(
 /// Their list from the rail's key of them (rail_transfers_node), drawn over the frame (rail_overlays): beside the key
 /// where it was as the list was opened from it (else where it is now), its foot level with the key's, as the
 /// workspaces' menu under it is.
-fn rail_transfers_list(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+fn rail_transfers_list(src : Source, w : Workspace) -> Unit {
   let all = coming(src, w.id)
   let from : @sf.Anchor = match (transfers_from.val, rail_transfers_key.val) {
     (Some((x, y, aw, ah)), _) => At(x, y, aw, ah)
@@ -146,7 +134,7 @@ fn rail_transfers_list(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
     _ => Unanchored
   }
-  transfers_list(c, src, w.id, from, fn(at) { open_page(Drive(at)) }, all.none(), side=Right, along=End)
+  transfers_list(src, w.id, from, fn(at) { open_page(Drive(at)) }, all.none(), side=Right, along=End)
 }
 
 ///|
@@ -159,7 +147,7 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   let id = c.id("home/transfers")
   let go = fn(at : DriveAt) { open_page(Drive(at)) }
   if all.none() {
-    transfers_list(c, src, ws, Of(id), go, true)
+    transfers_list(src, ws, Of(id), go, true)
     return
   }
   let (n, percent, failed) = all.going()
@@ -168,7 +156,7 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, failed~, on_press=fn() {
     ftransfers.open.set(!ftransfers.open.get())
   })
-  transfers_list(c, src, ws, Of(id), go, false)
+  transfers_list(src, ws, Of(id), go, false)
 }
 
 ///|
@@ -178,54 +166,116 @@ pub fn open_transfers() -> Unit {
 }
 
 ///|
-/// A file opened and let go, being brought after everything else (fill.ts): its mark, what it is called, how far (a
-/// bar), how it stands (后台缓存 …); stopped by its ✕, what was kept of it let go.
-fn keeping_row(c : @ui.Ctx, src : Source, k : Json) -> Unit {
-  let t = @sf.theme()
-  let j = Some(k)
-  let kid = text(j, "id")
-  c.box(style=ftransfer_row, fn() {
-    c.box(style=ftransfer_mark, fn() { @sf.icon(c, "download", size=transfer_icon, color=t.p.muted) |> ignore }) |> ignore
-    c.box(style=ftransfer_text, fn() {
-      // (its words say it is kept here as it comes: 后台缓存 …; pressed, it is opened again where it was)
-      opened_title(c, j, "keeping/open/" + kid, None)
-      @sf.progress(c, "keeping/" + kid, Some(number(j, "progress")))
-      c.text(text(j, "statusText"), style=ftransfer_status, allow_ellipsis=true) |> ignore
-    })
-    |> ignore
-    c.box(style=ftransfer_actions, fn() {
-      @sf.panel_icon_button(c, "keeping/stop/" + kid, "close", @sf.t("web-pages.files.stopKeeping"), on_press=fn() {
-        keeping_stop(src, kid)
-      })
-      |> ignore
-    })
-    |> ignore
+/// The list's rows in node `v` (its panel's body's), made once as it opens: what is being brought, then the downloads,
+/// then the copies, each a row by its station and id made as the core lists it and let go as it lists it no more,
+/// what it says bound to what the core says of it. `go`: where a copy's folder is shown.
+fn transfers_body(v : @view.View, src : Source, ws : String, go : (DriveAt) -> Unit) -> Unit {
+  // (none left: the list closes (transfers_list), what it showed last kept as it goes, not closed row by row under it)
+  let last : Ref[Coming?] = Ref(None)
+  let all = fn() {
+    let now = coming(src, ws)
+    match (now.none(), last.val) {
+      (true, Some(was)) => was
+      _ => {
+        last.val = Some(now)
+        now
+      }
+    }
+  }
+  let id = fn(j : Json) { text(Some(j), "station") + "|" + text(Some(j), "id") }
+  // (each row in a box of no padding of its own: what comes and goes down a column closes its way to none of what it
+  // holds, its padding not (flex's come_*), so a row's 8 over and under would be let go at once at its way's end)
+  let rowed = fn(row : @view.View, made : (@view.View) -> Unit) { row.box(made) |> ignore }
+  v.each(fn() { all().keeping }, id, fn(row, k) { rowed(row, fn(r) { keeping_row(r, src, k) }) })
+  v.each(fn() { all().downloads }, id, fn(row, d) { rowed(row, fn(r) { download_row(r, src, d) }) })
+  v.each(fn() { all().transfers }, id, fn(row, x) { rowed(row, fn(r) { transfer_row(r, src, x, go) }) })
+}
+
+///|
+/// Node `row` as a row of the list (ftransfer_row): its mark, its words and its keys, each made by what is given in a
+/// box of its own.
+fn transfer_row_of(
+  row : @view.View,
+  mark : (@view.View) -> Unit,
+  words : (@view.View) -> Unit,
+  keys : (@view.View) -> Unit,
+) -> Unit {
+  @sf.style_node(row, fn() { ftransfer_row })
+  row.box(fn(m) {
+    @sf.style_node(m, fn() { ftransfer_mark }, in_row=true)
+    mark(m)
+  })
+  |> ignore
+  row.box(fn(w) {
+    @sf.style_node(w, fn() { ftransfer_text }, in_row=true)
+    words(w)
+  })
+  |> ignore
+  row.box(fn(k) {
+    @sf.style_node(k, fn() { ftransfer_actions }, in_row=true)
+    keys(k)
   })
   |> ignore
 }
 
 ///|
-/// What comes, by what it is called (and its way, where it says one): pressed, opened again where it was opened (its
-/// `from`, as what opened it said: a chat's file in the viewer over its chat's files, a drive's video or song in its
-/// player), or a drive's file's folder; only words where there is nowhere to go.
-fn opened_title(c : @ui.Ctx, j : Json?, key : String, way : String?) -> Unit {
-  let id = c.id(key)
-  let there = opens(j)
-  c.on_press(id, fn() {
-    if there {
-      open_coming(j)
-    }
-  })
-  let b = c.box(style=ftransfer_title, id=if there { id } else { 0 }, fn() {
-    c.text(text(j, "title"), style=ftransfer_title_words, allow_ellipsis=true) |> ignore
+/// Words of a row in `parent`, `words` in `style` as they change, cut short with an ellipsis on their line where it has
+/// not the room (as the old row's were, allow_ellipsis): given way along a row, never squeezed down (View::cuts).
+fn transfer_words(parent : @view.View, words : () -> String, style : () -> @ui.TextStyle) -> Unit {
+  @sf.words_node(parent, words, style).cuts(Is(true))
+  .min_width(Is(Some(0.0)))
+  // (each, as an old view's words were measured, no wider than its line: two long ones beside each other given way alike)
+  .max_width(Is(Some(1.0e9)), within=true)
+  .allow_ellipsis(Is(true))
+  |> ignore
+}
+
+///|
+/// How far a row's has come (`part`, 0 to 1, as it changes) in `parent`: the library's bar (@sf.progress's).
+fn transfer_bar(parent : @view.View, part : () -> Double) -> Unit {
+  @sf.progress_node(parent, fn() { Some(part()) }, fn() { @ui.tree_theme().line }, fn() { @sf.theme().p.accent })
+  |> ignore
+}
+
+///|
+/// A file opened and let go, being brought after everything else (fill.ts), in `row` as the core says it (`k`): its
+/// mark, what it is called, how far (a bar), how it stands (后台缓存 …); stopped by its ✕, what was kept of it let go.
+fn keeping_row(row : @view.View, src : Source, k : @signals.Signal[Json]) -> Unit {
+  let j = fn() { Some(k.get()) }
+  let kid = text(Some(k.untracked()), "id")
+  transfer_row_of(
+    row,
+    fn(m) { @sf.icon_node(m, "download", transfer_icon, By(fn() { @sf.theme().p.muted })) |> ignore },
+    fn(w) {
+      // (its words say it is kept here as it comes: 后台缓存 …; pressed, it is opened again where it was)
+      opened_title(w, j, None)
+      transfer_bar(w, fn() { number(j(), "progress") })
+      transfer_words(w, fn() { text(j(), "statusText") }, fn() { ftransfer_status })
+    },
+    fn(a) {
+      @sf.panel_icon_button_node(a, "close", fn() { @sf.t("web-pages.files.stopKeeping") }, fn() { keeping_stop(src, kid) })
+      |> ignore
+    },
+  )
+}
+
+///|
+/// What comes, by what it is called (and its `way`, where it says one), in `parent` as `j` says it: pressed, opened
+/// again where it was opened (its `from`, as what opened it said: a chat's file in the viewer over its chat's files, a
+/// drive's video or song in its player), or a drive's file's folder; only words where there is nowhere to go.
+fn opened_title(parent : @view.View, j : () -> Json?, way : (() -> String)?) -> Unit {
+  parent.box(fn(b) {
+    @sf.style_node(b, fn() { ftransfer_title })
+    let there = fn() { opens(j()) }
+    @sf.presses_node(b, fn() { if @signals.untracked(there) { open_coming(@signals.untracked(j)) } }, on=there)
+    b.says(By(fn() { if there() { Some(@view.said(Button, label=text(j(), "title"))) } else { None } })) |> ignore
+    transfer_words(b, fn() { text(j(), "title") }, fn() { ftransfer_title_words })
     match way {
-      Some(w) => c.text(w, style=ftransfer_way, allow_ellipsis=true) |> ignore
+      Some(w) => transfer_words(b, w, fn() { ftransfer_way })
       None => ()
     }
   })
-  if there {
-    c.semantics(b, Button, id~, label=text(j, "title"))
-  }
+  |> ignore
 }
 
 ///|
@@ -260,111 +310,123 @@ fn open_coming(j : Json?) -> Unit {
 }
 
 ///|
-/// A transfer (TransferRow): its mark, what goes and where, how far (a bar while it copies), how it stands; stopped
-/// while it goes, tried again once failed, its folder shown once done.
-fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> Unit {
-  let t = @sf.theme()
-  let j = Some(x)
-  let state = text(j, "state")
-  let station = text(j, "station")
-  let tid = text(j, "id")
-  let way = if text(j, "fromStation") == station {
-    @sf.t("web-pages.files.into", args=[("to", text(j, "toText"))])
-  } else {
-    @sf.t("web-pages.files.fromInto", args=[("from", text(j, "fromStationName")), ("to", text(j, "toText"))])
+/// A transfer (TransferRow) in `row` as the core says it (`x`): its mark, what goes and where, how far (a bar while it
+/// copies), how it stands; stopped while it goes, tried again once failed, its folder shown once done.
+fn transfer_row(row : @view.View, src : Source, x : @signals.Signal[Json], go : (DriveAt) -> Unit) -> Unit {
+  let j = fn() { Some(x.get()) }
+  let state = fn() { text(j(), "state") }
+  let (station, tid) = (text(Some(x.untracked()), "station"), text(Some(x.untracked()), "id"))
+  let way = fn() {
+    let way = if text(j(), "fromStation") == station {
+      @sf.t("web-pages.files.into", args=[("to", text(j(), "toText"))])
+    } else {
+      @sf.t("web-pages.files.fromInto", args=[("from", text(j(), "fromStationName")), ("to", text(j(), "toText"))])
+    }
+    if flag(j(), "move") {
+      @sf.t("web-pages.files.moving", args=[("way", way)])
+    } else {
+      way
+    }
   }
   let call = fn(name : String) {
-    (src.call)(name, { "station": Json::string(station), "id": Json::string(tid) }, act_done(c, @sf.t("web-pages.files.transferWhat")))
+    (src.call)(name, { "station": Json::string(station), "id": Json::string(tid) }, act_said(@sf.t("web-pages.files.transferWhat")))
   }
-  c.box(style=ftransfer_row, fn() {
-    let (mark, ink) = match state {
+  let mark = fn() {
+    let t = @sf.theme()
+    match state() {
       "done" => ("check", t.p.green)
       "failed" => ("retry", t.p.red)
       "cancelled" => ("close", t.p.muted)
       _ => ("move", t.p.muted)
     }
-    c.box(style=ftransfer_mark, fn() { @sf.icon(c, mark, size=transfer_icon, color=ink) |> ignore }) |> ignore
-    c.box(style=ftransfer_text, fn() {
-      c.box(style=ftransfer_title, fn() {
-        c.text(text(j, "title"), style=ftransfer_title_words, allow_ellipsis=true) |> ignore
-        c.text(if flag(j, "move") { @sf.t("web-pages.files.moving", args=[("way", way)]) } else { way }, style=ftransfer_way, allow_ellipsis=true) |> ignore
+  }
+  transfer_row_of(
+    row,
+    fn(m) {
+      @sf.icon_node(m, @signals.untracked(mark).0, transfer_icon, By(fn() { mark().1 }), name_now=fn() { mark().0 })
+      |> ignore
+    },
+    fn(w) {
+      w.box(fn(b) {
+        @sf.style_node(b, fn() { ftransfer_title })
+        transfer_words(b, fn() { text(j(), "title") }, fn() { ftransfer_title_words })
+        transfer_words(b, way, fn() { ftransfer_way })
       })
       |> ignore
-      if state == "copying" {
-        @sf.progress(c, "transfer/" + tid, Some(number(j, "progress")))
-      }
-      let files = number(j, "files").to_int()
-      let status = text(j, "statusText") +
-        (if (state == "copying" || state == "done") && files > 1 {
-          " · " + @sf.t("web-pages.files.filesCount", args=[("n", files.to_string())])
-        } else {
-          ""
-        })
-      c.text(status, style=if state == "failed" { ftransfer_failed } else { ftransfer_status }, allow_ellipsis=true) |> ignore
-    })
-    |> ignore
-    c.box(style=ftransfer_actions, fn() {
-      if flag(j, "active") {
-        @sf.panel_icon_button(c, "files/transfer/cancel/" + tid, "close", @sf.t("web-pages.files.cancelTransfer"), on_press=fn() {
+      w.show(fn() { state() == "copying" }, fn(p) { transfer_bar(p, fn() { number(j(), "progress") }) })
+      transfer_words(
+        w,
+        fn() {
+          let files = number(j(), "files").to_int()
+          text(j(), "statusText") +
+          (if (state() == "copying" || state() == "done") && files > 1 {
+            " · " + @sf.t("web-pages.files.filesCount", args=[("n", files.to_string())])
+          } else {
+            ""
+          })
+        },
+        fn() { if state() == "failed" { ftransfer_failed } else { ftransfer_status } },
+      )
+    },
+    fn(a) {
+      a.show(fn() { flag(j(), "active") }, fn(k) {
+        @sf.panel_icon_button_node(k, "close", fn() { @sf.t("web-pages.files.cancelTransfer") }, fn() {
           call("drive.transfer.cancel")
-        }) |> ignore
-      }
-      if state == "failed" {
-        @sf.panel_icon_button(c, "files/transfer/retry/" + tid, "retry", @sf.t("web-pages.drive.retry"), on_press=fn() {
-          call("drive.transfer.retry")
-        }) |> ignore
-      }
-      if state == "done" {
-        @sf.panel_button(c, "files/transfer/show/" + tid, @sf.t("web-pages.files.show"), on_press=fn() {
+        })
+        |> ignore
+      })
+      a.show(fn() { state() == "failed" }, fn(k) {
+        @sf.panel_icon_button_node(k, "retry", fn() { @sf.t("web-pages.drive.retry") }, fn() { call("drive.transfer.retry") })
+        |> ignore
+      })
+      a.show(fn() { state() == "done" }, fn(k) {
+        @sf.panel_button_node(k, fn() { @sf.t("web-pages.files.show") }, fn() {
           ftransfers.open.set(false)
-          go({ station, root: Some(text(j, "toRoot")), path: text(j, "toPath") })
-        }) |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
+          let j = x.untracked()
+          go({ station, root: Some(text(Some(j), "toRoot")), path: text(Some(j), "toPath") })
+        })
+        |> ignore
+      })
+    },
+  )
 }
 
 ///|
-/// A file of the drive (a folder zipped) downloaded to this device: what, how far (a bar
-/// while it comes), how it stands; stopped while it comes, tried again once failed.
-fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
-  let t = @sf.theme()
-  let j = Some(d)
-  let failed = text(j, "state") == "failed"
-  let did = text(j, "id")
-  c.box(style=ftransfer_row, fn() {
-    c.box(style=ftransfer_mark, fn() {
-      @sf.icon(c, if failed { "retry" } else { "download" }, size=transfer_icon, color=if failed { t.p.red } else { t.p.muted })
+/// A file of the drive (a folder zipped) downloaded to this device, in `row` as the core says it (`d`): what, how far
+/// (a bar while it comes), how it stands; stopped while it comes, tried again once failed.
+fn download_row(row : @view.View, src : Source, d : @signals.Signal[Json]) -> Unit {
+  let j = fn() { Some(d.get()) }
+  let failed = fn() { text(j(), "state") == "failed" }
+  let active = fn() { flag(j(), "active") }
+  let did = text(Some(d.untracked()), "id")
+  transfer_row_of(
+    row,
+    fn(m) {
+      @sf.icon_node(
+        m,
+        if @signals.untracked(failed) { "retry" } else { "download" },
+        transfer_icon,
+        By(fn() { if failed() { @sf.theme().p.red } else { @sf.theme().p.muted } }),
+        name_now=fn() { if failed() { "retry" } else { "download" } },
+      )
       |> ignore
-    })
-    |> ignore
-    c.box(style=ftransfer_text, fn() {
-      opened_title(c, j, "download/open/" + did, Some(@sf.t("web-pages.files.toDevice")))
-      if flag(j, "active") {
-        @sf.progress(c, "download/" + did, Some(number(j, "progress")))
-      }
-      c.text(text(j, "statusText"), style=if failed { ftransfer_failed } else { ftransfer_status }, allow_ellipsis=true) |> ignore
-    })
-    |> ignore
-    c.box(style=ftransfer_actions, fn() {
-      if flag(j, "active") {
-        @sf.panel_icon_button(c, "files/download/cancel/" + did, "close", @sf.t("web-main.file.cancelDownload"), on_press=fn() {
-          download_cancel(src, did)
-        })
+    },
+    fn(w) {
+      opened_title(w, j, Some(fn() { @sf.t("web-pages.files.toDevice") }))
+      w.show(active, fn(p) { transfer_bar(p, fn() { number(j(), "progress") }) })
+      transfer_words(w, fn() { text(j(), "statusText") }, fn() { if failed() { ftransfer_failed } else { ftransfer_status } })
+    },
+    fn(a) {
+      a.show(active, fn(k) {
+        @sf.panel_icon_button_node(k, "close", fn() { @sf.t("web-main.file.cancelDownload") }, fn() { download_cancel(src, did) })
         |> ignore
-      }
-      if failed {
-        @sf.panel_icon_button(c, "files/download/retry/" + did, "retry", @sf.t("web-main.file.retryDownload"), on_press=fn() {
-          download_retry(src, did)
-        })
+      })
+      a.show(failed, fn(k) {
+        @sf.panel_icon_button_node(k, "retry", fn() { @sf.t("web-main.file.retryDownload") }, fn() { download_retry(src, did) })
         |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
+      })
+    },
+  )
 }
 
 ///|

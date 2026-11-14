@@ -7,14 +7,13 @@
 // to see it is there, is a connection, and the runner keeps one at a time. So it is never looked at but to attach.
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { createConnection, type Socket } from "node:net";
 import { join } from "node:path";
 import { niced } from "../ops/nice.ts";
 import { withShellCommand } from "../ops/shell-path.ts";
 import { platform } from "../platform/index.ts";
 import { runnerBinary } from "../platform/processes.ts";
-import { inSandbox, keyOfRunner, syncFor } from "./sandbox.ts";
 
 export type RunnerInfo = {
   id: string;
@@ -39,6 +38,8 @@ export const runnersDir = (data: string) => join(data, "run", "runners");
 /// Whether a runner of before (its info file there, itself alive) still keeps its process: its socket there (one on its
 /// way out has removed it). A pipe cannot be looked at (see above): the info file, which goes with it, says so then.
 export const listening = (info: RunnerInfo) => !platform.runnerSocketVisible || existsSync(info.socket);
+/// `listening`, looked at off the station's thread.
+export const listeningSoon = async (info: RunnerInfo) => !platform.runnerSocketVisible || (await access(info.socket).then(() => true, () => false));
 
 /// A program named by its command (not a path) that `env`'s PATH does not have: the runtime is not installed there.
 export class CommandMissing extends Error {
@@ -50,16 +51,10 @@ export class CommandMissing extends Error {
 }
 
 /// Starts `program` under a runner, its environment `env` (the agent's whole environment), in `cwd`.
-/// `local`: here even when the station runs things in sandboxes.
-export async function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string, local = false): Promise<RunnerInfo> {
-  // In the session's sandbox when the station runs things there (agents/sandbox.ts): the runner here runs the bridge.
-  const placed = local ? null : inSandbox(data, keyOfRunner(id), program, args, cwd, { agent: true, sync: syncFor(data, id.split("-")[0], env, cwd) });
-  if (placed !== null) ({ program, args } = placed);
+export async function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string): Promise<RunnerInfo> {
   // Looked for as the runner would (its PATH is `env`'s): one not there is told apart from a runner that failed.
-  else {
-    env = await withShellCommand(program, env);
-    if (!/[\\/]/.test(program) && platform.findCommand(program, env) === null) return Promise.reject(new CommandMissing(program));
-  }
+  env = await withShellCommand(program, env);
+  if (!/[\\/]/.test(program) && platform.findCommand(program, env) === null) return Promise.reject(new CommandMissing(program));
   return new Promise((resolve, reject) => {
     // Lower than the station (ops/nice.ts), the runtime it starts and what that starts too.
     const [command, given] = niced(runnerBinary(), ["--dir", runnersDir(data), "--id", id, "--cwd", cwd, "--", program, ...args]);
@@ -112,9 +107,10 @@ export async function liveRunners(data: string, options: { strict?: boolean } = 
   return read.flatMap((text) => (text === null ? [] : alive(() => text)));
 }
 
-/// Runner `id`'s, its file alone, if its runner is alive.
-export function runnerOf(data: string, id: string): RunnerInfo | undefined {
-  return alive(() => readFileSync(join(runnersDir(data), `${id}.json`), "utf8"))[0];
+/// Runner `id`'s, its file alone (read off the station's thread), if its runner is alive.
+export async function runnerOf(data: string, id: string): Promise<RunnerInfo | undefined> {
+  const text = await readFile(join(runnersDir(data), `${id}.json`), "utf8").catch(() => null);
+  return text === null ? undefined : alive(() => text)[0];
 }
 
 /// What an info file says, if its runner is alive.
@@ -143,12 +139,49 @@ export async function allLeft() {
   while (leaving.size > 0) await Promise.all(leaving);
 }
 
+/// Whole lines of bytes that come a piece at a time: a runner's messages of 64 KB (`RunnerConnection`), an output read
+/// again a part at a time (process.ts `linesWithin`). A line's pieces are kept as they came and joined once at its end,
+/// and a newline is looked for only in the piece that came. Joined again with each piece and searched from its start, a
+/// line of L bytes copied and scanned L²/(2·64 KB) bytes on the main thread: a `thread/resume` reply of 160 MB on one
+/// line, some 200 GB, and stations killed by the launcher one after another as they took it up (2026-11-13).
+export class Lines {
+  private parts: Buffer[] = [];
+  private size = 0;
+
+  /// The lines `bytes` ends, in order, without their newline; what it leaves of one is held for the next piece.
+  take(bytes: Buffer): Buffer[] {
+    const lines: Buffer[] = [];
+    let from = 0;
+    for (let i = bytes.indexOf(10); i >= 0; i = bytes.indexOf(10, from)) {
+      const last = bytes.subarray(from, i);
+      if (this.parts.length === 0) lines.push(last);
+      else {
+        this.parts.push(last);
+        lines.push(Buffer.concat(this.parts, this.size + last.length));
+        this.drop();
+      }
+      from = i + 1;
+    }
+    if (from < bytes.length) {
+      this.parts.push(bytes.subarray(from));
+      this.size += bytes.length - from;
+    }
+    return lines;
+  }
+
+  /// Lets go of what is held of a line: the next piece begins one.
+  drop() {
+    this.parts = [];
+    this.size = 0;
+  }
+}
+
 /// A connection to one runner: what the agent says, line by line, from where this station last acknowledged.
 export class RunnerConnection {
   readonly info: RunnerInfo;
   private socket: Socket;
   private carry = "";
-  private partial: Record<"out" | "err", Buffer> = { out: Buffer.alloc(0), err: Buffer.alloc(0) };
+  private lines: Record<"out" | "err", Lines> = { out: new Lines(), err: new Lines() };
   /// Where each stream's next line starts, as the runner counts bytes.
   private at: Record<"out" | "err", number> = { out: -1, err: -1 };
   private acked: Record<"out" | "err", number> = { out: 0, err: 0 };
@@ -181,12 +214,10 @@ export class RunnerConnection {
 
   private data(stream: "out" | "err", at: number, bytes: Buffer, line: (s: "out" | "err", t: string, from: number, to: number) => void | Promise<void>) {
     if (this.at[stream] < 0) this.at[stream] = at;
-    let buf = Buffer.concat([this.partial[stream], bytes]);
-    for (let i = buf.indexOf(10); i >= 0; i = buf.indexOf(10)) {
-      const text = buf.subarray(0, i).toString("utf8");
-      buf = buf.subarray(i + 1);
+    for (const whole of this.lines[stream].take(bytes)) {
+      const text = whole.toString("utf8");
       const start = this.at[stream];
-      this.at[stream] += i + 1;
+      this.at[stream] += whole.length + 1;
       const end = this.at[stream];
       this.queue = this.queue.then(async () => {
         await line(stream, text, start, end);
@@ -194,7 +225,6 @@ export class RunnerConnection {
         this.send({ op: "ack", out: this.acked.out, err: this.acked.err, ...(this.keep !== null ? { keep: this.keep } : {}) });
       });
     }
-    this.partial[stream] = buf;
   }
 
   private send(message: unknown) {

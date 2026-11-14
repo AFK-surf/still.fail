@@ -1,26 +1,37 @@
 // What the agent is told about its situation, appended to the runtime's own system prompt, and how messages are put to
 // it. A change to how agents work gets a note in migrations.ts too, for the sessions begun before it.
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import type { MessageRow, PendingMessage, WidgetModel } from "../store/store.ts";
 import type { BackgroundTask } from "./runtime.ts";
-import { STILLFAIL_SURFACE } from "../store/rows.ts";
+import { type CardChoice, STILLFAIL_SURFACE } from "../store/rows.ts";
 import { STATION_AUTHOR } from "../store/rows.ts";
 
 
 /// `project`: the directory the runtime runs in, for a session begun outside still.fail (in a terminal) and continued here.
-export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string): string {
+/// `memory`: the workspace's memory as it is now (`readMemory`). `site`: what the deployment adds (`readSiteInstructions`).
+export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string, memory: string, site = ""): string {
   const projectLine = project === null ? "" : `- Project directory: ${project}. This session began outside still.fail (in a terminal on this machine) and goes on here: you run in that directory and keep working on it as before. The session workspace below is for scratch files only.\n`;
-  return instructions(projectLine, workspace, repos_dir, memory_path) + memoryOf(memory_path);
+  return instructions(projectLine, workspace, repos_dir, memory_path) + (site === "" ? "" : `\n\n${site}`) + (memory === "" ? "" : `\n\n<memory path="${memory_path}">\n${memory}\n</memory>`);
+}
+
+/// The most of the deployment's text an agent is told: a few lines that point at its skills, not a manual.
+export const SITE_INSTRUCTIONS_MAX = 4096;
+
+/// What the deployment the station runs in adds to every session's instructions (`STILLFAIL_SITE_INSTRUCTIONS`: a file,
+/// read as the station starts), after still.fail's own: a machine that runs the station as part of itself (a Monoid
+/// Machine) says what it is and which of its skills to read. None by default, and none when the file does not read;
+/// cut at SITE_INSTRUCTIONS_MAX.
+export async function readSiteInstructions(env: NodeJS.ProcessEnv = process.env): Promise<string> {
+  const path = env.STILLFAIL_SITE_INSTRUCTIONS;
+  if (!path) return "";
+  const text = (await readFile(path, "utf8").catch(() => "")).trim();
+  return text.length > SITE_INSTRUCTIONS_MAX ? text.slice(0, SITE_INSTRUCTIONS_MAX) : text;
 }
 
 /// The workspace's memory as it is now, told after the instructions: given with them, not by the runtime's home (a
-/// profile serves every workspace, sessions/agent-home.ts).
-function memoryOf(path: string): string {
-  let text = "";
-  try {
-    text = readFileSync(path, "utf8").trim();
-  } catch {}
-  return text === "" ? "" : `\n\n<memory path="${path}">\n${text}\n</memory>`;
+/// profile serves every workspace, sessions/agent-home.ts). Read off the station's thread, at each process's opening.
+export async function readMemory(path: string): Promise<string> {
+  return (await readFile(path, "utf8").catch(() => "")).trim();
 }
 
 const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine for people who write to you from still.fail chats, Slack threads, Feishu chats and Comma Tasks.
@@ -36,16 +47,18 @@ Messages:
 
 Answering:
 - Only chat_post reaches people; your ordinary output reaches nobody. chat_post to=<the message's thread>.
+- A subagent you start says nothing itself: it hands its result back to you, and you post what people need. Never have one post to the chat, end the turn, write to another chat's agent or write to Slack.
 - Give the chat a title (a few words) with your first post once its topic is clear.
 - Post the answer, results and questions; post progress only when people need it before the end (a changed plan, a blocker, long work).
 - Ask only when a real choice blocks the work. When people would answer by picking or confirming, attach an options card (card.assignee: the deciding person's email from the conversation); when they must type a value, a text card. Do not ask about what is already decided or authorized.
 - Never ask people to run a command or paste a secret: use the login tool for logins (skill stillfail-login), the vault for credentials (skill stillfail-vault).
-- For visible results show them (skills stillfail-show, stillfail-viz). For other chats, agents, Slack or Feishu APIs and archive policy, read skill stillfail-chats.
+- For visible results show them (skills stillfail-show, stillfail-viz). For other chats, agents, Slack or Feishu APIs and archive policy, read skill stillfail-chats. To retire a station (move its chats to another), skill stillfail-retire. When you do not have a skill that your instructions or a tool's description names, read it with skill_read by its name.
 
 End every turn with one state, given as kind on your last chat_post or with chat_state:
-- all_done with done: what was finished and the evidence (a commit, a release, the answer given).
-- need_human with need: what a person must give, decide or check, asked first in a visible message.
+- all_done with done: only when nothing people asked for in the chat is left (no next step of yours, no unmerged branch, no open question): what was finished and the evidence (a commit, a release, the answer given). A step of a longer goal done is not all_done.
+- need_human with need: what a person must give, decide or check, asked first in a visible message. Not for what they already decided or told you to do.
 - waiting with for: only for your own work that runs on and brings you back (a background command or agent, a job, a loop watching CI).
+- Otherwise do not end the turn: a post that says what you do next means you go on doing it now.
 
 Formatting: GitHub Markdown everywhere. Differences:
 | | still.fail chat (thread CHAT/… or EMBER/…) | Slack | Feishu |
@@ -76,13 +89,16 @@ export const nameUntitled = (to: string) => `The chat ${to} still has no title, 
 
 export const RESUME_AFTER_RESTART = `The station restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know.`;
 
-export const GO_ON_AFTER_LOST = `Your last turn stopped because the station lost its connection to the sandbox your commands run in, and the station started you again there. Commands that were running then were ended. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
 export const GO_ON_AFTER_AUTH = `Your last turn stopped on an authentication error. The station reopened the runtime to reload its credentials. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
 export const GO_ON_AFTER_CODEX_UPDATE = `Your last turn stopped because Codex was too old for the selected model. The station updated Codex and reopened this conversation. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
 
 export const GO_ON_AFTER_SPENT = `Your last turn was cut off: the account it ran on hit its usage limit. You now run on another account (or model). Check where you were, then continue the work. Post only if people need to know.`;
 
 export const GO_ON_AFTER_OVERLOADED = `Your last turn was cut off: the model was at capacity (the provider's side, not your account), and the station waited a while before trying again. Check where you were, then continue the work. Post only if people need to know.`;
+
+export const GO_ON_AFTER_FAILED = `Your last turn failed (the model service or the connection to it went wrong), and a person asked to try again. Check where you were, then continue the work. Post only if people need to know.`;
+
+export const GO_ON_AFTER_UNANSWERED = `Your last turns ended without a state (or without reaching anyone), and the station stopped asking; a person asked to try again. Check where you were, then post what people still need to see (your answer, results, questions) and end the turn with a state as usual.`;
 
 export const GO_ON_AFTER_REFILL = `Your last turn was cut off: the account it ran on hit its usage limit, and no other account could take over. Its allowance should have refilled by now. Check where you were, then continue the work. Post only if people need to know.`;
 
@@ -232,6 +248,38 @@ export function formatInbound(messages: PendingMessage[], newThreads: Set<number
   return lines.join("\n");
 }
 
+/// How long ago, in words an agent reads: minutes up to an hour, hours and minutes up to a day, then days and hours.
+function agoWords(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (minutes < 1) return "less than a minute";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return minutes % 60 === 0 ? `${hours} h` : `${hours} h ${minutes % 60} min`;
+  return hours % 24 === 0 ? `${Math.floor(hours / 24)} d` : `${Math.floor(hours / 24)} d ${hours % 24} h`;
+}
+
+/// One line of a card's question, cut to what recalls it.
+const recalled = (text: string) => {
+  const line = [...text.replace(/\s+/g, " ").trim()];
+  return line.length > 200 ? `${line.slice(0, 200).join("")}…` : line.join("");
+};
+
+/// What people chose on the agent's cards with an option that closes them (no message was sent then), said before what
+/// it is handed now (`now`, ms): when each was chosen, so it is not read as what the new messages are about. Empty
+/// when none.
+export function formatCardChoices(choices: CardChoice[], names: Map<string, string>, now: number): string {
+  if (choices.length === 0) return "";
+  const lines = choices.map((c) => {
+    const name = names.get(c.by);
+    const by = name !== undefined ? `${name} (${c.by})` : c.by;
+    const thread = c.where === null ? "" : ` thread="${escapeAttr(threadAddress(c.where[0], c.where[1]))}"`;
+    const card = c.ts === null ? "" : ` card="${escapeAttr(c.ts)}"`;
+    const asked = c.question === null || c.question.trim() === "" ? "" : `Asked: ${recalled(c.question)}\n`;
+    return `<card-choice${thread}${card} by="${escapeAttr(by)}" at="${(c.at / 1000).toFixed(6)}" ago="${agoWords(now - c.at)}">\n${asked}Chosen: ${c.option}\n</card-choice>`;
+  });
+  return `[Earlier choices on your cards, told to you now. Each closed its card when it was made (at, ago) without sending you a message, so this is the first you hear of it. They are settled and not new: what you are handed after them is not about them unless it says so. Do not answer a choice by itself or ask it again.]\n${lines.join("\n")}`;
+}
+
 /// What people chose in widgets the agent posted, riding along with messages it is handed anyway; empty when none.
 export function formatWidgetModels(models: WidgetModel[]): string {
   if (models.length === 0) return "";
@@ -241,7 +289,7 @@ export function formatWidgetModels(models: WidgetModel[]): string {
 
 /// A thread's messages for chat_history: people by name, this session's own posts as "you", other agents and the
 /// station marked as bots.
-export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>, cards: Map<number, { card: any; pending: boolean }> = new Map()): string {
+export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>, cards: Map<number, { card: any; pending: boolean; chose?: { by: string; option: string } }> = new Map()): string {
   return messages
     .map((m) => {
       const from = m.authorKind === "agent" && m.author === selfKey ? "you" : m.authorKind === STATION_AUTHOR ? "station" : names.has(m.author) ? `${names.get(m.author)} (${m.author})` : m.author;
@@ -256,7 +304,9 @@ export function formatHistory(messages: MessageRow[], surface: string, address: 
           ...(typeof found.card?.signin?.site === "string" ? { site: found.card.signin.site } : {}),
           ...(typeof found.card?.login === "string" ? { login: found.card.login } : {}),
           ...(typeof found.card?.station === "string" ? { station: found.card.station } : {}) };
-        card = `\n[Answer card: ${found.pending ? "pending" : "no longer pending"}; ${JSON.stringify(facts)}]`;
+        // Closed by a choice that sent no message: nothing else in the thread says what was chosen.
+        const chose = found.chose === undefined ? "" : `; ${found.chose.by} chose ${JSON.stringify(found.chose.option)}, which closed it without a message`;
+        card = `\n[Answer card: ${found.pending ? "pending" : "no longer pending"}${chose}; ${JSON.stringify(facts)}]`;
       }
       return `<message via="${via(surface)}" thread="${address}" from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}${card}\n</message>`;
     })

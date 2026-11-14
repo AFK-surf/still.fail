@@ -13,7 +13,7 @@ permissions:
   contents: read
 jobs:
   deploy:
-    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main'
+    if: github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -32,13 +32,18 @@ jobs:
           STILLFAIL_CLOUD: monoid
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
           STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
-          DEPLOY_KEYS_JSON: ${{ secrets.MONOID_DEPLOY_KEYS_JSON }}
+          DEPLOY_KEYS_JSON: ${{ vars.CLOUD_MOVED == 'on' && secrets.DEPLOY_KEYS_JSON || secrets.MONOID_DEPLOY_KEYS_JSON }}
+          FORWARD_SECRET: ${{ vars.CLOUD_MOVED == 'on' && secrets.CLOUD_FORWARD_SECRET || '' }}
+          GUEST_GOOGLE_OAUTH_JSON: ${{ vars.CLOUD_MOVED == 'on' && secrets.GOOGLE_OAUTH_JSON || '' }}
           GOOGLE_OAUTH_JSON: ${{ secrets.MONOID_GOOGLE_OAUTH_JSON || secrets.GOOGLE_OAUTH_JSON }}
-          AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
+          GCP_TELEMETRY_JSON: ${{ secrets.GCP_TELEMETRY_JSON }}
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
-          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
-          APNS_JSON: ${{ secrets.APNS_JSON }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.MONOID_FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_JSON: ${{ secrets.MONOID_APNS_JSON }}
+          FCM_SERVICE_ACCOUNT_MORE_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_MORE_JSON: ${{ secrets.APNS_JSON }}
           APPLE_JSON: ${{ secrets.APPLE_JSON }}
           REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
         run: sh .github/deploy.sh ${{ inputs.parts }}

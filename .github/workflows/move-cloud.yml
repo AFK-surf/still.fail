@@ -1,0 +1,100 @@
+# Moving still.fail's accounts into monoid's cloud (the user, 2026-11-12; cloud/src/move.ts says how), by hand, a step
+# at a time, each looked at before the next:
+#   freeze  both APIs deployed MOVING (every call but the move's answered 503 moving: nobody is signed out), monoid's
+#           with still.fail's keys, answering as still.fail too
+#   copy    scripts/move-cloud.ts: still.fail's icons, Directory and accounts' objects into monoid's (dry_run: read only)
+#   open    still.fail's API forwarding to monoid's, monoid's no longer MOVING. Then the variable CLOUD_MOVED goes on, so
+#           the pipeline's deploys keep it so (workflows/pipeline.yml).
+#   back    as before freeze: each its own, still.fail's answering itself (CLOUD_MOVED off first).
+name: move-cloud
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "freeze, copy, open or back"
+        required: true
+      dry_run:
+        description: "copy: read still.fail's, write nothing"
+        type: boolean
+        default: true
+permissions:
+  contents: read
+jobs:
+  still-fail:
+    if: github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main' && contains(fromJSON('["freeze","open","back"]'), inputs.step)
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Deploy still.fail's api (${{ inputs.step }})
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
+          DEPLOY_KEYS_JSON: ${{ secrets.DEPLOY_KEYS_JSON }}
+          GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
+          GCP_TELEMETRY_JSON: ${{ secrets.GCP_TELEMETRY_JSON }}
+          VAPID_JSON: ${{ secrets.VAPID_JSON }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_JSON: ${{ secrets.APNS_JSON }}
+          FCM_SERVICE_ACCOUNT_MORE_JSON: ${{ secrets.MONOID_FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_MORE_JSON: ${{ secrets.MONOID_APNS_JSON }}
+          APPLE_JSON: ${{ secrets.APPLE_JSON }}
+          REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
+          MOVING: ${{ inputs.step == 'freeze' && '1' || '' }}
+          FORWARD_TO: ${{ inputs.step == 'open' && 'https://app.monoid.build' || '' }}
+          FORWARD_SECRET: ${{ inputs.step == 'open' && secrets.CLOUD_FORWARD_SECRET || '' }}
+        run: sh .github/deploy.sh api
+
+  monoid:
+    needs: [still-fail]
+    if: ${{ !cancelled() && github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main' && contains(fromJSON('["freeze","open","back"]'), inputs.step) && needs.still-fail.result == 'success' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Deploy monoid's api (${{ inputs.step }})
+        env:
+          STILLFAIL_CLOUD: monoid
+          CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
+          STILLFAIL_ADMIN_EMAIL: ${{ secrets.STILLFAIL_ADMIN_EMAIL }}
+          DEPLOY_KEYS_JSON: ${{ inputs.step == 'back' && secrets.MONOID_DEPLOY_KEYS_JSON || secrets.DEPLOY_KEYS_JSON }}
+          GOOGLE_OAUTH_JSON: ${{ secrets.MONOID_GOOGLE_OAUTH_JSON || secrets.GOOGLE_OAUTH_JSON }}
+          GUEST_GOOGLE_OAUTH_JSON: ${{ inputs.step != 'back' && secrets.GOOGLE_OAUTH_JSON || '' }}
+          FORWARD_SECRET: ${{ inputs.step != 'back' && secrets.CLOUD_FORWARD_SECRET || '' }}
+          MOVING: ${{ inputs.step == 'freeze' && '1' || '' }}
+          GCP_TELEMETRY_JSON: ${{ secrets.GCP_TELEMETRY_JSON }}
+          VAPID_JSON: ${{ secrets.VAPID_JSON }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.MONOID_FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_JSON: ${{ secrets.MONOID_APNS_JSON }}
+          FCM_SERVICE_ACCOUNT_MORE_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_MORE_JSON: ${{ secrets.APNS_JSON }}
+          APPLE_JSON: ${{ secrets.APPLE_JSON }}
+          REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
+        run: sh .github/deploy.sh api
+
+  copy:
+    if: github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main' && inputs.step == 'copy'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Copy still.fail's accounts into monoid's cloud
+        env:
+          DEPLOY_KEYS_JSON: ${{ secrets.DEPLOY_KEYS_JSON }}
+          MOVE_FROM: https://app.still.fail
+          MOVE_TO: https://app.monoid.build
+        run: |
+          MOVE_ADMIN_TOKEN=$(printf '%s' "$DEPLOY_KEYS_JSON" | jq -r .ADMIN_TOKEN)
+          echo "::add-mask::$MOVE_ADMIN_TOKEN"
+          export MOVE_ADMIN_TOKEN
+          node scripts/move-cloud.ts ${{ inputs.dry_run && '--dry-run' || '' }}

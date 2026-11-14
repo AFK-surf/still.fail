@@ -49,18 +49,18 @@ test "a link's card is read as the pointer comes onto it and let go of once it h
   assert_eq(read, [])
   let (x, y, w, h) = t.get(@ui.Role::Button, label="PR #4466").rect
   // pointed at: read, and its card opens over it
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(hover_open_ms * 2.0)
   assert_eq(read, ["linkPreview"])
   assert_eq(left, [])
   // the pointer gone, the card goes; once it has, what it read is let go of, once
-  t.move(700.0, 700.0)
+  t.move_to(700.0, 700.0)
   t.run_for((hover_close_ms + hover_out_ms) * 2.0)
   assert_eq(left, ["linkPreview"])
   t.run_for((hover_close_ms + hover_out_ms) * 2.0)
   assert_eq(left, ["linkPreview"])
   // pointed at again: read again
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(hover_open_ms * 2.0)
   assert_eq(read, ["linkPreview", "left", "linkPreview"])
 }
@@ -194,13 +194,13 @@ test "a file is read on every entry, including while its card is still open" {
   })
   t.draw()
   let (x, y, w, h) = t.get(@ui.Role::Button, label="src/a.ts").rect
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(hover_open_ms * 2.0)
   assert_eq(reads.val, 1)
   // Leave and return before the card closes; it still must re-read the file.
-  t.move(700.0, 700.0)
+  t.move_to(700.0, 700.0)
   t.frame()
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.frame()
   assert_eq(reads.val, 2)
   @sf.kept_call.val = kept
@@ -247,7 +247,7 @@ fn file_card_refresh_case(intermediate : Bool) -> Unit raise {
   t.draw()
   let (x, y, w, h) = t.get(@ui.Role::Button, label="src/a.ts").rect
   let entered = t.time()
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   assert_eq(sent.length(), 1)
   assert_true(sent[0].contains("\"topic\":\"filePeek\""))
   assert_true(sent[0].contains("\"station\":\"ws/st\""))
@@ -258,9 +258,9 @@ fn file_card_refresh_case(intermediate : Bool) -> Unit raise {
   client.receive_json({ "id": 1, "value": { "kind": "dir", "name": "a.ts", "path": "src/a.ts", "entries": ["before-entry"] } })
   t.frame()
   assert_true(t.find("before-entry") is Some(_))
-  t.move(700.0, 700.0)
+  t.move_to(700.0, 700.0)
   t.frame()
-  t.move(x + w / 2.0, y + h / 2.0)
+  t.move_to(x + w / 2.0, y + h / 2.0)
   t.frame()
   assert_eq(sent.length(), 3)
   assert_true(sent[1].contains("\"id\":1") && sent[1].contains("\"unsubscribe\":true"))
@@ -274,7 +274,7 @@ fn file_card_refresh_case(intermediate : Bool) -> Unit raise {
   t.frame()
   assert_true(t.find("after-entry") is Some(_))
   let left = t.time()
-  t.move(700.0, 700.0)
+  t.move_to(700.0, 700.0)
   assert_eq(sent.length(), 3, msg="the open card still holds the topic")
   t.frame_at(left + hover_close_ms)
   assert_eq(sent.length(), 3, msg="the leaving card still holds the topic")

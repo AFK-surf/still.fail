@@ -22,17 +22,6 @@ let chat_bar_h : Double = bar_h
 let chat_title_line : Double = 16.0 * 1.4
 
 ///|
-let composer_room : Double = 110.0
-
-///|
-/// The list's gap between messages (web mobile --list-gap), and under the viewer's message sent soon after the one
-/// before it (`joined`).
-let gap : Double = 20.0
-
-///|
-let joined_gap : Double = 4.0
-
-///|
 /// Where the chat's bar ends, from the list's top (the list runs on under it), and what the list keeps over its first
 /// row: 14 under the bar.
 fn bar_foot() -> Double {
@@ -40,9 +29,30 @@ fn bar_foot() -> Double {
 }
 
 ///|
-fn list_top() -> Double {
-  status_top() + chat_bar_h + 14.0
+fn bar_foot_of(r : ChatRef) -> Double {
+  bar_foot() + bar_extra_target(r)
 }
+
+///|
+fn list_top() -> Double {
+  bar_foot() + list_room
+}
+
+///|
+fn list_top_of(r : ChatRef) -> Double {
+  list_top() + bar_extra_target(r)
+}
+
+///|
+/// Where the chat's bar is drawn to now (its second row as far as it shows): what covers the list's top, its room under
+/// it the list's (list_room).
+fn bar_foot_live(v : @view.View, r : ChatRef) -> Double {
+  bar_foot() + bar_extra_shown(v, r)
+}
+
+///|
+/// The room the list keeps under the chat's bar over its first row: 14.
+let list_room : Double = 14.0
 
 ///|
 /// What the list keeps under its last row over the composer's room: 10.
@@ -120,9 +130,9 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, barred? : Bo
           list,
           chat_foot_room(c, r, Some(v)),
           settings_core(src, w),
-          top=list_top(),
+          top=list_top_of(r),
           lead=unread_lead(),
-          bar=bar_foot(),
+          bar=bar_foot_of(r),
           foot=list_foot(),
           // (its bar the page's node's: a picture flying from it drawn under that bar in the page's slot)
           slotted=barred,
@@ -144,7 +154,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, barred? : Bo
           // as of chat_bar's; the page's Bar all the same, so that what flies in it lands under it, in the page and
           // cut to it, not at the frame's end over whatever is beside the page as it goes)
           let room = c.layer(fn() {
-            let room = c.box(style=@ui.style(w=Full, h=Fixed(top_bar_h())), fn() {  })
+            let room = c.box(style=@ui.style(w=Full, h=Fixed(top_bar_h() + bar_extra_target(r))), fn() {  })
             c.floats_over(room)
           })
           c.stratum(room, Bar)
@@ -165,17 +175,12 @@ fn list_key(r : ChatRef) -> String {
 }
 
 ///|
-/// How far a row new to the list comes up as it fades in (Chat.kt rise: 14, over its turn's 320 ms, the standard
-/// curve).
-let rise_dy : Double = 14.0
-
-///|
 /// A chat opened over Home from the start at its message `seq`, as a notification opens it; `held`: its flash kept at
 /// its peak (screenshots of it).
 pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
   @sfbase.history_push()
   flash_held.val = held
-  go_to(r, seq)
+  go_to(r, seq, keep_place=false)
   app.nav.push(Chat(r))
 }
 
@@ -185,9 +190,11 @@ pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
 fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
   let k = r.station + "\u{1}" + r.session
   let kept = match saved { Some(view) => Some(view); None => @sfbase.chat_kept_from(src, r) }
+  // (a page made as nodes tells it of what its list had in sight: sfpages' chat_read_node)
+  let told = @sfpages.chat_read_left(src, r, kept)
   match (kept, readings.get(k)) {
-    (Some(v), Some(rd)) if !src.read_only => {
-      (src.call)("client.focus", { "left": focus_chat(r, v, None) }, fn(_) {  })
+    (Some(v), Some(rd)) if !told && !src.read_only => {
+      (src.call)("client.focus", { "left": focus_chat(r, v, None) }, @sfbase.answer_unread)
       match v.thread {
         Some(_) if rd.placed => tell_place(src, r, v, rd, exact=true)
         _ => ()
@@ -197,6 +204,7 @@ fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
   }
   pick_clear()
   readings.remove(k)
+  chat_bar_states.remove(k)
   // what holds the chat's thread at the core with it (its jobs in the bar and their sheets, the images beside one
   // opened from it): while any is held the core keeps the thread's window as first read, and the chat opened again
   // where it was first opened, not where it was left (views.ts: chatJobs and imageNear are of the chat's topic)
@@ -204,6 +212,7 @@ fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
   (src.leave)("chat", chat_params(r), @sfbase.TopicLeave::Legacy)
   (src.leave)("chatJobs", chat_params(r), @sfbase.TopicLeave::Legacy)
   (src.leave)("chatJobs", chat_jobs_summary_params(r), @sfbase.TopicLeave::Legacy)
+  (src.leave)("chatFeedback", chat_params(r), @sfbase.TopicLeave::Legacy)
   // what its agents' lines and its jobs' sheets read: their work as it goes, their logs as they grow
   @sfbase.let_go(src, @sfbase.chat_scope(r.station, r.session))
   @sfbase.let_go(src, @sfbase.jobs_scope(r.station))
@@ -220,11 +229,7 @@ fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
 
 ///|
 /// Which of the chat's asks the bell went to last, by chat (it goes to the next one each time, round again).
-let ask_turns : Map[String, Int] = {}
-
-///|
-/// How long the bell rises over the way to the end as that comes, and goes back down.
-let ask_lift_ms : Double = 200.0
+let ask_turns : Map[String, Int] = Map([])
 
 ///|
 let bar_drop_people : Int = 1
@@ -296,6 +301,8 @@ fn bar_frame(
 /// Frosted glass over the messages, no line under it (the frost alone sets it off).
 fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let t = @sf.theme()
+  // (its "…" is its chat's whole row's: held while its page is open, asked as it opens, @sfpages.chat_menu_of)
+  @sfbase.chat_whole_held(src, r) |> ignore
   let stations = station_marks(src, w.id)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let jobs = src.topic("chatJobs", chat_jobs_summary_params(r)).get().snapshot()
@@ -311,9 +318,9 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
     enter=@motion.trans(fade=0.0, scale=0.85, spec=archive_tween),
   )
   let archive_w = @motion.anim(c, archive_key + "/w", if archive { 1.0 } else { 0.0 }, global=true)
-  archive_w.follow(if archive { 1.0 } else { 0.0 }, archive_tween)
-  let archive_share = if archive_look is None { 0.0 } else { archive_w.get() }
-  let people = if v.people.length() > 5 { v.people[:5].to_array() } else { v.people }
+  archive_w.follow(c, if archive { 1.0 } else { 0.0 }, archive_tween)
+  let archive_share = if archive_look is None { 0.0 } else { archive_w.get(c) }
+  let people = if v.people.length() > 5 { v.people[:5].to_owned() } else { v.people }
   let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     bar_frame(
       c,
@@ -504,13 +511,6 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
 }
 
 ///|
-/// At work, as a row says it: yellow spokes 10 across stepping round in 12, no disc round them (it showed as
-/// a dark rim).
-fn at_work_mark(c : @ui.Ctx) -> Unit {
-  @sf.spokes(c, 10.0, mark_yellow, box=12.0) |> ignore
-}
-
-///|
 /// An agent's mark (small, as a list's): its maker's mark on a soft tile, its state on the corner.
 fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
   let t = @sf.theme()
@@ -606,7 +606,7 @@ fn mark_ground() -> (Int64, Double) {
 
 ///|
 /// Its corner: 6.
-fn mark_corner(side : Double) -> Double {
+fn mark_corner(_side : Double) -> Double {
   6.0
 }
 
@@ -681,8 +681,8 @@ fn avatar(
 ///|
 /// The chat read the first time (the library's Waiting): its messages to come in their bones, as its list draws them,
 /// the first as far under the bar as the list's first row; what could not be read over them in red (the bones still).
-fn waiting_messages(c : @ui.Ctx, failed : String?) -> Unit {
-  @sf.waiting(c, fn() { @sfpages.chat_messages_sample(c, list_top() - top_bar_h()) }, error=failed.unwrap_or(""))
+fn waiting_messages(c : @ui.Ctx, failed : String?, extra? : Double = 0.0) -> Unit {
+  @sf.waiting(c, fn() { @sfpages.chat_messages_sample(c, list_top() + extra - top_bar_h()) }, error=failed.unwrap_or(""))
 }
 
 ///|

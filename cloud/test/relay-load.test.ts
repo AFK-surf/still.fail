@@ -117,10 +117,10 @@ test("relays send their load from their own address; the console shows each rela
   }
 });
 
-test("what a relay did between two of its samples goes to Axiom as a log line", async () => {
+test("what a relay did between two of its samples goes to Cloud Logging as a log line", async () => {
   const relay = "https://203.0.113.7";
   const got: any[] = [];
-  const h = await harness({ relayUrls: relay, axiom: async (request) => (got.push({ url: request.url, body: JSON.parse(await request.text()) }), new Response("{}")) });
+  const h = await harness({ relayUrls: relay, telemetry: async (request) => (got.push({ url: request.url, body: JSON.parse(await request.text()) }), new Response("{}")) });
   try {
     const push = (body: string) => h.fetch("/v1/relays/load", { method: "POST", headers: { "x-stillfail-relay": relay, "cf-connecting-ip": "203.0.113.7" }, body });
     // The first sample has none before it: nothing said.
@@ -129,10 +129,10 @@ test("what a relay did between two of its samples goes to Axiom as a log line", 
     const later = METRICS.replace("bytes_sent_total 1000", "bytes_sent_total 61000").replace("dropped_total 10", "dropped_total 40").replace("accepts_total 7", "accepts_total 9");
     assert.equal((await push(`${later}\nnode_load1 0.5\nnode_time ${h.now()}\n`)).status, 200);
     assert.equal(got.length, 1);
-    assert.equal(got[0].url, "https://api.axiom.co/v1/logs");
+    assert.equal(got[0].url, "https://telemetry.googleapis.com/v1/logs");
     const [resource] = got[0].body.resourceLogs;
     const attrs = (list: any[]) => Object.fromEntries(list.map((a: any) => [a.key, a.value.intValue ?? a.value.doubleValue ?? a.value.stringValue]));
-    assert.deepEqual(attrs(resource.resource.attributes), { "service.name": "stillfail-relay", "stillfail.relay": "203.0.113.7" });
+    assert.deepEqual(attrs(resource.resource.attributes), { "service.name": "stillfail-relay", "stillfail.relay": "203.0.113.7", "gcp.project_id": "stillfail-test" });
     const [line] = resource.scopeLogs[0].logRecords;
     assert.equal(line.body.stringValue, "relay minute");
     assert.deepEqual(attrs(line.attributes), {
@@ -145,9 +145,9 @@ test("what a relay did between two of its samples goes to Axiom as a log line", 
 });
 
 // The last stretch to each client, which the relay's counters do not see (relay-load.sh `node_conn`): the connection
-// counters show its round trips and retransmissions. Each connection that sent in the minute goes to Axiom as a `relay
+// counters show its round trips and retransmissions. Each connection that sent in the minute goes to Cloud Logging as a `relay
 // conn` line beside the minute's, whatever the minute says; lines that do not read are left out.
-test("each client connection a relay's kernel saw goes to Axiom beside its minute", async () => {
+test("each client connection a relay's kernel saw goes to Cloud Logging beside its minute", async () => {
   const conn = "node_conn 58.216.63.0 39879 25.878 25.228 3646482 126655 2816728 1322 1";
   assert.deepEqual(relayConns(`${METRICS}\n${conn}\nnode_conn 1.2.3.0 x\nnode_conn <b> 1 1 1 1 1 1 1 0\nnode_conn 2409:8a1e:6c20:: 5555 40 30 900 0 8000 10 0\n`), [
     { peer: "58.216.63.0", port: 39879, rtt: 25.878, minrtt: 25.228, sent: 3646482, again: 126655, rate: 2816728, limited: true },
@@ -155,7 +155,7 @@ test("each client connection a relay's kernel saw goes to Axiom beside its minut
   ]);
   const relay = "https://203.0.113.7";
   const got: any[] = [];
-  const h = await harness({ relayUrls: relay, axiom: async (request) => (got.push(JSON.parse(await request.text())), new Response("{}")) });
+  const h = await harness({ relayUrls: relay, telemetry: async (request) => (got.push(JSON.parse(await request.text())), new Response("{}")) });
   try {
     // The first sample has no minute before it: its connections are said all the same.
     const r = await h.fetch("/v1/relays/load", { method: "POST", headers: { "x-stillfail-relay": relay, "cf-connecting-ip": "203.0.113.7" }, body: `${METRICS}\nnode_time ${h.now()}\n${conn}\n` });
@@ -173,9 +173,9 @@ test("each client connection a relay's kernel saw goes to Axiom beside its minut
   }
 });
 
-test("the cron reads still.fail's own relay's counters, and says in Axiom how near its budget's limits it is", async () => {
+test("the cron reads still.fail's own relay's counters, and says in Cloud Logging how near its budget's limits it is", async () => {
   const got: any[] = [];
-  const h = await harness({ axiom: async (request) => (got.push(JSON.parse(await request.text())), new Response("{}")) });
+  const h = await harness({ telemetry: async (request) => (got.push(JSON.parse(await request.text())), new Response("{}")) });
   try {
     const api = (await h.mf.getWorker("api")) as unknown as { scheduled(options: { cron: string; scheduledTime: Date }): Promise<{ outcome: string }> };
     assert.equal((await api.scheduled({ cron: "* * * * *", scheduledTime: EVERY_MINUTE_ONLY })).outcome, "ok");

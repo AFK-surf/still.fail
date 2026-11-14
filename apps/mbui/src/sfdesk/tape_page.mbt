@@ -81,24 +81,47 @@ fn tape_page_pane(v : @view.View, src : Source) -> Unit {
 /// A passage of a message picked while the page is not in use (held where it shows beside the sidebar), followed in
 /// node `v`: the page comes over with it, its bar there to be pressed (pengxiao, 2026-10-25: 引用 pressed there went to
 /// what showed of the page and brought it over, quoting nothing). As it is picked, once (@sfbase.picked: a new
-/// identity), never as it stays picked: a passage left picked keeps nothing from being brought over after (pengxiao,
-/// 2026-10-25: the sidebar pressed or pulled over went straight back).
+/// identity; a chat's page made as nodes, its messages' words picked of the window's tree, @ui.picked_now: which
+/// selection it is), never as it stays picked: a passage left picked keeps nothing from being brought over after
+/// (pengxiao, 2026-10-25: the sidebar pressed or pulled over went straight back).
 fn tape_pick_said(v : @view.View, src : Source) -> Unit {
   // (what is picked, as told, while a workspace is in view: none taken while none is, what is picked then taken as one
-  // is again)
-  v.reacts(fn() { (@sfbase.picked.get().serial, @sfbase.workspace_in_view(src).0 is Some(_)) }, fn(now) {
-    let (serial, held) = now
-    guard held else { return }
-    let pick = if serial == 0 { "" } else { serial.to_string() }
-    if pick != "" &&
-      pick != wide.tape_pick.get() &&
-      wide.tape_at.get() != Page &&
-      wide.tape_ask.get() is None &&
-      wide.tape_pull.get() is None {
-      wide.tape_ask.set(Some(Page))
-    }
-    wide.tape_pick.set(pick)
-  })
+  // is again; of the tree's words, only what a message's are of)
+  v.reacts(
+    fn() {
+      let made = match @ui.picked_now() {
+        Some(p) if !p.of.is_empty() => Some(p.made)
+        _ => None
+      }
+      (@sfbase.picked.get().serial, made, @sfbase.workspace_in_view(src).0 is Some(_))
+    },
+    fn(now) {
+      let (serial, made, held) = now
+      guard held else { return }
+      let pick = match (serial, made) {
+        (0, Some(m)) => "words \{m}"
+        (0, None) => ""
+        _ => serial.to_string()
+      }
+      if pick != "" &&
+        pick != wide.tape_pick.get() &&
+        wide.tape_at.get() != Page &&
+        wide.tape_ask.get() is None &&
+        wide.tape_pull.get() is None {
+        wide.tape_ask.set(Some(Page))
+      }
+      wide.tape_pick.set(pick)
+    },
+  )
+}
+
+///|
+/// The page's panel's corners as what is in it stands in them (pane_round): as wide as beside the column, its right
+/// corners none of what is in it while a side panel is beside it.
+fn tape_page_round() -> FixedArray[@ui.CornerOf] {
+  let side = tape_shown_side()
+  let under = if side is None { tape_room_now().under } else { 0.0 }
+  beside_column(tape_pane_corners(Page, side is Some(_)), under)
 }
 
 ///|
@@ -110,15 +133,12 @@ fn tape_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
   let (now, _, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
   // (said by this build: image_item, video_item)
-  @sfbase.held_pictures_waiting.val = false
-  let side = tape_shown_side()
-  let under = if side is None { tape_room_now().under } else { 0.0 }
-  let corners = tape_pane_corners(Page, side is Some(_))
+  @sfbase.held_pictures_waiting.val = []
   let page_id = c.id("main-page")
   tape_behind(c, Page, fn() {
     context_page(c, page_id)
     let pane = c.box(style=frame_main.then(@ui.style(w=Fixed(c.width))), id=page_id, fn() {
-      @sf.pane_round.val = Some(beside_column(corners, under))
+      @sf.pane_round.val = Some(tape_page_round())
       tape_bar_collected(c, fn() { page_one(c, src, w, page, c.width, c.height, 0.0) })
       @sf.pane_round.val = None
     })
@@ -157,7 +177,7 @@ fn next_tape_actions_gen() -> Int {
 /// Each page's bar on the tape, by its entry (its number): made as its page is first shown or built, let go as the entry
 /// leaves the stack (nav_flat_view's `gone`), not as its node stops showing.
 // kept across runs: emptied as a run begins (tape_goes_reset), each let go with its entry
-let tape_bars : Map[Int, TapeBar] = {}
+let tape_bars : Map[Int, TapeBar] = Map([])
 
 ///|
 /// The bar of entry `k`'s page, made as it is first asked.
@@ -317,7 +337,7 @@ fn tape_made(
             }
             p.owns(fn() {
               let tb = tape_bar_of(k)
-              if @signals.untracked(fn() { tb.page_actions.get() }) is Some((_, _, g)) && g == gen {
+              if tb.page_actions.untracked() is Some((_, _, g)) && g == gen {
                 tb.page_actions.set(None)
               }
             })
@@ -364,6 +384,9 @@ fn tape_made(
         context_node(p)
         profiles_place_node(p, src, core, here, stint, fn() { tape_made_frame }, width, said=told, tips~)
       })
+    // (the stations' place with one that only runs tasks picked: its page made once, in the place of the old view's)
+    Place("stations") if place_rig(src) != "" =>
+      tape_made(src, Setting(Station(place_rig(src))), tips).map(fn(m) { ("place/" + m.0, m.1) })
     // (a place of the rail's whose page is one of those: that page as the settings open it, at the stack's root, made
     // under its own kind)
     Place(name) =>
@@ -415,12 +438,18 @@ fn tape_made(
     Setting(NewProfile(address)) =>
       made("new-profile/" + address, fn(p, core, here, _stint, told, _acts) {
         context_node(p)
-        @sfpages.new_profile_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
+        @sfpages.new_profile_node(p, core, src, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
       })
     Setting(LocalStation) if pane_makes.val =>
       made("local-station", fn(p, core, _here, _stint, told, _acts) {
         context_node(p)
         @sfpages.local_station_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
+    // (by its station: another station's another page, not this one become it)
+    Setting(Station(address)) if pane_makes.val =>
+      made("station/" + address, fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        @sfpages.station_node(p, core, src, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, stint~)
       })
     Setting(Permissions) if pane_makes.val =>
       made("permissions", fn(p, core, _here, _stint, told, _acts) {
@@ -464,7 +493,7 @@ fn tape_made(
     Setting(Usage) if pane_makes.val =>
       made("usage", fn(p, core, here, _stint, told, acts) {
         context_node(p)
-        @sfpages.usage_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, bar_actions=acts)
+        @sfpages.usage_node(p, core, src, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, bar_actions=acts)
       })
     // (by its days: another's of other days another page)
     Setting(UsagePrices(days)) if pane_makes.val =>
@@ -491,10 +520,69 @@ fn tape_made(
       Some(
         (
           "chat",
-          fn(v, _page, _under, _stint, k) { @sfbase.chat_page_made(v, src, k, tape_page_one, key=tape_island_key) |> ignore },
+          fn(v, _page, _under, stint, k) {
+            // (its bar the tree's, over the page's old view: chat_bar_wide_node, keeping clear of the panel's corners as a
+            // page's bar on the tape does; the tape's head over it none, tape_bar_head)
+            @sfbase.chat_page_made(
+              v,
+              src,
+              k,
+              tape_page_one,
+              key=tape_island_key,
+              drawn=fn(serial) { tape_page_wait.draws(serial) },
+              over=fn(o, src, page, stint) { chat_bar_wide_node(o, src, page, tape_chat_bar_ends(), tips, stint) },
+              // (with chat_page_nodes on: its messages nodes, its composer in their list's foot its old view)
+              // (built in the page's panel, as tape_page_one builds the page: what stands in its corners concentric with them)
+              body=fn(col, s, r, composer, shows) {
+                // (on the panel's ground, a step darker while it is behind the one in use, going with the tape's move:
+                // tape_page_ground, as the island's own was, in the place of the page's ground chat_page_made gives it)
+                col.ground(By(fn() { tape_page_ground(col) })) |> ignore
+                chat_body_nodes(col, s, r, tips, stint, composer, shows, in_pane=true)
+              },
+              foot=fn(c, s, r) {
+                @sf.pane_round.val = Some(tape_page_round())
+                // (behind the one in use a step darker and nothing of it read out, as tape_page_one's page is:
+                // tape_behind)
+                tape_behind(c, Page, fn() { chat_composer_nodes(c, s, r, wide.tape.get()) })
+                @sf.pane_round.val = None
+              },
+              // (its column on the page's way as the tape takes its panel to another width: laid out as at its narrower end)
+              narrower=tape_page_narrower,
+            )
+            |> ignore
+          },
         ),
       )
     _ => None
+  }
+}
+
+///|
+/// Where a chat's bar in the page's panel on the tape keeps clear at its ends (chat_bar_wide_node's): as a page's bar
+/// there (pane_bar_node's, the same rule: tape_bar_start_room, tape_bar_end_room), the panel's corners as they are
+/// told it (tape_bar_head's); as much taller over its buttons as the tape's line has them (tape_bar_over); its title
+/// on the panel's words' line; what ends it, ⌘F's field where that is open, concentric with the panel's top right
+/// corner; its buttons round on that line, no corner of the window's; its ground the panel's (tape_page_ground), as a
+/// page's bar there has it.
+fn tape_chat_bar_ends() -> ChatBarEnds {
+  let corners = fn() {
+    let side = tape_shown_side()
+    let under = if side is None { tape_room_now().under } else { 0.0 }
+    beside_column(tape_pane_corners(Page, side is Some(_)), under)
+  }
+  {
+    over: fn() { @sf.tape_bar_over() },
+    margins: fn() { (0.0, 0.0) },
+    start: fn() { tape_bar_start_room(corners(), false) },
+    end: fn(_, finding) {
+      if finding {
+        tape_bar_end_room(corners(), side=@sfpages.find_field_h)
+      } else {
+        tape_bar_end_room(corners())
+      }
+    },
+    linked: fn() { None },
+    ground: tape_page_ground,
   }
 }
 

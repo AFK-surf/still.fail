@@ -34,7 +34,7 @@ pub(all) struct FixWrite {
 }
 
 ///|
-pub let fix_writes : Map[String, FixWrite] = {}
+pub let fix_writes : Map[String, FixWrite] = Map([])
 
 ///|
 pub fn fix_write(f : Fixture, key : String) -> FixWrite {
@@ -84,7 +84,7 @@ pub fn fix_compose_view(f : Fixture, key : String) -> Json {
   let w = fix_write(f, key)
   let files = fix_composers.get(key).unwrap_or([])
   let uploading = files.iter().any(fn(x) { field(Some(x), "done") is None && text(Some(x), "error") == "" })
-  let ready = (w.text.trim(chars=" \n\t").to_string() != "" ||
+  let ready = (w.text.trim(chars=" \n\t").to_owned() != "" ||
     files.iter().any(fn(x) { text(Some(x), "error") == "" }) ||
     w.quotes.length() > 0) &&
     !w.starting
@@ -132,9 +132,13 @@ pub fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Jso
     Some(Ok(Json::object({ "version": Json::number(w.version.to_double()) })))
   }
   match name {
+    // (its words typed: its draft's topic alone changed, told to what reads that topic, the rest of the made-up core
+    // as it was, as the core's own changes only the draft's: fixture_topic)
     "composer.text" => {
       w.text = text(p, "text")
-      changed()
+      w.version += 1
+      @settings.fixture_draft_changed()
+      Some(Ok(Json::object({ "version": Json::number(w.version.to_double()) })))
     }
     "composer.quote" => {
       let q = match field(p, "quote") {
@@ -203,7 +207,7 @@ pub fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Jso
     "composer.take" => {
       let files = fix_composers.get(key).unwrap_or([])
       w.taken = Some((w.text, w.quotes, files))
-      let taken = w.text.trim(chars=" \n\t").to_string()
+      let taken = w.text.trim(chars=" \n\t").to_owned()
       // As the core does (composer.ts sentQuote and upOnce): each quote names its own file, and a file quoted more
       // than once goes with the message only once. The draft's quote ids do not go with the message.
       let sent = files.filter(fn(f) { field(Some(f), "link") is None && text(field(Some(f), "ref"), "mode") != "path" })
@@ -212,7 +216,7 @@ pub fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Jso
           Object(m) => {
             let out = m.copy()
             out.remove("id") |> ignore
-            out["comment"] = Json::string(text(Some(q), "comment").trim(chars=" \n\t").to_string())
+            out["comment"] = Json::string(text(Some(q), "comment").trim(chars=" \n\t").to_owned())
             match sent.iter().find_first(fn(f) { text(Some(f), "quote") == text(Some(q), "id") }) {
               Some(f) => {
                 let name = match field(field(Some(f), "done"), "name") {

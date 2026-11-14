@@ -4,12 +4,15 @@
 // - the Stats index (`stats.index`), source `stillfail`: what the agents spent, by day, chat, person, account and
 //   model, and the chats they worked in;
 // - the Task index (`task.index`): the chats as Comma lists the Tasks its stations host, which the Router reads and
-//   writes in through the connect (`task.read`, `task.say`, surface.ts).
+//   writes in through the connect (`task.read`, `task.say`, surface.ts), each with what it asks of whom now
+//   (`attention`, `waits_for`, `note`: read/outflow.ts attentionOf) and its link in the app (`url`), for Comma to
+//   remind them by, and `router: true` when a Comma Router ever wrote in it (read/outflow.ts routerWrote), for
+//   Comma's clients to list those alone.
 // Both cover the last BUILD_DAYS, are kept per workspace under <data>/comma-indexes, numbered as their rows change, and each
 // connection sends Comma what it does not hold yet, a page at a time.
 //
-// Built as Comma first connects, a minute after the agents' spending was recorded, as a chat moves (a minute after
-// too), and every hour (another station's changes reach it so); one build at a time.
+// Built as Comma first connects, a minute after the agents' spending was recorded, as a chat moves or someone reads
+// one (a minute after too), and every hour (another station's changes reach it so); one build at a time.
 import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -101,6 +104,29 @@ export function statsRowsOf(given: StationRows, fromDay: string): Map<string, { 
   return rows;
 }
 
+/// What a Task asks of someone, as Comma takes it: Comma's bounds on whom (`waits_for`), its sentence and its link.
+const ATTENTION = ["need", "done", "failed"];
+const MAX_WAITS = 8;
+const MAX_NOTE = 300;
+const MAX_URL = 500;
+
+/// What a chat asks of whom now as a Task index row's fields (outflow.ts attentionOf): none for an archived chat, or
+/// a station from before that says nothing; who it is for each a lowercase email, distinct, at most MAX_WAITS.
+function attentionFields(chat: Json): Json {
+  const a = chat.attention;
+  if (chat.archived === true || typeof a?.kind !== "string" || !ATTENTION.includes(a.kind)) return {};
+  const waits = new Set<string>();
+  for (const w of Array.isArray(a.waitsFor) ? a.waitsFor : []) {
+    const email = typeof w === "string" ? w.trim().toLowerCase() : "";
+    if (/^[^\s@]+@[^\s@]+$/.test(email) && email.length <= MAX_TEXT && waits.size < MAX_WAITS) waits.add(email);
+  }
+  const note = cut(typeof a.note === "string" ? a.note.trim() : null, MAX_NOTE);
+  return { attention: a.kind, ...(waits.size > 0 ? { waits_for: [...waits] } : {}), ...(note === null ? {} : { note }) };
+}
+
+/// A chat's link in the app, as Comma takes one: https, at most MAX_URL.
+const urlOf = (url: unknown): Json => (typeof url === "string" && url.startsWith("https://") && url.length <= MAX_URL ? { url } : {});
+
 /// One station's Task index rows, by their chat's ref: what Comma lists of a Task, never its messages.
 export function taskRowsOf(given: StationRows): Map<string, { kind: string; json: string }> {
   const rows = new Map<string, { kind: string; json: string }>();
@@ -113,6 +139,7 @@ export function taskRowsOf(given: StationRows): Map<string, { kind: string; json
       created_by: cut(c.creator === null || c.creator === undefined ? null : who(c.creator, c.creator.ref ?? null), MAX_TEXT),
       created_at: c.createdAt ?? 0, last_activity_at: c.lastActiveAt ?? c.createdAt ?? 0,
       runtime: cut(agent?.runtime, 40), model: cut(agent?.model, 120), ...(given.station === undefined ? {} : { station: given.station }),
+      ...attentionFields(c), ...urlOf(c.url), ...(c.router === true ? { router: true } : {}),
     };
     rows.set(ref, { kind: "task", json: JSON.stringify(row) });
   }
@@ -478,7 +505,9 @@ export function statsWire(row: IndexRow): Json | null {
   }
 }
 
-/// A Task index row as `task.index` carries it: the Task's facts, never its text.
+/// A Task index row as `task.index` carries it: the Task's facts, never its messages; what it asks of whom only when it
+/// asks something, its agent's one sentence of it, its link when there is one, and `router` only when a Comma Router
+/// wrote in it (a station from before says nothing: absent is not known to be false).
 export function taskWire(row: IndexRow): Json | null {
   if (row.removed) return { thread: row.key, rev: row.rev, removed: true };
   try {
@@ -486,6 +515,11 @@ export function taskWire(row: IndexRow): Json | null {
     return {
       thread: row.key, rev: row.rev, task: t.task, title: t.title, status: t.status, created_by: t.created_by, created_at: t.created_at,
       last_activity_at: t.last_activity_at, runtime: t.runtime, model: t.model, labels: [],
+      ...(typeof t.attention === "string" ? { attention: t.attention } : {}),
+      ...(typeof t.attention === "string" && Array.isArray(t.waits_for) && t.waits_for.length > 0 ? { waits_for: t.waits_for } : {}),
+      ...(typeof t.attention === "string" && typeof t.note === "string" ? { note: t.note } : {}),
+      ...(typeof t.url === "string" ? { url: t.url } : {}),
+      ...(t.router === true ? { router: true } : {}),
     };
   } catch {
     return null;

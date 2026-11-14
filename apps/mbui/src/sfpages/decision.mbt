@@ -1,25 +1,16 @@
 // What a post asks, under it in its chat on the desktop (still.fail web/src/Decisions.tsx MessageDecision,
 // DecisionOptions; Chat.tsx AskDismiss; Decisions.css.ts decision, options, settledLine; Chat.css.ts askDismiss): who
 // decides, then the options while it waits for the viewer (numbered, pressing one answers with it: decision.answer);
-// once settled, how it went in one quiet line. A login card stays as its login goes; an agent's request about a vault
-// item is answered on its own card. 忽略 lets go what no one has decided (decision.dismiss). Answered on screen, a card
-// stays as it is, none of it pressed any more, and becomes its line once out of sight (sfbase's list_turns.mbt
-// Turns::in_turn): the list's height changes only for what comes.
-
-///|
-/// Whether post `seq` of chat `here` (None: where the chat stands) was on screen in its list as the build before left
-/// it (Reading::sees); never out of a chat's list.
-fn seen_in(c : @ui.Ctx, here : MessageHere, seq : Double?) -> Bool {
-  ignore(c)
-  match here.list {
-    Some(l) => reading_of(l.rk).sees(seq)
-    None => false
-  }
-}
+// once settled, how it went in one quiet line. A login card stays as its login goes, and goes as its options do once
+// it ended, its line in its place; an agent's request about a vault
+// item is answered on its own card. 忽略 lets go what no one has decided (decision.dismiss). Answered or let go, on
+// screen or not, what is under the post changes from that moment (sfbase's list_turns.mbt Turns::in_turn, `start`):
+// the options, 忽略 with them, fade out as their room closes, and the line saying how it went comes in their place, its
+// room opening as theirs closes, its words fading in after them (sfbase's under_post.mbt).
 
 ///|
 /// Under post `m` of chat `here` (thread `thread`; None while nothing can be sent there), what it asks; `turns`: its
-/// list's, what closes takes its turn there.
+/// list's, which says from when what is under the post changed.
 fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, turns : Turns?) -> Unit {
   match (m.card, here.core) {
     (Some(card), Some(core)) if card.kind == "login" && card.login != "" => {
@@ -27,21 +18,65 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         Some(d) => !d.resolved && !d.dismissed
         None => true
       }
+      // (on the chat's station, or another of its workspace: the card's)
+      let station = @sfbase.card_login_station(here.station, card.station)
+      let l = login_of(core, station, card.login)
+      let active = flag(l, "active")
+      let was = login_card_last(station, card.login, l)
+      let key = "login/" + here.station + "/" + m.ts
       c.box(style=decision_box, fn() {
-        match card.assignee_text {
-          Some(a) if open => c.text(a, style=settled_line) |> ignore
-          _ => ()
-        }
-        // (on the chat's station, or another of its workspace: the card's)
-        let station = if card.station == "" {
-          here.station
-        } else {
-          match here.station.find("/") {
-            Some(i) => here.station.view(end_offset=i).to_string() + "/" + card.station
-            None => card.station
+        let who = fn() {
+          match card.assignee_text {
+            Some(a) if open => c.text(a, style=settled_line) |> ignore
+            _ => ()
           }
         }
-        login_card(c, core, station, card.login)
+        if l is None {
+          // (none the core knows: the message's words say it, who is to finish it alone over 忽略)
+          who()
+        } else {
+          // the card under way; ended, it goes as an answered post's options go, who is to finish it with it, and
+          // its line comes in its place as how that went comes in theirs (under_post: faded out and smaller as its
+          // room closes, then the line fading in as its room opens), not one put in the other's place at once
+          c.box(style=decision_rooms, fn() {
+            under_post(
+              c,
+              key + "/card",
+              active,
+              exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
+              close=close_gap,
+              fn() {
+                c.box(style=decision_box, fn() {
+                  who()
+                  login_card(c, core, station, card.login, as_was=if active { None } else { was })
+                })
+                |> ignore
+              },
+            )
+            under_post(
+              c,
+              key + "/ended",
+              !active,
+              enter=@motion.trans(
+                fade=0.0,
+                spec=@motion.Snap(0.0),
+                fade_spec=@motion.tween(options_out_ms, ease=Leave, delay=options_out_ms),
+              ),
+              open=close_gap,
+              exit=@motion.trans(spec=@motion.Snap(0.0)),
+              close=@motion.Snap(0.0),
+              fn() {
+                // (as wide as its words, at the start)
+                c.box(style=settled_room, fn() {
+                  let (words, failed) = login_ended(l)
+                  c.text(words, style=if failed { lc_ended_failed } else { lc_ended }) |> ignore
+                })
+                |> ignore
+              },
+            )
+          })
+          |> ignore
+        }
         // (letting it go: under it while it is asked, as under a post with no card)
         ask_dismiss(c, src, here, m.seq, m.asked, false)
       })
@@ -59,7 +94,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     return
   }
   // an agent's request about a vault item that says what it is: its card is in place of the words (message.mbt)
-  if m.card is Some({ ask: Some(_), .. }) || m.card is Some({ phone: Some(_), .. }) || m.card is Some({ signin: Some(_), .. }) {
+  if m.card is Some({ ask: Some(_), .. }) || m.card is Some({ phone: Some(_), .. }) || m.card is Some({ signin: Some(_), .. }) || m.card is Some({ rig: Some(_), .. }) {
     return
   }
   let resolved = match m.decision {
@@ -71,10 +106,10 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     None => m.options
   }
   let key = here.station + "/" + m.ts
-  // answered, what is under it stays as it is while it is on screen, the one picked marked, none pressed, 忽略 faded
-  // in its room; out of sight its options and 忽略 are gone, how it went in their place, at once
+  // (answered or let go: open no more from that moment, on screen or not; `start_at` when it changed, what goes and
+  // comes under it moving from then)
   let open = match turns {
-    Some(tu) => tu.in_turn(c, "ask/" + m.ts, !resolved, close_turn_ms, seen=seen_in(c, here, Some(m.seq)))
+    Some(tu) => tu.in_turn(c, "ask/" + m.ts, !resolved)
     None => !resolved
   }
   let start_at = match turns {
@@ -94,10 +129,10 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       start_at?,
       fn() {
         c.box(style=decision_box, fn() {
-          // (who decides; answered while it shows, it fades out where it is, its room kept: the one picked is
-          // marked among the options, an answer in words is the viewer's row under them, nothing to say again (the
-          // user, 2026-10-29: 有个勾不就行了吗); let go, 已忽略 in its place, the one fading out, then the other in:
-          // chat_rows.mbt said_in_place)
+          // (who decides; answered, it fades out where it is as the options close round it: the one picked is
+          // marked among the options as they go, an answer in words is the viewer's row under them, nothing to say
+          // again (the user, 2026-10-29: 有个勾不就行了吗); let go, 已忽略 in its place, the one fading out, then the
+          // other in: chat_rows.mbt said_in_place)
           match m.card {
             Some({ assignee_text: Some(a), .. }) => {
               let went = match m.decision {
@@ -123,12 +158,10 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
             _ =>
               match (options, thread) {
                 (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved, on_pick=fn(i) {
-                    // the answer's row comes in first, in a turn kept for it now, they close in the next; the list
-                    // following its end for it, as for words sent. An option
-                    // that closes the card says nothing: no row comes, nothing waits for one
+                    // the answer's row comes in as the core has it, the list following its end for it, as for words
+                    // sent. An option that closes the card says nothing: no row comes, the list is not asked to follow
                     match turns {
-                      Some(tu) if !list[i].closes => {
-                        tu.keep_turn(c)
+                      Some(_) if !list[i].closes => {
                         // (asked of the list: its key names it only where it is built, not in this row)
                         reading_of(here.station + "\u{1}" + here.session).end_asked = true
                       }
@@ -143,7 +176,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       },
     )
     ask_dismiss(c, src, here, m.seq, m.asked, resolved, asking=open, asked_at=start_at, lead=true)
-    // (in their place once they close: in the same turn)
+    // (in their place as they close, from the same moment)
     let outcome = match m.decision {
       Some({ text: Some(words), .. }) if resolved && !open => Some(words)
       _ => None
@@ -173,7 +206,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                 c.box(style=settled_room, fn() {
                   let line = c.sp(c.theme().leading(settled_leading).unwrap_or(c.text_size(settled_size).1))
                   let id = @sf.ask_history_trigger(c, "options/" + key, [@ui.span(w)], settled_line, line)
-                  card_history(c, "options/" + key, id, padded=false, fn(p) {
+                  card_history(c, id, padded=false, fn(p) {
                     @sf.options_card(
                       p,
                       "history-options/" + key,
@@ -201,7 +234,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 /// A result's read-only history: a press on the line opens it in a panel (a sheet on a small screen), the original
 /// card's content rather than its now-inactive actions. Only a press: no hover card as well, two boxes of the same
 /// (the user, 2026-11-03: 「改成只允许点击吧」).
-fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body : (@ui.Ctx) -> Unit) -> Unit {
+fn card_history(c : @ui.Ctx, id : Int, padded? : Bool = true, body : (@ui.Ctx) -> Unit) -> Unit {
   c.on_press(id, fn() {
     @sf.panel(
       @sf.t("web-main.history.details"),
@@ -221,10 +254,10 @@ fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body
 /// An agent's request about a vault item, in place of its post `m`'s words: what is asked as a
 /// card, as wide as what it says (320 at least where there is the room), its answer
 /// at its foot as the core said it with the message (`ask.answer`: the vault it holds), so
-/// the card is whole as it comes; once decided, one line saying how it ended. In a chat's list, decided on screen, the
-/// card stays as it is, the answer given marked and none pressed any more, and is that line once out of sight, as a
-/// post's answered options are (message_decision, Turns::in_turn). Where nothing is answered (no core: a letter's), the
-/// card without its answer.
+/// the card is whole as it comes; once decided, one line saying how it ended. In a chat's list, decided, on screen or
+/// not, the card fades out as its room closes from that moment and the line comes in its place, its room opening, its
+/// words fading in after the card, as a post's answered options do (message_decision, Turns::in_turn). Where nothing is
+/// answered (no core: a letter's), the card without its answer.
 fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : VaultAsk) -> Unit {
   let asked : Asked = {
     name: ask.name,
@@ -241,6 +274,11 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
     filename: ask.filename,
     typed: ask.typed,
     station: ask.station,
+    describe: ask.describe,
+    new_name: ask.new_name,
+    new_about: ask.new_about,
+    was_about: ask.was_about,
+    remove: ask.remove,
   }
   let decided = ask.status != ""
   // (a file the person picks: as wide as it may be from the first, what is picked coming in beside its button with
@@ -270,7 +308,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
   match here.list {
     Some(l) => {
       let key = here.station + "/" + m.ts
-      let open = l.turns.in_turn(c, "vault/" + m.ts, !decided, close_turn_ms, seen=seen_in(c, here, Some(m.seq)))
+      let open = l.turns.in_turn(c, "vault/" + m.ts, !decided)
       let start_at = l.turns.start("vault/" + m.ts)
       under_post(
         c,
@@ -296,7 +334,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
         close=@motion.Snap(0.0),
         fn() {
           ended(Some(("vault/" + key, fn(id) {
-            card_history(c, "vault/" + key, id, fn(p) {
+            card_history(c, id, fn(p) {
               @settings.vault_ask_details(p, asked)
             })
           })))
@@ -309,41 +347,43 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
 
 ///|
 /// An agent's request for its person's phone in place of its post's words: its card while it waits
-/// (answered with `adb.decide` on the chat's station), then a line saying how it went: decided on screen, the card
-/// stays, the answer given marked, till it is out of sight (vault_ask_card's).
+/// (answered with `adb.decide` on the chat's station), then a line saying how it went: decided, the card goes and the
+/// line comes in its place from that moment (vault_ask_card's).
 fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : PhoneAsk) -> Unit {
   let decided = ask.status != ""
   let asking = fn() {
     c.box(style=@sf.ask_card_room.then(ask_card_under_head), fn() {
-      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None }, how=fn() { open_page(Setting(@settings.phone_steps(here.core, here.station, request=ask.request))) })
+      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None }, how=fn() { open_page(Setting(@settings.Route::AdbShare(""))) })
     })
     |> ignore
   }
-  // (granted: how its station holds the phone, and on the phone, its pairing a tap away)
+  // (granted: how its station holds the phone, and on the phone, what is left to do for it a press away)
   let ended = fn(history : (String, (Int) -> Unit)?) {
     let mine = mine_to(here, card.assignee)
     let link = @settings.phone_link(here.core, here.station, ask.link)
-    @settings.phone_outcome(
-      c,
-      ask.status,
-      ask.scope,
-      ask.why,
-      inline=here.inline,
-      link~,
-      paired_here=mine && @settings.phone_lends(c),
-      history~,
-    )
-    // (on the phone, its pairing a tap away, as a login's card is under its message)
-    if link == "unpaired" && ask.status == "granted" && mine && @settings.phone_lends(c) {
-      step_card(c, "phone-pair/" + m.ts, @sf.t("android-misc.adb.ask.pair.title"), @sf.t("android-misc.adb.ask.pair.about"), fn() {
-        open_page(Setting(@settings.Route::AdbShare(here.station)))
-      })
+    let step = match here.core {
+      Some(core) if ask.status == "granted" && mine && @settings.phone_lends(c) => @settings.adb_step_at(c, core, here.station).map(fn(s) { (core, s) })
+      _ => None
+    }
+    @settings.phone_outcome(c, ask.status, ask.scope, ask.why, inline=here.inline, link~, step_here=step is Some(_), history~)
+    // (on the phone, the first thing left, as a login's card is under its message: the card does it, never a page about
+    // it, and changes to the next as each is done, going once the station holds the phone; one the phone cannot do,
+    // its own prompt's or the station's, said with nothing to press)
+    match step {
+      Some((core, s)) =>
+        // (its line how, or why it is not done by itself; never the page's button's words: the card is the press)
+        step_card(c, "phone-step/" + m.ts, s.title, s.sub, go=if s.act == "" {
+          None
+        } else {
+          Some(fn() { @settings.adb_do(core, s.act, station=here.station) })
+        })
+      None => ()
     }
   }
   match here.list {
     Some(l) => {
       let key = here.station + "/" + m.ts
-      let open = l.turns.in_turn(c, "phone/" + m.ts, !decided, close_turn_ms, seen=seen_in(c, here, Some(m.seq)))
+      let open = l.turns.in_turn(c, "phone/" + m.ts, !decided)
       let start_at = l.turns.start("phone/" + m.ts)
       under_post(
         c,
@@ -369,8 +409,88 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
         close=@motion.Snap(0.0),
         fn() {
           ended(Some(("phone/" + key, fn(id) {
-            card_history(c, "phone/" + key, id, fn(p) {
+            card_history(c, id, fn(p) {
               @sf.ask_words(p, @sf.t("android-misc.adb.ask.chat.title"), ask.reason)
+            })
+          })))
+        },
+      )
+    }
+    None => if decided { ended(None) } else { asking() }
+  }
+}
+
+///|
+/// An agent's request for a rig of the workspace in place of its post's words (a station that only runs tasks): its card while it waits
+/// (answered by the rig's person with `rig.decide` on the chat's station), then a line saying how it went: decided,
+/// the card goes and the line comes in its place from that moment (phone_ask_card's).
+fn rig_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : RigAsk) -> Unit {
+  let decided = ask.status != ""
+  let granted = (ask.granted_kind, ask.granted_seconds)
+  let words = fn() { @settings.rig_outcome_words(ask.status, ask.why, ask.delivered, granted) }
+  let asking = fn() {
+    c.box(style=@sf.ask_card_room.then(ask_card_under_head), fn() {
+      @settings.rig_card(
+        c,
+        here.core,
+        here.station,
+        ask.request,
+        ask.name,
+        ask.reason,
+        (ask.timeout_kind, ask.timeout_seconds),
+        {
+          "rig": Json::string(ask.rig),
+          "name": Json::string(ask.name),
+          "session": Json::string(ask.session),
+          "chat": Json::string(ask.chat),
+          "title": Json::string(ask.title),
+          "by": Json::string(ask.by),
+          "device": Json::string(ask.device),
+          "deviceName": Json::string(ask.device_name),
+        },
+        mine_to(here, card.assignee),
+        device=ask.device_name,
+        who=card.assignee_text,
+        ended=if decided { Some((ask.status == "granted", words())) } else { None },
+        lock=fn() { open_page(Setting(@settings.Route::AdbShare(""))) },
+      )
+    })
+    |> ignore
+  }
+  let ended = fn(history : (String, (Int) -> Unit)?) {
+    @settings.rig_outcome(c, ask.status, ask.why, ask.delivered, granted, inline=here.inline, history~)
+  }
+  match here.list {
+    Some(l) => {
+      let key = here.station + "/" + m.ts
+      let open = l.turns.in_turn(c, "rig/" + m.ts, !decided)
+      let start_at = l.turns.start("rig/" + m.ts)
+      under_post(
+        c,
+        "rig-card/" + key,
+        open,
+        exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
+        close=close_gap,
+        start_at?,
+        asking,
+      )
+      under_post(
+        c,
+        "rig-ended/" + key,
+        decided && !open,
+        start_at?,
+        enter=@motion.trans(
+          fade=0.0,
+          spec=@motion.Snap(0.0),
+          fade_spec=@motion.tween(options_out_ms, ease=Leave, delay=options_out_ms),
+        ),
+        open=close_gap,
+        exit=@motion.trans(spec=@motion.Snap(0.0)),
+        close=@motion.Snap(0.0),
+        fn() {
+          ended(Some(("rig/" + key, fn(id) {
+            card_history(c, id, fn(p) {
+              @sf.ask_words(p, @sf.t("web-pages.rigs.ask.title", args=[("name", ask.name)]), ask.reason)
             })
           })))
         },
@@ -454,10 +574,10 @@ pub fn decision_options(
 
 ///|
 /// 忽略 under what asks what no one has decided, post `seq` of the chat (`asked`: the core's, on the post or the chat's
-/// `stateAsk`; `state`: shown where the chat stands, not under the post): the viewer lets it go (`decision.dismiss`),
-/// let go at once and back if that fails. Let go, or the card answered, on screen it fades where it is (the archive
-/// buttons' 280 ms, ArchiveEase), its room kept; out of sight it is gone, its room with it (Turns::in_turn), with the
-/// options once the card is answered (`asking` false, from `asked_at`).
+/// `stateAsk`): the viewer lets it go (`decision.dismiss`),
+/// let go at once and back if that fails. Let go, on screen or not, it goes from that moment (Turns::in_turn,
+/// `own_at`), fading and shrinking to 85% as its room closes (the archive buttons' 280 ms, ArchiveEase); the card
+/// answered, it goes so with the options (`asking` false, from `asked_at`).
 fn ask_dismiss(
   c : @ui.Ctx,
   src : Source,
@@ -468,7 +588,6 @@ fn ask_dismiss(
   asking? : Bool = true,
   asked_at? : Double? = None,
   at_end? : Bool = false,
-  state? : Bool = false,
   lead? : Bool = false,
 ) -> Unit {
   guard here.view.thread is Some(thread) && !here.view.offline && !here.view.archived else { return }
@@ -476,12 +595,11 @@ fn ask_dismiss(
     return
   }
   let k = seq_key(here.station, thread, seq)
-  // (answered, it goes with the options, in their turn; let go here, in a turn of its own)
+  // (answered, it goes with the options, from their moment; let go here, from its own)
   // (at the end of a card, no motion of its own: the card's, as the core says it let go)
   let (mine, own_at) = match here.list {
     Some(l) if !at_end => {
-      let seen = seen_in(c, here, if state { None } else { Some(seq) })
-      (l.turns.in_turn(c, "dismiss/" + k, !dismissed.has(k), dismiss_turn_ms, seen~), l.turns.start("dismiss/" + k))
+      (l.turns.in_turn(c, "dismiss/" + k, !dismissed.has(k)), l.turns.start("dismiss/" + k))
     }
     _ => (!dismissed.has(k), None)
   }
@@ -521,7 +639,7 @@ fn ask_dismiss(
     start_at?=at,
     lead~,
     fn() {
-      // (let go or answered on screen: faded where it is, its room kept till it is out of sight)
+      // (let go or answered: faded out where it is as its room closes)
       let look = @motion.presence(c, "dismiss-live/" + k, live, enter=@motion.trans(fade=0.0, spec=archive_tween))
       let b = c.box(style=dismiss_room, id=if live { id } else { 0 }, fn() {
         c.rich([@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot)], style=if hot {

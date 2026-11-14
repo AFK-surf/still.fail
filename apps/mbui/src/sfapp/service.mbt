@@ -31,7 +31,7 @@
 /// A station's name as the workspace's stations say it.
 fn station_name(src : Source, station : String) -> String {
   let scope = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
   match station_marks(src, scope).iter().find_first(fn(s) {

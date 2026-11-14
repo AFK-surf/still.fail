@@ -8,14 +8,14 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { brief, claudeProject, readTimeline, rememberCodexRollout, sessionPlaces, transcriptPaths } from "../src/read/transcript.ts";
-import { linkTranscripts, sessionSkills, unlinkAgentHome, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
+import { linkSiteSkills, linkTranscripts, sessionSkills, siteSkills, unlinkAgentHome, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
 import { isSlackMethod, slackWithFiles, threadCommand } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
-import { HELD_AFTER_MS, type History, type LiveMessage, LiveHub, briefInput, inBrief } from "../src/sessions/live.ts";
+import { HELD_AFTER_MS, type History, type LiveMessage, LiveHub, briefInput, inBrief, tokensOf } from "../src/sessions/live.ts";
 import type { SessionUsage } from "../src/read/usage.ts";
 import { chainOf, entriesOf, lengthOf, stateOf } from "../src/read/transcripts.ts";
 import { prepare, prepareHere } from "../src/sessions/local-links.ts";
@@ -210,6 +210,7 @@ test("a watched session's usage is what the counter recorded, told again as it r
   hub.countWith({ of: () => counted, ask: (key) => void asked.push(key) });
   const got: any[] = [];
   hub.subscribe("s", 0, null, (m) => void got.push(m));
+  await hub.idle();
   assert.deepEqual([got[0].usage.modelCalls, got[0].usage.cost], [0, 0], "none recorded yet: none, though its transcript has a call");
   counted = { modelCalls: 4, inputTokens: 900, cachedTokens: 800, outputTokens: 40, cost: 1.5, unpricedCalls: 0, model: "m", contextTokens: 10, contextWindow: null };
   got.length = 0;
@@ -221,10 +222,23 @@ test("a watched session's usage is what the counter recorded, told again as it r
   appendFileSync(path, line("two", "m2"));
   (hub as any).soon("s");
   await settle();
+  await hub.idle();
   await time.adjust(40);
   await settle();
+  await hub.idle();
   assert.deepEqual(asked, ["s"], "working on: the counter is asked to count it");
   assert.deepEqual([got.at(-1).entries.map((e: any) => e.text), got.at(-1).usage], [["two"], counted], "what it gained, with what was recorded so far");
+  asked.length = 0;
+  const beforeUsageLine = got.length;
+  appendFileSync(path, `${JSON.stringify({ time: 1, type: "usage", run: "u1", usage: { inputTokens: 10, outputTokens: 2 } })}\n`);
+  (hub as any).soon("s");
+  await settle();
+  await hub.idle();
+  await time.adjust(40);
+  await settle();
+  await hub.idle();
+  assert.deepEqual(asked, ["s"], "a usage-only line asks the counter to count too");
+  assert.equal(got.length, beforeUsageLine, "no empty timeline message before the counter records it");
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -241,6 +255,7 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   hub.event("s", { kind: "delta", id: "x", field: "text", text: "wri" });
   const got: LiveMessage[] = [];
   const id = hub.subscribe("s", 1, null, (m) => void got.push(m));
+  await hub.idle();
   assert.equal(got[0]!.type, "timeline");
   assert.deepEqual((got[0] as any).entries.map((e: any) => e.text), ["two"]);
   assert.equal(got[1]!.type, "steps");
@@ -253,11 +268,13 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   // What its watch does on the file's change (that it comes is side/hub-parts.test.ts's): read once the burst is over.
   watched(hub, "s");
   await settle();
+  await hub.idle();
   await time.adjust(40);
   await settle();
+  await hub.idle();
   const timeline = got.filter((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline").at(-1)!;
   assert.deepEqual([timeline.start, timeline.entries.map((e) => e.text)], [2, ["writing"]]);
-  hub.turnEnded("s");
+  await hub.turnEnded("s");
   assert.ok(got.some((m) => m.type === "clear"));
   hub.unsubscribe("s", id);
   hub.close();
@@ -273,11 +290,14 @@ test("a watcher in brief is told the entries in brief, those it lacks and those 
   const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
   const got: LiveMessage[] = [];
   hub.subscribe("s", 0, null, inBrief((m) => void got.push(m)));
+  await hub.idle();
   appendFileSync(path, bash("b", 300));
   watched(hub, "s");
   await settle();
+  await hub.idle();
   await time.adjust(40);
   await settle();
+  await hub.idle();
   const told = got.flatMap((m) => (m.type === "timeline" ? m.entries : []));
   // Each by what says what it does: the description that came after its long command too.
   assert.deepEqual(told.map((e) => [e.brief, JSON.parse(e.text).description]), [[true, "Step a"], [true, "Step b"]]);
@@ -298,6 +318,7 @@ test("a session at work is followed by the station itself: told from where it en
   hub.heldTold = (key, m) => void told.push({ ...m, key } as any);
   hub.lengths = (key, n) => void lengths.push([key, n]);
   hub.running("s", true);
+  await hub.idle();
   assert.deepEqual(hub.held(), ["s"]);
   // Where it ends, none of what it said before; the steps in flight.
   const start = told.find((m) => m.type === "timeline") as any;
@@ -309,7 +330,7 @@ test("a session at work is followed by the station itself: told from where it en
   told.length = 0;
   // Its last entry, written as its turn ends, is told before it is told to be done (no 40 ms wait).
   appendFileSync(path, line("three", "m3"));
-  hub.turnEnded("s");
+  await hub.turnEnded("s");
   const kinds = told.map((m) => m.type);
   assert.ok(kinds.indexOf("timeline") >= 0 && kinds.indexOf("timeline") < kinds.indexOf("clear"), kinds.join());
   assert.deepEqual((told.find((m) => m.type === "timeline") as any).entries.map((e: any) => e.text), ["three"]);
@@ -318,22 +339,27 @@ test("a session at work is followed by the station itself: told from where it en
   hub.running("s", false);
   await time.adjust(HELD_AFTER_MS - 1);
   await settle();
+  await hub.idle();
   assert.deepEqual(hub.held(), ["s"]);
   hub.running("s", true);
+  await hub.idle();
   await time.adjust(HELD_AFTER_MS * 2);
   await settle();
+  await hub.idle();
   assert.deepEqual(hub.held(), ["s"]);
   assert.equal(reads, 1, "located and read once");
   // Done for longer than the while: let go.
   hub.running("s", false);
   await time.adjust(HELD_AFTER_MS);
   await settle();
+  await hub.idle();
   assert.deepEqual(hub.held(), []);
   told.length = 0;
   appendFileSync(path, line("four", "m4"));
   watched(hub, "s");
   await time.adjust(40);
   await settle();
+  await hub.idle();
   assert.equal(told.length, 0, "nothing told of a session let go");
   hub.close();
   rmSync(dir, { recursive: true, force: true });
@@ -368,6 +394,7 @@ test("where the readers keep a session's history the live view reads none of its
   hub.subscribe("s", 1, null, (m) => void got.push(m), true);
   assert.equal(got.length, 0, "where it stands is read off the main thread first");
   await settle();
+  await hub.idle();
   const first = got[0] as Extract<LiveMessage, { type: "timeline" }>;
   assert.deepEqual([first.type, first.start, first.entries.length], ["timeline", 1, 2]);
   assert.equal(JSON.parse(first.entries[0]!.text).description, "Step b", "in brief, once");
@@ -383,6 +410,7 @@ test("where the readers keep a session's history the live view reads none of its
   watched(hub, "s");
   await time.adjust(40);
   await settle();
+  await hub.idle();
   const told = got.find((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline")!;
   assert.deepEqual([told.start, told.entries[0]!.brief, JSON.parse(told.entries[0]!.text).description], [3, true, "Step d"]);
   // A page of it (session_history): from the readers, whole.
@@ -406,6 +434,7 @@ test("a session watched again, or by the next station process, reads its transcr
   const got: LiveMessage[] = [];
   let id = hub.subscribe("s", 3, null, (m) => void got.push(m));
   await settle();
+  await hub.idle();
   assert.deepEqual(asked, ["state", "page 3 3 false"], "read back as it was first watched");
   assert.deepEqual(plan(got), ["读日志 in_progress", "修 pending"]);
   hub.unsubscribe("s", id);
@@ -415,9 +444,11 @@ test("a session watched again, or by the next station process, reads its transcr
   got.length = 0;
   id = hub.subscribe("s", 5, null, (m) => void got.push(m));
   await settle();
+  await hub.idle();
   // Its reading goes on from where it stood here, the readers not asked: what came since read here, the checklist with it.
   await time.adjust(40);
   await settle();
+  await hub.idle();
   assert.deepEqual(asked, []);
   assert.deepEqual(plan(got), ["读日志 completed", "修 in_progress"]);
   // The next station process: carried over, nothing read for it where nothing came since.
@@ -429,6 +460,7 @@ test("a session watched again, or by the next station process, reads its transcr
   const nextGot: LiveMessage[] = [];
   next.subscribe("s", 5, null, (m) => void nextGot.push(m));
   await settle();
+  await next.idle();
   assert.deepEqual(nextAsked, [], "where its reading stood carried over too");
   assert.deepEqual(plan(nextGot), ["读日志 completed", "修 in_progress"]);
   // Watched before the process before has handed over (the sessions at work, as the station starts): the readers are
@@ -449,6 +481,7 @@ test("a session watched again, or by the next station process, reads its transcr
   assert.deepEqual(lateGot.map((m) => m.type).slice(0, 1), ["timeline"], "joined without the readers");
   handedOver();
   await settle();
+  await late.idle();
   assert.deepEqual(lateAsked, [], "the readers never asked");
   // The process before gone without carrying it over (or none was there): the readers are asked then.
   let gone = () => {};
@@ -462,6 +495,7 @@ test("a session watched again, or by the next station process, reads its transcr
   assert.deepEqual(loneAsked, []);
   gone();
   await settle();
+  await lone.idle();
   assert.deepEqual([loneAsked[0], loneGot.map((m) => m.type).includes("timeline")], ["state", true], "asked once it is gone");
   lone.close();
   late.close();
@@ -485,26 +519,28 @@ test("what is said while a listener joins is told it after what it lacks", async
   assert.equal(got.length, 0);
   release();
   await settle();
+  await hub.idle();
   assert.deepEqual(got.map((m) => m.type), ["timeline", "steps", "work", "step"]);
   assert.deepEqual((got[0] as any).entries.map((e: any) => e.text), ["one", "two"]);
   hub.close();
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("a watcher can take only the latest entries, and ask for those before", () => {
+test("a watcher can take only the latest entries, and ask for those before", async () => {
   const dir = temp();
   const path = join(dir, "t.jsonl");
   writeFileSync(path, line("one", "m1") + line("two", "m2") + line("three", "m3"));
   const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }));
   const texts = (r: [number, { text: string }[]] | null) => r && [r[0], r[1].map((e) => e.text)];
   // Not watched yet: read for the asking.
-  assert.deepEqual(texts(hub.before("s", 2, 1)), [1, ["two"]]);
+  assert.deepEqual(texts(await hub.before("s", 2, 1)), [1, ["two"]]);
   const got: LiveMessage[] = [];
   hub.subscribe("s", 0, 1, (m) => void got.push(m));
+  await hub.idle();
   assert.deepEqual([(got[0] as any).start, (got[0] as any).entries.map((e: any) => e.text)], [2, ["three"]]);
   // Watched: from what is held.
-  assert.deepEqual(texts(hub.before("s", 2, 5)), [0, ["one", "two"]]);
-  assert.deepEqual(texts(hub.before("s", 0, 5)), [0, []]);
+  assert.deepEqual(texts(await hub.before("s", 2, 5)), [0, ["one", "two"]]);
+  assert.deepEqual(texts(await hub.before("s", 0, 5)), [0, []]);
   hub.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -520,6 +556,7 @@ test("a session gone on in a new runtime session: its history reads on from the 
   const hub = new LiveHub(() => ({ runtime: "claude", paths, current }), time.clock);
   const got: LiveMessage[] = [];
   hub.subscribe("s", 0, null, (m) => void got.push(m));
+  await hub.idle();
   // The one left gets its last words, then the session moves on: its new transcript is written only once the
   // conversation begins, after it moved.
   appendFileSync(left, line("two", "m2"));
@@ -530,16 +567,20 @@ test("a session gone on in a new runtime session: its history reads on from the 
   current = true;
   watched(hub, "s");
   await settle();
+  await hub.idle();
   await time.adjust(40);
   await settle();
+  await hub.idle();
   appendFileSync(now, line("four", "m4"));
   watched(hub, "s");
   await settle();
+  await hub.idle();
   await time.adjust(40);
   await settle();
+  await hub.idle();
   const told = () => got.flatMap((m) => (m.type === "timeline" ? m.entries.map((e, i) => `${m.start + i}:${e.text}`) : []));
   assert.deepEqual(told(), ["0:one", "1:two", "2:three", "3:four"]);
-  assert.deepEqual(hub.before("s", 10, 10)![1].map((e) => e.text), ["one", "two", "three", "four"]);
+  assert.deepEqual((await hub.before("s", 10, 10))![1].map((e) => e.text), ["one", "two", "three", "four"]);
   hub.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -744,6 +785,54 @@ test("how fast the model writes is told once half a second of it has come", asyn
   await settle(1);
 });
 
+test("the rate counts what the model writes, not what a call outputs, in tokens of its script, its steps side by side added up", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  const hub = new LiveHub(() => null);
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 0, null, (m) => void got.push(m));
+  const rates = () => got.flatMap((m) => (m.type === "rate" ? [m.tokensPerSecond] : []));
+  // A command's output as it runs is not the model writing.
+  hub.event("s", { kind: "start", id: "cmd", step: "tool", tool: "Bash", input: "{}" });
+  for (let i = 0; i < 4; i++) {
+    hub.event("s", { kind: "delta", id: "cmd", field: "output", text: "x".repeat(100_000) });
+    t.mock.timers.tick(500);
+  }
+  assert.deepEqual(rates(), [], "a call's output is no rate");
+  // 40 tokens a quarter second of English, then of Chinese: 160 token/s each (each long enough to fill the window).
+  hub.event("s", { kind: "start", id: "a", step: "text" });
+  for (let i = 0; i < 12; i++) {
+    hub.event("s", { kind: "delta", id: "a", field: "text", text: "x".repeat(160) });
+    t.mock.timers.tick(250);
+  }
+  assert.equal(rates().at(-1), 160);
+  for (let i = 0; i < 12; i++) {
+    hub.event("s", { kind: "delta", id: "a", field: "text", text: "字".repeat(60) });
+    t.mock.timers.tick(250);
+  }
+  assert.equal(rates().at(-1), 160, "a Chinese character is not 3/4 of a token");
+  assert.equal(tokensOf("abcd字字字"), 3);
+  // A subagent writing beside it adds to it; one of them ending leaves the other's.
+  hub.event("s", { kind: "start", id: "b", step: "text", subagent: true, parent: "agent" });
+  for (let i = 0; i < 12; i++) {
+    hub.event("s", { kind: "delta", id: "a", field: "text", text: "x".repeat(160) });
+    hub.event("s", { kind: "delta", id: "b", field: "text", text: "x".repeat(160) });
+    t.mock.timers.tick(250);
+  }
+  // Told as the first of the two writes of a quarter comes: the other's of that quarter not in yet.
+  assert.equal(rates().at(-1), 300);
+  hub.event("s", { kind: "end", id: "a" });
+  assert.notEqual(rates().at(-1), 0, "the subagent still writes");
+  for (let i = 0; i < 12; i++) {
+    hub.event("s", { kind: "delta", id: "b", field: "text", text: "x".repeat(160) });
+    t.mock.timers.tick(250);
+  }
+  assert.equal(rates().at(-1), 160);
+  hub.event("s", { kind: "end", id: "b" });
+  assert.equal(rates().at(-1), 0);
+  hub.close();
+  await settle(1);
+});
+
 // For client cores before 0.1.2301, which say what a running call does by its step (a newer one: by its transcript entry).
 test("a call's step carries what says what it runs, whole, however long the command before it", () => {
   const description = "Run account-proxy tests 3 times with new mock clock";
@@ -801,7 +890,7 @@ test("what stations before linked into the profile homes (the home workspace's m
   rmSync(root, { recursive: true, force: true });
 });
 
-test("a session's workspace has its workspace's skills where it runs: one gone is taken away, a preset's of the same name left", () => {
+test("a session's workspace has its workspace's skills where it runs: one gone is taken away, a preset's of the same name left", async () => {
   const root = temp();
   const [skills, workspace] = [join(root, "agent", "skills"), join(root, "workspace")];
   for (const name of ["team", "gone", "both"]) {
@@ -810,9 +899,9 @@ test("a session's workspace has its workspace's skills where it runs: one gone i
   }
   mkdirSync(join(skills, "notes"));
   mkdirSync(join(workspace, ".claude", "skills", "both"), { recursive: true });
-  sessionSkills(workspace, skills);
+  await sessionSkills(workspace, skills);
   rmSync(join(skills, "gone"), { recursive: true });
-  sessionSkills(workspace, skills);
+  await sessionSkills(workspace, skills);
   assert.deepEqual(readdirSync(join(workspace, ".claude", "skills")).sort(), ["both", "team"]);
   assert.ok(!lstatSync(join(workspace, ".claude", "skills", "both")).isSymbolicLink());
   assert.deepEqual(readdirSync(join(workspace, ".agents", "skills")).sort(), ["both", "team"]);
@@ -921,6 +1010,48 @@ test("the station's own skills are written and kept as the station has them; the
   rmSync(root, { recursive: true, force: true });
 });
 
+test("the deployment's skills are linked into an agents' home beside the station's own, and reach a session once their SKILL.md is there", async () => {
+  const root = temp();
+  const [site, home, workspace] = [join(root, "site"), join(root, "agent"), join(root, "workspace")];
+  assert.equal(siteSkills({}), null, "none by default");
+  assert.equal(siteSkills({ STILLFAIL_SITE_SKILLS: site }), site);
+  mkdirSync(join(site, "machine"), { recursive: true });
+  mkdirSync(join(site, "later"));
+  mkdirSync(join(home, "skills", "team"), { recursive: true });
+  writeFileSync(join(home, "skills", "team", "SKILL.md"), "ours");
+  // One of the team's with the name of one the deployment brings stays the team's.
+  mkdirSync(join(site, "team"));
+  writeFileSync(join(site, "team", "SKILL.md"), "the deployment's");
+  writeFileSync(join(site, "machine", "SKILL.md"), "---\nname: machine\n---\nfacts");
+  writeBuiltinSkills(home, false, site);
+  writeBuiltinSkills(home, false, site); // idempotent
+  const skills = join(home, "skills");
+  assert.equal(readlinkSync(join(skills, "machine")), join(site, "machine"));
+  assert.equal(readlinkSync(join(skills, "later")), join(site, "later"), "linked before its SKILL.md is written");
+  assert.equal(readFileSync(join(skills, "team", "SKILL.md"), "utf8"), "ours");
+  assert.ok(existsSync(join(skills, "stillfail-jobs", "SKILL.md")), "the station's own beside them");
+  await sessionSkills(workspace, skills);
+  assert.deepEqual(readdirSync(join(workspace, ".claude", "skills")).filter((n) => !n.startsWith("stillfail-")).sort(), ["machine", "team"], "only those with a SKILL.md");
+  // The deployment rewrites one, writes another, takes one away: a session's next opening has them as they are now.
+  writeFileSync(join(site, "machine", "SKILL.md"), "---\nname: machine\n---\nnew facts");
+  writeFileSync(join(site, "later", "SKILL.md"), "---\nname: later\n---\n");
+  rmSync(join(site, "team"), { recursive: true });
+  mkdirSync(join(site, "gone"));
+  linkSiteSkills(skills, site);
+  rmSync(join(site, "gone"), { recursive: true });
+  linkSiteSkills(skills, site);
+  assert.ok(!existsSync(join(skills, "gone")) && lstatSync(join(skills, "gone"), { throwIfNoEntry: false }) === undefined, "a link to one gone is taken away");
+  assert.equal(readFileSync(join(skills, "team", "SKILL.md"), "utf8"), "ours", "the team's own is never taken");
+  await sessionSkills(workspace, skills);
+  assert.equal(readFileSync(join(workspace, ".agents", "skills", "machine", "SKILL.md"), "utf8"), "---\nname: machine\n---\nnew facts");
+  assert.ok(existsSync(join(workspace, ".claude", "skills", "later", "SKILL.md")));
+  // Without a site, nothing of it.
+  const plain = join(root, "plain");
+  writeBuiltinSkills(plain, false, null);
+  assert.deepEqual(readdirSync(join(plain, "skills")).filter((n) => !n.startsWith("stillfail-")), []);
+  rmSync(root, { recursive: true, force: true });
+});
+
 const profile = (id: string, models: string[]) => hubConfig({ profiles: [{ id, runtime: "claude", home: `/h/${id}`, models }] }, "/").profiles[0]!;
 const ok = (state: string) => ({ state, detail: "", models: null, checkedAt: 0 });
 const quota = (used: number) => ({ state: "ok", windows: [{ label: "5 小时", usedPercent: used, resetsAt: null }], detail: null, checkedAt: 0 });
@@ -939,6 +1070,10 @@ test("the pool skips broken, spent and unfit profiles, then prefers headroom, th
   assert.equal(pickProfile([a], "m1", signals(), true).id, "a", "nothing healthy: still one, so the failure shows");
   assert.throws(() => pickProfile([a, b], "m2", signals(), true), /no profile has m2 enabled/);
   assert.equal(pickProfile([a, c], "m9", signals(), false).id, "c", "a connect's binding still runs on its healthy profiles");
+  // A used-up window whose refill is due runs again, before its allowance is read again.
+  health.b = { check: ok("ok"), quota: { ...quota(100), windows: [{ label: "5 小时", usedPercent: 100, resetsAt: 10 }] } };
+  assert.equal(pickProfile([a, b], "m1", { ...signals(), now: () => 9 }, true).id, "a", "neither can run: still one");
+  assert.equal(pickProfile([a, b], "m1", { ...signals(), now: () => 10 }, true).id, "b");
 });
 
 test("the pool runs sessions on subscriptions, however full, and on an account billed per use only when none can", () => {
@@ -1113,6 +1248,7 @@ test("what a session has going in the background and its checklist are told whol
   const got: LiveMessage[] = [];
   const work = () => got.filter((m): m is Extract<LiveMessage, { type: "work" }> => m.type === "work");
   hub.subscribe("s", 0, null, (m) => void got.push(m));
+  await hub.idle();
   // As it joins: its checklist as its transcript says it, nothing in the background.
   assert.deepEqual(work().at(-1), { type: "work", tasks: [], plan: [{ text: "Read", status: "completed" }, { text: "Fix", status: "in_progress" }] });
   hub.event("s", { kind: "tasks", tasks: [{ id: "a1", kind: "agent", description: "gaps" }] });
@@ -1123,7 +1259,7 @@ test("what a session has going in the background and its checklist are told whol
     { id: "b1", kind: "command", description: "watch CI", startedAt: 60_000, elapsedMs: 5_000 },
   ]);
   // The turn ends: they stay.
-  hub.turnEnded("s");
+  await hub.turnEnded("s");
   assert.equal(hub.now("s").find((m) => m.type === "work") !== undefined, true);
   assert.equal((hub.now("s").find((m) => m.type === "work") as any).tasks.length, 2);
   // Its checklist written again: told.
@@ -1132,6 +1268,7 @@ test("what a session has going in the background and its checklist are told whol
   watched(hub, "s");
   await time.adjust(40);
   await settle();
+  await hub.idle();
   assert.equal(work().length, before + 1);
   assert.deepEqual(work().at(-1)!.plan.map((p) => p.status), ["completed", "completed", "in_progress"]);
   // Its process ended: nothing in the background.
@@ -1155,6 +1292,7 @@ test("a session's checklist is read back from its transcript where the readers k
   // Only the latest entry asked for: the checklist is read back from before it all the same.
   hub.subscribe("s", 0, 1, (m) => void got.push(m), true);
   await settle();
+  await hub.idle();
   const last = got.filter((m): m is Extract<LiveMessage, { type: "work" }> => m.type === "work").at(-1);
   assert.deepEqual(last?.plan, [{ text: "Read", status: "completed" }, { text: "Fix", status: "in_progress" }]);
   hub.close();

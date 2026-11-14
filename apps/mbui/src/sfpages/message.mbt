@@ -89,9 +89,9 @@ pub fn picking(
           if find_chat() == here.list.unwrap().rk {
             // (⌘F's: every match coloured in, the stroke over it the current one's alone)
             found_scribbles(c, "pick/" + at, marked, x, y)
-            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, only=if rd.found_at == ts { find_k() } else { -1 })
+            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(c), x, y, only=if rd.found_at == ts { find_k() } else { -1 })
           } else {
-            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, faint=rd.found_at != ts)
+            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(c), x, y, faint=rd.found_at != ts)
           }
         }
       }
@@ -158,7 +158,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
     fn() { message_name(c, src, here, "m:" + m.ts, m.by.name, agent, m.by.from) },
     None,
     fn() {
-      quotes(c, src, here, m.quotes, m.attachments, at=message_place(m))
+      quotes(c, src, here, m.quotes, m.attachments, at=message_place(m), said=m.said)
       let files = beside_quotes(m.quotes, m.attachments)
       if m.author_kind == "person" {
         if m.text != "" {
@@ -166,7 +166,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
             person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, link_to=link_to_in(m)), chat_title=chat_title_of(m), runs=m.words)
           })
         }
-        message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)), at=message_place(m) + "/f")
+        message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)), at=message_place(m) + "/f", said=m.said)
       } else {
         picking(here, c, src, m.ts, m.seq, m.by.name, if m.author_kind == "agent" { "agent" } else { "person" }, m.text, fn() {
           prose_with_files(c, src, here, m, files)
@@ -189,8 +189,8 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
 /// that its agents have yet to take it, or its time.
 fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> Unit {
   c.box(style=mine_column, fn() {
-    quotes(c, src, here, m.quotes, m.attachments, mine=true, at=message_place(m))
-    message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)), at=message_place(m) + "/f")
+    quotes(c, src, here, m.quotes, m.attachments, mine=true, at=message_place(m), said=m.said)
+    message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)), at=message_place(m) + "/f", said=m.said)
     if m.text != "" {
       mine_bubble(c, src, here, m.text, "m:" + m.ts, m.ts, m.seq, if m.outgoing == "" { m.ts } else { "o:" + m.outgoing }, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, link_to=link_to_in(m)), chat_title=chat_title_of(m), runs=m.words)
     }
@@ -216,10 +216,10 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
                 if f.placed && lands < @double.infinity && c.moment() >= lands {
                   let a = @motion.anim(c, "time-in/" + m.ts, 0.0, global=true)
                   if a.target() != 1.0 {
-                    a.animate(1.0, @motion.tween(@sf.enter_ms, ease=Out), start_at=lands)
+                    a.animate(c, 1.0, @motion.tween(@sf.enter_ms, ease=Out), start_at=lands)
                   }
                   // (faded in as it is drawn)
-                  c.look_by(at, fn() { @ui.look(alpha=a.get()) })
+                  c.look_by(at, fn() { @ui.look(alpha=a.get(c)) })
                 } else {
                   // (built again as they land)
                   if f.placed && lands < @double.infinity {
@@ -339,6 +339,17 @@ pub fn person_avatar(c : @ui.Ctx, src : Source, id : String, name : String, pict
 }
 
 ///|
+/// The runtime an agent's mark is drawn for: the one it says, Claude's where it says none (an agent's picture in a chat,
+/// a chat's outline's row).
+fn agent_runtime(runtime : String) -> String {
+  if runtime != "" {
+    runtime
+  } else {
+    "claude"
+  }
+}
+
+///|
 /// An agent's picture in a chat (AgentAvatar): its model's maker (still.fail's mark without one) on the neutral
 /// ground; what it said went elsewhere (`slack`: slack | feishu), that place's mark on its corner. One of the chat's
 /// (`agent`, its session's key) has its card while the pointer rests on it (AgentHover).
@@ -357,7 +368,7 @@ pub fn agent_avatar(
   // (in a page's bones, one disc)
   let b = c.box(style=agent_avatar_ground, id~, fn() {
     if maker != "" || runtime != "" {
-      @sf.maker_mark(c, maker, if runtime != "" { runtime } else { "claude" }, agent_mark_side) |> ignore
+      @sf.maker_mark(c, maker, agent_runtime(runtime), agent_mark_side) |> ignore
     } else {
       @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, agent_mark_side) |> ignore
     }
@@ -455,10 +466,10 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
     Some(s) => {
       let id = c.id("msg-time/" + key)
       c.on_press(id, fn() {
-        absolute_times.val = !absolute_times.val
+        absolute_times.set(!absolute_times.get())
       })
-      @sf.tip(c, "msg-time/" + key, id, if absolute_times.val { s.ago } else { s.full })
-      c.box(id~, keep=true, fn() { c.text(if absolute_times.val { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
+      @sf.tip(c, "msg-time/" + key, id, if absolute_times.get() { s.ago } else { s.full })
+      c.box(id~, keep=true, fn() { c.text(if absolute_times.get() { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
     }
   }
 }
@@ -560,18 +571,23 @@ fn mine_bubble(
   picking(here, c, src, ts, turn, @sf.t("web-main.chat.you"), "person", words, fn() {
     // words sent flying here: the bubble's ground comes in round them on their way (sfbase's flight.mbt)
     let flight = flight_here(here)
-    let ground = match flight {
-      Some(f) if f.placed => flight_ground_of(c, f)
-      _ => 1.0
+    // (whether it shows whole yet read as it gets there; how much of it shows, where it is drawn, as it is painted: not
+    // where their way is each frame as its row is built)
+    let coming = match flight {
+      Some(f) if f.placed && !flight_grounded(c, f) => Some(f)
+      _ => None
     }
     // (the bubble, for what is drawn in it as it flies: flight_pieces_in)
-    let bubble_node = Ref::new(-1)
+    let bubble_node = Ref(-1)
     let b = c.box(
-      style=(if ground < 1.0 { bubble_bare } else { bubble }).then(@ui.style(max_w=Fixed(mine_most(c)))),
+      style=(if coming is Some(_) { bubble_bare } else { bubble }).then(@ui.style(max_w=Fixed(mine_most(c)))),
       fn() {
-        if ground < 1.0 {
-          let g = c.layer(fn() { c.box(style=bubble_ground, fn() {  }) |> ignore })
-          c.look(g, @ui.look(alpha=ground))
+        match coming {
+          Some(f) => {
+            let g = c.layer(fn() { c.box(style=bubble_ground, fn() {  }) |> ignore })
+            c.look_by(g, fn() { @ui.look(alpha=flight_ground_of(c, f)) })
+          }
+          None => ()
         }
         // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
         match flight {
@@ -614,9 +630,13 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       signin_ask_card(c, here, m, card, ask)
       return
     }
+    Some({ rig: Some(ask), .. } as card) => {
+      rig_ask_card(c, here, m, card, ask)
+      return
+    }
     _ => ()
   }
-  let placed : Map[String, Attachment] = {}
+  let placed : Map[String, Attachment] = Map([])
   for n in m.placed {
     match files.iter().find_first(fn(a) { a.name == n }) {
       Some(a) => placed[n] = a
@@ -650,7 +670,14 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
             }
         }
       },
-      on_link_hold=Some(fn(href, _) { if @sf.path_of_link(href) is None { link_held(c, href) } }),
+      on_link_hold=Some(fn(href, _) {
+        match @sf.path_of_link(href) {
+          // a file its path names: 在侧边打开 where it is offered (its card is the pointer's, or a finger's as it holds
+          // the chip)
+          Some((path, _)) => path_held(c, src, here.station, m.by.agent, path)
+          None => link_held(c, href)
+        }
+      }),
       on_link_shown=link_peeks(c, src, here, agent=m.by.agent, chats=m.chats, link_to=link_to_in(m)),
       chat_title=chat_title_of(m),
       // the files its paths name are its agent's (Chat.tsx ProseWithFiles' PathSession): their chips
@@ -661,7 +688,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           Some(a) if is_viz(a.name) && picturing.val is Some((seq, taking)) && publish_viz_drawn(seq, taking, a) =>
             Some({
               draw: fn() {
-                publish_viz(c, src, here, seq, taking, a, fn() { message_files(c, src, here, [a], false, by=Some(by), at~) })
+                publish_viz(c, src, here, seq, taking, a, fn() { message_files(c, src, here, [a], false, by=Some(by), at~, said=m.said) })
               },
               image: None,
             })
@@ -676,7 +703,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                   owner_of(here, a),
                   m.ts,
                   a,
-                  fn() { message_files(c, src, here, [a], false, by=Some(by), at~) },
+                  fn() { message_files(c, src, here, [a], false, by=Some(by), at~, said=m.said) },
                   @sf.theme().p.subtle,
                 )
               },
@@ -684,15 +711,15 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
             })
           Some(a) =>
             Some({
-              draw: fn() { message_files(c, src, here, [a], false, by=Some(by), at~) },
-              image: image_ratio(a).map(fn(r) { (r, fn(w) { file_item(c, src, here, a, w, by=Some(by), at~) }) }),
+              draw: fn() { message_files(c, src, here, [a], false, by=Some(by), at~, said=m.said) },
+              image: image_ratio(a).map(fn(r) { (r, fn(w) { file_item(c, src, here, a, w, by=Some(by), at~, said=m.said) }) }),
             })
           None => None
         }
       },
       code=fn(lang, code) {
         let first = match lang.find(" ") {
-          Some(i) => lang.view(end_offset=i).to_owned()
+          Some(i) => lang.exact_view(end=i).to_owned()
           None => lang
         }
         if first.to_lower() == "mermaid" && code.trim() != "" {
@@ -710,7 +737,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     )
     |> ignore
   }
-  message_files(c, src, here, rest, false, by=Some(by), at~)
+  message_files(c, src, here, rest, false, by=Some(by), at~, said=m.said)
 }
 
 ///|
@@ -719,6 +746,24 @@ fn is_viz(name : String) -> Bool {
   let n = name.to_lower()
   n.has_suffix(".html") || n.has_suffix(".htm")
 }
+
+///|
+/// What a notice's action after its pill does: 取消 the capacity retry it announced while that waits (`session.cancelRetry`),
+/// or 重试 the failed turn it is about while that is where its agent stands (`session.retry`, as a reply would); as
+/// (the agent's session, the action's words, the call), None for neither.
+fn notice_after(m : Message) -> (String, String, String)? {
+  if m.notice_retry_session != "" {
+    Some((m.notice_retry_session, @sf.t("common.cancel"), "session.cancelRetry"))
+  } else if m.notice_again_session != "" {
+    Some((m.notice_again_session, @sf.t("common.retry"), "session.retry"))
+  } else {
+    None
+  }
+}
+
+///|
+/// A notice's action as it was last offered, by its key, for it to go as it was (its way along the row back to nothing).
+let notice_after_last : Map[String, (String, String, String)] = Map([])
 
 ///|
 /// What still.fail itself says (SystemNotice): a pill across the chat in one line, a failure in red (the core's
@@ -742,11 +787,22 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
     _ => None
   }
   let linked = m.profile != "" && m.notice_link >= 0 && m.notice_link <= said.length()
-  let retry = m.notice_retry_session != "" && here.list is Some(_)
+  let after = if here.list is Some(_) { notice_after(m) } else { None }
+  let retry = after is Some(_)
   let retry_key = "notice-retry/" + station + "/" + m.ts
   let retry_share = @motion.animate(c, retry_key, if retry { 1.0 } else { 0.0 }, spec=@motion.tween(@ui.row_size_ms, ease=Out))
+  // gone to (a notification's, the outline's), its pill alone lit in the accent's ground: a row's band across the
+  // list (chat_list's row_box) would stand square behind the round pill
+  let lit = match here.list {
+    Some(l) => flash_of(c, reading_of(l.rk), m.ts)
+    None => 0.0
+  }
   let pill = fn() {
     c.box(style=notice_pill_of(failed, open), id~, fn() {
+      if lit > 0.0 {
+        let g = c.layer(fn() { c.box(style=if open { notice_lit_open } else { notice_lit }, fn() {  }) |> ignore })
+        c.look(g, @ui.look(alpha=lit))
+      }
       c.box(style=notice_line, fn() {
         c.box(style=notice_words_room, fn() {
           if m.notice_short != "" || m.notice_lines.length() > 0 {
@@ -755,6 +811,24 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
               for line in m.notice_lines {
                 c.text(line, style=notice_words_open.then(@ui.text_style(color=ink))) |> ignore
               }
+            } else if m.notice_sides is Some(sides) {
+              // another runtime or model: each side after the mark of who made its model, as a chat's agents are drawn;
+              // where the line has not the room for both, what it ran on left out and what it runs on now led by 换成
+              // (Ctx::box drop and more)
+              let words = notice_words.then(@ui.text_style(color=ink))
+              let (mark, _) = c.text_size(notice_size)
+              c.box(style=notice_sides, fn() {
+                c.box(style=notice_sides_part, more=true, fn() { c.text(sides.to, style=words) |> ignore }) |> ignore
+                c.box(style=notice_sides_part, drop=1, fn() {
+                  @sf.maker_mark(c, sides.was_maker, sides.was_runtime, mark) |> ignore
+                  c.text(sides.was, style=words) |> ignore
+                  c.text("→", style=words) |> ignore
+                })
+                |> ignore
+                @sf.maker_mark(c, sides.now_maker, sides.now_runtime, mark) |> ignore
+                c.text(sides.now, style=notice_words_cut.then(@ui.text_style(color=ink)), keep=true) |> ignore
+              })
+              |> ignore
             } else {
               c.text(said, style=notice_words.then(@ui.text_style(color=ink)), shorter=[m.notice_short], allow_ellipsis=true)
               |> ignore
@@ -763,8 +837,8 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
             let p = @sf.theme().p
             c.rich(
               [
-                @ui.span(said.view(end_offset=m.notice_link).to_string()),
-                @ui.span(said.view(start_offset=m.notice_link).to_string(), underline=true, link="profile"),
+                @ui.span(said.clamped_view(end=m.notice_link).to_owned()),
+                @ui.span(said.clamped_view(start=m.notice_link).to_owned(), underline=true, link="profile"),
               ],
               key="notice-profile/" + m.ts,
               style=(if open { notice_words_open } else { notice_words }).then(@ui.text_style(color=ink)),
@@ -820,8 +894,15 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
     if retry || retry_share > 0.0 {
       c.box(style=notice_with_action, fn() {
         pill()
-        let session = m.notice_retry_session
-        let busy = core_doing(src, ["session.cancelRetry"], [("station", station), ("key", session)])
+        // its 取消 or 重试 (as it was last, while it goes)
+        let (session, label, call) = match after {
+          Some(a) => a
+          None => notice_after_last.get(retry_key).unwrap_or(("", @sf.t("common.cancel"), "session.cancelRetry"))
+        }
+        if after is Some(a) {
+          notice_after_last[retry_key] = a
+        }
+        let busy = core_doing(src, [call], [("station", station), ("key", session)])
         let natural = match @motion.measured_size(c, retry_key) {
           Some((w, _)) => w
           None => 0.0
@@ -829,8 +910,8 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
         let cut = retry_share < 1.0
         let action = c.box(style=if cut { notice_action_cut.then(@ui.style(max_w=Fixed(natural * retry_share))) } else { notice_action_room }, fn() {
           let inner = c.box(style=notice_action_in, keep=cut, fn() {
-            @sf.button(c, @sf.t("common.cancel"), key="notice-cancel/" + m.ts, busy~, disabled=!retry || src.read_only || here.view.offline, on_press=fn() {
-              act(src, @sf.t("common.cancel"), "", "session.cancelRetry", {
+            @sf.button(c, label, key="notice-cancel/" + m.ts, busy~, disabled=!retry || src.read_only || here.view.offline, on_press=fn() {
+              act(src, label, "", call, {
                 "station": Json::string(station),
                 "key": Json::string(session),
                 "thread": Json::number(m.thread),
@@ -877,8 +958,10 @@ fn notice_copy(c : @ui.Ctx, m : Message, ink : @ui.Color) -> Unit {
 }
 
 ///|
-/// Notices opened (all their words and their time), by message.
-let notices_open : Map[String, Bool] = {}
+/// Notices opened (all their words and their time), by message: what a notice's row reads as it is made, as it changes
+/// (notice_said_node's `opened`).
+// kept across runs: let go as the app begins anew (message_reset)
+let notices_open : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
 
 ///|
 /// A word at a notice's end that acts on it (InstallAction, ReportAction): " · " at 60%, then the word, underlined;
@@ -995,7 +1078,7 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, key : String, b : I
 ///|
 /// Quotes as sent (Quotes): each a card of its own ahead of the message, its own picture in it (a preview mark's
 /// screenshot: the file of `files` it names); pressed, the list goes to the message it quotes. Sent from the composer,
-/// each flies there from its card in it (sfbase's flight.mbt).
+/// each flies there from its card in it (sfbase's flight.mbt). `said`: its message's (a picture brushed in only then).
 pub fn quotes(
   c : @ui.Ctx,
   src : Source,
@@ -1004,6 +1087,7 @@ pub fn quotes(
   files : Array[Attachment],
   mine? : Bool = false,
   at? : String = "",
+  said? : Bool = false,
 ) -> Unit {
   if quotes.length() == 0 {
     return
@@ -1038,7 +1122,7 @@ pub fn quotes(
         words_width?,
         // (its own box, as the message's files have theirs: at most as wide as the card has room; its corner concentric
         // with the card's)
-        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false, landing_key=@sfbase.quote_picture_key(i), corner=@sf.quote_picture_corner, at=if at == "" { "" } else { at + "/q:" + i.to_string() }) } }),
+        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false, landing_key=@sfbase.quote_picture_key(i), corner=@sf.quote_picture_corner, at=if at == "" { "" } else { at + "/q:" + i.to_string() }, said~) } }),
       )
       // sent from the composer: it flies here from its card there
       match flight {
@@ -1127,7 +1211,7 @@ fn elsewhere_route(c : @ui.Ctx, key : String, s : Elsewhere) -> Unit {
   c.on_press(place, fn() { @sfbase.open_slack(app, url) |> ignore })
   c.box(style=msg_route, fn() {
     @sf.icon(c, if s.received { "received" } else { "send" }, size=route_icon, color=t.p.accent) |> ignore
-    c.text(@sf.t(if s.received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_string(), style=route_words)
+    c.text(@sf.t(if s.received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_owned(), style=route_words)
     |> ignore
     c.box(style=if place != 0 && c.hovered(place) { route_place_hot } else { route_place }, id=place, fn() {
       let (mark, name) = match s.place {
@@ -1292,9 +1376,9 @@ let place_corner_room : @ui.Style = @ui.css("w=Full h=Full align=AEnd justify=JE
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_corner_mark : @ui.Style = @ui.css(
+let place_corner_mark : @ui.Style = @ui.css((
   #|w=S3_5 h=S3_5 radius=Full bg=Bg border=B1 border_color=Line align=ACenter justify=JCenter
-).then(@sf.outset_end(6.0)).then(@sf.outset_bottom(6.0))
+)).then(@sf.outset_end(6.0)).then(@sf.outset_bottom(6.0))
 
 ///|
 /// A notice (msgSystem): across the chat, in its middle, its time 4 under it once opened.
@@ -1347,6 +1431,15 @@ let notice_pill_failed : @ui.Style = notice_pill.then(@ui.css("bg=DangerBg"))
 let notice_pill_failed_open : @ui.Style = notice_pill_open.then(@ui.css("bg=DangerBg"))
 
 ///|
+/// A notice gone to, lit: the accent's ground over its pill's, as round (system_notice).
+// kept across runs: a value (no field of it changes)
+let notice_lit : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=AccentBg")
+
+///|
+// kept across runs: a value (no field of it changes)
+let notice_lit_open : @ui.Style = notice_lit.then(@ui.css("radius=Xl1_5"))
+
+///|
 /// Its words and what is done at their end (msgSystemLine, msgSystemEnd): the words cut short before it, which keeps
 /// its room whole (notice_action: kept, as a row's end).
 // kept across runs: a value (no field of it changes)
@@ -1355,6 +1448,18 @@ let notice_line : @ui.Style = @ui.css("row align=AEnd")
 ///|
 // kept across runs: a value (no field of it changes)
 let notice_words_room : @ui.Style = @ui.css("clip")
+
+///|
+/// A run changed to another runtime or model, on its line: each side after its mark, what it ran on left out where the
+/// line has not the room (system_notice's).
+// kept across runs: a value (no field of it changes)
+let notice_sides : @ui.Style = @ui.css("row align=ACenter gap=S1")
+
+///|
+/// A part of it: what it ran on and the arrow, or 换成 in its place.
+// kept across runs: a value (no field of it changes)
+let notice_sides_part : @ui.Style = @ui.css("row align=ACenter gap=S1")
+
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1373,6 +1478,12 @@ let notice_leading : @ui.Leading = L7
 /// Its words about a profile (one line closed).
 // kept across runs: a value (no field of it changes)
 let notice_words : @ui.TextStyle = @ui.text_style(size=notice_size, leading=notice_leading, wrap=false)
+
+///|
+/// What a run runs on now beside what it ran on (system_notice's sides): kept whole till what it ran on has left its
+/// line, cut short only then.
+// kept across runs: a value (no field of it changes)
+let notice_words_cut : @ui.TextStyle = @ui.text_style(size=notice_size, leading=notice_leading, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

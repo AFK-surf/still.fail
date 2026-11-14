@@ -1,0 +1,10 @@
+// Made by client/core-ts/test/real-size-app.test.ts (REAL_SIZE_WRITE=1): what the core sends `search` as `card`
+// happens (real-size-asked.ts CAUSES), each message the ops applied to what it holds, in order.
+///|
+fn init {
+  let asked =
+    #|{"topic":"search","scope":"ws","query":"迁移"}
+  let messages =
+    #|[[{"path":["items"],"key":["station","id"],"drop":["ws/studio","k-studio-15"]},{"path":["items"],"key":["station","id"],"put":{"id":"k-maple-6","session":"k-maple-6","thread":2006,"title":"Windows 安装包签名失败（signtool 0x800b0109）","agents":[{"runtime":"claude","agentText":"Opus 5.5 · xhigh","maker":{"id":"anthropic"}}],"last":{"seq":47,"by":{"mine":false},"preview":"需要你决定：周六上午 9 点做生产库迁移可以吗？"},"unread":true,"station":"ws/maple","stationName":"Maple","stationEmoji":"🍁","time":{"lastActiveAt":{"ago":"刚刚","full":"10/6 09:00:00"}},"people":[{"id":"sam.k@acme.dev","email":"sam.k@acme.dev","shown":{"name":"Sam Kowalski","picture":"https://avatars.slack-edge.com/2026-03-16/716206836_8f3c6a2b9d1e4f07c6a5_192.jpg","mine":false}},{"id":"aiko@acme.dev","email":"aiko@acme.dev","shown":{"name":"Aiko Tanaka","picture":"https://avatars.slack-edge.com/2026-03-18/718208838_8f3c8a2b9d1e4f07c6a5_192.jpg","mine":false}},{"id":"sun.fei@acme.dev","email":"sun.fei@acme.dev","shown":{"name":"孙飞","mine":false}}],"creator":{"id":"sam.k@acme.dev"},"peopleText":"Sam Kowalski 发起 · Aiko Tanaka、孙飞","pinned":false,"decision":{"seq":47,"options":[{"label":"改到周日上午"},{"label":"先不做"},{"label":"可以，周六 9 点","detail":"按计划停写 4 分钟","recommended":true}],"card":{"assignee":"me@x.com","type":"options","options":[{"label":"改到周日上午"},{"label":"先不做"},{"label":"可以，周六 9 点","detail":"按计划停写 4 分钟","recommended":true}]},"text":"待处理 · 需要你决定：周六上午 9 点做生产库迁移可以吗？"},"swipeArchive":true,"swipeAsk":"这是Sam Kowalski发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。","stateText":"待处理 · 需要你决定：周六上午 9 点做生产库迁移可以吗？","stateLead":"decision","stateLeadText":"待处理","stateRest":" · 需要你决定：周六上午 9 点做生产库迁移可以吗？","tone":"wait","mayShare":true,"mayPublish":true},"before":["ws/ash","k-ash-6"]}]]
+  put_changes(asked, "card", messages)
+}

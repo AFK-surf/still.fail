@@ -55,7 +55,7 @@ fn ask_focus_round(fixture_first : Bool) -> (String, String, String) {
 test "大屏, keyboard and mouse: a question asked over a chat as a film's fixture asks it, or once the chat is drawn, closed by Escape: the chat's message field has the focus after, as the old dialog left it" {
   let fixture_first = ask_focus_round(true)
   let drawn = ask_focus_round(false)
-  assert_eq((fixture_first.2, drawn.2), ("TextField 发消息", "TextField 发消息"), msg="fixture \{fixture_first} drawn \{drawn}")
+  assert_eq((fixture_first.2, drawn.2), ("TextField 发消息", "TextField 发消息"), msg="fixture \{Repr(fixture_first)} drawn \{Repr(drawn)}")
 }
 
 ///|

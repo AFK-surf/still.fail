@@ -51,7 +51,7 @@ fn page_diag_chat_page_case(pop : Bool, intermediate : Bool, legacy : Bool, cove
   client.receive_json({ "id": Json::number(prefs_sub.id.to_double()), "value": Json::object(prefs_value) })
   t.frame()
   guard client.peek_topic("chat", params=@sfbase.core_topic_params("chat", params)) is Some(chat_sub) else {
-    fail("chat subscription missing after opening: \{sent}")
+    fail("chat subscription missing after opening: \{Repr(sent)}")
   }
   if old_reader is Some(old) {
     assert_true(physical_equal(old, chat_sub), msg="the page shares the legacy reader's original subscription")
@@ -77,9 +77,11 @@ fn page_diag_chat_page_case(pop : Bool, intermediate : Bool, legacy : Bool, cove
   assert_eq(refs.length(), 1)
   assert_eq(@sfbase.text(@sfbase.field(refs.get(0), "ref"), "mode"), "file")
   if cover {
-    let link = @sfbase.link_target({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "child-session", "service": "j-web" })
+    // (a page over the chat: another chat, by a chat's link, over it on 大屏 as a link in a message opens it,
+    // Nav::push_over; popped or replaced before a frame builds it)
+    let link = @sfbase.link_target({ "opens": "chat", "workspace": "ws1", "station": "st1", "chat": "s-c2" })
     assert_true(@sfbase.open_target(src, link, false, None))
-    assert_true(app.nav.top() == Service("ws1/st1", "j-web"), msg="an agent's link stays over its chat")
+    assert_true(app.nav.top() == Chat(@sfbase.chat_ref("ws1/st1", "s-c2")), msg="another chat's link opens it over the chat")
   }
   assert_eq(sent.length(), before_events, msg="event reads share the topics from the page")
   assert_true(app.nav.pages().iter().any(fn(p) { p is Chat(_) }))

@@ -14,7 +14,7 @@ import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import { Events } from "../src/api/events.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
-import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, answerScreen, asked, frame, parseClip, parseInput } from "../src/mesh/screens.ts";
+import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, answerScreen, asked, frame, parseClip, parseInput, parseWindowPick } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
 import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
 import { Desktop, HelperView, TO_HELPER, helperClip, helperMessage } from "../src/screens/desktop.ts";
@@ -27,7 +27,7 @@ import type { SimDebug } from "../src/screens/sim-debug.ts";
 import { SIMCTL, Simulators, bootedOf, runtimeName, screenOf } from "../src/screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "../src/screens/win-desktop.ts";
 import { KEYS, WinInput } from "../src/screens/win-input.ts";
-import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, codecFor } from "../src/screens/source.ts";
+import { type AudioFrame, CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, codecFor } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED, STILL_MS, rateCeiling } from "../src/mesh/screen-pace.ts";
@@ -168,7 +168,7 @@ async function link() {
 async function open(hub: ScreenHub, viewer: Viewer, screen: unknown = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264", "jpeg"], control: true }, path = "/admin/api/screens/fake/view", clock?: Clock.Clock) {
   const { conn, theirs } = await link();
   const stream = await conn.openBi();
-  await writeLine(stream, { method: "POST", path, headers: { "stillfail-lang": "en" }, screen });
+  await writeLine(stream, { method: "POST", path, headers: { "stillfail-lang": "en", "stillfail-build": "0.1.0" }, screen });
   const incoming = (await theirs.acceptBi())!;
   const heard = new Reader(incoming);
   const head = await heard.line();
@@ -193,6 +193,19 @@ async function until(frames: FrameIn, kind: number, states: any[] = []): Promise
     if (got.kind === kind) return got.payload;
     if (got.kind === KIND.state) states.push(json(got.payload));
   }
+}
+
+/// The sound's format (said as the first packet is taken) and the first picture, in whichever order they came.
+async function soundAndPicture(frames: FrameIn): Promise<{ config: Buffer; picture: Buffer }> {
+  let config: Buffer | null = null;
+  let picture: Buffer | null = null;
+  while (config === null || picture === null) {
+    const got = await frames.next();
+    assert.ok(got, "the stream ended before the sound's format and a picture");
+    if (got.kind === KIND.audioConfig) config = got.payload;
+    if (got.kind === KIND.video) picture ??= got.payload;
+  }
+  return { config, picture };
 }
 
 test("a view: its answer, what it is, then the config and frames as the source gives them", async () => {
@@ -269,6 +282,121 @@ test("frames go unacknowledged while the link keeps up: two before its round tri
   await v.stream.write(frame(KIND.keyframe, Buffer.alloc(0)));
   await settle();
   assert.equal(view.keyframes, 1);
+  await v.stream.finish();
+  await v.served;
+});
+
+/// 2026-11-11: on a link of a few hundred kbit/s the computer's sound (1.5 Mbit/s of PCM) went on the stream as fast as
+/// it was made, every picture seconds behind it. What comes before the first picture's round trip is known, and while the
+/// pictures wait in front of the link, is left out; once they go through, the sound goes again.
+test("the sound is left out while the pictures wait in front of the link, and while it is silence", async () => {
+  class HeldSound extends FakeView {
+    #waiting: ((frame: AudioFrame) => void) | null = null;
+    nextAudio() {
+      return new Promise<AudioFrame>((give) => (this.#waiting = give));
+    }
+    give(ts: number) {
+      const give = this.#waiting;
+      this.#waiting = null;
+      assert.ok(give, "a packet of sound asked for");
+      // (ts 99: digital silence)
+      give({ ts, data: new Uint8Array(3840).fill(ts === 99 ? 0 : 1), codec: "pcm_s16le" });
+    }
+  }
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.make = () => new HeldSound();
+  hub.add(source);
+  const time = testClock();
+  const v = await open(hub, member, { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true, audio: "pcm_s16le" }, undefined, time.clock);
+  await until(v.frames, KIND.video);
+  await settle();
+  const view = source.views[0] as HeldSound;
+  // Before the link's round trip is known: taken, and left out.
+  view.give(0);
+  await settle();
+  await v.stream.write(frame(KIND.ack, ts8(1000)));
+  await settle();
+  view.give(1);
+  await settle();
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 1n, "the link keeps up: sound goes");
+  // Later than the round trip and QUEUE_MS: the pictures wait, and what sound is made meanwhile is left out.
+  await time.adjust(QUEUE_MS + 1);
+  view.give(2);
+  await settle();
+  view.give(3);
+  await settle();
+  // All the pictures decoded: the sound goes again, from what is made now.
+  await v.stream.write(frame(KIND.ack, ts8(view.asked * 1000)));
+  await settle();
+  view.give(4);
+  await settle();
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 4n);
+  // Digital silence (a source from before sends it while nothing plays): its first 9 packets go (a pause between two
+  // sounds), from the 10th it is left out; the sound after it goes.
+  for (let i = 0; i < 12; i++) {
+    view.give(99);
+    await settle();
+    if (i < 9) assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 99n);
+  }
+  view.give(5);
+  await settle();
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 5n);
+  await v.stream.finish();
+  await v.served;
+});
+
+/// Opus (a twentieth of PCM's bytes) is not left out for the pictures. Muted on the client (`sound` 0), the computer's
+/// sound goes no more: what the source makes meanwhile is taken and left out, so once it is on again (`sound` 1) the
+/// next packet made goes, not what was kept while muted.
+test("Opus goes while the pictures wait, and a view muted on the client is sent no sound till it is on again", async () => {
+  class HeldSound extends FakeView {
+    #waiting: ((frame: AudioFrame) => void) | null = null;
+    nextAudio() {
+      return new Promise<AudioFrame>((give) => (this.#waiting = give));
+    }
+    give(ts: number) {
+      const give = this.#waiting;
+      this.#waiting = null;
+      assert.ok(give, "a packet of sound asked for");
+      give({ ts, data: new Uint8Array(160).fill(ts), codec: "opus" });
+    }
+  }
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.make = () => new HeldSound();
+  hub.add(source);
+  const time = testClock();
+  const v = await open(hub, member, { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true, audio: "pcm_s16le", opus: true }, undefined, time.clock);
+  assert.equal(source.opened[0]!.opus, true, "the source is told the client decodes Opus");
+  await until(v.frames, KIND.video);
+  await v.stream.write(frame(KIND.ack, ts8(1000)));
+  await settle();
+  const view = source.views[0] as HeldSound;
+  view.give(1);
+  await settle();
+  assert.deepEqual(json(await until(v.frames, KIND.audioConfig)), { codec: "opus", sampleRate: 48000, channels: 2 });
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 1n);
+  // Opus goes while the pictures wait in front of the link too (PCM is left out then: the test before)
+  await time.adjust(QUEUE_MS + 1);
+  view.give(7);
+  await settle();
+  assert.equal((await until(v.frames, KIND.audio)).readBigUInt64BE(), 7n);
+  await v.stream.write(frame(KIND.ack, ts8(view.asked * 1000)));
+  await settle();
+  await v.stream.write(frame(KIND.sound, Buffer.from([0])));
+  await settle();
+  view.give(2);
+  await settle();
+  view.give(3);
+  await settle();
+  await v.stream.write(frame(KIND.sound, Buffer.from([1])));
+  await settle();
+  view.give(4);
+  await settle();
+  const next = await until(v.frames, KIND.audio);
+  assert.equal(next.readBigUInt64BE(), 4n, "none made while muted went");
+  assert.deepEqual(next.subarray(8), Buffer.alloc(160, 4));
   await v.stream.finish();
   await v.served;
 });
@@ -697,15 +825,18 @@ test("a view let go of from elsewhere: ended, said why and by whom; made to only
   const [a, b] = hub.people("fake").views;
   assert.deepEqual([a!.client, a!.app, b!.client, b!.device], ["youdid.wtf 桌面版 · pengx17", "desktop", "still.fail iOS", "other-device"]);
 
+  // (the second, on another device, only looks: the first drives it)
+  assert.deepEqual(hub.people("fake").views.map((v) => v.control), [true, false]);
   // 转为只看: it goes on, told so; what it sends then is not posted; the list says who holds it.
   hub.watchOnly("fake", a!.id);
-  assert.deepEqual(hub.people("fake").views.map((v) => v.control), [false, true]);
+  assert.deepEqual(hub.people("fake").views.map((v) => v.control), [false, false]);
   const told: any[] = [];
   for (;;) {
     const got = await first.frames.next();
     if (got?.kind === KIND.state) told.push(json(got.payload));
     if (told.some((s) => s.control === false && s.title === undefined)) break;
   }
+  assert.ok(!told.some((s) => "takenBy" in s), "made to only look from elsewhere, nobody took it");
   await first.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "pointer", kind: "move", x: 0.5, y: 0.5, buttons: 0 }))));
   await settle();
   assert.deepEqual(source.views[0]!.inputs, []);
@@ -760,6 +891,91 @@ test("made to only look with a key and the button down: both let go of, the rele
   assert.deepEqual(source.views[0]!.inputs.slice(4), [{ t: "key", kind: "up", key: "Shift", code: "ShiftLeft", mods: 8 }, { t: "pointer", kind: "up", x: 0.25, y: 0.5, buttons: 0 }]);
   await v.stream.finish();
   await v.served;
+});
+
+test("one person's view drives at a time: a person's ask takes it and the others only look, told who; a view's own reopen never takes it", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  hub.add(source);
+  const kim: Viewer = { sub: "u3", email: "kim@example.com", name: "Kim", role: "member", workspace: "w", device: "k" };
+  const ask = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true };
+  const views: Awaited<ReturnType<typeof open>>[] = [];
+  /// A view opened, the states it is told gathered as they come.
+  const opened = async (viewer: Viewer, screen: unknown) => {
+    const v = await open(hub, viewer, screen);
+    views.push(v);
+    const states: any[] = [];
+    void (async () => {
+      for (let got = await v.frames.next(); got !== null; got = await v.frames.next()) if (got.kind === KIND.state) states.push(json(got.payload));
+    })();
+    await settle();
+    return { ...v, states };
+  };
+  const drivers = () => hub.people("fake").views.filter((v) => v.control).map((v) => `${v.name}@${v.device ?? "agent"}`);
+
+  // Pat drives; Kim opens asking to drive, and only looks.
+  const pat = await opened(member, ask);
+  const kim1 = await opened(kim, ask);
+  assert.deepEqual([pat.states[0].control, kim1.states[0].control, "took" in kim1.states[0]], [true, false, false]);
+  assert.deepEqual(drivers(), ["Pat@d"]);
+
+  // Pat holds a key and the button; Kim takes it (接管): Pat only looks, told it was Kim, what Pat held let go of.
+  const press = (e: unknown) => pat.stream.write(frame(KIND.input, Buffer.from(JSON.stringify(e))));
+  await press({ t: "key", kind: "down", key: "a", code: "KeyA", mods: 0 });
+  await press({ t: "pointer", kind: "down", x: 0.5, y: 0.5, buttons: 1 });
+  await settle();
+  const kim2 = await opened(kim, { ...ask, taken: true });
+  assert.deepEqual(kim2.states[0].took, ["Pat"]);
+  assert.equal(kim2.states[0].control, true);
+  assert.deepEqual(pat.states.find((s) => s.control === false), { control: false, login: null, passkey: null, takenBy: "Kim" });
+  assert.deepEqual(source.views[0]!.inputs.slice(2), [{ t: "key", kind: "up", key: "a", code: "KeyA", mods: 0 }, { t: "pointer", kind: "up", x: 0.5, y: 0.5, buttons: 0 }]);
+  assert.deepEqual(hub.people("fake").controlledBy, ["Kim"]);
+  // (Kim's first view, only looking, closed as the core closes the one the next takes the place of)
+  await kim1.stream.finish();
+  await kim1.served;
+  views.splice(1, 1);
+
+  // Pat's own reopens asking to drive, its person not asking: only looking, Kim still drives; on a device never made to
+  // only look as well.
+  const patAgain = await opened(member, ask);
+  const patPhone = await opened({ ...member, device: "d2" }, ask);
+  assert.deepEqual([patAgain.states[0].control, patPhone.states[0].control], [false, false]);
+  assert.ok(!kim2.states.some((s) => "takenBy" in s));
+  assert.deepEqual(drivers(), ["Kim@k"]);
+
+  // Pat takes it back: Kim only looks, told so.
+  const patTakes = await opened(member, { ...ask, taken: true });
+  assert.deepEqual([patTakes.states[0].control, patTakes.states[0].took], [true, ["Kim"]]);
+  assert.equal(kim2.states.find((s) => s.control === false)?.takenBy, "Pat");
+  assert.deepEqual(drivers(), ["Pat@d"]);
+
+  // The same person on another device takes it: the view on the first only looks, one view drives.
+  const patPhoneTakes = await opened({ ...member, device: "d2" }, { ...ask, taken: true });
+  assert.deepEqual(patPhoneTakes.states[0].took, ["Pat"]);
+  assert.equal(patTakes.states.find((s) => s.control === false)?.takenBy, "Pat");
+  assert.deepEqual(drivers(), ["Pat@d2"]);
+
+  // An agent's view is not touched by a person's take, nor held off by: it waits (tools/computer.ts) as before.
+  const agent = await hub.openAs("fake", { maxWidth: 100, maxHeight: 100, codecs: ["jpeg"] }, { name: "agent: 部署", control: true });
+  const kim3 = await opened(kim, { ...ask, taken: true });
+  assert.deepEqual(kim3.states[0].took, ["Pat"]);
+  assert.deepEqual(drivers(), ["agent: 部署@agent", "Kim@k"]);
+  // An agent asked to take it: told it was the agent.
+  assert.equal(letGo(hub, "agent: 部署", "fake", "take_control", undefined).startsWith("1 "), true);
+  await settle();
+  assert.equal(kim3.states.find((s) => s.control === false)?.takenBy, "agent: 部署");
+  agent.close();
+
+  // A read-only member asking to take it only looks, and takes it from nobody.
+  const pat4 = await opened({ ...member, device: "d3" }, ask);
+  assert.deepEqual(drivers(), ["Pat@d3"], "with nobody else driving, a view drives as it opens");
+  const vic = await opened(reader, { ...ask, taken: true });
+  assert.deepEqual([vic.states[0].control, "took" in vic.states[0]], [false, false]);
+  assert.ok(!pat4.states.some((s) => s.control === false));
+  assert.deepEqual(drivers(), ["Pat@d3"]);
+
+  for (const v of views) await v.stream.finish();
+  await Promise.all(views.map((v) => v.served));
 });
 
 test("the agents' screen tool says each view's device, and lets go of a view only as asked", () => {
@@ -944,6 +1160,23 @@ test("what a view cannot be: answered with a status and why, in the asker's lang
   assert.equal(failed.answer.status, 503);
   assert.equal((await body(failed)).error, "The screen couldn't be opened: tab crashed");
   await Promise.all([none.served, codecs.served, path.served, refused.served, failed.served]);
+});
+
+test("a machine that lets the station take no input (a Mac without Accessibility): the view asked to drive only looks, says why, takes nobody's", async () => {
+  const hub = new ScreenHub();
+  const source = Object.assign(new FakeSource(), { access: (): ScreenAccess => ({ capture: true, control: false, app: "still.fail Helper" }) });
+  hub.add(source);
+  const v = await open(hub, member);
+  const states: any[] = [];
+  await until(v.frames, KIND.video, states);
+  assert.equal(states[0].control, false);
+  assert.deepEqual([states[0].access.capture, states[0].access.control, typeof states[0].access.message], [true, false, "string"]);
+  assert.deepEqual(hub.people("fake").controlledBy, []);
+  await v.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "text", text: "x" }))));
+  await settle();
+  assert.deepEqual(source.views[0]!.inputs, []);
+  await v.stream.finish();
+  await v.served;
 });
 
 test("the list: GET /screens with each source's access; an old station's 404; `screens` on the event stream", async () => {
@@ -1363,7 +1596,9 @@ class FakeHelperApp {
             return;
           }
           conn.write(helperMessage(1, Buffer.from(JSON.stringify({ width: 64, height: 36, encoder: "fake", ...(ask.audio === true ? { audio: true } : {}) }))));
-          if (ask.audio === true) conn.write(helperMessage(8, Buffer.from(JSON.stringify({ codec: "pcm_s16le", sampleRate: 48000, channels: 2 }))));
+          // (Opus to a view that asked it, as the Mac's helper encodes it)
+          const opus = ask.audioCodec === "opus";
+          if (ask.audio === true) conn.write(helperMessage(8, Buffer.from(JSON.stringify({ codec: opus ? "opus" : "pcm_s16le", sampleRate: 48000, channels: 2 }))));
           let sounds = 0;
           this.copy = (payload) => conn.write(helperMessage(5, payload));
           let n = 0;
@@ -1396,7 +1631,7 @@ class FakeHelperApp {
               else if (kind === 9) {
                 // A packet of system output, 20 ms on from the last; counted on the view's ask.
                 ask.audioAsked = (ask.audioAsked ?? 0) + 1;
-                const packet = Buffer.alloc(3848, ++sounds);
+                const packet = Buffer.alloc(8 + (opus ? 160 : 3840), ++sounds);
                 packet.writeBigUInt64BE(BigInt(1_000_000 + sounds * 20_000), 0);
                 conn.write(helperMessage(9, packet));
               }
@@ -1546,19 +1781,27 @@ test("the Mac's desktop sends its system output to a view that asked for it, pul
   hub.add(desktop);
   // A failure must not leave the fake helper listening (the file's tests would never end).
   try {
-    for (const requested of [true, false]) {
+    for (const requested of [true, "opus", false] as const) {
       fake.views = [];
-      const v = await open(hub, member, { codecs: ["h264"], control: true, ...(requested ? { audio: "pcm_s16le" } : {}) }, "/admin/api/screens/desktop/view");
+      // (on a clock of the test's: no frame waits on the way, so none of the sound is left out)
+      const v = await open(hub, member, { codecs: ["h264"], control: true, ...(requested ? { audio: "pcm_s16le" } : {}), ...(requested === "opus" ? { opus: true } : {}) }, "/admin/api/screens/desktop/view", testClock().clock);
       assert.equal(v.answer.status, 200);
       if (requested) {
-        // The helper asked for the system output too; the client told the format before the first packet.
+        // The helper asked for the system output too (as Opus where the client decodes it); the client told the format
+        // before the first packet. What came before the first picture's round trip was known was taken and left out:
+        // the packets go on, one after another, once it is.
         assert.equal(fake.views[0].audio, true);
-        assert.deepEqual(json(await until(v.frames, KIND.audioConfig)), { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
-        for (const n of [1, 2]) {
-          const packet = await until(v.frames, KIND.audio);
-          assert.equal(packet.length, 8 + 3840);
-          assert.equal(packet.readBigUInt64BE(), BigInt(1_000_000 + n * 20_000));
-          assert.deepEqual(packet.subarray(8), Buffer.alloc(3840, n));
+        assert.equal(fake.views[0].audioCodec, requested === "opus" ? "opus" : undefined);
+        const bytes = requested === "opus" ? 160 : 3840;
+        const { config, picture } = await soundAndPicture(v.frames);
+        assert.deepEqual(json(config), { codec: requested === "opus" ? "opus" : "pcm_s16le", sampleRate: 48000, channels: 2 });
+        await v.stream.write(frame(KIND.ack, picture.subarray(1, 9)));
+        const first = await until(v.frames, KIND.audio);
+        const n = Number((first.readBigUInt64BE() - 1_000_000n) / 20_000n);
+        for (const [i, packet] of [first, await until(v.frames, KIND.audio)].entries()) {
+          assert.equal(packet.length, 8 + bytes);
+          assert.equal(packet.readBigUInt64BE(), BigInt(1_000_000 + (n + i) * 20_000));
+          assert.deepEqual(packet.subarray(8), Buffer.alloc(bytes, n + i));
         }
       } else {
         await until(v.frames, KIND.video);
@@ -1697,6 +1940,31 @@ test("the clipboard: a view that drives it hears the source's copies and sets it
   await v.stream.finish();
   await v.served;
   assert.equal(view.copied, null, "no longer watched once the view ended");
+});
+
+test("the clipboard: the same copy heard again (Windows bumps its number several times for one) is said once, nor what the view set itself", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.types = ["text"];
+  hub.add(source);
+  const v = await open(hub, member);
+  await until(v.frames, KIND.video);
+  const view = source.views[0]!;
+  view.copied!({ type: "text", text: "一次" });
+  view.copied!({ type: "text", text: "一次" });
+  view.copied!({ type: "text", text: "一次" });
+  await v.stream.write(clipFrame(1, 1, Buffer.from("粘贴的")));
+  await settle();
+  // What the view set, heard back from the screen: it holds it already.
+  view.copied!({ type: "text", text: "粘贴的" });
+  view.copied!({ type: "text", text: "两次" });
+  view.copied!({ type: "text", text: "一次" });
+  await settle();
+  const said = [];
+  for (let i = 0; i < 3; i++) said.push((await until(v.frames, KIND.clipboard)).subarray(1).toString("utf8"));
+  assert.deepEqual(said, ["一次", "两次", "一次"]);
+  await v.stream.finish();
+  await v.served;
 });
 
 test("the clipboard only for a view that drives it: one that looks, a read-only member's, never hear it nor set it", async () => {
@@ -2029,7 +2297,7 @@ test("system audio is pull driven, old helpers decline it, and close releases a 
   const payload = Buffer.alloc(3848, 1);
   payload.writeBigUInt64BE(123456789n, 0);
   say(9, payload);
-  assert.deepEqual(await packet, { ts: 123456789, data: new Uint8Array(payload.subarray(8)) });
+  assert.deepEqual(await packet, { ts: 123456789, data: new Uint8Array(payload.subarray(8)), codec: "pcm_s16le" });
   const pending = view.nextAudio();
   view.close();
   assert.equal(await pending, null);
@@ -2041,12 +2309,50 @@ test("system audio is pull driven, old helpers decline it, and close releases a 
   old.close();
 });
 
+test("a helper's Opus packets are taken of any length one may be, and its PCM only whole", async () => {
+  const listeners: Record<string, ((chunk: Buffer) => void)[]> = {};
+  const pipe = { write: () => {}, destroy: () => {}, on: (event: string, f: any) => { (listeners[event] ??= []).push(f); } };
+  const say = (kind: number, body: Buffer | object) => listeners.data!.forEach((f) => f(helperMessage(kind, Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body)))));
+  const packet = (bytes: number) => { const p = Buffer.alloc(8 + bytes, 3); p.writeBigUInt64BE(20_000n, 0); return p; };
+  const opus = new HelperView("h264", pipe, () => {}, new WinInput(), "ScreenCaptureKit", true);
+  say(1, { width: 64, height: 36, codec: "h264", audio: true });
+  await opus.ready;
+  say(8, { codec: "opus", sampleRate: 48000, channels: 2 });
+  for (const bytes of [3, 160, 1275]) {
+    const next = opus.nextAudio();
+    say(9, packet(bytes));
+    assert.deepEqual(await next, { ts: 20_000, data: new Uint8Array(bytes).fill(3), codec: "opus" });
+  }
+  // Longer than any Opus packet: no more sound.
+  const long = opus.nextAudio();
+  say(9, packet(1276));
+  assert.equal(await long, null);
+  assert.equal(opus.hasAudio(), false);
+  opus.close();
+  delete listeners.data;
+  const pcm = new HelperView("h264", pipe, () => {}, new WinInput(), "Windows.Graphics.Capture", true);
+  say(1, { width: 64, height: 36, codec: "h264", audio: true });
+  await pcm.ready;
+  say(8, { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
+  const short = pcm.nextAudio();
+  say(9, packet(160));
+  assert.equal(await short, null);
+  pcm.close();
+});
+
 test("negotiated system audio flows while the picture is still, and unrequested audio is never pulled", async () => {
   class SoundView extends StillView {
     audioAsked = 0;
+    /// Let go once the test acknowledged the first picture: the packet asked for then is sent.
+    go: () => void = () => {};
+    readonly #going = new Promise<void>((resolve) => (this.go = resolve));
     async nextAudio() {
       this.audioAsked++;
-      return this.audioAsked === 1 ? { ts: 43210, data: new Uint8Array(3840).fill(7) } : null;
+      // The first, made before the picture's round trip is known: taken, and left out.
+      if (this.audioAsked === 1) return { ts: 1, data: new Uint8Array(3840).fill(1), codec: "pcm_s16le" as const };
+      if (this.audioAsked > 2) return null;
+      await this.#going;
+      return { ts: 43210, data: new Uint8Array(3840).fill(7), codec: "pcm_s16le" as const };
     }
   }
   for (const requested of [false, true]) {
@@ -2055,10 +2361,14 @@ test("negotiated system audio flows while the picture is still, and unrequested 
     const sound = new SoundView();
     source.make = () => sound;
     hub.add(source);
-    const v = await open(hub, member, { codecs: ["h264"], ...(requested ? { audio: "pcm_s16le" } : {}) });
+    const v = await open(hub, member, { codecs: ["h264"], ...(requested ? { audio: "pcm_s16le" } : {}) }, undefined, testClock().clock);
     if (requested) {
       assert.equal(source.opened[0]!.audio, true);
-      assert.deepEqual(json(await until(v.frames, KIND.audioConfig)), { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
+      const { config, picture } = await soundAndPicture(v.frames);
+      assert.deepEqual(json(config), { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
+      await v.stream.write(frame(KIND.ack, picture.subarray(1, 9)));
+      await settle();
+      sound.go();
       const packet = await until(v.frames, KIND.audio);
       assert.equal(packet.readBigUInt64BE(), 43210n);
       assert.deepEqual(packet.subarray(8), Buffer.alloc(3840, 7));
@@ -2081,4 +2391,44 @@ test("a source's codec: the best of its own the view takes; a preview's JPEG whe
   assert.equal(codecFor({ codecs: ["h264"], peek: true }, own), "h264");
   assert.equal(codecFor({ codecs: ["jpeg", "h264"], peek: true }, ["h264"]), "h264");
   assert.equal(codecFor({ codecs: ["jpeg"] }, ["h264"]), undefined);
+});
+
+test("a desktop's windows: as the helper says them (its info, then as they change), bounded; one picked asked of it by its id, one it did not say never", () => {
+  const written: Buffer[] = [];
+  const listeners: Record<string, ((chunk: Buffer) => void)[]> = {};
+  const pipe = {
+    write: (b: Buffer) => written.push(b),
+    destroy: () => {},
+    on: (event: string, f: any) => {
+      (listeners[event] ??= []).push(f);
+    },
+  };
+  const say = (kind: number, payload: object) => listeners.data!.forEach((f) => f(helperMessage(kind, Buffer.from(JSON.stringify(payload)))));
+  const view = new HelperView("h264", pipe, () => {});
+  const heard: unknown[] = [];
+  view.watchWindows((w) => heard.push(w));
+  say(1, { width: 1920, height: 1080, encoder: "e", codec: "h264", windows: [{ id: 101, app: "访达", title: "下载" }, { id: -1, app: "x" }, { id: 214, app: "Chrome", title: "t".repeat(300) }] });
+  // (told as it is heard after the info: one who starts to hear is told the last at once)
+  const late: unknown[] = [];
+  view.watchWindows((w) => late.push(w));
+  assert.deepEqual(late, [{ windows: [{ id: 101, app: "访达", title: "下载" }, { id: 214, app: "Chrome", title: "t".repeat(200) }], window: null }]);
+  view.window(214);
+  view.window(999);
+  view.window(null);
+  const asked = written.filter((b) => b[0] === TO_HELPER.window).map((b) => JSON.parse(b.subarray(5).toString()));
+  assert.deepEqual(asked, [{ window: 214 }, { window: null }]);
+  say(4, { window: 214 });
+  say(4, { windows: [{ id: 214, app: "Chrome", title: "t" }] });
+  say(4, { window: null });
+  assert.deepEqual(late.slice(1), [
+    { windows: [{ id: 101, app: "访达", title: "下载" }, { id: 214, app: "Chrome", title: "t".repeat(200) }], window: 214 },
+    { windows: [{ id: 214, app: "Chrome", title: "t" }], window: 214 },
+    { windows: [{ id: 214, app: "Chrome", title: "t" }], window: null },
+  ]);
+  view.close();
+  // what a client may ask: a window's id, or the whole display
+  assert.equal(parseWindowPick({ t: "window", id: 214 }), 214);
+  assert.equal(parseWindowPick({ t: "window" }), null);
+  assert.equal(parseWindowPick({ t: "window", id: -3 }), undefined);
+  assert.equal(parseWindowPick({ t: "key" }), undefined);
 });

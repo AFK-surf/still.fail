@@ -19,7 +19,7 @@ fn quote_once(t : @ui.Tester) -> (Double, Double) raise {
   guard at.length() > 0 else { fail("the quote not seen at \{t.time()}") }
   for p in at {
     if (p.0 - at[0].0).abs() > 0.5 || (p.1 - at[0].1).abs() > 0.5 {
-      fail("the quote seen twice apart at \{t.time()}: \{at}")
+      fail("the quote seen twice apart at \{t.time()}: \{Repr(at)}")
     }
   }
   at[0]
@@ -132,7 +132,7 @@ fn send_ground(t : @ui.Tester) -> Int64 raise {
     Some(r) => r.4
     None => {
       let near = t.drawn_rects().filter(fn(r) { r.0 < x + w && r.0 + r.2 > x && r.1 < y + h && r.1 + r.3 > y })
-      fail("nothing drawn as the send button at \{(x, y, w, h)}: \{near}")
+      fail("nothing drawn as the send button at \{Repr((x, y, w, h))}: \{Repr(near)}")
     }
   }
 }
@@ -176,13 +176,13 @@ fn quote_media_departure(name : String, width : Double, height : Double, platfor
   t.between_frames(fn() { frames.push(quote_hint_seen(t)) })
   tap_send(t)
   t.between_frames(fn() {  })
-  assert_true(frames.length() > 0 && frames.iter().all(fn(seen) { seen }), msg="the comment hint blinked: \{frames}")
+  assert_true(frames.length() > 0 && frames.iter().all(fn(seen) { seen }), msg="the comment hint blinked: \{Repr(frames)}")
   let first = quote_ground(t)
-  assert_true((first.3 - before.3).abs() < 0.5, msg="the card shrank on sending: \{before} to \{first}")
+  assert_true((first.3 - before.3).abs() < 0.5, msg="the card shrank on sending: \{Repr(before)} to \{Repr(first)}")
   assert_true(quote_hint_seen(t), msg="the comment hint vanished on sending")
   t.frame()
   let second = quote_ground(t)
-  assert_true((second.3 - first.3).abs() < 2.0, msg="the card jumped on its next frame: \{first} to \{second}")
+  assert_true((second.3 - first.3).abs() < 2.0, msg="the card jumped on its next frame: \{Repr(first)} to \{Repr(second)}")
   assert_true(quote_hint_seen(t), msg="the comment hint vanished on the next frame")
 }
 
@@ -235,7 +235,7 @@ test "a quote sent alone is in the list at once, its card flying there from the 
   }
   // where its words were as it is sent, then every frame till it has landed: never gone, never twice apart
   let at = quote_once(t)
-  assert_true((at.0 - was.0).abs() < 0.5 && (at.1 - was.1).abs() < 0.5, msg="sent, seen at \{at}, not \{was}")
+  assert_true((at.0 - was.0).abs() < 0.5 && (at.1 - was.1).abs() < 0.5, msg="sent, seen at \{Repr(at)}, not \{Repr(was)}")
   // its card as wide as it was in the composer as it sets out, and narrower only on its way: never all at once
   let widths = [quote_ground(t).2]
   let sent_at = t.time()
@@ -260,10 +260,10 @@ test "a quote sent alone is in the list at once, its card flying there from the 
   assert_true(y < was.1 - 40.0, msg="landed at \{y}, its words were at \{was.1}")
   let landed = widths[widths.length() - 1]
   assert_true(landed < wide - 40.0, msg="landed \{landed} wide, as the composer's \{wide}")
-  assert_true((widths[0] - wide).abs() < 0.5, msg="set out \{widths[0]} wide, not \{wide}: \{widths}")
+  assert_true((widths[0] - wide).abs() < 0.5, msg="set out \{widths[0]} wide, not \{wide}: \{Repr(widths)}")
   for k in 1..<widths.length() {
     if widths[k] > widths[k - 1] + 0.5 || widths[k - 1] - widths[k] > (wide - landed) / 2.0 {
-      fail("its width went from \{widths[k - 1]} to \{widths[k]} at once: \{widths}")
+      fail("its width went from \{widths[k - 1]} to \{widths[k]} at once: \{Repr(widths)}")
     }
   }
 }
@@ -334,16 +334,16 @@ test "sent, a quote's ✕ leaves with its card and the send button fades to fain
     assert_true(x_over_card(t), msg="the ✕ under its card at \{t.time()}")
   }
   // the ✕: seen as it sets out, fading on (never back), gone once it has left
-  assert_true(xs[0] > 0.9, msg="\{xs}")
-  assert_true(xs.iter().any(fn(a) { a > 0.1 && a < 0.9 }), msg="\{xs}")
+  assert_true(xs[0] > 0.9, msg="\{Repr(xs)}")
+  assert_true(xs.iter().any(fn(a) { a > 0.1 && a < 0.9 }), msg="\{Repr(xs)}")
   assert_eq(xs[xs.length() - 1], 0.0)
   for k in 1..<xs.length() {
     if xs[k] > xs[k - 1] + 0.01 {
-      fail("the ✕ came back: \{xs}")
+      fail("the ✕ came back: \{Repr(xs)}")
     }
   }
   // the send button: through what lies between its two grounds, not from one to the other at once
   let faint = grounds[grounds.length() - 1]
   assert_true(faint != ready)
-  assert_true(grounds.iter().any(fn(g) { g != ready && g != faint }), msg="\{grounds}")
+  assert_true(grounds.iter().any(fn(g) { g != ready && g != faint }), msg="\{Repr(grounds)}")
 }

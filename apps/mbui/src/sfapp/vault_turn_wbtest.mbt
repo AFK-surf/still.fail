@@ -110,7 +110,7 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
         _ => base.topic(name, params).get().snapshot()
       }
     },
-    call: fn(name, params, done) {
+    call: fn(name, _, done) {
       calls.push(name)
       if name == "vault.deny" {
         vc.status = "denied"
@@ -142,7 +142,7 @@ test "an answered secret request can be read again from its outcome without answ
       let (x, y) = t.find(outcome).unwrap()
       // (a pointer resting on it opens nothing: only a press does)
       if platform == 0 {
-        t.move(x, y)
+        t.move_to(x, y)
         t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
         assert_true(t.find(detail) is None)
       }
@@ -184,7 +184,7 @@ test "a pointer pressing an answered request's outcome shows its details once, n
   t.run_for(@ui.move_most_ms)
   let (x, y) = t.find("未存入 测试服务登录").unwrap()
   let shown = fn() { t.words().filter(fn(w) { w.0.contains("把测试服务密码安全保存") && w.5 > 0.0 }).length() }
-  t.move(x, y)
+  t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
   assert_eq(shown(), 0, msg="resting on it")
   t.press_at(x, y)
@@ -211,7 +211,7 @@ test "the disclosure mark is centred on the result's first line" {
     let mark = t.shape_boxes().iter().find_first(fn(s) {
       s.0.has_prefix("sf/icon/chevron-right/12") && s.1 >= x && s.1 <= x + w + 20.0 && (s.2 - y).abs() < 20.0
     }).unwrap()
-    assert_true((mark.2 + mark.4 / 2.0 - y - h / 2.0).abs() < 0.5, msg="the mark and the words share the first line's centre: \{mark}, \{(x, y, w, h)}")
+    assert_true((mark.2 + mark.4 / 2.0 - y - h / 2.0).abs() < 0.5, msg="the mark and the words share the first line's centre: \{Repr(mark)}, \{Repr((x, y, w, h))}")
   }
 }
 
@@ -259,7 +259,7 @@ test "a request decided in its chat: its card closes on screen to how it went, n
   tap_now(t, "不存")
   assert_eq(calls.filter(fn(n) { n.has_prefix("vault.") }), ["vault.deny"])
   // decided: how it went in its place, the room going to it as what else changes does (mbui's view/list_motion.mbt)
-  t.run_for(turn_most_ms)
+  t.run_for(answer_over_ms)
   assert_true(t.find("未存入 测试服务登录") is Some(_))
   t.press_at(nx, ny)
   t.release(nx, ny)
@@ -273,5 +273,5 @@ test "a request decided in its chat: its card closes on screen to how it went, n
   assert_true(t.find("存入密码 测试服务登录") is None)
   assert_true(t.find("未存入 测试服务登录") is Some(_))
   assert_true(!vc.vaults_asked, msg="the card asked the vaults topic")
-  assert_true(t.rest_of("under/") < 0.0)
+  assert_true(t.rest_of("under/") <= t.time())
 }

@@ -51,15 +51,15 @@ const PARTS: [RegExp, Part[]][] = [
   [/^web\//, ["web"]],
   [/^apps\/android\//, ["android"]],
   [/^apps\/desktop\//, ["desktop"]],
-  // still.fail's mbui app (apps/mbui, mbui itself in apps/mbui/mbui): the Android app since 2026-10-23 (the Kotlin one,
+  // still.fail's mbui app (apps/mbui, mbui itself in libs/mbui): the Android app since 2026-10-23 (the Kotlin one,
   // apps/android, before it), and the desktop app, in the Electron one's place since 2026-10-26 (it tells the core it is
   // "desktop"). What one platform's host alone builds reaches that platform (iOS is no part yet); the desktop's own
   // pages (src/sfdesk, and what sfapp still has of them: its wide frame, the menu bar, the settings ported from the
   // web's) the desktop.
-  [/^apps\/mbui\/((mbui\/)?ios\/|(mbui\/)?src\/host\/ios_)/, []],
-  [/^apps\/mbui\/((mbui\/|engine\/)?android\/|(mbui\/)?src\/host\/android_)/, ["android"]],
-  [/^apps\/mbui\/((mbui\/)?src\/host\/(apple|mac_|win|electron_)|src\/sfdesk\/|src\/sfapp\/((strings_)?wide|menu_bar|preview_desk|settings\/(web|desk)_))/, ["desktop"]],
-  [/^apps\/mbui\//, ["android", "desktop"]],
+  [/^(apps|libs)\/mbui\/(ios\/|src\/host\/ios_)/, []],
+  [/^(apps|libs)\/mbui\/((engine\/)?android\/|src\/host\/android_)/, ["android"]],
+  [/^(apps|libs)\/mbui\/(src\/host\/(apple|mac_|win|electron_)|src\/sfdesk\/|src\/sfapp\/((strings_)?wide|menu_bar|preview_desk|settings\/(web|desk)_))/, ["desktop"]],
+  [/^(apps|libs)\/mbui\//, ["android", "desktop"]],
   [/^cloud\/src\//, ["cloud"]],
 ];
 
@@ -72,10 +72,10 @@ const CHANGES_NOTHING = new RegExp(
     /^client\/core-ts\/(test|bench|harness|side|scripts)\//,
     /^apps\/android\/[^/]+\/src\/(androidTest|test)\/|^apps\/android\/(carries\.sh|not-carried\.txt)$/,
     /^client\/core-ts\/src\/shapes\/schema\.ts$|^web\/src\/core\/(shapes|operations)\.ts$|^apps\/android\/.*\/data\/(Shapes|Operations)\.kt$/,
-    /^apps\/mbui\/(mbui\/)?([^/]+|(e2e|docs|screens|scripts|tools|bench|goldens|test|web)\/.*)$/,
+    /^(apps|libs)\/mbui\/([^/]+|(e2e|docs|screens|scripts|tools|bench|goldens|test|web)\/.*)$/,
     /^apps\/mbui\/src\/(sffilm|sfreplay|sffix|sfkept|sfkit|sflayout|sfscreens|coredemo|books|photos|videos)\//,
-    /^apps\/mbui\/mbui\/src\/(\w*demo|effecttest|awly|film|textdiff)\//,
-    /^apps\/mbui\/.*(_test|_wbtest|_fixture|\/fixture)\.mbt$|^apps\/mbui\/core\/(.*[_-]test\.(m|js)|smoke\.m)$/,
+    /^libs\/mbui\/src\/(\w*demo|effecttest|awly|film|textdiff)\//,
+    /^(apps|libs)\/mbui\/.*(_test|_wbtest|_fixture|\/fixture)\.mbt$|^apps\/mbui\/core\/(.*[_-]test\.(m|js)|smoke\.m)$/,
   ].map((r) => r.source).join("|"),
 );
 

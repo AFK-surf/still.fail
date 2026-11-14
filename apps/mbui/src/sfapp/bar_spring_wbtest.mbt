@@ -101,11 +101,11 @@ test "bar: back from a chat, the notch opening frame by frame: drawn where it is
   let third = glass_notch(t)
   t.check_looks(true)
   // it moves: the notch drawn where it is at each frame's moment
-  assert_true(first != second && second != third, msg="\{first} \{second} \{third}")
+  assert_true(first != second && second != third, msg="\{Repr(first)} \{Repr(second)} \{Repr(third)}")
   let (cy, r) = notch_of(bar.k_at(at))
   assert_eq(second, (cy, r))
   // and nothing of the bar is built or laid out for it
-  assert_eq((p1.nodes, p1.laid, p2.nodes, p2.laid), (0, 0, 0, 0), msg="before: \{warm1} / \{warm2}; counted: \{p1} \{why1} / \{p2} \{t.built_why()}")
+  assert_eq((p1.nodes, p1.laid, p2.nodes, p2.laid), (0, 0, 0, 0), msg="before: \{warm1} / \{warm2}; counted: \{Repr(p1)} \{why1} / \{Repr(p2)} \{t.built_why()}")
 }
 
 ///|
@@ -121,8 +121,8 @@ test "bar: the notch opening, each frame painted so is the frame built whole; th
   // its icon drawn where the notch has it at each frame, moving with it (on the device's pixels: half a point at the
   // Tester's scale of 2; the icon's drawing as off its middle at both), and read out there
   let off = one.1 - one.2
-  assert_true(one.1 != two.1 && off.abs() <= 2.0 && (two.1 - two.2 - off).abs() <= 0.5, msg="\{one} \{two}")
-  assert_true((one.0 - one.2).abs() <= 0.5 && (two.0 - two.2).abs() <= 0.5, msg="\{one} \{two}")
+  assert_true(one.1 != two.1 && off.abs() <= 2.0 && (two.1 - two.2 - off).abs() <= 0.5, msg="\{Repr(one)} \{Repr(two)}")
+  assert_true((one.0 - one.2).abs() <= 0.5 && (two.0 - two.2).abs() <= 0.5, msg="\{Repr(one)} \{Repr(two)}")
   // to its end, each frame compared with the frame built whole (looks_check)
   t.run_for(bar_rest() - t.time())
   assert_eq(glass_notch(t), notch_of(1.0))
@@ -155,19 +155,19 @@ test "bar: a hold closes the notch and centres the places with it; release bring
   t.run_for(during_rise_ms)
   let middle = glass_notch(t)
   let during = place_across(t, "files")
-  assert_true(middle.1 > 0.0 && middle.1 < open.1, msg="\{open} \{middle}")
-  assert_true((during.0 - during.2).abs() <= 0.5, msg="\{during}")
+  assert_true(middle.1 > 0.0 && middle.1 < open.1, msg="\{Repr(open)} \{Repr(middle)}")
+  assert_true((during.0 - during.2).abs() <= 0.5, msg="\{Repr(during)}")
   t.run_for(held_frame_ms)
   let held = place_across(t, "files")
   let closed_x = 22.0 + bar_centres(390.0 - 44.0, 0.0, 4)[1]
   assert_eq(glass_notch(t), (0.0, 0.0))
-  assert_true((held.0 - closed_x).abs() <= 0.5 && (held.1 - closed_x).abs() <= 2.0, msg="\{held} \{closed_x}")
+  assert_true((held.0 - closed_x).abs() <= 0.5 && (held.1 - closed_x).abs() <= 2.0, msg="\{Repr(held)} \{closed_x}")
   t.release(xs[0], y)
   t.run_for(held_frame_ms)
   let after = place_across(t, "files")
   let restored = glass_notch(t)
-  assert_true((restored.0 - open.0).abs() < 0.001 && (restored.1 - open.1).abs() < 0.001, msg="\{open} \{restored}")
-  assert_true((after.0 - before.0).abs() <= 0.5 && (after.1 - before.1).abs() <= 0.5, msg="\{before} \{after}")
+  assert_true((restored.0 - open.0).abs() < 0.001 && (restored.1 - open.1).abs() < 0.001, msg="\{Repr(open)} \{Repr(restored)}")
+  assert_true((after.0 - before.0).abs() <= 0.5 && (after.1 - before.1).abs() <= 0.5, msg="\{Repr(before)} \{Repr(after)}")
 }
 
 ///|
@@ -189,7 +189,7 @@ test "bar: sliding chooses the place under the finger as the notch closes and wh
     assert_true(drawn_boundary - open_boundary > 1.0, msg="\{ms}: \{open_boundary} \{drawn_boundary}")
     // This lies on opposite sides of the old and the drawn boundary: the drawn side is chats.
     let x = (open_boundary + drawn_boundary) / 2.0
-    t.move(x, y)
+    t.move_to(x, y)
     assert_eq(bar.felt, "\{told.cur}/chats", msg="\{ms}")
     t.release(x, y)
     assert_true(app.nav.top() == Home, msg="\{ms}")

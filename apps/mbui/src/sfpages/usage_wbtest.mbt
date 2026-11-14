@@ -54,6 +54,8 @@ test "usage: the chosen series keeps its colour and shows its own peak on the wh
   usage_pick.only.set(("models", "b"))
   t.draw()
   assert_eq(t.rect_of("10/18"), Some(date))
+  // (the whole period's peak closing its room as the series' own comes, gone once it has)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("$20") is Some(_))
   assert_true(t.find("$82") is None)
   assert_true(t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(1) }))
@@ -126,14 +128,14 @@ test "usage: each day's bar 24 wide in the middle of its day, over its date, on 
       }
     }
   }
-  // none picked at first: every day's bar in full, the most spent's cost said over it, no scale's lines
+  // none picked at first: every day's bar in full, the most spent's cost said over it, with the Y-axis scale labels
   assert_eq(usage_faded_bars(t).length(), 0)
   assert_eq(usage_pick.day.get(), "")
   match t.rect_of("$80") {
     Some((_, y, _, h)) => assert_true(y + h <= top3 + 0.01)
     None => fail("the most spent day's cost not said")
   }
-  assert_true(t.rect_of("50") is None && t.rect_of("100") is None)
+  assert_true(t.rect_of("$100") is Some(_) && t.rect_of("$50") is Some(_) && t.rect_of("$0") is Some(_))
 }
 
 ///|
@@ -225,7 +227,7 @@ test "the year: a month whose weeks have not the room for its name says none, no
   t.draw()
   assert_true(t.rect_of("10月") is Some(_))
   let last = t.lines_of("11月")
-  assert_true(last.iter().all(fn(l) { !l.has_suffix("…") }), msg="\{last}")
+  assert_true(last.iter().all(fn(l) { !l.has_suffix("…") }), msg="\{Repr(last)}")
   // a day pointed at: its date and tokens a moment later (week 50's fourth day: its column and row among the cells,
   // each a square under the months' row)
   let squares = t.drawn_rects().filter(fn(r) { r.2 == r.3 && r.2 > 4.0 && r.2 < 20.0 })
@@ -239,36 +241,27 @@ test "the year: a month whose weeks have not the room for its name says none, no
   xs.dedup()
   assert_true(xs.length() >= 52 && ys.length() >= 7, msg="the grid's columns \{xs.length()}, rows \{ys.length()}")
   let side = cells[0].2
-  t.move(xs[50] + side / 2.0, ys[3] + side / 2.0)
+  t.move_to(xs[50] + side / 2.0, ys[3] + side / 2.0)
   t.run_for(@sf.tip_delay_ms * 2.0)
   assert_true(t.find("第 \{50 * 7 + 3} 天 · 1 token") is Some(_), msg="\{t.drawn_text()}")
   t.leave()
   t.run_for(@sf.tip_delay_ms * 2.0)
 }
 ///|
-test "用量, at each width and with either hand: the cost and its change, the days split by person or by model, the chats; a day picked, then let go; 30 天 picked" {
+test "用量, at each width and with either hand: the cost and its change, the days split by person, model or account, the breakdown; a day picked, then let go; 30 天 and 累计 picked" {
   for case in page_cases {
     let (w, platform) = case
     // (tall enough for the whole page: what is tapped is on the screen)
     let t = setting_tester(Usage, w, platform~, h=2400.0)
     let at = "\{w} platform \{platform}"
-    // first, what was done since counting began: the figures, the year, each device's work, where the chats came from
-    assert_true(t.find("累计 token") is Some(_) && t.find("18.3 亿") is Some(_) && t.find("Token 活跃度") is Some(_), msg=at)
-    assert_true(t.find("跨设备任务") is Some(_) && t.find("决策点击率") is Some(_) && t.find("各设备的工作量") is Some(_), msg=at)
-    assert_true(t.find("对话来自") is Some(_) && t.find("统计截至 10月2日") is Some(_), msg=at)
-    t.tap_text("按周")
-    t.draw()
-    assert_eq(usage_pick.year.get(), 1, msg=at)
-    assert_true(t.find("每列一周 · 最高 1.1 亿") is Some(_), msg=at)
-    t.tap_text("按天")
-    t.draw()
-    // the cost, its change, and the days split by who spent it, each named
+    // the cost, its change, secondary figures, and the days split by who spent it, each named
     assert_true(t.find("$118") is Some(_) && t.find("↑18%") is Some(_) && t.find("比前 7 天") is Some(_), msg=at)
-    assert_true(t.find("Ana") is Some(_) && t.find("按人") is Some(_) && t.find("按模型") is Some(_), msg=at)
-    // the chats that cost the most, each with who and which model
-    assert_true(t.find("整理发布清单") is Some(_) && t.find("林 · Opus 5.5 · Willow") is Some(_), msg=at)
-    // not here: the allowances (the profiles' page), the calls and tokens, the accounts
-    assert_true(t.find("lin@example.com") is None && t.find("1,416 次") is None && t.find("按账号") is None, msg=at)
+    assert_true(t.find("2,310 万") is Some(_) && t.find("1,416 次") is Some(_), msg=at)
+    assert_true(t.find("Ana") is Some(_) && t.find("按人") is Some(_) && t.find("按模型") is Some(_) && t.find("按账号") is Some(_), msg=at)
+    // the spending breakdown card: chats, people, models, accounts
+    assert_true(t.find("花费明细") is Some(_) && t.find("整理发布清单") is Some(_) && t.find("林 · Opus 5.5 · Willow") is Some(_), msg=at)
+    // not here: the raw email
+    assert_true(t.find("lin@example.com") is None, msg=at)
     // split by model instead: each model named
     t.tap_text("按模型")
     t.draw()
@@ -289,6 +282,17 @@ test "用量, at each width and with either hand: the cost and its change, the d
     // 30 days: a date a week under the bars (the core's `tick`), today's among them
     assert_true(t.find("10/23") is Some(_), msg=at)
     assert_true(t.find("10/24") is None, msg=at)
+    // 累计: what was done since counting began: the figures, the year, each device's work, where the chats came from
+    t.tap_text("累计")
+    t.draw()
+    assert_true(t.find("累计 token") is Some(_) && t.find("18.3 亿") is Some(_) && t.find("Token 活跃度") is Some(_), msg=at)
+    assert_true(t.find("跨设备任务") is Some(_) && t.find("各设备的工作量") is Some(_) && t.find("对话来自") is Some(_), msg=at)
+    t.tap_text("按周")
+    t.draw()
+    assert_eq(usage_pick.year.get(), 1, msg=at)
+    assert_true(t.find("每列一周 · 最高 1.1 亿") is Some(_), msg=at)
+    t.tap_text("按天")
+    t.draw()
   }
 }
 
@@ -362,7 +366,8 @@ test "用量: the overview follows the page's theme, including after a day is pi
     check("$118")
   }
   t.tap_text("10/3")
-  t.draw()
+  // (the day's chip makes its way in: looked at once there)
+  t.run_for(@ui.move_most_ms)
   for dark in [false, true, false] {
     @sf.set_dark(Some(dark))
     t.draw()
@@ -381,15 +386,17 @@ test "价目表: the first column starts in line with the card's note at every w
 }
 
 ///|
-test "价目表, at each width and with either hand: each station's card, its note, its models and rates; none said where it has none" {
+test "价目表, at each width and with either hand: unified model pricing card, its note, its models and rates" {
   for case in page_cases {
     let (w, platform) = case
     let t = setting_tester(UsagePrices(7), w, platform~)
     let at = "\{w} platform \{platform}"
     assert_true(t.find("价目表") is Some(_), msg=at)
+    assert_true(t.find("模型折算单价") is Some(_), msg=at)
     assert_true(t.find("每百万 token 的美元价格") is Some(_), msg=at)
     assert_true(t.find("Opus 5.5") is Some(_), msg=at)
     assert_true(t.find("$25") is Some(_), msg=at)
-    assert_true(t.find("读不到它的价格表") is Some(_), msg=at)
+    assert_true(t.find("GPT-6") is Some(_), msg=at)
+    assert_true(t.find("Haiku 5") is Some(_), msg=at)
   }
 }

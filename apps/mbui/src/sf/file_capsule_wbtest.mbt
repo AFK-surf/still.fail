@@ -23,8 +23,8 @@ test "a short file name and size stay whole in a card sized to them on whole-pix
           t.draw()
           let shown_stem = t.lines_of(stem)
           let shown_ext = t.lines_of(".txt")
-          assert_eq(shown_stem, [stem], msg="pixels=\{pixels} font=\{font} ends=\{ends} name=\{name} shown=\{shown_stem}")
-          assert_eq(shown_ext, [".txt"], msg="pixels=\{pixels} font=\{font} ends=\{ends} name=\{name} shown=\{shown_ext}")
+          assert_eq(shown_stem, [stem], msg="pixels=\{pixels} font=\{font} ends=\{ends} name=\{name} shown=\{Repr(shown_stem)}")
+          assert_eq(shown_ext, [".txt"], msg="pixels=\{pixels} font=\{font} ends=\{ends} name=\{name} shown=\{Repr(shown_ext)}")
         }
       }
     }

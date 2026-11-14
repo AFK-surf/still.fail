@@ -16,7 +16,7 @@ fn seen_once(t : @ui.Tester, s : String) -> (Double, Double) raise {
   guard at.length() > 0 else { fail("「\{s}」 not seen at \{t.time()}") }
   for p in at {
     if (p.0 - at[0].0).abs() > 0.5 || (p.1 - at[0].1).abs() > 0.5 {
-      fail("「\{s}」 seen twice apart at \{t.time()}: \{at}")
+      fail("「\{s}」 seen twice apart at \{t.time()}: \{Repr(at)}")
     }
   }
   at[0]
@@ -26,7 +26,7 @@ fn seen_once(t : @ui.Tester, s : String) -> (Double, Double) raise {
 #callsite(autofill(loc))
 fn assert_at(was : (Double, Double), now : (Double, Double), loc~ : SourceLoc) -> Unit raise {
   if (was.0 - now.0).abs() > 0.5 || (was.1 - now.1).abs() > 0.5 {
-    fail("moved from \{was} to \{now} (\{loc})")
+    fail("moved from \{Repr(was)} to \{Repr(now)} (\{loc})")
   }
 }
 
@@ -100,7 +100,7 @@ fn one_way_till(t : @ui.Tester, s : String, until : Double, most : Double) -> (D
     let now = seen_once(t, s)
     let d = now.1 - at.1
     if d.abs() > most || (way != 0.0 && d * way < 0.0 && d.abs() > 0.5) {
-      fail("「\{s}」 from \{at} to \{now} in a frame at \{t.time()}")
+      fail("「\{s}」 from \{Repr(at)} to \{Repr(now)} in a frame at \{t.time()}")
     }
     if d.abs() > 0.5 {
       way = d
@@ -144,7 +144,7 @@ test "wide: a new chat's first words sent: its field's hint not drawn over them 
 
 ///|
 test "a new chat's first words go into their bubble from the frame they are sent, the core's answers and its view of the chat however late" {
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let unread = @signals.signal(true)
   let t = held_core(held, unread)
   let words = "把发布说明写一下"
@@ -161,7 +161,7 @@ test "a new chat's first words go into their bubble from the frame they are sent
   let landed = one_way_till(t, words, sent + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
   assert_true(send_flight.get() is None)
   // in their bubble, over the composer at the chat's foot (its rows at its end, the room over them)
-  assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
+  assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{Repr(landed)} from \{Repr(typed)}")
   assert_true((landed.0 - typed.0).abs() > 1.0)
   // the chat made, the message sent to it, its view read: they stay in their bubble (up only as what comes under them
   // opens its room, its agent's line)
@@ -177,7 +177,7 @@ test "a new chat's first words go into their bubble from the frame they are sent
   t.draw()
   t.frame()
   let after = seen_once(t, words)
-  assert_true(after.0 == landed.0 && after.1 <= landed.1 + 0.5 && landed.1 - after.1 < 12.0, msg="\{landed} then \{after}")
+  assert_true(after.0 == landed.0 && after.1 <= landed.1 + 0.5 && landed.1 - after.1 < 12.0, msg="\{Repr(landed)} then \{Repr(after)}")
 }
 
 ///|
@@ -191,7 +191,7 @@ fn keyboard_up(t : @ui.Tester, h : Double) -> Unit {
 ///|
 test "a new chat's first words sent with the keyboard up: no words over others on any frame, the core however late" {
   // (words over words on any frame where something moves fail the test: words_over.mbt)
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let unread = @signals.signal(true)
   let t = held_core(held, unread)
   let (_, y) = bar_places_at()
@@ -207,7 +207,7 @@ test "a new chat's first words sent with the keyboard up: no words over others o
   assert_true(app.nav.top() is Chat(_))
   let typed = seen_once(t, words)
   let landed = one_way_till(t, words, t.time() + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
-  assert_true(landed.1 < typed.1, msg="landed at \{landed} from \{typed}")
+  assert_true(landed.1 < typed.1, msg="landed at \{Repr(landed)} from \{Repr(typed)}")
   for name in ["newChat.create", "chat.send"] {
     match held.get(name) {
       Some(give) => give()
@@ -307,7 +307,7 @@ test "a new chat's first words sent on a short page: nothing of its scene the fo
 
 ///|
 test "a new chat's first words sent: its scene fades where it is from then, as they go, not once the chat is made" {
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let t = held_core(held, @signals.signal(true))
   let title = "想让 agent 做什么？"
   new_chat_sent(t, "把发布说明写一下") |> ignore
@@ -343,7 +343,7 @@ test "a new chat's first words sent: its scene fades where it is from then, as t
 
 ///|
 test "a new chat's first words hold its composer as tall as it was while they are in it, its chat's, till they set out" {
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let unread = @signals.signal(true)
   let t = held_core(held, unread)
   let (_, y) = bar_places_at()
@@ -359,7 +359,10 @@ test "a new chat's first words hold its composer as tall as it was while they ar
   assert_true(app.nav.top() is Chat(_))
   assert_eq(box(), tall)
   // let go of as they set out, the core's answers kept the while
-  let go = t.rest_of("composer/held-box/")
+  let go = match app.nav.top() {
+    Chat(r) => @sfbase.flight_lets_go(r.station + ":" + r.session).map(fn(l) { l.0 }).unwrap_or(@double.infinity)
+    _ => @double.infinity
+  }
   assert_true(go > t.time() && go < @double.infinity, msg="\{go} \{t.time()}")
   t.run_for(go - t.time())
   assert_true(box() < tall, msg="\{box()} \{tall}")
@@ -375,12 +378,12 @@ test "a new chat's first words with the core at once: never gone, into their bub
   let landed = one_way_till(t, words, sent + flight_carry_after_ms + flight_carry_ms + 100.0, 120.0)
   assert_true(send_flight.get() is None)
   // over the composer at the chat's foot
-  assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
+  assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{Repr(landed)} from \{Repr(typed)}")
 }
 
 ///|
 test "a new chat's first words not sent (the chat not made): the page the new chat again, they back in its field" {
-  let held : Map[String, () -> Unit] = {}
+  let held : Map[String, () -> Unit] = Map([])
   let unread = @signals.signal(true)
   new_run()
   let base = fixture("home")
@@ -439,11 +442,7 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
           value: Some({
             "kept": "st1",
             "any": false,
-            "efforts": [],
-            "accounts": [],
-            "pickAccount": false,
             "waiting": false,
-            "frequent": [],
           }),
           error: None,
           version: 0,
@@ -486,4 +485,61 @@ test "a new chat while its stations are read: its page and composer as they will
   tap_send(t)
   t.draw()
   assert_eq(made.val, 1)
+}
+
+///|
+test "a new chat's first words: the room under its rows goes down to where the composer comes to stand, never at once" {
+  let t = tester("home")
+  // (three lines: the composer held as tall for them till they set out, lines more than it comes to stand at)
+  let words = "第一行\n第二行\n第三行"
+  ignore(new_chat_sent(t, words))
+  // (every frame drawn from the press on, as a display draws them: the composer let go of as the words set out, its
+  // room under the rows on the list's way with it, not a step)
+  // (the chat's list's, the last list drawn, once it is the only one: the new chat's page has a list of its own
+  // before, leaving as the chat comes)
+  let foot = fn() {
+    let lists = t.list_row_boxes()
+    if !(app.nav.top() is Chat(_)) || lists.length() != 1 || lists[0].length() == 0 {
+      -1.0
+    } else {
+      lists[0][lists[0].length() - 1].3
+    }
+  }
+  let mut was = foot()
+  let end = t.time() + flight_carry_after_ms + flight_carry_ms + @ui.move_most_ms
+  while t.time() < end {
+    t.frame()
+    let now = foot()
+    if was >= 0.0 && now >= 0.0 {
+      assert_true((now - was).abs() < newchat_foot_step, msg="at \{t.time()}: the room under the rows \{was} → \{now}")
+    }
+    was = now
+  }
+}
+
+///|
+/// The most the room under a new chat's rows may change in a frame on its way (points): a line's at once is a step.
+let newchat_foot_step : Double = 8.0
+
+///|
+test "unfolded: a new chat's long first words sent: the room under the chat's rows never below 0" {
+  // (a foldable opened, laid out Medium with touch: the chat's list keeps the composer's room as it comes to stand,
+  // composer_room's `settled`, from the frame the new chat becomes the chat; that room measured the new chat's tall
+  // composer against a foot never measured on a chat's page, -200 under 0: 0.1.8569's crash, chat_list's Foot row
+  // `Exact(<0>)`)
+  let src = @sffixture.round_trip(fixture_app("chat"), 60.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=864.0, h=954.0, platform=2)
+  // (what is held here is that it is drawn at all; how the composer opens at this width is not this test's)
+  t.motion_unjudged(true)
+  let words = "把发布说明写一下，" + "先列出这次改了什么、为什么改、谁会注意到，再按页面分组，每组写清楚旧的和新的样子。".repeat(6)
+  t.drive("timeout 20000\nuntil 新建对话\ntap 新建对话\nuntil 做任何事\ntap 做任何事\n") |> ignore
+  t.type_text(words)
+  t.draw()
+  tap_send(t)
+  t.draw()
+  let till = t.time() + @sfbase.flight_desk_ms + new_leave_ms + @sfbase.sent_down_ms
+  while t.time() < till {
+    t.frame()
+  }
+  assert_true(app.nav.top() is Chat(_))
 }

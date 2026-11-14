@@ -106,9 +106,9 @@ test "indents: a paragraph's own spacing replaced by two ideographic spaces, a h
   let drawn = render_chunk(chunk, 100, heads, true)
   assert_eq(drawn, "第一章 车站\n\u{3000}\u{3000}他到了。\n\u{3000}\u{3000}她也到了。\n")
   let raw = chunk.find("他").unwrap()
-  assert_eq(drawn.view(start_offset=render_offset(chunk, 100, heads, raw, true)).has_prefix("他"), true)
+  assert_eq(drawn.exact_view(start=render_offset(chunk, 100, heads, raw, true)).has_prefix("他"), true)
   let raw2 = chunk.find("她").unwrap()
-  assert_eq(drawn.view(start_offset=render_offset(chunk, 100, heads, raw2, true)).has_prefix("她"), true)
+  assert_eq(drawn.exact_view(start=render_offset(chunk, 100, heads, raw2, true)).has_prefix("她"), true)
   // the same block elsewhere in the text: its first line indented too
   assert_true(render_chunk(chunk, 0, heads, true).has_prefix("\u{3000}\u{3000}第一章"))
 }

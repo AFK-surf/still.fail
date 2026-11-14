@@ -42,11 +42,15 @@ export const profileFast = (p: Profile): boolean => p.fast === true;
 /// The runtimes a session can be set to Fast on (its own `fast`, else its profile's).
 export const FAST_RUNTIMES: readonly string[] = ["codex", "claude"];
 /// Whether a profile's account takes Fast: an OpenAI subscription on Codex (its service tier); on Claude Code (its
-/// `fastMode` setting) an Anthropic key, or a Claude subscription, whose Fast is billed to its usage credits (offered
-/// only while they are on: `fastNeedsCredits`; Claude Code runs at standard speed without them).
+/// `fastMode` setting) an Anthropic key, a Claude subscription, whose Fast is billed to its usage credits (offered
+/// only while they are on: `fastNeedsCredits`; Claude Code runs at standard speed without them), or an OpenRouter key
+/// (OpenRouter takes Claude Code's `speed: "fast"` and serves it from Anthropic's fast tier; checked 2026-11-11 with
+/// Claude Code 2.1.321, which sends it to a base URL of its own as to Anthropic's).
 export const takesFast = (p: Profile): boolean => {
   const kind = accessKind(p);
-  return (p.runtime === "codex" && kind === "subscription") || (p.runtime === "claude" && (kind === "anthropic-api" || kind === "subscription"));
+  if (p.runtime === "codex") return kind === "subscription";
+  if (p.runtime !== "claude") return false;
+  return kind === "anthropic-api" || kind === "subscription" || (kind === "api-provider" && access(p).provider === "openrouter");
 };
 /// A Claude subscription: its Fast is offered only while its allowance says its usage credits are on.
 export const fastNeedsCredits = (p: Profile): boolean => p.runtime === "claude" && accessKind(p) === "subscription";
@@ -65,6 +69,8 @@ export function apiSource(via: Via): [Source, Endpoints] | undefined {
 /// The key the runtimes are given where the profile has none (a provider that works without): they ask for one.
 const NO_KEY = "none";
 export const OPENCODE = "https://opencode.ai/zen/go";
+/// What Claude Code's background calls run on an OpenCode Go profile that names no model (`accessEnv`).
+export const OPENCODE_SMALL = "claude-haiku-5-5";
 /// The variable a Codex provider config reads an API provider's key from.
 const CODEX_KEY = "STILLFAIL_API_KEY";
 /// The variable DeepSeek Harness reads a profile's key from (its route's `apiKeyEnv`, dsh.ts); DeepSeek's own route
@@ -74,7 +80,9 @@ export const DSH_KEY = "STILLFAIL_DSH_KEY";
 /// Environment an access kind needs. `{route}` is expanded per session later.
 export function accessEnv(runtime: Runtime, kind: AccessKind, key: string, model: string | undefined, via: Via): Record<string, string> {
   if (kind === "opencode-go" && runtime === "claude") {
-    const small = model ?? "deepseek-flash";
+    // Claude Code's own small model where the profile names none: one the gateway lists today (an id it no longer
+    // has fails every background call with 400 "Model is unavailable": deepseek-flash, gone by 2026-11).
+    const small = model ?? OPENCODE_SMALL;
     return {
       ANTHROPIC_BASE_URL: OPENCODE,
       ANTHROPIC_API_KEY: key,

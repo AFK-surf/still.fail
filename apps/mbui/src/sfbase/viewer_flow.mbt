@@ -99,7 +99,7 @@ pub fn Viewer::read_on(self : Viewer, src : Source) -> Unit {
     None => {
       let f = Flow::new()
       v.flow = Some(f)
-      v.flow_told.set(@signals.untracked(fn() { v.flow_told.get() }) + 1)
+      v.flow_told.set(v.flow_told.untracked() + 1)
       f
     }
   }
@@ -156,13 +156,13 @@ pub fn Flow::take(self : Flow, bytes : Bytes) -> Unit {
     b.to_bytes()
   }
   let end = if self.whole() { all.length() } else { utf8_whole(all) }
-  self.carry = all[end:].to_bytes()
-  let words = self.tail + @codec.utf8_text(all[:end].to_bytes(), end)
+  self.carry = all[end:].to_owned()
+  let words = self.tail + @codec.utf8_text(all[:end].to_owned(), end)
   let parts = words.split("\n").map(fn(s) { s.to_owned() }).to_array()
   self.tail = parts.pop().unwrap_or("")
   let from = self.lines.length()
   for line in parts {
-    self.lines.push(if line.has_suffix("\r") { line.view(end_offset=line.length() - 1).to_owned() } else { line })
+    self.lines.push(if line.has_suffix("\r") { line.exact_view(end=line.length() - 1).to_owned() } else { line })
   }
   if self.whole() && self.tail != "" {
     self.lines.push(self.tail)

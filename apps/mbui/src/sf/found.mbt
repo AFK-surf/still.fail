@@ -17,7 +17,7 @@ pub fn find_words(text : String, words : Array[String]) -> Array[(Int, Int)] {
     }
     let mut at = 0
     while at + w.length() <= lower.length() {
-      match lower.view(start_offset=at).find(w) {
+      match lower.exact_view(start=at).find(w) {
         Some(k) => {
           out.push((at + k, at + k + w.length()))
           at = at + k + w.length()
@@ -126,10 +126,48 @@ pub fn found_weight(runs : Array[@ui.Run], words : Array[String]) -> Array[@ui.R
         continue
       }
       let inside = ranges.iter().any(fn(m) { m.0 <= off + a && off + b <= m.1 })
-      let piece = r.text.view(start_offset=a, end_offset=b).to_string()
+      let piece = r.text.exact_view(start=a, end=b).to_owned()
       out.push({ ..r, text: piece, weight: if inside && r.weight < 600 { 600 } else { r.weight } })
     }
     off = off + n
   }
   out
+}
+
+///|
+/// What a chat's find marks of words in pieces (`runs`, as View::runs_marks says them) where it found `words` in them:
+/// each match coloured in (the old page's highlighter: yellow on the light theme, orange in the dark, translucent so the
+/// words' own ink stays legible, search_marks.mbt), the `at`-th of them in their order (-1 none: the reader is at
+/// another) with the accent's line at its foot, as thick as a message's stroke; `at` found_all (a search's words in the
+/// message it opened the chat at): each with that line alone, none coloured in. None where nothing is found in them.
+pub fn found_marks(runs : Array[@ui.Run], words : Array[String], at : Int) -> Array[@view.RunsMark] {
+  if words.is_empty() {
+    return []
+  }
+  let t = theme()
+  let ground = if t.dark { 0xFF700047L } else { 0xFFCC00D9L }
+  find_words(runs_text(runs), words).mapi(fn(i, r) {
+    if at == found_all {
+      { from: r.0, to: r.1, ground: 0L, line: t.p.accent, line_w: message_stroke.width }
+    } else if i == at {
+      { from: r.0, to: r.1, ground, line: t.p.accent, line_w: message_stroke.width }
+    } else {
+      { from: r.0, to: r.1, ground, line: 0L, line_w: 0.0 }
+    }
+  })
+}
+
+///|
+/// What found_marks is told to mark every one of the words with the accent's line under it alone (a search's, where
+/// it opened a chat: the old page's search strokes), not one time the reader is at among them.
+pub let found_all : Int = -2
+
+///|
+/// The text of words in pieces, all of it in order (the terms a mark of them is said in).
+fn runs_text(runs : Array[@ui.Run]) -> String {
+  let sb = StringBuilder()
+  for r in runs {
+    sb.write_string(r.text)
+  }
+  sb.to_string()
 }

@@ -1,25 +1,28 @@
 // A page's dated record made once, laid
-// out by the width the page's frame gives it (look_node): a day's label over its rows, one change's lines each led by
-// its kind, and what a page says in place of what it lists. The page keeps what they say and who each is (its topic,
+// out by the width the page's frame gives it (look_node): a day's label, and under it its changes, each a block of the
+// page's list of its own (a piece of the day's card, narrow), one change's lines each led by its kind, and what a page
+// says in place of what it lists. The page keeps what they say and who each is (its topic,
 // its days and changes by their keys); these only how they are laid out.
 
 ///|
 /// One line of a change: its words, led by its kind's `label` (none: no label, its room kept where it is wide), the
 /// accent's where it is something `fresh`.
+#derive(Eq)
 pub(all) struct ChangeLine {
   label : String
   text : String
   fresh : Bool
-} derive(Eq)
+}
 
 ///|
 /// What a page says in place of what it lists (waiting over, nothing there, what went wrong), `words` as it says it now:
 /// narrow, 12 in, 8 over and under, the meta's muted (mNote); wide, as it is, the UI's muted; in red where it says what
 /// is wrong (`bad`).
-pub fn page_said_node(parent : @view.View, words : () -> String, bad? : Bool = false) -> Unit {
+#callsite(autofill(loc))
+pub fn page_said_node(parent : @view.View, words : () -> String, bad? : Bool = false, loc~ : SourceLoc) -> Unit {
   match look_node(parent) {
     Narrow =>
-      parent.box(fn(n) {
+      parent.box(made_for=loc, fn(n) {
         n.padding(Is((said_narrow_x, said_narrow_y, said_narrow_x, said_narrow_y))) |> ignore
         words_node(n, words, fn() { if bad { said_narrow_bad } else { said_narrow } }) |> ignore
       })
@@ -29,24 +32,46 @@ pub fn page_said_node(parent : @view.View, words : () -> String, bad? : Bool = f
 }
 
 ///|
-/// A day of a record, `label` as it is now, its rows (`rows` makes them: change_node's) under it: narrow, a heading
-/// over them on a list card (heading_node, group_node); wide, its label (10 in, the meta's medium muted) over them, 20
-/// over it all, 2 apart.
-pub fn day_group_node(parent : @view.View, label : () -> String, rows : (@view.View) -> Unit) -> Unit {
+/// A day's heading of a record made a block of its own, its changes each one after it (day_change_node), so a long day
+/// is made only as far as it shows: `label` as it is now; narrow, a heading over the card its changes are pieces of
+/// (heading_node); wide, its label (10 in, the meta's medium muted), 20 over it.
+#callsite(autofill(loc))
+pub fn day_heading_node(parent : @view.View, label : () -> String, loc~ : SourceLoc) -> Unit {
   match look_node(parent) {
-    Narrow => {
-      heading_node(parent, label)
-      group_node(parent, rows)
-    }
+    Narrow => heading_node(loc~, parent, label)
     Wide =>
-      parent.box(fn(d) {
-        d.padding(Is((0.0, day_top, 0.0, 0.0))).gap(Is(day_gap)) |> ignore
+      parent.box(made_for=loc, fn(d) {
+        d.padding(Is((0.0, day_top, 0.0, 0.0))) |> ignore
         d.box(fn(h) {
           h.padding(Is((change_in, 0.0, change_in, 0.0))) |> ignore
           words_node(h, label, fn() { day_heading }) |> ignore
         })
         |> ignore
-        rows(d)
+      })
+      |> ignore
+  }
+}
+
+///|
+/// One change of a day made a block of its own under its day's heading (day_heading_node), change_node's: narrow, a
+/// piece of the day's list card (card_piece_node, `piece` saying which as it is now); wide, 2 under what is over it.
+/// Laid out one under another, a day's heading and its changes are what one block of all of them was.
+#callsite(autofill(loc))
+pub fn day_change_node(
+  parent : @view.View,
+  piece : () -> CardPiece,
+  lines : () -> Array[ChangeLine],
+  version : () -> String,
+  note : () -> String,
+  coming : () -> Bool,
+  loc~ : SourceLoc,
+) -> Unit {
+  match look_node(parent) {
+    Narrow => card_piece_node(loc~, parent, piece, fn(card) { change_narrow_node(card, lines, version, note, coming) })
+    Wide =>
+      parent.box(made_for=loc, fn(d) {
+        d.padding(Is((0.0, day_gap, 0.0, 0.0))) |> ignore
+        change_wide_node(d, lines, version, note, coming)
       })
       |> ignore
   }
@@ -59,28 +84,32 @@ pub fn day_group_node(parent : @view.View, label : () -> String, rows : (@view.V
 /// and the note, 10 apart; 16 by 10 in, its lines 2 apart. Wide: each line with its kind before it in a room of 52 (a
 /// small label; none: its room kept), 10 apart, its words, its version at the end of the first; under them the note,
 /// as far in as the words; 10 by 8 in, its lines 4 apart.
+#callsite(autofill(loc))
 pub fn change_node(
   parent : @view.View,
   lines : () -> Array[ChangeLine],
   version : () -> String,
   note : () -> String,
   coming : () -> Bool,
+  loc~ : SourceLoc,
 ) -> Unit {
   match look_node(parent) {
-    Narrow => change_narrow_node(parent, lines, version, note, coming)
+    Narrow => change_narrow_node(loc~, parent, lines, version, note, coming)
     Wide => change_wide_node(parent, lines, version, note, coming)
   }
 }
 
 ///|
+#callsite(autofill(loc))
 fn change_narrow_node(
   parent : @view.View,
   lines : () -> Array[ChangeLine],
   version : () -> String,
   note : () -> String,
   coming : () -> Bool,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(c) {
+  parent.box(made_for=loc, fn(c) {
     c.padding(Is((change_narrow_x, change_narrow_y, change_narrow_x, change_narrow_y))).gap(Is(change_narrow_gap))
     |> ignore
     c.each(fn() { lines().mapi(fn(i, l) { (i, l) }) }, fn(il) { il.0 }, fn(row, il) {
@@ -131,14 +160,16 @@ fn change_kind_runs(l : ChangeLine) -> Array[@ui.Run] {
 }
 
 ///|
+#callsite(autofill(loc))
 fn change_wide_node(
   parent : @view.View,
   lines : () -> Array[ChangeLine],
   version : () -> String,
   note : () -> String,
   coming : () -> Bool,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(c) {
+  parent.box(made_for=loc, fn(c) {
     c.padding(Is((change_in, change_y, change_in, change_y))).gap(Is(change_wide_gap)) |> ignore
     let row_of = fn(r : @view.View) { r.row(Is(true)).gap(Is(change_gap)).lines_up(Is(Some(Start))) |> ignore }
     let kind_room = fn(r : @view.View, make : (@view.View) -> Unit) {

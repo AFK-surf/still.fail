@@ -74,7 +74,42 @@ function fileOf(request: Request): Request {
 export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, assets: (request: Request) => Promise<Response> | Response): Promise<Response> {
   const redirect = moved(request, env);
   if (redirect) return redirect;
-  return hardened(await page(request, env, assets));
+  const answer = built(request, hardened(await page(request, env, assets)));
+  return (await packed(request, answer, assets)) ?? answer;
+}
+
+/**
+ * The app's files named by the build that made them (`?b=`: web/src/mbui/core.ts BUILT_AT): another build's are
+ * another name, so the browser keeps them a year and never asks after them again.
+ */
+function built(request: Request, answer: Response): Response {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith("/mbui/") || !url.searchParams.has("b") || !answer.ok) return answer;
+  if ((answer.headers.get("content-type") ?? "").startsWith("text/html")) return answer;
+  answer.headers.set("cache-control", "public, max-age=31536000, immutable");
+  return answer;
+}
+
+/** The app's scripts that the build brotlis at the highest level beside them (apps/mbui/scripts/web-app.sh). */
+const PACKED = /^\/mbui\/(app|host)\.js$/;
+
+/**
+ * `answer` (one of PACKED) as its build brotlied it, `<file>.br`, sent as it is to a browser that takes brotli:
+ * Cloudflare's own brotli of it on the fly is a lower level's (app.js: 2.26 MB sent, 1.66 at the highest, 2026-11-09).
+ * Null for any other answer, a browser that takes no brotli, or a build without one: the file as it is.
+ */
+async function packed(request: Request, answer: Response, assets: (request: Request) => Promise<Response> | Response): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (!PACKED.test(url.pathname) || answer.status !== 200) return null;
+  if (!/\bbr\b/.test(request.headers.get("accept-encoding") ?? "")) return null;
+  const file = await assets(new Request(new URL(`${url.pathname}.br`, url), { method: request.method }));
+  if (file.status !== 200 || (file.headers.get("content-type") ?? "").startsWith("text/html")) return null;
+  const headers = new Headers(answer.headers);
+  headers.set("content-encoding", "br");
+  headers.append("vary", "accept-encoding");
+  headers.delete("content-length");
+  void answer.body?.cancel();
+  return new Response(file.body, { status: 200, headers, encodeBody: "manual" });
 }
 
 /** The page or file `request` asks for: the app's own, or on the test channel's host, the test channel's. */

@@ -26,15 +26,31 @@ priv struct Ev {
   /// what the run's host said of its views (`{"view":…}`, `{"still":…}`, `{"info":…}`, a player's `{"read":…}`:
   /// mbui's trace_views), the line whole: given in its place like a message in, to the Tester's host (Replay::host)
   host : Bool
+  /// a message in for one of the run's `stations` the replay keeps itself (Replay::keep_stations): which, in `kept`
+  /// (-1: none)
+  mut kept : Int
 }
 
 ///|
+/// One of the run's `stations` subscriptions a replay keeps itself (Replay::keep_stations): its scope (canon), how
+/// much of each station it says (`rank`: 2 whole, 1 whole but only those with a drive, 0 brief), its value so far
+/// (its deltas applied), and when it was last given one (the replay's count of them: the latest of a rank wins).
+priv struct KeptStations {
+  scope : String
+  rank : Int
+  mut value : Json?
+  mut given : Int
+}
+
+///|
+// strict is never read: the strict and the lax passes give what came alike
+#warnings("-unused_field")
 pub struct Replay {
   priv evs : Array[Ev]
   /// a recorded ask's id: the id the app gave the same ask now; and the other way
   priv ids : Map[Int, Int]
   priv back : Map[Int, Int]
-  /// a recorded subscription the app asks twice now (the stations whole and brief, a tape from before the brief ask):
+  /// a recorded subscription the app asks twice now (a chats' list whole and its first rows, a tape from before those):
   /// the other ids what comes for it goes to as well; what came for it so far (its value with its deltas); and what is
   /// to be given at the next delivery (its value so far, to the one asked after)
   priv copies : Map[Int, Array[Int]]
@@ -48,6 +64,8 @@ pub struct Replay {
   priv mut next_in : Int
   priv mut client : Client?
   priv diverged : Array[String]
+  // (the moment each of them was asked, on the app's clock)
+  priv diverged_at : Array[Double]
   priv fuzzy : Array[String]
   /// the wall clock as far as the run had come by what was given: the latest of the given messages' (so the same
   /// whatever order what may come at once was given in)
@@ -58,8 +76,9 @@ pub struct Replay {
   priv mut seed : UInt
   /// when what came is given (`pace`): at once, or at the run's own pace
   priv mut pace : Pace
-  /// whether every ask of the run's before a message waits it (else only its own and those that are not reports)
-  priv mut strict : Bool
+  /// whether a step of the script's is timed from the step before it (Replay::chain_steps: a pace pass's, its frames
+  /// not the run's), else from what happened again before it
+  priv mut steps_chained : Bool
   /// the clock the replay's events are timed on (a Tester's: when an ask is made again, a message given)
   priv mut clock : () -> Double
   /// the calls made since the last take_asked that the run answered (or that it did not make: a live backend answers
@@ -69,6 +88,8 @@ pub struct Replay {
   priv skipped : Array[String]
   /// reports the app made that the run did not (Replay::sent: its frames had them, the run's not)
   priv unasked_reports : Array[String]
+  /// the run's unsubscriptions made again after messages the run had after them were given (Replay::late_unsubs)
+  priv late_unsubs : Array[(String, Int, Double)]
   /// the ids the app gave its watches of `ambient` topics the run did not have (let go of as well, unasked)
   priv ambient_ids : Map[Int, Bool]
   /// what the run's app was started with (its trace's `{"env":…}`: src/stillfail's CORETRACE env)
@@ -76,10 +97,25 @@ pub struct Replay {
   /// what the run's host answered that its text recording kept (`{"textrec":…}`: TEXTREC lines, mbui's hostrec.mbt):
   /// a word's bounds, a picture's sizes; one a line
   priv run_text : Array[String]
+  /// when the run's display began each frame, on the run's clock (`w` of its trace's `{"frame":T}` lines: src/stillfail's
+  /// CORETRACE frame); none in a trace recorded before they were kept
+  priv run_frames : Array[Double]
   /// this machine's station as the run's host said it (its trace's `{"host":{"localStation":…}}`: src/stillfail's CORETRACE host)
   priv run_local : String
+  /// what the run's host gave its frames as the run began (its trace's first `{"settings":…}`: mbui's
+  /// @ui.trace_settings, src/stillfail's CORETRACE settings); those after it are given again as the host's lines are
+  /// (Replay::host), at their place
+  priv run_settings : Json?
   /// where what the run's host said of its views goes (Replay::host)
   priv mut host_said : ((String) -> Unit)?
+  /// the run's `stations` subscriptions, kept by the replay itself (Replay::keep_stations); how many of their values
+  /// were given so far; each scope's value as last given to the app; the app's asks for a scope's stations now (its
+  /// id: the scope)
+  priv mut stations_own : Bool
+  priv kept : Array[KeptStations]
+  priv mut kept_given : Int
+  priv scope_said : Map[String, Json]
+  priv stations_asked : Map[Int, String]
 }
 
 ///|
@@ -88,10 +124,11 @@ pub struct Replay {
 /// (in its wall clock), times `scale` (1: as the run had it; 2: twice as slow; 0.5: twice as fast). A message's anchor
 /// is the latest event before it in the run that has happened again: an ask made again, a message given (Replay::
 /// due_at); a trace whose asks have no wall clock (an older one) anchors to the messages in only.
+#derive(Eq, Debug)
 pub(all) enum Pace {
   AtOnce
   AsRun(Double)
-} derive(Eq, Show)
+}
 
 ///|
 /// Asks that only tell the core what the app sees or keeps (where its chat's list is, a draft and what is typed in it, where it was read to,
@@ -101,6 +138,11 @@ pub(all) enum Pace {
 /// params is the run's next of its name, not said to differ.
 let reports : Array[String] = [
   "client.focus", "chat.place", "draft.put", "drive.place", "composer.text", "composer.comment",
+  // (a chats' list's window raised as it is scrolled near its foot: as the frames scrolled it)
+  "chats.window",
+  // (how many of a chat's last messages it opens on, told before it is asked: a run from before it never told it, and
+  // a chat's topic is the same either way)
+  "chat.window",
   // the core's pure calls a replay's app answers from what is kept (src/sfkept) when it has the answer, and asks the
   // tape for when not: a tape's that the app answered itself is not where the two went apart, nor one it asks of a tape
   // from before the call (sfreplay's source.mbt tells the tape of each it answered, as a report)
@@ -109,26 +151,75 @@ let reports : Array[String] = [
 
 ///|
 /// Topics the app watches from its start whatever the person does (the device's downloads, sfbase/downloads.mbt; the
-/// copies between the workspace's stations, listed with them: sfdesk transfers.mbt): a run from before the app watched
-/// one has none of it, and that is not where the two went apart; it is answered nothing (the run had none of it), and
+/// copies between the workspace's stations, listed with them: sfdesk transfers.mbt; the team's replies on a chat's bug
+/// reports, watched with its composer: sfpages feedback_replies.mbt): a run from before the app watched one has none of it, and that is not where the two went apart; it is answered nothing (the run had none of it), and
 /// let go of as it was watched.
-let ambient : Array[String] = ["downloads", "driveTransfers"]
+let ambient : Array[String] = ["downloads", "driveTransfers", "chatFeedback"]
 
 ///|
 /// The conversation in `log`: a trace's lines (`{"out":…}`, `{"in":…}`), or a log with them after CORETRACE. Other
 /// lines are left out.
+///|
+/// What the app told the core in this replay, each message as a line (its kind, what it names, its params; an
+/// unsubscribe by what it subscribed, a subscription's id left out): what two passes of a flow at other paces are
+/// held to say alike (sfreplay's `orders`). Not the reports (`reports`: their number is the timing's by design).
+// kept across runs: begun anew by each replay (Replay::parse)
+let outs_said : Array[String] = []
+
+///|
+// kept across runs: begun anew by each replay (Replay::parse)
+let outs_subs : Map[Int, String] = Map([])
+
+///|
+/// What the app told the core in the replay last begun, in order (outs_said).
+pub fn Replay::outs(self : Replay) -> Array[String] {
+  ignore(self)
+  outs_said.copy()
+}
+
+///|
+fn outs_note(m : Map[String, Json], kind : String) -> Unit {
+  let id = match id_of(m) {
+    Some(i) => i
+    None => -1
+  }
+  match kind {
+    "subscribe" => {
+      let key = m.get("subscribe").map(fn(t) { canon(t) }).unwrap_or("")
+      outs_subs[id] = key
+      outs_said.push("sub " + key + (if m.contains("have") { " have" } else { "" }))
+    }
+    "unsubscribe" =>
+      outs_said.push(
+        "unsub " + outs_subs.get(id).unwrap_or("?") + (if m.get("keep") is Some(True) { " keep" } else { "" }),
+      )
+    "call" => {
+      let name = name_of(m)
+      if !reports.contains(name) {
+        outs_said.push("call " + name + " " + canon(m.get("params").unwrap_or(Json::null())))
+      }
+    }
+    other => outs_said.push(other + " " + name_of(m))
+  }
+}
+
+///|
 pub fn Replay::parse(log : String) -> Replay {
+  outs_said.clear()
+  outs_subs.clear()
   let evs : Array[Ev] = []
   let run_env : Array[(String, String)] = []
   let run_text : Array[String] = []
+  let run_frames : Array[Double] = []
   let run_local : Ref[String] = Ref("")
+  let run_settings : Ref[Json?] = Ref(None)
   for v in log.split("\n") {
     let line = v.to_owned()
     let start = match line.find("CORETRACE ") {
       Some(i) => i + 10
       None => if line.has_prefix("{") { 0 } else { continue }
     }
-    let j = @json.parse(line.view(start_offset=start).to_owned()) catch {
+    let j = @json.parse(line.exact_view(start=start).to_owned()) catch {
       _ => continue
     }
     guard j is Object(m) else { continue }
@@ -142,7 +233,7 @@ pub fn Replay::parse(log : String) -> Replay {
           Some(String(h)) => Some(@codec.from_hex(h))
           _ => None
         }
-        evs.push({ out: true, msg: o, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false })
+        evs.push({ out: true, msg: o, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false, kept: -1 })
       }
       (_, Some(i)) => {
         let (wall, has_wall) = match m.get("w") {
@@ -155,7 +246,7 @@ pub fn Replay::parse(log : String) -> Replay {
           (_, Some(Number(n, ..))) => Some(Bytes::new(n.to_int()))
           _ => None
         }
-        evs.push({ out: false, msg: i, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false })
+        evs.push({ out: false, msg: i, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false, kept: -1 })
       }
       _ =>
         if m.get("env") is Some(Object(vars)) {
@@ -169,6 +260,13 @@ pub fn Replay::parse(log : String) -> Replay {
             Some(Object(_) as v) => run_local.val = v.stringify()
             _ => ()
           }
+        } else if m.get("settings") is Some(Object(_)) && run_settings.val is None {
+          run_settings.val = Some(j)
+        } else if m.get("frame") is Some(Number(_, ..)) {
+          match m.get("w") {
+            Some(Number(w, ..)) => run_frames.push(w)
+            _ => ()
+          }
         } else if m.get("textrec") is Some(rec) {
           run_text.push(rec.stringify())
         } else if m.contains("view") ||
@@ -177,12 +275,13 @@ pub fn Replay::parse(log : String) -> Replay {
           m.contains("site") ||
           m.contains("sitebody") ||
           m.contains("sitestate") ||
+          m.contains("settings") ||
           m.contains("read") {
           let (wall, has_wall) = match m.get("w") {
             Some(Number(d, ..)) => (d, true)
             _ => (0.0, false)
           }
-          evs.push({ out: false, msg: j, bytes: None, wall, has_wall, done: false, at: -1.0, given: -1.0, host: true })
+          evs.push({ out: false, msg: j, bytes: None, wall, has_wall, done: false, at: -1.0, given: -1.0, host: true, kept: -1 })
         } else {
           match (m.get("step"), m.get("w")) {
             // (a step that acts, when its input was handed to the host (`"acted":true`): the step there, at that
@@ -213,6 +312,7 @@ pub fn Replay::parse(log : String) -> Replay {
                     at: -1.0,
                     given: -1.0,
                     host: false,
+                    kept: -1,
                   })
                 }
                 None => ()
@@ -231,6 +331,7 @@ pub fn Replay::parse(log : String) -> Replay {
                     at: -1.0,
                     given: -1.0,
                     host: false,
+                    kept: -1,
                   })
                 None => ()
               }
@@ -251,24 +352,105 @@ pub fn Replay::parse(log : String) -> Replay {
     next_in: 0,
     client: None,
     diverged: [],
+    diverged_at: [],
     fuzzy: [],
     wall: 0.0,
     walls: [],
     pace: AtOnce,
-    strict: true,
+    steps_chained: false,
     clock: fn() { 0.0 },
     seed: 0,
     asked: [],
     host_said: None,
     skipped: [],
     unasked_reports: [],
+    late_unsubs: [],
     ambient_ids: {},
     run_env,
     run_text,
+    run_frames,
     run_local: run_local.val,
+    run_settings: run_settings.val,
+    stations_own: false,
+    kept: [],
+    kept_given: 0,
+    scope_said: {},
+    stations_asked: {},
   }
   r.advance()
   r
+}
+
+///|
+/// A run whose app asked the stations as whole lists (`stations {scope}`, `brief`, `drive`: a trace from before the
+/// core sent them as rows, its head without sfcore's MBUI_STATION_ROWS), given to an app that asks only `stations
+/// {scope}` (sfreplay's source reads its rows, a station and its parts out of that): the run's `stations` subscriptions
+/// and their unsubscriptions are the replay's own, never matched to an ask of the app's. They count as made from the
+/// start (they hold back nothing, none is unmade); what came for them comes in the run's order and time as any message in
+/// (after what the run asked before it), kept for each (its deltas applied). A scope's value is, of those that said
+/// one, the latest of the richest kind (whole, over whole with a drive only, over brief); the app's `stations {scope}`
+/// is given it at once, and whole again each time it changes, until it is let go of. Said before anything is asked
+/// (as the replay is made, before `attach`).
+pub fn Replay::keep_stations(self : Replay) -> Unit {
+  // (a kept one by the id the run gave it, while the run had it: ids are given again after a client's reset)
+  self.stations_own = true
+  let owner : Map[Int, Int] = Map([])
+  for e in self.evs {
+    guard e.msg is Object(m) && !e.host && !is_step(e.msg) else { continue }
+    guard id_of(m) is Some(id) else { continue }
+    if e.out {
+      match kind_of(m) {
+        "subscribe" if name_of(m) == "stations" => {
+          let t = match m.get("subscribe") {
+            Some(Object(t)) => t
+            _ => {}
+          }
+          let rank = if t.get("brief") == Some(Json::boolean(true)) {
+            0
+          } else if t.get("drive") == Some(Json::boolean(true)) {
+            1
+          } else {
+            2
+          }
+          owner[id] = self.kept.length()
+          self.kept.push({ scope: canon(t.get("scope").unwrap_or(Json::null())), rank, value: None, given: 0 })
+          e.done = true
+        }
+        "subscribe" | "call" => owner.remove(id)
+        "unsubscribe" if owner.contains(id) => {
+          e.done = true
+          owner.remove(id)
+        }
+        _ => ()
+      }
+    } else {
+      match owner.get(id) {
+        Some(k) => e.kept = k
+        None => ()
+      }
+    }
+  }
+  self.advance()
+}
+
+///|
+/// The scope's value as the run's kept `stations` say it now (Replay::keep_stations): of those that said one, the
+/// latest of the richest kind.
+fn Replay::scope_value(self : Replay, scope : String) -> Json? {
+  let mut best : KeptStations? = None
+  for k in self.kept {
+    if k.scope != scope || k.value is None {
+      continue
+    }
+    best = match best {
+      Some(b) if b.rank > k.rank || (b.rank == k.rank && b.given > k.given) => Some(b)
+      _ => Some(k)
+    }
+  }
+  match best {
+    Some(b) => b.value
+    None => None
+  }
 }
 
 ///|
@@ -308,16 +490,19 @@ pub fn Replay::skip_where(self : Replay, which : (String, Json) -> Bool) -> Unit
 ///|
 /// The run's asks whose message holds `text`, and what came for them, left out: an ask the run's timing made (a list
 /// off its end for a frame: `client.focus` with `"end":false`) that a test's frames need not make again. How many.
+/// A watch let go of or an ask cancelled names it by its id, and nothing came for that: what came for the watch stays.
 pub fn Replay::drop(self : Replay, text : String) -> Int {
   let gone : Array[Int] = []
+  let mut n = 0
   for e in self.evs {
     if e.out && !e.done && !is_step(e.msg) && e.msg.stringify().contains(text) {
       e.done = true
+      n += 1
       match e.msg {
         Object(m) =>
           match id_of(m) {
-            Some(id) => gone.push(id)
-            None => ()
+            Some(id) if !(kind_of(m) == "unsubscribe" || kind_of(m) == "cancel") => gone.push(id)
+            _ => ()
           }
         _ => ()
       }
@@ -329,7 +514,7 @@ pub fn Replay::drop(self : Replay, text : String) -> Int {
     }
   }
   self.advance()
-  gone.length()
+  n
 }
 
 ///|
@@ -343,6 +528,8 @@ pub fn Replay::client(self : Replay) -> Client {
 ///|
 /// The app's core (`client`, `wall_ms`) is this conversation from now on, until `detach`: its client started anew.
 pub fn Replay::attach(self : Replay) -> Unit {
+  // (the core's place this conversation's from now: a made-up core that had it no longer, core.mbt's serve)
+  serving.val = 0
   // A reader still following a subscription can ask for it again during reset: its ask belongs to this replay.
   transport.val = fn(s, _) { self.out(s) }
   wall_override.val = Some(fn() { self.wall })
@@ -362,17 +549,17 @@ pub fn Replay::attach(self : Replay) -> Unit {
 ///|
 /// The app's core is the engine again.
 pub fn Replay::detach() -> Unit {
+  serving.val = 0
   transport.val = engine_send
   wall_override.val = None
   receive_hook.val = None
 }
 
 ///|
-/// From now on, what came is given at `pace`; `strict`: each message waits every ask of the run's before it (else its
-/// own, and those before it that are not reports: a run's timing made those, another timing makes others).
-pub fn Replay::pace(self : Replay, pace : Pace, strict? : Bool = true) -> Unit {
+/// From now on, what came is given at `pace`. Every pass waits the same (Replay::ready): a message waits its own ask and
+/// those before it that are not reports, as a report the run's frames made the app's own frames may not make again.
+pub fn Replay::pace(self : Replay, pace : Pace) -> Unit {
   self.pace = pace
-  self.strict = strict
 }
 
 ///|
@@ -441,6 +628,51 @@ pub fn Replay::deliver(
       self.advance()
       continue
     }
+    // (for one of the run's stations the replay keeps: kept, and its scope's value given whole to what asks it now,
+    // where that changed: Replay::keep_stations)
+    if e.kept >= 0 {
+      let k = self.kept[e.kept]
+      match e.msg {
+        Object(m) =>
+          match (m.get("value"), m.get("delta"), k.value) {
+            (Some(v), _, _) => k.value = Some(v)
+            (_, Some(Array(ops)), Some(was)) => k.value = Some(apply_delta(was, ops))
+            _ => ()
+          }
+        _ => ()
+      }
+      self.kept_given += 1
+      k.given = self.kept_given
+      match self.scope_value(k.scope) {
+        Some(v) if !(self.scope_said.get(k.scope) is Some(was) && physical_equal(was, v)) => {
+          self.scope_said[k.scope] = v
+          for now, scope in self.stations_asked {
+            if scope == k.scope {
+              let msg = Json::object({ "id": Json::number(now.to_double()), "value": v })
+              match to {
+                Some(post) => {
+                  self.walls.push(e.wall)
+                  post(msg.stringify(), None)
+                }
+                None => {
+                  if e.wall > self.wall {
+                    self.wall = e.wall
+                  }
+                  match self.client {
+                    Some(c) => c.receive_json(msg)
+                    None => ()
+                  }
+                }
+              }
+            }
+          }
+        }
+        _ => ()
+      }
+      n += 1
+      self.advance()
+      continue
+    }
     // (one asked twice now: what came so far kept, and given to the other too)
     match e.msg {
       Object(m) =>
@@ -486,7 +718,7 @@ pub fn Replay::deliver(
         }
         n += 1
       }
-      None => self.diverged.push("came for an ask not made again: " + e.msg.stringify())
+      None => self.diverge("came for an ask not made again: " + e.msg.stringify())
     }
     self.advance()
   }
@@ -508,15 +740,15 @@ pub fn Replay::host(self : Replay, said : (String) -> Unit) -> Unit {
 /// test to have said it (Replay::step_taken): a player's state its host told once the run was past `until 0:02 /` is
 /// not given before.
 pub fn step_of(line : String) -> String? {
-  let l0 = if line.has_prefix("now ") { line.view(start_offset=4).to_owned() } else { line }
+  let l0 = if line.has_prefix("now ") { line.exact_view(start=4).to_owned() } else { line }
   // (`=words`, words alone: the drive says the line it took as it parsed it)
   // (and without the spaces after it: the drive's line as it took it, trimmed)
   let mut l = l0.replace_all(old=" =", new=" ")
   while l.has_suffix(" ") {
-    l = l.view(end_offset=l.length() - 1).to_owned()
+    l = l.exact_view(end=l.length() - 1).to_owned()
   }
   let verb = match l.find(" ") {
-    Some(k) => l.view(end_offset=k).to_owned()
+    Some(k) => l.exact_view(end=k).to_owned()
     None => l
   }
   if said_steps.contains(verb) {
@@ -556,6 +788,89 @@ pub fn Replay::next_step(self : Replay) -> String? {
     }
   }
   None
+}
+
+///|
+/// When the last message in given so far was given (-inf: none yet).
+pub fn Replay::last_given(self : Replay) -> Double {
+  let mut most = -@double.infinity
+  for e in self.evs {
+    if !e.out && e.at > most {
+      most = e.at
+    }
+  }
+  most
+}
+
+///|
+/// The step taken last held taken at `at` (the strict pass's first, taken once what it waited for was so): what is
+/// timed from it (the run's next steps, Replay::due_at) on from there.
+pub fn Replay::step_moved_to(self : Replay, at : Double) -> Unit {
+  let mut i = self.evs.length() - 1
+  while i >= 0 {
+    let e = self.evs[i]
+    if e.out && e.done && is_step(e.msg) {
+      e.at = at
+      return
+    }
+    i = i - 1
+  }
+}
+
+///|
+/// When the last of what the run asked before its next step not taken again, not asked here yet, was due to be asked
+/// at this pace (each on from the latest event before it that happened again, by their gap in the run; a report aside,
+/// Replay::sent): -inf where there is none, or at once.
+pub fn Replay::asks_before_step_due(self : Replay) -> Double {
+  let scale = match self.pace {
+    AtOnce => return -@double.infinity
+    AsRun(scale) => scale
+  }
+  let mut most = -@double.infinity
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if !e.out || e.done {
+      continue
+    }
+    if is_step(e.msg) {
+      break
+    }
+    if is_report(e.msg) || is_let_go(e.msg) || !e.has_wall {
+      continue
+    }
+    let mut j = i - 1
+    while j >= 0 {
+      let a = self.evs[j]
+      if a.at >= 0.0 && (a.has_wall || !a.out) {
+        let gap = e.wall - a.wall
+        let t = a.at + (if gap > 0.0 { gap * scale } else { 0.0 })
+        if t > most {
+          most = t
+        }
+        break
+      }
+      j = j - 1
+    }
+  }
+  most
+}
+
+///|
+/// Whether the run asked something before its next step not taken again that this run has not asked yet (a report
+/// aside, Replay::sent): what comes before the step has not all happened again.
+pub fn Replay::asks_before_step(self : Replay) -> Bool {
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if e.out && !e.done {
+      if is_step(e.msg) {
+        return false
+      }
+      if !is_report(e.msg) && !is_let_go(e.msg) {
+        return true
+      }
+    }
+  }
+  false
 }
 
 ///|
@@ -703,13 +1018,73 @@ pub fn Replay::next_due(self : Replay) -> Double? {
 ///|
 /// When message `i` may come at this pace (+inf: not until an ask before it is made again): at once; or at its anchor's
 /// time on by the run's gap between them. Its anchor: the latest event before it that has happened again (an ask made
-/// again, a message given); one left out (skipped, dropped; not strict, a report not made) is passed over, as is a
+/// again, a message given); one left out (skipped, dropped, a report not made) is passed over, as is a
 /// message in not given yet (what may come at once in another order: its own time stands for it), as are asks with no
 /// wall clock (an older trace: anchored to the messages in). None before it: at once.
 fn Replay::due_at(self : Replay, i : Int) -> Double {
+  let due = self.due_chained(i)
+  // (never before the run's latest step taken again before it, by their gap in the run: what came after a step in the
+  // run comes after it here, on the timeline from where it was taken (a first step taken later than the run's moment
+  // for it, its first screen later: all after it later by as much), whatever was made again sooner meanwhile (an
+  // unsubscription the run made after the step, made here before it: wide-newline's answers timed from it came 15.7 ms
+  // before the tap that asked for them, its next step's moment 9.6 ms before the tap))
+  match self.step_before(i) {
+    Some((at, wall)) if due > -@double.infinity && due < @double.infinity && self.evs[i].has_wall => {
+      let scale = match self.pace {
+        AsRun(scale) => scale
+        AtOnce => 1.0
+      }
+      let gap = self.evs[i].wall - wall
+      let from_step = at + (if gap > 0.0 { gap * scale } else { 0.0 })
+      if from_step > due { from_step } else { due }
+    }
+    _ => due
+  }
+}
+
+///|
+/// The run's latest step before event `i` taken again here that says its moment: when here and when in the run.
+fn Replay::step_before(self : Replay, i : Int) -> (Double, Double)? {
+  let mut k = i - 1
+  while k >= 0 {
+    let e = self.evs[k]
+    if e.out && e.done && e.at >= 0.0 && e.has_wall && is_step(e.msg) {
+      return Some((e.at, e.wall))
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// When event `i` is due by the events before it alone (due_at's, before the steps are taken into account).
+fn Replay::due_chained(self : Replay, i : Int) -> Double {
   let scale = match self.pace {
     AtOnce => return -@double.infinity
     AsRun(scale) => scale
+  }
+  // (a step of the script's: on from the step before it as the run's script went on from it, by their gap in the
+  // run, whenever what came between them was taken here: an input is the run's own moment at any frame rate, not one
+  // that follows what this pace's frames took when)
+  if self.steps_chained && is_step(self.evs[i].msg) {
+    let mut k = i - 1
+    while k >= 0 {
+      let e = self.evs[k]
+      if is_step(e.msg) && e.done && e.at >= 0.0 && e.has_wall && self.evs[i].has_wall {
+        let gap = self.evs[i].wall - e.wall
+        return e.at + (if gap > 0.0 { gap * scale } else { 0.0 })
+      }
+      k = k - 1
+    }
+    // (the first step: from the first of the run that happened again here, by their gap in the run, not from what
+    // this pace's frames took last before it)
+    for j in 0..<i {
+      let e = self.evs[j]
+      if e.at >= 0.0 && (e.has_wall || !e.out) && self.evs[i].has_wall {
+        let gap = self.evs[i].wall - e.wall
+        return e.at + (if gap > 0.0 { gap * scale } else { 0.0 })
+      }
+    }
   }
   let mut j = i - 1
   while j >= 0 {
@@ -719,13 +1094,35 @@ fn Replay::due_at(self : Replay, i : Int) -> Double {
       return e.at + (if gap > 0.0 { gap * scale } else { 0.0 })
     }
     // (a step of the script's is the run's own: timed from what happened again before it, the app's asks it has not
-    // made again aside, as they may be made in that time: a draft kept while the run waited to tap)
-    if e.out && !e.done && !is_report(e.msg) && !is_step(self.evs[i].msg) {
+    // made again aside, as they may be made in that time: a draft kept while the run waited to tap; nor is anything
+    // timed from one let go of not made again yet, which holds nothing back, Replay::ready)
+    if e.out && !e.done && !is_report(e.msg) && !is_let_go(e.msg) && !is_step(self.evs[i].msg) {
       return @double.infinity
     }
     j = j - 1
   }
   -@double.infinity
+}
+
+///|
+/// Each step of the script's timed from the step before it, by their gap in the run (Replay::due_at): for a pass whose
+/// frames are not the run's (a pace pass, at a display's rate), so its inputs come at the run's moments whatever its
+/// frames took when. The strict pass's frames and steps are mapped from the run together: not so.
+pub fn Replay::chain_steps(self : Replay) -> Unit {
+  self.steps_chained = true
+}
+
+///|
+/// When the run's next step not taken again is due at this pace (Replay::due_at), +inf where there is none or it waits
+/// for an ask not made again: up to when what a step set off is drawn before the next input comes (Tester::inputs_next).
+pub fn Replay::next_step_at(self : Replay) -> Double {
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if e.out && !e.done && is_step(e.msg) {
+      return self.due_at(i)
+    }
+  }
+  @double.infinity
 }
 
 ///|
@@ -771,23 +1168,42 @@ fn is_report(m : Json) -> Bool {
 }
 
 ///|
+/// Whether `m` (an ask of the run's) lets go of one: what comes after it waits nothing of it, as a core sends one
+/// topic's values whether or not another was let go of yet (Replay::ready); it is made again all the same by the end.
+fn is_let_go(m : Json) -> Bool {
+  guard m is Object(o) else { return false }
+  kind_of(o) == "unsubscribe"
+}
+
+///|
 /// The messages in that may come whenever their time (what they came after asked again), the first of each ask's: in
-/// the run's order: up to the first ask not made again, past those that are reports (strict or not); an ask's own coming
+/// the run's order: up to the first ask not made again, past those that are reports; an ask's own coming
 /// once it was made (an answer to an ask not made again does not).
 fn Replay::ready(self : Replay) -> Array[Int] {
   let firsts : Array[Int] = []
   let seen : Array[Int] = []
+  let seen_kept : Array[Int] = []
   let from = if self.first_out < self.next_in { self.first_out } else { self.next_in }
   for i in from..<self.evs.length() {
     let e = self.evs[i]
     if e.out && !e.done {
-      // (a report waits nothing, strict or not: the run's frames made it, the app's own frames may not, Replay::sent)
-      if !is_report(e.msg) {
+      // (a report waits nothing: the run's frames made it, the app's own frames may not, Replay::sent; nor does one
+      // let go of (is_let_go): no message comes of it, and a core does not hold one topic back for another not let go
+      // of yet; the coordinator of the migration, 2026-11-12)
+      if !is_report(e.msg) && !is_let_go(e.msg) {
         break
       }
       continue
     }
     if e.out || e.done {
+      continue
+    }
+    // (for one of the run's stations the replay keeps: made from the start, its own first coming, Replay::keep_stations)
+    if e.kept >= 0 {
+      if !seen_kept.contains(e.kept) {
+        seen_kept.push(e.kept)
+        firsts.push(i)
+      }
       continue
     }
     match e.msg {
@@ -798,7 +1214,7 @@ fn Replay::ready(self : Replay) -> Array[Int] {
               continue
             }
             seen.push(id)
-            // (an answer to an ask not made again waits; strict, there is none here)
+            // (an answer to an ask not made again waits)
             if self.ids.contains(id) {
               firsts.push(i)
             }
@@ -851,7 +1267,7 @@ fn Replay::pick(self : Replay, now : Double, host_by : Double) -> Int {
 pub fn Replay::unanswered(self : Replay) -> Int {
   let mut n = 0
   for e in self.evs {
-    if !e.out && !e.done && e.msg is Object(m) && id_of(m) is Some(id) && self.ids.contains(id) {
+    if !e.out && !e.done && e.kept < 0 && e.msg is Object(m) && id_of(m) is Some(id) && self.ids.contains(id) {
       n += 1
     }
   }
@@ -912,6 +1328,23 @@ pub fn Replay::diverged(self : Replay) -> Array[String] {
 }
 
 ///|
+/// Each of them with the moment it was asked, on the app's clock (@hostapi.now): for a flow whose strict pass is known
+/// to ask them (sfreplay's strict_diverged_known), held to them and that moment.
+pub fn Replay::diverged_at(self : Replay) -> Array[(Double, String)] {
+  let out = []
+  for i, d in self.diverged {
+    out.push((self.diverged_at[i], d))
+  }
+  out
+}
+
+///|
+fn Replay::diverge(self : Replay, text : String) -> Unit {
+  self.diverged.push(text)
+  self.diverged_at.push(@hostapi.now())
+}
+
+///|
 /// The run's asks the app has not made again (yet), in their order, the skipped ones and the reports aside: at a test's
 /// end, what the run did that this one did not.
 pub fn Replay::unmade(self : Replay) -> Array[String] {
@@ -922,6 +1355,14 @@ pub fn Replay::unmade(self : Replay) -> Array[String] {
     }
   }
   out
+}
+
+///|
+/// The run's unsubscriptions this one made after messages the run had after them were given (Replay::ready gives
+/// those without waiting for it): each as made, how many came before it, and how long before it the first of them
+/// came (ms on the app's clock). Said, not held to anything: a subscription kept longer than the run kept it shows here.
+pub fn Replay::late_unsubs(self : Replay) -> Array[(String, Int, Double)] {
+  self.late_unsubs
 }
 
 ///|
@@ -955,15 +1396,53 @@ pub fn Replay::has_jobs_summary(self : Replay) -> Bool {
 fn Replay::out(self : Replay, text : String) -> Unit {
   let msg = @json.parse(text) catch {
     _ => {
-      self.diverged.push(text)
+      self.diverge(text)
       return
     }
   }
   guard msg is Object(m) else {
-    self.diverged.push(text)
+    self.diverge(text)
     return
   }
   let kind = kind_of(m)
+  outs_note(m, kind)
+  // The stations of a run whose own the replay keeps (Replay::keep_stations): asked, given the scope's value at the
+  // next delivery and whole again as it changes; let go of, no more.
+  if self.stations_own {
+    match id_of(m) {
+      Some(now) if kind == "subscribe" && name_of(m) == "stations" => {
+        let scope = match m.get("subscribe") {
+          Some(Object(t)) => canon(t.get("scope").unwrap_or(Json::null()))
+          _ => canon(Json::null())
+        }
+        self.stations_asked[now] = scope
+        match self.scope_said.get(scope) {
+          Some(v) => self.owed.push({ "id": Json::number(now.to_double()), "value": v })
+          None => ()
+        }
+        return
+      }
+      Some(now) if kind == "unsubscribe" && self.stations_asked.contains(now) => {
+        self.stations_asked.remove(now)
+        return
+      }
+      _ => ()
+    }
+  }
+  // One asked twice now and let go of (a copy of the tape's one, given what comes for that: the changelog's page
+  // left, the chats' list's card still asking its news): no ask of the run's, whose one goes on.
+  match id_of(m) {
+    Some(now) if kind == "unsubscribe" =>
+      match self.back.get(now) {
+        Some(then) if self.copies.get(then).map_or(false, fn(more) { more.contains(now) }) => {
+          self.copies[then] = self.copies.get(then).unwrap_or([]).filter(fn(x) { x != now })
+          self.back.remove(now)
+          return
+        }
+        _ => ()
+      }
+    _ => ()
+  }
   // an unsubscription or a cancel names an ask by its id: the run's id for it
   let refers = match id_of(m) {
     Some(l) if kind == "unsubscribe" || kind == "cancel" => self.back.get(l)
@@ -994,26 +1473,26 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       }
     }
   }
-  // The stations asked brief (a page that only names them), and a chats' list asked for its first rows (`limit`), can
-  // be answered by the whole list in an older tape.
-  if found < 0 && kind == "subscribe" && (name_of(m) == "stations" || name_of(m) == "chats") {
-    let same = sig(m, refers, ignore_brief=true)
+  // A chats' list asked for its first rows (`limit`) and the changelog asked for its news alone or for a tab's first
+  // changes (`part`, `limit`) can be answered by the whole in an older tape.
+  if found < 0 && kind == "subscribe" && twin_topic(name_of(m)) {
+    let same = sig(m, refers, ignore_part=true)
     for i in self.first_out..<self.evs.length() {
       let e = self.evs[i]
-      if e.out && !e.done && e.msg is Object(r) && sig(r, ref_of(r), ignore_brief=true) == same {
+      if e.out && !e.done && e.msg is Object(r) && sig(r, ref_of(r), ignore_part=true) == same {
         found = i
         break
       }
     }
   }
-  // One asked after another the tape's one went to (the whole list after the brief, or the other way): given what
+  // One asked after another the tape's one went to (the whole list after its first rows, or the other way): given what
   // came for it so far, and what comes for it from now on, as the first is.
-  if found < 0 && kind == "subscribe" && (name_of(m) == "stations" || name_of(m) == "chats") {
-    let same = sig(m, refers, ignore_brief=true)
+  if found < 0 && kind == "subscribe" && twin_topic(name_of(m)) {
+    let same = sig(m, refers, ignore_part=true)
     for i in 0..<self.evs.length() {
       let e = self.evs[i]
       match (e.out && e.done, e.msg, id_of(m)) {
-        (true, Object(r), Some(now)) if kind_of(r) == "subscribe" && sig(r, ref_of(r), ignore_brief=true) == same =>
+        (true, Object(r), Some(now)) if kind_of(r) == "subscribe" && sig(r, ref_of(r), ignore_part=true) == same =>
           match id_of(r) {
             Some(then) if self.ids.contains(then) => {
               match self.copies.get(then) {
@@ -1066,9 +1545,10 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       self.unasked_reports.push(text)
       return
     }
-    self.diverged.push(text)
-    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too)
-    if kind == "call" {
+    self.diverge(text)
+    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too, unless
+    // nobody reads its answer, awaited by nothing there)
+    if kind == "call" && !(id_of(m) is Some(now) && client.call_unread(now)) {
       self.asked.push(name_of(m))
     }
     return
@@ -1076,15 +1556,34 @@ fn Replay::out(self : Replay, text : String) -> Unit {
   let e = self.evs[found]
   e.done = true
   e.at = (self.clock)()
+  // (one let go of after messages the run had after it came: how many, from how long before)
+  if kind == "unsubscribe" {
+    let mut n = 0
+    let mut earliest = @double.infinity
+    for j in (found + 1)..<self.evs.length() {
+      let a = self.evs[j]
+      if !a.out && a.done && a.at >= 0.0 {
+        n = n + 1
+        if a.at < earliest {
+          earliest = a.at
+        }
+      }
+    }
+    if n > 0 {
+      self.late_unsubs.push((text, n, e.at - earliest))
+    }
+  }
   if e.msg is Object(r) && (kind == "subscribe" || kind == "call") {
     match (id_of(r), id_of(m)) {
       (Some(then), Some(now)) => {
         self.ids[then] = now
         self.back[now] = then
-        if kind == "subscribe" && (name_of(m) == "stations" || name_of(m) == "chats") {
+        if kind == "subscribe" && twin_topic(name_of(m)) {
           self.twins[then] = true
         }
-        if kind == "call" && self.answers(then) {
+        // (one whose answer nobody reads awaited by nothing in a scripted run: no `answered` line for it, emit.mbt;
+        // since #5425, client.device and the start's notify.permission)
+        if kind == "call" && self.answers(then) && !client.call_unread(now) {
           self.asked.push(name_of(m))
         }
       }
@@ -1117,7 +1616,7 @@ fn Replay::live(self : Replay, msg : Json) -> Json? {
     Some(then) =>
       match self.ids.get(then) {
         Some(now) => {
-          let copy : Map[String, Json] = {}
+          let copy : Map[String, Json] = Map([])
           for k, v in m {
             copy[k] = if k == "id" { Json::number(now.to_double()) } else { v }
           }
@@ -1177,6 +1676,17 @@ fn name_of(m : Map[String, Json]) -> String {
 }
 
 ///|
+/// Whether topic `name` is one a page may ask a part of (a chats' list's first rows; the changelog's news alone, or a
+/// tab's first changes) where an older tape asked the whole, or both are asked in a run: answered by the tape's one
+/// (sig's `ignore_part`; the changelog's whole holds every tab's days, read the same way, and says no `more`). And the
+/// workspaces' marks, asked of the workspace shown before they were one topic whichever is (a tape without
+/// MBUI_MARKS_ONE): answered by the tape's, of whichever workspace it asked them. The stations are not: a tape from
+/// before their rows keeps its own (Replay::keep_stations), a newer one is held to them as to any topic.
+fn twin_topic(name : String) -> Bool {
+  name == "chats" || name == "changelog" || name == "workspaceMarks"
+}
+
+///|
 /// What an ask is, whatever its id: its message without the id, keys in order; an unsubscription or a cancel with the
 /// run's id of what it names (`refers`).
 fn sig(
@@ -1184,17 +1694,21 @@ fn sig(
   refers : Int?,
   ignore_compact? : Bool = false,
   ignore_summary? : Bool = false,
-  ignore_brief? : Bool = false,
+  ignore_part? : Bool = false,
 ) -> String {
-  let copy : Map[String, Json] = {}
+  let copy : Map[String, Json] = Map([])
   for k, v in m {
-    if k != "id" {
+    // (asked as more of another of its subscriptions: answered whole as the tape's one is)
+    if k != "id" && !(k == "from" && ignore_part && twin_topic(name_of(m))) {
       match (k, v) {
-        ("subscribe", Object(t)) if ignore_brief &&
-          (t.get("topic") == Some(Json::string("stations")) || t.get("topic") == Some(Json::string("chats"))) => {
+        ("subscribe", Object(t)) if ignore_part && twin_topic(name_of(m)) => {
           let asked = t.copy()
-          asked.remove("brief")
           asked.remove("limit")
+          asked.remove("news")
+          asked.remove("part")
+          if t.get("topic") == Some(Json::string("workspaceMarks")) {
+            asked.remove("workspace")
+          }
           copy[k] = Json::object(asked)
         }
         ("subscribe", Object(t)) if ignore_compact && (t.get("topic") == Some(Json::string("chat")) || t.get("topic") == Some(Json::string("chatJobs"))) => {
@@ -1237,7 +1751,7 @@ fn canon(j : Json) -> String {
 /// How many of the run's calls `call` have had their answer (an `ok` or an `error`: a stream's end) given here: what a
 /// scripted run's `answered CALL` lines count (the k-th answer from the start).
 pub fn Replay::answers_given(self : Replay, call : String) -> Int {
-  let asked : Map[Int, Bool] = {}
+  let asked : Map[Int, Bool] = Map([])
   let mut n = 0
   for e in self.evs {
     guard e.msg is Object(m) && m.get("id") is Some(Number(id, ..)) else { continue }
@@ -1253,11 +1767,36 @@ pub fn Replay::answers_given(self : Replay, call : String) -> Int {
 }
 
 ///|
+/// When the app asked the run's `n`-th call `call` here (Replay::clock; counted from the start) and when that one's
+/// answer (an `ok` or an `error`) was given here: a pace pass's `answered` step, said not waited on (Flow::answered).
+/// None where it is not so yet.
+pub fn Replay::nth_call_at(self : Replay, call : String, n : Int) -> (Double?, Double?) {
+  let mut k = 0
+  let mut id = -1
+  let mut asked : Double? = None
+  for e in self.evs {
+    guard e.msg is Object(m) && m.get("id") is Some(Number(i, ..)) else { continue }
+    if id < 0 {
+      if e.out && kind_of(m) == "call" && name_of(m) == call {
+        k += 1
+        if k == n {
+          id = i.to_int()
+          asked = if e.done && e.at >= 0.0 { Some(e.at) } else { None }
+        }
+      }
+    } else if !e.out && !e.host && e.done && i.to_int() == id && (m.contains("ok") || m.contains("error")) {
+      return (asked, Some(e.given))
+    }
+  }
+  (asked, None)
+}
+
+///|
 /// When the answer to the run's latest call `call` given so far was given here (the clock, Replay::clock): what a
 /// test times a motion the answer starts from, as the tape has it at this pace, not as the app says it. None while
 /// none is given.
 pub fn Replay::given_at(self : Replay, call : String) -> Double? {
-  let asked : Map[Int, Bool] = {}
+  let asked : Map[Int, Bool] = Map([])
   let mut at : Double? = None
   for e in self.evs {
     guard e.msg is Object(m) && m.get("id") is Some(Number(id, ..)) else { continue }
@@ -1331,6 +1870,39 @@ pub fn Replay::host_frames(self : Replay) -> Array[Double] {
 }
 
 ///|
+/// The latest step of the run's script taken again here that says its moment: when here (this clock) and when in the
+/// run (its clock): what the steps after it, and the run's frames, are timed from (Replay::due_at). None before the
+/// first.
+pub fn Replay::step_anchor(self : Replay) -> (Double, Double)? {
+  let mut last : (Double, Double)? = None
+  for e in self.evs {
+    if e.out && e.done && e.at >= 0.0 && e.has_wall && is_step(e.msg) {
+      last = Some((e.at, e.wall))
+    }
+  }
+  last
+}
+
+///|
+/// The run's first step taken again here that says its moment: when here and when in the run (what the run's frames
+/// are timed from in the strict pass). None before it.
+pub fn Replay::first_step_anchor(self : Replay) -> (Double, Double)? {
+  for e in self.evs {
+    if e.out && e.done && e.at >= 0.0 && e.has_wall && is_step(e.msg) {
+      return Some((e.at, e.wall))
+    }
+  }
+  None
+}
+
+///|
+/// When the run's display began each frame, on the run's clock (its `{"frame":…}` lines); empty: a trace recorded
+/// before they were kept, its display's frames not known.
+pub fn Replay::run_frames(self : Replay) -> Array[Double] {
+  self.run_frames
+}
+
+///|
 /// The latest host line given here: when it was due on this clock, and its moment on the run's (what maps the run's
 /// frames onto this clock from then on). None while none is.
 pub fn Replay::host_given(self : Replay) -> (Double, Double)? {
@@ -1362,7 +1934,14 @@ pub fn Replay::env(self : Replay) -> Array[(String, String)] {
 }
 
 ///|
-/// This machine's station as the run's host said it (Tester::set_local_station: @ui.local_station's JSON); "" where
+/// What the run's host gave its frames as it began (`{"settings":{…}}`: mbui's @ui.trace_settings), for a replay's
+/// Tester to be made by it; None where its trace does not say (Flow::start refuses it).
+pub fn Replay::settings(self : Replay) -> Json? {
+  self.run_settings
+}
+
+///|
+/// This machine's station as the run's host said it (Tester::set_app_said: what `local_station` says); "" where
 /// its trace does not say.
 pub fn Replay::local_station(self : Replay) -> String {
   self.run_local
@@ -1378,3 +1957,4 @@ pub fn Replay::text(self : Replay) -> String? {
     Some(self.run_text.join("\n"))
   }
 }
+

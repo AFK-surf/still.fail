@@ -1,7 +1,7 @@
 // A station for the mesh tests (mesh.test.ts, bridge.test.ts): accepts credentials starting with "ok", echoes requests.
 // On localhost over the native addon (station/native/mesh), or on a simulated network (sim-iroh.ts: its `world`).
 import { loadAddon } from "../src/hosts/node-iroh.ts";
-import { ALPN } from "../src/mesh.ts";
+import { ALPN } from "../src/station/mesh-wire.ts";
 import { configFrame, readClientFrames, stateFrame, videoFrame } from "../src/screen-frames.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -18,8 +18,11 @@ export class Station {
   grants: string[] = [];
   /// Each connection's first credential, in the order they came.
   firsts: string[] = [];
-  /// Each connection's first line, whole (its credential, protocol, lock, the dial's traceparent).
+  /// Each connection's first line, whole (its credential, protocol, lock, the dial's traceparent), and as its text came.
   hellos: J[] = [];
+  helloLines: string[] = [];
+  /// What it answers every credential while a test says so: a refusal as a station gives one (`error`, a `code`).
+  refuses: J | null = null;
   conns: J[] = [];
   /// Connections before this one answer nothing more.
   deadBelow = 0;
@@ -114,6 +117,7 @@ export class Station {
   #answer(line: string): J {
     const grant = JSON.parse(line).credential as string;
     this.grants.push(grant);
+    if (this.refuses !== null) return this.refuses;
     return grant.startsWith("ok") ? { ok: true, station: "测试", ...(this.lan.length > 0 ? { lan: this.lan } : {}), ...(this.tailnet.length > 0 ? { tailnet: this.tailnet } : {}) } : { error: "grant signature invalid" };
   }
 
@@ -125,6 +129,7 @@ export class Station {
     if (first === null) return;
     this.firsts.push(JSON.parse(first).credential);
     this.hellos.push(JSON.parse(first));
+    this.helloLines.push(first);
     const reply = this.#answer(first);
     await control.write(Buffer.from(`${JSON.stringify(reply)}\n`));
     if (reply.error) {
@@ -154,7 +159,7 @@ export class Station {
         if (head !== null && JSON.parse(head).screen !== undefined) return this.#view(stream, JSON.parse(head), c.bytes);
         if (head !== null && JSON.parse(head).adb?.op === "share") {
           this.offers.push({ conn, head: JSON.parse(head) });
-          await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-ndjson" } })}\n`));
+          await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-ndjson", "stillfail-build": "0.1.0" } })}\n`));
           await stream.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connected", message: "" })}\n`));
           return;
         }
@@ -168,7 +173,7 @@ export class Station {
         const parsed = JSON.parse(head!);
         this.served.push(parsed);
         if (this.lateMs > 0) await this.world.sleep(this.lateMs);
-        const headers: J = { "content-type": "text/event-stream", "x-method": parsed.method };
+        const headers: J = { "content-type": "text/event-stream", "x-method": parsed.method, "stillfail-build": "0.1.0" };
         if (once) headers["stillfail-idempotent"] = "1";
         await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers })}\n`));
         // A large reply: how fast a way brings one, written a piece at a time (as the station's file reads are), so two at
@@ -216,7 +221,7 @@ export class Station {
         waiting.wake?.();
       }
     })().catch(() => {});
-    await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-stillfail-screen" } })}\n`));
+    await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-stillfail-screen", "stillfail-build": "0.1.0" } })}\n`));
     await stream.write(Buffer.from(configFrame({ codec: "jpeg", width: 640, height: 480 })));
     for (const frame of frames) {
       while (unacked.size >= 2) await new Promise<void>((r) => (waiting.wake = r));

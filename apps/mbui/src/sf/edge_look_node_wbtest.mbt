@@ -15,11 +15,12 @@ priv struct EdgeState {
 ///|
 /// What an edge's look draws, where its column is drawn from: its bar (top, height, ink), and its line's parts (how
 /// many, the ink of the one at its middle).
+#derive(Eq, Debug)
 priv struct EdgeDrawn {
   bar : Array[(Double, Double, Int64)]
   parts : Int
   middle : Int64?
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What is drawn of the column `handle_w` by 200 at (`x0`, 20).
@@ -122,15 +123,15 @@ test "an edge's look as nodes: at each moment of each of its moves the same, loo
   for at in ats {
     let (stepped, _, _) = looks_at((false, false, false), edge_steps, at, true)
     let (jumped, _, _) = looks_at((false, false, false), edge_steps, at, false)
-    assert_eq(jumped, stepped, msg="at \{at}: no frame before \{jumped}, frames all along \{stepped}")
+    assert_eq(jumped, stepped, msg="at \{at}: no frame before \{Repr(jumped)}, frames all along \{Repr(stepped)}")
     // (one bar at most; no more of its line than shows of it whole: fading, its faintest parts clear)
-    assert_true(stepped.bar.length() <= 1 && stepped.parts <= line_parts_seen(), msg="at \{at}: \{stepped}")
+    assert_true(stepped.bar.length() <= 1 && stepped.parts <= line_parts_seen(), msg="at \{at}: \{Repr(stepped)}")
   }
   // (shown and its moves over at 250: its bar, no line; in hand at 800: its bar and the parts of its line that show)
   let (shown, _, _) = looks_at((false, false, false), edge_steps, 250.0, false)
-  assert_eq((shown.bar.length(), shown.parts), (1, 0), msg="shown: \{shown}")
+  assert_eq((shown.bar.length(), shown.parts), (1, 0), msg="shown: \{Repr(shown)}")
   let (held, _, _) = looks_at((false, false, false), edge_steps, 800.0, false)
-  assert_eq((held.bar.length(), held.parts), (1, line_parts_seen()), msg="in hand: \{held}")
+  assert_eq((held.bar.length(), held.parts), (1, line_parts_seen()), msg="in hand: \{Repr(held)}")
 }
 
 ///|
@@ -145,8 +146,8 @@ test "an edge's look as nodes, made as each state is (nothing of either moving):
     let (start, (bars, parts)) = s
     for at in [0.0, 400.0] {
       let (node, old, _) = looks_at(start, [], at, true, old=true)
-      assert_eq(Some(node), old, msg="\{start} at \{at}: node \{node}, old \{old}")
-      assert_eq((node.bar.length(), node.parts), (bars, parts), msg="\{start} at \{at}")
+      assert_eq(Some(node), old, msg="\{Repr(start)} at \{at}: node \{Repr(node)}, old \{Repr(old)}")
+      assert_eq((node.bar.length(), node.parts), (bars, parts), msg="\{Repr(start)} at \{at}")
     }
   }
 }
@@ -172,8 +173,8 @@ test "an edge's look as nodes, turned back before a move's end: on from where it
     let (seen, _, t1) = looks_at((false, false, false), steps, at, false)
     let (stepped, _, _) = looks_at((false, false, false), steps, at, true)
     assert_eq(t1, t0)
-    assert_eq(stepped, seen, msg="at \{at}: frames all along \{stepped}, none \{seen}")
-    assert_eq(seen.bar.map(fn(b) { b.1 }), [s6 + (s12 - s6) * w.value_at(t0 + at)], msg="at \{at}: \{seen}")
+    assert_eq(stepped, seen, msg="at \{at}: frames all along \{Repr(stepped)}, none \{Repr(seen)}")
+    assert_eq(seen.bar.map(fn(b) { b.1 }), [s6 + (s12 - s6) * w.value_at(t0 + at)], msg="at \{at}: \{Repr(seen)}")
   }
 }
 
@@ -182,8 +183,8 @@ test "an edge's look as nodes made on it, or in hand: as it is then, at once, no
   for start in [(true, true, false), (true, true, true)] {
     let (made, _, _) = looks_at(start, [], 0.0, false)
     let (later, _, _) = looks_at(start, [], 400.0, true)
-    assert_eq(made, later, msg="\{start}")
-    assert_eq(made.bar.map(fn(b) { b.1 }), [@ui.Space::px(S12)], msg="\{start}")
+    assert_eq(made, later, msg="\{Repr(start)}")
+    assert_eq(made.bar.map(fn(b) { b.1 }), [@ui.Space::px(S12)], msg="\{Repr(start)}")
   }
 }
 
@@ -205,7 +206,7 @@ test "an edge's look as nodes let go as it moves: no frame asked after" {
   @ui.set_view_app(fn(root) {
     root.box(fn(n) {
       n.over(Is(true)).offset(Is((140.0, 20.0))).width(Is(Some(handle_w))).height(Is(Some(200.0))) |> ignore
-      n.show(fn() { there.get() }, fn(e) {
+      n.show(at_once=true, fn() { there.get() }, fn(e) {
         e.grow(Is(1.0)) |> ignore
         edge_look_node(e, fn() { true }, fn() { on.get() }, fn() { false }) |> ignore
       })

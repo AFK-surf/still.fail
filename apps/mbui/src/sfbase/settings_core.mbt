@@ -37,18 +37,6 @@ fn settings_core_of(
   login_card~ : (@ui.Ctx, String, String, Bool) -> Unit,
   share_card~ : () -> Unit,
 ) -> @settings.Core {
-  // a picture asked of the system's picker for a mark: its answer given (the host asks for a frame as it answers)
-  match picture_pick.val {
-    Some((p, done)) =>
-      match p.files() {
-        Some(files) => {
-          picture_pick.val = None
-          done(files.get(0).map(fn(f) { f.bytes }))
-        }
-        None => ()
-      }
-    None => ()
-  }
   {
     topic: fn(name, params) {
       let topic = src.topic(name, params)
@@ -64,7 +52,8 @@ fn settings_core_of(
     push: fn(r) {
       match r {
         @settings.Route::Home => open_page(Settings)
-        _ => open_page(Setting(r))
+        // (an account's page once what it shows is answered, the screen as it was meanwhile: account_open.mbt)
+        _ => open_answered(src, route_asks(w.id, r), fn() { open_page(Setting(r)) }) |> ignore
       }
     },
     pop: fn() { go_back() |> ignore },
@@ -72,7 +61,7 @@ fn settings_core_of(
     home,
     open_chat: fn(station, session, title) {
       // its station's name, as the chats' rows have it
-      let stations = src.topic("stations", { "scope": Json::string(w.id) }).get().snapshot()
+      let stations = station_rows(src, w.id)
       let mut name = ""
       match stations.value {
         Some(Array(a)) =>
@@ -115,13 +104,7 @@ fn settings_core_of(
     },
     open_screen: fn(station, screen) { open_page(Screen({ station, screen, title: "", until_gone: true })) },
     pick_picture: fn(done) {
-      match @ui.pick(@hostapi.PickKind::Photos) {
-        Some(p) => {
-          picture_pick.val = Some((p, done))
-          true
-        }
-        None => false
-      }
+      @ui.pick(@hostapi.PickKind::Photos, on_got=fn(files) { done(files.get(0).map(fn(f) { f.bytes })) }) is Some(_)
     },
     bars: fn() { bars_in(src, w.id) },
     set_bars: fn(sets, cur) { set_bars(src, w.id, sets, cur) },
@@ -154,13 +137,9 @@ fn settings_core_of(
     face_failed: face_failed,
     own_code_face: own_code_preview,
     read_only: if src.read_only { read_only_words } else { "" },
+    devices_on: src.asks_devices,
   }
 }
-
-///|
-/// A picture the settings asked the system's picker for (a station's or workspace's mark, a Slack app's icon), and who
-/// takes it: through the framework, so a Tester's picker is the test's (Tester::picks).
-pub let picture_pick : Ref[(@ui.Pick, (Bytes?) -> Unit)?] = Ref(None)
 
 ///|
 /// Whether usage statistics and error reports go out from this device, as the host keeps it (src/stillfail

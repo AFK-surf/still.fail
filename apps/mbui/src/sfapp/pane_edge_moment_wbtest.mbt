@@ -6,13 +6,14 @@
 /// What the sidebar's edge's run comes to (edge_run): held as it goes down; the sidebar's width after each move; held
 /// after it is let go; folded after a press of it let go without moving (no frame after it), and once its move had its
 /// while.
+#derive(Eq, Debug)
 priv struct PaneEdgeSeen {
   down : Bool
   widths : Array[Double]
   after : Bool
   folded : Bool
   folded_rest : Bool
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// 大屏 (1280 wide, a mouse's), the sidebar open at 240: down on its edge at `t0`, moved 10 wider each slow_drag_ms six
@@ -73,8 +74,8 @@ test "大屏: the sidebar's edge held, dragged and let go by a mouse, then press
   }
   let stepped = pane_edge_seen(true)
   let none = pane_edge_seen(false)
-  assert_eq(stepped, want, msg="frames all along: \{stepped}; no frame: \{none}")
-  assert_eq(none, want, msg="no frame: \{none}")
+  assert_eq(stepped, want, msg="frames all along: \{Repr(stepped)}; no frame: \{Repr(none)}")
+  assert_eq(none, want, msg="no frame: \{Repr(none)}")
 }
 
 ///|
@@ -89,15 +90,15 @@ test "大屏: the sidebar's list's thumb shown where the edge's strip is: a mous
   let g = 4.0
   let x0 = if tx - g > ex { tx - g } else { ex }
   let x1 = if tx + tw + g < ex + ew { tx + tw + g } else { ex + ew }
-  assert_true(x1 > x0 && ty + th / 2.0 > ey && ty + th / 2.0 < ey + eh, msg="thumb \{(tx, ty, tw, th)} edge \{(ex, ey, ew, eh)}")
+  assert_true(x1 > x0 && ty + th / 2.0 > ey && ty + th / 2.0 < ey + eh, msg="thumb \{Repr((tx, ty, tw, th))} edge \{Repr((ex, ey, ew, eh))}")
   let (px, py) = ((x0 + x1) / 2.0, ty + th / 2.0)
   // (where the list is, by its thumb: down it as the list scrolls on)
   let before = ty
-  t.move(px, py)
+  t.move_to(px, py)
   t.run_for(@ui.scrollbar_fade_ms)
   t.press_at(px, py)
   for i in 1..=4 {
-    t.move(px, py + 10.0 * i.to_double())
+    t.move_to(px, py + 10.0 * i.to_double())
     t.run_for(@ui.drag_step_ms)
   }
   t.release(px, py + 40.0)

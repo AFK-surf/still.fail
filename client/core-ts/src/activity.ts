@@ -1,30 +1,72 @@
 // What an agent at work is doing, as a chat shows it: one line, the thing it does now. From a `live`
 // topic's value into `activity`: `{ now: { key, text } }`.
 import { t } from "./i18n.ts";
-import { closeCut as close } from "./tool-step.ts";
+import { cleanCommand, cleanPath, closeCut as close, isOpaqueId, summaryCommand } from "./tool-step.ts";
 import { get } from "./util.ts";
 
-/// A tool's name without its MCP prefix.
+/// A tool's name without its MCP prefix or ACP "Run " prefix.
 export function toolName(tool: string): string {
-  for (const p of ["mcp__stillfail__", "stillfail__", "stillfail.", "mcp__ember__", "ember__", "ember."]) if (tool.startsWith(p)) return tool.slice(p.length);
-  return tool;
+  const s = tool.startsWith("Run ") ? tool.slice(4) : tool;
+  for (const p of ["mcp__stillfail__", "mcp_stillfail_", "stillfail__", "stillfail.", "mcp__ember__", "mcp_ember_", "ember__", "ember."]) if (s.startsWith(p)) return s.slice(p.length);
+  return s;
 }
 
-/// What kind of thing a tool does, for its icon and its verb. Claude Code's names, Codex's, and DeepSeek Harness's
-/// (lowercase: read, bash, …).
-export function kindOf(tool: string): string {
-  switch (toolName(tool)) {
+/// What kind of thing a tool does, for its icon and its verb. Claude Code's names, Codex's, DeepSeek Harness's
+/// (lowercase: read, bash, …), and ACP/Antigravity's ("File …", read_file, edit_file, write_file, run_command, …).
+export function kindOf(tool: string, input?: string | Record<string, J> | null): string {
+  const name = toolName(tool);
+  if (name.endsWith(" on Web")) return "web";
+  const a = typeof input === "string" ? args(input) : input ?? null;
+  if (
+    name.startsWith("File ") ||
+    name === "read_file" ||
+    name === "edit_file" ||
+    name === "write_file" ||
+    name === "write_to_file" ||
+    name === "replace_file_content" ||
+    name === "multi_replace_file_content" ||
+    name === "search_replace" ||
+    name === "delete_file"
+  ) {
+    if (
+      name === "edit_file" ||
+      name === "replace_file_content" ||
+      name === "multi_replace_file_content" ||
+      name === "write_file" ||
+      name === "write_to_file" ||
+      name === "search_replace" ||
+      name === "delete_file"
+    ) {
+      return "edit";
+    }
+    if (name === "read_file") return "read";
+    if (a && (a.Target !== undefined || a.Replacement !== undefined || a.Content !== undefined || a.old_string !== undefined || a.new_string !== undefined || a.content !== undefined)) return "edit";
+    return "read";
+  }
+  switch (name) {
     case "Read":
     case "NotebookRead":
     case "view_image":
+    case "read_image":
     case "read":
+    case "view_file_outline":
+    case "view_code_item":
+    case "skill_read":
+    case "skill":
       return "read";
     case "Glob":
     case "Grep":
     case "LS":
     case "ToolSearch":
+    case "search_tool":
+    case "mcp_list_tools":
     case "glob":
     case "grep":
+    case "grep_search":
+    case "find_by_name":
+    case "find_file_by_name":
+    case "list_dir":
+    case "search":
       return "search";
     case "Edit":
     case "MultiEdit":
@@ -39,27 +81,59 @@ export function kindOf(tool: string): string {
     case "BashOutput":
     case "KillShell":
     case "exec_command":
+    case "exec":
     case "shell":
     case "local_shell":
     case "write_stdin":
+    case "wait":
+    case "job_output":
     case "unified_exec":
+    case "run_command":
+    case "run_terminal_command":
+    case "command_status":
+    case "send_command_input":
+    case "manage_task":
+    case "sleep":
+    case "get_output":
       return "command";
     case "WebFetch":
     case "WebSearch":
     case "web_search":
     case "web_fetch":
+    case "search_web":
+    case "read_url_content":
+    case "web__run":
       return "web";
     case "Task":
-    case "Agent":
     case "spawn_agent":
     case "subagent":
+    case "invoke_subagent":
       return "agent";
+    case "Agent":
+      return typeof a?.Action === "string" || typeof a?.action === "string" ? "other" : "agent";
+    case "swarm":
+      return a?.action === "add" ? "agent" : "other";
+    case "define_subagent":
+    case "manage_subagents":
+    case "send_message":
+    case "SendMessage":
+    case "followup_task":
+    case "list_agents":
+    case "wait_agent":
+      return "other";
     case "chat_history":
     case "chat_list":
     case "chat_read":
     case "session_history":
+    case "session_send":
+    case "chat_archive":
+    case "chat_leave":
       return "thread";
     default:
+      if (a && typeof a.CommandLine === "string") return "command";
+      if (a && (a.Target !== undefined || a.Replacement !== undefined || a.Content !== undefined)) return "edit";
+      if (a && (typeof a.Path === "string" || typeof a.target_file === "string")) return "read";
+      if (/^(?:cd|git|pnpm|npm|node|cargo|python3?|sh|bash|zsh|rg|ls|cat|mkdir|rm|cp|mv|curl|gh)\b/.test(name)) return "command";
       return "other";
   }
 }
@@ -69,7 +143,7 @@ export function kindOf(tool: string): string {
 /// remote task status checks can instead be coalesced when the agent moves on at once.
 export function importantCall(tool: string, input: string): boolean {
   const name = toolName(tool);
-  const kind = kindOf(tool);
+  const kind = kindOf(tool, input);
   if (kind === "edit" || kind === "agent") return true;
   if (name === "station_task") return args(input)?.action === "start";
   return ["request_user_input", "request_user_input_async", "chat_create", "session_send", "job_start"].includes(name);
@@ -128,14 +202,35 @@ function cutShort(json: string): Record<string, J> | null {
 
 const firstLine = (s: string) => (s.split(/\r?\n/).find((l) => l.trim() !== "") ?? "").trim();
 
-/// What a call's words need beyond its input: the workspace's stations' names by id, and what the tasks prepared on
-/// them earlier in the transcript run, by `<station>/<key>` (tasksOf).
-export type Known = { stations?: ReadonlyMap<string, string>; tasks?: ReadonlyMap<string, string> };
+/// What a call's words need beyond its input: the workspace's stations' names by id, what the tasks prepared on
+/// them earlier in the transcript run, by `<station>/<key>` (tasksOf), and the sub-agents or chats named earlier in the
+/// transcript or workspace, by id (agentsOf).
+export type Known = {
+  stations?: ReadonlyMap<string, string>;
+  tasks?: ReadonlyMap<string, string>;
+  agents?: ReadonlyMap<string, string>;
+};
 
 /// The line of a command that says what it does: not `exec 2>&1`, `set -e`, a comment or a shebang.
 function commandLine(command: string): string {
-  const lines = command.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "");
-  return lines.find((l) => !/^(#|set\s+-|exec\s+\d*[<>])/.test(l)) ?? lines[0] ?? "";
+  const lines = command.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "" && !/^(#|set\s+-|exec\s+\d*[<>])/.test(l));
+  return summaryCommand(lines.join("\n"));
+}
+
+function shortChatRef(raw: string, agents?: ReadonlyMap<string, string>): string {
+  const s = raw.trim();
+  if (!s) return "";
+  const urlPart = s.includes("/chats/") ? (s.split("/chats/").pop() ?? s) : s;
+  let decoded = urlPart;
+  try {
+    decoded = decodeURIComponent(urlPart).replace(/^chat:/, "");
+  } catch {
+    decoded = urlPart;
+  }
+  const named = agents?.get(s) ?? agents?.get(urlPart) ?? agents?.get(decoded);
+  if (named) return named;
+  if (isOpaqueId(decoded) || isOpaqueId(s)) return "";
+  return decoded.length > 28 ? `${decoded.slice(0, 24)}…` : decoded;
 }
 
 /// What a station task runs, in a few words: the name it was given, else its command.
@@ -157,12 +252,75 @@ export function tasksOf(timeline: J[]): Map<string, string> {
   return out;
 }
 
+/// The sub-agents and chats a transcript or workspace knows by id (`agentId`, `conversationId`, `c-...` session key):
+/// mapped to the human-readable name/description given when they were spawned or opened.
+export function agentsOf(timeline: J[], threads?: J[]): Map<string, string> {
+  const out = new Map<string, string>();
+  if (Array.isArray(threads)) {
+    for (const th of threads) {
+      const title = typeof th?.title === "string" ? firstLine(th.title) : typeof th?.name === "string" ? firstLine(th.name) : "";
+      if (!title || isOpaqueId(title)) continue;
+      for (const k of [th?.key, th?.session, th?.id, th?.address]) {
+        if (typeof k === "string" && k.trim() !== "") {
+          out.set(k.trim(), title);
+          out.set(k.trim().replace(/^chat:/, ""), title);
+        }
+      }
+    }
+  }
+  const byCallId = new Map<string, string>();
+  let lastLabel = "";
+  for (const e of timeline) {
+    if (e?.kind === "tool_call" && typeof e.tool === "string" && typeof e.text === "string") {
+      const name = toolName(e.tool);
+      if (!["Agent", "Task", "spawn_agent", "subagent", "invoke_subagent", "chat_create", "swarm"].includes(name)) continue;
+      const a = args(e.text);
+      if (!a) continue;
+      const cand = [a.name, a.Role, a.role, a.title, a.description, a.subagent_type, a.TypeName, a.task_name].find(
+        (v) => typeof v === "string" && v.trim() !== "" && !isOpaqueId(v.trim()),
+      );
+      if (typeof cand === "string") {
+        const label = firstLine(cand);
+        lastLabel = label;
+        if (typeof e.callId === "string" && e.callId) byCallId.set(e.callId, label);
+        for (const idField of [a.agent_id, a.id, a.chat]) {
+          if (typeof idField === "string" && idField.trim() !== "") out.set(idField.trim(), label);
+        }
+      }
+    } else if (e?.kind === "tool_result" && typeof e.text === "string") {
+      const label = (typeof e.callId === "string" ? byCallId.get(e.callId) : undefined) ?? lastLabel;
+      if (!label) continue;
+      const aid = /\b(?:agentId|agent_id|conversationId|Conversation ID|task_id)["'\s:=]+["']?([A-Za-z0-9_-]{6,})/i.exec(e.text)?.[1];
+      if (aid) out.set(aid, label);
+      const chatKey = /\/chats\/(c-[A-Za-z0-9_-]+)/.exec(e.text)?.[1];
+      if (chatKey) out.set(chatKey, label);
+    } else if (e?.kind === "user" && typeof e.text === "string" && e.text.includes("<task-notification>")) {
+      const re = /<task-notification>([\s\S]*?)<\/task-notification>/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(e.text)) !== null) {
+        const block = m[1] ?? "";
+        const tid = /<task-id>([^<]+)<\/task-id>/.exec(block)?.[1]?.trim();
+        const sum = /<summary>([\s\S]*?)<\/summary>/.exec(block)?.[1]?.trim() ?? "";
+        const said = /^Agent "([\s\S]*)" (?:completed|failed|finished|was stopped)/.exec(sum)?.[1]?.trim();
+        if (tid && said && !isOpaqueId(said)) {
+          out.set(tid, firstLine(said));
+        }
+      }
+    }
+  }
+  return out;
+}
+
 /// A call of still.fail's own tools said in words rather than by its name: what it does on which station (station_task,
-/// station_file), the tools it loads (ToolSearch's `select:`); null for any other.
+/// station_file), the tools it loads (ToolSearch's `select:`), and still.fail's workspace/chat/job/skill tools; null for any other.
 export function told(tool: string, input: string, known: Known = {}): string | null {
-  const a = args(input);
-  if (!a) return null;
   const name = toolName(tool);
+  const a = args(input);
+  if (name.endsWith(" on Web")) {
+    const q = typeof a?.query === "string" && a.query ? firstLine(a.query) : firstLine(name.slice(0, -7).replace(/^["']|["']$/g, ""));
+    return q ? `网页搜索「${q}」` : "网页搜索";
+  }
+  if (!a) return null;
   if (name === "station_task" || name === "station_file") {
     const id = typeof a.station === "string" ? a.station : "";
     // An id not among the workspace's (or not read yet) is not shown as its 64 hex digits.
@@ -173,35 +331,214 @@ export function told(tool: string, input: string, known: Known = {}): string | n
       return t(`core-logic.activity.remote.${a.direction === "download" ? "download" : "upload"}`, { station, what: path || key });
     }
     if (a.action === "list") return t("core-logic.activity.remote.list", { station });
+    if (a.action === "mirrors") return `在 ${station} 上查看同步目录`;
+    if (a.action === "clean") return `在 ${station} 上清理 ${typeof a.mirror === "string" && a.mirror ? a.mirror : "同步目录"}`;
+    if (a.action === "release") return `在 ${station} 上释放 ${key || "同步目录"}`;
     if (!["prepare", "start", "get", "log", "stop"].includes(a.action)) return null;
     const what = (a.action === "prepare" ? taskOf(a) : "") || known.tasks?.get(`${id}/${key}`) || key;
     return t(`core-logic.activity.remote.${a.action}`, { station, what });
   }
-  if (name === "ToolSearch" && typeof a.query === "string" && a.query.startsWith("select:")) {
-    const names = a.query.slice("select:".length).split(",").map((n) => toolName(n.trim())).filter((n) => n !== "");
-    if (names.length > 0) return t("core-logic.activity.tools", { names: names.join(t("core-logic.history.did.sep")) });
+  if (name === "station_list") {
+    return typeof a.station === "string" && a.station ? `查看 station ${a.station}` : "查看 station 列表";
+  }
+  if (name === "skill_read") {
+    const skill = typeof a.name === "string" ? a.name : "";
+    const file = typeof a.file === "string" && a.file ? ` (${a.file})` : "";
+    return skill ? `读取技能 ${skill}${file}` : "读取技能";
+  }
+  if (name === "chat_post") {
+    if (typeof a.title === "string" && a.title && typeof a.text !== "string") return `设置对话标题「${a.title}」`;
+    if (typeof a.withdraw === "string" && a.withdraw) return "撤回选项卡片";
+    if (typeof a.send === "string" && a.send) return "发送暂存回复";
+    return null;
+  }
+  if (name === "chat_read" || name === "chat_history" || name === "session_history" || name === "session_send" || name === "chat_archive" || name === "chat_leave") {
+    const ref = shortChatRef(typeof a.chat === "string" ? a.chat : typeof a.to === "string" ? a.to : "", known.agents);
+    if (name === "chat_history") return ref ? `读取对话历史 ${ref}` : "读取对话历史";
+    if (name === "chat_read") return ref ? `读取对话 ${ref}` : "读取对话";
+    if (name === "session_history") return ref ? `读取执行历史 ${ref}` : "读取执行历史";
+    if (name === "session_send") return ref ? `向 ${ref} 发送消息` : "向其他会话发送消息";
+    if (name === "chat_archive") return ref ? `归档对话 ${ref}` : "归档对话";
+    return ref ? `停止关注 ${ref}` : "停止关注对话";
+  }
+  if (name === "chat_list") {
+    return typeof a.query === "string" && a.query ? `查找对话「${firstLine(a.query)}」` : "查看对话列表";
+  }
+  if (name === "search") {
+    return typeof a.query === "string" && a.query ? `搜索工作区「${firstLine(a.query)}」` : "搜索工作区";
+  }
+  if (name === "job_start") {
+    const jname = typeof a.name === "string" && a.name ? firstLine(a.name) : typeof a.command === "string" ? commandLine(a.command) : "";
+    if (a.watch === true) return jname ? `启动监控任务 ${jname}` : "启动监控任务";
+    if (typeof a.port === "number") return jname ? `启动服务 ${jname} (:${a.port})` : `启动服务 (:${a.port})`;
+    return jname ? `启动后台任务 ${jname}` : "启动后台任务";
+  }
+  if (name === "job_list") return "查看后台任务列表";
+  if (name === "job_log") return typeof a.id === "string" && a.id ? `查看后台任务日志 ${a.id}` : "查看后台任务日志";
+  if (name === "job_stop") return typeof a.id === "string" && a.id ? `停止后台任务 ${a.id}` : "停止后台任务";
+  if (name === "screen") {
+    if (a.action === "take_control") return "接管屏幕控制";
+    return typeof a.id === "string" && a.id ? `查看屏幕 ${a.id}` : "查看屏幕列表";
+  }
+  if (name === "browser") {
+    return typeof a.action === "string" && a.action !== "endpoint" ? `浏览器 ${a.action}` : "启动会话浏览器";
+  }
+  if (name === "secret_list") return "查看密钥列表";
+  if (name === "secret_describe") return typeof a.item === "string" && a.item ? `更新密钥说明 ${a.item}` : "更新密钥说明";
+  if (name === "secret_reask") return "重新请求密钥授权";
+  if (name === "secret_delete") return typeof a.item === "string" && a.item ? `申请删除密钥 ${a.item}` : "申请删除密钥";
+  if (name === "secret_cancel") return "撤回密钥申请";
+  if (name === "phone_use") return a.done === true ? "归还手机调试权限" : "请求手机调试权限";
+  if (name === "phone_send") return typeof a.path === "string" && a.path ? `发送文件到手机 ${a.path.split("/").pop() ?? a.path}` : "发送文件到手机";
+  if (name === "adb_devices") return "查看已连接 Android 设备";
+  if (name === "device_list") return "查看工作区设备列表";
+  if (name === "permissions") return typeof a.request === "string" && a.request ? `请求系统权限 ${a.request}` : "查看系统权限";
+  if (name === "relays") {
+    if (a.action === "add" || a.action === "remove") return `${a.action === "add" ? "添加" : "移除"}中继 ${typeof a.url === "string" ? a.url : ""}`.trim();
+    return "查看中继列表";
+  }
+  if (name === "workspace_limit") return typeof a.limit_gib === "number" ? `设置工作区空间上限 ${a.limit_gib} GiB` : "查看工作区空间上限";
+  if (name === "feishu_api") return typeof a.method === "string" && a.method ? `飞书 API ${a.method}` : "调用飞书 API";
+  if (name === "station_tool") {
+    const sub = typeof a.name === "string" ? a.name : "";
+    return a.arguments ? `调用 ${sub}`.trim() : `查看工具说明 ${sub}`.trim();
+  }
+  if (name === "ToolSearch" || name === "search_tool") {
+    if (typeof a.query === "string" && a.query.startsWith("select:")) {
+      const names = a.query.slice("select:".length).split(",").map((n) => toolName(n.trim())).filter((n) => n !== "");
+      if (names.length > 0) return t("core-logic.activity.tools", { names: names.join(t("core-logic.history.did.sep")) });
+    }
+    if (name === "search_tool") {
+      return typeof a.query === "string" && a.query ? `查找工具「${firstLine(a.query)}」` : "查找工具";
+    }
+    return null;
+  }
+  if (name === "mcp_list_tools") return "查看可用 MCP 工具";
+  if (name === "manage_task") {
+    const act = typeof a.Action === "string" ? a.Action : typeof a.action === "string" ? a.action : "";
+    const rawId = typeof a.TaskId === "string" ? (a.TaskId.split("/").pop() ?? a.TaskId) : "";
+    const tid = rawId ? ` ${rawId}` : "";
+    if (act === "list") return "查看后台命令列表";
+    if (act === "status") return `查看后台命令状态${tid}`;
+    if (act === "kill") return `停止后台命令${tid}`;
+    if (act === "send_input") return `向后台命令发送输入${tid}`;
+  }
+  if (name === "sleep") return typeof a.seconds === "number" ? `等待 ${a.seconds} 秒` : "等待";
+  if (name === "get_output") return typeof a.job_id === "string" && a.job_id ? `读取任务输出 ${a.job_id}` : "读取任务输出";
+  if (name === "job_output") return typeof a.job_id === "string" && a.job_id ? `查看命令输出 ${a.job_id}` : "查看命令输出";
+  if (name === "wait") {
+    const cid = typeof a.cell_id === "string" && a.cell_id ? ` #${a.cell_id}` : "";
+    return `等待命令输出${cid}`;
+  }
+  if (name === "write_stdin") {
+    const sid = a.session_id !== undefined ? ` #${a.session_id}` : "";
+    const chars = typeof a.chars === "string" ? firstLine(a.chars) : "";
+    return chars ? `向命令发送输入${sid}：${chars}` : `等待命令输出${sid}`;
+  }
+  if (name === "skill") {
+    const skill = typeof a.name === "string" && a.name ? a.name : typeof a.skill === "string" && a.skill ? a.skill : "";
+    return skill ? `读取技能 ${skill}` : "读取技能";
+  }
+  if (name === "web__run") {
+    if (Array.isArray(a.search_query) && a.search_query.length > 0) {
+      const q = typeof a.search_query[0]?.q === "string" ? firstLine(a.search_query[0].q) : "";
+      return q ? `网页搜索「${q}」` : "网页搜索";
+    }
+    if (Array.isArray(a.open) && a.open.length > 0) {
+      const u = typeof a.open[0]?.ref_id === "string" ? firstLine(a.open[0].ref_id) : "";
+      return u ? `打开网页 ${u}` : "打开网页";
+    }
+    return "网页操作";
+  }
+  if (name === "clock__curr_time") return "查看当前时间";
+  if (name === "list_agents") return "查看子 agent 列表";
+  if (name === "wait_agent") return "等待子 agent 完成";
+  if (name === "send_message" || name === "SendMessage") {
+    if (typeof a.summary === "string" && a.summary.trim() !== "") return firstLine(a.summary);
+    const to = typeof a.Recipient === "string" && a.Recipient
+      ? a.Recipient
+      : typeof a.recipient === "string" && a.recipient
+      ? a.recipient
+      : typeof a.to === "string" && a.to
+      ? a.to
+      : typeof a.task_name === "string" && a.task_name
+      ? a.task_name
+      : "";
+    const msg = typeof a.Message === "string" && !a.Message.startsWith("gAAAAAB")
+      ? firstLine(a.Message)
+      : typeof a.message === "string" && !a.message.startsWith("gAAAAAB")
+      ? firstLine(a.message)
+      : typeof a.content === "string"
+      ? firstLine(a.content)
+      : "";
+    const snippet = msg ? `：${msg.length > 36 ? `${msg.slice(0, 36)}…` : msg}` : "";
+    if (!to || to === "main") return `向主 agent 发送结果${snippet}`;
+    const namedTo = known.agents?.get(to) ?? (isOpaqueId(to) ? "" : to);
+    return namedTo ? `向子 agent (${namedTo}) 发送消息${snippet}` : `向子 agent 发送消息${snippet}`;
+  }
+  if (name === "followup_task") {
+    const tname = typeof a.task_name === "string" && a.task_name ? ` ${a.task_name}` : "";
+    return `继续子 agent 任务${tname}`;
+  }
+  if (name === "manage_subagents" || name === "swarm" || name === "Agent" || name === "Task" || name === "spawn_agent" || name === "subagent" || name === "invoke_subagent" || name === "define_subagent") {
+    if (typeof a.Action === "string") {
+      if (a.Action === "list") return "查看子 agent 列表";
+      if (a.Action === "kill") return "停止子 agent";
+      if (a.Action === "kill_all") return "停止全部子 agent";
+    }
+    if (typeof a.action === "string") {
+      if (a.action === "status") return "查看协作 agent 状态";
+      if (a.action === "models") return "查看可用模型列表";
+      if (a.action === "add") return typeof a.name === "string" && a.name ? `添加协作 agent ${a.name}` : "添加协作 agent";
+      if (a.action === "kill") return typeof a.name === "string" && a.name ? `停止协作 agent ${a.name}` : "停止协作 agent";
+      if (a.action === "model") return typeof a.name === "string" && a.name ? `切换协作 agent 模型 ${a.name}` : "切换模型";
+      if (a.action === "title") return typeof a.title === "string" && a.title ? `设置协作标题「${firstLine(a.title)}」` : "设置协作标题";
+    }
+    if (typeof a.Role === "string" && a.Role) return `分派子 agent：${firstLine(a.Role)}`;
+    if (typeof a.task_name === "string" && a.task_name) return `分派子 agent：${firstLine(a.task_name)}`;
+    if (typeof a.Name === "string" && a.Name && name === "define_subagent") return `定义子 agent：${firstLine(a.Name)}`;
   }
   return null;
 }
 
-/// What a call does, in a few words: its own description, else what still.fail's own tools say of it (told), else its
+/// What a call does, in a few words: what still.fail's own tools say of it (told), else its own description, else its
 /// verb and what it works on. The chat's activity says a running call so, and an execution history names a group of
 /// calls by its latest the same way.
 export function doing(tool: string, input: string, known: Known = {}): string {
-  const a = args(input) ?? {};
-  const said = typeof a.description === "string" ? firstLine(a.description) : "";
-  if (said) return said;
   const own = told(tool, input, known);
   if (own) return own;
-  const kind = kindOf(tool);
+  const a = args(input) ?? {};
+  const desc = typeof a.description === "string"
+    ? a.description
+    : typeof a.toolSummary === "string"
+    ? a.toolSummary
+    : typeof a.summary === "string"
+    ? a.summary
+    : "";
+  const said = firstLine(desc);
+  if (said) return said;
+  const kind = kindOf(tool, a);
+  const keys =
+    kind === "search"
+      ? ["pattern", "Pattern", "query", "Query", "queries", "path", "Path", "target_directory", "DirectoryPath", "SearchDirectory", "SearchPath", "file_path", "url"]
+      : ["command", "cmd", "CommandLine", "file_path", "target_file", "path", "Path", "target_directory", "DirectoryPath", "pattern", "Pattern", "url", "query", "Query", "queries", "prompt", "Prompt", "message", "Message", "text", "reason", "title", "Role", "to", "Recipient", "recipient"];
   let target = "";
-  for (const name of ["command", "cmd", "file_path", "path", "pattern", "url", "query", "queries", "prompt"]) {
+  for (const name of keys) {
     const v = a[name];
     const s = typeof v === "string" ? v : Array.isArray(v) ? v.filter((p): p is string => typeof p === "string").join(" ") : null;
     if (s === null) continue;
-    const line = firstLine(s);
+    const isCmd = name === "command" || name === "cmd" || name === "CommandLine";
+    const isPath = name === "file_path" || name === "target_file" || name === "path" || name === "Path" || name === "target_directory" || name === "DirectoryPath" || name === "SearchDirectory" || name === "SearchPath";
+    const raw = isCmd ? summaryCommand(s) : isPath ? cleanPath(s) : s;
+    const line = firstLine(raw);
     target = kind === "read" || kind === "edit" ? (line.split("/").pop() ?? line) : line;
     break;
+  }
+  if (!target && tool.startsWith("File ")) {
+    const p = cleanPath(tool.slice(5).trim());
+    target = p.split("/").pop() ?? p;
+  } else if (!target && kind === "command" && !["Bash", "bash", "run_command", "run_terminal_command", "exec", "exec_command", "shell", "local_shell"].includes(toolName(tool))) {
+    target = firstLine(summaryCommand(toolName(tool)));
   }
   return `${kind === "other" ? toolName(tool) : verb(kind)} ${target}`.trim();
 }

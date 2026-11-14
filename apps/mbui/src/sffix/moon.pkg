@@ -7,12 +7,16 @@ import {
   "stillfail/sfapp",
   "stillfail/sffixture",
   "stillfail/sfdesk",
+  "mbui/wasmrt",
 }
 
 options(
   "is-main": true,
+  targets: { "wasm_shell.mbt": [ "wasm" ] },
   link: {
     "js": { "format": "iife" },
+    // (run by mbui's native shell, scripts/wasm-app.sh: what it calls of the program, wasm_shell.mbt)
+    "wasm": { "exports": ["mbw_string", "mbw_bytes"], "export-memory-name": "memory" },
     "native": {
       "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
     },

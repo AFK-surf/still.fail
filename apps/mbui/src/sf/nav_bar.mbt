@@ -38,6 +38,16 @@ let nav_title_column : @ui.Style = @ui.style(w=Cut, pl=nav_title_clear, pr=nav_t
 let nav_line : @ui.Style = @ui.css("w=Cut h=S8 justify=JCenter clip")
 
 ///|
+/// The title's line with what is beside it, 6 after it (as the wide head's title_about).
+// kept across runs: a value (no field of it changes)
+let nav_line_after : @ui.Style = nav_line.then(@ui.css("row gap=S1_5 align=ACenter"))
+
+///|
+/// What a mark after the title takes (an icon's room).
+// kept across runs: a value (no field of it changes)
+let nav_mark_room : @ui.Style = @ui.css("w=S5 h=S5")
+
+///|
 // kept across runs: a value (no field of it changes)
 let nav_title_words : @ui.TextStyle = @ui.text_style(size=Title, leading=Font, weight=Semibold, color=Fg, wrap=false)
 
@@ -84,7 +94,8 @@ pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0
 
 ///|
 /// The bar (NavBar): back (`back_key` its id, `back` its word, `back_max` how wide the word may be), `title` in the
-/// middle and `sub` under it, `trailing` at the end; on `bg` when it is said, from `top` above it down (the status
+/// middle and `sub` under it (`title_after` after it, a mark as wide as an icon's room, S5: an ⓘ; the title kept in
+/// the middle, as without it), `trailing` at the end; on `bg` when it is said, from `top` above it down (the status
 /// bar's height, the view under it: NavBar's windowInsetsPadding(statusBars)). `on_press` when back is tapped.
 pub fn nav_bar(
   c : @ui.Ctx,
@@ -92,13 +103,14 @@ pub fn nav_bar(
   back : String,
   title : String,
   sub? : () -> Unit,
+  title_after? : () -> Unit,
   trailing? : () -> Unit,
   back_max? : Double = 0.0,
   bg? : Int64 = 0L,
   top? : Double = 0.0,
   on_press? : () -> Unit,
 ) -> Unit {
-  nav_bar_in(c, back_key, back, title, sub?, trailing?, back_max~, bg~, top~, on_press?)
+  nav_bar_in(c, back_key, back, title, sub?, title_after?, trailing?, back_max~, bg~, top~, on_press?)
 }
 
 ///|
@@ -108,6 +120,7 @@ fn nav_bar_in(
   back : String,
   title : String,
   sub? : () -> Unit,
+  title_after? : () -> Unit,
   trailing? : () -> Unit,
   back_max~ : Double,
   bg~ : Int64,
@@ -123,7 +136,17 @@ fn nav_bar_in(
     c.box(style=nav_bar_inner, fn() {
       // the title, in the flow: as tall as its lines make the bar
       c.box(style=nav_title_column, fn() {
-        c.box(style=nav_line, fn() { c.text(title, style=nav_title_words) |> ignore }) |> ignore
+        match title_after {
+          Some(f) =>
+            c.box(style=nav_line_after, fn() {
+              // (as much room before the title as the mark takes after it: the title where it stands without one)
+              c.box(style=nav_mark_room, fn() {  }) |> ignore
+              c.text(title, style=nav_title_words) |> ignore
+              f()
+            })
+            |> ignore
+          None => c.box(style=nav_line, fn() { c.text(title, style=nav_title_words) |> ignore }) |> ignore
+        }
         match sub {
           // its line drawn 4 up, under the title's (NavBar's offset)
           Some(f) => c.box(style=nav_sub_row, ty=-4.0, fn() { f() }) |> ignore
@@ -154,6 +177,7 @@ fn nav_bar_in(
 /// The bar (nav_bar's) as nodes in `parent`: back to where `back` says (nav_back_node), `on_back` as it is pressed;
 /// `title` in the middle, 84 clear of either side, cut short where it has less; what `trailing` makes at its end, on
 /// back's 32 line; on the page's ground, from `top` above it down (the status bar's height as it is).
+#callsite(autofill(loc))
 pub fn nav_bar_node(
   parent : @view.View,
   back : () -> String,
@@ -161,8 +185,9 @@ pub fn nav_bar_node(
   on_back : () -> Unit,
   top? : () -> Double = fn() { 0.0 },
   trailing? : (@view.View) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     b
     .padding(Is((nav_bar_x, nav_bar_top, nav_bar_x, nav_bar_foot)))
     .ground(By(fn() { theme().p.bg }))

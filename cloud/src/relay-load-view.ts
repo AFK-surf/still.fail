@@ -75,7 +75,7 @@ const readAt = (s: Sample): Sample => {
   return time !== undefined && time <= s.at && time > s.at - GAP ? { at: time, load: s.load } : s;
 };
 
-/** What a relay did between two of its samples (about a minute), for Axiom (relay-load.ts): what each counter grew by,
+/** What a relay did between two of its samples (about a minute), for Cloud Logging (relay-load.ts): what each counter grew by,
  * the connections it held at the end, its machine's load. None when they are a gap apart or there was none before. */
 export type RelayMinute = {
   secs: number;

@@ -22,7 +22,7 @@ jobs:
       # Mac; beside those the mesh's measured too unevenly to move, or 109 ms for a line of nothing (side run 41798988101).
       max-parallel: 1
       matrix:
-        part: [core-ts, station, rust]
+        part: [core-ts, station, rust, locks, locks-moved, locks-as-moved, rigs, cloud]
     runs-on: [self-hosted, macos-ci]
     timeout-minutes: 10
     steps:
@@ -33,8 +33,17 @@ jobs:
         run: pnpm install --frozen-lockfile && cd client/core-ts && pnpm install --frozen-lockfile
       - if: matrix.part == 'station'
         run: pnpm install --frozen-lockfile && cd station && pnpm install --frozen-lockfile
+      - if: matrix.part == 'cloud'
+        run: cd cloud && pnpm install --frozen-lockfile
       - name: side (${{ matrix.part }})
         run: sh scripts/side.sh ${{ matrix.part }}
+      # (what a failed locks or rigs kept before its down, scripts/e2e-local.sh `kept`: the cloud's, the relay's and each
+      # station's logs apart, each device's record of its links, the stations' locks; run 42815367472's device E was
+      # refused a handshake five times, and its log could not say by which process or what E had dialled)
+      - if: failure() && (matrix.part == 'locks' || matrix.part == 'locks-moved' || matrix.part == 'locks-as-moved' || matrix.part == 'rigs')
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with: { name: "side-${{ matrix.part }}-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/side-${{ matrix.part }}/kept", retention-days: 3, if-no-files-found: ignore }
       # A job stopped at its timeout leaves its simulators booted, each slowing the next run and holding this Mac's little disk.
       - if: always() && matrix.part == 'station'
         name: simulators left

@@ -1,0 +1,46 @@
+// The files whose Testers still show faults of how what moves goes at 60 and 120 a second (mbui's tester.mbt,
+// motion_counted: what CI's runs count, `scripts/motion_said.sh`): only counted there; every other file is judged, a
+// fault failing its test. Only shrinks: a file mended to none leaves the list.
+
+///|
+fn init {
+  @ui.motion_counted([
+    "src/sfapp/activity_wbtest.mbt",
+    "src/sfapp/cards_wbtest.mbt",
+    "src/sfapp/chat_keys_wbtest.mbt",
+    "src/sfapp/chat_wbtest.mbt",
+    "src/sfapp/composer_parts_wbtest.mbt",
+    "src/sfapp/composer_wbtest.mbt",
+    "src/sfapp/decide_wbtest.mbt",
+    "src/sfapp/desk_service_wbtest.mbt",
+    "src/sfapp/downloads_wbtest.mbt",
+    "src/sfapp/drive_motion_wbtest.mbt",
+    "src/sfapp/drive_wbtest.mbt",
+    "src/sfapp/duo_wbtest.mbt",
+    "src/sfapp/emit_kept_wbtest.mbt",
+    "src/sfapp/emit_wbtest.mbt",
+    "src/sfapp/files_places_wbtest.mbt",
+    "src/sfapp/flight_under_bar_wbtest.mbt",
+    "src/sfapp/home_wbtest.mbt",
+    "src/sfapp/kept_rows_kinds_wbtest.mbt",
+    "src/sfapp/menu_node_wbtest.mbt",
+    "src/sfapp/motion_wbtest.mbt",
+    "src/sfapp/place_first_wbtest.mbt",
+    "src/sfapp/preview_tree_wbtest.mbt",
+    "src/sfapp/preview_wbtest.mbt",
+    "src/sfapp/publish_wbtest.mbt",
+    "src/sfapp/quote_image_wbtest.mbt",
+    "src/sfapp/service_link_wbtest.mbt",
+    "src/sfapp/settings_wbtest.mbt",
+    "src/sfapp/squeeze_wbtest.mbt",
+    "src/sfapp/stack_over_wbtest.mbt",
+    "src/sfapp/stations_now_wbtest.mbt",
+    "src/sfapp/tape_moment_wbtest.mbt",
+    "src/sfapp/tape_wbtest.mbt",
+    "src/sfapp/viewer_flight_wbtest.mbt",
+    "src/sfapp/viewer_media_over_wbtest.mbt",
+    "src/sfapp/viewers_desk_wbtest.mbt",
+    "src/sfapp/wide_rail_wbtest.mbt",
+    "src/sfapp/wide_wbtest.mbt",
+  ])
+}

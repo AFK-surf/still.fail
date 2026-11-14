@@ -115,17 +115,19 @@ pub fn files_shell(
     let n = tabs.tabs.length()
     show("show", None, Some(tabs.tabs[(at + step + n) % n].id), None)
   }
-  if c.shortcut('t') {
-    show("open", Some(here), None, None)
-  } else if c.key_pressed(@ui.key_tab, mods=@ui.mod_ctrl) || c.shortcut(']', shift=true) {
-    along(1)
-  } else if c.key_pressed(@ui.key_tab, mods=@ui.mod_ctrl + @ui.mod_shift_key) || c.shortcut('[', shift=true) {
-    along(-1)
-  } else if c.key_pressed(@ui.key_of_char('d'), mods=@ui.mod_cmd + @ui.mod_alt) {
-    show("split", None, None, None)
-  } else if c.key_pressed(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key) {
-    go_to_open()
+  // (the keymap's files.* where the files are (settings' files_bindings), done at their key's moment)
+  c.key_context("Files")
+  let on = fn(action : String, f : () -> Unit) {
+    c.on_action("files." + action, fn() {
+      f()
+      true
+    })
   }
+  on("tab_new", fn() { show("open", Some(here), None, None) })
+  on("tab_next", fn() { along(1) })
+  on("tab_back", fn() { along(-1) })
+  on("split", fn() { show("split", None, None, None) })
+  on("go_to", go_to_open)
   // a side's folder, as the folder's own parts take it (drive.mbt), in its side's room; a folder opened in a new tab
   // or on the other side
   let side_room = if split_on { room / 2.0 - body_in_half } else { room - body_in }
@@ -251,7 +253,7 @@ fn tab_row(
         })
         c.semantics(close, Button, id=cid, label=@sf.t("web-pages.files.closeTab"))
         c.box(style=tab_parts, fn() {
-          for i, p in panes {
+          for _, p in panes {
             let tone = stations.search_by(fn(s) { s.station == p.station }).unwrap_or(0) % station_dots.length()
             c.box(style=station_dots[tone], fn() {  }) |> ignore
             let (folder, station) = pane_parts(p, stations)

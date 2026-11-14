@@ -23,7 +23,7 @@ import { readConnects, relayView } from "../src/relay-pick.ts";
 import { toolCall, toolResult, type ToolPart } from "../src/tool-step.ts";
 import { wordsAnswer } from "../src/words.ts";
 import { tr, type Lang } from "../src/i18n.ts";
-import { Browsing, withDrive, type BrowsingState, type Ordered } from "../src/drive-browse.ts";
+import { Browsing, type BrowsingState, type Ordered } from "../src/drive-browse.ts";
 import { driveCount } from "../src/drive.ts";
 
 const target = new URL("../../../apps/mbui/src/sfkept/kept.mbt", import.meta.url);
@@ -156,7 +156,17 @@ for (const key of sorted(relays)) {
 for (const key of sorted(tools)) {
   const ask = JSON.parse(key) as { name?: string; call?: string; result?: string; failed?: boolean; said?: boolean };
   const say = (k: string, a?: Record<string, string | number>) => tr("zh", k, a);
-  const withMd = (parts: ToolPart[]) => parts.map((p) => (p.kind === "markdown" ? { ...p, md: markdown(p.text) } : p));
+  const withMd = (parts: ToolPart[]) =>
+    parts.map((p) => {
+      if (p.kind === "markdown") return { ...p, md: markdown(p.text) };
+      if (p.kind === "fields") {
+        return {
+          ...p,
+          rows: p.rows.map((r) => (r.form === "long" ? { ...r, md: markdown(r.value) } : r)),
+        };
+      }
+      return p;
+    });
   kept["history.tool"][key] = {
     call: withMd(toolCall(ask.name ?? "", ask.call ?? "", ask.said === true, say)),
     result: typeof ask.result === "string" ? withMd(toolResult(ask.name ?? "", ask.call ?? "", ask.result, ask.failed === true, say)) : null,
@@ -185,8 +195,7 @@ if (check) {
 /// A step as the made-up core asks it: what the browsing held before (null: nothing yet), the prefs it reads (`driveViews`,
 /// `filesTabs`), each folder's entries it was given (by station, root and path, a line between; null: not read), the
 /// workspaces' stations with a drive, the time, the number the next new id is made of; and what is done: a topic's value
-/// (`topic`: driveBrowse or filesTabs, its params) or a call (`name`, `params`); or the stations a workspace lists, those
-/// with a drive (`withDrive`, as the `stations` topic asked with `drive` gives them).
+/// (`topic`: driveBrowse or filesTabs, its params) or a call (`name`, `params`).
 interface Step {
   lang?: Lang;
   state: BrowsingState | null;
@@ -195,15 +204,13 @@ interface Step {
   stations: Record<string, { station: string; name: string; home: string | null }[]>;
   now: number;
   id: number;
-  op: { topic: Record<string, unknown> } | { name: string; params: Record<string, unknown> } | { withDrive: { stations: { station: string; overview?: unknown }[]; here: string | null } };
+  op: { topic: Record<string, unknown> } | { name: string; params: Record<string, unknown> };
 }
 
 /// A step worked out: the topic's value or the call's answer (`error`: its message), what the browsing holds after it,
 /// the prefs it changed (each patch, in order); `need`: the folders it read that were not given (asked again with them,
 /// nothing else of it kept).
 function browseStep(step: Step): unknown {
-  // the stations with a drive, this machine's first (the `stations` topic asked with `drive`)
-  if ("withDrive" in step.op) return { value: withDrive(step.op.withDrive.stations, step.op.withDrive.here) };
   const need = new Set<string>();
   const patches: unknown[] = [];
   let id = step.id;

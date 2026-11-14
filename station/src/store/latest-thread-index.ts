@@ -8,6 +8,8 @@ export const LATEST_THREAD_INDEXED = `SELECT t.*,m.connect FROM latest_thread_ro
   CROSS JOIN thread_sessions m ON m.session=r.session AND m.thread=r.thread
   CROSS JOIN threads t ON t.id=r.thread WHERE r.session=?1
   ORDER BY r.has_last DESC,r.last_delivery DESC,r.joined_at DESC,r.member_rowid DESC LIMIT 1`;
+/// The threads a session heard from last, in the order LATEST_THREAD_INDEXED picks the first of: at most ?2.
+export const LATEST_THREADS_INDEXED = LATEST_THREAD_INDEXED.replace("LIMIT 1", "LIMIT ?2");
 // One statement keeps the readiness check, the at-most-two-member test, and the answer in the same snapshot. The
 // sentinel row also says when an old multi-chat session needs preparation before a caller can use the ordered index.
 export const LATEST_THREAD_ATTEMPT = `WITH small AS MATERIALIZED (

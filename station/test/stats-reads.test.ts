@@ -9,7 +9,7 @@ import { Store, newMessage } from "../src/store/store.ts";
 import { installOutflowChatIndex, outflowChatIndexStep, outflowChatScopes } from "../src/store/outflow-index.ts";
 import type { InWorkspace } from "../src/store/rows.ts";
 import * as read from "../src/read/store.ts";
-import { outflowChats, outflowMessages, outflowUsage } from "../src/read/outflow.ts";
+import { ROUTER_WROTE, outflowChats, outflowMessages, outflowUsage } from "../src/read/outflow.ts";
 import { usageOps } from "../src/read/ops-usage.ts";
 import { peerRead, textOf } from "../src/comma/peer.ts";
 import { bytesOf } from "../src/mesh/bus.ts";
@@ -247,6 +247,125 @@ test("a page of exported chats does not enumerate every session", () => {
       assert.deepEqual(outflowChats(reader, 0, viewer, { limit: 1, before: null }), first);
       assert.deepEqual(outflowChats(reader, 0, viewer, { limit: 1, before: first.next }), second);
     } finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+  } finally { store.close(); }
+});
+
+test("what a chat asks of whom now: a need for its card's assignee over its creator, a done its creator has not read, a failure; none archived; its page in the app", () => {
+  const store = Store.open(":memory:");
+  try {
+    const chat = (key: string, by = "ann@x") => {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, createdBy: by });
+      const thread = store.openThreadOf("ember", "CHAT", key, key, by, key);
+      store.joinThread(thread.id, key, "ember");
+      store.insertMessage(newMessage(thread.id, `${key}.1`, "person", by, "please"));
+      return thread.id;
+    };
+    const turn = (key: string, outcome: string, detail: string | null, declared: string | null, need: string | null, about: [number, number, string] | null = null) => {
+      store.startTurnFor(`t-${key}`, key, "input", { profile: "cc", person: "ann@x", thread: null });
+      if (need !== null) store.setNeed(`t-${key}`, need);
+      store.setAbout(`t-${key}`, about);
+      store.endTurn(`t-${key}`, outcome, detail, declared, null);
+    };
+    const carded = chat("carded");
+    const [asked] = store.insertMessage({ ...newMessage(carded, "carded.2", "agent", "carded", "Ship it?"), card: { type: "options", options: [{ label: "Ship" }], assignee: "Bob@X" } });
+    turn("carded", "completed", null, "need_human", "Should 1389 ship?", [carded, asked, "carded.2"]);
+    const asks = chat("asks");
+    turn("asks", "completed", null, "need_human", "Which branch?");
+    const done = chat("done");
+    store.insertMessage(newMessage(done, "done.2", "agent", "done", "merged"));
+    turn("done", "completed", null, "all_done", "Merged into main as 82f108a5");
+    const seen = chat("seen");
+    const [last] = store.insertMessage(newMessage(seen, "seen.2", "agent", "seen", "merged"));
+    turn("seen", "completed", null, "all_done", "Merged");
+    store.setRead("ann@x", seen, last);
+    const failed = chat("failed");
+    turn("failed", "failed", "rate_limit: out of quota\nretry after 5h", null, null);
+    const stopped = chat("stopped");
+    turn("stopped", "aborted", "other: stopped", null, null);
+    const archived = chat("archived");
+    store.insertMessage(newMessage(archived, "archived.2", "agent", "archived", "merged"));
+    turn("archived", "completed", null, "all_done", "Merged");
+    store.db.prepare("UPDATE threads SET hidden_at = 5 WHERE id = ?").run(archived);
+    readyChats(store);
+    const reader = read.makeStore(store.db, ".");
+    const pages = { origin: "https://still.fail", workspace: "ws-home", station: "st-1" };
+    // Each by its key: no chat's messages counted or gone through.
+    const db = reader.db;
+    const traced = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (sql === read.UNREAD || sql === read.HAS_UNREAD) throw new Error("counted unread history");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    Object.defineProperty(reader, "db", { value: traced, configurable: true });
+    let got: any;
+    try { got = outflowChats(reader, 0, undefined, null, pages); }
+    finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+    const by = new Map<number, any>(got.chats.map((c: any) => [c.thread, c]));
+    assert.deepEqual(by.get(carded).attention, { kind: "need", waitsFor: ["bob@x"], note: "Should 1389 ship?" }, "who decides its card, over who started it");
+    assert.deepEqual(by.get(asks).attention, { kind: "need", waitsFor: ["ann@x"], note: "Which branch?" });
+    assert.deepEqual(by.get(done).attention, { kind: "done", waitsFor: ["ann@x"], note: "Merged into main as 82f108a5" });
+    assert.equal(by.get(seen).attention, undefined, "read to its latest message: nothing waits");
+    assert.deepEqual(by.get(failed).attention, { kind: "failed", waitsFor: ["ann@x"], note: "rate_limit: out of quota" });
+    assert.equal(by.get(stopped).attention, undefined, "stopped by a person is no failure");
+    assert.equal(by.get(archived).attention, undefined);
+    assert.equal(by.get(done).url, "https://still.fail/o/ws-home/st-1/done");
+    // Read since: it waits no more; and without where the pages are, no link.
+    store.setRead("ann@x", done, last + 100);
+    const again = outflowChats(reader, 0) as any;
+    assert.equal(again.chats.find((c: any) => c.thread === done).attention, undefined);
+    assert.ok(again.chats.every((c: any) => c.url === undefined));
+  } finally { store.close(); }
+});
+
+test("a chat a Comma Router wrote in says so, by one keyed lookup of who wrote in it; a chat only people wrote in, or a platform's thread, says nothing", () => {
+  const store = Store.open(":memory:");
+  try {
+    const session = (key: string) => store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: key, createdAt: 1, lastActiveAt: 1, createdBy: "ann@x" });
+    const chat = (key: string) => {
+      session(key);
+      const thread = store.openThreadOf("ember", "CHAT", key, key, "ann@x", key);
+      store.joinThread(thread.id, key, "ember");
+      store.insertMessage(newMessage(thread.id, `${key}.1`, "person", "ann@x", "please"));
+      return thread.id;
+    };
+    const routed = chat("routed");
+    // Long after it, as the Router's message is written (comma/chats.ts routerSaysOnce), among others'.
+    for (let i = 2; i < 40; i++) store.insertMessage(newMessage(routed, `routed.${i}`, i === 20 ? "person" : "agent", i === 20 ? "slack:cm:Router" : "routed", "said"));
+    const people = chat("people");
+    store.insertMessage(newMessage(people, "people.2", "person", "bob@x", "and me"));
+    store.insertMessage(newMessage(people, "people.3", "agent", "people", "done"));
+    // A platform's thread names its people by their ids there, whatever they look like: never the Router's.
+    session("slack");
+    const slack = store.openThread("slack:T1", "C1", "100.1", null, "slack:ember:U1");
+    store.joinThread(slack.id, "slack", "ember");
+    store.insertMessage(newMessage(slack.id, "100.1", "person", "slack:odd", "hi"));
+    readyChats(store);
+    const reader = read.makeStore(store.db, ".");
+    const db = reader.db;
+    let lookups = 0;
+    const traced = new Proxy(db, { get(target, property) {
+      if (property === "prepare") return (sql: string) => {
+        if (sql === ROUTER_WROTE) lookups++;
+        else if (sql.includes("thread_people")) throw new Error("went through who wrote in a chat");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    Object.defineProperty(reader, "db", { value: traced, configurable: true });
+    let got: any;
+    try { got = outflowChats(reader, 0); }
+    finally { Object.defineProperty(reader, "db", { value: db, configurable: true }); }
+    const by = new Map<number, any>(got.chats.map((c: any) => [c.thread, c]));
+    assert.equal(by.get(routed).router, true);
+    assert.equal("router" in by.get(people), false);
+    assert.equal("router" in by.get(slack.id), false);
+    assert.equal(lookups, 2, "one for each still.fail chat");
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${ROUTER_WROTE}`).all(routed) as { detail: string }[]).map((r) => r.detail).join(" ");
+    assert.match(plan, /SEARCH thread_people USING PRIMARY KEY \(thread=\? AND author>\? AND author<\?\)/);
   } finally { store.close(); }
 });
 

@@ -1,8 +1,7 @@
-// The Rust core's jobs.rs and footprint.rs tests, ported.
+// The Rust core's jobs.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { conform } from "../src/conform.ts";
-import * as fp from "../src/footprint.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { ago, chatJobs, type From, LONG, log, longJobs, longNext, nextChange, remoteOwner, shown, span } from "../src/jobs.ts";
 
@@ -156,68 +155,28 @@ test("a_task_another_stations_chat_runs_is_in_that_chat", () => {
 test("a_logs_last_line_and_when", () => {
   let v: J = { text: "a\nbuilt ok\n", outputAt: NOW - 3_000, state: "running" };
   v = log(v, c());
-  assert.deepEqual([v.last, v.said], ["a\nbuilt ok", "最后输出 · 刚刚"]);
+  assert.deepEqual([v.last, v.said], ["built ok", "最后输出 · 刚刚"]);
   let empty: J = { text: "" };
   empty = log(empty, c());
-  assert.deepEqual([empty.last, empty.said], [undefined, undefined]);
+  assert.deepEqual([empty.last, empty.said, empty.lines], [undefined, undefined, []]);
 });
 
-// ── footprint.rs ──
-
-const FNOW = 1_790_000_000_000;
-const DAY = 86_400_000;
-function raw(manage: boolean): J {
-  return {
-    checkedAt: FNOW - 120_000, tookMs: 9000, scanning: false, manage,
-    disk: { totalBytes: 100e9, freeBytes: 8e9 },
-    parts: [{ id: "chats", bytes: 8e9 }, { id: "transcripts", bytes: 1e9 }, { id: "homes", bytes: 0 }, { id: "archive", bytes: 3e8 }, { id: "repos", bytes: 3e8 }, { id: "other", bytes: 1e8 }],
-    elsewhere: [{ id: "playwright", path: "~/Library/Caches/ms-playwright", bytes: 8e8 }],
-    chats: [
-      { key: "a", chat: { id: "a", title: "预加载", archived: false }, bytes: 3e9, rebuildBytes: 2.9e9, archived: false, lastActiveAt: FNOW - 3_600_000, state: "warm" },
-      { key: "b", chat: { id: "b", title: "", archived: true }, bytes: 4e8, rebuildBytes: 1e8, archived: true, lastActiveAt: FNOW - 10 * DAY, state: "cold" },
-      { key: "c", chat: { id: "c", title: "在跑", archived: false }, bytes: 3e8, rebuildBytes: 3e8, archived: false, lastActiveAt: FNOW, state: "running" },
-      { key: "d", chat: { id: "d", title: "旧的", archived: true }, bytes: 1e8, rebuildBytes: 0, archived: true, lastActiveAt: FNOW - 2 * DAY, state: "cold" },
-    ],
-    unseen: { count: 0, bytes: 0 },
-    memory: { totalBytes: 6e9, usedBytes: 5.2e9, stationBytes: 2.2e7 },
-    processes: [
-      { pgid: 1, runtime: "claude", rssBytes: 1.3e8, key: "a", chat: { id: "a", title: "预加载" }, state: "warm", lastActiveAt: FNOW - 3_600_000 },
-      { pgid: 2, runtime: "claude", rssBytes: 1.8e8, key: "c", chat: { id: "c", title: "在跑" }, state: "running", lastActiveAt: FNOW },
-      { pgid: 3, runtime: "codex", rssBytes: null, key: null, chat: null, state: null, lastActiveAt: null },
-    ],
-  };
-}
-const fc = () => ({ now: FNOW, offsetMin: 480 });
-const shape = (v: unknown) => assert.ok("ok" in conform("FootprintView", v), JSON.stringify(conform("FootprintView", v)));
-
-test("the_page_says_what_takes_the_disk_and_what_can_be_cleaned", () => {
-  const v = fp.shown(raw(true), fc());
-  shape(v);
-  assert.equal(v.checkedText, "统计于2 分钟前");
-  assert.equal(v.totalText, "9.0 GB");
-  assert.equal(v.legend[2].level, "red");
-  assert.deepEqual(v.actions.map((a: J) => a.id), ["rebuild", "archived", "idle"]);
-  assert.deepEqual(v.actions[0].choices[0].keys, ["a", "b"]);
-  const archived = v.actions[1].choices;
-  assert.deepEqual(archived.map((x: J) => x.keys), [["b", "d"], ["b"]]);
-  assert.equal(archived[0].confirms.length, 2);
-  assert.deepEqual(v.actions[2].choices[0].keys, ["a"]);
-  assert.equal(v.chats[1].title, "新对话");
-  assert.deepEqual(v.chats[2].choices, []);
-  assert.equal(v.chats[1].choices[1].confirms.length, 2);
-  assert.equal(v.memory[2].label, "在跑");
-  assert.ok(v.memory[4].label.startsWith("Codex"));
-  assert.equal(v.memory[3].choice.call, "footprint.evict");
-});
-
-test("members_look_and_a_first_scan_is_waited_for", () => {
-  const v = fp.shown(raw(false), fc());
-  assert.deepEqual([v.actions, v.actionsNote], [[], "只有 workspace 的 owner 和管理员可以清理"]);
-  assert.ok(v.chats.every((x: J) => x.choices.length === 0));
-  const first = fp.shown({ scanning: true, manage: true, disk: {}, parts: [], chats: [], processes: [] }, fc());
-  shape(first);
-  assert.deepEqual([first.measured, first.totalText], [false, "—"]);
-  let b: J = { bytes: null, scanning: true };
-  b = fp.brief(b);
-  assert.equal(b.text, "正在统计");
+test("a_logs_lines_each_by_its_number_its_runs_and_nothing_else_of_it", () => {
+  // (numbered from what the link kept, `from`; an empty line no runs; the text, the runs whole and `from` not sent)
+  const v = log({ text: "\u001b[32mok\u001b[39m one\n\n  two  ", outputAt: NOW - 3_000, from: 40 }, c());
+  assert.deepEqual(v.lines, [
+    { n: 40, runs: [{ text: "ok", fg: "2" }, { text: " one" }] },
+    { n: 41, runs: [] },
+    { n: 42, runs: [{ text: "  two  " }] },
+  ]);
+  assert.deepEqual(Object.keys(v).sort(), ["last", "lines", "outputAt", "said"]);
+  assert.equal(v.last, "two");
+  // Asked for its last line alone (a job's row): that and when, no lines.
+  const row = log({ text: "two", outputAt: NOW - 3_000, from: 7 }, c(), 1);
+  assert.deepEqual(row, { outputAt: NOW - 3_000, last: "two", said: "最后输出 · 刚刚" });
+  // (shaped as it goes out)
+  assert.ok("ok" in conform("JobLogView", v), JSON.stringify(conform("JobLogView", v)));
+  // Shown again (held inside another value and put out a second time): as it was, its lines kept.
+  assert.equal(log(v, c()), v);
+  assert.deepEqual(log(row, c(), 1), row);
 });

@@ -13,9 +13,10 @@ fn chat_tester(mode : String, w? : Double = 390.0) -> @ui.Tester {
 test "a chat opens at its end: its bar, its last messages, the composer's room under them" {
   let t = chat_tester("chat")
   assert_true(t.find("整理发布清单") is Some(_))
-  // (what the bar shows: its words seen, not those its row left out for the title and its agent, as a phone's is)
+  // (what the bar shows: its words seen, not those its row left out for the title and its agent)
   let bar = fn(t : @ui.Tester) { t.words().filter(fn(w) { w.2 < 100.0 && w.5 > 0.0 }).map(fn(w) { w.0 }) }
-  assert_true(!bar(t).contains("你") && !bar(t).contains("林"), msg="its people left out for its title: \{bar(t)}")
+  assert_true(bar(t).contains("你"), msg="its people with the room: \{Repr(bar(t))}")
+  assert_true(!bar(t).contains("林"), msg="lettered as it calls them: \{Repr(bar(t))}")
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   let (_, field_y) = t.find("发消息").unwrap()
@@ -28,22 +29,23 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   // no way to the newest at the newest
   assert_true(!readings.get("ws1/st1\u{1}s-c1").unwrap().jump)
   t.assert_idle()
-  // its people in the bar where it has the room, lettered as it calls them: the viewer 「你」, not their name
-  let wide = chat_tester("chat", w=480.0)
-  assert_true(bar(wide).contains("你"), msg="its people with the room: \{bar(wide)}")
-  assert_true(!bar(wide).contains("林"), msg="lettered as it calls them: \{bar(wide)}")
+  // its people left out for its title where the bar is narrower
+  let narrow = chat_tester("chat", w=350.0)
+  assert_true(!bar(narrow).contains("你") && !bar(narrow).contains("林"), msg="its people left out for its title: \{Repr(bar(narrow))}")
 }
 
 ///|
 test "scrolled up, the way to the newest shows; tapped, the list glides back to its end" {
   let t = chat_tester("chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -900.0)
-  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
-  assert_true(rd.jump)
+  let jumps = fn(t : @ui.Tester) {
+    t.semantics().iter().any(fn(s) { s.role == Button && s.label == @sf.t("web-main.chat.toLatest") })
+  }
+  assert_true(jumps(t))
   assert_true(t.find("做完了：列表、跳到最新的按钮") is None)
-  // it comes up growing (its presence, "chat-jump"): tapped once it is there, as a person can only tap what shows
-  t.run_for(t.rest_of("chat-jump") - t.time())
+  // it comes up growing: tapped once it is there, as a person can only tap what shows
+  t.run_for(@ui.move_most_ms)
   // over the send button, the composer's room under it
   t.click(Button, label=@sf.t("web-main.chat.toLatest"))
   // back at its end by the list's own rest (mbui's list_to_end: a glide solved in time, or at once from further than
@@ -53,17 +55,85 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
   if rest > t.time() {
     t.run_for(rest - t.time())
   }
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_))
-  assert_true(!rd.jump)
+  assert_true(!jumps(t))
   // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
   t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 
 ///|
+/// (the way to the newest's glide is this file's motion, counted here: motion_counted_wbtest.mbt; not judged in
+/// chat_find_wbtest, where the outline's go-to and its place kept are)
+test "a go-to in the chat keeps where the reader was: ↓ back there, ↓ again to the end, the place forgotten; reaching the end, or words sent, forget it" {
+  // (the Tester made here, this file's: the long chat of the outline's modes, away from its end at 22)
+  let outline_tester = fn(calls : Array[Made]) {
+    new_run()
+    let base = fixture("chat-outline-away")
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        calls.push({ name, params, bytes: None, done })
+        (base.call)(name, params, done)
+      },
+    }
+    open_fixture_over("chat-outline-away", src)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+    t.run_for(@ui.move_most_ms)
+    t.run_for(@ui.move_most_ms)
+    t
+  }
+  let back = fn(t : @ui.Tester) { t.semantics().iter().any(fn(s) { s.role == Button && s.label == "回到刚才的位置" }) }
+  // ↓ back, then ↓ again: at the end, nothing kept; a go-to from there keeps nothing
+  let calls : Array[Made] = []
+  let t = outline_tester(calls)
+  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(back(t))
+  t.click(Button, label="回到刚才的位置")
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_false(back(t))
+  t.click(Button, label="跳到最新")
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(outline_reading().at_end)
+  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_false(back(t))
+  // a place kept, then the end reached by ↓ without going back: forgotten
+  let t = outline_tester(calls)
+  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(back(t))
+  t.wheel(800.0, 400.0, 100000.0)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(outline_reading().at_end)
+  assert_false(back(t))
+  // a place kept, then words sent: forgotten
+  let t = outline_tester(calls)
+  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(back(t))
+  t.tap_text("发消息")
+  t.type_text("好的")
+  t.key(@ui.key_code_enter)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_true(named(calls, "composer.take").length() + named(calls, "chat.send").length() > 0)
+  assert_false(back(t))
+}
+
+///|
 test "the viewer's words on the right, everyone else's under their name" {
   let t = chat_tester("chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -500.0)
   // a bubble at the list's right (16 in: the web's narrow chatList), an agent's words from its left
   let (bx, _, bw, _) = t.rect_of("还有深色模式也看一下").unwrap()
@@ -75,7 +145,7 @@ test "the viewer's words on the right, everyone else's under their name" {
 ///|
 test "what the viewer quotes is over their bubble at the right, no wider than the bubble may be" {
   let t = chat_tester("chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -500.0)
   // (the agent's words it quotes are in the chat too: the card's are after whose they are)
   let quote = t.words().filter(fn(w) { w.0.has_prefix("Claude") && w.0.contains("其余的行按估计的高度占位") })
@@ -92,7 +162,7 @@ test "what the viewer quotes is over their bubble at the right, no wider than th
 ///|
 test "near the top the page before comes in, and what is in view stays where it is" {
   let t = chat_tester("chat")
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   // up to the first message: the page before is asked for there, and comes in above it
   let mut tries = 0
   while t.find("Willow 上的 claude 已启动") is None && tries < 40 {
@@ -234,7 +304,7 @@ test "a file card in the chat opens its preview" {
   // (the chat opened drawn at its moment, its push from there)
   t.draw()
   t.run_for(@ui.move_most_ms)
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   // (up the list till its card shows: its name's stem, its extension after it)
   let mut tries = 0
   while t.find(".log") is None && tries < 12 {
@@ -260,25 +330,30 @@ test "a file card in the chat opens its preview" {
 test "what waits to be decided and is out of view: a bell over the way to the end; tapped, the first one's post" {
   let t = chat_tester("chat")
   t.draw()
-  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
+  let shows = fn(t : @ui.Tester, label : String) {
+    t.semantics().iter().any(fn(s) { s.role == Button && s.label == label })
+  }
+  let bell = @sf.t("web-main.chat.asks.go")
   // both cards in view at the end: no bell
-  assert_true(!rd.ask)
+  assert_true(!shows(t, bell))
   // dragged down (a finger's: no easing to wait for), the cards below what shows
   t.drag(195.0, 150.0, 195.0, 750.0)
   t.drag(195.0, 150.0, 195.0, 750.0)
-  assert_true(rd.ask)
-  assert_true(rd.jump)
+  assert_true(shows(t, bell))
+  assert_true(shows(t, @sf.t("web-main.chat.toLatest")))
   // over the way to the end, once it has risen (the list, still flung, is stopped by a tap first: it takes that one)
   t.run_for(ask_lift_ms)
-  let bell = @sf.t("web-main.chat.asks.go")
-  if t.list_moving() {
+  let k = "ws1/st1\u{1}s-c1"
+  t.click(Button, label=bell)
+  // (the list, still flung, stopped by that tap where it takes it: the next one the bell's)
+  if @sfpages.ask_turns.get(k) is None {
     t.click(Button, label=bell)
   }
-  assert_true(!t.list_moving())
-  t.click(Button, label=bell)
-  assert_eq(rd.flash, "ts8")
+  // (its post lit as it is gone to, from the middle of its hold)
+  t.run_for((flash_in_ms + flash_held_ms) / 2.0)
+  assert_true(lit_over(t, "高度先按 90 估") > 0.99)
   // the next tap goes to the next one's
-  assert_eq(@sfpages.ask_turns.get("ws1/st1\u{1}s-c1"), Some(1))
+  assert_eq(@sfpages.ask_turns.get(k), Some(1))
 }
 
 ///|
@@ -366,7 +441,7 @@ test "words sent going up into the list tell the core where it is as the message
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -381,13 +456,13 @@ test "words sent going up into the list tell the core where it is as the message
   t.run_for(fix_answer_ms)
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
-  t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() + turn_calm_ms)
+  t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() + 2.0 * @ui.frame_period_default)
   assert_true(t.find("收到：「测试一下」") is Some(_))
   // told as the message at the top changed, not as it moved under it
   let told = named(calls, "chat.place").map(fn(m) { field(Some(m.params), "seq") })
   assert_true(told.length() > 0)
   for i in 1..<told.length() {
-    assert_true(told[i] != told[i - 1], msg="told again with the same message at the top: \{told}")
+    assert_true(told[i] != told[i - 1], msg="told again with the same message at the top: \{Repr(told)}")
   }
   fix_clock.val = None
 }
@@ -483,7 +558,7 @@ test "left short of its end, a chat opens again where it was left, though the co
   t.draw()
   open_chat(r)
   t.run_for(@ui.move_most_ms)
-  t.move(195.0, 400.0)
+  t.move_to(195.0, 400.0)
   t.wheel(195.0, 400.0, -900.0)
   t.run_for(@ui.move_most_ms)
   let k = "ws1/st1\u{1}s-c1"
@@ -573,7 +648,7 @@ test "a table wider than the message on a phone: at rest in line with the words,
   // slid to its end, held still before it is let go (no fling)
   t.press_at(360.0, y)
   for step in 1..=8 {
-    t.move(360.0 - step.to_double() * 40.0, y)
+    t.move_to(360.0 - step.to_double() * 40.0, y)
   }
   t.run_for(long_press_ms)
   t.release(40.0, y)
@@ -596,12 +671,12 @@ test "a table on a wide list, slid sideways: out over the margin, not cut at the
   let column = x - 4.0 - 12.0
   t.press_at(x + 300.0, y)
   for step in 1..=8 {
-    t.move(x + 300.0 - step.to_double() * 40.0, y)
+    t.move_to(x + 300.0 - step.to_double() * 40.0, y)
   }
   t.run_for(long_press_ms)
   t.release(x - 20.0, y)
   let (shown, _, _, _) = t.shown_of(cell).unwrap()
-  assert_true(shown < column, msg="\{(shown, column)}")
+  assert_true(shown < column, msg="\{Repr((shown, column))}")
 }
 
 ///|
@@ -704,15 +779,23 @@ test "a notice opened keeps the size of its words" {
 test "a chat's run changed: what changed on a line, else what it runs on now; pressed, both runs whole" {
   // (the user, 2026-11-06: 默认按最小差异显示，点击查看完整信息，如果差异太大一行显示不了，就只显示变化后的信息)
   let t = chat_tester("chat-run-change")
-  assert_eq(t.lines_of("Opus 5.5 · 高 → Sonnet 5.5 · 中"), ["Opus 5.5 · 高 → Sonnet 5.5 · 中"])
-  // too long for a phone's line: what it runs on now alone
-  assert_eq(t.lines_of("Claude Code · Sonnet 5.5 · 中 · 标准 → Codex · GPT-6 Astra · 高 · Fast"), [
-    "换成 Codex · GPT-6 Astra · 高 · Fast",
-  ])
-  let (x, y) = t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中").unwrap()
+  // (the words drawn, each whole: what a row left out is of no size)
+  let shown = fn() { t.words().filter(fn(w) { w.3 > 0.0 }).map(fn(w) { w.0 }) }
+  let first = shown()
+  // each side after the mark of who made its model
+  assert_true(first.contains("Opus 5.5 · 高") && first.contains("Sonnet 5.5 · 中"), msg=first.join(" | "))
+  // too long for a phone's line: what it runs on now alone, whole, after 换成 and its mark
+  assert_true(!first.contains("Claude Code · Sonnet 5.5 · 中 · 标准"), msg=first.join(" | "))
+  assert_true(first.contains("换成") && first.contains("Codex · GPT-6 Astra · 高 · Fast"), msg=first.join(" | "))
+  assert_eq(t.lines_of("Codex · GPT-6 Astra · 高 · Fast"), ["Codex · GPT-6 Astra · 高 · Fast"])
+  let (x, y) = t.find("Opus 5.5 · 高").unwrap()
   t.tap(x, y)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("之前：Claude Code · Opus 5.5 · 高 · 自动 · lin@example.com") is Some(_))
   assert_true(t.find("现在：Claude Code · Sonnet 5.5 · 中 · 自动 · lin@example.com") is Some(_))
-  assert_true(t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中") is None)
+  assert_true(!shown().contains("→"))
 }
+
+///|
+/// How long the bell rises over the way to the end as that comes, and goes back down.
+let ask_lift_ms : Double = 200.0

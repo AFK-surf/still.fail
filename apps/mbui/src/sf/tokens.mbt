@@ -639,15 +639,17 @@ pub fn foot_pad(height : Double) -> @ui.Style {
 /// A card's last row with capsules `height` high at its ends (a card card_pad in, as a page's): reaching past the
 /// card's words to where they stand concentric with its foot corners (card_foot_in), at both its sides and its foot;
 /// `start`: what leads it is that high instead (a field before a button: the row as high as the higher, the lower in
-/// its middle stands as much further from the foot as it is less high, each concentric with its corner); `words_first`:
-/// words lead it (where the card's words stand), only its end reaching.
-pub fn foot_reach(height : Double, start? : Double, words_first? : Bool = false) -> @ui.Style {
-  let out = room(card_foot_in(height) - card_pad)
+/// its middle stands as much further from the foot as it is less high, each concentric with its corner); `end`: what
+/// ends it is that high instead, the same way (a choice's capsule at its end, as far from the card's side as from its
+/// foot); `words_first`: words lead it (where the card's words stand), only its end reaching.
+pub fn foot_reach(height : Double, start? : Double, end? : Double, words_first? : Bool = false) -> @ui.Style {
+  let last = end.unwrap_or(height)
+  let out = room(card_foot_in(last) - card_pad)
   if words_first {
-    return @ui.style(mr=out, mb=out)
+    return @ui.style(mr=out, mb=room(card_foot_in(dmax(height, last)) - card_pad))
   }
   let lead = start.unwrap_or(height)
-  let under = room(card_foot_in(dmax(height, lead)) - card_pad)
+  let under = room(card_foot_in(dmax(dmax(height, lead), last)) - card_pad)
   @ui.style(ml=room(card_foot_in(lead) - card_pad), mr=out, mb=under)
 }
 
@@ -1150,6 +1152,7 @@ pub fn native_input() -> @ui.Pointing {
 ///|
 /// How the app's panes are laid out, by the screen alone: how much room its window has and what kind of screen it is.
 /// Never by what it is pointed with (@ui.pointing): each is pointed at with a mouse or a finger alike.
+#derive(Eq, Debug)
 pub(all) enum Layout {
   /// one page at a time, the whole window (a phone held upright, a narrow window)
   Small
@@ -1158,7 +1161,7 @@ pub(all) enum Layout {
   Medium
   /// the panes side by side, all of them shown: the rail and the sidebar, the page, the page's side panel
   Large
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// The layout of a window `width` wide, in points, on every screen alike (medium_from, large_from): neither which way up
@@ -1211,7 +1214,7 @@ fn screen_layout(width : Double) -> Layout {
 /// too), keyboard and mouse's on a computer, its window narrow or not; its colours one palette on every screen, light
 /// or dark as set: call at the top of a view.
 pub fn begin(_c : @ui.Ctx) -> Theme {
-  let dark = @signals.untracked(fn() { dark_set.get() }).unwrap_or(false)
+  let dark = dark_set.untracked().unwrap_or(false)
   current.val = theme_of(dark)
   current.val
 }
@@ -1460,7 +1463,7 @@ pub fn set_accent(key : String) -> Unit {
 ///|
 /// The colour theme drawn now (accent_set's).
 fn accent_now() -> AccentTone {
-  tone_of(@signals.untracked(fn() { accent_set.get() })).unwrap_or(accents[0])
+  tone_of(accent_set.untracked()).unwrap_or(accents[0])
 }
 
 ///|
@@ -1504,7 +1507,7 @@ fn accented(p : Palette, dark : Bool, key : String) -> Palette {
 /// is asked, not only as a frame begins.
 fn theme_of(dark : Bool) -> Theme {
   let touch = native_input() is Finger
-  let accent = @signals.untracked(fn() { accent_set.get() })
+  let accent = accent_set.untracked()
   // (one of each: the same whenever it is asked, what is made of it kept as long as it is)
   match themes_made.get((dark, touch, accent)) {
     Some(t) => return t
@@ -1529,7 +1532,7 @@ fn theme_of(dark : Bool) -> Theme {
 ///|
 /// The themes made (theme_of), by light or dark, the native input and the accent.
 // kept across runs: each a value of what it is made of
-let themes_made : Map[(Bool, Bool, String), Theme] = {}
+let themes_made : Map[(Bool, Bool, String), Theme] = Map([])
 
 ///|
 /// Whether a ground is drawn on in place of the page's now (with_ground): the theme is current's, as it says, till then.
@@ -2350,7 +2353,8 @@ pub fn keys_gap(size? : Double = bar_key_side, least? : Double = 2.0) -> @ui.Spa
 ///|
 /// keys_gap's room as a number (where it is worked into a width: a key coming in with the room before it).
 pub fn keys_apart(size? : Double = bar_key_side, least? : Double = 2.0) -> Double {
-  dmax(least, @ui.room_least() - size)
+  ignore(size)
+  least
 }
 
 ///|
@@ -2395,7 +2399,7 @@ pub fn tape_bar_end_of(
   // (the panel at the window's right edge, the window's own buttons over its top right corner where they are the
   // app's: its bar's last before them, alone: window_keys)
   if k[1] == tape_edge && @ui.window_keys_own() {
-    return window_keys_room_tape() - window_in + alone
+    return window_keys_room_tape(roots~) - window_in + alone
   }
   line_end_in(k[1].radius(roots), alone, side~)
 }
@@ -2440,7 +2444,7 @@ pub fn line_end_in(corner : Double, alone : Double, side? : Double = bar_key_sid
 pub fn window_end_in(alone : Double, roots? : @ui.CornerRoots = @ui.corner_roots()) -> Double {
   // (the window's own buttons there where the app draws them: the bar's last before them, alone: window_keys)
   if @ui.window_keys_own() {
-    return window_keys_room() + alone
+    return window_keys_room(roots~) + alone
   }
   match bar_keys_link() {
     Some(_) => window_key_in(alone, roots~)
@@ -3132,6 +3136,7 @@ pub let top_bar_title_look : @view.WordsLook = {
   wrap: false,
   tracking: ScaledPoints(-0.4),
   balance: false,
+  max_lines: 0,
 }
 
 ///|
@@ -3143,4 +3148,5 @@ pub let home_workspace_title_look : @view.WordsLook = {
   wrap: false,
   tracking: ScaledPoints(-0.4),
   balance: false,
+  max_lines: 0,
 }

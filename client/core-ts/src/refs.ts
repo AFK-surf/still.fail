@@ -2,6 +2,11 @@
 // (the composer's `@` menu and ⌘K's switcher). In the composer a reference is a short mark, `@[its title]`; sent, a
 // link, `[its title](its page)`. The link of each title picked (`chat.ref`) is kept on the device, the latest 200 of
 // each workspace, and a mark is made its link as it is sent in a chat of the same workspace.
+//
+// The menu lists the chats the viewer opened on this device most recently first, the latest first (kept here too, the
+// latest 50 of each workspace), then the rest by when they were last active, pinned or not: the owner found the order
+// before, the pinned chats always first and the rest by whichever an agent last touched, useless (the user,
+// 2026-11-10: 「现在引用对话…到底是什么排序」).
 import type { Data } from "./data.ts";
 import { t } from "./i18n.ts";
 import { encode } from "./ops.ts";
@@ -17,6 +22,9 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const TABLE = "chat_ref";
 const KEY = "links";
 export const KEPT = 200;
+const OPENED = "opened";
+/// At most this many chats opened are kept, each workspace's.
+export const OPENED_KEPT = 50;
 const TITLE = 24;
 const MARK_MAX = 120;
 
@@ -128,16 +136,48 @@ export function expand(data: Data, station: string, text: string): string {
   return out + rest;
 }
 
+/// The chats opened on this device in `workspace` (`[station, key]`), the latest first.
+export function openedIn(data: Data, workspace: string): [string, string][] {
+  return [...record(data, `${OPENED}:${workspace}`)].reverse();
+}
+
+/// A chat opened (`client.focus`): kept as the latest opened in its workspace, each once, the oldest going past 50.
+/// Nothing is written when it already is the latest, as the app tells its focus often.
+export function opened(data: Data, station: string, key: string): void {
+  const at = `${OPENED}:${ofAddress(station)}`;
+  const all = record(data, at);
+  const last = all[all.length - 1];
+  if (last && last[0] === station && last[1] === key) return;
+  const kept = all.filter(([s, k]) => !(s === station && k === key));
+  kept.push([station, key]);
+  data.put(TABLE, at, kept.slice(Math.max(kept.length - OPENED_KEPT, 0)));
+}
+
 /// What `query` finds among a `chats` view's rows, on every station of theirs: written on `station`, those of the others
-/// say so (`otherStation`), as an agent reads a chat of any.
-export function search(chats: J, query: string, station: string | null | undefined, exclude: string | null | undefined, limit: number | null | undefined): J {
+/// say so (`otherStation`), as an agent reads a chat of any. Those whose title has it first, then those it finds only
+/// in what else they say; each in the order the menu has them: those `opened` (`[station, key]`, the latest first),
+/// then the rest by when they were last active, the latest first, pinned chats as any other.
+export function search(chats: J, query: string, station: string | null | undefined, exclude: string | null | undefined, limit: number | null | undefined, opened: readonly (readonly [string, string])[] = []): J {
   const q = query.trim().toLowerCase();
   const has = (v: J) => typeof v === "string" && v.toLowerCase().includes(q);
   const rows = arr(get(chats, "days")).flatMap((d) => arr(get(d, "items")));
-  const candidates = rows
+  // Each opened's place, looked up once: a row by its id and by its key, the lower place.
+  const places = new Map<string, number>();
+  opened.forEach(([s, k], at) => {
+    const name = `${s}\u0001${k}`;
+    if (!places.has(name)) places.set(name, at);
+  });
+  const rank = (i: J): number => {
+    const of = (f: string) => (typeof get(i, f) === "string" ? places.get(`${get(i, "station")}\u0001${get(i, f)}`) : undefined) ?? opened.length;
+    return Math.min(of("id"), of("session"));
+  };
+  const active = (i: J): number => (typeof get(i, "lastActiveAt") === "number" ? (get(i, "lastActiveAt") as number) : 0);
+  const ordered = rows
     .filter((i) => get(i, "pending") !== true)
     .filter((i) => exclude == null || ["id", "session"].every((f) => get(i, f) !== exclude))
-    .map((i) => (station != null && get(i, "station") !== station ? { ...i, otherStation: true } : i));
+    .map((row, index) => ({ row, index, rank: rank(row), active: active(row) }))
+    .sort((a, b) => a.rank - b.rank || b.active - a.active || a.index - b.index);
+  const candidates = ordered.map(({ row: i }) => (station != null && get(i, "station") !== station ? { ...i, otherStation: true } : i));
   const titled = candidates.filter((i) => q === "" || has(get(i, "title")));
   const rest = candidates.filter(
     (i) =>
@@ -177,8 +217,9 @@ const LEAD = 8;
 const LINE_MAX = 240;
 
 /// The line of a message's text that has what was looked for, as a found message shows it: Markdown's marks out, on one
-/// line, its start cut (`…`) when the word found lies far into it; and where the words are in it, as UTF-16 ranges.
-export function excerpt(text: string, words: string[]): { text: string; marks: { from: number; to: number }[] } {
+/// line, its start cut (`…`) when the word found lies far into it (more than `lead` before it), at most `max` long after
+/// that; and where the words are in it, as UTF-16 ranges.
+export function excerpt(text: string, words: string[], lead = LEAD, max = LINE_MAX): { text: string; marks: { from: number; to: number }[] } {
   const plain = text
     .replace(/^ {0,3}(```|~~~).*$/gm, "")
     .replace(/!?\[([^\]\n]*)\]\([^)\s]*\)/g, "$1")
@@ -191,15 +232,13 @@ export function excerpt(text: string, words: string[]): { text: string; marks: {
   const lower = line.toLowerCase();
   const first = Math.min(...words.map((w) => lower.indexOf(w)).filter((i) => i >= 0), Infinity);
   let start = 0;
-  if (first !== Infinity && first > LEAD) {
-    start = first - LEAD;
+  if (first !== Infinity && first > lead) {
+    start = first - lead;
     // At a word's start where there is one near.
     const space = line.indexOf(" ", start);
     if (space >= 0 && space < first) start = space + 1;
   }
-  const lead = start > 0 ? "…" : "";
-  const body = line.slice(start, start + LINE_MAX);
-  const shown = lead + body;
+  const shown = (start > 0 ? "…" : "") + line.slice(start, start + max);
   const low = shown.toLowerCase();
   const found: [number, number][] = [];
   if (low.length === shown.length) {

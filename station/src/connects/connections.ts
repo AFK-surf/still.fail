@@ -129,8 +129,9 @@ export class Connections<C extends { id: string; enabled: boolean }> {
     const chat = this.chat(connect.id);
     if (!chat) return { state: "starting" };
     const botUserId = chat.botUserId();
-    if (botUserId === "") return { state: "starting" };
     const socket = chat.socket();
+    // Not known yet who its bot is: the platform not reached (asked again meanwhile), or it refused once reached.
+    if (botUserId === "") return socket.lastError === null ? { state: "starting" } : { state: "error", error: socket.lastError };
     const identity = chat.identity();
     return { state: socket.connected ? "connected" : "reconnecting", botUserId, lastError: socket.lastError, workspace: identity ? shownIdentity(identity) : null };
   }

@@ -9,109 +9,10 @@
 let bar_h : Double = 50.0
 
 ///|
-/// The top bar over the list: the filter at the left, the workspace's switcher and settings at the right. The
-/// switcher has a dot when another workspace has something waiting.
-fn top_bar(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  view : ChatsView?,
-  filter : String,
-  invited : Bool,
-) -> Unit {
-  let t = @sf.theme()
-  // frosted glass over the list (the page's paper at 70% over a 24px blur), no line under it
-  let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
-    // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
-    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
-      // the filter, and the archive in its menu: nothing to narrow or look back on with no station
-      match view {
-        Some(v) if v.stations > 0 => {
-          let from = c.id("home-filter")
-            nav_button(
-              c,
-              "filter",
-              20.0,
-              key="home-filter",
-              // (never marked for the list shown: asked 2026-10-27)
-              color=t.p.text,
-              said=fill("android-chat.home.filter.label", [
-                (
-                  "filter",
-                  tr(
-                    match filter {
-                      "mine" => "android-chat.home.filter.mine"
-                      "watching" => "android-chat.home.filter.watching"
-                      "hidden" => "web-main.filter.hidden"
-                      _ => "android-chat.home.filter.all"
-                    },
-                  ),
-                ),
-              ]),
-              on_press=fn() {
-                @sfpages.filter_menu(Of(from), filter, fn(f) { home_filter_go(src, w, f) })
-              },
-            )
-        }
-        _ => ()
-      }
-      // Catching up and transfers stay beside the filter.
-      let (syncing, said) = match view {
-        Some({ syncing: Some(y), .. }) => (true, y)
-        _ => (false, "")
-      }
-      @sf.sync_key(c, "home-syncing", 34.0, 20.0, syncing, said)
-      @sfdesk.transfers_key(c, src, w.id, 34.0, 20.0)
-      c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, justify=JEnd, fn() {
-        let wid = c.id("home-workspace")
-        // (the fixture's home-sheet: opened by it, as the app starts)
-        let go = fn() {
-          home_sheet_at_start.val = false
-          @sfpages.open_workspaces(src, Of(wid))
-        }
-        c.on_press(wid, go)
-        // (asked from elsewhere: done as it is seen)
-        if home_sheet_at_start.val {
-          go()
-        }
-        c.box(dir=Row, h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
-          @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
-          // its mark before its name (the one in use: a GIF of it moves); none where it has none, its letter only the
-          // name's first again beside it
-          if @sf.has_station_mark(w.emoji, w.icon) {
-            @sf.workspace_badge(c, w.name, w.emoji, w.icon, home_ws_mark, still=false)
-          }
-          // A long name gives way to the controls actually present, including the sync mark while it exits.
-          top_bar_title(c, w.name, look=@sf.home_workspace_title_look, cut=true) |> ignore
-          let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().snapshot()
-          match field(marks.value, "others") {
-            // what the others have waiting, as their rows' marks (sfpages' chat_mark), said as the core says it; else an
-            // invitation waiting (sfpages' workspace_mark.mbt)
-            Some(String(tone)) =>
-              c.box(style=others_mark, label=text(marks.value, "othersLabel"), fn() { @sfpages.chat_mark(c, tone) |> ignore })
-              |> ignore
-            _ => if invited { @sfpages.invite_dot(c, tr("android-chat.home.invited")) }
-          }
-        })
-        |> ignore
-        nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings"), on_press=fn() {
-          @sfbase.history_push()
-          app.nav.push(Settings)
-        })
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  // over what runs under it: the scroll bar there keeps clear of it
-  c.floats_over(glass_top)
-}
-
-///|
 /// The name in a top bar: 24 bold, its letters 0.4 closer, on one line.
 fn top_bar_title(c : @ui.Ctx, s : String, look? : @view.WordsLook = @sf.top_bar_title_look, cut? : Bool = false) -> Int {
   // (said as it is: Ctx::text makes it larger at the system's size of words, as view_spacing does a ScaledPoints)
-  guard look.tracking is ScaledPoints(tracking) else { abort("top_bar_title_look's tracking: ScaledPoints") }
+  guard look.tracking is ScaledPoints(tracking) else { @halt.saying("top_bar_title_look's tracking: ScaledPoints") }
   c.text(s, size=look.size, weight=look.weight, color=@sf.theme().p.text, wrap=look.wrap, line=look.line, tracking~, w=if cut {
     Cut
   } else {
@@ -160,14 +61,6 @@ fn nav_button(
     None => ()
   }
 }
-
-///|
-let mark_yellow : Int64 = 0xF2B01EFFL
-
-///|
-/// What the others have waiting, beside the name: its mark alone.
-// kept across runs: a value (no field of it changes)
-let others_mark : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// The filter's menu chosen on Home: a filter its list, 已归档 its page.

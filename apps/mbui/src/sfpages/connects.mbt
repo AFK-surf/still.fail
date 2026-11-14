@@ -36,11 +36,53 @@ pub fn connects_node(
   }
   // (all of them or the viewer's: as the page left it while it is on the stack, a signal of that input)
   let mine : @signals.Signal[Bool] = @signals.signal(connects_mine.val, same=fn(a, b) { a == b })
-  let set_mine = fn(m : Bool) {
-    connects_mine.val = m
-    mine.set(m)
+  let shown_at = connects_shown_at(only)
+  // (each read as it reads it, saying so where the filter pressed handed it what it asked: sfbase's shown_read)
+  let topic = fn() {
+    let ask = connects_ask(here(), mine.get())
+    let r = (core.topic)(ask.0, ask.1).get()
+    @sfbase.shown_read(shown_at)
+    r
   }
-  let topic = fn() { (core.topic)("connects", { "scope": str(here().workspace), "mine": Json::boolean(mine.get()) }).get() }
+  // The filter pressed: what the page reads for the other is asked of `src` and the page stays as it is, the filter
+  // naming what was pressed (`pressed`); once answered (at once where it is already) what it reads is switched whole,
+  // told as what the answer tells (sfbase's switch_answered). Pressed back, or the page left, the wait is given up.
+  let pressed : @signals.Signal[Bool?] = @signals.signal(None, same=fn(a, b) { a == b })
+  let waiting : Ref[@sfbase.PressWait?] = Ref(None)
+  let set_mine = fn(m : Bool) {
+    @signals.untracked(fn() {
+      match waiting.val {
+        Some(w) => {
+          waiting.val = None
+          w.give_up()
+        }
+        None => ()
+      }
+      if m == mine.get() {
+        pressed.set(None)
+        return
+      }
+      pressed.set(Some(m))
+      let w = @sfbase.switch_answered(
+        src,
+        [connects_ask(here(), m)],
+        shown_at,
+        fn() {
+          connects_mine.val = m
+          mine.set(m)
+          pressed.set(None)
+        },
+        let_go=fn() {
+          if pressed.untracked() == Some(m) {
+            pressed.set(None)
+          }
+        },
+      )
+      if w.waiting() {
+        waiting.val = Some(w)
+      }
+    })
+  }
   let stations = fn() {
     match @settings.stations_of(core, here()).value {
       Some(Array(a)) => if only == "" { a } else { a.filter(fn(x) { text(Some(x), "station") == only }) }
@@ -51,35 +93,42 @@ pub fn connects_node(
   let shown = fn() { items(view(), "items").filter(fn(x) { only == "" || text(Some(x), "station") == only }) }
   let wait = fn() { field(view(), "wait") }
   let loading = fn() { wait() is None || flag(wait(), "reading") }
-  // the Slack apps the viewer made that no connect has taken yet, each on its station
+  let station_of = fn(address : String) -> Json? {
+    stations().iter().find_first(fn(s) { text(Some(s), "station") == address })
+  }
+  // the Slack apps the viewer made that no connect has taken yet, each on its station (the connects' `slackApps`: every
+  // station's, said with it), with that station's row (its name and whether it is up; till that is read, its name)
   let waiting = fn() -> Array[(Json, Json)] {
-    let out : Array[(Json, Json)] = []
-    for s in stations() {
-      for app in items(field(Some(s), "overview"), "slackApps") {
-        out.push((app, s))
+    items(view(), "slackApps").filter_map(fn(x) {
+      let address = text(Some(x), "station")
+      if only != "" && address != only {
+        return None
       }
-    }
-    out
+      let s = match station_of(address) {
+        Some(s) => s
+        None => Json::object({ "station": Json::string(address), "name": Json::string(text(Some(x), "stationName")) })
+      }
+      Some((field(Some(x), "app").unwrap_or(Json::null()), s))
+    })
   }
   // none at all yet (not only none of the viewer's): the page is about adding the first
   let first = fn() {
     !loading() && topic().error is None && shown().length() == 0 && !mine.get() && waiting().length() == 0
   }
-  // a connect runs a profile's model: with none on any station (each read), the first step is a profile
+  // a connect runs a profile's model: with none on any station (each read), the first step is a profile (the connects'
+  // `noProfile`; one station's, by its overview's profiles alone)
   let no_profile = fn() {
-    let st = stations()
-    st.length() > 0 &&
-    st
-    .iter()
-    .all(fn(s) {
-      field(Some(s), "overview") is Some(Object(_)) && items(field(Some(s), "overview"), "profiles").length() == 0
-    })
+    if only == "" {
+      flag(view(), "noProfile")
+    } else {
+      match @settings.station_part(core, here(), only, "profiles") {
+        Some(Array(a)) => a.length() == 0
+        _ => false
+      }
+    }
   }
   // where one is added: the stations online
   let targets = fn() { stations().filter(fn(s) { flag(Some(s), "online") }) }
-  let station_of = fn(address : String) -> Json? {
-    stations().iter().find_first(fn(s) { text(Some(s), "station") == address })
-  }
   let failing = fn() { items(wait(), "failing").length() > 0 }
   // (its primary action named as what it adds; narrow, the title's ＋)
   let actions = fn(l : @view.View) {
@@ -148,7 +197,7 @@ pub fn connects_node(
         "filter" =>
           b.box(fn(f) {
             @sf.style_node(f, fn() { if wide { cn_filter_room } else { cn_filter_room_narrow } })
-            mine_filter_node(f, "connects-filter", "connects", fn() { mine.get() }, set_mine)
+            mine_filter_node(f, "connects-filter", "connects", fn() { pressed.get().unwrap_or(mine.get()) }, set_mine)
           })
           |> ignore
         "waiting" => {
@@ -163,7 +212,7 @@ pub fn connects_node(
               @sf.words_node(t, fn() { @sf.t("web-pages.connects.waiting") }, fn() { cn_quiet }) |> ignore
             })
             |> ignore
-            @sf.list_card_node(b, rows)
+            @sf.group_node(b, rows)
           } else {
             @sf.heading_node(b, fn() { @sf.t("web-pages.connects.waiting") })
             @sf.group_node(b, rows)
@@ -208,6 +257,20 @@ pub fn connects_node(
 }
 
 ///|
+/// What 连接 reads of its list for its filter (`mine`: the viewer's alone), as it reads it and as its filter pressed
+/// asks it ahead (connects_node).
+fn connects_ask(here : Here, mine : Bool) -> (String, Map[String, Json]) {
+  ("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) })
+}
+
+///|
+/// What connects_node's list (of station `only`, "" every station's) says it has read anew by, what its filter pressed
+/// asked handed to it (sfbase's switch_answered, shown_read).
+fn connects_shown_at(only : String) -> String {
+  "connects\n" + only
+}
+
+///|
 /// The connects (`shown`, of station `only`, else every station's, as they are now) as nodes: wide, a list of them;
 /// narrow, each station's under its name (one offline said so), as a card, each connect by its id (one made or taken
 /// out comes and goes where it is: @sf.keyed_rows_node).
@@ -245,7 +308,7 @@ fn connects_list_node(
         out
       }
       b.each(addresses, fn(a) { a }, fn(sb, a) {
-        let address = @signals.untracked(fn() { a.get() })
+        let address = a.untracked()
         let here_list = fn() { shown().filter(fn(x) { text(Some(x), "station") == address }) }
         let name = fn() {
           match here_list().get(0) {
@@ -288,7 +351,7 @@ fn connects_list_node(
 /// as connects_list_node makes them, through a core that answers nothing.
 fn connects_sample_node(v : @view.View, core : Core, look : Look, only : String, count : Int, tips : @sf.TipLayer, stint : () -> Int) -> Unit {
   let name = @sf.sample_words(4)
-  let shown = [8, 6, 10][:count].to_array().map(fn(n) {
+  let shown = [8, 6, 10][:count].to_owned().map(fn(n) {
     Json::object({
       "station": "sample",
       "stationName": Json::string(name),
@@ -403,8 +466,29 @@ fn cn_row_node(
     text(cv(), "modeText") + " · " + text(cv(), "runtimeText") + model
   }
   let on = fn() { [("station", station), ("id", id())] }
-  // (its own picture a face across the row's middle; what it connects to a mark by its first line: a platform's mark
-  // said once on a row, where the row leads with it, else before its team)
+  let wide = look == Wide
+  let end = fn(e : @view.View) {
+    // (wide: where it runs and who made it, dropped before its name where the line has not the room)
+    e.gap(Is(12.0)).fits(Is(wide)) |> ignore
+    if wide {
+      e.box(fn(f) {
+        @sf.style_node(f, fn() { cn_facts })
+        f.drops(Is(cn_drop_facts)) |> ignore
+        cn_station_tag_node(f, station_name, s, stint)
+        cn_owner_node(f, core, fn() { field(cv(), "createdBy") }, tips, stint)
+      })
+      |> ignore
+    }
+    doing_mark_node(e, fn() { is_doing(core, ["connect.delete"], on()) }, fn() { failed_of(core, ["connect.delete"], on()) }, tips~, size=doing_mark_end)
+    e.box(fn(st) {
+      @sf.style_node(st, fn() { cn_narrow_state })
+      @sf.state_dot_node(st, fn() { text(cv(), "presence") })
+      @sf.words_node(st, fn() { text(cv(), "statusText") }, fn() { cn_meta }) |> ignore
+    })
+    |> ignore
+  }
+  // (its lead a 28x28 face across the row's middle; a platform's mark said once on a row, where the row leads with it,
+  // else before its team)
   r.pick(fn() { opt_text(cv(), "botImage") is Some(_) }, fn(p, pictured) {
     @sf.link_row_node(
       p,
@@ -414,7 +498,7 @@ fn cn_row_node(
       note_cut=true,
       chevron=false,
       lead=LeadMade(fn(l) { cn_avatar_node(l, core, cv, stint) }),
-      face=pictured,
+      face=true,
       // its Slack workspace after its name (short of room, its name kept: its team leaves its line first)
       title_after=fn(a) {
         a.drops(Is(cn_drop_team)) |> ignore
@@ -428,27 +512,8 @@ fn cn_row_node(
         |> ignore
       },
       title_after_shown=fn() { opt_text(cv(), "team") is Some(_) },
-      tail=fn(e) {
-        // (wide: where it runs and who made it, dropped before its name where the line has not the room)
-        let wide = look == Wide
-        e.fits(Is(wide)) |> ignore
-        if wide {
-          e.box(fn(f) {
-            @sf.style_node(f, fn() { cn_facts })
-            f.drops(Is(cn_drop_facts)) |> ignore
-            cn_station_tag_node(f, station_name, s, stint)
-            cn_owner_node(f, core, fn() { field(cv(), "createdBy") }, tips, stint)
-          })
-          |> ignore
-        }
-        doing_mark_node(e, fn() { is_doing(core, ["connect.delete"], on()) }, fn() { failed_of(core, ["connect.delete"], on()) }, tips~, size=doing_mark_end)
-        e.box(fn(st) {
-          @sf.style_node(st, fn() { cn_narrow_state })
-          @sf.state_dot_node(st, fn() { text(cv(), "presence") })
-          @sf.words_node(st, fn() { text(cv(), "statusText") }, fn() { cn_meta }) |> ignore
-        })
-        |> ignore
-      },
+      tail?=if wide { None } else { Some(end) },
+      control?=if wide { Some(end) } else { None },
     )
   })
 }
@@ -599,15 +664,16 @@ fn cn_waiting_app_node(
       })
       |> ignore
     }),
+    face=true,
     // its Slack workspace after its name, no mark again (the row leads with Slack's: a platform's mark said once)
     title_after=fn(t) {
       t.drops(Is(cn_drop_team)) |> ignore
       @sf.words_node(t, fn() { text(av(), "team") }, fn() { cn_meta }) |> ignore
     },
     title_after_shown=fn() { opt_text(av(), "team") is Some(_) },
-    tail=fn(e) {
+    control=fn(e) {
       let wide = look == Wide
-      e.fits(Is(wide)) |> ignore
+      e.gap(Is(12.0)).fits(Is(wide)) |> ignore
       if wide {
         e.box(fn(f) {
           @sf.style_node(f, fn() { cn_facts })
@@ -620,21 +686,19 @@ fn cn_waiting_app_node(
         @sf.words_node(w, fn() { @sf.t("web-pages.connects.stationOffline") }, fn() { cn_meta }) |> ignore
       })
       doing_mark_node(e, dropping, fn() { failed_of(core, ["slack.dropApp"], on()) }, tips~, size=doing_mark_end)
-      // (what is done here at its end, last, as high as its first line: link_row's `control`)
       e.show(online, fn(c) {
-        @sf.line_end_node(c, fn(l) {
-          let go = fn() {
-            let (st, id) = @signals.untracked(fn() { (station(), app_id()) })
-            new_connect_dialog(src, core, @signals.untracked(here), st, resume=id)
-          }
-          if wide {
-            @sf.button_node(l, fn() { @sf.t("web-pages.connects.continue") }, go) |> ignore
-          } else {
-            @sf.tap_text_node(l, fn() { @sf.t("web-pages.connects.continue") }, go)
-          }
-          // dropped from under ⋯ (its menu), asked again first; it stays in Slack
-          l.show(fn() { !dropping() }, fn(m) { cn_more_node(m, drop) })
-        })
+        @sf.style_node(c, fn() { cn_actions })
+        let go = fn() {
+          let (st, id) = @signals.untracked(fn() { (station(), app_id()) })
+          new_connect_dialog(src, core, @signals.untracked(here), st, made_app=id)
+        }
+        if wide {
+          @sf.button_node(c, fn() { @sf.t("web-pages.connects.continue") }, go) |> ignore
+        } else {
+          @sf.tap_text_node(c, fn() { @sf.t("web-pages.connects.continue") }, go)
+        }
+        // dropped from under ⋯ (its menu), asked again first; it stays in Slack
+        c.show(fn() { !dropping() }, fn(m) { cn_more_node(m, drop) })
       })
     },
   )
@@ -681,7 +745,7 @@ fn mine_filter_node(parent : @view.View, key : String, of : String, mine : () ->
     }))
     |> ignore
     @sf.presses_node(b, fn() {
-      if @signals.untracked(fn() { open.get() }) {
+      if open.untracked() {
         return
       }
       let now = @signals.untracked(mine)
@@ -718,7 +782,7 @@ fn mine_filter_node(parent : @view.View, key : String, of : String, mine : () ->
 ///|
 /// Which filter's menu is open, by its key.
 // kept across runs: said by its button as its menu opens and goes; reset empties it
-let mine_filter_open : Map[String, Bool] = {}
+let mine_filter_open : Map[String, Bool] = Map([])
 
 ///|
 /// Whether filter `key`'s menu is open (tests).
@@ -764,7 +828,7 @@ let cn_more_icon : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_kind_box : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
+let cn_kind_box : @ui.Style = @ui.css("w=S7 h=S7 align=ACenter justify=JCenter")
 
 ///|
 /// The filter, as wide as what it says, 8 further under the head than the head's own room, where the web's is
@@ -835,9 +899,13 @@ let cn_owner_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color
 let cn_owner_none : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
-/// ⋯ (an icon button: 32, its corner 12).
 // kept across runs: a value (no field of it changes)
-let cn_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}")
+let cn_actions : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
+/// ⋯ (an icon button: 32, round).
+// kept across runs: a value (no field of it changes)
+let cn_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
 
 
 ///|

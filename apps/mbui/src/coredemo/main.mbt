@@ -65,7 +65,7 @@ fn account_row(c : @ui.Ctx, a : Json) -> Unit {
 /// MBUI_CORE_DUMP=1 prints the accounts and each workspace's stations as the
 /// core has them (DUMP accounts …, DUMP stations <workspace> …), for seeing
 /// the topics' shapes.
-let dumped : Map[String, Int] = {}
+let dumped : Map[String, Int] = Map([])
 
 ///|
 fn dump_one(name : String, s : @core.Sub) -> Unit {

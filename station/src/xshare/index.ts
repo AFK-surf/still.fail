@@ -22,13 +22,13 @@
 //   for a session of one of those say so (`as`), as the host may share this station's other workspaces too. A chat
 //   shared with another workspace of this same station is listed there without being asked of anyone.
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Clock } from "effect";
 import type { Cloud } from "../cloud/state.ts";
 import { Refused } from "../jobs/remote.ts";
 import { Fibers } from "../ops/fibers.ts";
-import { writePrivate } from "../ops/files.ts";
+import { PrivateFile } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { LAPSED, XSHARE_IDLE_MS } from "../store/rows.ts";
 import type { ChatShare, Store } from "../store/store.ts";
@@ -129,6 +129,7 @@ export class ChatShares {
   /// How often each host said something changed (xshare.changed), so a list asked for before is not taken over it.
   private heard = new Map<string, number>();
   private state: State | null = null;
+  private file: PrivateFile | null = null;
   /// Shares that lapsed by this time were told of (their views changed); the next to lapse is waited for.
   private lapsed = 0;
   private lapsing: (() => void) | null = null;
@@ -160,9 +161,13 @@ export class ChatShares {
     return empty;
   }
 
-  private writeState() {
-    mkdirSync(this.root, { recursive: true });
-    writePrivate(join(this.root, "state.json"), JSON.stringify(this.readState(), null, 2));
+  /// Written through off the station's thread (only this keeps it: what is read is the copy in memory). Written on the
+  /// main thread, a list's reconciling held it 9 s in a day on a station whose disk was kept busy (2026-11-06).
+  private writeState(): Promise<void> {
+    this.file ??= new PrivateFile(join(this.root, "state.json"));
+    const done = this.file.write(JSON.stringify(this.readState(), null, 2));
+    done.catch((error) => log.warn("xshare", "chat shares not written", { error: (error as Error).message }));
+    return done;
   }
 
   /// The workspace this station was enrolled in first: what was kept before workspaces were told apart is its.

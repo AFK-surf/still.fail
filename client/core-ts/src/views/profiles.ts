@@ -193,6 +193,11 @@ export function workspaceProfiles(stations: J[]): J {
       canShare: s.overview?.sharing === true,
       members,
       places,
+      // What its row says of its members and its profile's users, the row not carrying them (schema.ts ProfileRow):
+      // whether it is signed in on more than one of its members (its row opens the account's page, else the profile's),
+      // how many connects use it.
+      several: members.filter(owns).length > 1,
+      usedCount: Array.isArray(p.usedBy) ? p.usedBy.length : 0,
     });
   }
   // By kind of account; in each, what needs a look first, then by name.

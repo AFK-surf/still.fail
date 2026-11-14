@@ -416,7 +416,7 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
         if (!keep()) return partial(session.key);
         checkVisible(session.key);
       }
-      const thread = store.sessionThreads(s, session.key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
+      const thread = store.sessionThreads(s, session.key, STILLFAIL_SURFACE, 1)[0] ?? null;
       const chatTitle = (thread !== null ? given(thread) : null) ?? (session.title?.trim() || "");
       const ordered = latest.length < room ? latest : [...latest.slice(oldest), ...latest.slice(0, oldest)];
       if (ordered.length > 0) hitSessions.add(session.key);
@@ -441,7 +441,7 @@ export const sessionKeys = (s: Store): string[] => all(s, "SELECT key FROM sessi
 export function jobDocs(s: Store, key: string): Doc[] {
   const session = store.getSession(s, key);
   const jobs = store.listJobs(s, key);
-  const thread = session ? (store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null) : null;
+  const thread = session ? (store.sessionThreads(s, key, STILLFAIL_SURFACE, 1)[0] ?? null) : null;
   return jobs.map((j) => jobDoc(j, key, session, thread));
 }
 
@@ -472,7 +472,7 @@ const jobSessionValue = (row: JobSessionPosition) => row.storage === "text" ? ro
 function* jobDocSteps(s: Store, key: string, session: SessionRow, asker?: Asker): Generator<Doc | undefined> {
   const end = (s.db.prepare("SELECT MAX(rowid) AS n FROM jobs INDEXED BY jobs_by_session WHERE session_key = ?").get(key) as { n: number | null }).n;
   if (end === null) return;
-  const thread = store.sessionThreads(s, key).find((t) => t.surface === STILLFAIL_SURFACE) ?? null;
+  const thread = store.sessionThreads(s, key, STILLFAIL_SURFACE, 1)[0] ?? null;
   let current = session;
   let after: number | null = null;
   for (;;) {

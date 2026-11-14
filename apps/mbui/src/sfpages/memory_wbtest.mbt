@@ -15,7 +15,7 @@ test "记忆, at each width and with either hand: a row a station (one offline s
     t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(Memory("ws1/st1")), msg=at)
     // back to 记忆 over it
-    assert_true(t.find("记忆") is Some(_), msg="\{at} \{t.words().map(fn(w) { w.0 })}")
+    assert_true(t.find("记忆") is Some(_), msg="\{at} \{Repr(t.words().map(fn(w) { w.0 }))}")
     // a station's memory: its global memory by its parts, its projects, the other skills, the station's own folded
     assert_true(t.find("全局记忆") is Some(_), msg=at)
     assert_true(t.find("习惯") is Some(_), msg=at)

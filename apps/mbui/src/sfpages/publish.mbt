@@ -155,7 +155,7 @@ pub fn publish_close() -> Unit {
 ///|
 /// Whether its page is open (not closed, whether or not it has gone yet).
 pub fn publish_open() -> Bool {
-  @signals.untracked(fn() { publishing.of.get() }) is Some(_)
+  publishing.of.untracked() is Some(_)
 }
 
 ///|
@@ -408,7 +408,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
   // its all the same then)
   let list_key = "publish/page/" + r.station + "/" + thread.to_string()
   c.with_dismissed(fn(_) { publish_close() }, fn() {
-    let busy = fn() { @signals.untracked(fn() { publishing.busy.get() }) }
+    let busy = fn() { publishing.busy.untracked() }
     c.overlay("publish", modal=true, stays=busy, scrim=@sf.alpha(@sf.theme().p.bg, look.alpha), inert=leaving, fn() {
       let list_node = Ref(-1)
       let page = c.box(style=publish_fill, fn() {
@@ -525,7 +525,7 @@ fn publish_native(c : @ui.Ctx, p : Json?) -> Unit {
   }
   let busy = publishing.busy.get()
   @sf.native_over_act("close", @sf.t("common.close"), "close", fn() {
-    if !@signals.untracked(fn() { publishing.busy.get() }) {
+    if !publishing.busy.untracked() {
       publish_close()
     }
   }, lead=true)
@@ -593,7 +593,7 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
   let paper_edge = if narrow { row_side_narrow } else { publish_paper_in }
   let paper_in = if narrow { paper_edge } else { paper_edge + @sf.message_avatar_reach }
   // (how much was hidden in each, by its seq: the preview's `messages`, by their n)
-  let hidden : Map[Double, String] = {}
+  let hidden : Map[Double, String] = Map([])
   for m in items(p, "messages") {
     match text(Some(m), "hiddenText") {
       "" => ()
@@ -635,9 +635,9 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
         }
         c.box(style=ground, fn() {
           match lit {
-            Some(l) if l.target() > 0.0 || !l.over() => {
+            Some(l) if l.target() > 0.0 || !l.over(c) => {
               let g = c.layer(fn() { c.box(style=publish_lit, fn() {  }) |> ignore })
-              c.look_by(g, fn() { @ui.look(alpha=l.get()) })
+              c.look_by(g, fn() { @ui.look(alpha=l.get(c)) })
             }
             _ => ()
           }
@@ -687,7 +687,7 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
           // (faded as it is drawn)
           if !taking {
             let out = publish_out(c, k, on)
-            c.look_by(content.val, fn() { @ui.look(alpha=publish_faded(out.get())) })
+            c.look_by(content.val, fn() { @ui.look(alpha=publish_faded(out.get(c))) })
           }
         })
         |> ignore
@@ -780,7 +780,7 @@ fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> U
     @sf.t(if on { "web-pages.chat.publish.leaveOut" } else { "web-pages.chat.publish.putBack" }),
     @sf.message_file_corner,
     w?=w,
-    turn=fn() { out.get() * publish_plus_turn },
+    turn=fn() { out.get(c) * publish_plus_turn },
     on_remove=flip,
     fn() {
       // (pressed anywhere, as its mark is: what the chat would open it by does not here)
@@ -788,7 +788,7 @@ fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> U
         draw()
         c.layer(fn() { c.box(style=publish_file_press, id~, fn() {  }) |> ignore }) |> ignore
       })
-      c.look_by(card, fn() { @ui.look(alpha=publish_faded(out.get())) })
+      c.look_by(card, fn() { @ui.look(alpha=publish_faded(out.get(c))) })
     },
   )
   c.on_press(id, flip)

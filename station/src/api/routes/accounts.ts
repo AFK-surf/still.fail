@@ -136,14 +136,21 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
       }),
     ),
     route("POST", /^\/*profiles\/+([^/]+)\/+check(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.check(segment(id!), r.lang)))),
+    route("GET", /^\/*profiles\/+([^/]+)\/+fusion(?:\/.*)?$/, (_r, [id]) => answer((a) => ok({ fusion: a.fusionView(segment(id!)) }))),
     route("POST", /^\/*profiles\/+([^/]+)\/+reset-quota(?:\/.*)?$/, (r, [id]) =>
       answer(async (a) => {
         const key = idempotencyKey(r);
         if (key === undefined) throw new Refusal(400, "reset requires an idempotency key");
-        return ok(await a.resetQuota(segment(id!), key, r.lang));
+        // Which kind of the allowance's resets (`{reset}`), when it lists kinds.
+        let kind: string | null = null;
+        try {
+          const said = JSON.parse(r.body.toString("utf8") || "null")?.reset;
+          kind = typeof said === "string" && /^[a-z]{1,20}$/.test(said) ? said : null;
+        } catch {}
+        return ok(await a.resetQuota(segment(id!), key, r.lang, kind));
       }),
     ),
-    route("POST", /^\/*profiles\/+([^/]+)\/+quota(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.refreshQuota(segment(id!))))),
+    route("POST", /^\/*profiles\/+([^/]+)\/+quota(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.askedQuota(segment(id!))))),
     route("GET", /^\/*profiles\/+([^/]+)\/+login(?:\/.*)?$/, (r, [id]) =>
       answer((a) => {
         const profile = known(a, segment(id!));
@@ -169,14 +176,17 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         }
       }),
     ),
-    // Shared with the workspace's other stations (on, and which may use it), or no longer; moved to another station.
+    // Shared with the workspace's other stations (on, and which may use it, of those it chose from), or no longer; moved
+    // to another station (any profile of this station's own, shared or not: share/index.ts moveProfile).
     route("POST", /^\/*profiles\/+([^/]+)\/+share\/*$/, (r, [id]) =>
       answer(async () => {
         if (!sharing) return error(503, "station starting");
         manager(r.viewer, r.lang);
         const body = input(r);
+        // `among`: the stations the page chose from (a workspace's): only theirs change (share/index.ts shareProfile).
+        const among = body.among === undefined || body.among === null ? null : stations(body.among);
         try {
-          await sharing.shareProfile(segment(id!), body.on !== false, stations(body.allow));
+          await sharing.shareProfile(segment(id!), body.on !== false, stations(body.allow), among, r.viewer.email);
         } catch (e) {
           if (e instanceof Refusal) throw e;
           throw new Refusal(409, (e as Error).message);
@@ -191,7 +201,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         const to = input(r).station;
         if (typeof to !== "string" || !/^[0-9a-f]{64}$/.test(to)) throw new Refusal(400, "station must be a station id");
         try {
-          await sharing.moveProfile(segment(id!), to);
+          await sharing.moveProfile(segment(id!), to, r.lang);
         } catch (e) {
           throw new Refusal(409, (e as Error).message);
         }

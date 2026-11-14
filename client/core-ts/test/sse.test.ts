@@ -1,7 +1,7 @@
-// A text/event-stream split into events as chunks arrive (src/station/sse.ts), however the stream is cut.
+// A text/event-stream split into events as chunks arrive (src/sse.ts), however the stream is cut.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SseParser } from "../src/station/sse.ts";
+import { SseParser } from "../src/sse.ts";
 
 const bytes = (s: string) => new TextEncoder().encode(s);
 

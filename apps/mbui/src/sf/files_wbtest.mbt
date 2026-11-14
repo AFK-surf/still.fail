@@ -3,6 +3,7 @@ test "a file's card (FileCard): its name and size, how far it has gone up while 
   let done : Array[FileCardPress] = []
   let pending = Ref(true)
   let failed = Ref("")
+  let sent = Ref(9216.0)
   let t = @ui.Tester::new(
     fn(c) {
       let _ = begin(c)
@@ -13,7 +14,7 @@ test "a file's card (FileCard): its name and size, how far it has gone up while 
           "build.log",
           18432.0,
           pending=pending.val,
-          sent=Some(9216.0),
+          sent=Some(sent.val),
           error=failed.val,
           remove=true,
           retry=failed.val != "",
@@ -30,6 +31,10 @@ test "a file's card (FileCard): its name and size, how far it has gone up while 
   assert_true(t.find(".log") is Some(_))
   // going up: how far, in its size's place (its words' key while the catalog has none)
   assert_true(t.words().iter().any(fn(w) { w.0.contains("web-main.file.uploadingPart") }), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // all of it gone, the station not yet saying it has it: waiting for it, not 100%
+  sent.val = 18432.0
+  t.draw()
+  assert_true(t.words().iter().any(fn(w) { w.0.contains("common.uploadConfirming") }), msg=t.words().map(fn(w) { w.0 }).join("|"))
   pending.val = false
   failed.val = "上传失败"
   t.draw()

@@ -21,15 +21,10 @@ fn new_frame(src : Source, w : Workspace) -> @sfpages.NewChatFrame {
 /// (useStationDrive: as the view has its stations), on a station it can start on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   new_keys(c, src, w)
-  let v = src.topic("newChat", { "scope": Json::string(w.id) }).get().value
+  let v = src.topic("newChat", @sfpages.new_chat_asked(w.id)).get().value
   let frame = new_frame(src, w)
   let station = field(v, "station")
   let address = text(station, "station")
-  let on = station is Some(Object(_)) && text(v, "blocked") == "" && address != ""
-  // (what fades as it is left for a chat by the sidebar: switch.mbt)
-  if on {
-    page_switch.new_view = v
-  }
   if new_drive_station(src, w) is None {
     @sfpages.new_chat_page(c, src, w, frame)
     return
@@ -69,7 +64,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   // (on the tape, laid out Medium, its panel is a panel of its own beside the page's, as a chat's: the frame's,
   // tape_side)
-  if wide.tape {
+  if wide.tape.get() {
     with_bar()
     return
   }
@@ -78,20 +73,23 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// The new chat's own key, as a chat's (chat_keys): Space with no field focused, its composer (composer.focus), as its
-/// hint 按空格输入 says.
+/// The new chat's own key, as a chat's (chat_keys: the keymap's Chat), an action as it is built: Space with no field
+/// focused, its composer (composer.focus), as its hint 按空格输入 says.
 fn new_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let prefs = src.topic("prefs", {}).get().value
-  if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
+  c.key_context("Chat")
+  c.on_action("composer.focus", fn() {
+    guard !switcher_open() else { return false }
+    tape_page_for_key(c.moment())
     c.focus_field(writing(src, "new:" + w.id).field)
-  }
+    true
+  })
 }
 
 ///|
 /// The station workspace `w`'s new chat starts on, where the stations lend their files (useStationDrive: as the view
 /// has its stations): its 文件 tab is had; None where it is not (blocked, no station, none with a drive).
 fn new_drive_station(src : Source, w : Workspace) -> String? {
-  let v = src.topic("newChat", { "scope": Json::string(w.id) }).get().value
+  let v = src.topic("newChat", @sfpages.new_chat_asked(w.id)).get().value
   let station = field(v, "station")
   let address = text(station, "station")
   let on = station is Some(Object(_)) && text(v, "blocked") == "" && address != ""
@@ -112,7 +110,7 @@ fn new_left(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, up : @motion.An
   let files = new_files_open(src, w.id)
   let left = fn() { @sfpages.new_chat_left(c, src, w, frame, v, up, fade) }
   // (on the tape its panel is the frame's: the page alone)
-  if wide.tape {
+  if wide.tape.get() {
     left()
     return
   }
@@ -131,15 +129,14 @@ fn new_sent(src : Source, w : Workspace, r : ChatRef) -> Unit {
 }
 
 ///|
-/// Over the chat a new chat became: the page leaving; and a new chat left for a chat by the
-/// sidebar, fading over it (switch.mbt). Drawn over the chat's page, after it.
+/// Over the chat a new chat became: the page leaving (a new chat left for another chat is gone at once: switch.mbt).
+/// Drawn over the chat's page, after it.
 pub fn new_chat_after(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   if @sfbase.new_chat_leaving_of(c, r) {
     let l = c.layer(fn() { new_left(c, src, w, fresh.scene.get(), new_leave(c), new_fade(c)) })
     // (drawn only, while it leaves)
     c.draw_only(l)
   }
-  switch_new_out(c, src, w)
 }
 
 ///|
@@ -156,7 +153,7 @@ fn new_files_set(src : Source, ws : String, on : Bool) -> Unit {
   let open = new_files_open(src, ws)
   side_changing("new:" + ws, if open { ["files"] } else { [] }, if open { "files" } else { "" }, on)
   let call = if on { "chat.tabs.open" } else { "chat.tabs.close" }
-  (src.call)(call, { "chat": Json::string("new:" + ws), "tab": "files" }, fn(_) {  })
+  (src.call)(call, { "chat": Json::string("new:" + ws), "tab": "files" }, @sfbase.answer_unread)
 }
 
 ///|
@@ -190,11 +187,11 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
     c.box(style=side_pane, fn() { files_tab(c, src, w.id, "new:" + w.id, address) }) |> ignore
   })
   |> ignore
-  // (panel.close: the panel closed)
-  let prefs = src.topic("prefs", {}).get().value
-  if @settings.action_pressed(c, prefs, "panel.close") {
+  // (panel.close: the panel closed, at its key's moment)
+  c.on_action("panel.close", fn() {
     new_files_set(src, w.id, false)
-  }
+    true
+  })
 }
 
 ///|

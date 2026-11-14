@@ -23,7 +23,7 @@ import { StationAddr } from "../station/addr.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
 import { markOf, places, type Place } from "./xshare.ts";
-import { enrolled, takeInJoined } from "./lock.ts";
+import { enrolled, safeMode, takeInJoined } from "./lock.ts";
 import { down } from "./views.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -56,13 +56,6 @@ function stationsOf(inner: Inner, workspace: string): J[] | null {
   return isObject(v) && Array.isArray(v.stations) ? v.stations : null;
 }
 
-/// Whether a workspace is in security mode as the cloud lists it (`locked`: a lock not turned off; none from a cloud
-/// from before it, which is taken as no).
-function lockedWs(inner: Inner, workspace: string): boolean {
-  const v = inner.data.shared({ topic: "workspace", workspace });
-  return isObject(v) && v.locked === true;
-}
-
 /// The name of a station's home workspace, when it is one of the viewer's: the one listing it but not as joined. None
 /// where the station's home is this workspace, or one the viewer is not in.
 export function homeName(inner: Inner, workspace: string, id: string): string | null {
@@ -81,12 +74,13 @@ export function joinable(inner: Inner, workspace: string): J {
   const theirs = all.filter((p) => p.id !== workspace && manager(p.role));
   let loading = stationsOf(inner, workspace) === null;
   // A station whose home is in security mode joins only workspaces in it too: listed, not to be picked, saying so.
-  const locked = lockedWs(inner, workspace);
+  // (each by the lock this device holds there, the cloud's word only where it holds none: views/lock.ts `safeMode`)
+  const locked = safeMode(inner, workspace);
   const items: J[] = [];
   const seen = new Set<string>();
   for (const p of theirs) {
     const stations = stationsOf(inner, p.id);
-    const needsLock = !locked && lockedWs(inner, p.id);
+    const needsLock = !locked && safeMode(inner, p.id);
     if (stations === null) {
       loading = true;
       continue;
