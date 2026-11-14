@@ -7,7 +7,8 @@
 // here: who is let in (the credentials still.fail cloud signs, the locks) and what a request is answered (the routes).
 import type { Admin } from "../api/admin.ts";
 import { langOfCore, queryPairs } from "../api/request.ts";
-import { BUILD_HEADER, buildOf, coreTooOld } from "../api/oldest.ts";
+import { BUILD_HEADER, COUNTED_FROM, buildOf, coreTooOld } from "../api/oldest.ts";
+import { MOVED_FROM_BUILD } from "../api/moved-from.ts";
 import { deviceBuildsOf } from "./device-builds.ts";
 import { tr } from "../ops/i18n.ts";
 import type { Cloud } from "../cloud/state.ts";
@@ -305,6 +306,16 @@ export function sawBuild(cloud: Cloud, viewer: Admitted["viewer"], headers: Reco
   const build = buildSaid(headers);
   if (viewer.lockId !== undefined) deviceBuildsOf(cloud).saw(viewer.lockId, build, nowSecs());
   return build;
+}
+
+/// Whether a core saying `build` is too old for its workspace here: its chain moved (`moved {root}` on the chain this
+/// station keeps) and the build a release's (COUNTED_FROM) under MOVED_FROM_BUILD, whose rules refuse that chain. One that
+/// says none is answered as `coreTooOld` answers it (a web page from before builds were said, or not loaded again since:
+/// told to update, every request of it was refused and nothing on it said why, 2026-11-10), and one under COUNTED_FROM
+/// (a development build's, an iOS app's TestFlight number) cannot be told apart.
+export function movedTooOld(cloud: Cloud, viewer: Admitted["viewer"], build: number | null): boolean {
+  if (build === null || build < COUNTED_FROM || build >= MOVED_FROM_BUILD) return false;
+  return typeof cloud.chain(joinedOf(cloud, viewer.workspace))?.state?.moved === "string";
 }
 
 /// The ids of the devices workspace `ws`'s lock here names (null: the home one): its chain's, and where it moved the
@@ -869,7 +880,10 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   const asking: Record<string, unknown> = head.headers !== null && typeof head.headers === "object" ? head.headers : {};
   if (coreTooOld(asking)) return answer(426, { error: tr(langOfCore(asking as Record<string, string>), "station.admin.updateApp"), update: true });
   // What build the device ran, kept by its id in the lock (device-builds.ts: written only as it rises or the day changes).
-  sawBuild(m.cloud, viewer, asking);
+  const build = sawBuild(m.cloud, viewer, asking);
+  // A core too old for a workspace whose chain moved (api/moved-from.ts): told to update, as one under OLDEST_CORE is,
+  // for that workspace's requests alone.
+  if (movedTooOld(m.cloud, viewer, build)) return answer(426, { error: tr(langOfCore(asking as Record<string, string>), "station.admin.updateApp"), update: true });
   // One a part answers itself (a phone lent to the agents, adb/link.ts): it says what the member may.
   const part = m.streams?.(head);
   if (part !== undefined) return part({ conn, viewer, head, stream, reader });

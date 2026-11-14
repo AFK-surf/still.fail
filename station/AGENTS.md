@@ -196,7 +196,10 @@
   stillfail.db, written only as the build rises or the day changes) and given to a device the lock lets in (GET /lock
   `builds`, `serves` `builds`; GET /lock/person for the asker's own log's devices), with since when this station keeps
   them: what a core hands a workspace over by (the user, 2026-11-14: 无感迁移, no date, no switch, nobody told to update).
-  Nothing of a device the asker's lock does not name. `test/device-builds.test.ts` holds it.
+  Nothing of a device the asker's lock does not name. A core of a release's build under `MOVED_FROM_BUILD`
+  (`src/api/moved-from.ts`) asking in a workspace whose chain moved is told to update there (426 with `update`, as
+  `coreTooOld`; `src/mesh/serve.ts` `movedTooOld`), which its app shows as the ordinary 请更新 (请刷新页面 on the web); one
+  that says no build is answered as `coreTooOld` answers it. `test/device-builds.test.ts` holds it.
 
 ## Screens
 
