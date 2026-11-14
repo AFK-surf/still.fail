@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [f5ac0ecd1](https://github.com/AFK-surf/monoid/commit/f5ac0ecd163b57f1f293fbd83220ce40a748084e) station: the usage page and a Comma connect's usag | 2 | 2.74 | 11.66 | 31.29 | 41.91 | 27.9 | 53.59 | 96.6 | 107.15 |
 | [6ba59787a](https://github.com/AFK-surf/monoid/commit/6ba59787a53d4163654d8657c57ab730f1eef1e7) fix(mbui): the web's notifications, never answered | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.58 | 118.11 |
 | [afe35b6d3](https://github.com/AFK-surf/monoid/commit/afe35b6d34e7fdaf1df11e75f0deddbc184821d1) Offer 重试 on a turn given up on for want of a state | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.58 | 118.11 |
 | [1fa2fedb3](https://github.com/AFK-surf/monoid/commit/1fa2fedb3d3957539191d63faa17128cb223d84b) app tests: read stays looks at the frames a device | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [4a1db5287](https://github.com/AFK-surf/monoid/commit/4a1db52876df9685bc141f09024c61d7c1ebdd9b) fix(station): a DeepSeek Harness session is opened | 1.99 | 2.72 | 11.59 | 31.2 | 41.66 | 27.81 | 53.38 | 96.6 | 111.63 |
 | [93c11f443](https://github.com/AFK-surf/monoid/commit/93c11f443550f7fab3ea6837e56a0729eb2dec55) presets: name presets alone in the menu; a control | 1.99 | 2.72 | 11.59 | 31.2 | 41.66 | 27.81 | 53.38 | 96.62 | 109.24 |
 | [d53e54908](https://github.com/AFK-surf/monoid/commit/d53e54908b54d27778233e54e1b9c16fbecd0e77) station, core, app: an agent assists a station's r | 1.99 | 2.72 | 11.59 | 31.2 | 41.65 | 27.81 | 53.36 | 96.63 | 114.47 |
-| [3ee6f477a](https://github.com/AFK-surf/monoid/commit/3ee6f477a9ecbf33555410466e907673d9ac1107) mbui: a key of a page's list on its way grows from | 1.99 | 2.72 | 11.58 | 31.19 | 41.65 | 27.81 | 53.36 | 96.42 | 102.72 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [f5ac0ecd1](https://github.com/AFK-surf/monoid/commit/f5ac0ecd163b57f1f293fbd83220ce40a748084e) station: the usage page and a Comma connect's usag | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.39 |
 | [6ba59787a](https://github.com/AFK-surf/monoid/commit/6ba59787a53d4163654d8657c57ab730f1eef1e7) fix(mbui): the web's notifications, never answered | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.39 |
 | [afe35b6d3](https://github.com/AFK-surf/monoid/commit/afe35b6d34e7fdaf1df11e75f0deddbc184821d1) Offer 重试 on a turn given up on for want of a state | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
 | [1fa2fedb3](https://github.com/AFK-surf/monoid/commit/1fa2fedb3d3957539191d63faa17128cb223d84b) app tests: read stays looks at the frames a device | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
