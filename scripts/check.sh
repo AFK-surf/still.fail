@@ -396,6 +396,11 @@ if part ts; then
   if touches '^libs/base/|^client/core-ts/src/lang\.(zh|en)\.json$|^scripts/mb-base-words\.ts$'; then
     step "the base in MoonBit says the device base's words" node scripts/mb-base-words.ts --check
   fi
+  # And its reader of an event stream reads as the device base's in TypeScript does (client/core-ts/src/sse.ts), which
+  # stays: the cases its tests hold it to (libs/base/src/wire/sse_made_test.mbt) are what that reader gives.
+  if touches '^libs/base/src/wire/|^client/core-ts/src/sse\.ts$|^scripts/mb-base-sse\.ts$'; then
+    step "the base in MoonBit reads an event stream as the device base does" node scripts/mb-base-sse.ts --check
+  fi
   # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
   # their JS dependencies and the real wasm package even when no TS file changed.
   core_tests=0

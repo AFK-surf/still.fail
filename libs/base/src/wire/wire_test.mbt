@@ -1,5 +1,7 @@
 // The bytes held to what the core's device mesh writes (client/core-ts/src/mesh.ts: `Control.send`, `Link.request`),
-// each expectation the text JSON.stringify gives there.
+// each expectation the text JSON.stringify gives there; and an event stream read as the core in TypeScript reads one
+// (client/core-ts/test/sse.test.ts, whose stream and events these are, holds that reader; sse_made_test.mbt holds
+// this one to it case by case).
 
 ///|
 test "a control line is the credential, then what is said with it" {
@@ -69,4 +71,126 @@ test "events come as their blocks end, whatever the chunks" {
   // what was begun ends with the chunk that ends it
   let ended = sse.feed(b"\n\n")
   assert_true(ended == [{ name: "late", data: "x", id: None }])
+}
+
+///|
+/// The events of `stream` fed in the chunks `cuts` (byte offsets, ascending) cut it into.
+fn fed(stream : Bytes, cuts : Array[Int]) -> Array[@wire.Event] {
+  let sse = @wire.Sse::new()
+  let out : Array[@wire.Event] = []
+  let mut at = 0
+  for cut in [..cuts, stream.length()] {
+    out.append(sse.feed(stream[at:cut].to_owned()))
+    at = cut
+  }
+  out
+}
+
+///|
+/// The stream of the core's own test of its reader, and its events.
+fn stream_and_events() -> (Bytes, Array[@wire.Event]) {
+  let long = "长".repeat(3000)
+  let stream = "event: entry\nid: 1f2e.1\ndata: {\"text\":\"整理发布清单\"}\n\n" + "data: one\ndata: two\n\n" +
+    "id: 1f2e.2\n\n" + ": a comment\nevent: state\r\ndata:{\"busy\":true}\r\n\r\n" + "event: entry\nid: 1f2e.3\ndata: {\"text\":\"" +
+    long +
+    "\"}\n\n"
+  let events : Array[@wire.Event] = [
+    { name: "entry", data: "{\"text\":\"整理发布清单\"}", id: Some("1f2e.1") },
+    { name: "message", data: "one\ntwo", id: None },
+    { name: "", data: "", id: Some("1f2e.2") },
+    { name: "state", data: "{\"busy\":true}", id: None },
+    { name: "entry", data: "{\"text\":\"" + long + "\"}", id: Some("1f2e.3") },
+  ]
+  (@utf8.encode(stream), events)
+}
+
+///|
+test "a stream cut anywhere is the same events: in a character, between a block's two newlines" {
+  let (stream, events) = stream_and_events()
+  assert_true(fed(stream, []) == events)
+  assert_true(fed(stream, Array::makei(stream.length() - 1, i => i + 1)) == events)
+  for at = 1; at < stream.length(); at = at + 7 {
+    assert_true(fed(stream, [at]) == events)
+  }
+}
+
+///|
+test "a stream cut at random is the same events as it grows past what is kept and is moved in it" {
+  let (once, events) = stream_and_events()
+  let mut stream = once
+  let want : Array[@wire.Event] = [..events]
+  for _ in 0..<19 {
+    stream = stream + once
+    want.append(events)
+  }
+  let mut seed = 7
+  for _ in 0..<30 {
+    let cuts = []
+    let mut at = 0
+    while true {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      at = at + 1 + seed % 5000
+      if at >= stream.length() {
+        break
+      }
+      cuts.push(at)
+    }
+    assert_true(fed(stream, cuts) == want)
+  }
+}
+
+///|
+test "what is no whole block yet waits for the rest" {
+  let sse = @wire.Sse::new()
+  assert_true(sse.feed(b"event: entry\ndata: {") == [])
+  assert_true(sse.feed(b"\"a\":1}\n") == [])
+  assert_true(sse.feed(b"\n") == [{ name: "entry", data: "{\"a\":1}", id: None }])
+  assert_true(sse.feed(b"") == [])
+}
+
+///|
+test "a name and an id are said without what JavaScript's trim takes off, data as it came but one space" {
+  // (as the core's reader in TypeScript: `line.slice(6).trim()`; MoonBit's own `trim` takes off four characters)
+  let blank = "\u{0B}\u{0C}\u{A0}\u{1680}\u{2000}\u{200A}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}\u{FEFF}\t "
+  let text = "event:" + blank + "a b" + blank + "\nid:" + blank + "7" + blank + "\ndata:  x \u{3000}\n\n"
+  assert_true(
+    @wire.Sse::new().feed(@utf8.encode(text)) == [{ name: "a b", data: " x \u{3000}", id: Some("7") }],
+  )
+  // what is no white space to JavaScript stays: a next line (U+0085), a zero width space, a Mongolian vowel separator
+  let kept = "event: \u{85}a\u{200B}\u{180E}\ndata: 1\n\n"
+  assert_true(
+    @wire.Sse::new().feed(@utf8.encode(kept)) == [{ name: "\u{85}a\u{200B}\u{180E}", data: "1", id: None }],
+  )
+  // an id of white space alone is an id, empty
+  assert_true(@wire.Sse::new().feed(b"id: \t\n\n") == [{ name: "", data: "", id: Some("") }])
+}
+
+///|
+test "a byte order mark at a block's head is not of its text, further in it is" {
+  // (as JavaScript's TextDecoder, which reads each block there, takes one off: so the first line after it is read)
+  let sse = @wire.Sse::new()
+  assert_true(
+    sse.feed(b"\xEF\xBB\xBFdata: a\n\n\xEF\xBB\xBFevent: e\ndata: b\n\n") ==
+    [{ name: "message", data: "a", id: None }, { name: "e", data: "b", id: None }],
+  )
+  assert_true(sse.feed(b"data: \xEF\xBB\xBFc\n\xEF\xBB\xBFdata: d\n\n") == [{ name: "message", data: "\u{FEFF}c", id: None }])
+}
+
+///|
+test "bytes that are no UTF-8 are read as U+FFFD, one for each run that could have begun a character" {
+  // (the WHATWG's decoding, which the core's reader in TypeScript has of TextDecoder)
+  let sse = @wire.Sse::new()
+  assert_true(
+    sse.feed(b"data: \x80|\xE6\x95|\xF0\x9F\x98|\xC0\xAF|\xED\xA0\x80|\xFF\n\n") ==
+    [{ name: "message", data: "\u{FFFD}|\u{FFFD}|\u{FFFD}|\u{FFFD}\u{FFFD}|\u{FFFD}\u{FFFD}\u{FFFD}|\u{FFFD}", id: None }],
+  )
+}
+
+///|
+test "a CR is dropped wherever it is, and a field no line begins with is no field" {
+  let sse = @wire.Sse::new()
+  assert_true(
+    sse.feed(b"da\rta: a\rb\r\n\r\nretry: 3\ndata\n data: x\nevent\n\n\n\ndata:\n\n") ==
+    [{ name: "message", data: "ab", id: None }, { name: "message", data: "", id: None }],
+  )
 }

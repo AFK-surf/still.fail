@@ -45,7 +45,9 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   for a change here: `scripts/mb-base.ts`; and `scripts/mb-base-words.ts --check`, for a change to the device base's
   two files of words too: `src/mesh/words_made.mbt` is what they make, and every key `src/mesh` says (the first
   argument of `say`, `failed`, `under`, written out as a string) is one they have, since `say` gives a key with no
-  words back as the key.
+  words back as the key. And `scripts/mb-base-sse.ts --check`, for a change to `src/wire`, to the core's reader of
+  an event stream in TypeScript (`client/core-ts/src/sse.ts`) or to the script: `src/wire/sse_made_test.mbt` is
+  what that reader gives for the script's streams.
 - In CI and a full check only, for a change here or to what it is built with of mbui (`effect`, and `halt`, which
   `effect` imports: `mb-base.ts` holds that list to `effect`'s `moon.pkg`): every package under `src/` type-checked
   for native and for js, and every package's tests run on both. Today only `src/wire` has tests.
@@ -61,6 +63,11 @@ of its workspace (`moon.work`); `effect` stays in mbui.
 - `src/mesh/words_made.mbt` is made, and committed: `node scripts/mb-base-words.ts` writes it from the device
   base's own words (`client/core-ts/src/lang.zh.json`, `lang.en.json`: the keys `core-logic.mesh.*`), so a word is
   changed there, never here.
+- `src/wire/sse_made_test.mbt` is made, and committed, too: `node scripts/mb-base-sse.ts`. The core in TypeScript
+  keeps its own reader of an event stream and is not switched to this one (the user, 2026-11-14: 「不切 TS core，只留
+  读取器的修正」; the core moves to MoonBit a layer at a time), so the two are two that read alike, to the byte, and
+  these cases are all that holds them so: what a reader gives for some bytes is changed in both, a stream is added
+  in the script, never a case here.
 
 ## What a program on it gets with it
 
@@ -84,9 +91,12 @@ it, and its line goes then. Read from the code, none of them run:
   closes the connection alone) and a reply's stream after a read of it failed (`link.mbt:229-234`) stay for the
   page's life, with one entry a connection that ended and one an endpoint closed (`shell_js.mbt:82,92`). Natively
   the Rust shell lets a connection's streams go as it closes and keeps one entry a connection.
-- A peer's bytes are kept without a bound: an event stream's text with no blank line (`src/wire/sse.mbt:17,30-34`,
-  as the TypeScript reader), and `Reply::rest`, which also copies all it has for each piece that comes
-  (`link.mbt:244-250`).
+- A peer's bytes are kept without a bound: an event stream's text with no blank line (`src/wire/sse.mbt`,
+  `Sse::append`, as the TypeScript reader; past 1 GiB held its doubling, `room * 2`, wraps, where that reader's
+  does not), and `Reply::rest`, which also copies all it has for each piece that comes (`link.mbt:244-250`).
+- An event's `data:` lines are joined by MoonBit's `join` (`src/wire/sse.mbt`, `event_of`), which on js makes the
+  string again at each line: in an engine that copies it each time, an event of very many lines costs their number
+  squared (Hermes, run in the review of #6100, 2026-11-14; no program runs this reader there).
 - In a page a timer of the runtime's more than 2^31-1 ms away (24.8 days) is given to `setTimeout` as it is, which
   fires at once, and again (`shell_js.mbt:176-179,230-235`).
 
@@ -97,9 +107,11 @@ it, and its line goes then. Read from the code, none of them run:
   src/mesh` (and `--target js`), `moon test --target native src/wire`. The three `pkg.generated.mbti` are committed,
   as mbui's are, and are native's (on js `shell` starts with the address of iroh and has no `pump` or `run`): a check
   by package of a changed surface writes its own again, to commit; the check passes `--no-mbti` and writes none.
-- `wire` and `mesh` are one source for both targets: nothing in them asks which it is built for. What differs is
-  under `shell.mbt`'s surface, and an op the mesh comes to ask is answered by both shells, under the Rust shell's
-  name and with its JSON.
+- `wire` and `mesh` are one source for both targets, but for one thing: what an event stream's reader does to many
+  bytes at once is a file a target (`src/wire/moon.pkg`'s `targets`: `sse_js.mbt`, `sse_native.mbt`; `sse.mbt`'s
+  head says why), each small enough to read against the other, and the package's tests run both. Nothing else in
+  them asks which it is built for: what differs is under `shell.mbt`'s surface, and an op the mesh comes to ask is
+  answered by both shells, under the Rust shell's name and with its JSON.
 - A fiber's wait on the shell given up is not the shell's call given up: of its calls only a dial is
   (`Shell::give_up`), in a page too. A read let go of goes on, holding the stream's receiving half, and what it
   takes is lost to the next read. So a stream is never read again after a read of it was interrupted: it is reset
