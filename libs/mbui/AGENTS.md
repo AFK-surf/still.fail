@@ -261,10 +261,16 @@ yet and you can add one, add it.
   binding's property alike. Only what is on a way not at its end then (its own, what holds it, a way in or out beside
   it in its column: `Tree::on_way_at`) is judged as ever: a step in the middle of a way (`src/view/answer_marked.mbt`;
   the coordinator of the migration, 2026-11-14).
-- A test that looks at every frame after a cause (`Tester::each_frame`) runs the clock on with the frames a host
+- Time nothing happens in is skipped, never walked (the user, 2026-11-14: 「无意义的时间直接跳过是这个项目第一天就开始强调的」).
+  A test that looks at every frame after a cause (`Tester::each_frame`) runs the clock on with the frames a host
   draws (`Tester::run_shown`: the display's while the app asks for frames, none while it is at rest, one at what is
   due and at its end), never the display's frames walked one by one through a rest: a frame nobody draws shows
   nothing, and drawing them was most of what such a test cost a CI job (the coordinator of the migration, 2026-11-14).
+  A frame nothing asks for (no motion, no wake or timer due, nothing come from outside, no input, no step said, no
+  hook on each frame: `Tester::frame_unasked`) is not drawn on a host's run's way either (`set_frame_period`'s
+  run_for; a tape's `set_frame_times` draws each it had), nor by `Tester::frame_as_host`, which walks the display's
+  frames one at a time as an idle host has them, the clock only passing what is not drawn. `Tester::frame` draws each,
+  asked or not: a test walking a span by it (detlint's `frame-walk`) is counted, and that count only falls.
 - Motion is data: said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set

@@ -239,8 +239,15 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
   let end = self.on_grid(self.fake.time + ms)
   // (a host's run's frames: each of them on the way, the last the first at or past the end, as the host drew)
   if self.host_frames {
+    // (a run's tape's frames each as the tape had them; a period's, those something asks for, as an idle host draws
+    // them: Tester::frame_as_host)
+    let as_host = self.times.is_empty()
     while self.fake.time < end - 1.0e-9 {
-      self.clock_frame()
+      if as_host {
+        self.frame_as_host() |> ignore
+      } else {
+        self.clock_frame()
+      }
     }
     // (asked on by a hair, less than the same moment summed another way: on to the frame that is at or past it; not
     // past a frame a hair short of the end, that frame the end's, as the loop above has it)
@@ -330,7 +337,8 @@ fn Tester::between_after(self : Tester, t : Double, between : Double) -> Double 
 /// the default rate as at a rate (MBUI_TEST_FPS, whose frames between they are where they are closer than the
 /// display's). For a test that looks at every frame a device draws after a cause (Tester::each_frame): a frame
 /// nobody draws shows nothing (the coordinator of the migration, 2026-11-14), and walking the display's frames one by
-/// one through a rest draws them all. With a host's own frames (set_frame_times, set_frame_period) it is run_for.
+/// one through a rest draws them all. With a host's own frames (set_frame_times, set_frame_period) it is run_for: a
+/// tape's each frame it had, a period's those something asks for (Tester::frame_as_host).
 pub fn Tester::run_shown(self : Tester, ms : Double) -> Unit {
   let was = self.shown
   self.shown = true

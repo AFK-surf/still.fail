@@ -105,8 +105,9 @@ fn home_again_measure(t : @ui.Tester, name : String, act : () -> Unit, span? : D
     }
   }
   take()
+  // (the display's frames as an idle host has them: what nothing asks for not drawn, Tester::frame_as_host)
   while t.time() < start + span {
-    t.frame()
+    t.frame_as_host() |> ignore
     take()
   }
   let mut peak = -1
