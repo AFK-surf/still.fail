@@ -1,8 +1,8 @@
-// Declarative mbui native widget renderer (.mbui JSON -> @view.View / @ui.Ctx).
+// Declarative mbui native widget & Wasm mini-program renderer (.mbui / .wasm -> @view.View / @ui.Ctx).
 //
-// Maps declarative `.mbui` JSON widgets directly to native `@view.View` and `@ui.Ctx` nodes,
-// `@signals.Signal[Json]` reactive state, `@sf` components, and native chart/SVG primitives
-// (`viz_chart_node.mbt`), eliminating `NativeView::page` WebView overhead for inline chat widgets.
+// Maps declarative `.mbui` JSON widgets and sandboxed `.wasm` mini-programs directly to native
+// `@view.View` and `@ui.Ctx` nodes, `@signals.Signal[Json]` reactive state, `@sf` components, and
+// native chart/SVG primitives (`viz_chart_node.mbt`), eliminating `NativeView::page` WebView overhead.
 
 ///|
 pub struct VizMbuiWidget {
@@ -10,6 +10,8 @@ pub struct VizMbuiWidget {
   subtitle : String
   init_state : Map[String, Json]
   root : Json
+  wasm_bytes : Bytes?
+  gas_limit : Int
 }
 
 ///|
@@ -17,6 +19,13 @@ priv struct VizMbuiStore {
   key : String
   signals : Map[String, @signals.Signal[Json]]
   mut synced_raw : Json
+  mut wasm : VizWasmInstance?
+  gas_limit : Int
+  root_sig : @signals.Signal[Json]
+  title_sig : @signals.Signal[String]
+  subtitle_sig : @signals.Signal[String]
+  tree_ver : @signals.Signal[Int]
+  wasm_error : @signals.Signal[String]
 }
 
 ///|
@@ -30,7 +39,8 @@ pub fn viz_mbui_states_clear() -> Unit {
 
 ///|
 pub fn is_mbui_viz(name : String) -> Bool {
-  @sf.lower(name).has_suffix(".mbui")
+  let s = @sf.lower(name)
+  s.has_suffix(".mbui") || s.has_suffix(".wasm")
 }
 
 ///|
@@ -174,8 +184,50 @@ fn viz_json_num_arr(obj : Map[String, Json], key : String) -> Array[Double] {
 }
 
 ///|
+pub fn viz_mbui_parse_bytes(name : String, bytes : Bytes) -> VizMbuiWidget? {
+  if is_wasm_bytes(bytes) {
+    let fallback_title = if name.has_suffix(".wasm") {
+      name.unsafe_substring(start=0, end=name.length() - 5)
+    } else {
+      name
+    }
+    return Some({
+      title: fallback_title,
+      subtitle: "",
+      init_state: Map([]),
+      root: Json::object(Map([])),
+      wasm_bytes: Some(bytes),
+      gas_limit: viz_wasm_default_gas,
+    })
+  }
+  viz_mbui_parse(name, @utf8.decode_lossy(bytes))
+}
+
+///|
 pub fn viz_mbui_parse(name : String, raw : String) -> VizMbuiWidget? {
-  if !is_mbui_viz(name) && !raw.trim().has_prefix("{") {
+  let trimmed = raw.trim().to_owned()
+  if trimmed.has_prefix("wasm:base64:") {
+    let b64 = trimmed.unsafe_substring(start=12, end=trimmed.length())
+    match viz_base64_decode(b64) {
+      Some(bytes) if is_wasm_bytes(bytes) => return viz_mbui_parse_bytes(name, bytes)
+      _ => return None
+    }
+  }
+  let raw_bytes = @utf8.encode(raw)
+  if is_wasm_bytes(raw_bytes) {
+    return viz_mbui_parse_bytes(name, raw_bytes)
+  }
+  if @sf.lower(name).has_suffix(".wasm") && !trimmed.has_prefix("{") {
+    match viz_base64_decode(trimmed) {
+      Some(bytes) if is_wasm_bytes(bytes) => return viz_mbui_parse_bytes(name, bytes)
+      _ => ()
+    }
+    match viz_hex_decode(trimmed) {
+      Some(bytes) if is_wasm_bytes(bytes) => return viz_mbui_parse_bytes(name, bytes)
+      _ => ()
+    }
+  }
+  if !is_mbui_viz(name) && !trimmed.has_prefix("{") {
     return None
   }
   let parsed : Json = @json.parse(raw) catch { _ => return None }
@@ -183,6 +235,9 @@ pub fn viz_mbui_parse(name : String, raw : String) -> VizMbuiWidget? {
     Object(obj) => {
       let is_widget = is_mbui_viz(name) ||
         obj.contains("mbui") ||
+        obj.contains("wasm") ||
+        obj.contains("wasm_base64") ||
+        obj.contains("wasm_hex") ||
         obj.contains("body") ||
         obj.contains("root") ||
         obj.contains("children") ||
@@ -202,6 +257,29 @@ pub fn viz_mbui_parse(name : String, raw : String) -> VizMbuiWidget? {
           }
         _ => ()
       }
+      let wasm_b64 = viz_json_str(
+        obj,
+        "wasm",
+        viz_json_str(obj, "wasm_base64", viz_json_str(obj, "wasmBase64", "")),
+      )
+      let wasm_hex = viz_json_str(obj, "wasm_hex", viz_json_str(obj, "wasmHex", ""))
+      let wasm_bytes : Bytes? = if wasm_b64 != "" {
+        match viz_base64_decode(wasm_b64) {
+          Some(b) if is_wasm_bytes(b) => Some(b)
+          _ => None
+        }
+      } else if wasm_hex != "" {
+        match viz_hex_decode(wasm_hex) {
+          Some(b) if is_wasm_bytes(b) => Some(b)
+          _ => None
+        }
+      } else {
+        None
+      }
+      let gas_limit = viz_json_int(obj, "gas_limit", viz_wasm_default_gas).clamp(
+        min=1_000,
+        max=10_000_000,
+      )
       let root = match obj.get("root") {
         Some(r) => r
         None =>
@@ -210,7 +288,7 @@ pub fn viz_mbui_parse(name : String, raw : String) -> VizMbuiWidget? {
             None => parsed
           }
       }
-      Some({ title, subtitle, init_state, root })
+      Some({ title, subtitle, init_state, root, wasm_bytes, gas_limit })
     }
     _ => None
   }
@@ -247,6 +325,262 @@ fn viz_extract_state_map(raw : Json) -> Map[String, Json] {
 }
 
 ///|
+fn viz_sync_state_to_wasm(store : VizMbuiStore, inst : VizWasmInstance) -> Unit {
+  for k, sig in store.signals {
+    let v = sig.untracked()
+    inst.host.state_map[k] = v
+    let iv : Int? = match v {
+      Number(n, ..) => Some(n.to_int())
+      True => Some(1)
+      False => Some(0)
+      _ => None
+    }
+    match iv {
+      Some(num) => {
+        let _ = viz_wasm_set_global_i64(inst, k, num.to_int64() & 0xffffffffL)
+        if viz_wasm_has_export(inst, "set_" + k) {
+          let _ = viz_wasm_call(
+            inst,
+            "set_" + k,
+            [num.to_int64() & 0xffffffffL],
+            gas_limit=store.gas_limit,
+          )
+        }
+      }
+      None => ()
+    }
+  }
+}
+
+///|
+fn viz_apply_wasm_json_output(
+  store : VizMbuiStore,
+  hears : VizHears?,
+  json_str : String,
+) -> Unit {
+  let parsed : Json = @json.parse(json_str) catch { _ => return }
+  match parsed {
+    Object(obj) => {
+      match obj.get("title") {
+        Some(String(t)) if obj.contains("root") || obj.contains("body") =>
+          store.title_sig.set(t)
+        _ => ()
+      }
+      match obj.get("subtitle") {
+        Some(String(sub)) if obj.contains("root") || obj.contains("body") =>
+          store.subtitle_sig.set(sub)
+        _ => ()
+      }
+      match obj.get("state") {
+        Some(Object(st)) =>
+          for k, v in st {
+            let sig = viz_state_sig(store, k, v)
+            sig.set(v)
+            match store.wasm {
+              Some(inst) => inst.host.state_map[k] = v
+              None => ()
+            }
+          }
+        _ => ()
+      }
+      match obj.get("follow_up") {
+        Some(String(p)) if p.trim() != "" =>
+          match store.wasm {
+            Some(inst) => inst.host.follow_up_draft = Some(p.trim().to_owned())
+            None => ()
+          }
+        _ => ()
+      }
+      let has_tree_fields = obj.contains("root") ||
+        obj.contains("body") ||
+        obj.contains("type") ||
+        obj.contains("kind") ||
+        obj.contains("children") ||
+        obj.contains("chart")
+      if has_tree_fields {
+        let next_root = match obj.get("root") {
+          Some(r) => r
+          None =>
+            match obj.get("body") {
+              Some(b) => b
+              None => parsed
+            }
+        }
+        if store.root_sig.untracked() != next_root {
+          store.root_sig.set(next_root)
+          store.tree_ver.set(store.tree_ver.untracked() + 1)
+        }
+      } else if !obj.contains("state") && !obj.contains("follow_up") {
+        for k, v in obj {
+          let sig = viz_state_sig(store, k, v)
+          sig.set(v)
+        }
+      }
+    }
+    _ => ()
+  }
+  ignore(hears)
+}
+
+///|
+fn viz_sync_from_wasm(
+  store : VizMbuiStore,
+  inst : VizWasmInstance,
+  ret_vals : Array[Int64],
+  hears : VizHears?,
+) -> Unit {
+  match viz_wasm_extract_string(inst, ret_vals) {
+    Ok(Some(s)) => viz_apply_wasm_json_output(store, hears, s)
+    Ok(None) => ()
+    Err(e) => store.wasm_error.set(e)
+  }
+  if inst.host.out_state is None && viz_wasm_has_export(inst, "mbui_state") {
+    match viz_wasm_call(inst, "mbui_state", [], gas_limit=store.gas_limit) {
+      Ok(st_ret) =>
+        match viz_wasm_extract_string(inst, st_ret) {
+          Ok(Some(st_str)) => {
+            let parsed : Json = @json.parse(st_str) catch { _ => Json::null() }
+            match parsed {
+              Object(m) =>
+                for k, v in m {
+                  let sig = viz_state_sig(store, k, v)
+                  sig.set(v)
+                  inst.host.state_map[k] = v
+                }
+              _ => ()
+            }
+          }
+          _ => ()
+        }
+      Err(_) => ()
+    }
+  }
+  match inst.host.out_state {
+    Some(Object(m)) => {
+      inst.host.out_state = None
+      for k, v in m {
+        let sig = viz_state_sig(store, k, v)
+        sig.set(v)
+      }
+    }
+    Some(_) => inst.host.out_state = None
+    None => ()
+  }
+  if inst.host.state_dirty {
+    inst.host.state_dirty = false
+    for k, v in inst.host.state_map {
+      let sig = viz_state_sig(store, k, v)
+      if sig.untracked() != v {
+        sig.set(v)
+      }
+    }
+  }
+  for k, sig in store.signals {
+    if viz_wasm_has_export(inst, "get_" + k) {
+      match viz_wasm_call(inst, "get_" + k, [], gas_limit=store.gas_limit) {
+        Ok(vals) if vals.length() > 0 => {
+          let cur = sig.untracked()
+          let next_v = match cur {
+            True | False => Json::boolean(vals[0].to_int() != 0)
+            _ => Json::number(vals[0].to_int().to_double())
+          }
+          if cur != next_v {
+            sig.set(next_v)
+            inst.host.state_map[k] = next_v
+          }
+        }
+        _ => ()
+      }
+    } else {
+      match viz_wasm_get_global_i64(inst, k) {
+        Some(gv) => {
+          let cur = sig.untracked()
+          let next_v = match cur {
+            True | False => Json::boolean(gv.to_int() != 0)
+            _ => Json::number(gv.to_int().to_double())
+          }
+          if cur != next_v {
+            sig.set(next_v)
+            inst.host.state_map[k] = next_v
+          }
+        }
+        None => ()
+      }
+    }
+  }
+  match inst.host.follow_up_draft {
+    Some(draft) => {
+      inst.host.follow_up_draft = None
+      match hears {
+        Some(h) => {
+          let cut = if draft.length() > 4000 { draft.clamped_view(end=4000).to_owned() } else { draft }
+          let took = match h.follow_up {
+            Some(f) => f(cut)
+            None => false
+          }
+          toast_later(viz_tr(if took { "android-misc.viz.followupDrafted" } else { "android-misc.viz.cantSend" }))
+        }
+        None => ()
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+fn viz_notify_wasm_event(
+  store : VizMbuiStore,
+  hears : VizHears,
+  ev_json : Json,
+) -> Unit {
+  match store.wasm {
+    Some(inst) => {
+      viz_sync_state_to_wasm(store, inst)
+      let ev_bytes = @utf8.encode(ev_json.stringify())
+      let (ptr, len) = match viz_wasm_pass_input(inst, ev_bytes, gas_limit=store.gas_limit) {
+        Ok(pair) => pair
+        Err(e) => {
+          store.wasm_error.set(e)
+          return
+        }
+      }
+      if viz_wasm_has_export(inst, "mbui_event") {
+        let n_params = viz_wasm_func_param_count(inst, "mbui_event")
+        let call_args : Array[Int64] = if n_params >= 2 {
+          [ptr.to_int64() & 0xffffffffL, len.to_int64() & 0xffffffffL]
+        } else if n_params == 1 {
+          [ptr.to_int64() & 0xffffffffL]
+        } else {
+          []
+        }
+        match viz_wasm_call(inst, "mbui_event", call_args, gas_limit=store.gas_limit) {
+          Ok(ret) => {
+            store.wasm_error.set("")
+            viz_sync_from_wasm(store, inst, ret, Some(hears))
+          }
+          Err(e) => store.wasm_error.set(e)
+        }
+      } else if viz_wasm_has_export(inst, "mbui_update") {
+        match viz_wasm_call(inst, "mbui_update", [], gas_limit=store.gas_limit) {
+          Ok(ret) => {
+            store.wasm_error.set("")
+            viz_sync_from_wasm(store, inst, ret, Some(hears))
+          }
+          Err(e) => store.wasm_error.set(e)
+        }
+      }
+      if viz_wasm_has_export(inst, "mbui_render") && !viz_wasm_has_export(inst, "mbui_event") {
+        match viz_wasm_call(inst, "mbui_render", [], gas_limit=store.gas_limit) {
+          Ok(ret) => viz_sync_from_wasm(store, inst, ret, Some(hears))
+          Err(e) => store.wasm_error.set(e)
+        }
+      }
+    }
+    None => ()
+  }
+}
+
+///|
 fn viz_store_of(
   key : String,
   widget : VizMbuiWidget,
@@ -263,19 +597,87 @@ fn viz_store_of(
             None => s.signals[k] = @signals.signal(v)
           }
         }
+        match s.wasm {
+          Some(inst) => {
+            viz_sync_state_to_wasm(s, inst)
+            if viz_wasm_has_export(inst, "mbui_update") {
+              match viz_wasm_call(inst, "mbui_update", [], gas_limit=s.gas_limit) {
+                Ok(ret) => viz_sync_from_wasm(s, inst, ret, None)
+                Err(e) => s.wasm_error.set(e)
+              }
+            }
+          }
+          None => ()
+        }
       }
       return s
     }
   }
+  let merged_state : Map[String, Json] = Map([])
   let signals : Map[String, @signals.Signal[Json]] = Map([])
   for k, v in widget.init_state {
+    merged_state[k] = v
     signals[k] = @signals.signal(v)
   }
   let ext = viz_extract_state_map(external_state)
   for k, v in ext {
+    merged_state[k] = v
     signals[k] = @signals.signal(v)
   }
-  let store : VizMbuiStore = { key, signals, synced_raw: external_state }
+  let store : VizMbuiStore = {
+    key,
+    signals,
+    synced_raw: external_state,
+    wasm: None,
+    gas_limit: widget.gas_limit,
+    root_sig: @signals.signal(widget.root),
+    title_sig: @signals.signal(widget.title),
+    subtitle_sig: @signals.signal(widget.subtitle),
+    tree_ver: @signals.signal(0),
+    wasm_error: @signals.signal(""),
+  }
+  match widget.wasm_bytes {
+    Some(bytes) =>
+      match viz_wasm_instantiate(bytes, merged_state) {
+        Ok(inst) => {
+          store.wasm = Some(inst)
+          viz_sync_state_to_wasm(store, inst)
+          if viz_wasm_has_export(inst, "mbui_init") {
+            let init_json = Json::object(merged_state).stringify()
+            let (ptr, len) = match viz_wasm_pass_input(inst, @utf8.encode(init_json), gas_limit=store.gas_limit) {
+              Ok(p) => p
+              Err(_) => (0, 0)
+            }
+            let n_params = viz_wasm_func_param_count(inst, "mbui_init")
+            let args : Array[Int64] = if n_params >= 2 {
+              [ptr.to_int64() & 0xffffffffL, len.to_int64() & 0xffffffffL]
+            } else if n_params == 1 {
+              [ptr.to_int64() & 0xffffffffL]
+            } else {
+              []
+            }
+            match viz_wasm_call(inst, "mbui_init", args, gas_limit=store.gas_limit) {
+              Ok(ret) => viz_sync_from_wasm(store, inst, ret, None)
+              Err(e) => store.wasm_error.set(e)
+            }
+          }
+          if viz_wasm_has_export(inst, "mbui_update") {
+            match viz_wasm_call(inst, "mbui_update", [], gas_limit=store.gas_limit) {
+              Ok(ret) => viz_sync_from_wasm(store, inst, ret, None)
+              Err(e) => store.wasm_error.set(e)
+            }
+          }
+          if viz_wasm_has_export(inst, "mbui_render") {
+            match viz_wasm_call(inst, "mbui_render", [], gas_limit=store.gas_limit) {
+              Ok(ret) => viz_sync_from_wasm(store, inst, ret, None)
+              Err(e) => store.wasm_error.set(e)
+            }
+          }
+        }
+        Err(e) => store.wasm_error.set(e)
+      }
+    None => ()
+  }
   viz_mbui_stores.push(store)
   store
 }
@@ -322,6 +724,12 @@ fn viz_state_set(
 ) -> Unit {
   let sig = viz_state_sig(store, key, val)
   sig.set(val)
+  let ev_map : Map[String, Json] = Map([
+    ("type", Json::string("change")),
+    ("key", Json::string(key)),
+    ("value", val),
+  ])
+  viz_notify_wasm_event(store, hears, Json::object(ev_map))
   let snap = viz_state_snapshot(store)
   store.synced_raw = snap
   match hears.keep {
@@ -463,12 +871,47 @@ fn viz_run_action_map(
   hears : VizHears,
   obj : Map[String, Json],
 ) -> Unit {
+  let mut mutated = false
   match obj.get("set") {
-    Some(Object(pairs)) =>
+    Some(Object(pairs)) => {
+      mutated = true
       for k, v in pairs {
         let sig = viz_state_sig(store, k, v)
         sig.set(v)
       }
+    }
+    _ => ()
+  }
+  match obj.get("inc") {
+    Some(Object(pairs)) => {
+      mutated = true
+      for k, delta_json in pairs {
+        let delta = match delta_json {
+          Number(n, ..) => n
+          _ => 1.0
+        }
+        let cur = match viz_state_get(store, k) {
+          Number(n, ..) => n
+          String(s) => viz_parse_num(s, 0.0)
+          _ => 0.0
+        }
+        let next = Json::number(cur + delta)
+        let sig = viz_state_sig(store, k, next)
+        sig.set(next)
+      }
+    }
+    Some(String(inc_key)) if inc_key != "" => {
+      mutated = true
+      let delta = viz_json_num(obj, "by", 1.0)
+      let cur = match viz_state_get(store, inc_key) {
+        Number(n, ..) => n
+        String(s) => viz_parse_num(s, 0.0)
+        _ => 0.0
+      }
+      let next = Json::number(cur + delta)
+      let sig = viz_state_sig(store, inc_key, next)
+      sig.set(next)
+    }
     _ => ()
   }
   let state_key = viz_json_str(
@@ -479,6 +922,7 @@ fn viz_run_action_map(
   if state_key != "" {
     match obj.get("value") {
       Some(v) => {
+        mutated = true
         let sig = viz_state_sig(store, state_key, v)
         sig.set(v)
       }
@@ -487,11 +931,70 @@ fn viz_run_action_map(
   }
   let toggle_key = viz_json_str(obj, "toggle", "")
   if toggle_key != "" {
+    mutated = true
     let cur = viz_json_truthy(viz_state_get(store, toggle_key))
     let sig = viz_state_sig(store, toggle_key, Json::boolean(!cur))
     sig.set(Json::boolean(!cur))
   }
-  if obj.contains("set") || state_key != "" || toggle_key != "" {
+  let wasm_fn = viz_json_str(
+    obj,
+    "wasm_call",
+    viz_json_str(obj, "wasmCall", viz_json_str(obj, "call", "")),
+  )
+  if wasm_fn != "" {
+    match store.wasm {
+      Some(inst) => {
+        mutated = true
+        viz_sync_state_to_wasm(store, inst)
+        let call_args : Array[Int64] = []
+        for item in viz_json_arr(obj, "args") {
+          match item {
+            Number(n, ..) => call_args.push(n.to_int().to_int64() & 0xffffffffL)
+            True => call_args.push(1L)
+            False => call_args.push(0L)
+            String(s) => {
+              let resolved = viz_interp(store, s)
+              call_args.push(viz_parse_num(resolved, 0.0).to_int().to_int64() & 0xffffffffL)
+            }
+            _ => ()
+          }
+        }
+        match viz_wasm_call(inst, wasm_fn, call_args, gas_limit=store.gas_limit) {
+          Ok(ret) => {
+            store.wasm_error.set("")
+            let into_key = viz_json_str(obj, "into", viz_json_str(obj, "result_key", ""))
+            if into_key != "" && ret.length() > 0 {
+              let v = Json::number(ret[0].to_int().to_double())
+              let sig = viz_state_sig(store, into_key, v)
+              sig.set(v)
+              inst.host.state_map[into_key] = v
+            }
+            viz_sync_from_wasm(store, inst, ret, Some(hears))
+          }
+          Err(e) => store.wasm_error.set(e)
+        }
+      }
+      None => ()
+    }
+  }
+  let ev_id = viz_json_str(obj, "id", viz_json_str(obj, "event", ""))
+  let has_sub_action = match obj.get("action") {
+    Some(Object(_)) => true
+    _ => false
+  }
+  if mutated || ev_id != "" || (store.wasm is Some(_) && !has_sub_action) {
+    if wasm_fn == "" {
+      let ev_map : Map[String, Json] = Map([
+        ("type", Json::string(if ev_id != "" { ev_id } else { "action" })),
+        ("id", Json::string(ev_id)),
+        ("label", Json::string(viz_json_str(obj, "label", viz_json_str(obj, "text", "")))),
+      ])
+      if state_key != "" {
+        ev_map["key"] = Json::string(state_key)
+        ev_map["value"] = viz_state_get(store, state_key)
+      }
+      viz_notify_wasm_event(store, hears, Json::object(ev_map))
+    }
     let snap = viz_state_snapshot(store)
     store.synced_raw = snap
     match hears.keep {
@@ -904,9 +1407,10 @@ fn viz_render_node(
         }
         "row" | "controls" | "hstack" => {
           let gap = viz_json_num(obj, "gap", 8.0)
-          let wrap = viz_json_bool(obj, "wrap", true)
+          let wrap = viz_json_bool(obj, "wrap", !in_row)
           let align = viz_align_of(viz_json_str(obj, "align", "center"))
           let justify = viz_justify_of(viz_json_str(obj, "justify", "start"))
+          let row_w : @ui.Len = if in_row { Hug } else { Full }
           let children = viz_children_of(obj)
           parent.box(fn(r) {
             if wrap {
@@ -914,7 +1418,7 @@ fn viz_render_node(
             }
             @sf.style_node(
               r,
-              fn() { @ui.style(row=true, w=Full, gap=@sf.room_of(gap), align~, justify~) },
+              fn() { @ui.style(row=true, w=row_w, gap=@sf.room_of(gap), align~, justify~) },
               in_row~,
             )
             for i = 0; i < children.length(); i = i + 1 {
@@ -1006,37 +1510,40 @@ fn viz_render_node(
               |> ignore
             }
             card.box(fn(val_row) {
-              @sf.style_node(val_row, fn() { viz_row_between_s2 })
-              val_row.box(fn(nums) {
-                @sf.style_node(nums, fn() { viz_row_end_s1 }, in_row=true)
-                nums.box(fn(w) {
-                  @sf.style_node(w, fn() { @ui.style() }, in_row=true)
-                  @sf.words_node(w, fn() { viz_interp(store, val_raw) }, fn() { viz_stat_val }) |> ignore
-                })
-                |> ignore
-                if unit != "" {
-                  nums.box(fn(w) {
-                    @sf.style_node(w, fn() { @ui.style() }, in_row=true)
-                    @sf.words_node(w, fn() { viz_interp(store, unit) }, fn() { viz_stat_unit }) |> ignore
-                  })
-                  |> ignore
-                }
+              @sf.style_node(val_row, fn() { viz_row_end_s1 })
+              val_row.box(fn(w) {
+                @sf.style_node(w, fn() { @ui.style() }, in_row=true)
+                @sf.words_node(w, fn() { viz_interp(store, val_raw) }, fn() { viz_stat_val }) |> ignore
               })
               |> ignore
-              if spark.length() >= 2 {
-                viz_spark_node(val_row, path + "/spark", fn() { spark }, tone, 46.0, 22.0, in_row=true)
+              if unit != "" {
+                val_row.box(fn(w) {
+                  @sf.style_node(w, fn() { @ui.style() }, in_row=true)
+                  @sf.words_node(w, fn() { viz_interp(store, unit) }, fn() { viz_stat_unit }) |> ignore
+                })
+                |> ignore
               }
             })
             |> ignore
-            if delta != "" {
+            if delta != "" || spark.length() >= 2 {
               let delta_style = match @sf.lower(tone) {
                 "green" | "ok" | "good" | "success" => @sf.caption.then(viz_good)
                 "red" | "bad" | "danger" | "error" => @sf.caption.then(@sf.bad)
                 "yellow" | "amber" | "warn" | "warning" => @sf.caption.then(@sf.lacking)
                 _ => @sf.caption
               }
-              card.box(fn(w) {
-                @sf.words_node(w, fn() { viz_interp(store, delta) }, fn() { delta_style }) |> ignore
+              card.box(fn(foot_row) {
+                @sf.style_node(foot_row, fn() { viz_row_between_s2 })
+                if delta != "" {
+                  foot_row.box(fn(w) {
+                    @sf.style_node(w, fn() { @ui.style() }, in_row=true)
+                    @sf.words_node(w, fn() { viz_interp(store, delta) }, fn() { delta_style }) |> ignore
+                  })
+                  |> ignore
+                }
+                if spark.length() >= 2 {
+                  viz_spark_node(foot_row, path + "/spark", fn() { spark }, tone, 36.0, 16.0, in_row=true)
+                }
               })
               |> ignore
             }
@@ -1309,15 +1816,24 @@ fn viz_render_node(
         }
         "progress" => {
           let label = viz_json_str(obj, "label", viz_json_str(obj, "title", ""))
-          let val = viz_json_num(obj, "value", 0.0)
-          let max_v = @sf.dmax(1.0, viz_json_num(obj, "max", 100.0))
-          let frac = @sf.dclamp(val / max_v, 0.0, 1.0)
+          let val_raw = viz_json_str(obj, "value", "0")
+          let max_raw = viz_json_str(obj, "max", "100")
           let tone = viz_json_str(obj, "tone", "")
-          let val_txt = viz_json_str(
-            obj,
-            "value_text",
-            viz_fmt_num(val, "") + " / " + viz_fmt_num(max_v, ""),
-          )
+          let val_txt_raw = viz_json_str(obj, "value_text", "")
+          let calc_frac = fn() -> Double {
+            let v = viz_parse_num(viz_interp(store, val_raw), 0.0)
+            let m = @sf.dmax(1.0, viz_parse_num(viz_interp(store, max_raw), 100.0))
+            @sf.dclamp(v / m, 0.0, 1.0)
+          }
+          let calc_txt = fn() -> String {
+            if val_txt_raw != "" {
+              viz_interp(store, val_txt_raw)
+            } else {
+              let v = viz_parse_num(viz_interp(store, val_raw), 0.0)
+              let m = @sf.dmax(1.0, viz_parse_num(viz_interp(store, max_raw), 100.0))
+              viz_fmt_num(v, "") + " / " + viz_fmt_num(m, "")
+            }
+          }
           parent.box(fn(col) {
             @sf.style_node(col, fn() { viz_col_s1 }, in_row~)
             if label != "" {
@@ -1330,7 +1846,7 @@ fn viz_render_node(
                 |> ignore
                 r.box(fn(w) {
                   @sf.style_node(w, fn() { @ui.style() }, in_row=true)
-                  @sf.words_node(w, fn() { viz_interp(store, val_txt) }, fn() { @sf.code }) |> ignore
+                  @sf.words_node(w, calc_txt, fn() { @sf.code }) |> ignore
                 })
                 |> ignore
               })
@@ -1339,8 +1855,8 @@ fn viz_render_node(
             col.box(fn(bar) {
               @sf.progress_node(
                 bar,
-                fn() { Some(frac) },
-                fn() { viz_tone_color(tone, 0) },
+                fn() { Some(calc_frac()) },
+                fn() { viz_tone_color(viz_interp(store, tone), 0) },
                 fn() { @sf.theme().p.card2 },
               )
               |> ignore
@@ -1387,6 +1903,12 @@ fn viz_render_node(
               }
               0
             }
+            let min_h = viz_json_num(obj, "min_height", viz_json_num(obj, "height", 0.0))
+            let tb_style = if min_h > 0.0 {
+              viz_col_s2.then(@ui.style(min_h=viz_fixed_len(min_h)))
+            } else {
+              viz_col_s2
+            }
             parent.box(fn(col) {
               @sf.style_node(col, fn() { viz_col_s2_5 }, in_row~)
               @sf.seg_node(
@@ -1400,19 +1922,18 @@ fn viz_render_node(
                 },
               )
               |> ignore
-              for i = 0; i < ids.length(); i = i + 1 {
-                let tab_idx = i
-                let tab_body = bodies[i]
-                col.show(
-                  fn() { active_idx() == tab_idx },
-                  fn(panel) {
-                    @sf.style_node(panel, fn() { viz_col_s2 })
+              col.pick(
+                active_idx,
+                fn(panel, tab_idx) {
+                  @sf.style_node(panel, fn() { tb_style })
+                  if tab_idx >= 0 && tab_idx < bodies.length() {
+                    let tab_body = bodies[tab_idx]
                     for j = 0; j < tab_body.length(); j = j + 1 {
                       viz_render_node(panel, store, hears, tab_body[j], path + "/tb\{tab_idx}_\{j}", depth + 1)
                     }
-                  },
-                )
-              }
+                  }
+                },
+              )
             })
             |> ignore
           }
@@ -1548,6 +2069,7 @@ fn viz_render_ctx(
   node : Json,
   path : String,
   depth : Int,
+  in_row? : Bool = false,
 ) -> Unit {
   if depth > 24 {
     return
@@ -1608,16 +2130,17 @@ fn viz_render_ctx(
         }
         "row" | "controls" | "hstack" => {
           let gap = viz_json_num(obj, "gap", 8.0)
-          let wrap = viz_json_bool(obj, "wrap", true)
+          let wrap = viz_json_bool(obj, "wrap", !in_row)
           let align = viz_align_of(viz_json_str(obj, "align", "center"))
           let justify = viz_justify_of(viz_json_str(obj, "justify", "start"))
+          let row_w : @ui.Len = if in_row { Hug } else { Full }
           let children = viz_children_of(obj)
           c.box(
-            style=@ui.style(row=true, w=Full, gap=@sf.room_of(gap), align~, justify~),
+            style=@ui.style(row=true, w=row_w, gap=@sf.room_of(gap), align~, justify~),
             flow=wrap,
             fn() {
               for i = 0; i < children.length(); i = i + 1 {
-                viz_render_ctx(c, store, hears, children[i], path + "/r\{i}", depth + 1)
+                viz_render_ctx(c, store, hears, children[i], path + "/r\{i}", depth + 1, in_row=true)
               }
             },
           )
@@ -1688,27 +2211,29 @@ fn viz_render_ctx(
             if label != "" {
               c.text(viz_interp(store, label), style=@sf.caption) |> ignore
             }
-            c.box(style=viz_row_between_s2, fn() {
-              c.box(style=viz_row_end_s1, fn() {
-                c.text(viz_interp(store, val_raw), style=viz_stat_val) |> ignore
-                if unit != "" {
-                  c.text(viz_interp(store, unit), style=viz_stat_unit) |> ignore
-                }
-              })
-              |> ignore
-              if spark.length() >= 2 {
-                viz_spark_ctx(c, path + "/spark", spark, tone, 46.0, 22.0)
+            c.box(style=viz_row_end_s1, fn() {
+              c.text(viz_interp(store, val_raw), style=viz_stat_val) |> ignore
+              if unit != "" {
+                c.text(viz_interp(store, unit), style=viz_stat_unit) |> ignore
               }
             })
             |> ignore
-            if delta != "" {
+            if delta != "" || spark.length() >= 2 {
               let delta_style = match @sf.lower(tone) {
                 "green" | "ok" | "good" | "success" => @sf.caption.then(viz_good)
                 "red" | "bad" | "danger" | "error" => @sf.caption.then(@sf.bad)
                 "yellow" | "amber" | "warn" | "warning" => @sf.caption.then(@sf.lacking)
                 _ => @sf.caption
               }
-              c.text(viz_interp(store, delta), style=delta_style) |> ignore
+              c.box(style=viz_row_between_s2, fn() {
+                if delta != "" {
+                  c.text(viz_interp(store, delta), style=delta_style) |> ignore
+                }
+                if spark.length() >= 2 {
+                  viz_spark_ctx(c, path + "/spark", spark, tone, 36.0, 16.0)
+                }
+              })
+              |> ignore
             }
           })
           |> ignore
@@ -1915,10 +2440,12 @@ fn viz_render_ctx(
         }
         "progress" => {
           let label = viz_json_str(obj, "label", viz_json_str(obj, "title", ""))
-          let val = viz_json_num(obj, "value", 0.0)
-          let max_v = @sf.dmax(1.0, viz_json_num(obj, "max", 100.0))
+          let val_raw = viz_json_str(obj, "value", "0")
+          let max_raw = viz_json_str(obj, "max", "100")
+          let val = viz_parse_num(viz_interp(store, val_raw), 0.0)
+          let max_v = @sf.dmax(1.0, viz_parse_num(viz_interp(store, max_raw), 100.0))
           let frac = @sf.dclamp(val / max_v, 0.0, 1.0)
-          let tone = viz_json_str(obj, "tone", "")
+          let tone = viz_interp(store, viz_json_str(obj, "tone", ""))
           let val_txt = viz_json_str(
             obj,
             "value_text",
@@ -1972,6 +2499,12 @@ fn viz_render_ctx(
                 active_idx = i
               }
             }
+            let min_h = viz_json_num(obj, "min_height", viz_json_num(obj, "height", 0.0))
+            let tb_style = if min_h > 0.0 {
+              viz_col_s2.then(@ui.style(min_h=viz_fixed_len(min_h)))
+            } else {
+              viz_col_s2
+            }
             c.box(style=viz_col_s2_5, fn() {
               @sf.segmented(
                 c,
@@ -1986,11 +2519,17 @@ fn viz_render_ctx(
               )
               |> ignore
               let tab_body = bodies[active_idx]
-              c.box(style=viz_col_s2, fn() {
-                for j = 0; j < tab_body.length(); j = j + 1 {
-                  viz_render_ctx(c, store, hears, tab_body[j], path + "/tb\{active_idx}_\{j}", depth + 1)
-                }
-              })
+              c.box(
+                style=tb_style,
+                id=c.id(path + "/tbody"),
+                taps=false,
+                tallest=true,
+                fn() {
+                  for j = 0; j < tab_body.length(); j = j + 1 {
+                    viz_render_ctx(c, store, hears, tab_body[j], path + "/tb\{active_idx}_\{j}", depth + 1)
+                  }
+                },
+              )
               |> ignore
             })
             |> ignore
@@ -2104,10 +2643,9 @@ fn viz_render_ctx(
 }
 
 ///|
-fn viz_root_has_title(widget : VizMbuiWidget) -> Bool {
-  match widget.root {
-    Object(ro) =>
-      widget.title != "" && viz_json_str(ro, "title", "") == widget.title
+fn viz_root_has_title(root_json : Json, title : String) -> Bool {
+  match root_json {
+    Object(ro) => title != "" && viz_json_str(ro, "title", "") == title
     _ => false
   }
 }
@@ -2126,27 +2664,47 @@ pub fn viz_mbui_node(
       let _ = viz_store_of(place, widget, state())
       viz_root_col
     })
-    if !viz_root_has_title(widget) && (widget.title != "" || widget.subtitle != "") {
-      root.box(fn(head) {
+    root.show(
+      fn() {
+        let t = store.title_sig.get()
+        let sub = store.subtitle_sig.get()
+        !viz_root_has_title(store.root_sig.get(), t) && (t != "" || sub != "")
+      },
+      fn(head) {
         @sf.style_node(head, fn() { viz_col_s0_5 })
-        if widget.title != "" {
-          let t = widget.title
-          head.box(fn(w) {
-            @sf.words_node(w, fn() { viz_interp(store, t) }, fn() { @sf.title }) |> ignore
-          })
-          |> ignore
-        }
-        if widget.subtitle != "" {
-          let sub = widget.subtitle
-          head.box(fn(w) {
-            @sf.words_node(w, fn() { viz_interp(store, sub) }, fn() { @sf.caption }) |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    }
-    viz_render_node(root, store, hears, widget.root, place, 0)
+        head.show(
+          fn() { store.title_sig.get() != "" },
+          fn(w) {
+            @sf.words_node(w, fn() { viz_interp(store, store.title_sig.get()) }, fn() { @sf.title }) |> ignore
+          },
+        )
+        head.show(
+          fn() { store.subtitle_sig.get() != "" },
+          fn(w) {
+            @sf.words_node(w, fn() { viz_interp(store, store.subtitle_sig.get()) }, fn() { @sf.caption }) |> ignore
+          },
+        )
+      },
+    )
+    root.show(
+      fn() { store.wasm_error.get() != "" },
+      fn(err_box) {
+        @sf.style_node(err_box, fn() { viz_card_box })
+        @sf.words_node(
+          err_box,
+          fn() { "Wasm 沙箱拦截: " + store.wasm_error.get() },
+          fn() { @sf.body.then(@sf.bad) },
+        )
+        |> ignore
+      },
+    )
+    root.pick(
+      fn() { store.tree_ver.get() },
+      fn(p, _) {
+        @sf.style_node(p, fn() { viz_root_col })
+        viz_render_node(p, store, hears, store.root_sig.untracked(), place, 0)
+      },
+    )
   })
   |> ignore
 }
@@ -2160,19 +2718,29 @@ pub fn viz_mbui_ctx(
   hears : VizHears,
 ) -> Unit {
   let store = viz_store_of(place, widget, state)
+  let root_json = store.root_sig.get()
+  let title = store.title_sig.get()
+  let subtitle = store.subtitle_sig.get()
+  let w_err = store.wasm_error.get()
   c.box(style=viz_root_col, fn() {
-    if !viz_root_has_title(widget) && (widget.title != "" || widget.subtitle != "") {
+    if !viz_root_has_title(root_json, title) && (title != "" || subtitle != "") {
       c.box(style=viz_col_s0_5, fn() {
-        if widget.title != "" {
-          c.text(viz_interp(store, widget.title), style=@sf.title) |> ignore
+        if title != "" {
+          c.text(viz_interp(store, title), style=@sf.title) |> ignore
         }
-        if widget.subtitle != "" {
-          c.text(viz_interp(store, widget.subtitle), style=@sf.caption) |> ignore
+        if subtitle != "" {
+          c.text(viz_interp(store, subtitle), style=@sf.caption) |> ignore
         }
       })
       |> ignore
     }
-    viz_render_ctx(c, store, hears, widget.root, place, 0)
+    if w_err != "" {
+      c.box(style=viz_card_box, fn() {
+        c.text("Wasm 沙箱拦截: " + w_err, style=@sf.body.then(@sf.bad)) |> ignore
+      })
+      |> ignore
+    }
+    viz_render_ctx(c, store, hears, root_json, place, 0)
   })
   |> ignore
 }

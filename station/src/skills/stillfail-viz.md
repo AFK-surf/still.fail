@@ -1,28 +1,30 @@
 ---
 name: stillfail-viz
-description: Create inline native mbui widgets (.mbui), charts, comparisons or interactive diagrams in still.fail chats. Use when a visual or interactive widget explains better than prose; Slack receives an attached file.
+description: Create inline native mbui widgets (.mbui), sandboxed Wasm mini-programs (.wasm), charts, comparisons or interactive diagrams in still.fail chats. Use when a visual or interactive widget explains better than prose; Slack receives an attached file.
 ---
 
-# Inline visualizations (`.mbui`)
+# Inline visualizations (`.mbui` & `.wasm`)
 
 - Make one only when people need to see or explore something in the chat and it explains better than words. A table
   someone asks for is a Markdown table; a static structure that labeled nodes and edges explain fully is a Mermaid code
-  fence (it draws natively in still.fail's colours without a file). Use a `.mbui` widget for charts, metrics, comparisons,
-  interactive tabs/toggles, checklists and follow-up actions.
-- Prefer `.mbui` over `.html`: `.mbui` widgets are rendered natively by still.fail's `mbui` engine (`@view.View` +
-  `@sf` components + `@signals.Signal` + Skia canvas) with zero WebView overhead, synchronous layout height on the very
-  first frame, 120 fps scrolling, automatic light/dark theme tokens, and direct rendering in chat-to-image exports.
+  fence (it draws natively in still.fail's colours without a file). Use a `.mbui` widget or `.wasm` mini-program for
+  charts, metrics, comparisons, interactive calculators/simulators, tabs/toggles, checklists and follow-up actions.
+- Prefer `.mbui` / `.wasm` over `.html`: `.mbui` and `.wasm` widgets are rendered natively by still.fail's `mbui` engine
+  (`@view.View` + `@sf` components + `@signals.Signal` + Skia canvas) with zero WebView overhead, synchronous layout
+  height on the very first frame, 120 fps scrolling, automatic light/dark theme tokens, and direct rendering in
+  chat-to-image exports.
 - A request for a site, an app page or a change to a project is not an inline widget: build that in the project. For a
   mockup of `still.fail`'s own UI, write real `mbui` code (`sffixture`) and render screenshots/video with
   `apps/mbui/scripts/media.sh` (see `stillfail-show`).
 
 ## Post
 
-Write a `.mbui` JSON file in the session workspace, e.g. `release.mbui`. Attach with
-`chat_post(files=["/abs/path/release.mbui"])` and put `[Release](release.mbui)` on its own line in the text. Every
-still.fail app (desktop, iOS, Android, web) draws it inline in the message and supports full-screen expansion. Say its
-point around the link in a sentence or two: notifications and chat lists show only your words. Don't repeat its data in
-the text. In Slack, attach the file and omit the Markdown link; say what the figure shows for people staying in Slack.
+Write a `.mbui` JSON file (or a `.wasm` binary mini-program) in the session workspace, e.g. `release.mbui` or
+`sim.wasm`. Attach with `chat_post(files=["/abs/path/release.mbui"])` and put `[Release](release.mbui)` on its own line
+in the text. Every still.fail app (desktop, iOS, Android, web) draws it inline in the message and supports full-screen
+expansion. Say its point around the link in a sentence or two: notifications and chat lists show only your words. Don't
+repeat its data in the text. In Slack, attach the file and omit the Markdown link; say what the figure shows for people
+staying in Slack.
 
 ## `.mbui` Widget Schema
 
@@ -126,9 +128,39 @@ A `.mbui` file is a UTF-8 JSON object with optional initial `state` and a `body`
 - `details` / `collapse`: expandable section (`"id"`, `"title"`, `"subtitle"`, `"open": bool`, `"body": […]`).
 - `switch`: boolean toggle row (`"key"`, `"label"`, `"note"`, `"value"`). Toggling updates `state[key]` and persists widget state.
 - `check`: interactive checkbox row (`"key"`, `"label"`, `"note"`, `"value"`). Toggling updates `state[key]` and persists widget state.
-- `button` / `action`: interactive button (`"label"`, `"variant"`: `"primary"` | `"secondary"` | `"ghost"`, `"set"`: `{"key": value}`, `"toggle"`: `"key"`, `"follow_up"`: `"prompt text"`).
+- `button` / `action`: interactive button (`"label"`, `"variant"`: `"primary"` | `"secondary"` | `"ghost"`, `"set"`: `{"key": value}`, `"inc"`: `"key"`, `"toggle"`: `"key"`, `"wasm_call"`: `"export_fn"`, `"follow_up"`: `"prompt text"`).
 - Conditional visibility on any node: `"when": "key"` (truthy in `state`), `"when": "!key"` (falsy), or `"when": "key=val"`.
-- State interpolation in text & `follow_up`: `{key}` in a button's `follow_up` prompt is replaced with the live value of `state[key]`, and the prompt is placed in the chat composer for the user to review and send. State changes are saved automatically to the station (`modelContent` is sent to you alongside the user's next message).
+- State interpolation in text & `follow_up`: `{key}` or `${key}` in text, badges, progress bars, or a button's `follow_up` prompt is replaced with the live value of `state[key]`, and the prompt is placed in the chat composer for the user to review and send. State changes are saved automatically to the station (`modelContent` is sent to you alongside the user's next message).
+
+## Sandboxed Wasm 1.0 Mini-Programs (`.wasm` & `"wasm"`)
+
+When a widget needs custom computation (simulations, live aggregations, pricing/capacity calculators, or dynamic view
+generation), use the built-in sandboxed Wasm 1.0 bytecode runtime (`viz_wasm_vm.mbt`):
+- **Cross-platform & iOS-ready**: interpreted in pure MoonBit at ~880 MIPS (~0.02 ms for 20k instructions; 0 ms during
+  list scrolling/animations) with zero JIT requirement.
+- **Deterministic sandbox**:
+  - Capability-based host import allowlist (`mbui` / `env` only; WASI, filesystem, and network imports are rejected at
+    instantiation).
+  - Per-invocation instruction gas metering (`"gas_limit"`, default `1,000,000` instructions per event) that traps
+    infinite loops without blocking the UI thread.
+  - Hard linear memory cap (`64` pages = `4 MiB`) and call stack depth limit (`256`).
+- **Two ways to package**:
+  1. **Embedded controller in `.mbui`**: add `"wasm": "<base64-encoded .wasm>"` (or `"wasm_hex"`) to your `.mbui` JSON.
+     Buttons can invoke any exported function via `"wasm_call": "fn_name"` (with optional `"args": [...]` and `"into": "state_key"`),
+     and state changes automatically invoke exported `mbui_event` or `mbui_update`.
+  2. **Standalone `.wasm` file**: attach `app.wasm` and link `[Title](app.wasm)`. On load, `mbui_init()` runs and emits
+     the initial `.mbui` JSON tree via `mbui.set_tree(ptr, len)` (or returns a `(ptr << 32) | len` `i64` slice).
+- **Host imports (`"mbui"` or `"env"` module)**:
+  - `state_get_i32(key_ptr: i32, key_len: i32, fallback: i32) -> i32`
+  - `state_set_i32(key_ptr: i32, key_len: i32, val: i32)`
+  - `state_get_f64(key_ptr: i32, key_len: i32, fallback: f64) -> f64`
+  - `state_set_f64(key_ptr: i32, key_len: i32, val: f64)`
+  - `state_get_str(key_ptr: i32, key_len: i32, dst_ptr: i32, dst_cap: i32) -> i32`
+  - `state_set_str(key_ptr: i32, key_len: i32, val_ptr: i32, val_len: i32)`
+  - `set_tree(json_ptr: i32, json_len: i32)`: update the widget's `.mbui` JSON tree.
+  - `set_state(json_ptr: i32, json_len: i32)`: merge a JSON object into reactive `state`.
+  - `follow_up(text_ptr: i32, text_len: i32)`: draft a follow-up message in the chat composer.
+  - `input_len() -> i32` and `input_copy(dst_ptr: i32, max_len: i32) -> i32`: read the JSON event payload passed to `mbui_init` / `mbui_event`.
 
 ## Design rules
 

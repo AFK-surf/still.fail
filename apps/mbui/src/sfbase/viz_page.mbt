@@ -716,7 +716,12 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
       if native {
         @sf.native_over_act("close", @sf.t("common.close"), "close", fn() { c.tell("viz/full-close", fn() { viz_close_full() }) }, lead=true)
         @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() {
-          keep_bytes(c, v.name, "text/html", @utf8.encode(html))
+          if html.has_prefix("wasm:base64:") {
+            let b64 = html.unsafe_substring(start=12, end=html.length())
+            keep_bytes(c, v.name, "application/wasm", viz_base64_decode(b64).unwrap_or(b""))
+          } else {
+            keep_bytes(c, v.name, "text/html", @utf8.encode(html))
+          }
         })
       }
       let t = @sf.theme()
