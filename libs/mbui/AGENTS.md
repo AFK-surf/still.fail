@@ -195,7 +195,8 @@ yet and you can add one, add it.
 - So every test the Tester runs, mbui's and the app's, runs again with frames drawn on `run_for`'s way (while the app
   asks for them, as a host draws them) at 60, 120, 24 and 7 a second (`MBUI_TEST_FPS`, `scripts/fps_check.sh`; in CI
   mbui-ci's `native at …` and mbui-check's `… at … fps`, a runner a rate; on main after a merge, not on a branch's
-  pushes (the user, 2026-11-11 15:51 UTC: 「直接合，帧率在 main 上合并后跑」: red there mended forward), and in the
+  pushes (the user, 2026-11-11 15:51 UTC: 「直接合，帧率在 main 上合并后跑」: red there mended forward), but for the app's
+  test files a branch changed, at 120, 60 and 24 (mbui-check's `rates-changed`; the user, 2026-11-14), and in the
   day's run), and must come out the same; the app's sweeps of
   each screen at rest (screens, squeeze_said, words_large, corners, contrast) only at the default rate, a rate having
   found nothing in them the default run did not (the user, 2026-11-11: each part of the tests is run for what it is
