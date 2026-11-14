@@ -568,6 +568,46 @@ test "a login's card under its post, made once as nodes, is drawn as the old vie
 }
 
 ///|
+test "a login's card ended while it shows goes as an answered post's options go: faded and smaller as its room closes, who is to finish it with it, then its line fading in in its place; not one put in the other's place at once" {
+  let login = @signals.signal(card_login(true, "browser"))
+  let base = @sffixture.fixture("chat")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      match name {
+        "machineLogin" => { value: Some(login.get()), error: None, version: 1 }
+        "machineLogins" => { value: Some({ "canLogin": Json::boolean(true), "canRelay": true }), error: None, version: 1 }
+        _ => (base.topic_read)(name, params)
+      }
+    },
+  }
+  let m = card_login_post(who="等 林 完成", asked=true)
+  let t = card_old(760.0, src, m, "login-ends", fn(x, here) {
+    x.text(m.text, style=dec_words) |> ignore
+    message_decision(x, src, here, m, here.list.map(fn(l) { l.turns }))
+  })
+  t.run_for(@ui.move_most_ms)
+  let line = "已在 Willow 上登录 gh"
+  let seen = fn(words : String) {
+    t.words().iter().fold(init=0.0, fn(a, w) { if w.0 == words && w.5 > a { w.5 } else { a } })
+  }
+  assert_eq(seen("在 Willow 上登录 gh"), 1.0)
+  login.set(card_login(false, "done", more={ "statusText": line, "endedText": line }))
+  // (early in the options' going: the card and who is to finish it fading where they are, the line not yet)
+  t.run_for(@sfbase.options_out_ms / 5.0)
+  let card = seen("在 Willow 上登录 gh")
+  assert_true(card > 0.0 && card < 1.0, msg="card at \{card}")
+  assert_true(seen("等 林 完成") > 0.0)
+  assert_eq(seen(line), 0.0)
+  // (gone, and the line come whole in its place)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(seen("在 Willow 上登录 gh"), 0.0)
+  assert_eq(seen("等 林 完成"), 0.0)
+  assert_eq(seen(line), 1.0)
+  assert_true(card_has(t, "忽略"))
+}
+
+///|
 test "a login's card under its post: its × cancels it on the card's station (another of the workspace's where the card says so), 忽略 lets the ask go" {
   for other in ["", "st2"] {
     let calls : Array[(String, Json)] = []
