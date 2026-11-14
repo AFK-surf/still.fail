@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [4cbff594b](https://github.com/AFK-surf/monoid/commit/4cbff594ba9559cab9eb5c0d5141b41be09e7027) lock: a workspace hands itself over once everythin | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.63 | 117.11 |
 | [7b3640858](https://github.com/AFK-surf/monoid/commit/7b3640858fa10fb1eb1a710c951205aa4b2dc92d) mbui: a height on its way under a page's list on a | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.54 | 111.03 |
 | [9f35adb9e](https://github.com/AFK-surf/monoid/commit/9f35adb9ea7f320bedea545262bbf469726ab14d) mbui: the new chat page's answered agent at work f | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.37 | 111.2 |
 | [5a114683e](https://github.com/AFK-surf/monoid/commit/5a114683e899f682316f3331785b651faac35ddd) app,views: fit agent KPI figures to tile width and | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.49 | 112.91 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [bd1d2fba1](https://github.com/AFK-surf/monoid/commit/bd1d2fba1fd2fade1c56fc3203562d4ab262f744) fix(mbui): a film closed shows its player till the | 1.97 | 2.69 | 11.41 | 31.01 | 40.97 | 27.63 | 52.78 | 95.77 | 116.71 |
 | [ba8f65307](https://github.com/AFK-surf/monoid/commit/ba8f6530794f19441770da4aae46ca32d5996bf4) test(mbui): the answers' sweeps' jolts at 60 and 1 | 1.97 | 2.69 | 11.41 | 31.01 | 40.97 | 27.63 | 52.78 | 96.36 | 106.94 |
 | [a936f7d2a](https://github.com/AFK-surf/monoid/commit/a936f7d2a383aefa92b9a8ead339a0019283f991) mbui: what a page's list has in sight, where a blo | 1.97 | 2.69 | 11.41 | 31 | 40.95 | 27.63 | 52.78 | 95.59 | 177.86 |
-| [a88607818](https://github.com/AFK-surf/monoid/commit/a88607818d6c8539750e1f9e4e9e58497412093f) Streams: a frame decoded unseen, a decoder emptied | 1.97 | 2.69 | 11.4 | 30.98 | 40.91 | 27.6 | 52.73 | 95.8 | 106.62 |
