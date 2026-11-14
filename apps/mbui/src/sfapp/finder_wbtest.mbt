@@ -74,7 +74,7 @@ fn tap_search_field(t : @ui.Tester) -> Unit raise {
 }
 
 ///|
-test "the search's way in by the hand: a finger's field at the lists' top in every tier, none with a mouse (⌘K's)" {
+test "the search's way in by the hand: a field at the lists' top in every tier with either input, ⌘K's too with a mouse" {
   for case in [(390.0, 2, false), (720.0, 2, false), (1280.0, 2, true), (390.0, 0, false), (720.0, 0, false), (1280.0, 0, false)] {
     let (w, platform, regular) = case
     let calls : Array[Made] = []
@@ -87,10 +87,8 @@ test "the search's way in by the hand: a finger's field at the lists' top in eve
     list_up_to_top(t)
     t.draw()
     let at = "\{w} platform \{platform}"
-    if platform == 2 {
-      assert_true(t.find("搜索全部内容") is Some(_), msg=at)
-    } else {
-      assert_true(t.find("搜索全部内容") is None, msg=at)
+    assert_true(t.find("搜索全部内容") is Some(_), msg=at)
+    if platform != 2 {
       t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
       t.frame()
       // laid out Small the search's page, else the panel
