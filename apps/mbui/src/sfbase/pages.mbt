@@ -257,56 +257,46 @@ pub fn chat_page_made(
 
 ///|
 /// The way a chat's composer's ground last set out on for what it holds (a line more, a file, a quote; sfpages'
-/// composer reshape, its `by` changed): its draft, its spec, the moment its build said it, and where that way is
-/// declared (when it set out and how long: @motion.reshape_way, read once the frame that set it off is laid out). Said
-/// by the composer's build at that cause, none for words sent from it (their row carries its room) nor once a later
-/// build sets out on none; taken by the one height change of its node in a list's foot it comes out as (foot_resizes).
+/// composer reshape, its `by` changed): its draft, the moment its build said it, and where that way is declared (when
+/// it set out, how long, and how far on it the ground is drawn at a moment: @motion.reshape_way, reshape_share, read
+/// once the frame that set it off is laid out). Said by the composer's build at that cause, none for words sent from
+/// it (their row carries its room) nor once a later build sets out on none; taken by the one height change of its node
+/// in a list's foot it comes out as (foot_resizes).
 // kept across runs: said again by each composer's build, taken once
-pub let composer_set_out : Ref[(String, @motion.Spec, Double, () -> (Double, Double)?)?] = Ref(None)
+pub let composer_set_out : Ref[(String, Double, () -> (Double, Double, (Double) -> Double)?)?] = Ref(None)
 
 ///|
 /// The old view `island` holding chat `r`'s composer in its list's foot come to another height: where its composer's
 /// ground set out on a way for that (composer_set_out), its height goes that very way (View::resizes, kept to its foot:
-/// the composer grows from it): from when the ground set out, as long as its way is declared, on its curve (a tween's,
-/// else a Move's from rest), so the room under the last row and what stands on the foot go with the ground in the same
-/// frames, the one way the old list's foot went with it (sfpages' composer_way_for_list). Otherwise at once.
+/// the composer grows from it): from when the ground set out, as long as its way is declared, at each moment as far on
+/// as the ground is drawn then (its own way read, not one worked out beside it), so the room under the last row and
+/// what stands on the foot go with the ground in the same frames, one way, as the old list's foot went with it
+/// (sfpages' composer_way_for_list). Otherwise at once.
 fn foot_resizes(island : @view.View?, r : ChatRef) -> Unit {
-  guard composer_set_out.val is Some((draft, spec, _, declared)) &&
+  guard composer_set_out.val is Some((draft, _, declared)) &&
     draft == r.station + ":" + r.session &&
     island is Some(v) else {
     return
   }
   composer_set_out.val = None
-  guard declared() is Some((start, dur)) && dur > 0.0 else {
+  guard declared() is Some((start, dur, ground)) && dur > 0.0 else {
     v.resizes(foot=true) |> ignore
     return
-  }
-  // (the ground's share of its way `t` ms after it set out)
-  let ground = fn(t : Double) -> Double {
-    if t <= 0.0 {
-      return 0.0
-    }
-    if t >= dur {
-      return 1.0
-    }
-    match spec {
-      Tween(ms, ease, delay) =>
-        if t <= delay || ms <= 0.0 {
-          0.0
-        } else {
-          ease.at(if t - delay >= ms { 1.0 } else { (t - delay) / ms })
-        }
-      _ => 1.0 + @ui.move_path(-1.0, 0.0, t, dur).0
-    }
   }
   // (told after it set out: the rest of its way, from where it has got to)
   let since = @ui.tree_cause().unwrap_or(start) - start
   let gone = if since > 0.0 { since } else { 0.0 }
   let left = dur - gone
   guard left > 0.0 else { return }
-  let p0 = ground(gone)
+  let p0 = ground(start + gone)
   v.resizes(
-    spec=(left, fn(f) { if p0 >= 1.0 { 1.0 } else { (ground(gone + f * left) - p0) / (1.0 - p0) } }),
+    spec=(left, fn(f) {
+      if p0 >= 1.0 {
+        1.0
+      } else {
+        (ground(start + gone + f * left) - p0) / (1.0 - p0)
+      }
+    }),
     foot=true,
   )
   |> ignore

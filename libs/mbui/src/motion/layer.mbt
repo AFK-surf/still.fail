@@ -855,6 +855,22 @@ pub fn reshape_way(c : @ui.Ctx, key : String) -> (Double, Double)? {
 }
 
 ///|
+/// How far on its way the ground of the node reshaping as `key` (reshape) is drawn at a moment (0 where it set out, 1
+/// at its shape, a Move's past it on the way): its own way read at that moment (Anim::value_at, the way as it is told,
+/// told again too), the share it is drawn at by a frame then, so that what goes with that ground takes its height from
+/// it in each frame, one way, never a way of its own declared alike. None as reshape_way.
+pub fn reshape_share(c : @ui.Ctx, key : String) -> ((Double) -> Double)? {
+  ignore(c)
+  match mo.recs.get(motion_key(key)) {
+    Some(r) if r.alive && !r.g_carry && r.gp.start >= 0.0 => {
+      let way = r.gp
+      Some(fn(at) { way.value_at(at) })
+    }
+    _ => None
+  }
+}
+
+///|
 /// The frame the measured nodes were last laid out in (after_layout): their records' nodes (Rec's `node`) are that
 /// layout's.
 // kept across runs: said as each frame is laid out
