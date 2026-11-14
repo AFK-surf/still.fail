@@ -602,6 +602,19 @@ fn h_glyph_put(key : Int, x : Int, y : Int) -> Unit {
 }
 
 ///|
+/// The picture of glyph `key`, drawn by the h_glyph asked last, given back into `out` (halo.mbt): false where the host
+/// gives none.
+fn h_glyph_picture(key : Int, out : FixedArray[Byte]) -> Bool {
+  @hostapi.glyph_picture(key, out)
+}
+
+///|
+/// Pixels made here (a halo, halo.mbt) put in the atlas at `x`, `y`: false where the host takes none.
+fn h_atlas_put(x : Int, y : Int, w : Int, h : Int, px : FixedArray[Byte]) -> Bool {
+  @hostapi.atlas_put(x, y, w, h, px)
+}
+
+///|
 fn h_atlas_size(colour : Bool) -> Int {
   @hostapi.atlas_size(colour)
 }

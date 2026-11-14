@@ -74,6 +74,20 @@ fn ffi_glyph(key : Int, out : FixedArray[Double]) -> Unit {
 
 fn ffi_glyph_put(key : Int, x : Int, y : Int) = "mbhost" "mb_host_glyph_put"
 
+fn mbw_mb_host_glyph_picture(key : Int, out : Int) -> Int = "mbhost" "mb_host_glyph_picture"
+
+///|
+fn ffi_glyph_picture(key : Int, out : FixedArray[Byte]) -> Int {
+  mbw_mb_host_glyph_picture(key, @wasmrt.byte_array_addr(out))
+}
+
+fn mbw_mb_host_atlas_put(x : Int, y : Int, w : Int, h : Int, px : Int) -> Int = "mbhost" "mb_host_atlas_put"
+
+///|
+fn ffi_atlas_put(x : Int, y : Int, w : Int, h : Int, px : FixedArray[Byte]) -> Int {
+  mbw_mb_host_atlas_put(x, y, w, h, @wasmrt.byte_array_addr(px))
+}
+
 fn ffi_atlas_size(colour : Int) -> Int = "mbhost" "mb_host_atlas_size"
 
 fn mbw_mb_host_glyphs_ahead(keys : Int, n : Int) = "mbhost" "mb_host_glyphs_ahead"
@@ -769,6 +783,19 @@ fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
 ///|
 fn glyph_put(key : Int, x : Int, y : Int) -> Unit {
   ffi_glyph_put(key, x, y)
+}
+
+///|
+/// The picture of glyph `key` drawn by the `glyph` asked last (win_text.cpp; Apple's, Linux's and Android's hosts give
+/// none yet: no halo drawn there).
+fn glyph_picture(key : Int, out : FixedArray[Byte]) -> Bool {
+  ffi_glyph_picture(key, out) == 1
+}
+
+///|
+/// Pixels made here put in the words' atlas (win_text.cpp; none taken elsewhere yet).
+fn atlas_put(x : Int, y : Int, w : Int, h : Int, px : FixedArray[Byte]) -> Bool {
+  ffi_atlas_put(x, y, w, h, px) == 1
 }
 
 ///|

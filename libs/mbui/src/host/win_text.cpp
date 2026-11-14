@@ -1066,6 +1066,24 @@ extern "C" void mb_host_glyph_put(int32_t key, int32_t x, int32_t y) {
   held_key = -1;
 }
 
+// The picture of the glyph drawn last, as mb_host_glyph_put would put it, copied out (RGBA, a mask's colour its
+// cover): what words' halo is blurred from (src/ui/halo.mbt). 1 when given.
+extern "C" int32_t mb_host_glyph_picture(int32_t key, moonbit_bytes_t out) {
+  if (key != held_key || !held_px) return 0;
+  size_t n = (size_t)held_w * held_h * 4;
+  if ((size_t)Moonbit_array_length(out) < n) return 0;
+  memcpy(out, held_px, n);
+  return 1;
+}
+
+// Pixels made by MoonBit (a halo, RGBA) put in the atlas, their top left at x, y, as a glyph's are. 1 when put.
+extern "C" int32_t mb_host_atlas_put(int32_t x, int32_t y, int32_t w, int32_t h, moonbit_bytes_t px) {
+  if (w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > mb_atlas_size || y + h > mb_atlas_size) return 0;
+  if ((size_t)Moonbit_array_length(px) < (size_t)w * h * 4) return 0;
+  mb_atlas_upload(x, y, w, h, px);
+  return 1;
+}
+
 // ---------------------------------------------------------------------------
 // The platform's own drawing of a line (textref_native.mbt, for src/textdiff): DirectWrite's text layout with its
 // default features (ligatures as any app has them) and the fonts above, drawn by Direct2D into a WIC bitmap with the

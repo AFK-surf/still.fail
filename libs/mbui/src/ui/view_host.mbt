@@ -1758,11 +1758,13 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       stretching.length() == 0 &&
       turn == 0.0 &&
       !ground_drawn.reshaped() &&
-      (c.shadow.2 & 0xFFL) == 0L {
+      (c.shadow.2 & 0xFFL) == 0L &&
+      c.halo.0 <= 0.0 {
       // (wholly outside the clip it is drawn in, where it is drawn (moved, grown, what holds it scrolled): nothing of its own
       // drawn or made, no glyph of its words asked of the host, as the old frame paints nothing of what lies outside its
       // clip where it is drawn (scene.mbt's paint, what is moved carried: draw_carries); not where what it draws may lie
-      // elsewhere than its box: turned, shadowed, its ground drawn in a box of its own (View::ground_drawn), or in what is drawn
+      // elsewhere than its box: turned, shadowed, its words on a halo (View::words_halo), its ground drawn in a box of its
+      // own (View::ground_drawn), or in what is drawn
       // stretched (Android's list at an end, moved after it is drawn). What it holds each looked at where it is.)
       self.ride_spot(c, x, y, s, a, false)
       -1
@@ -2532,6 +2534,8 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
       fn(_, _, _, _, _) {  },
       center_in~,
     )
+    // (the halo they are drawn on, over their grounds, under them: View::words_halo, halo.mbt)
+    let halo_at = self.halo_start(c.halo.0, c.halo.1)
     self.emit_rich_glyphs(
       r,
       lay,
@@ -2544,6 +2548,7 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
       unplaced=glyphs,
       center_in~,
     )
+    self.halo_fill(halo_at, c.halo.0)
     self.paint_run_lines(r, lay, 0.0, 0.0, colors, 1.0, center_in~)
     // (past its box where it says so, View::ellipsis_past: as its plain words, below)
     if over && lay.w > c.w + 0.5 && !c.ellipsis_past {
@@ -2564,9 +2569,13 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
     } else {
       tl
     }
+    // (the halo they are drawn on, under them, not cut with them where they are cut short: View::words_halo,
+    // halo.mbt)
+    let halo_at = self.halo_start(c.halo.0, c.halo.1)
     let from = self.ninst - start
     // (each line in the middle of its width where it says so, as an old view's centred words: Ctx::text's `center`)
     self.emit_text(tl, 0.0, 0.0, c.ink, 1.0, unplaced=glyphs, center_in=if c.words_center { c.w } else { -1.0 })
+    self.halo_fill(halo_at, c.halo.0)
     // (cut short to less than its ellipsis: no further than its box, as an old view's line is in the box that clips it;
     // or, said so, its ellipsis drawn past it as an old view's words cut short (`w=Cut`) are: View::ellipsis_past)
     if !k.wrap && tl.w > c.w + 0.5 && !c.ellipsis_past {

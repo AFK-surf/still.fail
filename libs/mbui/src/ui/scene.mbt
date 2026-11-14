@@ -1209,6 +1209,8 @@ fn Ctx::emit_text(
       Some(u) => u.push((self.ninst, ox + dx + tl.xs[c] + s.pad + g.ox / z, top + tl.ascent, g.oy / z, gx - set_x, gy - set_y))
       None => ()
     }
+    // (its halo's, where its words have one: halo.mbt)
+    halo_told(self.ninst, key)
     glyph_pushing.val = true
     self.push_inst(
       gx,

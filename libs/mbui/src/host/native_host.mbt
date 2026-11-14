@@ -268,6 +268,16 @@ impl @hostapi.Host for Native with glyph_put(_, key, x, y) {
 }
 
 ///|
+impl @hostapi.Host for Native with glyph_picture(_, key, out) {
+  glyph_picture(key, out)
+}
+
+///|
+impl @hostapi.Host for Native with atlas_put(_, x, y, w, h, px) {
+  atlas_put(x, y, w, h, px)
+}
+
+///|
 impl @hostapi.Host for Native with atlas_size(_, colour) {
   atlas_size(colour)
 }

@@ -154,6 +154,8 @@ fn text_arrive() -> Unit {
     let first = text_cache.generation < 0
     text_cache.generation = g
     glyphs_forget()
+    // (and the halos blurred of them: their pictures are of the glyphs drawn before, halo.mbt)
+    halos_forget()
     // (and the frame drawn whole: its glyphs drawn again where they were, the same numbers, other pixels: hostcall.mbt
     // `presented`)
     presented.forget()

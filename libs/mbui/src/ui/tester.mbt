@@ -134,6 +134,10 @@ fn reset_globals() -> Unit {
   text_cache.fonts.clear()
   text_cache.metrics.clear()
   glyphs_forget()
+  halos_forget()
+  halos.none = false
+  halos.blurred = 0
+  halos.put = 0
   text_cache.generation = -1
   text_cache.frame = 0
   text_cache.thinned = -1
