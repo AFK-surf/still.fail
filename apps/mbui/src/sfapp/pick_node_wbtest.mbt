@@ -127,7 +127,8 @@ test "pick, long, 大屏 keyboard and mouse: 30 choices, its list no taller than
 test "pick, short, with no search though long: a menu of its choices, no search; Down, Enter: c1" {
   let chosen = Ref("")
   let t = pick_at_point(@sf.pick_search_from + 4, chosen, search=false)
-  let no_field = t.find("搜索") is None
+  // (its own field's words alone: the lists' search under it says 搜索全部内容)
+  let no_field = t.words().iter().all(fn(w) { w.0 != "搜索" })
   t.key(@ui.key_code_down)
   t.key(@ui.key_code_enter)
   t.frame()
