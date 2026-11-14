@@ -1300,7 +1300,7 @@ export class SessionActor {
         : null;
       cards.set(m, { ended: state.ended, current: state.current, special });
     }
-    const text = formatInbound(said, newThreads, names, selves, posts, cards, this.key);
+    const text = formatInbound(said, newThreads, names, selves, posts, cards, this.key, this.now());
     let models: any[];
     for (;;) {
       if (signal.aborted) throw new Error("delivery cancelled");

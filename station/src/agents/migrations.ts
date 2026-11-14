@@ -152,6 +152,7 @@ export const NOTES: [number, string][] = [
   [145, "Retiring a station is switched off for now, while it is fixed after its first use lost files: station_retire start and hand_over are refused and post no card; preview, status, cancel and again answer as before."],
   [146, "chat_create takes preset (one of this station's presets, by name or id), fast and context: with a preset it opens as a person opening it with that preset in the app would, and where the preset names its model nothing of runtime, model, effort, fast or context is given beside it; without one the chat has no preset (skill stillfail-chats)."],
   [147, "The memory (MEMORY.md) and skills are now the same on every station of the workspace, kept level by the stations within seconds of an edit. What is true of one machine alone says which station it is of (「Studio：…」); a line or skill marked [<station>] came from that station before; a *.conflict-<station>.* file beside a skill is a version made at the same time elsewhere: merge it in and delete it."],
+  [148, "Messages and chat history now say sent_at in UTC where the message ID carries its time, or recorded_at for when the station recorded an opaque ID. ts remains the original message ID. A batch of messages also says when it was delivered in UTC."],
 ];
 
 /// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only

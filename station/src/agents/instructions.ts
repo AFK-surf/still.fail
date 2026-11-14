@@ -38,7 +38,7 @@ export async function readMemory(path: string): Promise<string> {
 const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string, station: string) => `You work on this machine for people who write to you from still.fail chats, Slack threads, Feishu chats and Comma Tasks.
 
 Messages:
-- Each message comes as <message via="web|slack|feishu|comma" thread="…" from="…" ts="…">: thread is the conversation to answer in. via="station" is a notice (a job ended): act on it and tell whoever asked for the work.
+- Each message comes as <message via="web|slack|feishu|comma" thread="…" from="…" ts="…">: thread is the conversation to answer in. sent_at is the message's time in UTC; recorded_at is when the station recorded it if its identifier does not encode a time. ts is the original message identifier. A delivery says when it was handed to you in UTC. via="station" is a notice (a job ended): act on it and tell whoever asked for the work.
 - One session can hear several threads: answer each in its own. Not every message is for you; other agents are bots: build on their work and mention them when you need something.
 - before="TS" means it was written before your post TS, without seeing it.
 - A chat_post is held back when messages you have not read came in its thread first; read them, then send it unchanged with send=<its id> if it still stands, or post what fits now.
@@ -216,10 +216,21 @@ const via = (surface: string) => (surface === STILLFAIL_SURFACE ? "web" : surfac
 /// The still.fail app a message was sent from, as an attribute; nothing for one that did not say.
 const clientAttr = (m: MessageRow) => (m.client !== null && m.client !== undefined ? ` client="${escapeAttr(m.client)}"` : "");
 
+/// Numeric message IDs from Slack and the app are seconds since the epoch. Feishu IDs, for example, are opaque:
+/// for those only the time the station recorded the message is known (which can be later than it was sent).
+function timeAttr(m: MessageRow): string {
+  const numeric = /^\d{10}(?:\.\d+)?$/.test(m.ts) ? Number(m.ts) * 1000 : NaN;
+  const sent = Number.isFinite(numeric) && numeric <= 8.64e15 ? numeric : null;
+  const recorded = Number.isFinite(m.createdAt) && m.createdAt > 0 && m.createdAt <= 8.64e15 ? m.createdAt : null;
+  const at = sent ?? recorded;
+  return at === null ? "" : ` ${sent === null ? "recorded_at" : "sent_at"}="${new Date(at).toISOString()}"`;
+}
+
 /// Messages handed to a session, each with its source and sender, and a hint where a thread is new to it.
 /// `posts`: the agent's first post in a message's thread made after it (by ts), said as its `before`.
-export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map(), cards: Map<PendingMessage, { ended: Pick<MessageRow, "author" | "ts">; current: Pick<MessageRow, "ts"> | null; special: string | null }> = new Map(), selfKey = ""): string {
+export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map(), cards: Map<PendingMessage, { ended: Pick<MessageRow, "author" | "ts">; current: Pick<MessageRow, "ts"> | null; special: string | null }> = new Map(), selfKey = "", now?: number): string {
   const lines: string[] = [];
+  if (messages.length > 0 && now !== undefined) lines.push(`[Messages delivered at ${new Date(now).toISOString()} (UTC)]`);
   const hinted = new Set<number>();
   for (const p of messages) {
     const m = p.message;
@@ -237,7 +248,7 @@ export function formatInbound(messages: PendingMessage[], newThreads: Set<number
     const from = agent ? (name ?? "another agent") : name !== undefined ? `${name} (${m.author})` : m.author;
     const post = posts.get(p);
     const sentBefore = post !== undefined ? ` before="${escapeAttr(post)}"` : "";
-    lines.push(`<message via="${via(p.surface)}" connect="${escapeAttr(p.connect)}"${you} thread="${address}" from="${escapeAttr(from)}"${agent ? " bot" : ""}${clientAttr(m)} ts="${m.ts}"${sentBefore}>\n${messageForAgent(m)}\n</message>`);
+    lines.push(`<message via="${via(p.surface)}" connect="${escapeAttr(p.connect)}"${you} thread="${address}"${timeAttr(m)} from="${escapeAttr(from)}"${agent ? " bot" : ""}${clientAttr(m)} ts="${m.ts}"${sentBefore}>\n${messageForAgent(m)}\n</message>`);
     const change = cards.get(p);
     if (change !== undefined) {
       const whose = change.ended.author === selfKey ? "Your card" : "A card";
@@ -311,7 +322,7 @@ export function formatHistory(messages: MessageRow[], surface: string, address: 
         const chose = found.chose === undefined ? "" : `; ${found.chose.by} chose ${JSON.stringify(found.chose.option)}, which closed it without a message`;
         card = `\n[Answer card: ${found.pending ? "pending" : "no longer pending"}${chose}; ${JSON.stringify(facts)}]`;
       }
-      return `<message via="${via(surface)}" thread="${address}" from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}${card}\n</message>`;
+      return `<message via="${via(surface)}" thread="${address}"${timeAttr(m)} from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}${card}\n</message>`;
     })
     .join("\n");
 }

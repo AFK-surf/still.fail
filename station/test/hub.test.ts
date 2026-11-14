@@ -47,8 +47,7 @@ test("a mention starts a session and prompts the runtime with the message", asyn
   const session = r.claude.last();
   assert.equal(session.prompts.length, 1);
   // What the agent is called there comes with the message (the connect's bot and its mention).
-  const expected = `<message via="slack" connect="cl" you="ember (<@UBOT>)" thread="C1/${m.ts}" from="U1" ts="${m.ts}">\n<@UBOT> fix the build\n</message>`;
-  assert.ok(session.prompts[0]!.includes(expected), session.prompts[0]);
+  assert.ok(matches(session.prompts[0]!, [`<message via="slack" connect="cl" you="ember (<@UBOT>)" thread="C1/${m.ts}"`, `from="U1" ts="${m.ts}">\n<@UBOT> fix the build\n</message>`]), session.prompts[0]);
   assert.equal(r.session(sessionKey("cl", "C1", m.threadTs)).runtimeSessionId, session.sessionId);
   assert.ok(session.options.cwd.endsWith("workspace"));
   await r.close();
@@ -1704,7 +1703,7 @@ test("a chat opened on the admin page reaches the session like Slack, and the ag
   sayIn(r.hub, thread.id, "local", "现在进展如何？");
   await settle();
   const prompt = r.claude.last().prompts.at(-1)!;
-  assert.ok(prompt.includes(`<message via="web" connect="ember" thread="CHAT/${thread.threadTs}" from="管理员 (local)"`), prompt);
+  assert.ok(matches(prompt, [`<message via="web" connect="ember" thread="CHAT/${thread.threadTs}"`, `from="管理员 (local)"`]), prompt);
   assert.ok(prompt.includes("现在进展如何"));
   const to = `CHAT/${thread.threadTs}`;
   assert.equal(await r.call(key, "chat_post", { to, text: "快好了", kind: "all_done", done: "答了进展：快好了，没有别的要做" }), `Posted to ${to}, and recorded state all_done.`);
