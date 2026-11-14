@@ -890,10 +890,10 @@ test "settings: a station's network not open yet waits where its line goes (Stat
 ///|
 test "settings: an offline station's picture and line centred across its card's room (StationBody), not over the 10 above it" {
   let t = stations_unread_net()
-  // Maple's room: its load's 20 and 10 over its unseen line, the line's 38
+  // Maple's room: its load's 20 and 10 over its unseen line, the line's 18
   let room = unseen_lines(t)[1] - 30.0
   let (_, said) = t.find("长时间未连接").unwrap()
-  assert_true((said - (room + 34.0)).abs() < 0.5, msg="the line's middle \{said}, the room's \{room + 34.0}")
+  assert_true((said - (room + 24.0)).abs() < 0.5, msg="the line's middle \{said}, the room's \{room + 24.0}")
 }
 
 ///|
@@ -1369,12 +1369,12 @@ let station_press_modes : Array[(String, Array[String])] = [
 ]
 
 ///|
-/// Words 设置 of the made-up station up shows once whole: its login under way's card's, its variables' draft's.
-let station_settings_whole : Array[String] = ["在浏览器里登录", "HTTPS_PROXY=http://127.0.0.1:7890"]
+/// Words 设置 of the made-up station up shows once whole: its software and permissions.
+let station_settings_whole : Array[String] = ["软件与更新", "权限"]
 
 ///|
 /// The choice's own words (what the pressed control answers with), left out of what is compared.
-let station_press_labels : Array[String] = ["概览", "进程", "设置", "软件与设备"]
+let station_press_labels : Array[String] = ["概览", "进程", "设置"]
 
 ///|
 /// Every word drawn now and where (Tester::words, as usage_words_placed), the choice's own left out, none faded out.

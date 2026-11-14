@@ -379,6 +379,10 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   if mode == "keys-dialog" {
     @sfdesk.wide.keys_open.set(true)
   }
+  // a station login link (/w/<ws>/s/<station>/login/<id>) opened in its standalone sheet
+  if mode == "login-link" {
+    open_login("ws1/st1", "login-1")
+  }
 }
 
 ///|

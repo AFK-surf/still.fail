@@ -47,10 +47,10 @@ variant() {
   case "${MBUI_VARIANT:-preview}" in
     preview) id=fail.still.mbui name="still.fail preview" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1\nMBUI_UPDATE_FEED=win/mbui' ;;
     stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail extra='MBUI_OWN=1\nMBUI_UPDATE_FEED=win' ;;
-    beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf dir=stillfail-beta schemes=stillfail-beta extra='MBUI_OWN=1\nMBUI_BETA=1\nMBUI_UPDATE_FEED=win' ;;
+    beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf dir=stillfail-beta schemes=stillfail-beta,stillfail extra='MBUI_OWN=1\nMBUI_BETA=1\nMBUI_UPDATE_FEED=win' ;;
     # monoid's: the same app on monoid's cloud, its station its own (~\.monoid, 「monoid station」: install-windows.ts)
     monoid) id=build.monoid.desktop name=monoid exe=monoid dir=monoid schemes=monoid extra="$MONOID_ENV" ;;
-    monoid-beta) id=build.monoid.desktop.beta name=monoid.zone exe=monoid.zone dir=monoid-beta schemes=monoid-beta extra="$MONOID_ENV\nMBUI_BETA=1" ;;
+    monoid-beta) id=build.monoid.desktop.beta name=monoid.zone exe=monoid.zone dir=monoid-beta schemes=monoid-beta,monoid extra="$MONOID_ENV\nMBUI_BETA=1" ;;
     *) echo "win.sh: MBUI_VARIANT is preview, stable, beta, monoid or monoid-beta, not $MBUI_VARIANT" >&2; return 1 ;;
   esac
 }

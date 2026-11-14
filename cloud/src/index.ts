@@ -299,7 +299,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
  * Android App Links: the app, signed with this certificate, opens https://<its host>/o/… itself, on every host: its
  * manifest says which hosts it opens. Another product's cloud its own apps' (monoid's: build.monoid.android and .beta).
  */
-const assetLinks = () => (cloudProduct().id === "stillfail" ? ["fail.still.android"] : [`${cloudProduct().reverse}.android`, `${cloudProduct().reverse}.android.beta`]).map((package_name) => ({
+const assetLinks = () => (cloudProduct().id === "stillfail" ? ["fail.still.android", "fail.still.android.beta"] : [`${cloudProduct().reverse}.android`, `${cloudProduct().reverse}.android.beta`]).map((package_name) => ({
   relation: ["delegate_permission/common.handle_all_urls"],
   target: {
     namespace: "android_app",

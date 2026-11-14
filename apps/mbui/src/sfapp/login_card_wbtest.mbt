@@ -327,9 +327,7 @@ test "a login card's field keeps in view as the keyboard comes up: under the bar
 }
 
 ///|
-test "a code-pasting login's card in its chat and on its station's page beside it at once: a field each, no fault" {
-  // The agent's post with the login's link, the link opening the station's page beside the chat (kept in its tabs):
-  // the one Field in both faulted, the chat 这部分显示出错了 each time it opened (2026-11-06).
+test "a code-pasting login's card in its chat and in its login sheet at once: a field each, no fault" {
   new_run()
   let base = fixture("chat")
   let pasting = login_of([("step", "open"), ("paste", true), ("url", "https://claude.ai/oauth/authorize")])
@@ -351,22 +349,19 @@ test "a code-pasting login's card in its chat and on its station's page beside i
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
-  // (the station's page as a tab beside the chat: after its files, as the fixture's kept tabs go)
-  @sfbase.open_page(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  open_login("ws1/st1", "login-1")
   t.run_for(@ui.move_most_ms)
-  @settings.mark_login("ws1/st1", "login-1")
-  @sfbase.open_page(Setting(@settings.Route::Station("ws1/st1")))
-  t.run_for(@ui.move_most_ms)
-  assert_eq(side_now({ station: "ws1/st1", session: "s-c1", title: "", station_name: "" }).1, "station:[\"ws1/st1\"]")
+  assert_true(sheet_open())
   assert_true(t.find("这部分显示出错了") is None)
   let fields = t.locate("粘贴登录码")
   assert_eq(fields.length(), 2, msg="\{Repr(fields)}")
-  // what is typed in the one is its own: typed on the station's page
-  let (x, y) = fields.iter().find_first(fn(p) { p.0 > 800.0 }).unwrap()
-  t.tap(x, y)
+  // what is typed in the one is its own: typed in the sheet's card
+  let field = t.get(TextField, label="粘贴登录码")
+  let (fx, fy, fw, fh) = field.rect
+  t.tap(fx + fw / 2.0, fy + fh / 2.0)
   t.type_text("ABC-123")
   t.frame()
-  // (完成 shows once a code is in: on the station's page's card alone)
+  // (完成 shows once a code is in: on the sheet's card alone)
   let done = t.locate("完成")
-  assert_true(done.length() == 1 && done[0].0 > 800.0, msg="\{Repr(done)}")
+  assert_eq(done.length(), 1, msg="\{Repr(done)}")
 }

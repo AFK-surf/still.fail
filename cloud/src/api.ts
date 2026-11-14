@@ -323,9 +323,10 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   }
   if (kind === "invitations" && !target && method === "POST") {
     const email = text("email").trim().toLowerCase() || null;
+    const origin = (onTestChannel.has(request) || header(request, "channel") === "beta" ? betaOrigin(env) : null) ?? env.PUBLIC_ORIGIN;
     return directory(async () => {
       const made = await dir.invite(sub, ws, role(), email);
-      return { ...made, url: `${env.PUBLIC_ORIGIN}/invite#${made.token}` };
+      return { ...made, url: `${origin}/invite#${made.token}` };
     });
   }
   // The bug reports from the workspace's chats the team replied on, with the replies, for its members' apps to show in

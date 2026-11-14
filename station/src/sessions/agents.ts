@@ -68,6 +68,7 @@ import { rootViewThrough } from "../drive/drive.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import { stationLang, tr, type Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
+import { channelOf } from "../updates/versions.ts";
 import { type Connect, hubConfig } from "./config.ts";
 import type { TailState } from "../read/tail.ts";
 import { followLatestThreadRequests } from "../read/latest-thread-requests.ts";
@@ -88,7 +89,7 @@ import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
 import { readAgentEnvFrom } from "../ops/agent-env.ts";
 import { CardOutcomeWorker } from "../store/card-outbox-worker.ts";
-import { type PageBase, sessionPage } from "./page.ts";
+import { type PageBase, pageOrigin, sessionPage } from "./page.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
@@ -216,7 +217,9 @@ export const AgentsLive = (control: Control) =>
       // In the workspace its chat is in.
       const pages = (): PageBase | null => {
         const s = place();
-        return s && plane.spec().pages ? { origin: s.origin, workspace: s.workspace, station: s.station } : null;
+        return s && plane.spec().pages
+          ? { origin: pageOrigin(s.origin, channelOf(config.raw(), app)), workspace: s.workspace, station: s.station }
+          : null;
       };
       const pageOf = (key: string) => {
         const s = pages();
@@ -503,8 +506,8 @@ export const AgentsLive = (control: Control) =>
       const computer = new Computer({
         hub: screens,
         base: () => {
-          const s = place();
-          return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
+          const s = pages();
+          return s ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
         },
         name: agentName,
       });
@@ -518,13 +521,13 @@ export const AgentsLive = (control: Control) =>
         ...workspaceSizeTools(workspaceWatch, remote),
         ...jobTools(jobs, (key) => store.getSession(key)?.workspace ?? null, hub.places),
         ...screenTools(screens, () => {
-          const s = place();
-          return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
+          const s = pages();
+          return s ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
         }, agentName),
         // What macOS lets still.fail Helper do here, and a grant asked of a person.
         ...permissionTools(grants, () => {
-          const s = place();
-          return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
+          const s = pages();
+          return s ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
         }),
         ...computerTools(computer),
         ...forwardTools(forwards),

@@ -503,7 +503,9 @@ test("hub: a Feishu connect's chat is one session, its threads on the connect's 
     assert.ok(answer.startsWith("Posted to oc_g/om_a"), answer);
     const card = r.fake.calls("POST", "/open-apis/im/v1/messages").map((c) => JSON.parse(c.body.content)).find((c) => JSON.stringify(c).includes("button"));
     assert.deepEqual(card.body.elements.filter((e: Json) => e.tag === "button").map((b: Json) => b.text.content), ["A", "B"]);
-    assert.match(await rig.refused(key, "chat_post", { to: "oc_g/om_a", text: "登录", card: { type: "login", login: "abc" } }), /login card is shown only in still\.fail/);
+    const loginPost = await rig.call(key, "chat_post", { to: "oc_g/om_a", text: "登录 https://app.still.fail/w/ws/s/st/login/abc", card: { type: "login", login: "abc" } });
+    assert.ok(loginPost.startsWith("Posted to oc_g/om_a"), loginPost);
+    assert.deepEqual(rig.store.cardAt(thread.id, rig.store.messagesBefore(thread.id, null, 1)[0]!.ts), { type: "login", login: "abc" });
   } finally {
     await r.close();
     await rig.close();

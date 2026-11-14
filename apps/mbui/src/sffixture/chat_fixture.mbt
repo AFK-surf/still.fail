@@ -705,7 +705,22 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
     // chat-login: the login's page to open in the browser, for one who may (its pill opens it in a tab over the app;
     // what apps/android's MbuiCompareTest pictures beside it)
     // chat-login-station: the same, where the station's own browser can open it too
-    "machineLogins" if f.mode == "chat-login" || f.mode == "chat-login-station" => Some({ "canLogin": true, "canRelay": true })
+    // login-link: a loopback login opened from its Slack link (/w/<ws>/s/<station>/login/<id>) in a standalone sheet
+    "machineLogins" if f.mode == "chat-login" || f.mode == "chat-login-station" || f.mode == "login-link" =>
+      Some({ "canLogin": true, "canRelay": true })
+    "machineLogin" if f.mode == "login-link" =>
+      Some({
+        "id": "login-1",
+        "title": "在 Willow 上登录 gcloud",
+        "state": "browser",
+        "step": "loopback",
+        "url": "https://accounts.google.com/o/oauth2/auth",
+        "domain": "accounts.google.com",
+        "active": true,
+        "browser": true,
+        "browserText": "在 Willow 的浏览器中打开",
+        "statusText": "在浏览器里完成登录",
+      })
     "machineLogin" if f.mode == "chat-login" || f.mode == "chat-login-station" => {
       let l : Map[String, Json] = {
         "id": "login-1",

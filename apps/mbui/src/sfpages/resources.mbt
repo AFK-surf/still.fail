@@ -978,7 +978,7 @@ let rs_foot_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, w=Fu
 ///|
 /// The line (uses: 14 apart, muted, the text's under the pointer).
 // kept across runs: a value (no field of it changes)
-let rs_uses : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter")
+let rs_uses : @ui.Style = @ui.css("row w=Full gap=S3_5 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -12,9 +12,9 @@ test "53-settings-sheet-sinking" {
     f.run_for(@ui.move_most_ms)
     f.tap("=willow")
     f.run_for(@ui.move_most_ms)
-    // (the page under it at its 软件与设备: a sinking sheet is only drawn, a tap where its 保存 is drawn goes to what is
+    // (the page under it at its 设置: a sinking sheet is only drawn, a tap where its 保存 is drawn goes to what is
     // under it, here its versions' words, which take none; the overview has its rows to go to there)
-    f.tap("=软件与设备")
+    f.tap("=设置")
     f.tap("icon:more")
     f.run_to(@sf.presented_rest)
     f.tap("=重命名")

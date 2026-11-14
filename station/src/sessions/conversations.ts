@@ -370,19 +370,15 @@ export async function chatPost(hub: Hub, key: string, args: Args, held: Held = {
   if (store.manuallyArchived(thread.thread.id)) throw new Error(`${threadAddress(thread.thread.channel, thread.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
   const chat = hub.chat(thread.connect);
   // A login card on a platform: its page to open, with a field for the code that page gives or the device code to enter
-  // there; so only for a login of this station at such a step.
+  // there; so only for a login of this station at such a step. Elsewhere the card is still kept in the still.fail chat
+  // (and its 待处理), while the platform message carries the link in its text.
   const page = card?.type === "login" && chat.loginCards === true && card.station === undefined ? (hub.logins?.page(String(card.login)) ?? null) : null;
   const loginHere = page !== null;
-  // (the page goes only into what the platform shows, never into the card the chat keeps)
-  const shown = page !== null ? { ...card, page } : card;
-  if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE && !(chat.cards === true && (card.type === "options" || card.type === "text")) && !loginHere) {
-    throw new Error(
-      card.type === "login" && chat.loginCards === true
-        ? 'a login card is shown here only for a login of this station that gives a device code, or waits for a code from its page (paste: true); otherwise post its link in the text and end with kind "need_human"'
-        : chat.cards === true
-          ? 'a login card is shown only in still.fail chats (CHAT/… or EMBER/…); here post its link in the text and end with kind "need_human"'
-          : 'cards (options, a text field) are not shown here; write the choices or the question in the text and end with kind "need_human"',
-    );
+  // (the page goes only into what the platform shows, never into the card the chat keeps; a login card the platform
+  // cannot show inline is omitted from the platform post while kept in the chat)
+  const shown = loginHere ? { ...card, page } : card?.type === "login" && thread.thread.surface !== STILLFAIL_SURFACE ? null : card;
+  if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE && !(chat.cards === true && (card.type === "options" || card.type === "text")) && card.type !== "login") {
+    throw new Error('cards (options, a text field) are not shown here; write the choices or the question in the text and end with kind "need_human"');
   }
   if (card !== null && text === "") throw new Error("text is required with a card: what it asks and the facts it turns on, so it can be answered from this message alone");
   let about: [number, number, string] | null = null;

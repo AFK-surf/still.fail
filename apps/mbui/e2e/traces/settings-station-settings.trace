@@ -79,18 +79,20 @@
 {"in":{"id":29,"value":{"wait":{"reading":true,"text":"正在从 willow 读取","failing":[],"empty":false},"empty":true,"net":false,"disk":false,"everyMs":0,"tiles":[{"key":"cpu","label":"CPU","value":"0%","sub":"","points":[]},{"key":"memory","label":"内存","value":"0.0 MB","sub":"","points":[]}],"kinds":[{"key":"chats","label":"对话"},{"key":"app","label":"桌面 App"},{"key":"station","label":"Station"}],"groups":[],"stations":[],"notes":[],"basis":"只算这台机器上 still.fail 的桌面 App、station 和 agent 起的进程；几秒就结束的命令可能漏掉一部分。数值来自 macOS 给每个进程记的计数，和活动监视器同源，CPU 以一个核为 100%"}},"w":1794099262470.497}
 {"step":"now tap =设置","w":1794099262831.06}
 {"step":"now tap =设置","acted":true,"w":1794099262831.263}
-{"out":{"id":30,"subscribe":{"topic":"machineLogins","station":"01M6WAAH2DP72DPMV55PP3WSST/d28c82e1eea63a88fe9bac533f8e6fb98ed9260ffae49d7f3f1aa3089c29d98c"},"keyed":true},"w":1794099262847.199}
 {"out":{"id":27,"unsubscribe":true},"w":1794099262847.245}
+{"out":{"id":28,"unsubscribe":true},"w":1794099262847.792}
+{"out":{"id":29,"unsubscribe":true},"w":1794099262847.825}
+{"step":"wheelat 2000 =设置","w":1794099262848.0}
+{"step":"wheelat 2000 =设置","acted":true,"w":1794099262848.1}
+{"step":"tap =Agent 环境变量","w":1794099262848.5}
+{"step":"tap =Agent 环境变量","acted":true,"w":1794099262848.6}
 {"out":{"id":31,"subscribe":{"topic":"agentEnvForm","station":"01M6WAAH2DP72DPMV55PP3WSST/d28c82e1eea63a88fe9bac533f8e6fb98ed9260ffae49d7f3f1aa3089c29d98c","form":"mbui-env-1"},"keyed":true},"w":1794099262849.124}
 {"out":{"id":32,"call":"agentEnv.form.open","params":{"station":"01M6WAAH2DP72DPMV55PP3WSST/d28c82e1eea63a88fe9bac533f8e6fb98ed9260ffae49d7f3f1aa3089c29d98c","form":"mbui-env-1"}},"w":1794099262850.354}
 {"step":"answered agentEnv.form.open","w":1794099262859.772}
-{"out":{"id":28,"unsubscribe":true},"w":1794099262859.792}
-{"out":{"id":29,"unsubscribe":true},"w":1794099262859.825}
-{"in":{"id":30,"value":{"supported":true,"loaded":true,"canLogin":true,"canRelay":true,"logins":[],"tools":[]}},"w":1794099262859.91}
 {"in":{"id":31,"value":null},"w":1794099262859.924}
 {"in":{"id":32,"ok":{"text":"","dirty":false,"pending":false,"lines":[{"parts":[],"problem":null,"error":false}],"errors":0}},"w":1794099262863.156}
-{"step":"wheelat 600 =软件与设备","w":1794099262880.94}
-{"step":"wheelat 600 =软件与设备","acted":true,"w":1794099262881.064}
+{"step":"wheelat 600 =Agent 环境变量","w":1794099262880.94}
+{"step":"wheelat 600 =Agent 环境变量","acted":true,"w":1794099262881.064}
 {"step":"tap HTTPS_PROXY=","w":1794099262898.981}
 {"step":"tap HTTPS_PROXY=","acted":true,"w":1794099262899.111}
 {"step":"type E2E_PROXY_080726=http://127.0.0.1:9","w":1794099262920.747}
@@ -99,16 +101,12 @@
 {"in":{"id":31,"value":{"text":"","dirty":false,"pending":false,"lines":[{"parts":[],"problem":null,"error":false}],"errors":0}},"w":1794099262932.371}
 {"out":{"id":33,"call":"agentEnv.form.edit","params":{"station":"01M6WAAH2DP72DPMV55PP3WSST/d28c82e1eea63a88fe9bac533f8e6fb98ed9260ffae49d7f3f1aa3089c29d98c","form":"mbui-env-1","input":{"text":"E2E_PROXY_080726=http://127.0.0.1:9"}}},"w":1794099262946.907}
 {"in":{"id":33,"ok":{"text":"E2E_PROXY_080726=http://127.0.0.1:9","dirty":true,"pending":false,"lines":[{"parts":[{"kind":"name","text":"E2E_PROXY_080726"},{"kind":"other","text":"="},{"kind":"value","text":"http://127.0.0.1:9"}],"problem":null,"error":false}],"errors":0}},"w":1794099262964.497}
-{"out":{"id":30,"unsubscribe":true},"w":1794099262968.791}
-{"out":{"id":34,"subscribe":{"topic":"memberships","station":"01M6WAAH2DP72DPMV55PP3WSST/d28c82e1eea63a88fe9bac533f8e6fb98ed9260ffae49d7f3f1aa3089c29d98c"},"keyed":true},"w":1794099263013.176}
 {"in":{"id":31,"delta":[{"path":["dirty"],"set":true},{"path":["lines",0,"parts"],"append":[{"kind":"name","text":"E2E_PROXY_080726"},{"kind":"other","text":"="},{"kind":"value","text":"http://127.0.0.1:9"}]},{"path":["text"],"set":"E2E_PROXY_080726=http://127.0.0.1:9"}]},"w":1794099263030.296}
-{"in":{"id":34,"value":{"manages":true,"loading":true,"canJoin":false,"workspaces":[]}},"w":1794099263030.353}
 {"step":"until =取消","w":1794099263047.447}
 {"step":"tap =保存","w":1794099263047.471}
 {"step":"tap =保存","acted":true,"w":1794099263047.61}
 {"out":{"id":35,"call":"agentEnv.form.save","params":{"station":"01M6WAAH2DP72DPMV55PP3WSST/d28c82e1eea63a88fe9bac533f8e6fb98ed9260ffae49d7f3f1aa3089c29d98c","form":"mbui-env-1"}},"w":1794099263063.304}
 {"step":"answered agentEnv.form.save","w":1794099263064.061}
-{"in":{"id":34,"value":{"manages":true,"loading":false,"canJoin":true,"workspaces":[{"workspace":"01M6WAAH2DP72DPMV55PP3WSST","name":"Dev","stationName":"willow","home":true,"here":true,"line":"主 workspace"}]}},"w":1794099263074.489}
 {"in":{"id":11,"value":{"doing":[{"call":"agentEnv.form.save","params":{"station":"01M6WAAH2DP72DPMV55PP3WSST/d28c82e1eea63a88fe9bac533f8e6fb98ed9260ffae49d7f3f1aa3089c29d98c","form":"mbui-env-1"},"since":1794099263063,"stage":"running"}]}},"w":1794099263075.116}
 {"in":{"id":31,"delta":[{"path":["pending"],"set":true}]},"w":1794099263075.428}
 {"in":{"id":35,"ok":{"env":[{"key":"E2E_PROXY_080726","value":"http://127.0.0.1:9","secret":false}]}},"w":1794099263096.368}
@@ -140,18 +138,11 @@
 {"in":{"id":22,"delta":[{"path":[],"key":["station"],"patch":"01M6WAAH2DP72DPMV55PP3WSST/d28c82e1eea63a88fe9bac533f8e6fb98ed9260ffae49d7f3f1aa3089c29d98c","ops":[{"path":["overview","agentEnv"],"set":[]}]}]},"w":1794099266203.557}
 {"step":"wait 100","w":1794099268648.204}
 {"step":"now gone =取消","w":1794099268766.154}
-{"step":"wheelat -1200 =保存","w":1794099268766.258}
-{"step":"wheelat -1200 =保存","acted":true,"w":1794099268766.413}
-{"step":"tap =软件与设备","w":1794099268782.236}
-{"out":{"id":34,"unsubscribe":true},"w":1794099268801.329}
-{"out":{"id":38,"subscribe":{"topic":"machineLogins","station":"01M6WAAH2DP72DPMV55PP3WSST/d28c82e1eea63a88fe9bac533f8e6fb98ed9260ffae49d7f3f1aa3089c29d98c"},"keyed":true},"w":1794099268830.085}
-{"step":"tap =软件与设备","acted":true,"w":1794099268833.614}
-{"in":{"id":38,"value":{"supported":true,"loaded":true,"canLogin":true,"canRelay":true,"logins":[],"tools":[]}},"w":1794099268833.713}
-{"step":"wheelat 2000 =软件与更新","w":1794099268859.403}
-{"step":"wheelat 2000 =软件与更新","acted":true,"w":1794099268859.505}
-{"out":{"id":38,"unsubscribe":true},"w":1794099268859.531}
+{"step":"tap =Agent 环境变量","w":1794099268782.236}
+{"step":"tap =Agent 环境变量","acted":true,"w":1794099268782.4}
+{"out":{"id":31,"unsubscribe":true},"w":1794099268801.329}
+{"step":"until =检查更新","w":1794099268870.6}
 {"step":"tap =检查更新","w":1794099268870.682}
-{"out":{"id":31,"unsubscribe":true},"w":1794099268870.716}
 {"step":"tap =检查更新","acted":true,"w":1794099268949.349}
 {"out":{"id":39,"call":"software.check","params":{"station":"01M6WAAH2DP72DPMV55PP3WSST/d28c82e1eea63a88fe9bac533f8e6fb98ed9260ffae49d7f3f1aa3089c29d98c"}},"w":1794099268963.398}
 {"step":"# flow complete","w":1794099268964.275}

@@ -254,14 +254,24 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
         }
       }
     }
-    // a station's 共享调试, as its agent links it: 共享调试's one page, that station's step first; a login
-    // an agent started on a station: its card on the station's page, marked, brought into view
-    "adbShare" | "login" => {
-      if t.station == "" || (t.opens == "login" && t.login == "") {
+    // a login an agent started on a station (/w/<ws>/s/<station>/login/<id>): its card in a sheet over the page in view
+    "login" => {
+      if t.station == "" || t.login == "" {
         return false
       }
-      let route : @settings.Route = if t.opens == "login" { Station(address) } else { AdbShare(address) }
-      if t.opens == "adbShare" && app.nav.top() == Setting(route) {
+      if ws != current {
+        pick_workspace(src, ws)
+      }
+      (shell.val.open_login)(address, t.login)
+      return true
+    }
+    // a station's 共享调试, as its agent links it: 共享调试's one page, that station's step first
+    "adbShare" => {
+      if t.station == "" {
+        return false
+      }
+      let route : @settings.Route = AdbShare(address)
+      if app.nav.top() == Setting(route) {
         if outside {
           bring_chosen()
         }
@@ -277,9 +287,6 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
         if app.nav.top() != Home {
           app.nav.replace(Home)
         }
-      }
-      if t.opens == "login" {
-        @settings.mark_login(address, t.login)
       }
       open_page(Setting(route))
     }

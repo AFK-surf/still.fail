@@ -30,7 +30,7 @@ export const VaultLive = Layer.effectDiscard(
     const parts = yield* Parts;
     const plane = yield* ControlPlane;
     const cloud = plane.state;
-    const { hub, remote, cardOutcomes } = yield* Agents;
+    const { hub, remote, cardOutcomes, pages } = yield* Agents;
     // A workspace's lock: the home workspace's is the station's own (null), another's by its id.
     const lock = (ws: string | null) => cloud.locked(ws === null || ws === cloud.home() ? null : ws)?.state ?? null;
     const vaults = vaultStore(store.db);
@@ -74,8 +74,8 @@ export const VaultLive = Layer.effectDiscard(
       backfill: { previousGone: previous.exited, priority: store.backfillPriority },
       workspace: (session) => store.sessionWs(session) ?? cloud.home(),
       screenLink: (tab) => {
-        const s = cloud.state;
-        return s && s.workspace && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}/screen/${encodeURIComponent(`browser:${tab}`)}` : null;
+        const s = pages();
+        return s ? `${s.origin}/w/${s.workspace}/s/${s.station}/screen/${encodeURIComponent(`browser:${tab}`)}` : null;
       },
       browser: {
         tabs: (session) => browsers.tabs(session),

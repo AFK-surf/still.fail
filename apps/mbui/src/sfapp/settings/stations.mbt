@@ -219,8 +219,8 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
       // the boxes of what runs low; not read yet, grey bars over their room
       c.box(style=@sf.full_width, fn() {
         c.box(style=seen(peek_meters, host is Some(_), faded), fn() {
-          let low = items(host, "meters").filter(fn(m) { text(Some(m), "level") != "ok" })
-          @sf.meter_line(c, low, key="station-body/" + text(s, "station"))
+          let meters = items(host, "meters")
+          @sf.meter_line(c, meters, key="station-body/" + text(s, "station"))
         })
         |> ignore
         if online && host is None && !unreadable(s) {
@@ -356,11 +356,11 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
         ]),
       )
   }
-  c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
-    c.box(w=Fill(1.0), gap=2.0, fn() {
-      // (short of room, how it is reached and what its latency is called are cut short; the figures are not)
-      c.box(dir=Row, gap=8.0, align=ACenter, fn() {
-        c.text(text(n, "path"), size=t.t.meta, color=t.p.muted, wrap=false, line=18.0, w=Cut) |> ignore
+  c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, justify=JBetween, flow=true, line_gap=2.0, fn() {
+    c.box(dir=Row, w=Cut, gap=6.0, align=ACenter, fn() {
+      // (short of room, what its latency is called is cut short; how it is reached and the figures are not)
+      c.box(dir=Row, gap=6.0, align=ACenter, fn() {
+        c.text(text(n, "path"), size=t.t.meta, color=t.p.muted, wrap=false, line=18.0) |> ignore
         match field(n, "loss") {
           Some(Object(_)) as l =>
             c.text(text(l, "text"), size=@sf.theme().t.meta, weight=500, color=tone(l), wrap=false, line=18.0) |> ignore
@@ -370,7 +370,8 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
       |> ignore
       match field(n, "rtt") {
         Some(Object(_)) as r =>
-          c.box(dir=Row, align=ACenter, fn() {
+          c.box(dir=Row, w=Cut, gap=4.0, align=ACenter, fn() {
+            c.text("·", size=t.t.meta, color=t.p.muted, wrap=false, line=18.0) |> ignore
             c.text(tr("android-settings.stations.rtt"), size=t.t.meta, color=t.p.muted, wrap=false, line=18.0, w=Cut) |> ignore
             c.text(text(r, "text"), size=@sf.theme().t.meta, weight=500, color=tone(r), wrap=false, line=18.0) |> ignore
           })
@@ -379,24 +380,11 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
       }
     })
     |> ignore
-    c.box(gap=2.0, fn() {
-      for way in [("↑", "up", "upTotal"), ("↓", "down", "downTotal")] {
-        c.box(dir=Row, align=ACenter, fn() {
+    c.box(dir=Row, gap=10.0, align=ACenter, fn() {
+      for way in [("↑", "up"), ("↓", "down")] {
+        c.box(dir=Row, gap=4.0, align=ACenter, fn() {
           c.text(way.0, size=t.t.meta, color=t.p.muted, wrap=false, line=18.0) |> ignore
-          // (5 before it, then 68 for it: Stations.kt padding(start = 5.dp).width(68.dp))
-          c.box(w=Px(73.0), pl=5.0, fn() {
-            c.text(text(n, way.1), size=t.t.meta, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
-          })
-          |> ignore
-          match opt_text(n, way.2) {
-            Some(total) =>
-              c.box(min_w=60.0, fn() {
-                c.text(fill("android-settings.stations.total", [("total", total)]), size=t.t.meta, color=t.p.muted, wrap=false, line=18.0)
-                |> ignore
-              })
-              |> ignore
-            None => ()
-          }
+          c.text(text(n, way.1), size=t.t.meta, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
         })
         |> ignore
       }

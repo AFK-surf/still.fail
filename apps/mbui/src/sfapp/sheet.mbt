@@ -13,6 +13,8 @@ priv enum SheetKind {
   ShareSheet
   /// what an invitation's link leads to, before it is accepted: half the screen
   InviteLink
+  /// a station's login opened from its link (/w/<ws>/s/<station>/login/<id>): as tall as its card
+  LoginLink
 }
 
 ///|
@@ -21,6 +23,7 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
   match kind {
     ShareSheet => (0.0, false)
     InviteLink => (0.5, false)
+    LoginLink => (0.0, false)
     NoSheet => (0.5, false)
   }
 }
@@ -45,14 +48,18 @@ let sheet_drawer : Ref[(SheetKind) -> Unit] = Ref(fn(_) {  })
 /// Opens `kind` (in place of one open), by what opened it: the library's panel (@sf.panel), as tall as its share of
 /// the window (a sheet with a finger, beside `from` or in the middle of the window with a mouse). What was typed lets
 /// go of the keyboard first.
-fn raise_sheet(kind : SheetKind, from? : @sf.Anchor = Unanchored) -> Unit {
+fn raise_sheet(
+  kind : SheetKind,
+  from? : @sf.Anchor = Unanchored,
+  title? : String = "",
+) -> Unit {
   lower_sheet()
   let s = sheet_host
   s.kind = kind
   let (share, draggable) = sheet_spec(kind)
   @sf.panel(
-    // (each draws its own head: what is shared, an invitation)
-    "",
+    // (ShareSheet and InviteLink draw their own head; LoginLink gives its title)
+    title,
     fn(_, _) { (sheet_drawer.val)(kind) },
     from~,
     tall=share,

@@ -53,7 +53,7 @@ test("each host's old name serves the same: static sites, the API, the relay, th
     // Both apps' App Links, on both hosts.
     for (const fetch of [h.fetch, (path: string) => h.fetchOld("main", path)]) {
       const links = (await (await fetch("/.well-known/assetlinks.json")).json()) as { target: { package_name: string } }[];
-      assert.deepEqual(links.map((l) => l.target.package_name), ["fail.still.android"]);
+      assert.deepEqual(links.map((l) => l.target.package_name), ["fail.still.android", "fail.still.android.beta"]);
     }
     // Still no wildcard.
     assert.equal((await h.fetchWorker("api", "https://other.relay.example/v1/me", { headers: { authorization: `Bearer ${tokens.access_token}` } })).status, 421);

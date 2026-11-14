@@ -2,7 +2,7 @@
 // menu, a chat's sheet, an agent's history.
 
 ///|
-/// The cloud's address, for a chat's link (the app's MBUI_CLOUD, else still.fail's own).
+/// The cloud's address, for API calls (the app's MBUI_CLOUD, else still.fail's own).
 pub fn cloud_origin() -> String {
   match @ui.env("MBUI_CLOUD") {
     "" => "https://app.still.fail"
@@ -11,12 +11,28 @@ pub fn cloud_origin() -> String {
 }
 
 ///|
+/// The cloud's address for links this build gives out: on the test channel's own app (youdid.wtf, monoid.zone:
+/// MBUI_BETA=1 and MBUI_OWN=1), its own host so opening a link opens the test app.
+pub fn link_origin() -> String {
+  let cloud = cloud_origin()
+  if @ui.env("MBUI_BETA") == "1" && @ui.env("MBUI_OWN") == "1" {
+    if cloud == "https://app.still.fail" {
+      return "https://app.youdid.wtf"
+    }
+    if cloud == "https://app.monoid.build" {
+      return "https://app.monoid.zone"
+    }
+  }
+  cloud
+}
+
+///|
 /// A chat's still.fail link: <cloud>/o/<workspace>/<station>/<session>; "" for a station of no
 /// workspace or a chat with no session yet.
 pub fn chat_link(station : String, session : String) -> String {
   match station.find("/") {
     Some(at) if at > 0 && at < station.length() - 1 && session != "" => {
-      let cloud = cloud_origin()
+      let cloud = link_origin()
       let base = if cloud.has_suffix("/") {
         cloud.exact_view(end=cloud.length() - 1).to_owned()
       } else {

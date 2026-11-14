@@ -68,9 +68,10 @@
                  Notices keeps the link for the app (@hostapi.link_opened), which asks the core what it opens (src/sfapp/links.mbt). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.action.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="${appHost}" android:pathPrefix="/o/" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPrefix="/o/" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPrefix="/o/" />
             </intent-filter>
             <!-- An invitation's link (/invite#<token>), a chat's link as chats refer to each other (/w/<ws>/s/<station>/chats/<key>),
@@ -85,6 +86,11 @@
                 <data android:scheme="https" android:host="${appHost}" android:pathPattern="/w/.*/s/.*/adb" />
                 <data android:scheme="https" android:host="${appHost}" android:pathPattern="/w/.*/s/.*/screen/.*" />
                 <data android:scheme="https" android:host="${appHost}" android:pathPattern="/w/.*/s/.*/login/.*" />
+                <data android:scheme="https" android:host="app.still.fail" android:path="/invite" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/chats/.*" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/adb" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/screen/.*" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/login/.*" />
                 <data android:scheme="https" android:host="ember.3720.org" android:path="/invite" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/chats/.*" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/adb" />

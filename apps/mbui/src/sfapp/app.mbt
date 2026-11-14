@@ -124,6 +124,7 @@ fn reset() -> Unit {
   ask_turns.clear()
   wide_reset()
   invite_reset()
+  login_link_reset()
   // the library as a run begins (what is presented, the menus open, a group's and a page's rows, the viewers: the texts
   // read, the films played, the reader's layout; the system's bars): this is the moment the run begins where it is said
   // by hand (sf's run_begins.mbt)
@@ -155,6 +156,7 @@ fn pages_shell(src : Source, wide : Bool) -> Shell {
     home,
     close_overlays,
     open_invite,
+    open_login,
     behind: peeks_stop_all,
     open: fn(p) { open_where(src, p) },
     open_over: fn(p) { open_over_where(src, p) },

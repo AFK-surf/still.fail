@@ -9,6 +9,8 @@ pub(all) struct Shell {
   close_overlays : () -> Unit
   /// an invitation's link opened: what it leads to shown, before it is accepted (its token)
   open_invite : (String) -> Unit
+  /// a station login's link opened (/w/<ws>/s/<station>/login/<id>): its card in a sheet (station, login)
+  open_login : (String, String) -> Unit
   /// the app gone behind, between frames (what lives only while it is shown let go)
   behind : (Source) -> Unit
   /// a page opened where the layout has it (the pane table): what pages, links and the app's
@@ -49,6 +51,7 @@ pub fn bare_shell() -> Shell {
     home: nav_home,
     close_overlays: fn() { app.menu = false },
     open_invite: fn(_) {  },
+    open_login: fn(_, _) {  },
     behind: fn(_) {  },
     open: stack_open,
     open_over: stack_open,

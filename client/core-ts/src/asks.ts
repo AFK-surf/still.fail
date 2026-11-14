@@ -18,8 +18,10 @@ import { fromUtf8, hex, isObject, parseJson, sha256, toJsonBytes, utf8 } from ".
 // deno-lint-ignore no-explicit-any
 type J = any;
 
-/// still.fail cloud under its names: the released app's, the test channel's (youdid.wtf), ember's from before the rename.
+/// still.fail cloud under its names: the released app's, the test channel's (youdid.wtf), ember's from before the rename,
+/// and monoid's (app.monoid.build, app.monoid.zone).
 const CLOUD_HOSTS = ["app.still.fail", "app.youdid.wtf", "ember.3720.org"];
+const MONOID_HOSTS = ["app.monoid.build", "app.monoid.zone"];
 const PICTURES = 256;
 /// A picture that could not be fetched is not asked for again for this long: a Google account's, where Google cannot be
 /// reached, waited 15 s each time it was drawn, about half of a phone's.
@@ -413,7 +415,10 @@ export function linkTarget(url: string, origin: string): J {
   const o = splitUrl(origin);
   if (u === null || o === null) return null;
   const same = u.scheme === o.scheme && u.host === o.host && u.port === o.port;
-  const sameCloud = CLOUD_HOSTS.includes(o.host) && u.scheme === "https" && CLOUD_HOSTS.includes(u.host) && u.port === null;
+  const sameCloud = u.scheme === "https" && u.port === null && (
+    (CLOUD_HOSTS.includes(o.host) && CLOUD_HOSTS.includes(u.host)) ||
+    (MONOID_HOSTS.includes(o.host) && MONOID_HOSTS.includes(u.host))
+  );
   if (!(same || sameCloud)) return null;
   const s = u.segments;
   if (s.length === 1 && s[0] === "invite" && u.fragment !== "") return { opens: "invite", token: u.fragment };

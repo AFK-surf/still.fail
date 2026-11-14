@@ -634,7 +634,7 @@ pub fn fixture_page(mode : String) -> String {
       up("", "settings/station/ws1/st1", 0)
     }
     "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" => {
-      station_parts["ws1/st1"] = "machine"
+      station_parts["ws1/st1"] = "settings"
       fx_station_update_failed.val = m == "settings-station-update-failed"
       fx_station_updated.val = m == "settings-station-updated"
       up("", "settings/station/ws1/st1", 0)

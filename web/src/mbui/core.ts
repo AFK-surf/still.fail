@@ -219,12 +219,30 @@ navigator.serviceWorker?.addEventListener("message", (event: MessageEvent) => {
   if (typeof opens === "string") (host() as (MbHost & MbHostPush) | undefined)?.noticeTapped(opens);
 });
 
-/// The page's address as a link the app was opened with (mbui's system channel, `{"link": url}`: a chat's
-/// /w/…/chats/… or /o/… page, as the app takes one the system opens it with), as it loads and as the browser goes back
-/// or forward to another; the app's own page names nothing.
-function tellLink(): void {
-  if (location.pathname === "/" || location.pathname === "/mbui.html" || location.pathname === "/mbui" || location.pathname === "/share") return;
-  host()?.post("system", JSON.stringify({ link: location.href }));
+/// The desktop app's URL scheme for this page's host (mac-app.sh, win.sh): `stillfail-beta` on `app.youdid.wtf`,
+/// `monoid-beta` on `app.monoid.zone`, `monoid` on `app.monoid.build`, `stillfail` on `app.still.fail`.
+function appScheme(): string {
+  const monoid = location.hostname.includes("monoid.");
+  return `${monoid ? "monoid" : "stillfail"}${BETA ? "-beta" : ""}`;
 }
-tellLink();
-addEventListener("popstate", tellLink);
+
+/// The page's address as a link the app was opened with (mbui's system channel, `{"link": url}`: a chat's
+/// /w/…/chats/… or /o/… page, or /w/…/login/…, as the app takes one the system opens it with), as it loads and as the
+/// browser goes back or forward to another; the app's own page names nothing. On initial load in a desktop browser,
+/// also hands the link to the desktop app via its URL scheme (`stillfail://…`, `stillfail-beta://…`) so a link clicked
+/// in Slack or another app opens the installed desktop app (and `youdid.wtf` when it is the one installed).
+function tellLink(initial = false): void {
+  const p = location.pathname;
+  if (p === "/" || p === "/mbui.html" || p === "/mbui" || p === "/share") return;
+  host()?.post("system", JSON.stringify({ link: location.href }));
+  if (
+    initial &&
+    !navigator.webdriver &&
+    !/Android|iPhone|iPad/i.test(navigator.userAgent) &&
+    (p.startsWith("/o/") || p.startsWith("/w/") || p === "/invite")
+  ) {
+    location.assign(`${appScheme()}://${p.slice(1)}${location.search}${location.hash}`);
+  }
+}
+tellLink(true);
+addEventListener("popstate", () => tellLink(false));
