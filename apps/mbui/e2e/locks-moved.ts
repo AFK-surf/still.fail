@@ -183,7 +183,7 @@ try {
   });
   await must("A back on a release that moves it: the chain moves by itself, nobody asked; ivy carried, bound to no log; I still in", async () => {
     const from = [vDev, iDev].map((x) => [x, x.asked()] as const);
-    vDev.build = "0.1.9100";
+    vDev.build = "0.1.9170";
     await vDev.restart();
     await whenChanged([fifthData], () => /^MOVED \S+ on /m.test(threeSays("fifth")) && memberAt(threeSays("fifth"), iDev.sub) === "member" && !personAt(threeSays("fifth"), iDev.sub), 120_000, () => `the first: ${firstSays()}`);
     for (const [x, n] of from) if (x.asked() !== n) throw new Error(`${x.name} asked the person: ${x.askedWhat(n).join("; ")}`);

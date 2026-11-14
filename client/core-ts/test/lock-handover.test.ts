@@ -464,18 +464,17 @@ test("without the host's flag, the device's clock before HAND_OVER_FROM: lock.ha
   assert.equal(on.stations.A.chain(null)?.state?.moved, on.gMe, "with it: handed over");
 });
 
-// Held for now (src/lock-handover.ts `HAND_OVER_HELD`, 2026-11-14): an app's host, which says neither `handOverByTests`
-// nor `handOverAuto`, hands nothing over by itself whatever its clock says, and is offered no `lock.handOver`.
-test("held: on a host not made for tests, past HAND_OVER_FROM, whatever is asked nothing is said, nothing moved, nothing shown, lock.handOver is no call", async () => {
+// An app's own host, which says neither `handOverByTests` nor `handOverAuto` (the hold of 2026-11-14 taken out, what the
+// locks' rounds showed a moved workspace doing wrong mended): past HAND_OVER_FROM its chain is handed over by itself as
+// the lock is read, nothing said in anyone's log and nobody asked.
+test("on a host not made for tests, past HAND_OVER_FROM: handed over by itself as the lock is read, nothing said, nobody asked", async () => {
   const w = await setUp({ flag: false });
-  assert.equal(handOverState(w.inner, "ws"), null, "not handed over by itself here");
-  assert.equal((await w.askGrant()).error, undefined);
   await w.run(read(w.inner, "ws"));
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved, nobody calling lock.handOver");
   assert.deepEqual(w.said(), [], "nothing said");
-  assert.deepEqual(movedAt(w), [null, null]);
-  assert.equal(lockView(w.inner, "ws").upgrade, undefined, "nothing shown");
-  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.handOver", { workspace: "ws" }), catch: (e) => e as CoreError }));
-  assert.equal(out.error?.code, "unknown_call", out.error?.message);
+  assert.equal(w.asked(), 0, "nobody asked");
+  assert.equal(handOverState(w.inner, "ws"), null, "moved");
 });
 
 // A member the chain named unbound, after the move (what an unbound member can do: the lead, 2026-11-14): their first
