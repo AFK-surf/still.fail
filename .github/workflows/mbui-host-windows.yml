@@ -19,6 +19,7 @@ on:
       - "libs/mbui/scripts/win_logs_test.c"
       - "libs/mbui/scripts/win_keys_test.c"
       - "libs/mbui/scripts/win_clip_test.c"
+      - "libs/mbui/scripts/win_sound_test.c"
       - "libs/mbui/src/host/mini_json.h"
       - "apps/mbui/src/host/station_install.h"
       - "apps/mbui/scripts/station_install_test.c"
@@ -65,6 +66,11 @@ jobs:
           mkdir -p out/keys
           cl.exe -nologo -W4 -Isrc/host scripts/win_keys_test.c -Foout/keys/ -Feout/keys/win_keys_test.exe
           out/keys/win_keys_test.exe
+      - name: "A stream's sound plays again after a gap, its reserve comes back, and never waits for more than the app gives (src/host/win_sound.h)"
+        run: |
+          mkdir -p out/sound
+          cl.exe -nologo -W4 -WX -Isrc/host scripts/win_sound_test.c -Foout/sound/ -Feout/sound/win_sound_test.exe
+          out/sound/win_sound_test.exe
       - name: "Pasted screenshots over 8 MiB are attachments, as copied image files are"
         run: |
           mkdir -p out/clip

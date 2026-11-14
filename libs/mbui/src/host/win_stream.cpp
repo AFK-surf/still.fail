@@ -30,11 +30,11 @@
 //
 // A stream's sound (@hostapi.stream_audio, 48 kHz stereo PCM16 in 20 ms packets, the app's and a route's alike): a
 // source voice of XAudio2's of its own (one engine for all), as apple_stream.m's player: started once its reserve is
-// queued (100 ms at first), emptied once more than that and 200 ms are (after a stall in the transport) and as it runs
-// dry (an underrun refills the reserve first); stopped by an empty packet (muted, the stream's sound gone) or as the
-// stream closes. The reserve follows how late packets come: a gap between two longer than it covers makes it that
-// long and a packet more, at most 300 ms (packets of a Mac's sound, each 20 ms by their own clock, came here 50 to
-// 270 ms apart now and then, a busy Mac's: 60 ms ran dry, and each time it did was heard as a crackle).
+// queued (100 ms at first), or once nothing more came for 100 ms with 100 ms or more queued (all the app gives before
+// it plays); emptied once more than the reserve and 200 ms are (after a stall in the transport) and as it runs dry (an
+// underrun refills the reserve first); stopped by an empty packet (muted, the stream's sound gone) or as the stream
+// closes. The reserve follows how late packets come while it plays, up to 300 ms, and comes back down as they come on
+// time: win_sound.h, the rule, and why.
 //
 // A stream's system video layer (@hostapi.stream_layers, a native view of kind 4: win_views.cpp hands its content's
 // visual here, mb_stream_attach): a composition swap chain the size of the frame, in a visual of the views'
@@ -64,6 +64,7 @@
 #include <string.h>
 #include <math.h>
 #include "win.h"
+#include "win_sound.h"
 
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "ole32.lib")
@@ -187,12 +188,12 @@ struct Stream {
   double ptr_w, ptr_h, ptr_hx, ptr_hy, ptr_x, ptr_y;
   int ptr_shown, ptr_new;
   IDCompositionSurface *ptr_surface;
-  // its sound (under sound_lock): its voice, whether it plays, its packets' memory (the voice reads each till played)
+  // its sound (under sound_lock): its voice, whether it is gone, its packets' memory (the voice reads each till played)
   IXAudio2SourceVoice *voice;
-  int sound_playing, sound_gone;
-  // the packets queued before it plays (5 at first: sound_play), and when the last one came (QueryPerformanceCounter)
-  int sound_reserve;
-  LONGLONG sound_at;
+  int sound_gone;
+  // when it plays and its reserve (win_sound.h), and the timer that brings it the moment it asks for (sound_held)
+  SoundPlayer sound;
+  PTP_TIMER sound_timer;
   uint8_t *sound_ring;
   unsigned sound_next;
   // the samples its voices let go of had played (its sound's clock goes on across them: mb_host_stream_audio_played);
@@ -1729,7 +1730,6 @@ void mb_host_stream_show(int32_t id, double ts) {
 #define SOUND_PACKET 3840  // 20 ms: 960 frames of 48 kHz stereo PCM16
 #define SOUND_FRAMES 960
 #define SOUND_RING 32      // packets' memory: the 25 queued at most, the one playing, and room
-#define SOUND_MOST 15      // the largest reserve: 300 ms
 
 static SRWLOCK sound_lock = SRWLOCK_INIT;
 static IXAudio2 *sound_engine;
@@ -1754,6 +1754,57 @@ static int sound_ready(void) {
   return 1;
 }
 
+// the player's clock (win_sound.h): ms, the machine's
+static double sound_now(void) {
+  static LARGE_INTEGER freq;
+  if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+  LARGE_INTEGER now;
+  QueryPerformanceCounter(&now);
+  return (double)now.QuadPart * 1000.0 / (double)freq.QuadPart;
+}
+
+// (under sound_lock) its voice, as win_sound.h's player does to it
+static int voice_queued(void *it) {
+  XAUDIO2_VOICE_STATE st;
+  ((Stream *)it)->voice->GetState(&st, XAUDIO2_VOICE_NOSAMPLESPLAYED);
+  return (int)st.BuffersQueued;
+}
+static int voice_submit(void *it, const uint8_t *packet) {
+  Stream *s = (Stream *)it;
+  uint8_t *slot = s->sound_ring + (size_t)(s->sound_next++ % SOUND_RING) * SOUND_PACKET;
+  memcpy(slot, packet, SOUND_PACKET);
+  XAUDIO2_BUFFER b = {};
+  b.AudioBytes = SOUND_PACKET;
+  b.pAudioData = slot;
+  return SUCCEEDED(s->voice->SubmitSourceBuffer(&b));
+}
+static int voice_start(void *it) { return SUCCEEDED(((Stream *)it)->voice->Start()); }
+static void voice_flush(void *it) {
+  Stream *s = (Stream *)it;
+  s->voice->Stop();
+  s->voice->FlushSourceBuffers();
+}
+static SoundVoice voice_of(Stream *s) {
+  SoundVoice v = {s, voice_queued, voice_submit, voice_start, voice_flush};
+  return v;
+}
+
+// (a pool's thread) the moment its player asked for (nothing more came: what is queued may play)
+static void CALLBACK sound_due(PTP_CALLBACK_INSTANCE inst, void *arg, PTP_TIMER timer) {
+  (void)inst;
+  (void)timer;
+  Stream *s = (Stream *)arg;
+  AcquireSRWLockExclusive(&sound_lock);
+  if (!s->sound_gone && s->voice && !s->sound.playing) {
+    SoundVoice v = voice_of(s);
+    sound_held(&s->sound, &v, sound_now());
+    if (s->sound.playing)
+      fprintf(stderr, "win: stream %d: sound started on the %d ms given, short of its reserve %d ms\n", s->id,
+              voice_queued(s) * 20, s->sound.reserve * 20);
+  }
+  ReleaseSRWLockExclusive(&sound_lock);
+}
+
 // (under sound_lock) its voice let go, what is queued with it
 static void sound_stop(Stream *s) {
   if (s->voice) {
@@ -1764,8 +1815,9 @@ static void sound_stop(Stream *s) {
     s->voice->DestroyVoice();
   }
   s->voice = NULL;
-  s->sound_playing = 0;
-  s->sound_at = 0;
+  sound_stopped(&s->sound);
+  // (a moment it asked for is passed over: sound_due finds no voice, or the count gone on)
+  if (s->sound_timer) SetThreadpoolTimer(s->sound_timer, NULL, 0, 0);
 }
 
 // (under sound_lock) one 20 ms packet played after those queued
@@ -1784,43 +1836,31 @@ static void sound_play(Stream *s, const uint8_t *bytes) {
       return;
     }
     if (!s->sound_ring) s->sound_ring = (uint8_t *)malloc((size_t)SOUND_RING * SOUND_PACKET);
-    s->sound_playing = 0;
+    sound_stopped(&s->sound);
     if (s->sound_volume_set) s->voice->SetVolume(s->sound_volume);
   }
-  if (!s->sound_reserve) s->sound_reserve = 5;
-  // how long since the last packet: a gap longer than the reserve covers makes it that long and a packet more
-  static LARGE_INTEGER freq;
-  if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
-  LARGE_INTEGER now;
-  QueryPerformanceCounter(&now);
-  if (s->sound_at) {
-    int gap = (int)((now.QuadPart - s->sound_at) * 1000 / freq.QuadPart);
-    int need = gap / 20 + 2;
-    // (a gap of a second or more: the sound paused, not late)
-    if (gap < 1000 && need > s->sound_reserve && s->sound_reserve < SOUND_MOST) {
-      s->sound_reserve = need < SOUND_MOST ? need : SOUND_MOST;
-      fprintf(stderr, "win: stream %d: sound %d ms apart, its reserve %d ms\n", s->id, gap, s->sound_reserve * 20);
+  int was = s->sound.reserve;
+  SoundVoice v = voice_of(s);
+  double now = sound_now();
+  double due = sound_packet(&s->sound, &v, bytes, now);
+  if (was && s->sound.reserve > was)
+    fprintf(stderr, "win: stream %d: sound %d ms apart, its reserve %d ms\n", s->id, (int)s->sound.gap,
+            s->sound.reserve * 20);
+  else if (was && s->sound.reserve < was)
+    fprintf(stderr, "win: stream %d: sound calm, its reserve %d ms\n", s->id, s->sound.reserve * 20);
+  if (due > 0) {
+    // (a debounce: what tells that the app gives no more before it plays is only that nothing comes. Its timer made
+    // once, let go as the stream closes)
+    if (!s->sound_timer) s->sound_timer = CreateThreadpoolTimer(sound_due, s, NULL);
+    if (s->sound_timer) {
+      ULARGE_INTEGER rel;
+      rel.QuadPart = (ULONGLONG)(-(LONGLONG)((due - now) * 10000.0));
+      FILETIME ft;
+      ft.dwLowDateTime = rel.LowPart;
+      ft.dwHighDateTime = rel.HighPart;
+      SetThreadpoolTimer(s->sound_timer, &ft, 0, 0);
     }
   }
-  s->sound_at = now.QuadPart;
-  XAUDIO2_VOICE_STATE st;
-  s->voice->GetState(&st, XAUDIO2_VOICE_NOSAMPLESPLAYED);
-  // more than the reserve and 200 ms queued (a stall), or run dry while playing: emptied, the reserve filled again
-  if ((int)st.BuffersQueued >= s->sound_reserve + 10 || (s->sound_playing && st.BuffersQueued == 0)) {
-    s->voice->Stop();
-    s->voice->FlushSourceBuffers();
-    s->sound_playing = 0;
-    st.BuffersQueued = 0;
-  }
-  uint8_t *slot = s->sound_ring + (size_t)(s->sound_next++ % SOUND_RING) * SOUND_PACKET;
-  memcpy(slot, bytes, SOUND_PACKET);
-  XAUDIO2_BUFFER b = {};
-  b.AudioBytes = SOUND_PACKET;
-  b.pAudioData = slot;
-  if (FAILED(s->voice->SubmitSourceBuffer(&b))) return;
-  // started once its reserve is queued
-  if (!s->sound_playing && (int)st.BuffersQueued + 1 >= s->sound_reserve && SUCCEEDED(s->voice->Start()))
-    s->sound_playing = 1;
 }
 
 // (any thread) stream s's packet played, or (empty) its sound stopped
@@ -1840,7 +1880,14 @@ void mb_host_stream_close(int32_t id) {
   sound_stop(s);
   // (its sound's clock set back: only here)
   s->sound_played_before = 0;
+  PTP_TIMER sound_timer = s->sound_timer;
+  s->sound_timer = NULL;
   ReleaseSRWLockExclusive(&sound_lock);
+  // (its timer let go once no call of it runs: one takes sound_lock, so waited for here, outside it)
+  if (sound_timer) {
+    WaitForThreadpoolTimerCallbacks(sound_timer, TRUE);
+    CloseThreadpoolTimer(sound_timer);
+  }
   layer_drop(s);
   if (s->ptr_px) free(s->ptr_px);
   s->ptr_px = NULL;
