@@ -1,6 +1,7 @@
 // Requests whose boxes might need recovery. An old database is filled in bounded batches; future changes keep it current.
 // Keep (ws, id), rather than SQLite rowids: a VACUUM may change rowids in the original table.
 import type { DatabaseSync } from "node:sqlite";
+import { installSchema } from "./schema-install.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_rebox_lookup (
@@ -37,15 +38,7 @@ export const REBOX_BACKFILL_FIRST = "SELECT ws, id FROM vault_requests ORDER BY 
 export const REBOX_BACKFILL_NEXT = "SELECT ws, id FROM vault_requests WHERE (ws, id) > (?, ?) ORDER BY ws, id LIMIT ?";
 
 export function initializeReboxIndex(db: DatabaseSync): void {
-  db.exec("SAVEPOINT vault_rebox_schema");
-  try {
-    db.exec(SCHEMA);
-    db.exec("RELEASE vault_rebox_schema");
-  } catch (error) {
-    db.exec("ROLLBACK TO vault_rebox_schema");
-    db.exec("RELEASE vault_rebox_schema");
-    throw error;
-  }
+  installSchema(db, "vault_rebox_schema", SCHEMA, ["SELECT 1 FROM vault_rebox_backfill WHERE id = 1"]);
 }
 
 export function reboxIndexComplete(db: DatabaseSync): boolean {
