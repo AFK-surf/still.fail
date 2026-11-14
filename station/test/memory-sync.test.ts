@@ -259,7 +259,7 @@ test("one skill each station kept on since it was copied: merged, each line once
   }
 });
 
-test("a skill kept apart is named for the station that made it, once, wherever it went first; its own files go with it", async () => {
+test("a skill kept apart is named for the station that made it, once, wherever it went first; its own files copied beside it", async () => {
   const D = "d".repeat(64);
   NAMES[D] = "MBA";
   const w = world([A, C, D]);
@@ -276,7 +276,8 @@ test("a skill kept apart is named for the station that made it, once, wherever i
       assert.equal(existsSync(join(s.home, "skills", "stillfail-MBA")), false);
     }
     assert.equal(read(w.at(C), "skills/stillfail-Mini1/host"), "mini\n");
-    assert.equal(read(w.at(C), "skills/stillfail/host"), null);
+    // Left where it was too: what is outside the station may read it there.
+    assert.equal(read(w.at(C), "skills/stillfail/host"), "mini\n");
     assert.equal(read(w.at(A), "skills/stillfail-Mini1/host"), null);
   } finally {
     await w.done();
