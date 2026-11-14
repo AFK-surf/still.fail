@@ -1891,17 +1891,22 @@ impl Inner {
         if a.get("relayOnly").and_then(Value::as_bool).unwrap_or(false) {
             builder = builder.clear_ip_transports();
         }
+        // The DHT unless `dht: false` (a company's filter marking the Mainline DHT as risky), mDNS either way: the
+        // station's addon's `dht`.
+        let with_dht = a.get("dht").and_then(Value::as_bool).unwrap_or(true);
         // Stations on the LAN (mDNS, never announced itself) and which relay they are on (the DHT), as client/core-ts's.
         if a.get("lookup").and_then(Value::as_bool).unwrap_or(false) && !relays.is_empty() {
-            builder = builder
-                .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
-                .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).no_publish());
+            builder = builder.address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false));
+            if with_dht {
+                builder = builder.address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).no_publish());
+            }
         } else if a.get("discovery").and_then(Value::as_bool).unwrap_or(false) {
             // A station's: found on the LAN by mDNS and by its relay through the DHT, both announced (the station's
             // addon's `bind`), each left out, said, where it cannot be made (mDNS's port held, no network yet).
-            builder = builder
-                .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE)))
-                .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).secret_key(key_again)));
+            builder = builder.address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE)));
+            if with_dht {
+                builder = builder.address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).secret_key(key_again)));
+            }
         }
         let endpoint = builder.bind().await.map_err(err)?;
         Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint, Arc::new(Kept { homes: relays.clone(), ..Kept::default() }))) })))
