@@ -21,13 +21,15 @@
 //   node scripts/native.ts status                      every part and target: key, and whether cached / published
 //   node scripts/native.ts missing [--windows] [part[:target]…]    those (default: all of ours) the release lacks, one a line
 //   node scripts/native.ts missing --prebuilt          the prebuilt ones (`msvc`: the shell and engine, Android's,
-//        Windows' and Linux', which the mbui app's jobs only fetch) in neither the store nor the release, one a line
+//        Windows' and Linux', which the mbui app's jobs only fetch; `prebuilt`: ghostty-vt) in neither the store nor
+//        the release, one a line
 //   node scripts/native.ts ensure [--windows] [--publish] [--outbox DIR] [part[:target]…]
 //        CI: each (default: all) in the cache, built when not prebuilt; --publish uploads what the release lacks
 //        (gh, main only), then prunes those parts and targets to the newest 20; --outbox copies the artifacts the
 //        release lacks there (a branch's run artifact)
 //        The default leaves out what only Windows builds (MSVC's: the mbui app's shell and engine); --windows is those.
-//        Never what only Linux builds (the mbui app's Linux shell and engine: the prebuild workflow's alone).
+//        Never what only Linux builds (the mbui app's Linux shell and engine: the prebuild workflow's alone), nor
+//        what is built only by hand (`prebuilt`: ghostty-vt, prebuild --release on a Mac).
 //   node scripts/native.ts prune [N]                   the release keeps the newest N (20) of each part and target
 //   node scripts/native.ts prebuild [--release] [part:target…]   each (default: the Windows parts) in neither the store
 //        (STORE: the releases bucket's natives/) nor the release, got or built here (Windows builds the Windows ones, a
@@ -154,6 +156,10 @@ type Part = {
   zig?: string;
   /// Its win32-x64 is MSVC's (clang-cl's), built on a Windows machine, not MinGW's from a Mac: CI's natives-win job.
   msvc?: true;
+  /// Built only by hand (`prebuild`), never by CI: a build of all its targets takes longer than a job may (ghostty-vt's
+  /// eight, ~10 min), and what it is made of changes only as its pinned release does. CI's jobs fetch it, or fail saying
+  /// to prebuild it; `ensure` and `missing` leave it out of their default.
+  prebuilt?: true;
   /// Built into `out` (a fresh directory).
   build: (target: Target, out: string) => void;
 };
@@ -232,6 +238,87 @@ function withHidden(part: Part): Part {
 
 const MESH_LIB = (t: Target) => (t === "darwin-arm64" ? "libstillfail_mesh.dylib" : t === "win32-x64" ? "stillfail_mesh.dll" : "libstillfail_mesh.so");
 
+/// libghostty-vt (the app's terminal, the runner's copy of one's screen): Ghostty's source and dependency tarballs of a
+/// release, whose minisign signatures (Ghostty's key, RWQlAjJC23149WL2sEpT/l0QKy7hMIFhYdQOFy0Z7z7PbneUgvlsnYcV) were
+/// checked as the version was taken and whose sha256 is checked here, built with no network (`--system`, the deps) by
+/// the zig that release asks for (its build.zig.zon's `minimum_zig_version`: its minor exactly), fetched here by its
+/// own sha256 into the build directory, so no machine needs it installed. A static library and the headers; the web's
+/// a module (wasm32-freestanding, ReleaseSmall, only what a terminal shown and typed into needs).
+const GHOSTTY_VT = {
+  version: "1.0.1",
+  source: "333dfce97641ef9b536bb9e08907ad86abaaada50e8f7417b70d9284adef37aa",
+  deps: "91a4e10960a52bf5bf4b15aa2a2cddaff8a89d6cd903d3055bda4fd17de3356d",
+  zig: "0.17.0",
+  zigs: {
+    "aarch64-macos": "b607e9b9234790a008116ae5bdb71c6243b84b9fb42a53a9e70fde41c06c536a",
+    "x86_64-windows": "b5663f69581dcf391293fbf16c06cb80d81d806545ce618b4d0bab7f0eb8c428",
+  } as Record<string, string>,
+};
+/// zig's target of each of ours: macOS and iOS at the shell's oldest (APPLE_MIN), Android at the app's lowest API,
+/// Linux for glibc 2.28 on (as the station's crates), Windows MinGW's (the runner's; whether the app's MSVC build links
+/// it, or needs one of its own built on Windows, is for when the app's Windows terminal is made).
+const GHOSTTY_VT_TARGETS: Partial<Record<Target, string>> = {
+  "darwin-arm64": "aarch64-macos.11.0",
+  "ios-arm64": "aarch64-ios.17.0",
+  "ios-sim-arm64": "aarch64-ios.17.0-simulator",
+  "android-arm64": `aarch64-linux-android.${ANDROID_API}`,
+  "linux-x64": "x86_64-linux-gnu.2.28",
+  "linux-arm64": "aarch64-linux-gnu.2.28",
+  "win32-x64": "x86_64-windows-gnu",
+  wasm32: "wasm32-freestanding",
+};
+const GHOSTTY_VT_FLAGS = (t: Target): string[] =>
+  t === "wasm32"
+    ? ["-Doptimize=ReleaseSmall", "-Dvt-features=-all,+render-state,+input-encode,+selection,+color"]
+    : ["-Doptimize=ReleaseFast", "-Dcpu=baseline"];
+const ghosttyVtLib = (t: Target) => (t === "wasm32" ? "bin/ghostty-vt.wasm" : t === "win32-x64" ? "lib/ghostty-vt-static.lib" : "lib/libghostty-vt.a");
+/// A file fetched into `dir` once, by its sha256.
+function fetched(dir: string, url: string, sha256: string): string {
+  const file = join(dir, basename(url));
+  const sum = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
+  if (!existsSync(file) || sum(file) !== sha256) {
+    mkdirSync(dir, { recursive: true });
+    run("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", url, "-o", `${file}.part`]);
+    const got = sum(`${file}.part`);
+    if (got !== sha256) throw new Error(`${url}: sha256 ${got}, not ${sha256}`);
+    renameSync(`${file}.part`, file);
+  }
+  return file;
+}
+function ghosttyVt(): Part {
+  const v = GHOSTTY_VT;
+  return {
+    files: (t) => [ghosttyVtLib(t), ...(t === "wasm32" ? [] : ["include/ghostty/vt.h"])],
+    targets: Object.keys(GHOSTTY_VT_TARGETS) as Target[],
+    rust: false,
+    zig: v.zig,
+    prebuilt: true,
+    recipe: (t) => ({ version: v.version, source: v.source, deps: v.deps, zig: v.zig, target: GHOSTTY_VT_TARGETS[t], flags: GHOSTTY_VT_FLAGS(t) }),
+    build(t, out) {
+      const zigHost = osPlatform() === "darwin" && osArch() === "arm64" ? "aarch64-macos" : osPlatform() === "win32" && osArch() === "x64" ? "x86_64-windows" : fail("ghostty-vt is built on an Apple Silicon Mac or on Windows");
+      const work = join(BUILD(), "ghostty-vt");
+      const at = `https://release.files.ghostty.org/libghostty-vt/${v.version}`;
+      const source = fetched(work, `${at}/libghostty-vt-${v.version}.tar.gz`, v.source);
+      const deps = fetched(work, `${at}/libghostty-vt-${v.version}-deps.tar.gz`, v.deps);
+      const zipped = zigHost === "x86_64-windows";
+      const zigArchive = fetched(work, `https://ziglang.org/download/${v.zig}/zig-${zigHost}-${v.zig}.${zipped ? "zip" : "tar.xz"}`, v.zigs[zigHost]!);
+      const zig = join(work, `zig-${zigHost}-${v.zig}`, zipped ? "zig.exe" : "zig");
+      if (!existsSync(zig)) run(TAR, ["-xf", zigArchive, "-C", work]);
+      // (each target from the tarballs anew: zig's build writes into the source's own .zig-cache)
+      const src = join(work, `src-${t}`);
+      rmSync(src, { recursive: true, force: true });
+      mkdirSync(src, { recursive: true });
+      run(TAR, ["-xzf", source, "-C", src]);
+      run(TAR, ["-xzf", deps, "-C", src]);
+      run(zig, ["build", "--prefix", out, "--system", join(src, `libghostty-vt-${v.version}-deps`), `-Dtarget=${GHOSTTY_VT_TARGETS[t]}`, ...GHOSTTY_VT_FLAGS(t)], {
+        cwd: join(src, `libghostty-vt-${v.version}`),
+        env: { ...process.env, ZIG_GLOBAL_CACHE_DIR: join(work, "zig-cache") },
+      });
+      rmSync(src, { recursive: true, force: true });
+    },
+  };
+}
+
 /// An mbui offscreen program and its portable launcher. The sources are conservative: a change to an app component or
 /// the framework selects a new binary. A separate scene or drive file is never part of the key.
 function mbuiRenderer(app: string, launcher: string): Part {
@@ -289,6 +376,7 @@ const PARTS: Record<string, Part> = {
   "mbui-figure": mbuiRenderer("sffigure", "figure-run.sh"),
   "mbui-film": mbuiRenderer("sffilm", "media.sh"),
   "mbui-film-wasm": mbuiWasmFilm(),
+  "ghostty-vt": ghosttyVt(),
   // The station's iroh and image codecs, a Node addon ( §3); the core on Node (its tests,
   // apps/mbui's e2e peer) uses it too.
   mesh: {
@@ -1121,6 +1209,9 @@ async function getKey(part: string, target: Target, k: string, mode: "any" | "fe
       if (got) { noteUse(got); return got; }
     }
     // What is prebuilt (`msvc`) CI builds only in the prebuild workflow, run by hand: anywhere else said, with how.
+    if (mode !== "prebuild" && P(part).prebuilt && process.env.CI) {
+      throw new Error(`${part} ${target} ${k} is not prebuilt: on a Mac, node scripts/native.ts prebuild --release ${part}:${target} (every target: prebuild --release ${P(part).targets.map((t) => `${part}:${t}`).join(" ")})`);
+    }
     if (mode !== "prebuild" && P(part).msvc && (mode === "fetch" || ((onWindows(part, target) || onLinux(part, target)) && process.env.CI))) {
       throw new Error(`${part} ${target} ${k} is not prebuilt: run the prebuild workflow on the branch, gh workflow run prebuild.yml -R ${REPO} --ref ${process.env.GITHUB_REF_NAME || "<branch>"} (or on a Mac, node scripts/native.ts prebuild ${part}:${target})`);
     }
@@ -1389,7 +1480,7 @@ async function main(argv: string[]) {
       // --prebuilt: the prebuilt ones (`msvc`) that neither the store nor the release has (the prebuild workflow's).
       if (args.includes("--prebuilt")) {
         for (const [p, t] of ours()) {
-          if (!P(p).msvc) continue;
+          if (!P(p).msvc && !P(p).prebuilt) continue;
           const name = asset(p, t, key(p, t));
           if (!(await inStore(name)) && !(await exists(name))) console.log(`${p}:${t}`);
         }
@@ -1398,7 +1489,7 @@ async function main(argv: string[]) {
       const windows = args.includes("--windows");
       const wanted: [string, Target][] = [];
       for (const a of args.filter((a) => a !== "--windows")) { const [p, t] = a.split(":"); wanted.push(pair(t ? [p!, t] : [p!])); }
-      if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows && !onLinux(p, t)) wanted.push([p, t]);
+      if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows && !onLinux(p, t) && !P(p).prebuilt) wanted.push([p, t]);
       const remote = (await published()) ?? fail("the release's assets could not be listed");
       for (const [p, t] of wanted) if (!remote.has(asset(p, t, key(p, t)))) console.log(`${p}:${t}`);
       return;
@@ -1413,7 +1504,7 @@ async function main(argv: string[]) {
         else { const [p, t] = args[i]!.split(":"); wanted.push(pair(t ? [p!, t] : [p!])); }
       }
       // Default: all of ours that this kind of machine builds (--windows: what only Windows does).
-      if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows && !onLinux(p, t)) wanted.push([p, t]);
+      if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows && !onLinux(p, t) && !P(p).prebuilt) wanted.push([p, t]);
       const listed = await published();
       const remote = listed ?? new Set<string>();
       // Its assets listed: it is there. Else asked again, and said missing only when GitHub says so: a request that did
