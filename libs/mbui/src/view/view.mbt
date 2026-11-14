@@ -2576,34 +2576,59 @@ fn Tree::alone_laid_out(self : Tree) -> Unit {
     let at = self.alone_due[j]
     j = j + 1
     let n = self.nodes[at]
-    if n.live && n.flex.dirty && n.flex.laid_given() {
-      self.work.computes = self.work.computes + 1
-      self.laids = self.laids + 1
-      @flex.relayout(n.flex)
-      self.alone_laid.push((at, @flex.computes()))
-      // (what it holds came out another size than it is counted: what holds it laid out again, from the nearest that
-      // lays out alone above it as a change in it is (Tree::layout_marked_at), which measures it there)
-      match self.alone_asks.get(at) {
-        Some(ask) if ask() => {
-          let mut i = n.parent
-          while i >= 0 {
-            let m = self.nodes[i]
+    if n.live && n.flex.dirty {
+      let mut anc_dirty = false
+      let mut p = n.parent
+      while p >= 0 {
+        if !self.nodes[p].slot && self.nodes[p].flex.dirty {
+          anc_dirty = true
+          break
+        }
+        p = self.nodes[p].parent
+      }
+      if !anc_dirty && n.flex.laid_given() {
+        if n.flex.children.is_empty() && n.flex.measure is None {
+          n.flex.dirty = false
+        } else {
+          self.work.computes = self.work.computes + 1
+          self.laids = self.laids + 1
+          @flex.relayout(n.flex)
+          self.alone_laid.push((at, @flex.computes()))
+        }
+        // (what it holds came out another size than it is counted: what holds it laid out again, from the nearest that
+        // lays out alone above it as a change in it is (Tree::layout_marked_at), which measures it there)
+        match self.alone_asks.get(at) {
+          Some(ask) if ask() => {
+            let mut i = n.parent
+            while i >= 0 {
+              let m = self.nodes[i]
+              if !m.slot {
+                m.flex.dirty = true
+                if m.alone && m.flex.laid_given() {
+                  self.alone_due.push(i)
+                  break
+                }
+              }
+              i = m.parent
+            }
+          }
+          _ => ()
+        }
+      } else {
+        // (no longer as it was asked, or what holds it already to be laid out: laid out with what holds it, by the
+        // layout of all of it after this)
+        let mut i = n.parent
+        while i >= 0 {
+          let m = self.nodes[i]
+          if !m.slot {
             m.flex.dirty = true
-            if m.alone && m.flex.laid_given() {
+            if m.alone && m.flex.laid_given() && !anc_dirty {
               self.alone_due.push(i)
               break
             }
-            i = m.parent
           }
+          i = m.parent
         }
-        _ => ()
-      }
-    } else if n.live && n.flex.dirty {
-      // (no longer as it was asked: laid out with what holds it, by the layout of all of it after this)
-      let mut i = n.parent
-      while i >= 0 {
-        self.nodes[i].flex.dirty = true
-        i = self.nodes[i].parent
       }
     }
   }
@@ -5457,9 +5482,9 @@ fn Tree::measured_now(self : Tree) -> Unit {
   @signals.untracked(fn() {
     self.bound_at(at)
     if self.layout_due && self.measured_gen < 0 {
+      let g = @flex.computes() + 1
       self.alone_laid_out()
       self.work.computes = self.work.computes + 1
-      let g = @flex.computes() + 1
       self.measuring = true
       self.laids = self.laids + 1
       @flex.compute(self.nodes[0].flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
@@ -8120,7 +8145,12 @@ fn View::park(self : View, v : View) -> () -> Unit {
   m.parent = -1
   self.tree.touched(self.at)
   self.tree.order_marked_in(self.at)
-  self.boxes_again()
+  let h = if n.slot { self.tree.box_holder(self.at) } else { self.at }
+  let own = if !m.slot { Some(m.flex) } else { None }
+  match own {
+    Some(b) if self.tree.box_taken_out(h, b) => ()
+    _ => self.boxes_again()
+  }
   self.tree.modals_told(within=v.at)
   // (woken, what changed meanwhile told as an answer: at once, answering.mbt)
   fn() {
@@ -10250,9 +10280,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     let gen = if self.measured_gen >= 0 {
       if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
     } else {
+      let g = @flex.computes() + 1
       self.alone_laid_out()
       self.work.computes = self.work.computes + 1
-      let g = @flex.computes() + 1
       self.laids = self.laids + 1
       @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
       if self.walk_from >= 0 && self.walk_from < g {
@@ -10264,10 +10294,13 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.measured_gen = -1
     self.walk_from = -1
     self.walk(0, gen, true)
-    // (what was laid out alone: placed by from it, what holds it laid out or not)
+    // (what was laid out alone: placed by from it, where what holds it was not laid out)
     for a in self.alone_laid {
       if self.nodes[a.0].live {
-        self.walk(a.0, a.1, true)
+        let h = self.box_holder(a.0)
+        if h < 0 || self.nodes[h].flex.laid_out_at() < gen {
+          self.walk(a.0, gen, true)
+        }
       }
     }
     self.alone_laid.clear()

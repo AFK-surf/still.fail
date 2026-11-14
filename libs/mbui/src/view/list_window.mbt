@@ -2192,7 +2192,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       } else {
         let kept = now.copy()
         for k in showed {
-          if laid_at.contains(k) && !kept.contains(k) {
+          if laid_at.get(k) is Some(i) &&
+            i < all.length() &&
+            all.top(i) + all.h(i) > top &&
+            all.top(i) < top + vh &&
+            !kept.contains(k) {
             kept.push(k)
           }
         }
@@ -2378,6 +2382,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     // (what the last pass found, alone: what showed before and shows no more let go now, in this layout)
     show_only(found)
+    self.tree.room_bindings_run()
     slots_cover(places(laid.untracked()), found, top, vh)
     let live = blocks.filter(fn(b) { b.0.alive() })
     blocks.clear()
@@ -2822,6 +2827,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         Some(self.tree.rows_slot(my_tall.get().unwrap_or(est)))
       }))
       .shrink(Is(0.0))
+      .holds_whole()
       // (as tall as it is counted, as wide as the column: what changes in what shows laid out from it alone; where that
       // comes out another height than it is counted, or what shows in it was never measured (one taken from another's
       // slot), the column laid out again, which measures it: Tree::alone_asks)

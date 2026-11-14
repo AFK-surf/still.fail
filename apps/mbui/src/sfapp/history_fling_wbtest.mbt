@@ -350,3 +350,31 @@ test "the desk's history beside a chat: a sent message's words opened at its foo
     None => fail("not opened")
   }
 }
+
+///|
+test "the desk's history beside a chat: scrolling across turns reuses row views and keeps measurements" {
+  let history = fling_history(20)
+  let t = wheel_history(fn() { history })
+  t.check_looks(false)
+  let tree = @ui.view_tree().unwrap()
+  let w0 = tree.work()
+  for _ in 0..<18 {
+    t.wheel(1100.0, 500.0, -30.0)
+  }
+  let w1 = tree.work()
+  for _ in 0..<12 {
+    t.wheel(1100.0, 500.0, -30.0)
+  }
+  let w2 = tree.work()
+  let total_made = w2.made - w0.made
+  let total_let_go = w2.let_go - w0.let_go
+  let total_laid = w2.laid - w0.laid
+  let total_measured = w2.measured - w0.measured
+  let warm_made = w2.made - w1.made
+  let warm_let_go = w2.let_go - w1.let_go
+  assert_true(
+    total_made <= 220 && total_let_go <= 40 && total_laid <= 400 && total_measured <= 40,
+    msg="total=(\{total_made}, \{total_let_go}, \{total_laid}, \{total_measured})",
+  )
+  assert_true(warm_made == 0 && warm_let_go == 0, msg="warm=(\{warm_made}, \{warm_let_go})")
+}
