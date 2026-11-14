@@ -519,25 +519,56 @@ export class Directory extends DurableObject<Env> {
     // of an account's 187 requests in a minute, 49 `/v1/me` and 61 the view). Those whose role changed, or who were not
     // members before, get the view whole as before (what they see of it changed beyond what the others are told), and
     // whoever else is told (`also`: taken out, or invited) the list read again.
-    const told = this.#told(workspace);
-    const members = new Map((told?.now.members ?? []).map((m) => [m.sub, m.role]));
-    const before = new Map((told?.before?.members ?? []).map((m) => [m.sub, m.role]));
-    const groups = new Map<string, { subs: string[]; events: AccountEvent[] }>();
-    const into = (key: string, sub: string, events: () => AccountEvent[]) => {
-      let group = groups.get(key);
-      if (!group) groups.set(key, (group = { subs: [], events: events() }));
-      group.subs.push(sub);
-    };
+    // (who is told never hangs on what is told: the members as the Directory has them, whatever `#told` comes to)
+    const subs = this.#members(workspace);
     const plain: AccountEvent = { type: "workspace", id: workspace };
-    for (const [sub, role] of members) {
-      const listed: AccountEvent[] = list && told ? [{ type: "workspaces", entry: told.entry(role) }] : list ? [LIST] : [];
-      const same = told !== null && told.before !== null && before.get(sub) === role;
-      const manager = MANAGERS.includes(role);
-      into(`${role} ${same}`, sub, () => [...listed, same && told ? { type: "workspace", id: workspace, rev: told.rev, ...told.change(manager) } : plain]);
+    const groups = new Map<string, { subs: string[]; events: AccountEvent[] }>();
+    try {
+      const told = this.#told(workspace);
+      const roles = new Map((told?.now.members ?? []).map((m) => [m.sub, m.role]));
+      const before = new Map((told?.before?.members ?? []).map((m) => [m.sub, m.role]));
+      const into = (key: string, sub: string, events: () => AccountEvent[]) => {
+        let group = groups.get(key);
+        if (!group) groups.set(key, (group = { subs: [], events: events() }));
+        group.subs.push(sub);
+      };
+      for (const sub of subs) {
+        const role = roles.get(sub);
+        if (role === undefined || !told) {
+          into("plain", sub, () => [...(list ? [LIST] : []), plain]);
+          continue;
+        }
+        const same = told.before !== null && before.get(sub) === role;
+        const manager = MANAGERS.includes(role);
+        into(`${role} ${same}`, sub, () => [...(list ? [{ type: "workspaces", entry: told.entry(role) } as AccountEvent] : []), same ? { type: "workspace", id: workspace, rev: told.rev, ...told.change(manager) } : plain]);
+      }
+    } catch (error) {
+      // What tells a change never fails the request it follows (2026-11-15: a first version answered 500 to an
+      // invitation already made): the view as last told let go of and begun again from now, at a version above any
+      // before, and every member told plainly, as before there were versions.
+      console.warn(`told: ${workspace}'s view as last told not read (${error instanceof Error ? error.message : String(error)}); its members told plainly, told anew from now`);
+      groups.clear();
+      groups.set("plain", { subs, events: [...(list ? [LIST] : []), plain] });
+      this.#toldAnew(workspace);
     }
-    const others = [...new Set(also)].filter((sub) => !members.has(sub));
+    const others = [...new Set(also)].filter((sub) => !subs.includes(sub));
     if (others.length > 0) groups.set("others", { subs: others, events: [...(list ? [LIST] : []), plain] });
     for (const { subs, events } of groups.values()) this.#tell(subs, ...events);
+  }
+
+  /** A workspace's view as last told let go of, and kept again as it is now at a version above the one let go of and
+   * this second's thousandths (`#told`); where even that fails, none kept, the next change beginning it. */
+  #toldAnew(workspace: string): void {
+    try {
+      const was = this.#one("SELECT rev FROM told WHERE workspace = ?", workspace);
+      this.#run("DELETE FROM told WHERE workspace = ?", workspace);
+      const now = this.#alike(workspace);
+      if (!now) return;
+      const rev = Math.max(nowSeconds() * 1000, typeof was?.rev === "number" ? was.rev + 1 : 0);
+      this.#run("INSERT INTO told (workspace, rev, view) VALUES (?, ?, ?)", workspace, rev, JSON.stringify(now));
+    } catch (error) {
+      console.warn(`told: ${workspace}'s view not kept anew (${error instanceof Error ? error.message : String(error)})`);
+    }
   }
 
   /** What a workspace's view says alike to every member: `#view` but the viewer's role and lock requests, the managers'

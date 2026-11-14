@@ -130,6 +130,15 @@ export class Directory extends ProductionDirectory {
     for (const e of entries) this.ctx.storage.sql.exec("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, e.hash, JSON.stringify(e.entry));
     this.lockSeen.delete(workspace);
   }
+  /** A workspace's view as last told (directory.ts `#told`) kept as `view`, written as it is, and its version. */
+  keepTold(workspace: string, view: string, rev: number) {
+    this.ctx.storage.sql.exec("INSERT INTO told (workspace, rev, view) VALUES (?, ?, ?) ON CONFLICT (workspace) DO UPDATE SET rev = excluded.rev, view = excluded.view", workspace, rev, view);
+  }
+  /** A workspace's view as last told and its version; null with none kept. */
+  toldOf(workspace: string): { rev: number; view: string } | null {
+    const row = this.ctx.storage.sql.exec("SELECT rev, view FROM told WHERE workspace = ?", workspace).toArray()[0];
+    return row ? { rev: row.rev as number, view: row.view as string } : null;
+  }
   /** The hashes of the entries kept off a workspace lock's chain (lock_aside), in the order kept. */
   lockAside(workspace: string): string[] {
     return this.ctx.storage.sql.exec("SELECT hash FROM lock_aside WHERE workspace = ? ORDER BY rowid", workspace).toArray().map((r) => r.hash as string);

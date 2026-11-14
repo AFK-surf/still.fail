@@ -549,3 +549,53 @@ test("what a change tells is what reading again gives: the view by its versions,
     await h.close();
   }
 });
+
+// What tells a change never fails the request it follows (2026-11-15: a first version of `#told` answered 500 to an
+// invitation already made, reading a row it had not written): a view as last told that cannot be read is let go of,
+// every member told plainly as before there were versions, and the next change told with versions again.
+for (const [what, kept] of [["not JSON", "{not json"], ["a list not a list", JSON.stringify({ id: "x", name: "Home", members: "alice", stations: [] })]] as const) {
+  test(`a view as last told that cannot be read (${what}): the change answers, every member told plainly, the next told with versions`, async () => {
+    const h = await harness();
+    try {
+      const tokens = { alice: await h.login("alice"), bob: await h.login("bob") };
+      const alice = h.as(tokens.alice), bob = h.as(tokens.bob);
+      const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
+      await alice("POST", `/v1/workspaces/${w}/invitations`, { role: "member", email: "bob@example.test" });
+      const invitation = ((await (await bob("GET", "/v1/me")).json()) as any).invitations[0].id;
+      assert.equal((await bob("POST", `/v1/invitations/${invitation}/accept`)).status, 200);
+      const on = { alice: await listen(h, tokens.alice.access_token), bob: await listen(h, tokens.bob.access_token) };
+      const got: Record<string, any[]> = { alice: [], bob: [] };
+      for (const [name, l] of Object.entries(on)) l.ws.addEventListener("message", (event) => void (event.data === "pong" || got[name]!.push(JSON.parse(event.data as string))));
+      const took = async () => {
+        for (const l of Object.values(on)) await l.take();
+        const all = { alice: got.alice!.splice(0), bob: got.bob!.splice(0) };
+        return all;
+      };
+      const directory = await h.object("DIRECTORY", "primary");
+      await alice("PATCH", `/v1/workspaces/${w}`, { name: "House" });
+      await took();
+      const was = await directory.toldOf(w);
+      assert.ok(was, "a view as last told kept");
+      await directory.keepTold(w, kept, was.rev);
+      const renamed = await alice("PATCH", `/v1/workspaces/${w}`, { name: "Hut" });
+      console.log(`CHANGE AFTER ${what}: ${renamed.status}`);
+      assert.equal(renamed.status, 200, `the change answered: ${await renamed.clone().text()}`);
+      const plain = await took();
+      for (const name of ["alice", "bob"] as const) {
+        assert.deepEqual(plain[name].map((e) => JSON.stringify(e)).sort(), [JSON.stringify({ type: "workspaces" }), JSON.stringify({ type: "workspace", id: w })].sort(), `${name} told plainly`);
+      }
+      const after = await directory.toldOf(w);
+      assert.ok(after === null || (after.view !== kept && after.rev > was.rev), `the row let go of or begun again above ${was.rev}: ${JSON.stringify(after)}`);
+      await alice("PATCH", `/v1/workspaces/${w}`, { name: "Home" });
+      const told = await took();
+      for (const name of ["alice", "bob"] as const) {
+        const event = told[name].find((e) => e.type === "workspace");
+        assert.ok(Array.isArray(event?.rev), `${name} told with versions again: ${JSON.stringify(told[name])}`);
+        assert.equal(event.set?.name, "Home");
+        assert.ok(told[name].find((e) => e.type === "workspaces")?.entry, `${name} told their entry again`);
+      }
+    } finally {
+      await h.close();
+    }
+  });
+}
