@@ -52,7 +52,7 @@ import { LOGIN_BROWSER_FILE, type LoginCommands, type LoginJob, LoginManager } f
 import { codexAccountIdentity, codexClaimsIn, type MachineLogin, MachineLogins } from "./machine.ts";
 import { facts } from "./catalog.ts";
 import { uncheckOutdated } from "./models.ts";
-import { claudeOAuthToken } from "./oauth.ts";
+import { type Bound, LEND_BOUND_MS, claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, devinAccountFile, devinNotedIn, grokAuthFile, grokEmailIn, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, codexUsage, lentCodexUsage, machineUsage } from "./quota.ts";
 import { claudeResetWith } from "./claude-reset.ts";
@@ -423,18 +423,23 @@ export class Accounts {
   }
 
   /// The machine login's current Claude token, renewed when about to run out (the Claude driver's `machineToken`).
-  async machineToken(env: Env = this.env, rejected?: string): Promise<MachineToken> {
-    const [token, expiresAt] = await claudeOAuthToken(env, null, rejected ?? null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS);
+  async machineToken(env: Env = this.env, rejected?: string, lent = false): Promise<MachineToken> {
+    const [token, expiresAt] = await claudeOAuthToken(env, null, rejected ?? null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS, lent ? this.lendBound() : undefined);
     return { token, expiresAt };
   }
 
   /// A Claude profile's current token, renewed when about to run out: handed to its local sessions (`subscriptionToken`)
-  /// and lent when another station shares it.
-  async claudeToken(profile: Json, rejected?: string): Promise<MachineToken> {
-    if (profile.machine === true) return this.machineToken(this.env, rejected);
+  /// and lent when another station shares it (`lent`: its renewal waited for LEND_BOUND_MS at most, then the token it has
+  /// is lent while it lasts the usual margin, the renewal going on behind).
+  async claudeToken(profile: Json, rejected?: string, lent = false): Promise<MachineToken> {
+    if (profile.machine === true) return this.machineToken(this.env, rejected, lent);
     const home = String(profile.home ?? "");
-    const [token, expiresAt] = await claudeOAuthToken(this.env, joinPath(this.deps.data, home), rejected ?? null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS);
+    const [token, expiresAt] = await claudeOAuthToken(this.env, joinPath(this.deps.data, home), rejected ?? null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS, lent ? this.lendBound() : undefined);
     return { token, expiresAt };
+  }
+
+  private lendBound(): Bound {
+    return { ms: LEND_BOUND_MS, after: (ms, f) => this.background.after(ms, f) };
   }
 
   /// One of a Claude subscription's limit resets used (claude-reset.ts), with its token (a borrowed one's lent by its
