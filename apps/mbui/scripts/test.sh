@@ -242,7 +242,7 @@ for t in $targets; do
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
       src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:2 src/sfapp/send_steady_wbtest.mbt:@1@2
       src/sfapp/chat_page_nodes_wbtest.mbt:2 src/sfapp/answers_still_wbtest.mbt:@2@3@4@5
-      src/sfapp/switches_still_wbtest.mbt:@20@25@29@34@38@43@47@52@60@68@90@123@146@176@205@248)
+      src/sfapp/switches_still_wbtest.mbt:@20@25@29@34@38@43@47@52@56@60@68@90@123@146@176@205@248)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -561,6 +561,8 @@ for t in $targets; do
       # the most). No more runners for it (the owner: 「不要一慢就拆」, 「分片会排队」))
       # (seventeen since, its tests 52-68 cut at 60: that one run was 273-279 s, part 1/4 288-291 s of its 5 minutes on
       # main 98178dc5 43606413194 and cf48243e 43604572194, its other three runs 68-132 s; the other parts 108-166 s)
+      # (eighteen since, its tests 52-60 cut at 56: that run was 247 s on main ccb596e1 43609558227, part 1/4 258 s
+      # beside its four others (99-167 s), where 60-68 was 96; its tests 52-59 8-11 s each on Studio, none the most)
       "src/sfapp/switches_still_wbtest.mbt "*) echo switches ;;
       # (send_steady's three on the fourth, beside its pages on its four cores: the deal reckons them there)
       "src/sfapp/send_steady_wbtest.mbt "*) echo 4 ;;
