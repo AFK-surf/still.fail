@@ -1078,13 +1078,35 @@ fn place_parts(at : String) -> (String, String) {
 }
 
 ///|
-/// The chat's row keeps the identity it had before the core took it over (Reading::sent_as).
+/// What a chat's page made as nodes calls the core's rows that took over what was sent from here by, by the chat
+/// (station + "\u{1}" + session): the core's row's key to the key it was sent as (its list's own, sfpages'
+/// chat_body_rows' `sent_as`), read through its rows so what reads it follows a row taken over; given as the page is
+/// made, taken as it goes. The old page's is its Reading's (Reading::sent_as).
+pub let rows_sent_as : Map[String, () -> Map[String, String]] = Map([])
+
+///|
+/// The keys chat (`station`, `session`)'s rows that took over what was sent from here go on by, by the core's row's
+/// key: its page's, the page made as nodes' where it is one (rows_sent_as), else the old page's Reading's.
+fn sent_as_of(station : String, session : String) -> Map[String, String]? {
+  let k = station + "\u{1}" + session
+  match rows_sent_as.get(k) {
+    Some(f) => Some(f())
+    None =>
+      match readings.get(k) {
+        Some(r) => {
+          r.sent_as_told.get() |> ignore
+          Some(r.sent_as)
+        }
+        None => None
+      }
+  }
+}
+
+///|
+/// The chat's row keeps the identity it had before the core took it over (sent_as_of).
 fn placed_row(station : String, session : String, row : String) -> String {
-  match readings.get(station + "\u{1}" + session) {
-    Some(r) => {
-      r.sent_as_told.get() |> ignore
-      r.sent_as.get(row).unwrap_or(row)
-    }
+  match sent_as_of(station, session) {
+    Some(sent_as) => sent_as.get(row).unwrap_or(row)
     None => row
   }
 }
@@ -1125,11 +1147,10 @@ pub fn Viewer::thumb_id(self : Viewer) -> String {
 fn Viewer::gallery_at(self : Viewer) -> String {
   match self.steps {
     InChat(_, session) =>
-      match readings.get(self.station + "\u{1}" + session) {
-        Some(r) => {
-          r.sent_as_told.get() |> ignore
+      match sent_as_of(self.station, session) {
+        Some(sent_as) => {
           let (row, part) = place_parts(self.at)
-          for source, sent_row in r.sent_as {
+          for source, sent_row in sent_as {
             if sent_row == row {
               return source + part
             }
@@ -3499,6 +3520,7 @@ pub fn file_viewer_reset() -> Unit {
   pv_strip.pinned = None
   pv_strip.near.clear()
   near_asked.clear()
+  rows_sent_as.clear()
   tab_viewers_reset()
 }
 
