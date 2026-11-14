@@ -407,7 +407,11 @@ fn new_controls(
     }
     // (its face, as the page has it: its panel asked as the hand comes to it, opened whole once answered)
     // (a preset that names its model: shown as the preset's, not opened; changed by editing the preset or picking none)
-    model_triple(c, src, address, "new", face=p, small=true, floating~, bound=flag(v, "presetModel"))
+    model_triple(c, src, address, "new", face=p, small=true, floating~, bound=flag(v, "presetModel"), on_bound=fn(from) {
+      if !going {
+        preset_fixed_menu(src, w, address, v, @sf.t("web-main.preset.fixedModel", args=[("name", text(v, "presetName"))]), from)
+      }
+    })
   }
 }
 
@@ -449,7 +453,12 @@ fn new_station_control(
       }
     },
     on_press=fn() {
-      if !going && !fixed {
+      if going {
+        ()
+      } else if fixed {
+        // (held by the preset: said so, with the ways to change it)
+        preset_fixed_menu(src, w, text(station, "station"), v, @sf.t("web-main.preset.fixedStation", args=[("name", text(v, "presetName"))]), Of(from))
+      } else {
         open()
       }
     },

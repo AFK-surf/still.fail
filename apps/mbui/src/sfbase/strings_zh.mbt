@@ -2704,6 +2704,8 @@ let zh : Map[String, String] = {
   "web-main.preset.deleteTitle": "删除预设「{name}」？",
   "web-main.preset.deleteBody": "已经用它开的对话不受影响。",
   "web-main.preset.editNamed": "编辑「{name}」",
+  "web-main.preset.fixedModel": "模型由预设「{name}」固定",
+  "web-main.preset.fixedStation": "Station 由预设「{name}」固定",
   "web-main.preset.newRow": "新预设",
   "web-main.preset.namePlaceholder": "比如：still.fail 开发",
   "web-main.preset.dirsHint": "这类事要用到的仓库或目录",

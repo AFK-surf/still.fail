@@ -2684,6 +2684,8 @@ web-main.preset.create
 web-main.preset.deleteTitle
 web-main.preset.deleteBody
 web-main.preset.editNamed
+web-main.preset.fixedModel
+web-main.preset.fixedStation
 web-main.preset.newRow
 web-main.preset.namePlaceholder
 web-main.preset.dirsHint

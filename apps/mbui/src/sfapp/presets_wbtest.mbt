@@ -74,6 +74,13 @@ fn shows(t : @ui.Tester, words : String) -> Bool {
 }
 
 ///|
+/// Whether words starting `start` are drawn now, seen.
+fn shows_start(t : @ui.Tester, start : String) -> Bool {
+  t.text_runs().iter().any(fn(r) { r.text.has_prefix(start) }) ||
+  t.words().iter().any(fn(w) { w.0.has_prefix(start) && w.5 > 0.5 })
+}
+
+///|
 /// The words drawn now, seen.
 fn runs(t : @ui.Tester) -> String {
   "\{Repr(t.text_runs().map(fn(r) { r.text }))} \{Repr(t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 }))}"
@@ -134,18 +141,38 @@ test "a phone's new chat shows its preset's control, the composer a capsule as t
 }
 
 ///|
-test "a preset that names its model and its station shows them as its own, a press opening neither" {
-  // (the same page with a preset that names neither: each opens)
+test "a preset that names its model and its station shows them as its own, a press saying the preset holds it and the ways to change it" {
+  // (the same page with a preset that names neither: each opens its pick)
   for bound in [false, true] {
-    for words in ["Opus 5.5", "Willow"] {
+    for (words, held) in [("Opus 5.5", "模型由预设"), ("Willow", "Station 由预设")] {
       new_run()
       let t = preset_mode(if bound { "newchat-preset-bound" } else { "newchat-preset-picked" })
       guard t.find(words) is Some((x, y)) else { fail("no \{words}: \{runs(t)}") }
       t.tap(x, y)
       t.run_for(@ui.move_most_ms)
-      assert_eq(t.query(@ui.Role::Dialog) is Some(_), !bound, msg="\{words}, bound \{bound}: \{runs(t)}")
+      let said = shows_start(t, held)
+      assert_eq(said, bound, msg="\{words}, bound \{bound}: \{runs(t)}")
+      if bound {
+        assert_true(shows_start(t, "编辑「") && shows(t, "不用预设"), msg=runs(t))
+      } else {
+        assert_true(t.query(@ui.Role::Dialog) is Some(_), msg="\{words}: \{runs(t)}")
+      }
     }
   }
+}
+
+///|
+test "不用预设 from a held control lets go of the preset" {
+  new_run()
+  let calls : Array[Made] = []
+  let t = preset_mode("newchat-preset-bound", src=preset_calls("newchat-preset-bound", calls))
+  guard t.find("Willow") is Some((x, y)) else { fail("no Willow: \{runs(t)}") }
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  press(t, "不用预设")
+  t.frame()
+  let picked = Some(named(calls, "newChat.pick").last().unwrap().params)
+  assert_eq(text(picked, "preset"), "")
 }
 
 ///|
