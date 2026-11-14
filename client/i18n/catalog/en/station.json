@@ -237,6 +237,7 @@
   "station.retire.card.otherStation": "another station",
   "station.retire.ownersOnly": "Only the workspace's owners and admins can confirm moving a station",
   "station.retire.askGone": "This card's request is gone: ask the agent to ask again",
+  "station.retire.off": "Move chats away and remove is switched off for now: it is being fixed, and opens again once it is",
   "station.connect.stationAway": "The station this chat runs on ({station}) can't be reached right now, so your message didn't get to it. Try again once it's back online.",
   "station.connect.ownerEmail": "The owner must be an email address",
   "station.connect.ownerWho": "Only workspace owners, admins or the current owner can change the owner",
