@@ -121,7 +121,10 @@ yet and you can add one, add it.
   hands no number for either (the coordinator of the migration, 2026-11-12). A height change a handler declares
   (`View::resizes`) makes its way as what comes does, in its column's one way (in a list's foot the list's, the room
   under the last block following the foot as it shows), alone by its spec, nothing where it comes out as tall; one not
-  declared is at once; what draws a ground by how tall something shows is given that (`View::shown_by`).
+  declared is at once; what draws a ground by how tall something shows is given that (`View::shown_by`). Said `foot`,
+  what it holds keeps to its foot all the way, cut at its top (flex Style's `come_foot`; an old view hosted in it too):
+  a composer grows from its foot, what is over it going up with it as one (`src/view/list_foot_keeps_foot_test.mbt`;
+  the coordinator of the migration, 2026-11-14).
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.

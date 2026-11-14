@@ -8869,6 +8869,7 @@ fn View::comes(
   st.come_fill = to <= 0.0 || from <= 0.0 || (n.coming && st.come_fill) || fill
   // (a structure's way a Move, whatever a height change declared said before: View::resizes says its own after)
   st.come_spec = None
+  st.come_foot = false
   st.come_from = from
   st.come_v = speed
   st.come_to = to
@@ -9209,6 +9210,7 @@ fn come_done(tree : Tree, v : View, m : Node) -> Unit {
   let st = m.flex.style
   m.coming = false
   st.come_grid = 0.0
+  st.come_foot = false
   m.come_off = fn() {  }
   st.come_now = 0.0 / 0.0
   // (all of what it comes to, the gap before it whole: as its column lays it out from here, whether it is measured

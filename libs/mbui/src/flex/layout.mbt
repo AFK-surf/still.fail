@@ -753,6 +753,22 @@ fn size_uncached(
   perform : Bool,
 ) -> Double {
   let s = node.style
+  // what it holds kept to its foot while its height goes its way (Style's come_foot), given that height by what lays it
+  // out: laid out whole at the height it comes to, measured so, and moved so its bottom is the node's bottom (its top
+  // cut there as it grows, the room over it empty as it closes)
+  if s.come_foot && perform && known(kh) {
+    s.come_foot = false
+    let now = s.come_now
+    s.come_now = undef
+    size_uncached(node, kw, undef, aw, ah, cb_w, cb_h, false) |> ignore
+    let natural = out_h.val
+    let w = size_uncached(node, kw, natural, aw, ah, cb_w, cb_h, perform)
+    s.come_now = now
+    s.come_foot = true
+    come_keep_foot(node, kh - natural)
+    out_h.val = kh
+    return w
+  }
   // an item coming or going along a row: as wide as its way has got of what it comes to, what it holds laid out whole
   // from its start at that (Style's come_across), as tall as that makes it; given its width by what lays it out (a
   // row's item at its basis), what it holds laid out whole all the same
@@ -789,6 +805,9 @@ fn size_uncached(
       // at that width it is told another room and lays it out otherwise, a table's rows beside each other at 760 and
       // 586 wide stacked, frame after frame: settings-station-processes' 平铺, the switches' sweep, 2026-11-14)
       let w = size_uncached(node, kw, natural, aw, ah, cb_w, cb_h, perform)
+      if perform {
+        come_keep_foot(node, tall - natural)
+      }
       out_h.val = tall
       return w
     }
@@ -928,6 +947,19 @@ fn size_uncached(
     return layout_flex(node, b, if known(w) { w } else { fw }, sized, aw, ah, perform)
   }
   layout_flex(node, b, w, h, aw, ah, perform)
+}
+
+///|
+/// What `node` holds, laid out whole at the height its come way goes to, kept to its foot where it says so (Style's
+/// come_foot): moved by `by` (how much shorter it shows than that height, as a negative), so its bottom is the node's
+/// bottom and what is over the node's top is cut there. Nothing where it keeps to its top, as ever.
+fn come_keep_foot(node : Node, by : Double) -> Unit {
+  if !node.style.come_foot || by == 0.0 {
+    return
+  }
+  for c in node.children {
+    c.top = c.top + by
+  }
 }
 
 ///|
