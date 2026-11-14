@@ -21,7 +21,7 @@ export type FormField = "username" | "password" | "code";
 /// each kind (FormField) a person could type in now, the first of each; `pick(kind)` focuses that one, its text
 /// selected (so what is typed replaces it). A code's field: marked so (one-time-code), named so, or a short field of
 /// digits; a code split one digit to a box is its first box.
-const FINDER = `(() => {
+export const FINDER = `(() => {
   const visible = (el) => !!el && !el.disabled && !el.readOnly && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
   const inputs = [];
   const walk = (root) => { for (const el of root.querySelectorAll("*")) { if (el.tagName === "INPUT") inputs.push(el); if (el.shadowRoot) walk(el.shadowRoot); } };
@@ -62,8 +62,22 @@ export const BUTTON_SCRIPT = `(() => {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 })()`;
 
+/// A tab's sign-in form as it is filled (a Chrome tab's: TabForm; a chat's Farview tab's: farview-form.ts).
+export interface SignInForm {
+  host(): Promise<string>;
+  url(): Promise<string>;
+  on(site: string): Promise<boolean>;
+  look(): Promise<FormAsks>;
+  type(kind: FormField, value: string): Promise<boolean>;
+  enter(): Promise<void>;
+  press(): Promise<boolean>;
+  mark(): Promise<void>;
+  marked(): Promise<boolean>;
+  close(): void;
+}
+
 /// A tab's sign-in form, on a connection of its own to the browser.
-export class TabForm {
+export class TabForm implements SignInForm {
   readonly #cdp: Cdp;
   readonly #session: string;
   readonly #targetId: string;
@@ -175,7 +189,7 @@ const STEPS = 5;
 /// Goes through `site`'s sign-in on `form`'s tab with `values`: each step's fields typed (each of `used`, what an
 /// earlier fill typed, not again: asked again, the page refused it), the form sent, until the page leaves its sign-in,
 /// asks a code not given, or needs a person. `wait(ms)` waits (the station's time); what was typed is added to `used`.
-export async function drive(form: TabForm, site: string, values: FormValues, used: Set<FormField>, wait: (ms: number) => Promise<void>): Promise<Driven> {
+export async function drive(form: SignInForm, site: string, values: FormValues, used: Set<FormField>, wait: (ms: number) => Promise<void>): Promise<Driven> {
   for (let step = 0; step < STEPS; step++) {
     if (!(await form.on(site))) return step === 0 ? { state: "person", why: "elsewhere" } : { state: "left" };
     const asks = await form.look();

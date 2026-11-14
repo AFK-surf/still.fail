@@ -20,6 +20,7 @@ export const BrowserLive = Layer.effectDiscard(
       Effect.sync(() => new FarviewTabs({ dir: join(data, "browser", "farview"), config: () => farviewConfig(config.raw()), screens })),
       (f) => Effect.sync(() => f.close()),
     );
+    browser.useFarview(farview);
     parts.door(browserDoor(browser));
     parts.sessionEnded((session) => {
       void browser.closeOf(session);

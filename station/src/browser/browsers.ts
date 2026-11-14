@@ -6,7 +6,8 @@
 // context (signins.ts) and taken out again when its grant ends, its cookies as they were then given back to the vault.
 // The context goes when its chat is archived or deleted, and with Chrome when Chrome ends (idle, a crash): a chat asking
 // again then has a new one, its sign-ins still granted put in again. The default context is the station's own, for the
-// tabs it opens itself (a login's page), no chat's.
+// tabs it opens itself (a login's page), no chat's. Where the station's config makes Farview the chats' browser
+// (farview.ts, `useFarview`), a chat's sign-ins, tabs and sign-in form are its Farview tab's instead.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Fibers } from "../ops/fibers.ts";
@@ -16,7 +17,8 @@ import { type BrowserOptions, type BrowserStatus, StationBrowser } from "./brows
 import type { GateParts } from "./gate.ts";
 import { sitePasskeys } from "./passkeys.ts";
 import { type SignedIn, expired, keptOf, siteCookies, stateOf } from "./signins.ts";
-import { TabForm } from "./signin-form.ts";
+import type { FarviewTabs } from "./farview.ts";
+import { type SignInForm, TabForm } from "./signin-form.ts";
 import type { TabInfo } from "./tabs.ts";
 
 /// A sign-in taken out of a chat's context as its grant ended: its cookies (and passkeys) as they were then (the site may
@@ -49,6 +51,8 @@ export class Browsers {
   /// the passkeys of its sign-ins still granted are to be put in again.
   #resumed: (session: string) => void = () => {};
   #used: (session: string, host: string) => void = () => {};
+  /// The chats' Farview, where the config makes it their browser.
+  #farview: FarviewTabs | null = null;
 
   constructor(o: BrowserOptions) {
     this.#dir = o.dir;
@@ -72,6 +76,15 @@ export class Browsers {
       this.#timers.delete(x.request);
       void this.#due(session).catch((e) => log.warn("browser", "a sign-in could not be taken out", { session, error: (e as Error).message }));
     }));
+  }
+
+  /// The chats' Farview (browser/module.ts): while its config is active, the chats' tabs and sign-ins are there.
+  useFarview(f: FarviewTabs) {
+    this.#farview = f;
+  }
+
+  #fv(): FarviewTabs | null {
+    return this.#farview?.active() ? this.#farview : null;
   }
 
   /// Hears each sign-in taken out of a chat's context, with its cookies as they were.
@@ -183,13 +196,17 @@ export class Browsers {
 
   /// The tabs of `session`'s chat.
   tabs(session: string): TabInfo[] {
+    const fv = this.#fv();
+    if (fv !== null) return fv.tabs(session);
     return this.station.tabs().filter((t) => t.session === session);
   }
 
   /// The sign-in form of `session`'s chat's tab `targetId`, on a connection of its own (signin-form.ts); refused for a
   /// tab not its chat's.
-  async form(session: string, targetId: string): Promise<TabForm> {
+  async form(session: string, targetId: string): Promise<SignInForm> {
     if (!this.tabs(session).some((t) => t.id === targetId)) throw new Error("no such tab in this chat's browser");
+    const fv = this.#fv();
+    if (fv !== null) return fv.form(session);
     const { cdp, session: tab } = await this.station.attach(targetId);
     return new TabForm(cdp, tab, targetId);
   }
@@ -233,6 +250,8 @@ export class Browsers {
   /// (signins.ts `keptOf`): its cookies, and its passkeys (a chat's context only: the station's has no authenticator);
   /// the browser started if it is not running.
   async cookies(session: string, sites: string[], station: boolean): Promise<string> {
+    const fv = this.#fv();
+    if (fv !== null && !station) return keptOf({ cookies: siteCookies(await fv.cookies(session), sites), passkeys: [] });
     const ctx = station ? undefined : await this.context(session);
     const { cookies } = await this.station.send("Storage.getCookies", ctx ? { browserContextId: ctx } : {});
     const passkeys = ctx === undefined ? [] : await (await this.station.passkeys()).read(ctx, sites);
@@ -245,6 +264,16 @@ export class Browsers {
     const state = stateOf(d.cookies);
     const cookies = siteCookies(state.cookies, d.sites);
     const passkeys = sitePasskeys(state.passkeys, d.sites);
+    const fv = this.#fv();
+    if (fv !== null) {
+      const x: SignedIn = { request: d.request, ...(d.workspace === undefined ? {} : { workspace: d.workspace }), sites: d.sites, until: d.until };
+      this.#signedIn.set(session, [...(this.#signedIn.get(session) ?? []).filter((y) => y.request !== d.request), x]);
+      this.#write();
+      await fv.putCookies(session, cookies);
+      log.info("browser", "a sign-in put into a chat's Farview", { session, request: d.request, sites: d.sites, cookies: cookies.length });
+      this.#arm(session, x);
+      return;
+    }
     const ctx = await this.context(session);
     const x: SignedIn = { request: d.request, ...(d.workspace === undefined ? {} : { workspace: d.workspace }), sites: d.sites, until: d.until };
     this.#signedIn.set(session, [...(this.#signedIn.get(session) ?? []).filter((y) => y.request !== d.request), x]);
@@ -260,6 +289,17 @@ export class Browsers {
     const now = this.#fibers.now() / 1000;
     const ended = (this.#signedIn.get(session) ?? []).filter((x) => x.until <= now);
     if (ended.length === 0) return;
+    const fv = this.#fv();
+    if (fv !== null) {
+      this.#signedIn.set(session, (this.#signedIn.get(session) ?? []).filter((x) => x.until > now));
+      this.#write();
+      for (const x of ended) {
+        const cookies = await fv.takeOut(session, x.sites);
+        log.info("browser", "a sign-in taken out of a chat's Farview as its grant ended", { session, request: x.request, sites: x.sites });
+        if (cookies.length > 0) this.#takenOut(session, x.request, keptOf({ cookies, passkeys: [] }), x.workspace);
+      }
+      return;
+    }
     // Its context is not there (the browser is closed, or not taken up yet): taken out when it next is. One gone with
     // its Chrome took its cookies with it: nothing to take out, nothing new to give back.
     const ctx = this.#contexts.get(session);

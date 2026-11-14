@@ -6,6 +6,7 @@ import { createServer, type Socket } from "node:net";
 import { test } from "node:test";
 import { chatDir, farviewConfig, farviewHowTo, hostFileOf, type FarviewTabs } from "../src/browser/farview.ts";
 import { DEFAULT_SIZE, FarviewScreen, FrameLink, inputOf, sizeFor } from "../src/browser/farview-screen.ts";
+import { decodeAnswer, encodeAsk } from "../src/browser/farview-agent.ts";
 import { browserTools, type ToolBrowsers } from "../src/browser/tool.ts";
 
 test("Farview is the chats' browser only where config.json names it with where it is", () => {
@@ -164,4 +165,19 @@ test("the browser tool gives the chat's Farview where the switch is on, and its 
   assert.deepEqual(stopped, ["chat:c-1"]);
   on = false;
   assert.match(String(await tool!.run("chat:c-1", {})), /DevTools for this chat: http:\/\/127\.0\.0\.1:9222/);
+});
+
+test("the station's asks of a Farview tab are its wire's messages, and its answers read", () => {
+  // (Farview's src/proto: a 4-byte length, the kind, each string its length and UTF-8 bytes, zigzag varints)
+  assert.deepEqual([...encodeAsk({ kind: "look" })], [0, 0, 0, 1, 38]);
+  assert.deepEqual([...encodeAsk({ kind: "cookies", verb: "get", arg: "é" })], [0, 0, 0, 8, 70, 6, ...Buffer.from("get"), 4, 0xc3, 0xa9]);
+  const body = (kind: number, ...strs: string[]) => {
+    const out = [kind * 2];
+    for (const s of strs) out.push(Buffer.byteLength(s) * 2, ...Buffer.from(s));
+    return Buffer.from(out);
+  };
+  assert.deepEqual(decodeAnswer(body(33, "[1]")), { kind: "value", value: "[1]" });
+  assert.deepEqual(decodeAnswer(body(20, "https://a.test/", "A", "outline")), { kind: "seen", url: "https://a.test/", title: "A", outline: "outline" });
+  assert.deepEqual(decodeAnswer(body(21)), { kind: "taken" });
+  assert.equal(decodeAnswer(body(12)), null);
 });

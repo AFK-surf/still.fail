@@ -9,8 +9,10 @@
 // its frame port (JSON lines; what the tab's screen is made of, farview-screen.ts). It is started as a job is, in a
 // group of its own, and outlives a station process: the next one takes it up by the `host.json` it wrote.
 //
-// Not yet: a sign-in from the vault (`sign_in`) is put into the chat's Chrome context, not here; the login pages a
-// station opens are Chrome's.
+// Sign-ins ( 登录态) go into the tab as they go into a chat's Chrome context (browsers.ts): a sign-in the vault grants
+// is its cookies set in the host's jar, taken out again as the grant ends; one kept is read from it; a card's sign-in
+// fills the tab's form (farview-form.ts). Farview has no authenticator: a sign-in's passkeys are not put in.
+// Not yet: the login pages a station opens of its own are Chrome's.
 import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rm } from "node:fs/promises";
 import { connect } from "node:net";
@@ -22,7 +24,10 @@ import { log } from "../ops/log.ts";
 import { startLasting } from "../ops/processes.ts";
 import type { Screens } from "../screens/source.ts";
 import type { BrowserStatus } from "./browser.ts";
+import { askTab } from "./farview-agent.ts";
+import { FarviewForm } from "./farview-form.ts";
 import { FarviewScreen } from "./farview-screen.ts";
+import { type CookieParam, allCookies, ofSites } from "./signins.ts";
 import type { TabInfo } from "./tabs.ts";
 
 /// Where Farview is, as the config says it; null: the chats have Chrome.
@@ -202,11 +207,53 @@ export class FarviewTabs {
     return this.#hosts.get(session)?.agent ?? null;
   }
 
+  /// Its one tab, by the id its screen goes by after `browser:` (as a Chrome tab's: a sign-in's card opens
+  /// `browser:<tab>`).
   tabs(session: string): TabInfo[] {
     const host = this.#hosts.get(session);
     if (host === undefined) return [];
     const page = host.screen.page();
-    return [{ id: host.screen.id, title: page.title, url: page.url, attached: false, session }];
+    return [{ id: host.screen.id.replace(/^browser:/, ""), title: page.title, url: page.url, attached: false, session }];
+  }
+
+  async #cookies(session: string, verb: "get" | "set" | "clear", arg: string): Promise<string> {
+    const host = await this.host(session);
+    const a = await askTab(host.agent, { kind: "cookies", verb, arg });
+    if (a.kind !== "value") throw new Error("Farview's tab did not give its cookies");
+    if (a.value.startsWith("error:")) throw new Error(`Farview: ${a.value}`);
+    return a.value;
+  }
+
+  /// The cookies of the chat's tab (its host started if it is not running).
+  async cookies(session: string): Promise<CookieParam[]> {
+    let read: unknown = [];
+    try {
+      read = JSON.parse(await this.#cookies(session, "get", ""));
+    } catch {}
+    return allCookies(read);
+  }
+
+  /// `cookies` set in the chat's tab (a sign-in granted).
+  async putCookies(session: string, cookies: CookieParam[]): Promise<void> {
+    if (cookies.length > 0) await this.#cookies(session, "set", JSON.stringify(cookies));
+  }
+
+  /// The cookies of `sites` taken out of the chat's tab where its host runs (a sign-in's grant ended): them, as they
+  /// were.
+  async takeOut(session: string, sites: string[]): Promise<CookieParam[]> {
+    if (!this.#hosts.has(session)) {
+      const found = await this.#find(session, this.#dirOf(session));
+      if (found === null) return [];
+    }
+    const taken = (await this.cookies(session)).filter((c) => ofSites(c.domain, sites));
+    // (Farview clears a host's cookies and its parent domains': each of theirs by its own, the site's among them)
+    for (const domain of new Set(taken.map((c) => c.domain.replace(/^\./, "")))) await this.#cookies(session, "clear", domain);
+    return taken;
+  }
+
+  /// The tab's sign-in form, filled from a card.
+  async form(session: string): Promise<FarviewForm> {
+    return new FarviewForm((await this.host(session)).agent);
   }
 
   /// Ends `session`'s chat's host; its directory (cookies, storage, where it was) stays for when it asks again.
@@ -240,7 +287,7 @@ export function farviewHowTo(config: FarviewConfig, port: number): string {
     "Steps: `look`, `go:<address>`, `click:<selector>`, `fill:<selector>=<words>`, `submit:<selector>`, `key:<key>` or `key:<key>@<selector>`, `back`, `forward`, `reload`, `wait:<ms>`, `shot:<file.png>`, `eval:<js>` (its result as JSON).",
     `For example: \`${run} go:https://example.com look\`.`,
     "There is no DevTools address: Playwright and chrome-devtools-mcp do not drive it.",
-    "Its cookies and storage are this chat's alone and stay until the chat is archived.",
+    "Its cookies and storage are this chat's alone and stay until the chat is archived. A site's sign-in: `sign_in` puts one the vault keeps into this tab, or asks a person on a card, as with Chrome.",
     "A person can see and drive the tab from their app (the `screen` tool gives the link); when they act on it, it is theirs: the agent is told \"the person took the tab back\" and waits until they say it is done.",
   ].join("\n");
 }
