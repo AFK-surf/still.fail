@@ -54,7 +54,7 @@ import { MOVED_FROM_BUILD, ROOT_OUT_FROM_BUILD } from "../../../station/src/api/
 import { check, Device, dir, fail, failures, type J, log, must, stationDo, stationSays, whenChanged, within } from "./device.ts";
 
 const auto = process.env.E2E_HANDOVER !== "call";
-const short = (s: J) => JSON.stringify({ state: s.state, cause: s.cause, message: s.message });
+const short = (s: J) => JSON.stringify({ state: s.state, cause: s.cause, old: s.old, message: s.message });
 
 // alice's two apps and her web page; frank, an admin, and gina, a member, an app each
 // (A says a release under MOVED_FROM_BUILD until ivy is set up, round 19's start: the chain held unmoved meanwhile)
@@ -729,7 +729,7 @@ try {
     sDev.build = `0.1.${MOVED_FROM_BUILD}`;
     await sDev.restart();
     for (const id of both()) log(`  S sees ${id === fifthId ? "the first" : "the second"}: ${short(await inThree(sDev, id, (s) => s.state === "error" && s.old === "app"))}`);
-    sDev.build = undefined;
+    sDev.build = `0.1.${ROOT_OUT_FROM_BUILD}`;
     await sDev.restart();
     for (const id of both()) await inThree(sDev, id, (s) => s.state === "online");
   });
