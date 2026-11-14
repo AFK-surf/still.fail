@@ -57,7 +57,8 @@ fn check_row_box_node(
 ) -> Unit {
   let side = fn() { theme().rows.check }
   let corner = fn() { theme().rows.check_corner }
-  parent.box(made_for=loc, fn(b) {
+  // (what it is to the hand, the keyboard and a screen reader: mbui's headless toggle's)
+  @headless.toggle(made_for=loc, parent, Checkbox, label, on, turn, disabled~, fn(b, _) {
     b
     .width(By(fn() { Some(side()) }))
     .height(By(fn() { Some(side()) }))
@@ -80,13 +81,7 @@ fn check_row_box_node(
       (1.0, line)
     }))
     .alpha(By(fn() { if disabled() { check_disabled_alpha } else { 1.0 } }))
-    .says(By(fn() { Some(@view.said(Checkbox, label=label(), check=if on() { On } else { Off })) }))
     |> ignore
-    presses_node(b, on=fn() { !disabled() }, fn() {
-      if !@signals.untracked(disabled) {
-        turn(!@signals.untracked(on))
-      }
-    })
     b.show(on, fn(m) {
       m
       .words(Is("✓"))
