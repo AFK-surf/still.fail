@@ -34,6 +34,8 @@ export const LOGS_BEFORE = 256;
 
 // The first build that keeps every log a workspace's stations give and reads them by their heads (GET /lock/heads,
 // POST /lock/given): a core of a release under it is told to update (mesh/serve.ts `movedTooOld`) only in a workspace
-// whose state in force is made of more than LOGS_BEFORE logs (`Cloud.needs`), and nowhere else. 9999999 until the
-// commit that brings it is on main: the lead sets it to that commit's build then, never below it.
-export const LOGS_ANY_FROM_BUILD = 9999999;
+// whose state in force is made of more than LOGS_BEFORE logs (`Cloud.needs`), and nowhere else. 9300: a
+// margin over main (9273) as the change was made ready, for this commit alone; the change after it sets the build of
+// the commit that brought it (as ROOT_OUT_FROM_BUILD above: until main reaches a margin, a core in such a workspace is
+// told to update with no release to update to; no workspace of that size has moved, the hold of 200 going with this).
+export const LOGS_ANY_FROM_BUILD = 9300;
