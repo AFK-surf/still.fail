@@ -436,7 +436,14 @@ for t in $targets; do
         # (the second's pages on two programs beside its sweeps at the default rate, on $n at a rate, where it has none)
         p2=2
         [ -z "${MBUI_TEST_FPS:-}" ] || p2=$n
-        runs+=("@pages 1 $n ${g1[*]}" "@pages 2 $p2 ${g2[*]}" "@pages 3 1 ${g3[*]}" "@pages 4 $n ${g4[*]}")
+        # (the third's pages on two programs at the default rate, dealt still as on one (its specs' 1): beside kept_rows'
+        # five and answers_still's, which end by some 120 s, its pages on one ran on alone with three cores idle, 115
+        # files 251-287 s of a job 265-295 s of its 5 minutes, read-stays-cheaper 43578793657 and main 0ebf623b
+        # 43573188215, where the other three were 142-169 s. Dealt as on two it took twice the pages at 60 a second,
+        # 2026-11-11, above; dealt as on one, the same files go on two.)
+        p3=1
+        [ -n "${MBUI_TEST_FPS:-}" ] || p3=2
+        runs+=("@pages 1 $n ${g1[*]}" "@pages 2 $p2 ${g2[*]}" "@pages 3 $p3 ${g3[*]}" "@pages 4 $n ${g4[*]}")
       else
         runs+=("@pages 0 $n $(page_deal 1,1,0,1 "${pages[@]}" | cut -d' ' -f2 | tr '\n' ' ')")
       fi
