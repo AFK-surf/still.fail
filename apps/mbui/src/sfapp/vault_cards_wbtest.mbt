@@ -702,8 +702,7 @@ test "a request to delete an item: 删除密钥 and its name, 删除 deletes it"
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
-  assert_true(t.words().any(fn(x) { x.5 > 0.0 && x.0.has_prefix("删除密钥") }), msg="its title")
-  for w in ["办公室 Mac 主机管理员登录", "删除", "保留"] {
+  for w in ["删除密钥 办公室 Mac 主机管理员登录", "删除", "保留"] {
     assert_true(vt_seen(t, w) is Some(_), msg="\{w}: \{Repr(t.words().filter(fn(x) { x.5 > 0.0 }).map(fn(x) { x.0 }))}")
   }
   assert_true(vt_seen(t, "允许") is None, msg="a use's answer in its place")
