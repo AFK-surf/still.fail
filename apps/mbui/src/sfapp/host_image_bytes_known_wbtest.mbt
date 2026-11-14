@@ -9,6 +9,9 @@ fn init {
     // (every screen walked over a core answering late, a chat's pictures opened and stepped: what CI's runs held at
     // most)
     ("src/sfapp/answers_still_wbtest.mbt", 262430),
+    // (every screen's switches pressed over a core answering late, its pictures among them: what Studio's run held at
+    // most, 2026-11-14)
+    ("src/sfapp/switches_still_wbtest.mbt", 2906925),
     ("src/sfapp/chat_bar_wide_wbtest.mbt", 89156),
     ("src/sfapp/chat_images_told_wbtest.mbt", 57845),
     ("src/sfapp/chat_keys_wbtest.mbt", 127704),

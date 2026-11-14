@@ -582,6 +582,24 @@ jobs:
           - { group: 4/4, fps: "7" }
     env: *app-env
     steps: *app-steps
+  # Every screen's switches pressed over a core answering late, each held to its row of switches_known (src/sfapp's
+  # switches_still_wbtest.mbt): main's own run after a merge and the day's, never a branch's pushes (the coordinator of
+  # the migration, 2026-11-13: too long for them), at the default rate alone, on three runners, its twelve runs four a
+  # runner (scripts/test.sh APP_GROUP=switches)
+  switches:
+    name: native (app switches part ${{ matrix.part }})
+    needs: app-build
+    if: ${{ !cancelled() && needs.app-build.result == 'success' && github.event_name != 'workflow_run' && inputs.rates != 'no' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [switches]
+        fps: [""]
+        part: [1/3, 2/3, 3/3]
+    env: *app-env
+    steps: *app-steps
   # (each per-file bar of the app's set beside the most one Tester of its file found under it in the runs at 60, 120
   # and the default rate, all their jobs' together: a file's tests run in one job, but a Tester made in another file's
   # helper is filed under that file, whose own tests may run in another (scripts/motion_bars.sh). A bar to fall or a
@@ -589,7 +607,7 @@ jobs:
   # 2026-11-12), and what merged since is said by rates-said)
   motion-bars:
     name: native (the app's bars against what was found)
-    needs: [native, replay-fps, app, app-rates]
+    needs: [native, replay-fps, app, app-rates, switches]
     if: ${{ always() && github.event_name != 'workflow_run' && inputs.rates != 'no' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -614,7 +632,7 @@ jobs:
   # through, the likeliest first (scripts/rates-said.sh), for whoever brought it to mend forward. Red here holds no pull
   # request back. (actions: read: this run's jobs and main's runs before it; its callers grant it)
   rates-said:
-    needs: [native, app-build, replay-build, replay-fps, app, app-rates, motion-bars]
+    needs: [native, app-build, replay-build, replay-fps, app, app-rates, switches, motion-bars]
     if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 3

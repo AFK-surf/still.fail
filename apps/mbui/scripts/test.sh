@@ -237,7 +237,8 @@ for t in $targets; do
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
       src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:2 src/sfapp/send_steady_wbtest.mbt:@1@2
-      src/sfapp/chat_page_nodes_wbtest.mbt:2 src/sfapp/answers_still_wbtest.mbt:@2@3@4@5)
+      src/sfapp/chat_page_nodes_wbtest.mbt:2 src/sfapp/answers_still_wbtest.mbt:@2@3@4@5
+      src/sfapp/switches_still_wbtest.mbt:12)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -252,7 +253,8 @@ for t in $targets; do
       if [ -n "${MBUI_TEST_FPS:-}" ]; then
         # (real_size's, every screen opened on a workspace of real size and given its changes, the same: a sweep of every
         # screen, its bars set on the default run; 40-102 s a run at the four rates, #5407 42976047326)
-        case $f in */screens_wbtest.mbt | */squeeze_said_wbtest.mbt | */words_large_wbtest.mbt | */real_size_wbtest.mbt) continue ;; esac
+        # (switches_still's, every screen's switches pressed, its table set on the default run: main's switches job's alone)
+        case $f in */screens_wbtest.mbt | */squeeze_said_wbtest.mbt | */words_large_wbtest.mbt | */real_size_wbtest.mbt | */switches_still_wbtest.mbt) continue ;; esac
       fi
       # (in k runs of its tests by their index: moon test FILE --index FROM-TO, the tests in the file's order)
       m=$(grep -c '^test "' "$f")
@@ -502,6 +504,10 @@ for t in $targets; do
       # 54-124 s, main 85413543 42736997391, station-conversations-survive 42739107408, 2026-11-10)
       "src/sfapp/preview_tree_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "" | 60) echo 1 ;; *) echo 4 ;; esac ;;
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
+      # (switches_still's twelve, every screen's switches pressed over a core answering late, on three runners of their
+      # own, four side by side on each one's four cores: main's alone, after a merge (mbui-check.yml's switches), its
+      # 960 walks some 700 s in Wasm in one process on Studio, 2026-11-13)
+      "src/sfapp/switches_still_wbtest.mbt "*) echo switches ;;
       # (send_steady's three on the fourth, beside its pages on its four cores: the deal reckons them there)
       "src/sfapp/send_steady_wbtest.mbt "*) echo 4 ;;
       # (chat_page_nodes' two on the fourth, the one with the most programs; reckoned there at each rate. At the
@@ -523,8 +529,9 @@ for t in $targets; do
     mine=()
     for r in "${runs[@]}"; do
       [ -n "${r// /}" ] || continue
-      # (APP_GROUP=contrast, corners: that sweep's runs alone, on a runner of their own, beside the four)
-      if [ "$APP_GROUP" = contrast ] || [ "$APP_GROUP" = corners ]; then [ "$(app_group_of 4 $r)" = "$APP_GROUP" ] && mine+=("$r")
+      # (APP_GROUP=contrast, corners, switches: that sweep's runs alone, on a runner of their own, beside the four;
+      # switches' on three, APP_PART below)
+      if [ "$APP_GROUP" = contrast ] || [ "$APP_GROUP" = corners ] || [ "$APP_GROUP" = switches ]; then [ "$(app_group_of 4 $r)" = "$APP_GROUP" ] && mine+=("$r")
       # (APP_GROUP=real-size: real_size's two runs alone, whichever of the four each is dealt to)
       elif [ "$APP_GROUP" = real-size ]; then [ "${r%% *}" = src/sfapp/real_size_wbtest.mbt ] && mine+=("$r")
       else [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r"); fi
