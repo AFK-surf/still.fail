@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [baf7f4d5b](https://github.com/AFK-surf/monoid/commit/baf7f4d5b1723338f2f891a15ffdf90f7cb2809a) app: keep quote available for wrapped selections ( | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [9ab2e861e](https://github.com/AFK-surf/monoid/commit/9ab2e861e597888b70026718c56019b5abccfde8) app tests: chat_opens_whole's pictures bar falls t | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [dd5abd9f1](https://github.com/AFK-surf/monoid/commit/dd5abd9f1fd5d363c431d8af826f80566777fd08) mbui: the composer's first card moves the chat's e | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [397697418](https://github.com/AFK-surf/monoid/commit/397697418f1db38553b80eb64d4311ac4dba8b56) lock: after a move, a member with no log of their  | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [6b92c390c](https://github.com/AFK-surf/monoid/commit/6b92c390cbdac8dce1576111917d5c7b3328e2cb) station: a chat's entries and letters read by the  | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.88 | 112.98 |
 | [d64201f31](https://github.com/AFK-surf/monoid/commit/d64201f311356a3b2a8fad873a5cdb82149c52ae) mbui: a height declared to go its way keeps what i | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.58 | 111.75 |
 | [d64201f31](https://github.com/AFK-surf/monoid/commit/d64201f311356a3b2a8fad873a5cdb82149c52ae) mbui: a height declared to go its way keeps what i | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.58 | 111.75 |
-| [4ef52f094](https://github.com/AFK-surf/monoid/commit/4ef52f094ff4238961172ac22e3d97282acc3dff) mbui: reuse execution history row views and keep l | 1.99 | 2.72 | 11.61 | 31.24 | 41.75 | 27.85 | 53.46 | 96.57 | 114.87 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [baf7f4d5b](https://github.com/AFK-surf/monoid/commit/baf7f4d5b1723338f2f891a15ffdf90f7cb2809a) app: keep quote available for wrapped selections ( | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.1 |
 | [9ab2e861e](https://github.com/AFK-surf/monoid/commit/9ab2e861e597888b70026718c56019b5abccfde8) app tests: chat_opens_whole's pictures bar falls t | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.1 |
 | [dd5abd9f1](https://github.com/AFK-surf/monoid/commit/dd5abd9f1fd5d363c431d8af826f80566777fd08) mbui: the composer's first card moves the chat's e | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.31 |
 | [397697418](https://github.com/AFK-surf/monoid/commit/397697418f1db38553b80eb64d4311ac4dba8b56) lock: after a move, a member with no log of their  | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.18 |
