@@ -569,6 +569,10 @@ for t in $targets; do
       # beside its four others (99-167 s), where 60-68 was 96; its tests 52-59 8-11 s each on Studio, none the most)
       "src/sfapp/switches_still_wbtest.mbt "*) echo switches ;;
       # (send_steady's three on the fourth, beside its pages on its four cores: the deal reckons them there)
+      # (its tests 2-9, its longest, on the first since at the default rate, where it walks its frames: beside them the
+      # fourth's pages were 242 s and its job 259 on main ba23979e 43618070194, its three runs 101-152 s, where the
+      # first's job was 127 with its pages 116; at a rate it returns at once, @ui.test_at_a_rate, and stays)
+      "src/sfapp/send_steady_wbtest.mbt --index 2-"*) case "${MBUI_TEST_FPS:-}" in "") echo 1 ;; *) echo 4 ;; esac ;;
       "src/sfapp/send_steady_wbtest.mbt "*) echo 4 ;;
       # (chat_page_nodes' two on the fourth, the one with the most programs; reckoned there at each rate. At the
       # default rate on the second, whose pages are on two programs beside its sweeps: on the fourth beside
