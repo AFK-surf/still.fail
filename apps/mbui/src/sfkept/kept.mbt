@@ -306,6 +306,7 @@ let kept_answers : String =
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"a-maple-0\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"a-maple-0\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"chat%3Ac-4dbf0d0c6e\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"chat%3Ac-4dbf0d0c6e\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"chat:c-2\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"chat:c-2\"}",{"open":[]}]
+  #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"k-maple-3\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"k-maple-3\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"k-maple-9\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"k-maple-9\",\"change\":{\"action\":\"open\",\"tab\":\"service:j-web\",\"auto\":true}}",{"next":{"tabs":["service:j-web"],"active":"service:j-web"},"tabs":{"open":[]}}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"k-maple-9\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"k-maple-9\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"new:1\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"new:1\",\"change\":{\"action\":\"clear\",\"tab\":null,\"auto\":true}}",{"next":{"tabs":[]},"tabs":{"open":[]}}]
