@@ -24,6 +24,10 @@
 // opening tried a second time beside its first; and an endpoint a dial found stuck is bound anew before the next
 // dial, while nothing is on it (wake.mbt).
 //
+// The endpoint is bound as its program says (`Binding`: peers looked up, the protocols it takes connections on,
+// its relays' entries), the relays are told again (`Mesh::retune`), and a connection a peer dials to it is its
+// program's to take (`Mesh::incoming`), never a link (bind.mbt).
+//
 // One connection to a peer in a scope, on the one endpoint, through the relays given (and direct, where the endpoint
 // may): what that mesh does beside that is not here yet (the choice among several ways and relays, each relay's own
 // endpoint, a peer dialled at the addresses it said, peers looked up on the LAN and in the DHT, traces, the day's
@@ -162,6 +166,23 @@ pub struct Mesh {
   priv id : String
   /// The device's key: what the endpoint is bound with, each time.
   priv secret : Bytes
+  /// The relays the endpoint is on and a peer is dialled through, and their entries: as it was made with, then as
+  /// it was last told (`Mesh::retune`, bind.mbt). And what else it is bound with, which stays.
+  priv mut relays : Array[String]
+  priv mut entries : Array[RelayEntry]
+  priv binding : Binding
+  /// The relays were told again and the endpoint is not yet on them: it is bound anew by the next link that finds
+  /// nothing on it, where the bind begun as they were told did not come to it.
+  priv mut retuned : Bool
+  /// One telling of the entries at the shell at a time, in the order told (`Mesh::retune`).
+  priv tuning : @effect.Semaphore
+  /// The connections peers dial to the endpoint (bind.mbt): one asks for the next at a time; what the wait under
+  /// way at the shell ends with, kept until an asker takes it, or let go of with the endpoint it was asked of
+  /// (`Mesh::forget_coming`: an asker takes only what is still here, and is told to look again as it is let go
+  /// of, the close's doing too); those taken whose end is not told yet.
+  priv taking : @effect.Semaphore
+  priv mut coming : @effect.Deferred[Taken]?
+  priv incomings : Array[Incoming]
   /// A dial ran out of time with no connection made: the endpoint may be stuck, and is bound anew before the next
   /// dial where nothing is on it, `rebind_ms` after the last time at the soonest. When it last was; and whether
   /// one is under way: whoever would dial meanwhile waits (`held`).
@@ -171,8 +192,9 @@ pub struct Mesh {
   /// Whoever asked for a link and waits before any dial is made for it (`Mesh::hold`): for the endpoint to be
   /// bound anew, or, taken for stuck, to have nothing left on it. Each with its place: told to look again as
   /// either may be so (`Mesh::eased`), and failed as closed where its place is let go of (`drop_link`) or the
-  /// mesh closes. No opening is theirs yet, so `links` does not say them.
-  priv held : Array[(Place, @effect.Deferred[Unit])]
+  /// mesh closes. No opening is theirs yet, so `links` does not say them. With no place: whoever asked for a
+  /// connection a peer dials and waits for the endpoint being bound anew (`Mesh::incoming`).
+  priv held : Array[(Place?, @effect.Deferred[Unit])]
   /// Its fibers: the dials, each link's answer, pings and renewal.
   priv scope : @effect.Scope
   /// The links, by place. An opening not yet ended is always here, which `close` goes by: one is taken out or put
@@ -194,7 +216,15 @@ pub struct Mesh {
 
 ///|
 /// Binds the endpoint with the device key kept in `store` (made and kept the first time).
-pub async fn Mesh::make(shell : @shell.Shell, store : Store, options : Options) -> Mesh {
+///
+/// `binding`: what else the endpoint is bound with (bind.mbt); none said: nothing looked up, no connection taken,
+/// no entries, as before there was any.
+pub async fn Mesh::make(
+  shell : @shell.Shell,
+  store : Store,
+  options : Options,
+  binding? : Binding = Binding::none(),
+) -> Mesh {
   if options.says is Some(says) {
     for field in own_fields {
       if says.contains(field) {
@@ -214,7 +244,9 @@ pub async fn Mesh::make(shell : @shell.Shell, store : Store, options : Options) 
       secret
     }
   }
-  let endpoint = bind(shell, options, secret)
+  let relays = options.relays.copy()
+  let entries = binding.entries.copy()
+  let endpoint = bind(shell, relays, options.relay_only, binding, entries, secret)
   let id = match (shell.ask("iroh.endpointId", { "id": endpoint }) catch { e => raise under("bind_failed", e) }) {
     String(id) => id
     _ => raise failed("bind_failed")
@@ -225,6 +257,14 @@ pub async fn Mesh::make(shell : @shell.Shell, store : Store, options : Options) 
     endpoint,
     id,
     secret,
+    relays,
+    entries,
+    binding,
+    retuned: false,
+    tuning: @effect.Semaphore::new(1),
+    taking: @effect.Semaphore::new(1),
+    coming: None,
+    incomings: [],
     stuck: false,
     rebound_at: None,
     rebinding: false,
@@ -238,21 +278,6 @@ pub async fn Mesh::make(shell : @shell.Shell, store : Store, options : Options) 
     health_waits: [],
     closed: false,
   }
-}
-
-///|
-/// An endpoint bound at the shell with the device's key, as the mesh's options say: its handle.
-async fn bind(shell : @shell.Shell, options : Options, secret : Bytes) -> Json {
-  let relays = Json::array(options.relays.map(relay => Json::string(relay)))
-  let bound = shell.call(
-    "iroh.bind",
-    { "relayUrls": relays, "relayOnly": Json::boolean(options.relay_only), "lookup": false },
-    bytes=secret,
-  ) catch {
-    e => raise under("bind_failed", e)
-  }
-  guard bound.json is { "id": endpoint, .. } else { raise failed("bind_failed") }
-  endpoint
 }
 
 ///|
@@ -320,15 +345,17 @@ pub async fn Mesh::link(
     }
   }
   guard !self.closed else { raise failed("closed") }
-  // The endpoint taken for stuck, nothing on it: it is bound anew, begun in this step.
-  if !self.rebinding && self.stuck && self.idle() && self.may_rebind() {
+  // The endpoint taken for stuck, or not yet on the relays it was told (`Mesh::retune`), nothing on it: it is
+  // bound anew, begun in this step.
+  if !self.rebinding && (self.stuck || self.retuned) && self.idle() && self.may_rebind() {
     self.rebind()
   }
-  // Nothing is dialled on an endpoint that is being bound anew, nor on one taken for stuck that is to be once
-  // what is still on it ended by itself (`Mesh::settling`): a dial begun there would keep it from ever being
-  // so. This waits to be told (`Mesh::hold`), and then looks at everything anew, its place first: it waited.
-  if self.rebinding || (self.stuck && self.may_rebind() && self.settling()) {
-    self.hold(place)
+  // Nothing is dialled on an endpoint that is being bound anew, nor on one taken for stuck, or not yet on the
+  // relays told, that is to be once what is still on it ended by itself (`Mesh::settling`): a dial begun there
+  // would keep it from ever being so. This waits to be told (`Mesh::hold`), and then looks at everything anew, its
+  // place first: it waited.
+  if self.rebinding || ((self.stuck || self.retuned) && self.may_rebind() && self.settling()) {
+    self.hold(Some(place))
     return self.link(peer, credentials, scope~)
   }
   self.dial(place, credentials, fresh).done.wait()
@@ -337,7 +364,7 @@ pub async fn Mesh::link(
 ///|
 /// Waits before a dial for `place` is made, until told to look again (`Mesh::eased`); fails as closed where the
 /// place is let go of meanwhile (`drop_link`) or the mesh closes. Given up, it is no more waited for.
-async fn Mesh::hold(self : Mesh, place : Place) -> Unit {
+async fn Mesh::hold(self : Mesh, place : Place?) -> Unit {
   let turn : @effect.Deferred[Unit] = @effect.Deferred::new()
   self.held.push((place, turn))
   defer {
@@ -492,11 +519,19 @@ pub fn Mesh::drop_link(self : Mesh, peer : String, scope? : String = "", reason?
   let place : Place = { scope, peer }
   // (whoever asked for it and waits before any dial is made: told as of an opening given up)
   for one in self.held.copy() {
-    if one.0 == place {
+    if one.0 == Some(place) {
       ignore(one.1.fail(failed("closed")))
     }
   }
-  self.held.retain(one => one.0 != place)
+  self.held.retain(one => one.0 != Some(place))
+  self.let_go(place, reason)
+}
+
+///|
+/// What is at `place` is let go of, as `drop_link` says: its half that is of `links`. Whoever waits to dial there
+/// is not told by this (the endpoint let go of whole to be bound on other relays leaves them to be dialled on
+/// the one that comes: `Mesh::rehome`, bind.mbt).
+fn Mesh::let_go(self : Mesh, place : Place, reason : String) -> Unit {
   guard self.links.get(place) is Some(opening) else { return }
   match opening.result {
     None => {
@@ -554,7 +589,7 @@ async fn Mesh::open(self : Mesh, place : Place, credentials : async (String, Boo
   let call : Ref[Int64?] = Ref(None)
   let connection : Ref[Json?] = Ref(None)
   let dialled : @effect.Deferred[Json] = @effect.Deferred::new()
-  let addr : Json = { "id": Json::string(peer), "relays": Json::array(self.options.relays.map(relay => Json::string(relay))) }
+  let addr : Json = { "id": Json::string(peer), "relays": Json::array(self.relays.map(relay => Json::string(relay))) }
   ignore(
     self.scope.fork(name="mesh dial", () => {
       // (given up before this took its first step: nothing is dialled for it. The opening's own fiber forks this and
@@ -602,7 +637,7 @@ async fn Mesh::open(self : Mesh, place : Place, credentials : async (String, Boo
       let stream : Stream = { shell, id: stream }
       let control : Control = {
         stream,
-        lines: { stream, carry: @wire.Carry::new() },
+        lines: { stream, carry: @wire.Carry::new(), most: max_head },
         says: self.options.says,
         refusal: self.options.refusal,
         named: false,
@@ -882,6 +917,14 @@ pub async fn Mesh::close(self : Mesh) -> Unit {
   }
   self.live.clear()
   self.racing.clear()
+  let taken = self.incomings.copy()
+  self.incomings.clear()
+  for incoming in taken {
+    ignore(incoming.gone.succeed({ kind: "local", reason: "closed" }))
+  }
+  // (the wait for one a peer dials: whoever waits on it looks again, and finds the mesh closed; a connection it
+  // had brought that nobody took is let go of)
+  self.forget_coming()
   // (whoever waits to dial: for the endpoint to be bound anew, or to have nothing left on it)
   let held = self.held.copy()
   self.held.clear()
@@ -902,6 +945,10 @@ pub async fn Mesh::close(self : Mesh) -> Unit {
     for link in open {
       ignore(attempt(() => self.shell.call("conn.close", { "id": link.conn, "code": 0, "reason": "closed" })))
     }
+    for incoming in taken {
+      ignore(attempt(() => self.shell.call("conn.close", { "id": incoming.conn, "code": 0, "reason": "closed" })))
+    }
+    // (with it go the connections on it nobody took, and the wait for the next: `iroh.close`, in both shells)
     ignore(attempt(() => self.shell.call("iroh.close", { "id": self.endpoint })))
   })
 }
