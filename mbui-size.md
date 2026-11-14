@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [ccb596e15](https://github.com/AFK-surf/monoid/commit/ccb596e15dff188924f64bfc807e284ead6a315a) mbui film, app: a picture says every rule its fram | 2.01 | 2.76 | 11.86 | 31.73 | 43.86 | 28.34 | 55.51 | 97.24 | 106.15 |
 | [dde6fa102](https://github.com/AFK-surf/monoid/commit/dde6fa102d3d2d63bbacb78ed807d2a66b06ba40) mbui app: the chat's page made as nodes has its 对话 | 2.01 | 2.76 | 11.86 | 31.73 | 43.86 | 28.34 | 55.51 | 97.24 | 106.15 |
 | [2b23c5376](https://github.com/AFK-surf/monoid/commit/2b23c5376c888f0dc29c2fc9ccf4abfd5450cf79) mbc: a generic file's instances pieced by the type | 2.01 | 2.76 | 11.85 | 31.71 | 43.79 | 28.33 | 55.46 | 97.14 | 110.27 |
 | [98178dc57](https://github.com/AFK-surf/monoid/commit/98178dc5725f505c950ae5e74e85728fa39f2543) mbui: settings_rig's sizes_steady bar down to the  | 2.01 | 2.76 | 11.85 | 31.71 | 43.79 | 28.33 | 55.46 | 97.14 | 110.27 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [3e0ee8e1e](https://github.com/AFK-surf/monoid/commit/3e0ee8e1e87a03d245e66661a9c2e77a60f7bd2d) station: presets and starred models kept as record | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [2e2176c2c](https://github.com/AFK-surf/monoid/commit/2e2176c2c1a853c09045c023068842d4dfa8493c) lock: a code typed before its device's answer is t | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [de8259c6a](https://github.com/AFK-surf/monoid/commit/de8259c6a7d28a71ef0bd832d3a2e133734e3a0a) mbui: list_part_test leaves motion_counted and siz | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 27.92 | 53.63 | 96.67 | 115.89 |
-| [ef56bb5d9](https://github.com/AFK-surf/monoid/commit/ef56bb5d9011151d7fd0b278c357ea1cdaac3ed1) app: simplify the workspace relays panel to inline | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.67 | 115.89 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [ccb596e15](https://github.com/AFK-surf/monoid/commit/ccb596e15dff188924f64bfc807e284ead6a315a) mbui film, app: a picture says every rule its fram | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.28 |
 | [dde6fa102](https://github.com/AFK-surf/monoid/commit/dde6fa102d3d2d63bbacb78ed807d2a66b06ba40) mbui app: the chat's page made as nodes has its 对话 | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.69 |
 | [2b23c5376](https://github.com/AFK-surf/monoid/commit/2b23c5376c888f0dc29c2fc9ccf4abfd5450cf79) mbc: a generic file's instances pieced by the type | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.69 |
 | [98178dc57](https://github.com/AFK-surf/monoid/commit/98178dc5725f505c950ae5e74e85728fa39f2543) mbui: settings_rig's sizes_steady bar down to the  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.46 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [3e0ee8e1e](https://github.com/AFK-surf/monoid/commit/3e0ee8e1e87a03d245e66661a9c2e77a60f7bd2d) station: presets and starred models kept as record | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
 | [2e2176c2c](https://github.com/AFK-surf/monoid/commit/2e2176c2c1a853c09045c023068842d4dfa8493c) lock: a code typed before its device's answer is t | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
 | [de8259c6a](https://github.com/AFK-surf/monoid/commit/de8259c6a7d28a71ef0bd832d3a2e133734e3a0a) mbui: list_part_test leaves motion_counted and siz | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
-| [ef56bb5d9](https://github.com/AFK-surf/monoid/commit/ef56bb5d9011151d7fd0b278c357ea1cdaac3ed1) app: simplify the workspace relays panel to inline | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
