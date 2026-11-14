@@ -367,6 +367,7 @@ export class ScreenHub implements Screens {
           id: s.id, kind: s.kind, title: s.title(), width, height, ...this.people(s.id), ...(access ? { access } : {}),
           ...(clipboard.length > 0 ? { clipboard } : {}),
           ...(s.peek ? { peek: true } : {}),
+          ...(s.farview ? { farview: true } : {}),
           ...(s.discard ? { closable: true } : {}),
           ...(s.userTab ? { userTab: true } : {}),
           ...(sleeping ? { sleeping: true } : {}),

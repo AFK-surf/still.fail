@@ -229,6 +229,13 @@ export class FarviewTabs {
     return { running: true, binary: "Farview", headless: true, pid: host.pid, tabs: 1, viewing: host.screen.viewing() };
   }
 
+  /// The port of the host whose tab is screen `id` that a person's client speaks Farview's protocol on (null: none
+  /// runs): an app that draws the tab itself is carried to it (`{"farview": …}` streams, module.ts).
+  clientPort(id: string): number | null {
+    for (const host of this.#hosts.values()) if (host.screen.id === id && groupAlive(host.pid)) return host.port;
+    return null;
+  }
+
   /// Its agent port, for the agent's `agent.exe` (null: not running).
   agentPort(session: string): number | null {
     return this.#hosts.get(session)?.agent ?? null;
