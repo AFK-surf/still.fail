@@ -443,6 +443,8 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
       id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy, ...(views.length > 0 ? { views } : {}), ...(get(s, "peek") === true ? { peek: true } : {}),
       // A page a person opened in the station's persistent browser profile (`screen.openBrowser`), put to sleep while idle.
       ...(get(s, "userTab") === true ? { userTab: true } : {}),
+      // A Farview tab: the app draws it itself in Farview's own protocol (`farview.view`), not as pictures.
+      ...(get(s, "farview") === true ? { farview: true } : {}),
       ...(get(s, "sleeping") === true ? { sleeping: true } : {}),
       ...(site !== null ? { site } : {}),
       // An agent drives it now (its view among the screen's people, AGENT).

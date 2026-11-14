@@ -42,6 +42,7 @@ import { Workspaces } from "./workspace.ts";
 import { install as installStationCalls } from "./station/calls.ts";
 import { install as installScreens } from "./screens.ts";
 import { install as installTerminals } from "./terminals.ts";
+import { install as installFarview } from "./farview.ts";
 import { Composers, install as installComposer } from "./composer.ts";
 import { StationsSync } from "./station/sync.ts";
 import { StationTopics } from "./station/topics.ts";
@@ -255,6 +256,7 @@ export class Core {
       installStationCalls();
       installScreens();
       installTerminals();
+      installFarview();
       inner.composers = new Composers(inner);
       installComposer();
       inner.views = new Views(envOf(inner));
