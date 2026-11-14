@@ -5,7 +5,6 @@
 ///|
 fn init {
   @ui.motion_counted([
-    "src/motion/list_part_test.mbt",
     "src/motion/motion_test.mbt",
   ])
 }
