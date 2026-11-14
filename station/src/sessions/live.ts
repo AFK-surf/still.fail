@@ -13,6 +13,7 @@ import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type PlanState, noPlan, planItems, readPlan, saysWhole } from "../read/plan.ts";
 import { ChainTail, type TailState, type TranscriptRef } from "../read/tail.ts";
+import { ReadTail, type TailRead } from "../read/read-tail.ts";
 import { type TimelineEntry, brief } from "../read/transcript.ts";
 import { type SessionUsage, noUsage } from "../read/usage.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
@@ -142,7 +143,9 @@ export function tokensOf(text: string): number {
 /// transcripts stand is read off the main thread (`ready`).
 /// `takeUp`: while the readers are asked where its reading stands, where the process before's stood (carried over as it
 /// was asked): gone on from there at once, whether it was.
-type Watched = { tail: ChainTail | null; ready: Promise<void> | null; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void; takeUp?: (states: TailState[]) => boolean; locating?: AbortController; following?: AbortController; followAgain?: boolean; carried?: TailState[]; announce?: boolean; reads?: Promise<void> };
+/// A session's transcripts as they are followed: read here (off the thread that asks), or by the readers (`tailRead`).
+type Tailing = ChainTail | ReadTail;
+type Watched = { tail: Tailing | null; ready: Promise<void> | null; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void; takeUp?: (states: TailState[]) => boolean; locating?: AbortController; following?: AbortController; followAgain?: boolean; carried?: TailState[]; announce?: boolean; reads?: Promise<void> };
 /// A listener of a session: whether it is told the entries in brief, and what is said while it joins (what it lacks of
 /// the transcript read off the main thread first), held until it has joined.
 type Sub = { id: number; listener: Listener; brief: boolean; queue: LiveMessage[] | null };
@@ -208,6 +211,19 @@ export class LiveHub {
   private lengthTold = new Map<string, number>();
   /// Where a transcript's past is read (agents.ts: the readers); none (tests): here, and kept in memory.
   history: History | null = null;
+  /// Where what a watched transcript gains is read (agents.ts: the readers, the MoonBit program where it is there);
+  /// none: here, off the thread that asks, parsed on it.
+  tailRead: TailRead | null = null;
+
+  /// A session's transcripts followed from their start, as `tailRead` says where they are read.
+  private chain(runtime: RuntimeKind, paths: TranscriptRef[], keeps = true): Tailing {
+    return this.tailRead !== null ? new ReadTail(runtime, paths, this.tailRead, keeps) : new ChainTail(runtime, paths, null, keeps);
+  }
+
+  /// One followed on from where their reading stood.
+  private chainFrom(runtime: RuntimeKind, states: TailState[]): Tailing {
+    return this.tailRead !== null ? ReadTail.from(runtime, states, this.tailRead) : ChainTail.from(runtime, states);
+  }
   /// Until the station process before has handed over (gone, agents.ts): where a reading stands is what it carries over
   /// (`takeTails`), not asked of the readers before then; asked, a reader read a busy transcript on from where it last
   /// marked it for seconds at each update, every device's reads waiting behind it (ccvm 2026-11-04).
@@ -538,7 +554,7 @@ export class LiveHub {
   }
 
   /// A watched transcript's length, kept where its summary reads it, as it changes.
-  private noteLength(key: string, tail: ChainTail) {
+  private noteLength(key: string, tail: Tailing) {
     const n = tail.length;
     if (this.lengthTold.get(key) === n) return;
     this.lengthTold.set(key, n);
@@ -631,7 +647,7 @@ export class LiveHub {
     }
     const at = this.locateAsync !== null ? await this.locateAsync(key, new AbortController().signal) : this.locate(key);
     if (!at) return null;
-    const tail = new ChainTail(at.runtime, at.paths);
+    const tail = this.chain(at.runtime, at.paths);
     await tail.readSoon();
     return tail.entries;
   }
@@ -899,7 +915,7 @@ export class LiveHub {
     this.watched.set(key, watched);
     const start = (at: NonNullable<ReturnType<Locate>>) => {
       watched.behind = watched.behind || at.current === false;
-      const begin = (tail: ChainTail) => {
+      const begin = (tail: Tailing) => {
         watched.tail = tail;
         watched.ready = null;
         this.noteLength(key, tail);
@@ -913,7 +929,7 @@ export class LiveHub {
       };
       if (this.history === null) {
         // What is already there counts as known; subscribers ask for what they lack. Read off the main thread.
-        const tail = new ChainTail(at.runtime, at.paths);
+        const tail = this.chain(at.runtime, at.paths);
         let readyNow = () => {};
         watched.ready = new Promise<void>((resolve) => (readyNow = resolve));
         void tail.readSoon().then(() => {
@@ -932,7 +948,7 @@ export class LiveHub {
       watched.carried = undefined;
       const kept = same(stood) ? stood : same(carried) ? carried : null;
       if (kept !== null) {
-        begin(ChainTail.from(at.runtime, kept));
+        begin(this.chainFrom(at.runtime, kept));
         this.soon(key);
         return true;
       }
@@ -945,7 +961,7 @@ export class LiveHub {
       watched.takeUp = (states) => {
         if (begun || this.watched.get(key) !== watched || !same(states)) return false;
         begun = true;
-        begin(ChainTail.from(at.runtime, states));
+        begin(this.chainFrom(at.runtime, states));
         this.soon(key);
         readyNow();
         return true;
@@ -960,11 +976,11 @@ export class LiveHub {
         .then((states) => {
           if (this.watched.get(key) !== watched || begun) return readyNow();
           begun = true;
-          if (same(states)) begin(ChainTail.from(at.runtime, states));
+          if (same(states)) begin(this.chainFrom(at.runtime, states));
           else {
             // Its transcripts are not where the readers found them (or they could not say): read here (off the main
             // thread), kept nowhere.
-            const tail = new ChainTail(at.runtime, at.paths, null, false);
+            const tail = this.chain(at.runtime, at.paths, false);
             return tail.readSoon().then(() => {
               if (this.watched.get(key) === watched) {
                 begin(tail);
