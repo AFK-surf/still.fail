@@ -87,7 +87,7 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage", "timeline", "transcriptState", "sessionPlace"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage", "timeline", "transcriptState", "sessionPlace", "changed"].contains(
     op,
   )
 }
@@ -110,6 +110,13 @@ fn Reader::read(self : Reader, op : String, ask : Json) -> Json raise {
   }
   db.exec("BEGIN")
   defer (db.exec("COMMIT") catch { _ => () })
+  self.answer_in(db, op, ask)
+}
+
+///|
+/// A read's answer, in the snapshot `read` began.
+fn Reader::answer_in(self : Reader, db : @sql.Db, op : String, ask : Json) -> Json raise {
+  let args = ask.value("args").unwrap_or(Json::null())
   match op {
     "job" => @readops.job(db, self.host, args)
     "jobLog" => @readops.job_log(db, self.host, args)
@@ -159,6 +166,17 @@ fn Reader::read(self : Reader, op : String, ask : Json) -> Json raise {
     "timeline" => @readops.timeline(db, self.host, self.data, self.sep, self.finder, ask)
     "transcriptState" => @readops.transcript_state(db, self.host, self.data, self.sep, self.finder, args)
     "sessionPlace" => @readops.session_place(db, self.host, self.data, self.sep, ask)
+    // (what of a list a client does not hold as it is: the list read as its own op reads it, its args those given)
+    "changed" =>
+      match args.value("op") {
+        Some(String("chats" | "sessions" | "threads" as list)) => {
+          let inner = Map::from_iter(ask.as_object().unwrap().iter())
+          inner["args"] = args.value("args").unwrap_or(Json::null())
+          @readops.changed_of(list, self.answer_in(db, list, Json::object(inner)), args)
+        }
+        Some(String(list)) => fail("no read \{list}")
+        _ => fail("ops[a.op] is not a function")
+      }
     _ => fail("no read \{op}")
   }
 }
