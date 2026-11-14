@@ -261,6 +261,10 @@ yet and you can add one, add it.
   binding's property alike. Only what is on a way not at its end then (its own, what holds it, a way in or out beside
   it in its column: `Tree::on_way_at`) is judged as ever: a step in the middle of a way (`src/view/answer_marked.mbt`;
   the coordinator of the migration, 2026-11-14).
+- A test that looks at every frame after a cause (`Tester::each_frame`) runs the clock on with the frames a host
+  draws (`Tester::run_shown`: the display's while the app asks for frames, none while it is at rest, one at what is
+  due and at its end), never the display's frames walked one by one through a rest: a frame nobody draws shows
+  nothing, and drawing them was most of what such a test cost a CI job (the coordinator of the migration, 2026-11-14).
 - Motion is data: said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set
