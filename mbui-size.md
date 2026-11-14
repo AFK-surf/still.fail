@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2b23c5376](https://github.com/AFK-surf/monoid/commit/2b23c5376c888f0dc29c2fc9ccf4abfd5450cf79) mbc: a generic file's instances pieced by the type | 2.01 | 2.76 | 11.85 | 31.71 | 43.79 | 28.33 | 55.46 | 97.14 | 110.27 |
 | [98178dc57](https://github.com/AFK-surf/monoid/commit/98178dc5725f505c950ae5e74e85728fa39f2543) mbui: settings_rig's sizes_steady bar down to the  | 2.01 | 2.76 | 11.85 | 31.71 | 43.79 | 28.33 | 55.46 | 97.14 | 110.27 |
 | [de70d7eb6](https://github.com/AFK-surf/monoid/commit/de70d7eb6f49a20986279a592ae85b484af20f46) station: a MoonBit read's answer goes to Node as i | 2.01 | 2.76 | 11.87 | 31.72 | 43.86 | 28.33 | 55.51 | 97.08 | 109.15 |
 | [cf48243e5](https://github.com/AFK-surf/monoid/commit/cf48243e57cd199702aaac9a10fc9084a8013055) app tests: place-stations' 设置 changes once now (#6 | 2.01 | 2.76 | 11.87 | 31.72 | 43.86 | 28.34 | 55.51 | 96.9 | 116.08 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [de8259c6a](https://github.com/AFK-surf/monoid/commit/de8259c6a7d28a71ef0bd832d3a2e133734e3a0a) mbui: list_part_test leaves motion_counted and siz | 2 | 2.74 | 11.79 | 31.58 | 43.61 | 27.92 | 53.63 | 96.67 | 115.89 |
 | [ef56bb5d9](https://github.com/AFK-surf/monoid/commit/ef56bb5d9011151d7fd0b278c357ea1cdaac3ed1) app: simplify the workspace relays panel to inline | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.67 | 115.89 |
 | [059d395fb](https://github.com/AFK-surf/monoid/commit/059d395fbd56c640d83268da1843419dbe633cd3) mbui: what nothing asks for is not drawn on a span | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.67 | 115.89 |
-| [0ad0b4e91](https://github.com/AFK-surf/monoid/commit/0ad0b4e9125680fe2355b738580d3b645205f6dd) mbui: skip clean root layout and resting spare bin | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.6 | 107.15 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2b23c5376](https://github.com/AFK-surf/monoid/commit/2b23c5376c888f0dc29c2fc9ccf4abfd5450cf79) mbc: a generic file's instances pieced by the type | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.69 |
 | [98178dc57](https://github.com/AFK-surf/monoid/commit/98178dc5725f505c950ae5e74e85728fa39f2543) mbui: settings_rig's sizes_steady bar down to the  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.46 |
 | [de70d7eb6](https://github.com/AFK-surf/monoid/commit/de70d7eb6f49a20986279a592ae85b484af20f46) station: a MoonBit read's answer goes to Node as i | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.46 |
 | [cf48243e5](https://github.com/AFK-surf/monoid/commit/cf48243e57cd199702aaac9a10fc9084a8013055) app tests: place-stations' 设置 changes once now (#6 | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.46 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [de8259c6a](https://github.com/AFK-surf/monoid/commit/de8259c6a7d28a71ef0bd832d3a2e133734e3a0a) mbui: list_part_test leaves motion_counted and siz | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
 | [ef56bb5d9](https://github.com/AFK-surf/monoid/commit/ef56bb5d9011151d7fd0b278c357ea1cdaac3ed1) app: simplify the workspace relays panel to inline | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.02 |
 | [059d395fb](https://github.com/AFK-surf/monoid/commit/059d395fbd56c640d83268da1843419dbe633cd3) mbui: what nothing asks for is not drawn on a span | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
-| [0ad0b4e91](https://github.com/AFK-surf/monoid/commit/0ad0b4e9125680fe2355b738580d3b645205f6dd) mbui: skip clean root layout and resting spare bin | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
