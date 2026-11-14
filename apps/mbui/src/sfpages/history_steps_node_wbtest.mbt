@@ -402,3 +402,21 @@ test "reused history rows strip i/ prefix when expanding groups and messages" {
   }
   steps_reset()
 }
+
+///|
+test "curved_rail_shapes connects icon centers at x=10 and curves around body at x=3" {
+  // Single-line header with next event: straight vertical connector at x = 10
+  let s1 = curved_rail_shapes(20.0, 0.0, true)
+  assert_eq(s1, [@ui.shape_of([([10.0, 20.0, 10.0, 30.0], false)], stroke=0x000000FFL, width=1.25)])
+  // Single-line terminal header: no rail
+  assert_eq(curved_rail_shapes(20.0, 0.0, false).length(), 0)
+  // Wrapped multi-line in-row header without subordinate body: vertical connector to head_h - 1.5
+  let s_wrap = curved_rail_shapes(44.0, 0.0, false)
+  assert_eq(s_wrap, [@ui.shape_of([([10.0, 20.0, 10.0, 42.5], false)], stroke=0x000000FFL, width=1.25)])
+  // Event with body followed by next event vs terminal event with body
+  let s_next = curved_rail_shapes(20.0, 80.0, true)
+  let s_end = curved_rail_shapes(20.0, 80.0, false)
+  assert_eq(s_next.length(), 1)
+  assert_eq(s_end.length(), 1)
+  assert_true(s_next != s_end, msg="rail_next=true extends into next icon while rail_next=false hooks at bottom")
+}
