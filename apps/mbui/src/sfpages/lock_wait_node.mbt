@@ -24,13 +24,15 @@ pub fn lock_wait_node(
 
 ///|
 /// Which of the steps shows (pair_steps' branches): the code typed, one being found, or what is so and the request;
-/// or, the code approved but no station of the lock having taken it yet, what it waits for (`Waits`).
+/// or, the code approved but no station of the lock having taken it yet, what it waits for (`Waits`); or, a web page
+/// nobody can approve here (the core's `me.needsAppText`), only that, with nothing to ask (`NeedsApp`).
 #derive(Eq)
 priv enum PairShows {
   Typing
   Finding
   Asked
   Waits
+  NeedsApp
 }
 
 ///|
@@ -47,8 +49,10 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
   let checking = fn() { @settings.is_doing(core, ["lock.pairCode"], on) || state() == "checking" }
   // (the code approved, no station having taken it yet: the call's pending sentence, "" none)
   let waits : @signals.Signal[String] = @signals.signal("")
+  let needs_app = fn() { text(me(), "needsAppText") }
   let shows = fn() {
     match state() {
+      _ if needs_app() != "" => NeedsApp
       _ if waits.get() != "" => Waits
       "code" | "wrong" | "checking" => Typing
       "finding" => Finding
@@ -133,6 +137,9 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
         lock_devices_node(v, dialled)
       }
       Waits => lock_note_node(v, fn() { waits.get() })
+      // (nobody could answer an ask: no button that asks, the core's words in its place; the owner, 2026-11-13: 「开了安全
+      // 模式那就需要 app」)
+      NeedsApp => lock_note_node(v, needs_app)
       Asked => {
         v.show(fn() { state() == "failed" }, fn(n) {
           @sf.words_node(n, fn() { text(pair(), "error") }, fn() { lock_failed }).words_centered(Is(true)) |> ignore

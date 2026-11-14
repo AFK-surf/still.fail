@@ -3410,7 +3410,9 @@ fn waiting_approvers(code : Bool) -> Json {
 /// asking, finding, the code being typed, typed wrong (or the device showing it gone), being checked, no device found,
 /// the pairing failed (lock-elsewhere: approved in another workspace, not this one), this device without
 /// its code yet; its security page): this device waiting, not a signer. lock-upgrade: in the lock but not signing (its key lost), the code being typed on its
-/// security page.
+/// security page. lock-needs-app, lock-needs-app-security: a web page left out of an upgraded workspace that nobody can
+/// approve there (its person has no app in it): the core's `needsAppText` in place of the ask, on its waiting page and
+/// on its security page.
 fn waiting_lock(mode : String) -> Json {
   let mode = if mode.has_suffix("-dark") { mode.unsafe_substring(start=0, end=mode.length() - 5) } else { mode }
   let pair = match mode {
@@ -3431,6 +3433,20 @@ fn waiting_lock(mode : String) -> Json {
   // in the lock, its key since lost (a phone moved to a new one): made one that signs on its security page
   let upgrade = mode == "lock-upgrade"
   let code = if mode == "lock-nocode" { "" } else { "Q4K-7PM" }
+  // a web page nobody can approve here: not waiting (nothing to ask), the core's words (core-misc.lock.needsApp)
+  let needs_app = mode.has_prefix("lock-needs-app")
+  let me : Array[(String, Json)] = [
+    ("device", str("d-me")),
+    ("code", str(code)),
+    ("kind", str(if needs_app { "web" } else { "app" })),
+    ("confirmed", Json::boolean(upgrade)),
+    ("waiting", Json::boolean(!upgrade && !needs_app)),
+    ("unsigned", Json::boolean(upgrade)),
+    ("pair", pair),
+  ]
+  if needs_app {
+    me.push(("needsAppText", str("此 workspace 的安全模式要求每位成员至少有一台客户端。请安装桌面或手机客户端并登录，由管理员批准后，再用客户端批准此网页版")))
+  }
   obj([
     ("available", Json::boolean(true)),
     ("locked", Json::boolean(true)),
@@ -3438,23 +3454,12 @@ fn waiting_lock(mode : String) -> Json {
     ("role", str("owner")),
     ("manages", Json::boolean(true)),
     ("owner", Json::boolean(true)),
-    ("canSign", Json::boolean(true)),
+    ("canSign", Json::boolean(!needs_app)),
     ("signs", Json::boolean(false)),
     ("signers", Json::number(5.0)),
     ("protected", Json::number(4.0)),
     ("attention", Json::number(0.0)),
-    (
-      "me",
-      obj([
-        ("device", str("d-me")),
-        ("code", str(code)),
-        ("kind", str("app")),
-        ("confirmed", Json::boolean(upgrade)),
-        ("waiting", Json::boolean(!upgrade)),
-        ("unsigned", Json::boolean(upgrade)),
-        ("pair", pair),
-      ]),
-    ),
+    ("me", obj(me)),
     (
       "members",
       [
