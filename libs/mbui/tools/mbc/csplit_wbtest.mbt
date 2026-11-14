@@ -696,3 +696,14 @@ test "moonc's prototype of fflush is <stdio.h> in the units" {
   }
   assert_eq(calls, 1)
 }
+
+///|
+test "a generic's instances pieced by the types they are for" {
+  let keys = b"_Mz0__M0MPB0Map0keysGiURP0mbui0view0ViewEE"
+  assert_eq(type_args(keys), b"GiURP0mbui0view0ViewEE")
+  assert_eq(type_args(b"_Mz0__M0MPB0Map0getGiURP0mbui0view0ViewEE"), type_args(keys))
+  assert_eq(type_args(b"_Mz0__M0MPB0Map0keysGiURP0mbui0view0ViewEEC0l0"), type_args(keys))
+  assert_eq(type_args(b"_M0TPB0IterGiE"), b"GiE")
+  assert_eq(type_args(b"_M0FP0mbui0view0Grid0new"), b"_M0FP0mbui0view0Grid0new")
+  assert_eq(type_args(b"_M0FPB10i16x8__add"), b"_M0FPB10i16x8__add")
+}
