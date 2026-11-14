@@ -1399,22 +1399,63 @@ async fn Serving::say(
       None => return error(400, "invalid JSON")
     }
   }
-  // (words alone: anything more is Node's)
+  // (words and quotes: files and copies to Slack or Feishu are Node's)
   let listed = (k : String) => match input.get(k) {
     None | Some(Null) => false
     Some(Array(a)) => a.length() > 0
     Some(_) => true
   }
-  if listed("attachments") || listed("quotes") || listed("cc") {
+  if listed("attachments") || listed("cc") {
     return None
   }
-  let said = match input.get("text") {
-    None | Some(Null) => ""
-    Some(String(s)) => @jscase.trim_white(s)
-    Some(v) => @jscase.trim_white(v.stringify())
+  // (read again as JSON.parse reads it: what is kept of it is as JSON.stringify writes it)
+  let js : @jsjson.JValue = if body.length() == 0 {
+    Obj([])
+  } else {
+    match (try { Some(@jsjson.parse(@utf8.decode_lossy(body))) } catch { _ => None }) {
+      Some(Obj(_) as o) => o
+      _ => Obj([])
+    }
   }
-  if said == "" {
+  let said = match js.get("text") {
+    None | Some(Null) => ""
+    Some(Str(u)) => @jscase.trim(@jsjson.raw_text(u))
+    Some(v) => @jscase.trim(@jsjson.stringify(v))
+  }
+  let given_quotes = js.get("quotes")
+  let quotes = quotes_of(given_quotes)
+  if said == "" && quotes.length() == 0 {
     return error(400, word("emptyMessage"))
+  }
+  // A quote naming the card waiting in the chat answers it (hub.ts: only one naming a message, as given)
+  let original = match given_quotes {
+    Some(Arr(all)) => all
+    _ => []
+  }
+  let named = original.iter().any(q => q is Obj(_) && q.get("ts") is Some(Str(_)))
+  let mut answered : Json? = None
+  if named {
+    match self.pending_card(db, thread) {
+      Ready(Some((asked, at_ts, card))) => {
+        let options = match card.get("options") {
+          Some(Arr(o)) => o
+          _ => []
+        }
+        let selected = options.iter().any(o => o is Obj(_) &&
+          is_str(o.get("label"), said) &&
+          is_str(o.get("action"), "close"))
+        let quoted = original.iter().any(q => q is Obj(_) && is_str(q.get("ts"), at_ts))
+        if selected && quoted {
+          return error(409, word("updateClientForOption"))
+        }
+        if quoted {
+          answered = Some(asked)
+        }
+      }
+      Ready(None) => ()
+      // (an old chat whose cards are not indexed yet: Node prepares it)
+      NotReady => return None
+    }
   }
   // A chat out of lists (archived by hand, or by the station: a message brings that back): Node's (store.ts `#bringBack`).
   let out = t.get("hidden_at") is Some(Number(_)) ||
@@ -1426,11 +1467,11 @@ async fn Serving::say(
     return None
   }
   // Which app sent it, for its agent (control characters out, 80 at most).
-  let client = match input.get("client") {
-    Some(String(c)) => {
+  let client = match js.get("client") {
+    Some(Str(u)) => {
       let kept = StringBuilder::new()
       let mut count = 0
-      for ch in @jscase.trim_white(c) {
+      for ch in @jscase.trim(@jsjson.text(u)) {
         let code = ch.to_int()
         if code < 0x20 || (code >= 0x7F && code < 0xA0) {
           continue
@@ -1487,6 +1528,8 @@ async fn Serving::say(
   guard claimed.value("ts") is Some(String(_) as ts) else { return error(500, "no timestamp") }
   let email = viewer.value("email").unwrap_or(Json::null())
   let at = Json::number(self.now().to_double())
+  // (rows.ts `jsonList`: none for none)
+  let kept_quotes = if quotes.length() == 0 { Json::null() } else { Json::string(@jsjson.stringify(Arr(quotes))) }
   let written = try {
     Ok(
       self.writing(db, () => {
@@ -1509,8 +1552,8 @@ async fn Serving::say(
         let k = Json::number(last + 1.0)
         ignore(
           db.run(
-            "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter, change) VALUES (?, ?, 'message', NULL, ?, 'person', ?, ?, NULL, NULL, NULL, ?, NULL, NULL, NULL, NULL, ?, NULL, NULL, NULL)",
-            [thread, k, ts, email, Json::string(said), client, at],
+            "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter, change) VALUES (?, ?, 'message', NULL, ?, 'person', ?, ?, NULL, ?, NULL, ?, NULL, NULL, NULL, NULL, ?, NULL, NULL, NULL)",
+            [thread, k, ts, email, Json::string(@jsjson.text(@jsjson.units(said))), kept_quotes, client, at],
           ),
         )
         match db.all("SELECT thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter, change FROM entries WHERE thread = ? AND n = ?", [thread, k]) {
@@ -1533,11 +1576,165 @@ async fn Serving::say(
           "answer": { "status": 200, "headers": { "content-type": "application/json" }, "text": Json::string(answer) },
         } : Json).stringify(),
       )
+      // Answered from the decisions page: read up to that card, not past it (later ones may be unseen).
+      if answered is Some(card_n) && email is String(e) {
+        let v = Json::string(e)
+        let now = Json::number(self.now().to_double())
+        let read_n = self.writing(db, () => {
+          ignore(
+            db.run(
+              "INSERT INTO reads (viewer, thread, n, at) VALUES (?, ?, ?, ?) ON CONFLICT (viewer, thread) DO UPDATE SET n = MAX(n, excluded.n), at = excluded.at",
+              [v, thread, card_n, now],
+            ),
+          )
+          match db.all("SELECT n FROM reads WHERE viewer = ? AND thread = ?", [v, thread]) {
+            [r, ..] => r.get("n").unwrap_or(Json::number(0.0))
+            _ => Json::number(0.0)
+          }
+        })
+        self.changed([{ "type": "read", "viewer": v, "thread": thread, "n": read_n }])
+      }
       Some(self.whole(headers, @utf8.encode(answer)))
     }
     Err(m) => {
       self.host.say(({ "said": Json::null(), "of": Json::number(n.to_double()) } : Json).stringify())
       error(500, m)
     }
+  }
+}
+
+///|
+/// The card waiting in a chat, as store.ts `pendingCardHeaderIfReady` finds it.
+priv enum Pending {
+  /// its post's n and ts and its card (cardOf: its own, else its options as an options card), or none waiting
+  Ready(((Json, String, @jsjson.JValue))?)
+  /// the chat's cards not indexed yet (card-post-index.ts `cardPostsReady`)
+  NotReady
+}
+
+///|
+fn Serving::pending_card(self : Serving, db : @sql.Db, thread : Json) -> Pending raise {
+  ignore(self)
+  guard db.all("SELECT phase FROM card_post_scopes WHERE thread = ?", [thread]) is [{ "phase": Number(2.0, ..), .. }, ..] else {
+    return NotReady
+  }
+  guard db.all("SELECT n FROM card_posts WHERE thread=? ORDER BY n DESC LIMIT 1", [thread]) is [{ "n": Number(_) as n, .. }, ..] else {
+    return Ready(None)
+  }
+  let answered = db.all(
+    "SELECT 1 AS x FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1",
+    [thread, n],
+  ) is [_, ..]
+  let closed = db.all("SELECT 1 AS x FROM closed_cards WHERE thread = ? AND n = ?", [thread, n]) is [_, ..]
+  if answered || closed {
+    return Ready(None)
+  }
+  guard db.all("SELECT ts, card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", [thread, n]) is [row, ..] else {
+    return Ready(None)
+  }
+  let parsed = (v : Json?) => match v {
+    Some(String(t)) => try { Some(@jsjson.parse(t)) } catch { _ => None }
+    _ => None
+  }
+  let card = match parsed(row.get("card")) {
+    Some(c) => Some(c)
+    None =>
+      match parsed(row.get("options")) {
+        Some(o) => Some(@jsjson.JValue::Obj([(@jsjson.units("type"), Str(@jsjson.units("options"))), (@jsjson.units("options"), o)]))
+        None => None
+      }
+  }
+  guard card is Some(c) else { return Ready(None) }
+  let ts = match row.get("ts") {
+    Some(String(t)) => t
+    _ => ""
+  }
+  Ready(Some((n, ts, c)))
+}
+
+///|
+/// The first `max` characters of code units (`[...s].slice(0, max)`: a pair one, a lone surrogate one).
+fn js_chars(u : Array[Int], max : Int) -> Array[Int] {
+  let out = []
+  let mut count = 0
+  let mut i = 0
+  while i < u.length() && count < max {
+    let c = u[i]
+    if c >= 0xd800 && c <= 0xdbff && i + 1 < u.length() && u[i + 1] >= 0xdc00 && u[i + 1] <= 0xdfff {
+      out.push(c)
+      out.push(u[i + 1])
+      i += 2
+    } else {
+      out.push(c)
+      i += 1
+    }
+    count += 1
+  }
+  out
+}
+
+///|
+/// What is kept of the quotes a message brings (routes/hub.ts `quotesOf`): 20 at most, each cut, an empty one dropped.
+fn quotes_of(given : @jsjson.JValue?) -> Array[@jsjson.JValue] {
+  guard given is Some(Arr(list)) else { return [] }
+  let out = []
+  for k, q in list {
+    if k >= 20 {
+      break
+    }
+    let o : @jsjson.JValue = if q is Obj(_) { q } else { Obj([]) }
+    let field = (name : String, fallback : String, max : Int) => {
+      let v = match o.get(name) {
+        None | Some(Null) => @jsjson.units(fallback)
+        Some(Str(s)) => s
+        Some(v) => @jsjson.units(@jsjson.stringify(v))
+      }
+      js_chars(v, max)
+    }
+    let text = field("text", "", 4000)
+    let quote : Array[(Array[Int], @jsjson.JValue)] = [
+      (@jsjson.units("author"), Str(field("author", "消息", 100))),
+      (@jsjson.units("text"), Str(text)),
+      (@jsjson.units("comment"), Str(field("comment", "", 4000))),
+    ]
+    if o.get("ts") is Some(Str(ts)) && ts_like(ts) {
+      quote.push((@jsjson.units("ts"), Str(ts)))
+    }
+    if o.get("role") is Some(Str(role)) && ["agent", "person", "page", "image"].iter().any(r => @jsjson.units(r) == role) {
+      quote.push((@jsjson.units("role"), Str(role)))
+    }
+    if o.get("file") is Some(Str(file)) && file.length() > 0 {
+      quote.push((@jsjson.units("file"), Str(js_chars(file, 200))))
+    }
+    if @jscase.trim(@jsjson.raw_text(text)) != "" {
+      out.push(@jsjson.JValue::Obj(quote))
+    }
+  }
+  out
+}
+
+///|
+/// `^[0-9]+\.[0-9]+$`
+fn ts_like(u : Array[Int]) -> Bool {
+  let mut dot = -1
+  for i, c in u {
+    if c == '.'.to_int() {
+      if dot >= 0 {
+        return false
+      }
+      dot = i
+    } else if c < '0'.to_int() || c > '9'.to_int() {
+      return false
+    }
+  }
+  dot > 0 && dot < u.length() - 1
+}
+
+///|
+/// Whether `v` is the string `s` (code unit for code unit, as `===`).
+fn is_str(v : @jsjson.JValue?, s : String) -> Bool {
+  match v {
+    Some(Str(u)) => u == @jsjson.units(s)
+    _ => false
   }
 }

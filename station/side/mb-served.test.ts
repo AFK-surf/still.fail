@@ -16,6 +16,7 @@ import { RUNTIME_KINDS } from "../src/agents/runtime.ts";
 import { tr } from "../src/ops/i18n.ts";
 import { type Endpoint, type Stream, loadMesh } from "../src/mesh/native.ts";
 import { Store, newMessage } from "../src/store/store.ts";
+import { quotesOf } from "../src/api/routes/hub.ts";
 
 const binary = mbReaderBinary();
 const skip = binary === null ? "the MoonBit program is not built here (station/mb/build.sh)" : false;
@@ -350,9 +351,9 @@ test("a routed request is answered by the MoonBit program as the admin API answe
       },
       said: (thread, n, text, row) => said.push({ thread, n, text, row }),
     };
-    const post = async (body: unknown, key?: string) => {
+    const post = async (body: unknown, key?: string, to = thread) => {
       const ms = await theirs.openBi();
-      const h = { ...routedHead, method: "POST", path: `/admin/api/threads/${thread}/messages`, headers: { ...routedHead.headers, ...(key ? { "idempotency-key": key } : {}) } };
+      const h = { ...routedHead, method: "POST", path: `/admin/api/threads/${to}/messages`, headers: { ...routedHead.headers, ...(key ? { "idempotency-key": key } : {}) } };
       await ms.write(Buffer.from(`${JSON.stringify(h)}\n${JSON.stringify(body)}`));
       await ms.finish();
       const got = await readAll(ms);
@@ -381,6 +382,32 @@ test("a routed request is answered by the MoonBit program as the admin API answe
     await post({ text: "a file", attachments: [{ path: "x" }] });
     assert.equal(given.length, before + 1);
     assert.equal(given.pop()!.head.path, `/admin/api/threads/${thread}/messages`);
+    // with quotes: kept as hub.ts `quotesOf` keeps them, the row as the store writes it
+    const quoted = [
+      { author: "A", text: "引 \"q\"\n\t\u0001 😀".repeat(3), comment: 5, ts: "1.2", role: "agent", file: "f.png" },
+      { text: "   " }, "x", { author: { a: [1, "b"] }, text: "t", ts: "1.2.3", role: "robot", file: "" },
+      { author: null, text: "😀".repeat(4001), comment: null },
+    ];
+    const withQuotes = await post({ text: " see this ", quotes: quoted });
+    assert.equal(withQuotes.status, 200, JSON.stringify(withQuotes.body));
+    for (let i = 0; i < 100 && said.length < 2; i++) await new Promise((r) => setTimeout(r, 10));
+    const qrow = said[1].row;
+    const [n3] = store.insertMessage({ ...newMessage(thread, "x.2", "person", "p@x", "see this"), quotes: quotesOf(quoted), at: qrow.at } as ReturnType<typeof newMessage>);
+    const theirsQ = (store as any).db.prepare("SELECT thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter, change FROM entries WHERE thread = ? AND n = ?").get(thread, n3);
+    assert.deepEqual({ ...qrow, n: 0, ts: "" }, { ...theirsQ, n: 0, ts: "" });
+    // quotes alone are a message; empty ones are not
+    assert.equal((await post({ quotes: [{ author: "A", text: "only" }] })).status, 200);
+    assert.deepEqual(await post({ quotes: [{ author: "A", text: " " }] }), { status: 400, body: { error: tr("en", "station.admin.emptyMessage") } });
+    // a quote naming the card waiting answers it: read up to it; its option that closes it is the app's to choose
+    const asking = store.openThread("ember", "CHAT", "cq", "Asks", null).id;
+    const [cardN] = store.insertMessage({ ...newMessage(asking, "5.000001", "agent", "s0", "pick"), card: { type: "options", options: [{ label: "Yes", action: "close" }, { label: "No" }] }, at: 5 } as ReturnType<typeof newMessage>);
+    const naming = [{ author: "s0", text: "pick", ts: "5.000001" }];
+    assert.deepEqual(await post({ text: "Yes", quotes: naming }, undefined, asking), { status: 409, body: { error: tr("en", "station.admin.updateClientForOption") } });
+    assert.equal(store.readPosition("p@x", asking), 0);
+    assert.equal((await post({ text: "No", quotes: naming }, undefined, asking)).status, 200);
+    for (let i = 0; i < 100 && store.readPosition("p@x", asking) === 0; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(store.readPosition("p@x", asking), cardN);
+    assert.equal(given.length, before);
   }
   // a list read again as what changed of it (routes/changed.ts): what the device holds of it, by digest
   for (const [list, args, id] of [
