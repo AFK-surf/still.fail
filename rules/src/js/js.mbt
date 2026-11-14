@@ -104,7 +104,7 @@ pub fn lower_role(a : String, b : String) -> String {
 
 ///|
 /// The caller's cryptography: `{sha256Hex(text), sigValid(sig, hash, origins, rpId, passkey), validKeyId(id),
-/// endpointProof(ws, base, endpoint, proof)}`.
+/// endpointProof(ws, base, endpoint, proof), taggedSigValid(key, sig, tag, digest)}`.
 #external
 pub type JsCrypto
 
@@ -121,6 +121,16 @@ extern "js" fn js_valid_key_id(c : JsCrypto, id : String) -> Bool = "(c, id) => 
 ///|
 extern "js" fn js_endpoint_proof(c : JsCrypto, ws : String, base : String, endpoint : String, proof : String) -> Bool =
   "(c, ws, base, endpoint, proof) => c.endpointProof(ws, base, endpoint, proof)"
+
+///|
+/// (a caller from before `taggedSigValid` was asked for proves nothing by it: false)
+extern "js" fn js_tagged_sig_valid(c : JsCrypto, key : String, sig : String, tag : String, digest : String) -> Bool =
+  "(c, key, sig, tag, digest) => typeof c.taggedSigValid === 'function' && c.taggedSigValid(key, sig, tag, digest) === true"
+
+///|
+impl @lock.Crypto for JsCrypto with tagged_sig_valid(self, key, sig, tag, digest) {
+  js_tagged_sig_valid(self, key, sig, tag, digest)
+}
 
 ///|
 impl @lock.Crypto for JsCrypto with sha256_hex(self, s) {
@@ -779,6 +789,12 @@ pub fn state4_moved_js(ws : String, chain : JsValue, chains : JsValue, bodies : 
   let o = held(st.lock)
   js_put(o, "on", js_of_str(st.on))
   o
+}
+
+///|
+/// What a binding's signer signs after `bind_tag` and a NUL (`@lock.bind_digest`), and the tag: `{tag, digest}`.
+pub fn bind_digest_js(ws : String, sub : String, log : String, moved : String, crypto : JsCrypto) -> JsValue {
+  to_js(Json::object(Map([("tag", Json::string(@lock.bind_tag)), ("digest", Json::string(@lock.bind_digest(ws, sub, log, moved, crypto)))])))
 }
 
 ///|

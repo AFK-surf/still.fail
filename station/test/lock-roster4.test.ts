@@ -69,6 +69,12 @@ const M8_ROWS: { label: string; o: Omit<Extract<Job4, { t: "m8" }>, "t" | "n"> }
   { label: "carried (D6)", o: {} },
   { label: "carried, s2 away through the changes", o: { away: true } },
   { label: "not carried (D6 off: the logs alone)", o: { carry: false } },
+  { label: "carried, (a) bound by their own proof (bind)", o: { self: true } },
+  // (the rule between two bindings of one member: model.ts `rival`; the lead's review, 2026-11-14)
+  { label: "two bindings: L2 by the phone L1 took off", o: { rival: "removed" } },
+  { label: "two bindings: each took the other's device off (a circle)", o: { rival: "circle" } },
+  { label: "two bindings, neither taking anything off", o: { rival: "honest" } },
+  { label: "one binding whose log took off the device that proved it", o: { rival: "self" } },
 ];
 const m8Rows = M8_ROWS.map((r) => ask<Any>({ t: "m8", n: CASES, ...r.o }));
 const again = ask<boolean>({ t: "again", steps: STEPS });
@@ -208,6 +214,9 @@ test("M8: the handover that waits for nobody, the chain as it moved carried", as
     const later = Object.entries(r.later as Record<string, [number, number]>).map(([k, [a, b]]) => `${k} ${a}/${b}`).join(", ");
     print(`${row.label}: entries alice's log said for it ${r.said}; keepers compared ${r.compared}/${r.keepers}, rooted in alice's log ${r.atAlice}; the chain's list at its head right after the move at ${r.same}/${r.compared}; fields differing: ${said(r.diffs)}${r.first.length ? ` (${r.first.join("; ")})` : ""}; app devices not their person's own left behind ${r.behind}; later, holding at the end: ${later}; something taken out named again ${r.back}${r.backLog ? ` (${r.backLog})` : ""}`);
     if (i === 0 && r.example) for (const l of r.example) print(`  ${l}`);
+    // (the binding the member's own app proves holds at every keeper rooted in alice's log at the end, the forged one
+    // before it bound nobody: the lead's, 2026-11-14)
+    if (row.o.self || row.o.rival) assert.ok(r.later.bind[1] > 0 && r.later.bind[0] === r.later.bind[1], `bind held at ${r.later.bind}`);
   }
   print(`(M8 printed, ${since()}; ${WORKERS} worker threads)`);
 });

@@ -79,6 +79,16 @@ export const crypto = {
   sigValid: (sig: J, hash: string) => sig?.alg === "Ed25519" && typeof sig.key === "string" && typeof sig.sig === "string" && verifies(sig.key, sig.sig, signedBytes(hash)),
   validKeyId: (id: string) => /^ed25519:[0-9a-f]{64}$/.test(id),
   endpointProof: () => false,
+  /// (a form a device's signer signs under a tag of its own: `tag`, a NUL, the 32 bytes of `digest`; a moved
+  /// workspace's `bind`, rules/src/lock/roster.mbt `bind_tag`)
+  taggedSigValid: (key: string, sig: string, tag: string, digest: string) => /^[0-9a-f]{64}$/.test(digest) && verifies(key, sig, concatBytes(utf8(`${tag}\0`), unhex(digest))),
+};
+
+const concatBytes = (a: Uint8Array, b: Uint8Array) => {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
 };
 
 /// Round three's statements of a workspace in the clear, which the rules refuse (station/src/mesh/person-chains.ts
@@ -168,6 +178,13 @@ export type PersonalEnv = {
   /// to the first, each the person's own (views/lock.ts `vouchersIn`, which says what taking them so costs): a chain one
   /// of those keys signed an entry of is its person's lock (`#putOnBy`).
   vouchers?: (sub: string) => ReadonlySet<string>;
+  /// The bindings to say on `sub`'s log with the seed in hand for something else (views/lock.ts `bindsFor`): each moved
+  /// workspace's statement, made after the log as it then is.
+  binds?: (sub: string) => Effect.Effect<{ ws: string; make: Statements }[]>;
+  /// Whether `sub`, with no lock of their own, has one begun here on an act of theirs on their own devices that needs it
+  /// (views/lock.ts `beginsFor`: a member a moved workspace's chain carries bound to no log, this device an own app of
+  /// theirs it names; `seedFor`).
+  begins?: (sub: string) => boolean;
   /// The person's stations, where the lock is read and brought (the root AGENTS.md, The cloud is the account system):
   /// `read` the chains they keep of it (null when none this device reaches keeps any: older, offline or refusing it),
   /// `bring` the chain as it is now, how many took it (null: none could be asked; a refusal fails), `answered` whether
@@ -536,12 +553,28 @@ export class PersonalLock {
   /// With the seed in hand for something else: this device said again on the chain with the key it signs workspaces'
   /// locks with, where its entry lacks it or names another (the rules take a device entry for a key on the chain as that
   /// device said again). Nothing more is asked of the person; a failure only leaves it unsaid until the next time.
+  /// And then the bindings of moved workspaces this device is to say (`#addBinds`), with the same seed.
   #restate(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
     const signKey = this.#mySignKey();
     const mine = this.#myKey === null ? undefined : this.#lastSaid(sub).get(this.#myKey);
-    if (signKey === null || mine === undefined || mine.said?.sign_key === signKey) return Effect.void;
+    if (signKey === null || mine === undefined || mine.said?.sign_key === signKey) return this.#addBinds(sub, seed, within);
     const { key, id, label } = mine.device;
-    return Effect.ignore(this.#append(sub, seed, "device", { key, id, label, sign_key: signKey }, true, within), { log: "Unhandled", message: "personal lock: this device said again" });
+    return Effect.andThen(Effect.ignore(this.#append(sub, seed, "device", { key, id, label, sign_key: signKey }, true, within), { log: "Unhandled", message: "personal lock: this device said again" }), this.#addBinds(sub, seed, within));
+  }
+
+  /// With the seed in hand for something the person does: in each moved workspace where the chain as it moved bound
+  /// them to no log and this device is an own app of theirs it names, `bind` said on their log (views/lock.ts
+  /// `bindsFor`; the lead, 2026-11-14: what they did for themselves before the move, they do after it with the one ask it
+  /// took then, nothing more asked and nobody else involved). A failure leaves it for the next ask.
+  #addBinds(sub: string, seed: Uint8Array, within?: Asked): Effect.Effect<void> {
+    const binds = this.#env.binds;
+    if (binds === undefined) return Effect.void;
+    return Effect.gen({ self: this }, function* () {
+      for (const b of yield* binds(sub)) {
+        const said = Effect.flatMap(this.#turn(sub).withPermits(1)(this.#state(sub, seed, b.ws, b.make, within)), (rest) => rest);
+        yield* Effect.ignore(said, { log: "Unhandled", message: "personal lock: a binding said" });
+      }
+    });
   }
 
   /// Whether this device is on `sub`'s chain pinned here and its last entry there does not say the signer it keeps (one
@@ -567,7 +600,9 @@ export class PersonalLock {
       // (said meanwhile, as the person was asked)
       if (mine === undefined || signKey === null || mine.said?.sign_key === signKey) return null;
       const { key, id, label } = mine.device;
-      const pending = yield* this.#append(sub, seed, "device", { key, id, label, sign_key: signKey }, false, this.asked());
+      const within = this.asked();
+      const pending = yield* this.#append(sub, seed, "device", { key, id, label, sign_key: signKey }, false, within);
+      if (pending === null) yield* this.#addBinds(sub, seed, within);
       return pending === null ? null : { pending: pendingRow(pending, this.#env.stations?.names?.(sub) ?? []) };
     });
   }
@@ -1250,12 +1285,39 @@ export class PersonalLock {
     return this.#unseal(reason);
   }
 
+  /// The key's seed for an act of the person's own on their lock (`reason` its ask): unsealed where this device is on
+  /// it; where they have none and the act begins one (`begins`: a member a moved workspace's chain carries bound to no
+  /// log, this device an own app of theirs there, approving or taking off a device of theirs), their lock read first
+  /// (not knowing is not none) and begun on that act as views/pair.ts `ownLogFor` begins a newcomer's: with nobody asked
+  /// where it may (`beginQuietly`'s `acted`), then the act's one ask, else begun with that one ask (`begin`). The
+  /// bindings ride what the act then signs (`#restate`). The lead, 2026-11-14: the same one ask as before the move,
+  /// nobody else involved.
+  seedFor(sub: string, reason: string): Effect.Effect<Uint8Array, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.standing(sub) === "none" && this.#env.begins?.(sub) === true) {
+        const read = yield* Effect.result(this.refresh(sub, undefined, this.asked()));
+        if (this.standing(sub) === "none") {
+          if (read._tag === "Failure") return yield* Effect.fail(read.failure);
+          if (!(this.mayBeginQuietly(sub) && (yield* this.beginQuietly(sub, true)))) return yield* this.begin(sub, reason);
+        }
+      }
+      if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      return yield* this.#unseal(reason);
+    });
+  }
+
+  /// Whether this device is on `sub`'s lock, or begins it on an act of theirs (`seedFor`).
+  #mayAct(sub: string): boolean {
+    return this.standing(sub) === "member" || (this.standing(sub) === "none" && this.#env.begins?.(sub) === true);
+  }
+
   /// A new device let in here, face to face, signed with `seed` (else the person is asked now): the whole lock then, for
   /// it to pin. `device.sign_key`, the key it signs workspaces' locks with as its hello said, goes into its entry.
   addDevice(sub: string, device: Device, reason: string, seed: Uint8Array | null = null): Effect.Effect<Entry[], CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (!this.#mayAct(sub)) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      const signed = seed ?? (yield* this.seedFor(sub, reason));
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      const signed = seed ?? (yield* this.#unseal(reason));
       // (one wait for all it signs, made after the person was asked)
       const within = this.asked();
       yield* this.#signAgain(sub, signed, within);
@@ -1300,10 +1362,12 @@ export class PersonalLock {
   /// nothing in. Never this device. Null, or, no station of theirs up, `{pending}`, the removal's row.
   removeCarried(sub: string, id: string, label: string, reason: string): Effect.Effect<{ pending: PendingRow } | null, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      const chain = this.chain(sub);
-      if (chain === null || [...chain.devices.values()].some((d) => d.id === id)) return yield* Effect.fail(CoreError.invalid("the device is on their own lock: taken off by its key"));
-      const seed = yield* this.#unseal(reason);
+      if (!this.#mayAct(sub)) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      const on = (c: Chain | null) => c === null || [...c.devices.values()].some((d) => d.id === id);
+      if (this.standing(sub) === "member" && on(this.chain(sub))) return yield* Effect.fail(CoreError.invalid("the device is on their own lock: taken off by its key"));
+      // (their lock begun first where they have none: `seedFor`)
+      const seed = yield* this.seedFor(sub, reason);
+      if (on(this.chain(sub))) return yield* Effect.fail(CoreError.invalid("the device is on their own lock: taken off by its key"));
       const within = this.asked();
       yield* this.#signAgain(sub, seed, within);
       yield* this.#restate(sub, seed, within);
@@ -1326,8 +1390,9 @@ export class PersonalLock {
   /// theirs up, `{pending}`, its row.
   web(sub: string, kind: "web" | "web.remove", body: { id: string; label?: string; exp?: number }, reason: string, seed: Uint8Array | null = null): Effect.Effect<{ pending: PendingRow } | null, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (!this.#mayAct(sub)) return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      const signed = seed ?? (yield* this.seedFor(sub, reason));
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      const signed = seed ?? (yield* this.#unseal(reason));
       const within = this.asked();
       yield* this.#signAgain(sub, signed, within);
       yield* this.#restate(sub, signed, within);

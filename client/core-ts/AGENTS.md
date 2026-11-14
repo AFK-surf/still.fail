@@ -258,7 +258,7 @@ another; the accounts' list's merge across stations and its refills.
 - A chain is handed over by itself (views/lock.ts `handsOver`) on every build from `HAND_OVER_FROM` (src/lock-handover.ts;
   a host made for tests may say `handOverAuto` before it), with no date anyone waits for and nobody told to update (the
   user, 2026-11-14: 无感迁移): each workspace once everything that uses it reads a moved one the same way: every station
-  the chain names said in its GET /lock `serves` that it serves `bodies`, `logs`, `builds` and `carried` (it reads a
+  the chain names said in its GET /lock `serves` that it serves `bodies`, `logs`, `builds`, `carried` and `bind` (it reads a
   moved chain as it moved, `stationsWaited`, `keepServes`; never the cloud's word of its version), shown on the owner's
   device (`upgrade`, `upgradeOf`, `waitedLines`: one line a station, the refusal `lock_stations_not_ready` the same); and
   every app device the chain lets in was last seen by one of its stations on a build from `MOVED_FROM_BUILD`
@@ -277,9 +277,18 @@ another; the accounts' list's merge across stations and its refills.
 - After the move a person's devices the chain named and their log does not are still put on that log by their other
   device (`ownLocks` reads a moved chain as it moved, `approvedIn`), and an own app device the chain carries is taken
   off by the person's own device in one ask (`lock.removeDevice`, personal-lock.ts `removeCarried`: put on their log under
-  a key thrown away, then taken off by it). One of a member the chain bound to no log, and no admit has bound since,
-  goes out only with them. A member the chain named, first app device after the move, is admitted face to face as a
-  newcomer is, in the role the state gives them (views/pair.ts `admitOf`), what the chain carried of theirs staying.
+  a key thrown away, then taken off by it). A member the chain bound to no log, with a log of their own this device is
+  on, is bound to it by `bind` (rules/AGENTS.md) riding the next thing they do on their own lock with its one ask
+  (views/lock.ts `bindsFor`, personal-lock.ts `#addBinds`; the lead, 2026-11-14: what they did for themselves before the
+  move, with nothing more asked and nobody else involved): approving their own device or web page, taking one off, a
+  change of the list (`sayMoved` works it out with it, `plan` reading the chain as it moved). One with no log at all
+  (apps from before own logs, the common case at a move) has it begun on such an act of theirs on such a device, as
+  views/pair.ts `ownLogFor` begins a newcomer's, the `bind` riding it, in that act's one ask (personal-lock.ts
+  `seedFor`, views/lock.ts `beginsHere`): approving their own web page, their own new app (which asks them, never
+  owners and admins, and brings the key it joins their log with: views/pair.ts `carriedUnbound`), taking a device of
+  theirs off. A member the chain named, first
+  app device after the move, is admitted face to face as a newcomer is, in the role the state gives them (views/pair.ts
+  `admitOf`), what the chain carried of theirs staying.
 - Known, not built for (the lead, 2026-11-14): a station of another workspace from before build 8799 keeps a stale copy
   of the person's log once they say a statement. A root log holding statements of a half-done handover of builds
   9040–9054 that the chain has since contradicted is held back silently; nothing is built for it.

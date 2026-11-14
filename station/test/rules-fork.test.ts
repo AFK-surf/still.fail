@@ -12,7 +12,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { type Entry, endpointProof, entryHash, sigValid, validKeyId } from "../src/cloud/lock.ts";
+import { type Entry, endpointProof, entryHash, sigValid, taggedSigValid, validKeyId } from "../src/cloud/lock.ts";
 import { key, signed } from "./lock-world-sim.ts";
 import { VARIANTS } from "./lock-fork-choice-model.ts";
 import { pool, print } from "./lock-fork-pool.ts";
@@ -110,7 +110,7 @@ test("the rules are the fourth round's model's on its scripted worlds: bodies no
 // device by it, never by the log's key (the lead, 2026-11-13: nothing the workspace signer signed checked out against
 // the moved state).
 test("a person's log says each device's signer: the fold keeps it and those said before, and a moved workspace's state names the device by it, never by its key on the log", () => {
-  const crypto = { sha256Hex: (s: string) => createHash("sha256").update(s).digest("hex"), sigValid, validKeyId, endpointProof };
+  const crypto = { sha256Hex: (s: string) => createHash("sha256").update(s).digest("hex"), sigValid, validKeyId, endpointProof, taggedSigValid };
   const [log1, log2, log3] = [key(7101), key(7102), key(7103)];
   const [s1, s2a, s2b] = [key(7201), key(7202), key(7203)];
   const [id1, id2, id3] = [key(7301).hex, key(7302).hex, key(7303).hex];

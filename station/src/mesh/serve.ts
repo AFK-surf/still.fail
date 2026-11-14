@@ -381,7 +381,7 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     // lock let in, as admission let this one, and of a workspace with none, of nobody)
     // (`carried`: a moved chain read as it moved beside its people's logs, cloud/lock.ts `state4Moved`, 2026-11-14: every
     // reader must make the same state, so a core hands a chain over only once each of its stations says it)
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds", "carried"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds", "carried", "bind"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
@@ -516,7 +516,7 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
     const chains = personChainsOf(cloud);
     // (with what this station serves of the person's logs and the builds of the app devices on the asker's own log, as
     // seen here: what their core reads before it writes a kind an older station or app refuses, device-builds.ts)
-    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
+    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried", "bind"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
     if (method !== "POST") return [405, { error: "GET or POST" }];
     let said: any;
     try {

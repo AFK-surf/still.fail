@@ -12,7 +12,7 @@
 // difference is told with the seed, the place and the keeper.
 import { createHash } from "node:crypto";
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
-import { type Entry, canonical, endpointProof, sigValid, validKeyId } from "../src/cloud/lock.ts";
+import { type Entry, canonical, endpointProof, sigValid, taggedSigValid, validKeyId } from "../src/cloud/lock.ts";
 import { type Family, type Keeper, type Variant, World, drawSteps, hashOf, signed, variantName } from "./lock-fork-choice-model.ts";
 import { type Holder, V3, type V3v, drawSteps3, effect, spec, stationKeys3, v3Name } from "./lock-roster-model.ts";
 import { type Body, type D4, type D4Member, type W4Options, WS2, World4, bodyHash, tagOf, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, m8, revoked, unsigned } from "./lock-roster4-model.ts";
@@ -35,7 +35,7 @@ export const crypto = {
     }
     return ok;
   },
-  validKeyId, endpointProof,
+  validKeyId, endpointProof, taggedSigValid,
 };
 
 type Off = { at: number; why: string; refusal?: string; winner?: string; step?: string; under?: string };
@@ -388,7 +388,7 @@ export function scriptedWorlds(from: number, to: number): Out {
       for (const kind of ["web", "off"] as const) for (const parent of ["same", "any"] as const) revoked(seed, kind, parent);
       m6(seed);
       for (const m of [{}, { away: true }, { attack: "same" as const }, { attack: "any" as const }]) m7(seed, m);
-      for (const m of [{}, { away: true }]) m8(seed, m);
+      for (const m of [{}, { away: true }, { self: true }, ...(["removed", "circle", "honest", "self"] as const).map((rival) => ({ rival }))]) m8(seed, m);
       misshapen(o, seed, r);
       // (one whose device says no signer: listed, signing nothing, its web page let in)
       const u = unsigned(seed);

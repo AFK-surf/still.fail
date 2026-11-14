@@ -14,7 +14,9 @@
 // not said yet of someone it named (`roster.mbt` `Carried` for the list): where the root's log says neither `open` nor
 // `off`, its settings, on; and of a member it names, bound as it bound them (the log of their binding in the list is
 // the one the chain bound them to, none where it bound them to none), their devices the log has not said (`carry_of`).
-// So the handover signs `moved` alone, and nobody is waited for or asked.
+// So the handover signs `moved` alone, and nobody is waited for or asked. A member the chain bound to no log is bound
+// to one by their own `bind` (`roster.mbt` `binds_of`), proved by the signer the chain names for an own app device of
+// theirs; what a log of a binding of theirs took off of the chain's devices of theirs the chain carries no more.
 
 ///|
 /// How far ahead of a keeper's clock a web device's `at` may be and still count.
@@ -54,8 +56,9 @@ pub fn state4_moved(ws : String, chain : Array[Json], chains : Array[Array[Json]
 /// the chain had it) whose id the log never said (`web`, `web.remove`), not run out by `now` (`webs`); and of those own
 /// app devices the log did put on, the chain's signer and the signers it had, by id (`sayless`), which a device the log
 /// says no signer for signs with. Never a device the log took off (it put it on), nor one the chain took off or does
-/// not call their own.
-fn carry_of(cr : Carried, sub : String, lock : String, logs : Map[String, (Person, Array[Json])], now : Double) -> Carry {
+/// not call their own, nor one in `off`: the chain's devices of theirs that a log of a binding of theirs took off
+/// (`roster.mbt` `binds_of`), so a device they took off never comes back by another log's binding.
+fn carry_of(cr : Carried, sub : String, lock : String, logs : Map[String, (Person, Array[Json])], now : Double, off : Map[String, Unit]) -> Carry {
   let none : Carry = { apps: [], webs: [], sayless: Map([]) }
   let bound = cr.chain.persons.get(sub).unwrap_or("")
   guard cr.chain.members.contains(sub) && (bound == lock || bound == "") else { return none }
@@ -79,7 +82,7 @@ fn carry_of(cr : Carried, sub : String, lock : String, logs : Map[String, (Perso
     if d.kind == "app" && d.own && d.sign_key is Some(k) {
       if put.contains(d.id) {
         out.sayless[d.id] = (k, cr.chain.sign_keys.get(d.id).unwrap_or([k]))
-      } else {
+      } else if !off.contains(d.id) {
         out.apps.push(d)
       }
     } else if d.kind == "web" && !said.contains(d.id) && d.exp is Some(exp) && now < exp {
@@ -98,7 +101,7 @@ priv struct Carry {
 
 ///|
 fn state4_of(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], now : Double, carried : Carried?, c : &Crypto) -> State4 {
-  let (r, logs) = roster_of(ws, root, chains, bodies, [], carried, c)
+  let (r, logs, offs) = roster_of(ws, root, chains, bodies, [], carried, c)
   let s : LockState = {
     ws,
     seq: 0.0,
@@ -171,7 +174,7 @@ fn state4_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
       s.persons[m.sub] = m.lock
     }
     let carry = match carried {
-      Some(cr) => carry_of(cr, m.sub, m.lock, logs, now)
+      Some(cr) => carry_of(cr, m.sub, m.lock, logs, now, offs.get(m.sub).unwrap_or(Map([])))
       None => { apps: [], webs: [], sayless: Map([]) }
     }
     if logs.get(m.lock) is Some((p, _)) && p.sub == m.sub && p.devices.length() > 0 {
