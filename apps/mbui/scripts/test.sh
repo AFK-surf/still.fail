@@ -392,7 +392,12 @@ for t in $targets; do
           # (send_steady's three beside the fourth's pages were 114, 137 and 149 s, with real_size's half 78 and its
           # pages 211, app 4/4 222-237 s of its 5 minutes on main c54dc28b 43348134004 and branches after: reckoned 300,
           # by the table some 95 s of its pages go to the other three)
-          *) specs="4,4,380,1 2,4,430,1 1,4,500,1 4,4,420,1" ;;
+          # (the first's other runs some 560-600 s of its cores since (real_size's half 200-232 s, preview_tree's halves
+          # 69-120, answers_still's five), its pages 252-291 s on five pushes of 2026-11-14 and app 1/4 cut at its 5
+          # minutes on main 3ee6f477 (43540456308, attempt 1); the third's 270-440, its job 94-159 s; the second's
+          # 276-473 and the fourth's 324-477 as reckoned. The first reckoned 600, the third 400: by the table some 160 s
+          # of the first's pages go to the second (two programs), the third and the fourth, 787 s to 627)
+          *) specs="4,4,600,1 2,4,430,1 1,4,400,1 4,4,420,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
