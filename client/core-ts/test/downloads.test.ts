@@ -155,6 +155,17 @@ test("a file sent up is called as its sender named it, not as the station keeps 
   assert.equal(titleOf("2026-10-24T21-59-13-dc7ed5-"), "2026-10-24T21-59-13-dc7ed5-");
 });
 
+test("a chat download keeps the attachment's original name, including for agent files", async () => {
+  const stored = "2026-11-14T04-39-37-report.zip";
+  const r = await rig(new Map([[stored, bytesOf(4)]]));
+  await r.ask("download.start", { station: ST, key: "k1", name: stored, size: 4, from: { session: "k1", file: { name: "report.zip", path: `C:\\station\\uploads\\${stored}`, size: 4 } } });
+  const [download] = await r.view();
+  assert.equal(download.name, stored);
+  assert.equal(download.title, "report.zip");
+  assert.equal(download.state, "ready");
+  r.core.close();
+});
+
 test("saved, a file a viewer kept before stays kept: the device keeps what it kept before the download", async () => {
   const film = bytesOf(9 * MB, 5);
   const r = await rig(new Map([["film.mp4", film]]));

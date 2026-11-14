@@ -217,10 +217,7 @@ fn owner_of(here : MessageHere, a : Attachment) -> String {
 ///|
 /// The last part of a path: the name the station keeps a file by (storedName).
 fn stored_name(path : String) -> String {
-  match path.rev_find("/") {
-    Some(i) => path.exact_view(start=i + 1).to_owned()
-    None => path
-  }
+  @sfbase.base_name(path)
 }
 
 ///|
