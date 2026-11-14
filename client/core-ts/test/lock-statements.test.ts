@@ -19,7 +19,7 @@ import { Core } from "../src/core.ts";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, entryHash, next } from "../src/lock.ts";
 import { bodyHash, wsTag } from "../src/lock-moved.ts";
-import { held, inForceOf, movedHere, read, roster, safeMode } from "../src/views/lock.ts";
+import { held, inForceOf, movedHere, movedWorks, read, roster, safeMode } from "../src/views/lock.ts";
 import { joinable } from "../src/views/memberships.ts";
 import { jsonResponse } from "../src/testing.ts";
 import { hex, utf8 } from "../src/util.ts";
@@ -664,4 +664,16 @@ test("the root's person bound again by a log of theirs: this device on it turns 
   assert.equal(on.error, undefined, on.error?.message);
   assert.equal(inForceOf(w.inner, "ws").said, "on");
   assert.deepEqual(w.said(), ["off", "open"]);
+});
+
+// The root's person's new app approved by another owner (views/pair.ts `admitOf`: `again` while the list names them):
+// what this device would say works where every station said `rootout`, the removal first naming the root's log.
+test("the root's person's app begun anew, approved by another owner: the removal and the admit by the new log work only where every station said `rootout`", async () => {
+  const o = await setUp({ root: "alice" });
+  const again = person("r1", 6011, key(6111).hex);
+  const meant = [{ kind: "member.remove" as const, sub: "r1" }, { kind: "member" as const, sub: "r1", email: "a@x.com", lock: gOf(again), role: "owner" }];
+  assert.equal(movedWorks(o.inner, "ws", "s1", meant), false, "before: it would not do what it means");
+  o.st.rootout = true;
+  await o.run(read(o.inner, "ws"));
+  assert.equal(movedWorks(o.inner, "ws", "s1", meant), true, "every station said rootout");
 });

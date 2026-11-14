@@ -254,6 +254,11 @@
   (`src/api/moved-from.ts`) asking in a workspace whose chain moved is told to update there (426 with `update`, as
   `coreTooOld`; `src/mesh/serve.ts` `movedTooOld`), which its app shows as the ordinary 请更新 (请刷新页面 on the web); one
   that says no build is answered as `coreTooOld` answers it. `test/device-builds.test.ts` holds it.
+- After a move the root's person is a member like any other (rules/AGENTS.md, `~root`; the lead, 2026-11-14): this
+  station says `rootout` in its GET /lock `serves`, so a core says a removal of them naming the root's log only where
+  every station reads it so, and a core under `ROOT_OUT_FROM_BUILD` (`src/api/moved-from.ts`) is told to update
+  (`movedTooOld`) only where the state in force has them out of `~root` (`Cloud.rootOut`, the rules' `root_in`):
+  nowhere else is anyone told anything. `test/lock-root-out.test.ts` holds it.
 
 ## Screens
 

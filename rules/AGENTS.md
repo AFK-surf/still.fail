@@ -65,4 +65,6 @@
   they reach a reader (as before, when its person could not be taken out at all), and the root's word against an
   owner's is the root's, so the root's person with a device in hand is never locked out by an owner for good. A reader
   from before reads such a removal as nothing: a core says one only where every station the list names says
-  `rootout` in its `serves`.
+  `rootout` in its `serves`. `open` and `off` follow the person: bound by a real admit, the newest of them in force on
+  that log counts where it says any (its settings likewise), else the root's; so they turn safe mode off and on again
+  from their devices now, and nobody else does. `rules/protocol/lock.spthy` is unchanged: nothing new is signed.

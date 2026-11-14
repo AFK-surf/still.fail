@@ -30,6 +30,13 @@
 //     her new app L, told by the stations that the list names no app of hers, is a newcomer (its own log begun, Q
 //     asked once, nothing on L) and in at both, jade bound by that admit. What alice's and frank's sign-ins asked the
 //     cloud in the minute before frank's acts is logged (`requestsOf`): alice's account is near its 120 by then.
+//   24 alice, the root's person, loses every device (her apps closed for good, as round 5 of locks.ts installs A anew):
+//     her new app Z says her other devices are gone (her own log begun anew), frank (an owner) takes her out, adds her
+//     again as an owner and approves Z's code, as for any member whose lock was begun anew (locks.ts round 12; the
+//     lead, 2026-11-14: after a move the root's person is a member like any other, `~root`). Z in at both, an owner,
+//     her page confirmed; A, of her old log, refused by both; frank and hank untouched. Then Z turns safe mode off and
+//     on again (on and off follow her), frank still answered `lock_root_only`. Last: nothing after it needs alice's
+//     old devices.
 // Chains are handed over by themselves on every build from HAND_OVER_FROM (client/core-ts src/lock-handover.ts; the
 // user, 2026-11-14: 无感迁移, no date, no switch), so by default nothing calls `lock.handOver`: P's joining alice's own
 // lock face to face, the ask for something else that A answers, is moved from round 19's start to where the call was
@@ -74,6 +81,8 @@ const wDev = new Device("W", "ivy", { page: true });
 const mDev = new Device("M", "jade", { sealed: false });
 const oDev = new Device("O", "jade");
 const lDev = new Device("L", "jade");
+// alice's new app once every one of hers is gone (round 24)
+const zDev = new Device("Z", "alice");
 const fifthData = `${process.env.E2E_STATION}/data`;
 const sixthData = `${process.env.E2E_STATION}-b/data`;
 try {
@@ -673,9 +682,59 @@ try {
     if (lDev.asked() !== lFrom) throw new Error(`L asked the person: ${lDev.askedWhat(lFrom).join("; ")}`);
     await atBoth("jade bound", (s) => memberAt(s, oDev.sub) === "member" && personAt(s, oDev.sub));
   });
+  // ── round 24: alice, the root's person, every device lost; frank takes her out and lets her in again (the lead,
+  // 2026-11-14). Her apps closed for good; Z, her new app, finds none of hers to approve it and begins her own lock anew
+  // (`adb.personalRestart`, the app's 「我的其它设备都不在了」); frank's asks are those of taking any member out and of
+  // approving a first device, Z's those of a lock begun anew. ──
+  await within(Promise.all([vDev, nDev, xDev].map((x) => x.close())), 5000);
+  await zDev.signIn();
+  const zFrom = zDev.asked();
+  await must("Z, alice's new app, every other gone: refused by both; it says her other devices are gone, a lock of her own begun anew", async () => {
+    for (const id of both()) log(`  Z sees ${id === fifthId ? "the first" : "the second"}: ${short(await inThree(zDev, id, (s) => s.state !== "online" && s.state !== "connecting" && s.cause === "lock"))}`);
+    await zDev.call("adb.personalRestart", { sub: zDev.sub });
+    await zDev.personal((p) => p.standing === "member" && p.devices.length === 1, 60_000);
+    log(`  Z asked: ${zDev.askedWhat(zFrom).join("; ") || "nothing"}`);
+  });
+  await must("frank takes alice out (one ask on Q): out at both, nobody else", async () => {
+    const asked = await asksOf(qDev, () => qDev.call("workspace.removeMember", { account: qDev.sub, workspace: three, member: zDev.sub }));
+    log(`  Q asked: ${asked.join("; ") || "nothing"}`);
+    if (asked.length !== 1) throw new Error(`Q asked ${asked.length} times`);
+    await atBoth("alice out", (s) => memberAt(s, zDev.sub) === null && memberAt(s, qDev.sub) === "owner" && memberAt(s, sDev.sub) === "member");
+  });
+  await must("frank adds alice again as an owner and approves Z's code: one ask on Q, nothing more on Z; Z in at both, alice an owner bound to her new log, her page confirmed", async () => {
+    await qDev.call("workspace.addMembers", { account: qDev.sub, workspace: three, role: "owner", emails: ["alice@example.test"] });
+    const zBefore = zDev.asked();
+    const asked = await asksOf(qDev, () => approvedInThree(zDev, false, qDev));
+    log(`  Q asked: ${asked.join("; ") || "nothing"}`);
+    if (asked.length !== 1) throw new Error(`Q asked ${asked.length} times`);
+    if (zDev.asked() !== zBefore) throw new Error(`Z asked the person: ${zDev.askedWhat(zBefore).join("; ")}`);
+    await atBoth("alice an owner, bound", (s) => memberAt(s, zDev.sub) === "owner" && personAt(s, zDev.sub));
+    await zDev.lock(three, (l) => l.signs && l.me?.confirmed, 90_000);
+    log(`  Z asked in all: ${zDev.askedWhat(zFrom).join("; ") || "nothing"}`);
+  });
+  // (A says 0.1.9170 since round 23, under ROOT_OUT_FROM_BUILD until it is set at push: told to update there, as a
+  // core whose rules would read alice in; a refusal either way)
+  await check("A, of alice's old log, started again: refused by both", async () => {
+    await vDev.restart();
+    for (const id of both()) log(`  A sees ${id === fifthId ? "the first" : "the second"}: ${short(await inThree(vDev, id, (s) => s.state !== "online" && s.state !== "connecting"))}`);
+  });
+  await check("frank and hank untouched: Q and S let in by both", async () => {
+    for (const x of [qDev, sDev]) for (const id of both()) await inThree(x, id, (s) => s.state === "online");
+  });
+  await check("on and off follow alice: Z turns safe mode off (off at both) and on again (on at both); frank still answered lock_root_only", async () => {
+    const off = await asksOf(zDev, () => zDev.call("lock.disable", { workspace: three }));
+    log(`  off: Z asked ${off.join("; ") || "nothing"}`);
+    await atBoth("off", (s) => /^MOVED \S+ off /m.test(s) && /^LOCK off$/m.test(s));
+    const on = await asksOf(zDev, () => zDev.call("lock.open", { workspace: three }));
+    log(`  on: Z asked ${on.join("; ") || "nothing"}`);
+    await atBoth("on", (s) => /^MOVED \S+ on /m.test(s) && /^LOCK on /m.test(s));
+    const r = await qDev.call("lock.disable", { workspace: three }).then(() => null, (x: Error) => x);
+    log(`  Q's lock.disable: ${r?.message.slice(0, 200) ?? "done"}`);
+    if (r === null || !/lock_root_only/.test(r.message)) throw new Error("frank not answered lock_root_only");
+  });
 } catch (e) {
   fail("the run", e);
 }
 log(failures() === 0 ? "ALL PASSED" : `${failures()} FAILED`);
-await within(Promise.all([vDev, pDev, xDev, qDev, rDev, sDev, yDev, gDev, tDev, nDev, iDev, jDev, kDev, wDev, mDev, oDev, lDev].map((x) => x.close())), 5000);
+await within(Promise.all([vDev, pDev, xDev, qDev, rDev, sDev, yDev, gDev, tDev, nDev, iDev, jDev, kDev, wDev, mDev, oDev, lDev, zDev].map((x) => x.close())), 5000);
 process.exit(failures() === 0 ? 0 : 1);
