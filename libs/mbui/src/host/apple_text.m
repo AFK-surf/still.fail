@@ -811,6 +811,23 @@ void mb_host_glyph_put(int32_t key, int32_t x, int32_t y) {
   held_key = -1;
 }
 
+// A glyph's picture given back, pixels made by MoonBit put in the atlas (words' halo, src/ui/halo.mbt): none here
+// yet, so no halo is drawn (win_text.cpp's are).
+int32_t mb_host_glyph_picture(int32_t key, moonbit_bytes_t out) {
+  (void)key;
+  (void)out;
+  return 0;
+}
+
+int32_t mb_host_atlas_put(int32_t x, int32_t y, int32_t w, int32_t h, moonbit_bytes_t px) {
+  (void)x;
+  (void)y;
+  (void)w;
+  (void)h;
+  (void)px;
+  return 0;
+}
+
 // ---------------------------------------------------------------------------
 // The platform's own drawing of a line (textref_native.mbt, for src/textdiff): Core Text's CTLineDraw into a bitmap
 // context, the same fonts as above and the same rasterizer settings (no font smoothing), so what differs from

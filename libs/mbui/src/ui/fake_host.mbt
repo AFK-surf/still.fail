@@ -454,6 +454,28 @@ impl @hostapi.Host for FakeHost with glyph_put(self, key, x, y) {
 }
 
 ///|
+/// A glyph's picture given back (what words' halo is blurred from, halo.mbt): a live host's; the fake's glyph box all
+/// covered, so a halo is made and drawn as a host's is.
+impl @hostapi.Host for FakeHost with glyph_picture(self, key, out) {
+  match self.live {
+    Some(l) => l.host.glyph_picture(key, out)
+    None => {
+      out.fill(b'\xFF')
+      true
+    }
+  }
+}
+
+///|
+/// Pixels made here put in the atlas (a halo, halo.mbt): a live host's; the fake takes them, as it has no pictures.
+impl @hostapi.Host for FakeHost with atlas_put(self, x, y, w, h, px) {
+  match self.live {
+    Some(l) => l.host.atlas_put(x, y, w, h, px)
+    None => true
+  }
+}
+
+///|
 /// The side of a fake host's atlas: the web's (its glyphs placed in it as a host's are), colour glyphs in it with the
 /// others.
 let fake_atlas_size : Int = 2048

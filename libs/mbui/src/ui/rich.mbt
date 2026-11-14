@@ -1382,6 +1382,8 @@ fn Ctx::emit_rich_glyphs(
       Some(u) => u.push((self.ninst, ox + lay.xs[c] + lay.pre[c] + g.ox / z, top + lay.line_base[l], g.oy / z, gx - set_x, gy - set_y))
       None => ()
     }
+    // (its halo's, where its words have one: halo.mbt)
+    halo_told(self.ninst, key)
     glyph_pushing.val = true
     self.push_inst(
       gx,

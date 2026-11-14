@@ -68,6 +68,8 @@ pub(all) struct Look {
   mut runs_marks : Array[RunsMark]
   /// the shadow it casts under its ground (blur, how far down, colour; 0 blur: none): View::shadow
   mut shadow : (Double, Double, Int64)
+  /// the halo its words are drawn on, under them (its blur's sigma in points, its colour; 0 blur: none): View::words_halo
+  mut halo : (Double, Int64)
   /// the shapes it draws over its ground (their outlines, as said: what they come to drawn kept by them), and the one
   /// colour they are drawn in where it is not 0 (their own where it is): View::shapes, View::tint
   mut shapes : Array[@paint.Shape]
@@ -167,6 +169,8 @@ pub(all) struct Content {
   runs_picked : (Int, Int)
   runs_marks : Array[RunsMark]
   shadow : (Double, Double, Int64)
+  /// the halo its words are drawn on (View::words_halo)
+  halo : (Double, Int64)
   shapes : Array[@paint.Shape]
   lines : Array[@paint.Line]
   tint : Int64
@@ -273,6 +277,8 @@ pub(all) struct Drawn {
   runs_picked : (Int, Int)
   runs_marks : Array[RunsMark]
   shadow : (Double, Double, Int64)
+  /// the halo its words are drawn on (View::words_halo)
+  halo : (Double, Int64)
   shapes : Array[@paint.Shape]
   lines : Array[@paint.Line]
   tint : Int64
@@ -1646,6 +1652,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.look.glass = None
       n.look.words_look = words_plain
       n.look.shadow = (0.0, 0.0, 0L)
+      n.look.halo = (0.0, 0L)
       n.said = None
       n.said_hidden = false
       if n.behind {
@@ -1812,7 +1819,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_marks: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_cover_at: None, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), drawn_exact: false, ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, words_breaks: false, glyphs_said: 0, ellipsis_past: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), runs_marks: [], shadow: (0.0, 0.0, 0L), halo: (0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_cover_at: None, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), drawn_exact: false, ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, words_breaks: false, glyphs_said: 0, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         words_as_said,
@@ -3493,6 +3500,7 @@ priv enum Prop {
   GoneEmpty
   FillsAcross
   WordsBreaks
+  WordsHalo
   GlyphsBy
   InUse
   LaysAnew
@@ -3591,6 +3599,7 @@ impl Show for Prop with output(self, logger) {
       GoneEmpty => "GoneEmpty"
       FillsAcross => "FillsAcross"
       WordsBreaks => "WordsBreaks"
+      WordsHalo => "WordsHalo"
       GlyphsBy => "GlyphsBy"
       InUse => "InUse"
       LaysAnew => "LaysAnew"
@@ -3684,6 +3693,7 @@ fn Prop::ord(self : Prop) -> Int {
     LaysAnew => 89
     EllipsisPast => 54
     WordsBreaks => 87
+    WordsHalo => 90
     Points => 55
     Picture => 56
     Drop => 57
@@ -11070,6 +11080,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     runs_picked: n.look.runs_picked,
     runs_marks: n.look.runs_marks,
     shadow: n.look.shadow,
+    halo: n.look.halo,
     hosted: n.hosted,
     clips: n.look.clips,
     clips_self: n.look.clips && n.coming && !n.come_uncut,
@@ -11866,6 +11877,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     runs_picked: c.runs_picked,
     runs_marks: c.runs_marks,
     shadow: c.shadow,
+    halo: c.halo,
     hosted: c.hosted,
     clips: c.clips,
     clips_self: c.clips_self,

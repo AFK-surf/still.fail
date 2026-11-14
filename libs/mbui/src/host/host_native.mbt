@@ -63,6 +63,12 @@ extern "C" fn ffi_glyph(key : Int, out : FixedArray[Double]) -> Unit = "mb_host_
 
 extern "C" fn ffi_glyph_put(key : Int, x : Int, y : Int) -> Unit = "mb_host_glyph_put"
 
+#borrow(out)
+extern "C" fn ffi_glyph_picture(key : Int, out : FixedArray[Byte]) -> Int = "mb_host_glyph_picture"
+
+#borrow(px)
+extern "C" fn ffi_atlas_put(x : Int, y : Int, w : Int, h : Int, px : FixedArray[Byte]) -> Int = "mb_host_atlas_put"
+
 extern "C" fn ffi_atlas_size(colour : Int) -> Int = "mb_host_atlas_size"
 
 #borrow(keys)
@@ -621,6 +627,19 @@ fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
 ///|
 fn glyph_put(key : Int, x : Int, y : Int) -> Unit {
   ffi_glyph_put(key, x, y)
+}
+
+///|
+/// The picture of glyph `key` drawn by the `glyph` asked last (win_text.cpp; Apple's, Linux's and Android's hosts give
+/// none yet: no halo drawn there).
+fn glyph_picture(key : Int, out : FixedArray[Byte]) -> Bool {
+  ffi_glyph_picture(key, out) == 1
+}
+
+///|
+/// Pixels made here put in the words' atlas (win_text.cpp; none taken elsewhere yet).
+fn atlas_put(x : Int, y : Int, w : Int, h : Int, px : FixedArray[Byte]) -> Bool {
+  ffi_atlas_put(x, y, w, h, px) == 1
 }
 
 ///|

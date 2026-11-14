@@ -1,7 +1,7 @@
 // How a node's words are set and what is drawn round it besides its ground: their size, weight and line, whether they
 // wrap (View::words' `look`), their ink as it changes (View::ink); how wide it may grow (View::max_width); the shadow
-// it casts (View::shadow). Typed, what hosts the tree draws by them (ui's view_made), measured by what it measures
-// with (Tree::new's `measure`).
+// it casts (View::shadow), the halo its words are drawn on (View::words_halo). Typed, what hosts the tree draws by them
+// (ui's view_made), measured by what it measures with (Tree::new's `measure`).
 
 ///|
 /// How a node's words are set: their size (points), weight (100 … 900), the height of a line (points, at the system's
@@ -340,6 +340,20 @@ pub fn View::ink(self : View, ink : Live[Int64], loc~ : SourceLoc) -> View {
 #callsite(autofill(loc))
 pub fn View::shadow(self : View, cast : Live[(Double, Double, Int64)], loc~ : SourceLoc) -> View {
   self.bind(loc~, Shadow, cast, Paint, fn(c) { self.tree.nodes[self.at].look.shadow = c })
+  self
+}
+
+///|
+/// The halo its words are drawn on, as it changes (`blur`: its sigma in points, `ink` its colour; 0 blur: none): the
+/// cover of their glyphs as they are laid out, blurred so, in that colour, under them, as CSS's text-shadow with no
+/// offset, but brought up so that where it is densest it covers wholly (thin strokes blurred come to a fifth of a cover
+/// or less): a name over a busy ground read clearly on it without a box round it. Paint's: drawn with its words, as
+/// opaque, cut and big as they are; blurred once for the words, size and pixels they are drawn at, not each frame
+/// (ui's halo.mbt). Drawn where the host gives its glyphs' pictures back (Windows); elsewhere none, its words as ever.
+/// A property of its own, not WordsLook's, as View::words_breaks is.
+#callsite(autofill(loc))
+pub fn View::words_halo(self : View, halo : Live[(Double, Int64)], loc~ : SourceLoc) -> View {
+  self.bind(loc~, WordsHalo, halo, Paint, fn(h) { self.tree.nodes[self.at].look.halo = h })
   self
 }
 

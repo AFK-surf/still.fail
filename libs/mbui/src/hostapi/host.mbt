@@ -58,6 +58,8 @@ pub(open) trait Host {
   glyph_put(Self, Int, Int, Int) -> Unit = _
   atlas_size(Self, Bool) -> Int = _
   glyphs_ahead(Self, FixedArray[Int], Int) -> Unit = _
+  glyph_picture(Self, Int, FixedArray[Byte]) -> Bool = _
+  atlas_put(Self, Int, Int, Int, Int, FixedArray[Byte]) -> Bool = _
   face_add(Self, Int, String, Int) -> Bool = _
   face_add_bytes(Self, Int, Bytes, Int) -> Bool = _
   face_clear(Self, Int) -> Unit = _
@@ -495,6 +497,16 @@ impl Host with atlas_size(_, _) {
 ///|
 impl Host with glyphs_ahead(_, _, _) {
   ()
+}
+
+///|
+impl Host with glyph_picture(_, _, _) {
+  false
+}
+
+///|
+impl Host with atlas_put(_, _, _, _, _, _) {
+  false
 }
 
 ///|
@@ -1834,6 +1846,23 @@ pub let colour_atlas_u : Int = 16384
 /// view. What `glyph` answers is the same either way: only when the work is done changes. A host may do nothing.
 pub fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
   current.val.glyphs_ahead(keys, n)
+}
+
+///|
+/// The picture of glyph `key` drawn by the `glyph` asked last, as `glyph_put` would put it in the atlas, its pixels into
+/// `out` (its width by its height at the host's scale, as `glyph` says them; RGBA premultiplied, rows from the top: a
+/// mask's colour as its cover): what words' halo is blurred from (mbui/ui's halo.mbt). False where the host holds none
+/// or gives none back (no halo drawn then).
+pub fn glyph_picture(key : Int, out : FixedArray[Byte]) -> Bool {
+  current.val.glyph_picture(key, out)
+}
+
+///|
+/// Pixels made by the caller (`w` by `h`, RGBA premultiplied, rows from the top) put in the words' atlas with their top
+/// left at pixel `x`, `y`, as `glyph_put` puts a glyph's (there before the next frame is drawn): a halo blurred from
+/// glyphs (mbui/ui's halo.mbt). False where the host takes none (nothing put).
+pub fn atlas_put(x : Int, y : Int, w : Int, h : Int, px : FixedArray[Byte]) -> Bool {
+  current.val.atlas_put(x, y, w, h, px)
 }
 
 ///|
