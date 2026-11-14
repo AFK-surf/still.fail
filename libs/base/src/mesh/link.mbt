@@ -177,6 +177,13 @@ pub struct Link {
   priv mut missed : Int
   priv mut pinging : Bool
   priv mut rx : Int
+  /// Its pings' round trips (`Link::note`): how many were counted, their mean and mean deviation smoothed, how long
+  /// the last one answered took (none answered: none), and whether one was answered yet (the first is not counted).
+  priv mut samples : Int
+  priv mut srtt : Double
+  priv mut dev : Double
+  priv mut answered_ms : Int?
+  priv mut warm : Bool
 }
 
 ///|
@@ -431,4 +438,49 @@ fn Link::brought(self : Link) -> Bool {
   let more = self.came > self.rx
   self.rx = self.came
   more
+}
+
+///|
+/// How a link's pings went: what a program shows of its way, or chooses a way by.
+pub(all) struct Pings {
+  /// The round trips counted so far (none: `srtt` and `dev` say nothing yet).
+  samples : Int
+  /// Their mean, in ms, smoothed an eighth each time, and their mean deviation, a quarter.
+  srtt : Double
+  dev : Double
+  /// Pings in a row not answered.
+  missed : Int
+  /// How long the last one answered took, in ms; none where none was.
+  answered_ms : Int?
+}
+
+///|
+pub fn Link::pings(self : Link) -> Pings {
+  { samples: self.samples, srtt: self.srtt, dev: self.dev, missed: self.missed, answered_ms: self.answered_ms }
+}
+
+///|
+/// A ping's round trip of `ms` is counted: smoothed as TCP smooths its own (RFC 6298: the mean an eighth each time,
+/// the mean deviation a quarter), but its deviation from nothing at first, not half the first round trip.
+fn Link::note(self : Link, ms : Int) -> Unit {
+  let ms = ms.to_double()
+  if self.samples == 0 {
+    self.srtt = ms
+    self.dev = 0.0
+  } else {
+    self.dev = 0.75 * self.dev + 0.25 * (ms - self.srtt).abs()
+    self.srtt = 0.875 * self.srtt + 0.125 * ms
+  }
+  self.samples += 1
+}
+
+///|
+/// The bytes that came on its connection so far, the transport's own packets too (`conn.stats`); 0 where the shell
+/// does not say.
+fn Link::heard(self : Link) -> Double {
+  let said = self.shell.ask("conn.stats", { "id": self.conn }) catch { _ => return 0.0 }
+  match said {
+    { "rxBytes": Number(bytes, ..), .. } => bytes
+    _ => 0.0
+  }
 }

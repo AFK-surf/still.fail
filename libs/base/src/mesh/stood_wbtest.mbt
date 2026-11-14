@@ -19,6 +19,12 @@
 //   far.holds = true … far.release()      answers are kept back until the test gives them.
 //   far.away = true                       a dial is not answered (given up by the mesh when its time runs out).
 //   far.end(2, "bye")                     the peer ends connection 2 with that reason (`kind`: "timeout"…).
+//   far.lose(2)                           the peer is gone from under connection 2 without a word: what the device
+//                                          writes there is taken (and kept in `heard`, `asked`), nothing comes
+//                                          back, and the connection does not end. Other connections are answered.
+//   stood.rx[2] = 100.0                   what the transport says came on connection 2 so far (`conn.stats`).
+//   stood.on_relay = false                the endpoint is on no relay yet (`iroh.relayStatus`): an opening's time
+//                                          is not counted until it is.
 //   let link = stood.opened(mesh, source.gives())      a link (`scope=`: in that scope), its hello answered by the
 //                                          script; `Source` gives "c1", "c2"… and keeps how each was asked
 //   stood.rt.advance(tick_ms)             time goes on: what is due meanwhile happens at its own time
@@ -55,6 +61,12 @@ priv struct Stood {
   mut cancels : Bool
   /// The peer that answers by itself (`Stood::with_peer`); none: every dial, read and end is the test's to answer.
   mut peer : Peer?
+  /// The bytes that came on each connection so far, as the transport counts them (`conn.stats`): the test's to say
+  /// (`stood.rx[2] = 100`); 0 of one it said nothing of.
+  rx : Map[Int, Double]
+  /// Whether the endpoint is on a relay (`iroh.relayStatus`: no relay at all while true, as a mesh made with none;
+  /// one not connected while false).
+  mut on_relay : Bool
 }
 
 ///|
@@ -80,6 +92,8 @@ fn Stood::new() -> Stood {
     holding: "",
     cancels: true,
     peer: None,
+    rx: Map([]),
+    on_relay: true,
   }
   let answer = (id : Int64, json : Json) => stood.shell.val.unwrap().answer(id, json)
   let shell = @shell.Shell::stood_in(
@@ -120,7 +134,14 @@ fn Stood::new() -> Stood {
       let handle = handle_of(args)
       match op {
         "iroh.endpointId" => Json::string("ab".repeat(32))
-        "iroh.relayStatus" | "conn.paths" => Json::array([])
+        "iroh.relayStatus" =>
+          if stood.on_relay {
+            Json::array([])
+          } else {
+            [{ "url": "https://relay.test/", "connected": false }]
+          }
+        "conn.paths" => Json::array([])
+        "conn.stats" => { "rxBytes": Json::number(stood.rx.get(handle).unwrap_or(0.0)), "txBytes": 0 }
         "conn.closeReason" => {
           if stood.forgot.contains(handle) {
             raise @shell.ShellError("no handle \{handle}")
@@ -297,6 +318,8 @@ priv struct Peer {
   mut takes : Int
   mut holds : Bool
   mut away : Bool
+  /// The connections it is gone from under (`lose`): nothing more comes on them.
+  lost : Map[Int, Unit]
   /// Every control line it took, in order: `<ms on the test's clock> <connection> <the line as written>`.
   heard : Array[String]
   /// Every request it took, as it was finished: `<ms> <connection> <its head line> <its body's length>`.
@@ -327,6 +350,7 @@ fn Stood::with_peer() -> (Stood, Peer) {
     takes: 0,
     holds: false,
     away: false,
+    lost: Map([]),
     heard: [],
     asked: [],
     dials: [],
@@ -486,6 +510,8 @@ fn Peer::send(self : Peer, stream : Int, pieces : Array[Bytes?]) -> Unit {
 /// stream it reset or a connection that ended.
 fn Peer::put(self : Peer, stream : Int, pieces : Array[Bytes?]) -> Unit {
   guard self.flows.get(stream) is Some(flow) && !flow.reset && !self.stood.ended.contains(flow.conn) else { return }
+  // (gone from under it: what was on its way is lost too)
+  guard !self.lost.contains(flow.conn) else { return }
   for piece in pieces {
     match flow.reader {
       Some(reader) => {
@@ -524,6 +550,13 @@ fn Peer::over(self : Peer, conn : Int, why : Json) -> Unit {
       shell.refuse(reader, "connection closed")
     }
   }
+}
+
+///|
+/// The peer is gone from under connection `conn` without a word, as a process ended with its connections open:
+/// nothing more comes on it, what was on its way too, and it does not end.
+fn Peer::lose(self : Peer, conn : Int) -> Unit {
+  self.lost[conn] = ()
 }
 
 ///|

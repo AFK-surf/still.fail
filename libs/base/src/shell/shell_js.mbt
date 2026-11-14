@@ -11,9 +11,11 @@
 //   iroh.connect       `endpoint.connect(addr, alpn, [], givenUp)`; `fetch.cancel` of its call resolves `givenUp`,
 //                      which drops the handshake, and it is answered "cancelled" as natively
 //   iroh.endpointId, iroh.relayStatus, iroh.close      the endpoint's `id`, `relayStatus`, `close`
-//   conn.openBi, conn.close, conn.closed, conn.closeReason, conn.paths
+//   conn.openBi, conn.close, conn.closed, conn.closeReason, conn.paths, conn.stats
 //                      the connection's `openBi`, `close(code, reason)`, `closedInfo`, `closeReason`, `paths` (each
-//                      path a relay's: no `ip`)
+//                      path a relay's: no `ip`), `stats` (`{rxBytes, txBytes}` alone of what the Rust shell says,
+//                      and of a connection not ended alone: one that ended is "not its handle", which the mesh
+//                      takes as nothing more having come)
 //   istream.read/write/finish/reset                    the stream's own; a read answers its end as `{end: true}`
 //
 // A handle is a number, as the Rust shell's (`{"id": n}`), and a page lives long: each is let go of, none kept for
@@ -190,6 +192,10 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|      case "conn.paths":
   #|        if (h?.conn !== undefined) return h.conn.paths();
   #|        if (h?.gone !== undefined) return [];
+  #|        break;
+  #|      case "conn.stats":
+  #|        // ({rxBytes, txBytes}: of one that ended a page keeps none, and the mesh asks it of none)
+  #|        if (h?.conn !== undefined) return h.conn.stats();
   #|        break;
   #|      default:
   #|        throw new Error("a page's shell has no " + op);
