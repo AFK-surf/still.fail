@@ -19,6 +19,23 @@ pub fn language_from_prefs(prefs : Json?) -> Unit {
 }
 
 ///|
+/// Which chat page this device makes, as the person chose it in 外观 (试用新对话页: the prefs' `chatPage`, `nodes`
+/// the page made as nodes; none, the old), told `chat_page_nodes` as the kept choice changes, and as the app's tree is
+/// made, before any page of nodes: a chat page made after reads it (one already made stays as it was). Only a change
+/// of the choice writes it: none kept says nothing, so a run begins as `chat_page_nodes_at_start` (the reset) says.
+pub fn chat_page_from_prefs(prefs : Json?) -> Unit {
+  let chosen = @settings.pref_from(prefs, "chatPage")
+  if chosen != chat_page_told.val {
+    chat_page_told.val = chosen
+    chat_page_nodes.set(chosen == "nodes")
+  }
+}
+
+///|
+/// The chat page last told `chat_page_nodes` from the prefs (`chatPage`): none as a run begins.
+let chat_page_told : Ref[String] = Ref("")
+
+///|
 /// Light or dark, as this device is set (the prefs' `appearance`), or as the system is (@hostapi.system_dark)
 /// when it follows it; the host told when it changes (its bars follow, or are as dark as the frame's page says:
 /// `page_dark`).
@@ -34,6 +51,8 @@ pub fn appearance(c : @ui.Ctx, src : Source, page_dark : Bool?) -> Unit {
   })
   // haptics as this device is set (the prefs' `haptics`: off), else on
   @ui.set_haptics(text(prefs, "haptics") != "off")
+  // the chat page as chosen here (the prefs' `chatPage`: 试用新对话页)
+  chat_page_from_prefs(prefs)
   let dark = @settings.dark(prefs, @ui.system_dark())
   @sf.set_dark(Some(dark))
   // the accent as this device is set (the prefs' `accent`, as chosen here a moment ago), else still.fail's orange
@@ -306,6 +325,7 @@ fn app_frame_reset() -> Unit {
   badge_told.set(-1)
   told_bars.val = None
   told_dark.val = None
+  chat_page_told.val = ""
   attention.told = false
   attention.visible = false
   attention.focused = false

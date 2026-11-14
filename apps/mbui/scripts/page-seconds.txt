@@ -80,6 +80,7 @@ chat_open_wbtest.mbt 1 2 3 1
 chat_opens_whole_wbtest.mbt 53 28 40 22
 chat_own_row_parts_wbtest.mbt 11 11 24 5
 chat_page_nodes_wbtest.mbt 96 82 62 43
+chat_page_setting_wbtest.mbt 2 3 3 1
 chat_parity_wbtest.mbt 1 6 5 1
 chat_pictures_held_wbtest.mbt 1 2 2 1
 chat_pictures_scrolled_wbtest.mbt 0 1 1 0

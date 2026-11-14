@@ -1711,6 +1711,11 @@ export interface PrefsView {
 	 */
 	sendKey?: string;
 	/**
+	 * Which chat page this device makes (设置 → 外观 → 试用新对话页): `nodes`, the one made as nodes, tried while it
+	 * is being completed; or (none) the one of before.
+	 */
+	chatPage?: string;
+	/**
 	 * When a done chat is offered to archive (drawn faded): `off`, never;
 	 * `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it
 	 * (where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says.

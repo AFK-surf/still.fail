@@ -468,6 +468,7 @@ fn settings_search_children(row : SettingsRow, core : Core) -> Array[SettingsRow
       if @ui.takes_drops() {
         a.push(("drop", @sf.t("web-pages.appearance.drop.title"), Appearance))
       }
+      a.push(("chatPage", @sf.t("web-pages.appearance.chatPage.title"), Appearance))
       a
     }
     "notifications" => [

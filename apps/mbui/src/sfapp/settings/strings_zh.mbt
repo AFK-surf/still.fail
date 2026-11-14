@@ -1154,6 +1154,8 @@ let zh : Map[String, String] = {
   "web-pages.appearance.archive.reviewed": "按模型判断",
   "web-pages.appearance.archive.reviewedHint": "只提示 station 的归档建议（设置 → 自动决策）判断为没有后续事项的 chat。没开归档建议的 station 不会提示。",
   "web-pages.appearance.archive.title": "提示归档",
+  "web-pages.appearance.chatPage.description": "新的消息列表：往上读时内容不会被顶走。还在补齐，遇到问题可以关掉",
+  "web-pages.appearance.chatPage.title": "试用新对话页",
   "web-pages.appearance.drop.description": "发路径只告诉 agent 文件在哪；发文件会把文件放进 chat 所在的 station",
   "web-pages.appearance.drop.file": "发文件",
   "web-pages.appearance.drop.path": "发路径",

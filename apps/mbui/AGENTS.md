@@ -166,6 +166,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - What is left of the old is counted by detlint and only falls: `old-island` (`@ui.old` hosting a Ctx in a node),
   `old-list` (`Ctx::list`), `old-panel`, `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`.
   A change never adds one; one it touches it moves over. A node-made part is never wrapped back into a Ctx.
+- The chat's page made as nodes is behind a setting a person turns on, 外观's 试用新对话页 (the prefs' `chatPage`,
+  sfbase's `chat_page_from_prefs`), off by default till it lacks nothing (the owner, 2026-11-14: 「做开关」「别把用户搞得
+  没法用」); `chat_page_nodes_at_start` stays false meanwhile.
 - What changes with the width a row or a part is given is a binding (`By`: a gap's height, a margin, a size), never a
   structure switched by a value worked out of that width (`pick`, `show` on `width() <= …`): a structure switched makes
   its way in and out, and what the window or the system's bars do to the width is no motion of the thing's (found by

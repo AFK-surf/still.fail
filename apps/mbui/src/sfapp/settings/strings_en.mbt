@@ -1181,6 +1181,8 @@ let en : Map[String, String] = {
   "web-pages.appearance.archive.reviewed": "After review",
   "web-pages.appearance.archive.reviewedHint": "Suggested only for chats the station's archive suggestions (Settings → Automatic decisions) found to have nothing left. Stations without archive suggestions on suggest none.",
   "web-pages.appearance.archive.title": "Archive suggestions",
+  "web-pages.appearance.chatPage.description": "A new message list: what you read stays put. Still being completed; turn it off if something is wrong",
+  "web-pages.appearance.chatPage.title": "Try the new chat page",
   "web-pages.appearance.drop.description": "Path tells the agent where the file is; File puts it on the chat's station",
   "web-pages.appearance.drop.file": "File",
   "web-pages.appearance.drop.path": "Path",
