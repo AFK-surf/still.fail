@@ -1690,3 +1690,84 @@ test("an item of a vault renamed: decided by its vault's members, taken once the
     rmSync(h.dir, { recursive: true, force: true });
   }
 });
+
+test("an item deleted from the plain library: its card names it, its owner's approval deletes it here, and it grants nothing", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    void h.secrets.save("s1", { name: "旧的管理员密码", kind: "token", reason: "x", value: "t-1", hosts: ["example.com"], cwd: h.dir });
+    await tick();
+    const [saving] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.ok(typeof h.secrets.savedPlain(WS, null, "bob@x.com", { request: saving!.id }) !== "string");
+    await assert.rejects(h.secrets.remove("s1", { item: "none", reason: "r" }), /secret_list/);
+    await assert.rejects(h.secrets.remove("s1", { item: "旧的管理员密码", reason: " " }), /reason is required/);
+    const asked = h.secrets.remove("s1", { item: "旧的管理员密码", reason: "登不上，换了新的" });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.deepEqual(r!.remove, { name: "旧的管理员密码" });
+    const { text, card } = h.cards.at(-1)!;
+    assert.equal(text, "申请删除密钥「旧的管理员密码」：登不上，换了新的");
+    assert.deepEqual(card.options.map((o: { label: string }) => o.label), ["删除", "保留"]);
+    assert.deepEqual(card.vault.remove, { name: "旧的管理员密码" });
+    assert.match(h.secrets.grantPlain(WS, null, "bob@x.com", { request: r!.id, scope: "once" })!, /grants nothing/);
+    assert.match(h.secrets.removedPlain(WS, "carol@x.com", { request: r!.id }) as string, /only the item's owner/);
+    const gone = h.secrets.removedPlain(WS, "bob@x.com", { request: r!.id });
+    assert.ok(typeof gone !== "string");
+    assert.deepEqual([gone.deleted, gone.version, gone.fields], [true, 1, {}]);
+    assert.match(await decided(h, asked), /Deleted: 「旧的管理员密码」 \(i_\w+\) is no longer in the vault/);
+    assert.deepEqual(h.secrets.listings("s1"), []);
+    assert.deepEqual(pendingOf(h.secrets, null, "bob@x.com"), []);
+    assert.deepEqual(await h.secrets.uses(WS, null, PLAIN, { sub: "bob", email: "bob@x.com" }), []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("an item of a vault deleted: decided by its vault's members, taken once the item here is deleted, never granted", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  h.vaults.putVault(w.vault);
+  h.vaults.putBox(w.cert(w.alice));
+  try {
+    const id = "i_01HZZZZZZZZZZZZZZZZZZZZZZZ";
+    h.vaults.putItem(signed(
+      { v: 1 as const, ws: WS, vault: VAULT, id, version: 0, epoch: 0, ct: encryptWith(fill(4), Buffer.from("{}"), itemContext(WS, VAULT, id, 0, 0), fill(5, 12)), listing: { name: "branded", kind: "token" as const, modes: ["env" as const], hosts: [] }, at: 1000 },
+      TAG.item, w.alice.signer,
+    ));
+    const asked = h.secrets.remove("s1", { item: "branded", reason: "登不上" });
+    await tick();
+    const [r] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.ok(r && r.remove && r.box === "" && r.vault === VAULT);
+    assert.equal(h.cards.at(-1)!.card.assignee, "alice@x.com");
+    assert.match(h.secrets.grant(w.state, "alice", { request: r.id } as never)!, /grants nothing/);
+    assert.match(h.secrets.removed(w.state, "bob", { request: r.id })!, /vault's members/);
+    assert.match(h.secrets.removed(w.state, "alice", { request: r.id })!, /bring its copy first/);
+    h.vaults.putItem(signed({ v: 1 as const, ws: WS, vault: VAULT, id, version: 1, epoch: 0, deleted: true as const, ct: "", at: 1001 }, TAG.item, w.alice.signer));
+    assert.equal(h.secrets.removed(w.state, "alice", { request: r.id }), null);
+    assert.match(await decided(h, asked), /Deleted: 「branded」/);
+    assert.deepEqual(pendingOf(h.secrets, w.state, "alice@x.com"), []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a request withdrawn by the agent that asked: its card closed, gone from its owner's waiting requests, nobody told", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    void h.secrets.save("s1", { name: "Office-Host-2 管理员登录", kind: "login", reason: "装 git", hosts: [], cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.ok(r);
+    const told = h.notified.length;
+    assert.throws(() => h.secrets.cancel("s2", r.id), /unknown session/);
+    assert.throws(() => h.secrets.cancel("s1", "r_none"), /No such request in this chat/);
+    assert.match(h.secrets.cancel("s1", r.id), /Withdrew request r_\w+/);
+    assert.deepEqual(pendingOf(h.secrets, null, "bob@x.com"), []);
+    assert.deepEqual(h.withdrawn, ["1"]);
+    assert.equal(h.notified.length, told);
+    assert.throws(() => h.secrets.cancel("s1", r.id), /no longer pending \(withdrawn\)/);
+    // (decided once withdrawn: nothing to approve)
+    assert.match(h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id, fields: { username: "u", password: "p" } }) as string, /withdrawn/);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});

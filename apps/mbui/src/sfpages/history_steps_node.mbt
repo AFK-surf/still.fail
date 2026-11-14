@@ -1282,7 +1282,7 @@ fn step_label(name : String) -> String {
     "station_task" | "station_file" | "station_list" | "station_tool" | "relays" | "workspace_limit" => "远程"
     "job_start" | "job_list" | "job_log" | "job_stop" | "sleep" | "get_output" | "clock__curr_time" => "任务"
     "screen" | "browser" | "computer" => "屏幕"
-    "secret_list" | "secret_describe" | "secret_reask" | "secret_use" | "secret_save" | "secret_run" => "密钥"
+    "secret_list" | "secret_describe" | "secret_delete" | "secret_cancel" | "secret_reask" | "secret_use" | "secret_save" | "secret_run" => "密钥"
     "phone_use" | "phone_send" | "adb_devices" | "device_list" | "device_use" | "permissions" => "设备"
     "" => "工具"
     other => if other.length() > 10 { "工具" } else { other }

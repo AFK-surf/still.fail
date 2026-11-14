@@ -2045,7 +2045,10 @@ export interface VaultAsk {
 	 * said it (absent: nothing said); a request to rename, what would change, a line each.
 	 */
 	howText?: string;
-	/** Decided: granted | denied | expired. Absent while it waits (or before its station said). */
+	/**
+	 * Decided: granted | denied | expired | withdrawn (taken back by the agent). Absent while it waits (or before its
+	 * station said).
+	 */
 	status?: string;
 	/** Granted: once | hour | chat. */
 	scope?: string;
@@ -2056,6 +2059,11 @@ export interface VaultAsk {
 	 * so (granted); answered as one to keep (`answer` approve or setUp).
 	 */
 	describe?: VaultDescribe;
+	/**
+	 * A request to delete the item (secret_delete) rather than use it: approved, it is deleted (granted); answered as
+	 * one to keep (`answer` approve or setUp).
+	 */
+	remove?: boolean;
 	/** Another station of the workspace its commands run on (a secret to keep: the one its command read it on), by name. */
 	station?: string;
 	/**

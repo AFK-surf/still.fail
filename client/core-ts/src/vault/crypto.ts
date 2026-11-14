@@ -44,7 +44,9 @@ export type Plain = { kind: Kind; name: string; fields: Record<string, string>; 
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
   timeout?: Timeout;
-  command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
+  command?: string; hosts?: string[]; box: string; at: number;
+  /// `withdrawn`: taken back by the agent that asked (secret_cancel) before anyone decided it.
+  status: "pending" | "granted" | "denied" | "expired" | "withdrawn";
   /// The plain library's item's owner, or whom a secret to keep is for (their email).
   owner?: string;
   /// An agent asking to keep a secret (secret_save agent 存入): the item as it is to be listed, written
@@ -59,6 +61,9 @@ export type Request = {
   /// An agent asking to rename the item or change its about (secret_describe 改名和说明): as they are to be, and as
   /// they were when asked. Granted by writing the item's next version so (`vault.approve`); it grants nothing.
   describe?: { name: string; about: string; was: { name: string; about: string } };
+  /// An agent asking to delete the item (secret_delete 删除): its name when asked. Granted by deleting the item
+  /// (`vault.approve`); it grants nothing.
+  remove?: { name: string };
 };
 /// `typed`: its secret is what the person types in on its card (nothing sealed: the app writes what was typed).
 export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true; about?: string };

@@ -391,7 +391,7 @@ test "the vault's page's request where it is not this device's to answer, or dec
 /// The vault page's card of request r1 in ws1, from the vaults topic.
 fn vault_ask(c : @ui.Ctx, src : Source) -> Unit {
   let w : Workspace = { id: "ws1", name: "", emoji: "", icon: "", email: "" }
-  let asked : @settings.Asked = { name: "GitHub token", reason: "", timeout_kind: "", timeout_seconds: 0, approved_timeout_kind: "", approved_timeout_seconds: 0, mode: "proxy", command: "", how_text: "", save_kind: "", username: "", filename: "", typed: false, station: "", describe: false, new_name: "", new_about: "", was_about: "" }
+  let asked : @settings.Asked = { name: "GitHub token", reason: "", timeout_kind: "", timeout_seconds: 0, approved_timeout_kind: "", approved_timeout_seconds: 0, mode: "proxy", command: "", how_text: "", save_kind: "", username: "", filename: "", typed: false, station: "", describe: false, new_name: "", new_about: "", was_about: "", remove: false }
   c.box(w=Fill(1.0), fn() { @settings.vault_ask(c, settings_core(src, w), "ws1", "r1", asked, true) }) |> ignore
 }
 
@@ -680,5 +680,34 @@ test "a request to rename an item: what changes a part each, 确认修改 writes
   let card_faults = t.audit().filter(fn(f) { f.contains("名称") || f.contains("说明") || f.contains("UniFi") || f.contains("修改") })
   assert_eq(card_faults, [])
   vt_press(t, "确认修改")
+  assert_eq(vt_vault_calls(calls), ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r-demo\",\"scope\":\"once\"}"])
+}
+
+///|
+/// A request to delete an item (chat-vault-remove), as its card in its chat on a phone's window: 删除密钥 and its name in
+/// the title, the agent's reason under it, 删除 / 保留 at its foot, nothing of how a use is given; 删除 deletes it
+/// (`vault.approve` once).
+test "a request to delete an item: 删除密钥 and its name, 删除 deletes it" {
+  new_run()
+  @sf.presenters_reset()
+  let calls : Array[String] = []
+  let base = fixture("chat-vault-remove")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push(name + " " + params.stringify())
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  for w in ["删除密钥 办公室 Mac 主机管理员登录", "删除", "保留"] {
+    assert_true(vt_seen(t, w) is Some(_), msg="\{w}: \{Repr(t.words().filter(fn(x) { x.5 > 0.0 }).map(fn(x) { x.0 }))}")
+  }
+  assert_true(vt_seen(t, "允许") is None, msg="a use's answer in its place")
+  let card_faults = t.audit().filter(fn(f) { f.contains("删除") || f.contains("保留") || f.contains("办公室") })
+  assert_eq(card_faults, [])
+  vt_press(t, "删除")
   assert_eq(vt_vault_calls(calls), ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r-demo\",\"scope\":\"once\"}"])
 }

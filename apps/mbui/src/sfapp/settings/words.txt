@@ -772,6 +772,9 @@ android-settings.vault.act.deny
 android-settings.vault.act.denyWhat
 android-settings.vault.act.dontChange
 android-settings.vault.act.dontSave
+android-settings.vault.act.dontRemove
+android-settings.vault.act.remove
+android-settings.vault.act.removeWhat
 android-settings.vault.act.save
 android-settings.vault.act.saveWhat
 android-settings.vault.add
@@ -793,6 +796,10 @@ android-settings.vault.approve.what
 android-settings.vault.ask.changed
 android-settings.vault.ask.denied
 android-settings.vault.ask.expired
+android-settings.vault.ask.withdrawn
+android-settings.vault.ask.removed
+android-settings.vault.ask.notRemoved
+android-settings.vault.ask.remove
 android-settings.vault.ask.granted
 android-settings.vault.ask.timedGranted
 android-settings.vault.ask.kept

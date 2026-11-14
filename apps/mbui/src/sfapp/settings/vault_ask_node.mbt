@@ -55,6 +55,7 @@ pub fn vault_foot_node(
   timeout : () -> (String, Int),
   foot~ : Bool,
   describe? : () -> Bool = fn() { false },
+  remove? : () -> Bool = fn() { false },
 ) -> Unit {
   let lasts = fn() {
     match answer() {
@@ -168,7 +169,7 @@ pub fn vault_foot_node(
       let sc = scope()
       let t = timed()
       let m = minutes()
-      let what = tr(if describe() { "android-settings.vault.act.changeWhat" } else if s { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
+      let what = tr(if remove() { "android-settings.vault.act.removeWhat" } else if describe() { "android-settings.vault.act.changeWhat" } else if s { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
       let chosen = if !t || sc == "once" { if s { "once" } else { sc } } else if m <= 60 { "hour" } else { "chat" }
       let params : Array[(String, Json)] = [("workspace", str(ws())), ("request", str(request())), ("scope", str(chosen))]
       if t && sc != "once" {
@@ -281,9 +282,10 @@ pub fn vault_foot_node(
       } else {
         @sf.button_node(
           p,
-          fn() { tr(if describe() { "android-settings.vault.act.change" } else if save() { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }) },
+          fn() { tr(if remove() { "android-settings.vault.act.remove" } else if describe() { "android-settings.vault.act.change" } else if save() { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }) },
           approve,
-          tone=Primary,
+          // (one to delete the item: red, as what cannot be undone)
+          tone=if @signals.untracked(remove) { DangerSolid } else { Primary },
           busy=fn() { busy(true) },
           disabled=fn() { under() || empty() || !valid_time() },
           card_words=foot,
@@ -292,7 +294,7 @@ pub fn vault_foot_node(
       }
       @sf.button_node(
         p,
-        fn() { tr(if describe() { "android-settings.vault.act.dontChange" } else if save() { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }) },
+        fn() { tr(if remove() { "android-settings.vault.act.dontRemove" } else if describe() { "android-settings.vault.act.dontChange" } else if save() { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }) },
         fn() {
           let r = @signals.untracked(request)
           act(false, "vault.deny", tr("android-settings.vault.act.denyWhat"), obj([("workspace", str(@signals.untracked(ws))), ("request", str(r))]))
@@ -384,6 +386,7 @@ pub fn vault_actions_node(
     },
     foot=false,
     describe=fn() { field(row(), "describe") is Some(_) },
+    remove=fn() { flag(row(), "remove") },
   )
 }
 
@@ -395,7 +398,9 @@ fn vault_title_runs(ask : Asked) -> Array[@ui.Run] {
   let save = ask.save_kind != ""
   let named = fn(n) { @ui.span(n, weight=600, color=t.p.text) }
   let words = fn(w) { @ui.span(w, weight=400, color=t.p.text) }
-  let runs = if ask.describe {
+  let runs = if ask.remove {
+    fill_named("android-settings.vault.ask.remove", [("name", ask.name)], named, words)
+  } else if ask.describe {
     describe_title_runs(ask, named, words)
   } else if save {
     fill_named(
@@ -477,7 +482,7 @@ fn vault_asked_node(v : @view.View, ask : () -> Asked, full_command : Bool) -> U
       })
       |> ignore
     })
-    w.show(fn() { ask().how_text != "" && !ask().describe }, fn(s) {
+    w.show(fn() { ask().how_text != "" && !ask().describe && !ask().remove }, fn(s) {
       @sf.words_node(s, fn() { ask().how_text }, fn() { @sf.ask_note }) |> ignore
     })
     w.show(fn() { vault_odd_runs(ask()).length() > 0 }, fn(s) {
@@ -517,6 +522,7 @@ pub fn vault_card_node(
           fn() { (ask().timeout_kind, ask().timeout_seconds) },
           foot=true,
           describe=fn() { ask().describe },
+          remove=fn() { ask().remove },
         )
       },
     )

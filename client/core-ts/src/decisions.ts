@@ -130,6 +130,9 @@ function vaultAsk(v: J): J | null {
     const d = get(v, "describe");
     out.describe = { name: d.name, about: str(d.about) ?? "", wasAbout: str(d.wasAbout) ?? "" };
     out.howText = describeText(name, out.describe);
+  } else if (isObject(get(v, "remove"))) {
+    // A request to delete the item (secret_delete): its name and why say it all.
+    out.remove = true;
   } else {
     out.howText = howText(mode, hosts);
   }

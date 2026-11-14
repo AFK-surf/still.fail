@@ -334,6 +334,9 @@ export async function chatPost(hub: Hub, key: string, args: Args, held: Held = {
     const ts = typeof args.withdraw === "string" && args.withdraw.trim() !== "" ? args.withdraw : null;
     if (ts === null) throw new Error("withdraw must be your question's message ts");
     const thread = target(hub, key, args.to);
+    // A vault request's card closed alone would leave the request waiting in its owner's 密钥: it is withdrawn whole.
+    const vault = (store.cardAt(thread.thread.id, ts) as { vault?: { request?: unknown } } | null)?.vault;
+    if (typeof vault?.request === "string") throw new Error(`That card is the vault request ${vault.request}: withdraw it with secret_cancel {request: "${vault.request}"}, which closes its card too.`);
     if (!store.withdrawCard(key, thread.thread.id, ts)) throw new Error("withdraw must name your own message with a card in this conversation");
     return "Withdrew the answer card; its message is kept. Continue your work and record the appropriate ending state.";
   }
