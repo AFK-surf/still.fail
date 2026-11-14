@@ -5,7 +5,6 @@
 ///|
 fn init {
   @ui.sizes_steady_known([
-    ("src/motion/list_part_test.mbt", 6),
     ("src/motion/motion_test.mbt", 1),
   ])
 }
