@@ -4,7 +4,7 @@
 // workspace's stations are from before (they answer no GET /presets/kept: read as before, never PUT to). The starred
 // models are the new chat's `choice` record `ws:<ws>:liked`, a map of preset-records.ts `Stars` (a list from before
 // read as each key starred). The rule both sides keep is preset-records.ts; nothing here decides otherwise. Pure.
-import { type KeptRecord, type PresetRecord, type Stars, canonical, isGone, newerRecord, newerStar, recordOf, starsOf } from "./preset-records.ts";
+import { type KeptRecord, type PresetRecord, type Stars, canonical, isGone, newerRecord, newerStar, recordOf, recordsKept, starsOf } from "./preset-records.ts";
 import { isObject } from "./util.ts";
 
 export const TABLE = "presetRecords";
@@ -43,19 +43,32 @@ export function adopted(r: KeptRecord, who: Who): KeptRecord {
   return r.owner === "" ? { ...r, owner: who.sub, rev: r.rev + 1 } : r;
 }
 
-/// `given` (records a station said, each checked) taken into `records` where newer: what is kept then, the same object
-/// where nothing was taken. Only `who`'s.
+/// A deletion of nobody said yet (one of before, deleted by an app from before by someone who did not make it, which a
+/// station gives everyone) as `who`'s device takes it: only where it holds that preset live as its own, as its own
+/// deletion, one change more than it (so it wins over the record it adopted of the same `rev`, and is carried to every
+/// station after); none otherwise.
+export function ownerless(r: KeptRecord, records: Record<string, KeptRecord>, who: Who): KeptRecord | null {
+  if (!isGone(r) || r.owner !== "" || who.sub === "") return null;
+  const held = records[r.id];
+  if (held === undefined || isGone(held) || held.owner !== who.sub) return null;
+  return { id: r.id, owner: who.sub, rev: r.rev + 1, gone: true, updatedAt: r.updatedAt };
+}
+
+/// `given` (records a station said, each checked) taken into `records` where newer, then the deletions kept as a
+/// station keeps them (preset-records.ts `recordsKept`): what is kept then, the same object where nothing changed. Only
+/// `who`'s, and a deletion of nobody's said where it is of one of theirs (`ownerless`).
 export function taken(records: Record<string, KeptRecord>, given: readonly KeptRecord[], who: Who): Record<string, KeptRecord> {
   let out: Record<string, KeptRecord> | null = null;
   for (const raw of given) {
-    if (!theirs(raw, who)) continue;
-    const r = adopted(raw, who);
+    const of = ownerless(raw, out ?? records, who);
+    if (of === null && !theirs(raw, who)) continue;
+    const r = of ?? adopted(raw, who);
     const was = (out ?? records)[r.id];
     if (was !== undefined && (newerRecord(was, r) === was || canonical(was) === canonical(r))) continue;
     out ??= { ...records };
     out[r.id] = r;
   }
-  return out ?? records;
+  return recordsKept(out ?? records);
 }
 
 /// What a station said of records, each checked as both sides check one; one that does not check left out.

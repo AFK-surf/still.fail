@@ -15,12 +15,12 @@ import type { Route } from "../../../station/src/api/admin.ts";
 import { routes as presetRoutes } from "../../../station/src/api/routes/presets.ts";
 import { routes as starRoutes } from "../../../station/src/api/routes/stars.ts";
 import type { Viewer } from "../../../station/src/mesh/credential.ts";
-import { Presets } from "../../../station/src/sessions/presets.ts";
+import { Presets, readPresetsFile } from "../../../station/src/sessions/presets.ts";
 import { Choose } from "../src/choose.ts";
 import type { Inner } from "../src/core.ts";
 import { handlers } from "../src/core/execute.ts";
 import { CoreError } from "../src/error.ts";
-import { type KeptRecord, type PresetRecord, canonical, isGone } from "../src/preset-records.ts";
+import { GONE_KEPT, type KeptRecord, type PresetRecord, canonical, isGone } from "../src/preset-records.ts";
 import { TABLE, heldOf, starredKeys, starsHeld } from "../src/presets-kept.ts";
 import { PresetViews, carryAll, install, likedKey, whoIn } from "../src/views/presets.ts";
 import { overview } from "./station-fixture.ts";
@@ -31,7 +31,7 @@ const YOU = { sub: "s2", email: "b@x.com", name: "Bo" };
 const clock = { now: 1_000 };
 
 type Ask = (method: string, path: string, body: unknown) => Effect.Effect<unknown, CoreError>;
-type Rig = { id: string; address: string; presets: Presets; answer: (viewer: Viewer) => Ask; told: string[] };
+type Rig = { id: string; address: string; presets: Presets; answer: (viewer: Viewer) => Ask; told: string[]; home: string };
 
 /// What the station's routes answer `r`, as the mesh would: its JSON, or its refusal as the core's requests make one.
 function served(routes: Route[], viewer: Viewer): Ask {
@@ -64,7 +64,7 @@ function station(id: string): Rig {
     ...presetRoutes({ presets, reposDir: () => repos, changed: () => told.push("presets") }),
     ...starRoutes({ kept: { modelStars: (w, s) => stars.get(`${w}/${s}`) ?? null, putModelStars: (w, s, t) => void stars.set(`${w}/${s}`, t) }, told: () => told.push("stars") }),
   ];
-  return { id, address: `${WS}/${id}`, presets, told, answer: (viewer) => served(routes, viewer) };
+  return { id, address: `${WS}/${id}`, presets, told, home, answer: (viewer) => served(routes, viewer) };
 }
 
 /// A station from before: GET /presets lists every preset of the workspace (none of `owner`, `rev`, `home`), POST,
@@ -85,6 +85,7 @@ function before(id: string): Rig {
     id,
     address: `${WS}/${id}`,
     presets,
+    home,
     told: asked,
     answer: (viewer) => {
       const ask = served(routes, viewer);
@@ -104,7 +105,14 @@ function device(who: { sub: string; email: string; name: string }, stations: Rig
   const lists = new Map<string, unknown>();
   const byAddress = new Map(stations.map((s) => [s.address, s]));
   const viewer = { sub: who.sub, email: who.email, name: who.name, role: "member", workspace: WS, device: "d" } as Viewer;
-  const call = (address: string, method: string, path: string, body: unknown) => byAddress.get(address)!.answer(viewer)(method, path, body);
+  // (each request asked, and those to refuse as a station gone away would: `${method} ${address}`)
+  const asked: string[] = [];
+  const refuse = new Set<string>();
+  const call = (address: string, method: string, path: string, body: unknown) => {
+    asked.push(`${method} ${address} ${path}`);
+    if (refuse.has(`${method} ${address}`)) return Effect.fail(new CoreError("offline", "not reached"));
+    return byAddress.get(address)!.answer(viewer)(method, path, body);
+  };
   const inner = {
     provider: { kind: "stillfail" },
     data: {
@@ -144,6 +152,8 @@ function device(who: { sub: string; email: string; name: string }, stations: Rig
     inner,
     views,
     records,
+    asked,
+    refuse,
     up,
     lists,
     settle,
@@ -372,4 +382,86 @@ test("starred models: two devices' stars from before meet as their union, an uns
   c2.like(b.address, "gpt-6", true);
   assert.deepEqual(starredKeys(starsHeld(fresh.records.get(`choice:${likedKey(WS)}`))!), ["claude-opus-5-5", "gpt-6"], "the defaults kept, then the one starred");
   assert.equal(TABLE, "presetRecords");
+});
+
+/// Each station told `presets` (its `told` grew) tells its devices, as its stream would, until none tells any more: the
+/// rounds it took, or null where it never came to rest in `most`.
+async function toRest(devices: ReturnType<typeof device>[], stations: Rig[], most = 12): Promise<number | null> {
+  // (from the first: what they told as the device first carried is told it too)
+  const seen = new Map(stations.map((s) => [s, 0]));
+  for (let round = 1; round <= most; round++) {
+    const telling = stations.filter((s) => s.told.length !== seen.get(s));
+    if (telling.length === 0) return round - 1;
+    for (const s of telling) seen.set(s, s.told.length);
+    for (const s of telling) for (const d of devices) await d.tell(s, "presets");
+  }
+  return null;
+}
+
+test("more deletions than a keeper keeps: device and stations keep the same of each owner's and come to rest", async () => {
+  const a = station("a");
+  const b = station("b");
+  const d = device(ME, [a, b]);
+  // (a person who deleted more presets than an owner's are kept: the latest GONE_KEPT of them, and some live)
+  const MANY = 520;
+  const records: Record<string, KeptRecord> = {};
+  for (let i = 0; i < MANY; i++) records[`p-g${i}`] = { id: `p-g${i}`, owner: ME.sub, rev: 2, gone: true, updatedAt: 10_000 + i };
+  records["p-live"] = { id: "p-live", name: "Live", dirs: [], instructions: "", createdBy: ME.email, createdAt: 1, updatedAt: 1, owner: ME.sub, rev: 1, home: "a" };
+  d.records.set(`${TABLE}:${WS}`, { records, before: [] });
+  await d.open(a);
+  await d.open(b);
+  const rounds = await toRest([d], [a, b]);
+  assert.notEqual(rounds, null, "the stations kept telling and the device kept bringing: no rest");
+  // At rest: told again, nothing is brought and nothing more is told.
+  const before = d.asked.length;
+  const told = [a.told.length, b.told.length];
+  await d.tell(a, "presets");
+  await d.tell(b, "presets");
+  assert.deepEqual(d.asked.slice(before).filter((x) => x.startsWith("PUT")), [], "nothing brought at rest");
+  assert.deepEqual([a.told.length, b.told.length], told, "nothing more told");
+  // Both hold the same deletions, the latest GONE_KEPT of the owner's; the station's file is bounded by owner.
+  const goneOf = (rs: KeptRecord[]) => rs.filter(isGone).map((r) => r.id).sort();
+  const held = goneOf(Object.values(d.held().records));
+  assert.equal(held.length, GONE_KEPT);
+  assert.deepEqual(held, Array.from({ length: GONE_KEPT }, (_, i) => `p-g${MANY - GONE_KEPT + i}`).sort(), "the latest");
+  assert.deepEqual(goneOf(stationRecords(a)), held);
+  assert.deepEqual(goneOf(stationRecords(b)), held);
+  // (another owner's, and those of nobody said, are bounded apart: one person's many push out nobody else's)
+  a.presets.add(null, { name: "Bo's", dirs: [] }, YOU.email, YOU.sub);
+  const bos = a.presets.list(null).find((p) => p.name === "Bo's")!;
+  a.presets.delete(null, bos.id, { sub: YOU.sub, email: YOU.email });
+  const file = readPresetsFile(a.home, "a");
+  assert.equal(file.gone.filter((g) => g.owner === ME.sub).length, GONE_KEPT);
+  assert.equal(file.gone.filter((g) => g.owner === YOU.sub).length, 1);
+});
+
+test("a preset of nobody said yet, deleted on one station by someone else's app from before, reaches its maker's device and every station", async () => {
+  const s1 = station("s1");
+  const s2 = station("s2");
+  // A's from before on S1; A's new device reads it there and carries it to S2, its PUT to S1 not reaching it.
+  const old = s1.presets.add(null, { name: "Old", dirs: [] }, ME.email);
+  const d = device(ME, [s1, s2]);
+  d.refuse.add(`PUT ${s1.address}`);
+  await d.open(s1);
+  await d.open(s2);
+  d.refuse.clear();
+  assert.equal(stationRecords(s2).find((r) => r.id === old.id)?.owner, ME.sub, "S2 holds it as A's");
+  assert.equal(s1.presets.get(null, old.id)?.owner, "", "S1 still of nobody said");
+  // B's app from before deletes it on S1: a deletion of nobody said.
+  s1.presets.delete(null, old.id, { sub: YOU.sub, email: YOU.email });
+  // A third person's device, holding nothing of it, changes nothing and brings nothing.
+  const c = device({ sub: "s3", email: "c@x.com", name: "C" }, [s1, s2]);
+  await c.open(s1);
+  await c.open(s2);
+  assert.deepEqual(Object.keys(c.held().records), []);
+  assert.deepEqual(c.asked.filter((x) => x.startsWith("PUT")), []);
+  // A's device, told by S1: holds it deleted as its own, and brings that to both.
+  await d.tell(s1, "presets");
+  assert.notEqual(await toRest([d, c], [s1, s2]), null);
+  const gone = d.held().records[old.id]!;
+  assert.ok(isGone(gone), "deleted on A's device");
+  assert.equal(gone.owner, ME.sub);
+  const at = (s: Rig) => s.presets.kept(null, { sub: ME.sub, email: ME.email }).find((r) => r.id === old.id);
+  assert.ok(isGone(at(s2)!), "and on S2");
+  assert.deepEqual([isGone(at(s1)!), at(s1)!.owner], [true, ME.sub], "S1's of nobody replaced by A's");
 });

@@ -29,7 +29,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import * as ops from "../ops.ts";
-import { type KeptRecord, type PresetRecord, RecordRefusal, type Stars, canonical, isGone, mergeStars, newerRecord, recordOf, starsOf } from "../preset-records.ts";
+import { type KeptRecord, type PresetRecord, RecordRefusal, type Stars, canonical, isGone, mergeStars, newerRecord, recordOf, recordsKept, starsOf } from "../preset-records.ts";
 import {
   type Held,
   TABLE,
@@ -108,10 +108,12 @@ function markBefore(inner: Inner, ws: string, id: string, before: boolean): void
 }
 
 /// `given` taken into what is kept of `ws` where newer (read anew: nothing waits between this read and its write).
-function take(inner: Inner, ws: string, given: readonly KeptRecord[], who: Who): void {
+function take(inner: Inner, ws: string, given: readonly KeptRecord[], who: Who): boolean {
   const held = heldOf(inner.data, ws);
   const records = taken(held.records, given, who);
-  if (records !== held.records) write(inner, ws, { ...held, records });
+  if (records === held.records) return false;
+  write(inner, ws, { ...held, records });
+  return true;
 }
 
 /// The person's records carried to station `address`: its own read and the newer of each kept, then brought what it
@@ -130,7 +132,8 @@ export function carry(inner: Inner, address: string): Effect.Effect<void, CoreEr
     }
     markBefore(inner, ws, stationId(address), false);
     const there = recordsOf(get(said.success, "records"));
-    take(inner, ws, there, who);
+    // (what this station had newer goes on to the others reached now, as a change made here does)
+    if (take(inner, ws, there, who)) carryAll(inner, ws, "presets", address);
     const byId = new Map(there.map((r) => [r.id, r]));
     for (const part of turns(lacking(heldOf(inner.data, ws).records, byId, who))) {
       const put = yield* Effect.result(ask(inner, address, "PUT", "/presets/kept", { records: part }));
@@ -179,9 +182,9 @@ function keepStars(inner: Inner, ws: string, given: Stars): void {
 }
 
 /// Everything of the person's carried to every station of `ws` reached now (a change made here).
-export function carryAll(inner: Inner, ws: string, what: "presets" | "stars"): void {
+export function carryAll(inner: Inner, ws: string, what: "presets" | "stars", besides: string | null = null): void {
   for (const s of stationsOf(inner, ws)) {
-    if (!reached(inner, s.address)) continue;
+    if (s.address === besides || !reached(inner, s.address)) continue;
     inner.scheduler.enqueue(s.address, `${what}/${s.address}`, Priority.background, Effect.ignore(what === "presets" ? carry(inner, s.address) : carryStars(inner, s.address)));
   }
 }
@@ -439,7 +442,7 @@ function run(inner: Inner, views: PresetViews, c: Of, progress: Parameters<Handl
     const held = heldOf(inner.data, ws);
     const keep = (r: KeptRecord) => {
       const now_ = heldOf(inner.data, ws);
-      write(inner, ws, { ...now_, records: { ...now_.records, [r.id]: r } });
+      write(inner, ws, { ...now_, records: recordsKept({ ...now_.records, [r.id]: r }) });
       views.changed(ws);
       carryAll(inner, ws, "presets");
     };

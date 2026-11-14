@@ -73,6 +73,38 @@ export function newerRecord<T extends KeptRecord>(a: T, b: T): T {
   return canonical(a) >= canonical(b) ? a : b;
 }
 
+/// The deletions of one owner's (a person's `sub`; those of nobody said yet, of the routes of before, one owner of their
+/// own) a keeper keeps at most: the latest by when each was deleted. Both sides keep the same by this one rule
+/// (`goneKept`), the station as it writes and the device as it keeps, so a device never brings a deletion a station would
+/// drop as it takes it (which went round for good with a bound of the workspace's, 2026-11-14). 200: a person's
+/// presets are made by hand, tens of them, so a deletion is forgotten only after two hundred later ones of the same
+/// person's, and only a keeper that held that preset live all that while could bring it back then; 200 deletions are
+/// some 16 KB a person a station.
+export const GONE_KEPT = 200;
+
+/// Of `gone`, those kept (GONE_KEPT of each owner's: the latest by `updatedAt`, then the higher `rev`, then the lower
+/// id, the same whatever their order), in the order given; `gone` itself where all are.
+export function goneKept<T extends GoneRecord>(gone: readonly T[]): readonly T[] {
+  const byOwner = new Map<string, T[]>();
+  for (const g of gone) byOwner.set(g.owner, [...(byOwner.get(g.owner) ?? []), g]);
+  if ([...byOwner.values()].every((list) => list.length <= GONE_KEPT)) return gone;
+  const order = (a: T, b: T) => b.updatedAt - a.updatedAt || b.rev - a.rev || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const kept = new Set<T>();
+  for (const list of byOwner.values()) for (const g of [...list].sort(order).slice(0, GONE_KEPT)) kept.add(g);
+  return gone.filter((g) => kept.has(g));
+}
+
+/// `records` (by id) with the deletions `goneKept` does not keep left out; the same object where none is.
+export function recordsKept<T extends KeptRecord>(records: Record<string, T>): Record<string, T> {
+  const gone = Object.values(records).filter((r): r is T & GoneRecord => isGone(r));
+  const kept = goneKept(gone);
+  if (kept.length === gone.length) return records;
+  const keep = new Set<KeptRecord>(kept);
+  const out: Record<string, T> = {};
+  for (const [id, r] of Object.entries(records)) if (!isGone(r) || keep.has(r)) out[id] = r;
+  return out;
+}
+
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const count = (v: unknown, least: number): boolean => typeof v === "number" && Number.isSafeInteger(v) && v >= least;
 

@@ -141,6 +141,10 @@
   other, nothing of them goes to the cloud, and a station never rewrites a record a device brought (two stations given
   one keep the same bytes). A station changes a record itself only for an app from before (POST, PUT, DELETE
   /presets), which is listed only those made on it (`home`).
+- It keeps so many deletions of each owner's (those of nobody said one owner of their own), by the rule a device keeps
+  them by (`preset-records.ts` `goneKept`): a PUT whose deletion would be dropped as it is written changes nothing and
+  tells nothing (`Presets.carry`), so nothing goes round. A deletion of nobody said is given in everyone's GET
+  /presets/kept: its maker's device takes it as its own.
 - Agents see every preset a station keeps, whoever's (chat_create `preset`); people see their own by default and
   others' after a press (`GET /presets/others`). That is a default filter, not a permission (Its data, above).
 
