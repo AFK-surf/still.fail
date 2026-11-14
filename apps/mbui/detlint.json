@@ -564,7 +564,39 @@
     "panic-test": {},
     "read-before-run": {},
     "reset-by-hand": {},
-    "app-word": {}
+    "app-word": {},
+    "frame-walk": {
+      "src/sf/sheet_sink_wbtest.mbt": 2,
+      "src/sfapp/bar_places_kept_wbtest.mbt": 1,
+      "src/sfapp/bar_places_today_wbtest.mbt": 1,
+      "src/sfapp/cards_order_wbtest.mbt": 1,
+      "src/sfapp/cards_wbtest.mbt": 2,
+      "src/sfapp/chat_bar_wide_wbtest.mbt": 1,
+      "src/sfapp/composer_hint_wbtest.mbt": 2,
+      "src/sfapp/composer_parts_wbtest.mbt": 1,
+      "src/sfapp/composer_wbtest.mbt": 2,
+      "src/sfapp/desk_composer_wbtest.mbt": 1,
+      "src/sfapp/emit_way_wbtest.mbt": 1,
+      "src/sfapp/emit_wbtest.mbt": 2,
+      "src/sfapp/files_favorite_motion_wbtest.mbt": 1,
+      "src/sfapp/floor_wbtest.mbt": 1,
+      "src/sfapp/home_wbtest.mbt": 1,
+      "src/sfapp/image_corners_chat_wbtest.mbt": 1,
+      "src/sfapp/linger_wbtest.mbt": 1,
+      "src/sfapp/makes_way_wbtest.mbt": 1,
+      "src/sfapp/model_pop_wbtest.mbt": 1,
+      "src/sfapp/motion_wbtest.mbt": 2,
+      "src/sfapp/new_workspace_wbtest.mbt": 1,
+      "src/sfapp/newchat_send_wbtest.mbt": 4,
+      "src/sfapp/newchat_wbtest.mbt": 1,
+      "src/sfapp/preview_wbtest.mbt": 1,
+      "src/sfapp/quote_flight_wbtest.mbt": 2,
+      "src/sfapp/quote_image_wbtest.mbt": 1,
+      "src/sfapp/send_hold_wbtest.mbt": 5,
+      "src/sfapp/send_steady_wbtest.mbt": 7,
+      "src/sfapp/sent_first_wbtest.mbt": 2,
+      "src/sfapp/viewer_flight_wbtest.mbt": 1
+    }
   },
   "excused": {
     "frame-request": {},
@@ -649,6 +681,7 @@
     "panic-test": {},
     "read-before-run": {},
     "reset-by-hand": {},
-    "app-word": {}
+    "app-word": {},
+    "frame-walk": {}
   }
 }

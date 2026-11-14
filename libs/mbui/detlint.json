@@ -273,7 +273,16 @@
     "panic-test": {},
     "read-before-run": {},
     "reset-by-hand": {},
-    "app-word": {}
+    "app-word": {},
+    "frame-walk": {
+      "src/motion/motion_test.mbt": 1,
+      "src/ui/list_scroll_same_wbtest.mbt": 1,
+      "src/ui/list_size_test.mbt": 3,
+      "src/ui/rows_return_undrawn_wbtest.mbt": 1,
+      "src/ui/scroll_list_wbtest.mbt": 7,
+      "src/ui/scroll_wbtest.mbt": 3,
+      "src/ui/stretch_damage_wbtest.mbt": 2
+    }
   },
   "excused": {
     "frame-request": {},
@@ -351,7 +360,8 @@
     "panic-test": {},
     "read-before-run": {},
     "reset-by-hand": {},
-    "app-word": {}
+    "app-word": {},
+    "frame-walk": {}
   },
   "tester": {
     "names": [
