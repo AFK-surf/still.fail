@@ -1228,6 +1228,11 @@ export class Remote {
     this.bus.on("share.", shares);
   }
 
+  /// Where requests about the agents' memory go (memory.*, share/memory.ts): the stations of the workspace it is of.
+  setMemory(memory: Inbox): void {
+    this.bus.on("memory.", memory);
+  }
+
   /// Where requests about chats shared across workspaces go (xshare.*, xshare/index.ts): `inside` those of this
   /// workspace's stations, `outside` every request of a station that is not of it (the transport lets those through
   /// only while there is one).

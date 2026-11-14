@@ -102,6 +102,16 @@
 - An agent's own answer is never forwarded: it posts with `chat_post` and ends each turn with a state (`all_done`,
   `need_human`, `waiting`); a turn ended without one is asked again.
 
+## The agents' memory
+
+- A workspace's MEMORY.md and team skills are one for all its stations (the user, 2026-11-14: 「直接全局共享，跟 station
+  相关的直接说明是哪个 station」): `src/share/memory.ts` keeps each file's recent versions and brings the stations level,
+  merging two versions made apart from the one both came from (`src/share/memory-merge.ts`, as `git merge-file`, both
+  kept where both changed). What is one machine's says which station it is of; the agents' instructions say so. No
+  CRDT library (it grows, and every station would have to compact it together). With no version both came from (each
+  station's memory of before) MEMORY.md's lines, and a file both kept on since it was copied, are put together each
+  line once; skills of one name and nothing alike are kept apart as `<name>-<station>` (the user, 2026-11-14).
+
 ## How a workspace's devices reach its stations (its ways)
 
 - A workspace's own relays and the ways its devices do not take are its stations' (`src/mesh/ways.ts`; the root
