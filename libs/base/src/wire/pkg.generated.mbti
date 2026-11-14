@@ -1,0 +1,48 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "base/wire"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn head_line(String, String, Array[(String, String)], more? : Map[String, @json.Json]) -> String
+
+pub fn hello_line(String, says? : Map[String, @json.Json], also? : Map[String, @json.Json], traceparent? : String) -> String
+
+pub fn reply_head(String) -> Head
+
+// Errors
+
+// Types and methods
+pub struct Carry {
+  // private fields
+}
+pub fn Carry::length(Self) -> Int32
+pub fn Carry::line(Self) -> String?
+pub fn Carry::new() -> Self
+pub fn Carry::push(Self, Bytes) -> Unit
+pub fn Carry::take(Self) -> Bytes
+
+#derive(Eq)
+pub(all) struct Event {
+  name : String
+  data : String
+  id : String?
+}
+
+pub(all) enum Head {
+  Head(Int32, Array[(String, String)])
+  Unreadable(String)
+  NoStatus
+}
+
+pub struct Sse {
+  // private fields
+}
+pub fn Sse::feed(Self, Bytes) -> Array[Event]
+pub fn Sse::new() -> Self
+
+// Type aliases
+
+// Traits

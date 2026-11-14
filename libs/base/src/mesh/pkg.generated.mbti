@@ -1,0 +1,106 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "base/mesh"
+
+import {
+  "base/shell",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn code_of(Error) -> String
+
+pub let connect_timeout_ms : Int32
+
+pub let device_key : String
+
+pub let onto_max_ms : Int32
+
+pub let ping_timeout_ms : Int32
+
+pub let renew_ms : Int32
+
+pub fn said(Error) -> String
+
+pub fn say(String, args? : Map[String, String]) -> String
+
+pub fn set_language(String) -> Unit
+
+pub fn shell_store(@shell.Shell) -> Store
+
+pub let tick_ms : Int32
+
+// Errors
+pub(all) suberror MeshError {
+  MeshError(code~ : String, message~ : String, cause~ : String)
+}
+
+// Types and methods
+pub struct Backoff {
+  first : Int32
+  most : Int32
+  // private fields
+}
+pub fn Backoff::new(first? : Int32, most? : Int32) -> Self
+pub async fn Backoff::pause(Self) -> Unit
+pub fn Backoff::reset(Self) -> Unit
+
+pub(all) struct Closed {
+  kind : String
+  reason : String
+}
+pub fn Closed::words(Self) -> String
+
+pub struct Link {
+  peer : String
+  // private fields
+}
+pub async fn Link::admitted(Self) -> @json.Json
+pub fn Link::close(Self) -> Unit
+pub async fn Link::closed(Self) -> Closed
+pub fn Link::ended(Self) -> Closed?
+pub async fn Link::exchange(Self, String) -> @json.Json
+pub fn Link::path(Self) -> String?
+pub fn Link::paths(Self) -> Array[@json.Json]
+pub async fn Link::request(Self, String, String, headers? : Array[(String, String)], body? : Bytes) -> Reply
+pub fn Link::usable(Self) -> Bool
+pub fn Link::via(Self) -> String?
+
+pub struct Mesh {
+  // private fields
+}
+pub async fn Mesh::close(Self) -> Unit
+pub fn Mesh::device_id(Self) -> String
+pub async fn Mesh::link(Self, String, async (String, Bool) -> Presented) -> Link
+pub async fn Mesh::make(@shell.Shell, Store, Options) -> Self
+
+pub(all) struct Options {
+  alpn : String
+  relays : Array[String]
+  relay_only : Bool
+  says : Map[String, @json.Json]?
+  refusal : ((@json.Json, String) -> Error?)?
+}
+
+pub(all) struct Presented {
+  credential : String
+  also : Map[String, @json.Json]?
+}
+
+pub struct Reply {
+  status : Int32
+  headers : Array[(String, String)]
+  // private fields
+}
+pub fn Reply::cancel(Self) -> Unit
+pub fn Reply::header(Self, String) -> String?
+pub async fn Reply::rest(Self) -> Bytes
+pub async fn Reply::take(Self) -> Bytes?
+
+pub(all) struct Store {
+  get : async (String) -> Bytes?
+  set : async (String, Bytes) -> Unit
+}
+
+// Type aliases
+
+// Traits
