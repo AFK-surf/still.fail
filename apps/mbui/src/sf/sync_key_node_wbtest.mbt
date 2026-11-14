@@ -36,6 +36,7 @@ test "sync key node: a moment's catching up shows nothing; once it has gone on, 
   let turning_b = t.drawn_instances_keyed()
   syncing.set(None)
   t.draw()
+  assert_false(@ui.view_tree().unwrap().cycle_wants_60(), msg="no high-rate cycle after synchronization")
   // (all here: still there, ticking, under the words it said last)
   let ticking = sync_key_said(t, words)
   t.run_for(sync_settle_most + sync_back_ms + sync_tick_ms + sync_done_ms / 2.0)
@@ -78,36 +79,30 @@ fn sync_angle_step(from : Double, to : Double) -> Double {
 }
 
 ///|
-test "sync key node: the drawn mark turns evenly through the join, its frames never slowing there" {
+test "sync key node: the original eased turn is kept, with at least 60 frames a second requested" {
   let syncing = @signals.signal(Some("正在同步"))
   let t = sync_key_tester(syncing)
   t.run_for(later_ms + @kit.presence_in_ms)
   assert_eq(t.audit(), [])
-  // Start on a turn's join, then inspect each eighth through two whole turns, including both joins.
+  assert_eq(sync_turn_ms, 1400.0)
+  // The original ease-in-out at declared moments of a turn, including its slow start and end.
   let start = (t.time() / sync_turn_ms).ceil() * sync_turn_ms
-  t.frame_at(start)
-  let mut before = sync_drawn_angle(t)
-  for i in 1..=16 {
-    t.frame_at(start + i.to_double() * sync_turn_ms / 8.0)
-    let after = sync_drawn_angle(t)
-    let step = sync_angle_step(before, after)
-    assert_true((step - 3.141592653589793 / 4.0).abs() < 0.00001, msg="step \{i}: \{step}")
-    before = after
+  for (phase, fraction) in [(0.0, 0.0), (0.125, 0.04296875), (0.25, 0.15625), (0.5, 0.5), (0.75, 0.84375), (0.875, 0.95703125)] {
+    t.frame_at(start + phase * sync_turn_ms)
+    let angle = sync_drawn_angle(t)
+    assert_true((angle - fraction * 2.0 * 3.141592653589793).abs() < 0.00001, msg="phase \{phase}: \{angle}")
   }
-  // Follow it on a 120 Hz display: 0 means every display frame, otherwise the requested rate. Turning evenly, it is
-  // drawn at 30 to 40 Hz all the way round (a turn in 1.4 s: ui's frame_pace.mbt, a step of 2 points a frame at most);
-  // slowed at a turn's ends, it fell to 15 Hz there.
-  let at = t.time()
-  for i in 1..=192 {
+  // Follow two full turns on a 120 Hz display: 0 means every display frame, otherwise the requested rate.
+  let at = start + sync_turn_ms
+  for i in 1..=336 {
     t.frame_at(at + i.to_double() * 1000.0 / 120.0)
     let rate = t.frames_paced()
-    assert_true(rate == 0.0 || rate >= 30.0, msg="frame \{i}: \{rate} Hz")
+    assert_true(rate == 0.0 || rate >= 60.0, msg="frame \{i}: \{rate} Hz")
   }
 }
 
 ///|
 test "sync key node: finishing at any point goes on from the drawn angle and speed before slowing to a tick" {
-  let pi = 3.141592653589793
   for phase in [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 0.999] {
     let syncing = @signals.signal(Some("正在同步"))
     let t = sync_key_tester(syncing)
@@ -122,6 +117,6 @@ test "sync key node: finishing at any point goes on from the drawn angle and spe
     let next = sync_drawn_angle(t)
     let delta = sync_angle_step(finishing, next)
     assert_true(sync_angle_step(before, finishing) < 0.00001, msg="phase \{phase}: angle jumped at completion")
-    assert_true((delta - 2.0 * pi / sync_turn_ms).abs() < 0.0002, msg="phase \{phase}: first step \{delta}")
+    assert_true((delta - sync_turning(phase)).abs() < 0.0002, msg="phase \{phase}: first step \{delta}")
   }
 }
