@@ -217,7 +217,9 @@ function view(inner: Inner, c: Extract<TerminalCall, { kind: "view" }>, progress
         const queue = yield* Queue.unbounded<Uint8Array>();
         out = queue;
         yield* Effect.addFinalizer(() => Effect.sync(() => (out = out === queue ? null : out)));
-        yield* Effect.forkScoped(Effect.ignore(Effect.forever(Effect.flatMap(Queue.take(queue), (bytes) => socket.send.write(bytes)))));
+        // Its writer, in order, as long as the stream (what is typed waits in the queue: nothing is asked on a time).
+        const drain: Effect.Effect<void, CoreError> = Effect.suspend(() => Effect.flatMap(Queue.take(queue), (bytes) => Effect.andThen(socket.send.write(bytes), drain)));
+        yield* Effect.forkScoped(Effect.ignore(drain));
         const reopen = Deferred.makeUnsafe<void>();
         again = reopen;
         state.phase = "live";
