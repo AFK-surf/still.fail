@@ -728,6 +728,7 @@ common.uploading
 core-logic.accounts.login.failed
 core-logic.decisions.replied
 core-logic.decisions.you
+core-views.screen.kind.browser
 desktop.contextMenu.copy
 desktop.contextMenu.copyImage
 desktop.contextMenu.copyLink

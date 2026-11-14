@@ -824,6 +824,8 @@ fn page_view(
         Setting(r) => setting_page(c, src, w, r)
         // (made once: narrow_shell.mbt's history_node)
         History(_, _, _) => ()
+        // (a Farview tab: made once, narrow_shell.mbt's)
+        Screen(at) if @sfpages.farview_screen(at.screen) => ()
         Screen(at) => @sfpages.screen_page(c, src, at, system_frame())
       }
       // the page runs under the status bar; it keeps the paper behind its icons, moving with it (App.kt: the list, a

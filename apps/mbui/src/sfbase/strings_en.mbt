@@ -746,6 +746,7 @@ let en : Map[String, String] = {
   "core-logic.accounts.login.failed": "Sign-in failed",
   "core-logic.decisions.replied": "{name} replied",
   "core-logic.decisions.you": "You",
+  "core-views.screen.kind.browser": "Browser tab",
   "desktop.contextMenu.copy": "Copy",
   "desktop.contextMenu.copyImage": "Copy Image",
   "desktop.contextMenu.copyLink": "Copy Link",

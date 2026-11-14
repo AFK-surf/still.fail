@@ -1,4 +1,5 @@
 members = [
   ".",
   "../../libs/mbui",
+  "deps/farview/client",
 ]

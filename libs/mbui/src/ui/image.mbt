@@ -970,3 +970,23 @@ fn image_ready_asking_none(src : String) -> Bool {
     None => false
   }
 }
+
+///|
+/// The image handed over as `key` (add_image, Ctx::image_bytes) let go of: its bytes and every decode of it the host
+/// holds, so what draws it shows nothing more (a picture drawn again under another key, the one before no longer
+/// shown: a tile of a page each time it changes). What is told of it goes once nothing follows it.
+pub fn forget_image(key : String) -> Unit {
+  image_data.remove(key)
+  image_vector_drawers.remove(key)
+  match image_cache.get(key) {
+    Some(list) => {
+      for e in list {
+        h_image_free(e.id)
+        image_dropped(e)
+      }
+      image_cache.remove(key)
+    }
+    None => ()
+  }
+  image_forget(key)
+}

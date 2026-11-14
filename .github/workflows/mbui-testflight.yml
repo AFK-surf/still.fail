@@ -39,6 +39,10 @@ on:
         type: boolean
 permissions:
   contents: read
+env:
+  # Farview's client, which the app draws a chat's Farview tab with (apps/mbui/scripts/farview.sh: a private repository,
+  # read by its deploy key)
+  FARVIEW_DEPLOY_KEY: ${{ secrets.FARVIEW_DEPLOY_KEY }}
 jobs:
   guard:
     if: github.repository_owner == 'AFK-surf' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
@@ -71,6 +75,8 @@ jobs:
     needs: guard
     permissions: { contents: read, actions: read }
     uses: ./.github/workflows/mbui-check.yml
+    # (its FARVIEW_DEPLOY_KEY: the app's Farview client)
+    secrets: inherit
   # Queued tests can outlast the release's ten minutes. Start its build and signing only after the tests finish.
   # The explicit skip_tests choice still permits uploading after failed tests.
   release:

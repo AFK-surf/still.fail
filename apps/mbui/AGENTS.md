@@ -189,6 +189,14 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - What comes or goes by its size keeps its whole scale, from where it starts, and is not seen at half its size or
     less, so it does not jump (the user, 2026-10-31, again 2026-11-08): its opacity is `@sf.seen_at(scale)`.
 
+## Farview's client
+
+- A chat's Farview tab is drawn by the app itself (`src/sfpages/farview_tab.mbt`) with Farview's client, the module
+  `fvclient` of the private AFK-surf/farview, never copied here (左子健, 2026-11-07 and 2026-11-14: 固定 commit 拉进
+  moon.work): `scripts/farview.sh` puts it in `deps/farview` at the commit `farview.pin` names, `moon.work` names it,
+  `scripts/env.sh` fetches it with git's own credentials and CI with the read-only deploy key `FARVIEW_DEPLOY_KEY`
+  (each workflow's env, the mbui-moonbit action's last step). A newer client is a change of `farview.pin`.
+
 ## Running the app in development
 
 - Source `scripts/env.sh` before invoking MoonBit in development, including remote task commands. Keep its `moon`

@@ -17,6 +17,7 @@ import {
   "mbui/signals",
   "mbui/view",
   "stillfail/gallery",
+  "fvclient/stage",
 }
 
-import { "stillfail/sffixture", "stillfail/sfkept", "stillfail/core", "mbui/halt" } for "wbtest"
+import { "stillfail/sffixture", "stillfail/sfkept", "stillfail/core", "mbui/halt", "fvclient/proto" } for "wbtest"

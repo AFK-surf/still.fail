@@ -9,6 +9,8 @@ fn init {
     // (chat-download's recording's still and its agent's: what the old list's Tester has its host hold, the same, each
     // fixture, screen and place, chat_body_node_wbtest's comparison)
     ("src/sfpages/chat_body_node_wbtest.mbt", 57758),
+    // (a Farview tab's tiles of a page 390 by 1000, each drawn at the window's 2 as a PNG of stored blocks)
+    ("src/sfpages/farview_tab_wbtest.mbt", 7491174),
     ("src/sfpages/peek_pictures_wbtest.mbt", 89156),
     ("src/sfpages/peeks_file_node_wbtest.mbt", 31398),
     ("src/sfpages/screen_wbtest.mbt", 58572),
