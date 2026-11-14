@@ -14,7 +14,9 @@
 // file copied off the app's thread): `kept` is Keeping until it has answered, then where the file is (its name as the
 // system has it: a name taken gets a number), or that the person called it off, or that it failed. A frame is asked
 // for as the answer comes. `end` lets go of a keep (one not finished is called off, its part file removed). None
-// where the host keeps nothing (the web page).
+// where the host keeps nothing (Host's default, a host with none of its own). The web page keeps every way as the
+// browser's download (web/host.js H.keepBegin: its parts Blobs, an <a download> clicked), kept once it is clicked,
+// where it is only the file's name (the browser tells the page nothing more).
 
 ///|
 /// How a file is kept.
