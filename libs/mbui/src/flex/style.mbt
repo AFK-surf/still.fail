@@ -232,6 +232,11 @@ pub(all) struct Style {
   // (the share of the way gone for the share of its time gone); none, a Move by how far. A way of its own alone: in a
   // group with others (come_group set), the group's.
   mut come_spec : (Double, (Double) -> Double)?
+  // Not CSS's: whether what it holds keeps to its foot as its come way (come_*) goes, down a column: laid out whole at
+  // the height it comes to as ever, its bottom at the item's bottom all the way, cut at the item's top (a composer
+  // growing from its foot, what is over it going up with it: the view's View::resizes `foot`); else to its top, cut at
+  // its foot. Let go with the way (the view's come_done, a structure's way said anew).
+  mut come_foot : Bool
   // Not CSS's: the host's grid (pixels a point; 0: none) a height on its way (come_*) is laid on as it goes, toward where
   // it goes and never past its rest (come_tall_on): closing, its height now put down; growing, put up; at its rest once
   // less than a pixel of its way is left, its rest as it is. Set by the view as the way sets out (View::comes, a declared
@@ -354,6 +359,7 @@ pub fn Style::new() -> Style {
     come_fill: false,
     come_across: false,
     come_spec: None,
+    come_foot: false,
     come_grid: 0.0,
     gone_empty: false,
     structural: false,

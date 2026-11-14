@@ -1130,64 +1130,83 @@ fn old_frame(c : Ctx) -> Unit {
       Some(o) => {
         // (laid out where its layout puts it, on no pixel it is not on, as the old frame lays out what it holds)
         let (id, _, _, w, h, _, ox, oy, _) = p
+        // (its node's height on a way said to keep what it holds to its foot (View::resizes `foot`): laid out whole at
+        // the height it comes to, as tall as what it holds, its bottom at its node's bottom, cut at its node's top: in
+        // a box of its node's size, from there)
+        let foot_by = match (view_app.val, o.natural) {
+          (Some(tree), Some(nat)) if !o.gives && tree.holds_to_foot(id) =>
+            match nat.untracked() {
+              Some(n) if n != h => h - n
+              _ => 0.0
+            }
+          _ => 0.0
+        }
         let (left, top) = (ox, oy)
-        let i = c.box(
-          // (one as tall as what it holds: as tall as that is laid out, whatever its node was given (its height its node's
-          // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
-          // (one that gives way: laid out in the height its node is given, as tall as what it holds asks all the same)
-          style=if o.natural is Some(_) && !o.gives {
-            style(w=Fixed(w), clip=!o.over)
-          } else {
-            style(w=Fixed(w), h=Fixed(h), clip=true)
-          },
-          left~,
-          top~,
-          fn() {
-            // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
-            o.part = c.id(o.key)
-            // (built for its own room: what it reads of the window's size is its node's)
-            // (as tall as what it holds: built for its width, its Ctx::height the window's (where it is built, not how
-            // tall it may be), never the height it is given, which is what it holds's)
-            let room_h = if o.natural is Some(_) { c.height } else { h }
-            // (as wide as what it holds: built for the most it may be, whatever it is now)
-            let room_w = match o.fits {
-              Some((most, _)) => most
-              None => w
-            }
-            o.room.val = (room_w, room_h)
-            // (how big its node is placed, for its build to give way to (old_given): told as it changes, built again)
-            if o.gives && o.given.untracked() != Some((w, h)) {
-              o.given.set(Some((w, h)))
-            }
-            let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
-            c.sized(room_w, room_h, fn() {
-              match o.natural {
-                // (as tall as what it holds at its width, in a box of its own: how tall that is laid out, its node's
-                // height, old_natural_after_layout; as wide as what it holds, `most` at most, no narrower than its node:
-                // how wide that is laid out, what its node is told)
-                Some(_) =>
-                  match o.fits {
-                    // (laid out in the room of the most it may be, at its start: as wide as what it holds there, no
-                    // narrower than its node; whatever its node is now)
-                    Some((most, _)) => {
-                      let most = dmax(w, most)
-                      c.box(style=style(w=Fixed(most), align=AStart), fn() {
-                        o.held_box = c.box(style=style(w=Hug, min_w=Fixed(w), max_w=Fixed(most)), fn() { put() })
-                      })
-                      |> ignore
-                    }
-                    // (one that gives way: in the height its node is given, all of it)
-                    None if o.gives => o.held_box = c.box(style=style(w=Fixed(w), h=Full), fn() { put() })
-                    None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
-                  }
-                None => {
-                  o.held_box = -1
-                  put()
-                }
+        // (what it holds placed at `x`, `y` of what it is built in: its node's place, or its foot's box's)
+        let place = fn(x : Double, y : Double) {
+          c.box(
+            // (one as tall as what it holds: as tall as that is laid out, whatever its node was given (its height its node's
+            // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
+            // (one that gives way: laid out in the height its node is given, as tall as what it holds asks all the same)
+            style=if o.natural is Some(_) && !o.gives {
+              style(w=Fixed(w), clip=!o.over)
+            } else {
+              style(w=Fixed(w), h=Fixed(h), clip=true)
+            },
+            left=x,
+            top=y,
+            fn() {
+              // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
+              o.part = c.id(o.key)
+              // (built for its own room: what it reads of the window's size is its node's)
+              // (as tall as what it holds: built for its width, its Ctx::height the window's (where it is built, not how
+              // tall it may be), never the height it is given, which is what it holds's)
+              let room_h = if o.natural is Some(_) { c.height } else { h }
+              // (as wide as what it holds: built for the most it may be, whatever it is now)
+              let room_w = match o.fits {
+                Some((most, _)) => most
+                None => w
               }
-            })
-          },
-        )
+              o.room.val = (room_w, room_h)
+              // (how big its node is placed, for its build to give way to (old_given): told as it changes, built again)
+              if o.gives && o.given.untracked() != Some((w, h)) {
+                o.given.set(Some((w, h)))
+              }
+              let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
+              c.sized(room_w, room_h, fn() {
+                match o.natural {
+                  // (as tall as what it holds at its width, in a box of its own: how tall that is laid out, its node's
+                  // height, old_natural_after_layout; as wide as what it holds, `most` at most, no narrower than its node:
+                  // how wide that is laid out, what its node is told)
+                  Some(_) =>
+                    match o.fits {
+                      // (laid out in the room of the most it may be, at its start: as wide as what it holds there, no
+                      // narrower than its node; whatever its node is now)
+                      Some((most, _)) => {
+                        let most = dmax(w, most)
+                        c.box(style=style(w=Fixed(most), align=AStart), fn() {
+                          o.held_box = c.box(style=style(w=Hug, min_w=Fixed(w), max_w=Fixed(most)), fn() { put() })
+                        })
+                        |> ignore
+                      }
+                      // (one that gives way: in the height its node is given, all of it)
+                      None if o.gives => o.held_box = c.box(style=style(w=Fixed(w), h=Full), fn() { put() })
+                      None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
+                    }
+                  None => {
+                    o.held_box = -1
+                    put()
+                  }
+                }
+              })
+            },
+          )
+        }
+        let i = if foot_by != 0.0 {
+          c.box(style=style(w=Fixed(w), h=Fixed(h), clip=true), left~, top~, fn() { place(0.0, foot_by) |> ignore })
+        } else {
+          place(left, top)
+        }
         // (moved to where it is drawn, from where it is laid out, as it is painted (Ctx::moved_by): what it holds, its
         // clip, where it takes a finger and where its words are, with it; read again as where it is placed changes
         // (old_placed_said), not as anything else of the tree's does: where the tree draws its node, on no pixel the tree
