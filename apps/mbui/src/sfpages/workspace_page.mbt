@@ -707,6 +707,7 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
     v.box(fn(body) {
       // its own: removed, added right in the panel (one not wanted is taken away, not turned off)
       body.show(fn() { manager() || relays().length() > 0 }, fn(sec) {
+        @sf.style_node(sec, fn() { ws_way_own_sec })
         ws_way_label_node(sec, fn() { @sf.t("android-settings.ways.own") })
         sec.each(relays, fn(url) { url }, fn(row, url) {
           row.box(fn(b) {
@@ -762,15 +763,10 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
           })
           |> ignore
         })
-        sec.box(fn(d) {
-          @sf.style_node(d, fn() { @sf.panel_words_in_node(d).then(ws_way_rule_box) })
-          d.box(fn(line) { @sf.style_node(line, fn() { ws_way_rule }) }) |> ignore
-        })
-        |> ignore
       })
       // still.fail's relays: one switch for all of them, what it does under it
       let title = fn() { @sf.t("android-settings.ways.ours") }
-      ws_way_row_node(body, title, ours_note, fn(e) {
+      ws_way_row_node(body, title, ours_note, last=true, fn(e) {
         e.show(busy, fn(s) { @sf.spinner_node(s, size=@sf.spinner_size) |> ignore })
         @sf.switch_node(
           e,
@@ -787,8 +783,6 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
           disabled=fn() { !manager() || busy() || relays().is_empty() },
         )
       })
-      // (room under the last: its switch out of the panel's corner, not set in it)
-      body.box(fn(e) { @sf.style_node(e, fn() { ws_way_end }) }) |> ignore
     })
     |> ignore
   })
@@ -798,9 +792,16 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
 /// A row of the ways' panel in `parent`: its title, `note` under it (none where it says ""), what `end` makes at its end
 /// (a switch, a button) aligned with its first line (`title`); on the panel's words' line, as its description and its
 /// groups' labels are. Each as it is said now.
-fn ws_way_row_node(parent : @view.View, title : () -> String, note : () -> String, end : (@view.View) -> Unit) -> Unit {
+fn ws_way_row_node(
+  parent : @view.View,
+  title : () -> String,
+  note : () -> String,
+  end : (@view.View) -> Unit,
+  last? : Bool = false,
+) -> Unit {
   parent.box(fn(r) {
-    @sf.style_node(r, fn() { @sf.panel_words_in_node(r).then(ws_way_line) })
+    let line = if last { ws_way_last_line } else { ws_way_line }
+    @sf.style_node(r, fn() { @sf.panel_words_in_node(r).then(line) })
     r.box(fn(w) {
       @sf.style_node(w, fn() { ws_way_words }, in_row=true)
       @sf.words_node(w, title, fn() { ws_way_title }) |> ignore
@@ -833,6 +834,10 @@ let ws_way_line : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart py=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
+let ws_way_last_line : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart pt=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
 let ws_way_end_line : @ui.Style = @ui.css("row gap=S2 align=ACenter h=S5")
 
 ///|
@@ -841,11 +846,7 @@ let ws_way_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_rule_box : @ui.Style = @ui.css("w=Full py=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ws_way_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
+let ws_way_own_sec : @ui.Style = @ui.css("pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -858,10 +859,6 @@ let ws_way_add_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter py=S1_
 ///|
 // kept across runs: a value (no field of it changes)
 let ws_way_add_input : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ws_way_end : @ui.Style = @ui.css("h=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
