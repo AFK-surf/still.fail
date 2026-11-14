@@ -62,6 +62,7 @@ chat_nodes_old_at_once_wbtest.mbt 33 36 42 21
 chat_nodes_read_stays_before_wbtest.mbt 10 21 49 8
 chat_nodes_read_stays_before_wide_wbtest.mbt 19 35 60 12
 chat_nodes_read_stays_rows_wbtest.mbt 9 10 15 5
+chat_nodes_read_stays_side_wbtest.mbt 20 15 30 10
 chat_nodes_read_stays_wbtest.mbt 11 12 26 6
 chat_old_at_once_help_wbtest.mbt 0 0 0 0
 chat_old_at_once_wbtest.mbt 30 30 66 30
