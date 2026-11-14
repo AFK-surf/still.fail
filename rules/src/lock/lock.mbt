@@ -387,6 +387,11 @@ fn sig_of(e : Json) -> Json {
 pub let copied : Ref[Int] = { val: 0 }
 
 ///|
+/// How many entries of a workspace's chain the rules stepped (took after the state before them) since this module
+/// loaded: a chain read again that nothing changed must step none (station/test/rules-carried.test.ts counts it).
+pub let stepped : Ref[Int] = { val: 0 }
+
+///|
 /// `prev` with its maps copied, at the next seq with head `hash`.
 fn copied_from(prev : LockState, hash : String) -> LockState {
   {
@@ -518,6 +523,7 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
 /// such a caller sees, and it gives up the state with the refusal. An entry that takes no effect (its signer's device
 /// put in under its name by someone else) has its checks made on copies either way, so `prev` stays as it was.
 fn step(prev : LockState, e : Json, now : Double?, c : &Crypto, in_place : Bool) -> LockState raise LockError {
+  stepped.val += 1
   let v = Some(e)
   if prev.moved is Some(_) {
     refuse("the lock moved to a person's own log: nothing follows it here")
