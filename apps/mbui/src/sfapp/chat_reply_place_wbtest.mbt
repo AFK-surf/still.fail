@@ -32,7 +32,8 @@ fn rp_held_at(screen : String) -> Double {
   if screen == "小屏" {
     124.0
   } else {
-    139.0
+    // (its head and words 4 apart, msg_main_share's gap: 139 till it was given back)
+    143.0
   }
 }
 

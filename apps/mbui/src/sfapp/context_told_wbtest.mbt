@@ -6,7 +6,7 @@
 /// 大屏, a mouse's, the chat open, scrolled till Ana's message shows: its words right clicked (its menu, 多选
 /// and what else there is), dismissed by `how` (as the host hands it on, no frame after it): whether it is open then, once a
 /// frame is drawn, as a right click opens it again and a frame after.
-fn context_dismissed(how : (@ui.Tester) -> Unit) -> Array[Bool] raise {
+fn context_dismissed(how : (@ui.Tester, Double) -> Unit) -> Array[Bool] raise {
   let t = wide_tester([], mode="chat")
   for _ in 0..<12 {
     match t.run_rects("example.com/review/42") {
@@ -20,7 +20,8 @@ fn context_dismissed(how : (@ui.Tester) -> Unit) -> Array[Bool] raise {
   t.frame()
   let shown = t.find("多选") is Some(_)
   let seen = [open()]
-  how(t)
+  // (beside it: over the words it opened at, where nothing of it is, as the words lie)
+  how(t, y - 40.0)
   seen.push(open())
   t.draw()
   seen.push(open())
@@ -35,16 +36,16 @@ fn context_dismissed(how : (@ui.Tester) -> Unit) -> Array[Bool] raise {
 
 ///|
 test "大屏: a right click's menu in a chat dismissed by Escape: closed as the key is taken; the frame after closes nothing more, opened again its own" {
-  assert_eq(context_dismissed(fn(t) { t.key_told(@ui.key_escape, 0, t.time()) }), [true, false, false, true, true])
+  assert_eq(context_dismissed(fn(t, _) { t.key_told(@ui.key_escape, 0, t.time()) }), [true, false, false, true, true])
 }
 
 ///|
 test "大屏: a right click's menu in a chat dismissed by a press beside it: closed as it goes down; the frame after closes nothing more, opened again its own" {
   let down : Array[Bool] = []
-  let seen = context_dismissed(fn(t) {
-    t.touch_at(0, 600.0, 300.0, t.time())
+  let seen = context_dismissed(fn(t, beside) {
+    t.touch_at(0, 600.0, beside, t.time())
     down.push(@sfdesk.context.open)
-    t.touch_at(2, 600.0, 300.0, t.time())
+    t.touch_at(2, 600.0, beside, t.time())
   })
   assert_eq((down, seen), ([false], [true, false, false, true, true]))
 }
