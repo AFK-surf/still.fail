@@ -520,6 +520,53 @@ fn chat_body_node(
     },
     at_start=false,
   )
+  // the newest row come while the list follows its foot (sfbase's follow_newest: not where it stands, an agent's line,
+  // the way to the newer): read from its top, its foot followed no further than its top as far under the bar as the
+  // list's head keeps its first row, and follow_margin more (ListPlace::follow_from); the viewer's own followed all the
+  // way to the foot, as they wrote it. Taken as the keys change, at that change's moment, while it is at its foot then;
+  // only for a key that came by that change: the newest another because the last went (a refused send deleted, a
+  // message taken back) is no answer come, and says nothing
+  // (the keys as they were before the change that gave these: read again for the same change, the same)
+  let keys_now : Ref[Array[String]] = Ref([])
+  let keys_before : Ref[Array[String]] = Ref([])
+  let newest = fn() -> (String, Bool, Bool)? {
+    let rs = rows.get()
+    if !physical_equal(rs.keys, keys_now.val) {
+      keys_before.val = keys_now.val
+      keys_now.val = rs.keys
+    }
+    let before = keys_before.val
+    let mut i = rs.keys.length() - 1
+    while i >= 0 {
+      let k = rs.keys[i]
+      let came = !before.contains(k)
+      match rs.rows.get(k).map(fn(r) { r.entry }) {
+        Some(State(_, _, _) | Working(_) | Newer) | None => ()
+        Some(Out(_)) => return Some((k, true, came))
+        Some(Said(m)) => return Some((k, m.mine, came))
+        Some(_) => return Some((k, false, came))
+      }
+      i = i - 1
+    }
+    None
+  }
+  let newest_was : Ref[String?] = Ref(@signals.untracked(newest).map(fn(n) { n.0 }))
+  v.reacts(
+    newest,
+    fn(now) {
+      let was = newest_was.val
+      newest_was.val = now.map(fn(n) { n.0 })
+      guard now is Some((k, own, true)) && was is Some(w) && w != k && @signals.untracked(fn() { scroll.at_foot_now() }) else {
+        return
+      }
+      if own {
+        place.follow_from(None)
+      } else {
+        place.follow_from(Some(k), margin=room + @sfbase.follow_margin)
+      }
+    },
+    at_start=false,
+  )
   read(place, fn() { rows.get() })
   v
 }
