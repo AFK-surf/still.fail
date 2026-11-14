@@ -415,7 +415,12 @@ for t in $targets; do
           # (answers_still's five on the third since (some 200-220 s of its cores): the third reckoned 600. The first kept
           # at 600 for its pages, which ran there 1.85 times their table's times: by the table its pages 627 s to 607,
           # the third's 306 to 286, the second's 573 to 593, the fourth's 766 to 786)
-          *) specs="4,4,600,1 2,4,430,1 1,4,600,1 4,4,420,1" ;;
+          # (read stays' six files, 433 s by the table (the 大屏 page-before ones 99-106 s each): dealt so the fourth's
+          # pages were some 940 s by the table, 1189 s as testexe said them beside its other runs (one of 106 s ran 205),
+          # and app 4/4 was cut at its 5 minutes, where the first's, second's and third's jobs were 199, 190 and 162 s
+          # (#6134, 43568641653). The fourth reckoned 630: by the table its pages some 800 s, as before those files
+          # (786, its job 222-237 s), the first's 607 to some 830, the second's 593 to 715, the third's 286 to 360)
+          *) specs="4,4,600,1 2,4,430,1 1,4,600,1 4,4,630,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
