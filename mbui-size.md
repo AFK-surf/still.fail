@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [7b3640858](https://github.com/AFK-surf/monoid/commit/7b3640858fa10fb1eb1a710c951205aa4b2dc92d) mbui: a height on its way under a page's list on a | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.54 | 111.03 |
 | [9f35adb9e](https://github.com/AFK-surf/monoid/commit/9f35adb9ea7f320bedea545262bbf469726ab14d) mbui: the new chat page's answered agent at work f | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.37 | 111.2 |
 | [5a114683e](https://github.com/AFK-surf/monoid/commit/5a114683e899f682316f3331785b651faac35ddd) app,views: fit agent KPI figures to tile width and | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.49 | 112.91 |
 | [ba25bbd60](https://github.com/AFK-surf/monoid/commit/ba25bbd6019449485485a55dec2e7bf1470bd00e) mbui: every screen's switches pressed over a late  | 1.99 | 2.72 | 11.59 | 31.2 | 41.66 | 27.81 | 53.38 | 96.68 | 106.47 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [ba8f65307](https://github.com/AFK-surf/monoid/commit/ba8f6530794f19441770da4aae46ca32d5996bf4) test(mbui): the answers' sweeps' jolts at 60 and 1 | 1.97 | 2.69 | 11.41 | 31.01 | 40.97 | 27.63 | 52.78 | 96.36 | 106.94 |
 | [a936f7d2a](https://github.com/AFK-surf/monoid/commit/a936f7d2a383aefa92b9a8ead339a0019283f991) mbui: what a page's list has in sight, where a blo | 1.97 | 2.69 | 11.41 | 31 | 40.95 | 27.63 | 52.78 | 95.59 | 177.86 |
 | [a88607818](https://github.com/AFK-surf/monoid/commit/a88607818d6c8539750e1f9e4e9e58497412093f) Streams: a frame decoded unseen, a decoder emptied | 1.97 | 2.69 | 11.4 | 30.98 | 40.91 | 27.6 | 52.73 | 95.8 | 106.62 |
-| [4b1b9dfe2](https://github.com/AFK-surf/monoid/commit/4b1b9dfe287decf26204dd1c4f5250b96bb31255) presets: what a preset names, its chats run with;  | 1.97 | 2.68 | 11.4 | 30.98 | 40.91 | 27.6 | 52.73 | 95.88 | 109.31 |
