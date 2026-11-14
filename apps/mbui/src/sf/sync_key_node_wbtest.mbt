@@ -78,7 +78,7 @@ fn sync_angle_step(from : Double, to : Double) -> Double {
 }
 
 ///|
-test "sync key node: the drawn mark turns evenly through the join, with at least 60 frames a second requested" {
+test "sync key node: the drawn mark turns evenly through the join, its frames never slowing there" {
   let syncing = @signals.signal(Some("正在同步"))
   let t = sync_key_tester(syncing)
   t.run_for(later_ms + @kit.presence_in_ms)
@@ -94,12 +94,14 @@ test "sync key node: the drawn mark turns evenly through the join, with at least
     assert_true((step - 3.141592653589793 / 4.0).abs() < 0.00001, msg="step \{i}: \{step}")
     before = after
   }
-  // Follow it on a 120 Hz display: 0 means every display frame, otherwise the requested rate.
+  // Follow it on a 120 Hz display: 0 means every display frame, otherwise the requested rate. Turning evenly, it is
+  // drawn at 30 to 40 Hz all the way round (a turn in 1.4 s: ui's frame_pace.mbt, a step of 2 points a frame at most);
+  // slowed at a turn's ends, it fell to 15 Hz there.
   let at = t.time()
   for i in 1..=192 {
     t.frame_at(at + i.to_double() * 1000.0 / 120.0)
     let rate = t.frames_paced()
-    assert_true(rate == 0.0 || rate >= 60.0, msg="frame \{i}: \{rate} Hz")
+    assert_true(rate == 0.0 || rate >= 30.0, msg="frame \{i}: \{rate} Hz")
   }
 }
 

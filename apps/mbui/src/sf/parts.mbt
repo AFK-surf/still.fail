@@ -4795,8 +4795,9 @@ fn init {
 }
 
 ///|
-/// A turn of the mark, as the other waiting rings (spinner_turn_ms).
-let sync_turn_ms : Double = spinner_turn_ms
+/// A turn of the mark: evenly, but slower than the other waiting rings (spinner_turn_ms), as it only says the list is
+/// catching up in the background, nothing to wait for (the user, 2026-11-14: 1.4 s, not 0.8).
+let sync_turn_ms : Double = 1400.0
 
 ///|
 /// How long the mark takes to come to rest, at least and at most; how far on in that the arrows start to go.
