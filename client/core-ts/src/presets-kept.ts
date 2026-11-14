@@ -12,11 +12,13 @@ export const TABLE = "presetRecords";
 /// What the device keeps of `ws`: its person's records by id, and the ids of its stations from before (their GET
 /// /presets/kept answered `no route`).
 /// `owed`: the ids of its stations owed a carry of the records (one passed by while not reached, one whose read or PUT
-/// failed), `owedStars` the same of the stars: what a stream that comes back resumed is asked for, and only that.
-export type Held = { records: Record<string, KeptRecord>; before: string[]; owed: string[]; owedStars: string[] };
+/// failed), `owedStars` the same of the stars; `met`, `metStars`: those whose records, whose stars, this device has
+/// read at least once (one from before counts as met). A stream that comes back resumed is asked only where its
+/// station is owed or not met yet (a core that updated to this coming back on the cursor its last one kept).
+export type Held = { records: Record<string, KeptRecord>; before: string[]; owed: string[]; owedStars: string[]; met: string[]; metStars: string[] };
 
 const NOTHING = Object.freeze([]) as unknown as string[];
-const NONE: Held = Object.freeze({ records: Object.freeze({}) as Record<string, KeptRecord>, before: NOTHING, owed: NOTHING, owedStars: NOTHING });
+const NONE: Held = Object.freeze({ records: Object.freeze({}) as Record<string, KeptRecord>, before: NOTHING, owed: NOTHING, owedStars: NOTHING, met: NOTHING, metStars: NOTHING });
 
 const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
@@ -25,7 +27,7 @@ export function heldOf(data: { record(table: string, key: string): unknown }, ws
   const raw = data.record(TABLE, ws);
   if (!isObject(raw)) return NONE;
   const records = isObject(raw.records) ? (raw.records as Record<string, KeptRecord>) : {};
-  return { records, before: ids(raw.before), owed: ids(raw.owed), owedStars: ids(raw.owedStars) };
+  return { records, before: ids(raw.before), owed: ids(raw.owed), owedStars: ids(raw.owedStars), met: ids(raw.met), metStars: ids(raw.metStars) };
 }
 
 /// Who the device is in a workspace: its account's `sub` and email.

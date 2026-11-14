@@ -546,3 +546,28 @@ test("a stream come back resumed is asked only what the device owes its station:
   await d.resumed(b);
   assert.deepEqual(asks(b, at), []);
 });
+
+test("a core updated to this, its stream restored from the cursor its last one kept, reads each station once: what the person's other devices carried is listed", async () => {
+  const a = station("a");
+  // (another device of theirs carried a preset and a star to a)
+  const phone = device(ME, [a]);
+  await phone.open(a);
+  const made = ok(await phone.call("add", a.address, { name: "From the phone", dirs: [] })) as { id: string };
+  const starring = new Choose({ store: phone.inner.store, data: phone.inner.data, now: () => clock.now, agent: () => null, starsChanged: (ws) => carryAll(phone.inner, ws, "stars") });
+  starring.like(a.address, "gpt-6", true);
+  await phone.settle();
+  // This device: its database holds nothing of these (as a core from before wrote it); its stream to a comes back
+  // restored, never read whole.
+  const d = device(ME, [a]);
+  d.away(a);
+  const at = d.asked.length;
+  await d.resumed(a);
+  assert.deepEqual(d.asked.slice(at), [`GET ${a.address} /presets/kept`, `GET ${a.address} /stars`], "each read once, nothing brought");
+  const choose = new Choose({ store: d.inner.store, data: d.inner.data, now: () => clock.now, agent: () => null, who: (s) => whoIn(d.inner, s) });
+  const listed = (choose as unknown as { compute(t: unknown): { ok: { presets: { id: string }[] } } }).compute({ topic: "newChat", scope: WS }).ok.presets;
+  assert.deepEqual(listed.map((p) => p.id), [made.id], "listed on the new chat's page");
+  assert.deepEqual(starredKeys(starsHeld(d.records.get(`choice:${likedKey(WS)}`))!), ["gpt-6"], "the star taken");
+  const again = d.asked.length;
+  await d.resumed(a);
+  assert.deepEqual(d.asked.slice(again), [], "met: nothing asked the next time");
+});

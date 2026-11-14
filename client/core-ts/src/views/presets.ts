@@ -116,11 +116,20 @@ export function markOwed(inner: Inner, ws: string, id: string, what: "presets" |
   write(inner, ws, { ...held, [key]: owed ? [...held[key], id] : held[key].filter((x) => x !== id) });
 }
 
-/// Whether station `address` is owed a carry of either (views/presets.ts `resumed`).
+/// Station `id` of `ws` read once of its records (`presets`) or its stars: met, kept beside the records.
+function markMet(inner: Inner, ws: string, id: string, what: "presets" | "stars"): void {
+  const held = heldOf(inner.data, ws);
+  const key = what === "presets" ? "met" : "metStars";
+  if (!held[key].includes(id)) write(inner, ws, { ...held, [key]: [...held[key], id] });
+}
+
+/// Whether station `address` is owed a carry of either, or not met yet (never read here of it: so a core that updated
+/// to this, coming back on the cursor its last one kept, reads each station once): views/presets.ts `resumed`.
 export function owedTo(inner: Inner, address: string): { presets: boolean; stars: boolean } {
   const held = heldOf(inner.data, ofAddress(address));
   const id = stationId(address);
-  return { presets: held.owed.includes(id), stars: held.owedStars.includes(id) };
+  const before = held.before.includes(id);
+  return { presets: held.owed.includes(id) || (!before && !held.met.includes(id)), stars: held.owedStars.includes(id) || (!before && !held.metStars.includes(id)) };
 }
 
 /// `given` taken into what is kept of `ws` where newer (read anew: nothing waits between this read and its write).
@@ -147,11 +156,13 @@ export function carry(inner: Inner, address: string): Effect.Effect<void, CoreEr
       // nothing, never carried to)
       if (fromBeforeRoute(said.failure)) {
         markBefore(inner, ws, id, true);
+        markMet(inner, ws, id, "presets");
         markOwed(inner, ws, id, "presets", false);
       } else markOwed(inner, ws, id, "presets", true);
       return;
     }
     markBefore(inner, ws, stationId(address), false);
+    markMet(inner, ws, id, "presets");
     const there = recordsOf(get(said.success, "records"));
     // (what this station had newer goes on to the others reached now, as a change made here does)
     if (take(inner, ws, there, who)) carryAll(inner, ws, "presets", address);
@@ -175,7 +186,11 @@ export function carryStars(inner: Inner, address: string): Effect.Effect<void, C
     const id = stationId(address);
     const said = yield* Effect.result(ask(inner, address, "GET", "/stars"));
     // (one from before keeps none: owed nothing)
-    if (said._tag === "Failure") return markOwed(inner, ws, id, "stars", !fromBeforeRoute(said.failure));
+    if (said._tag === "Failure") {
+      if (fromBeforeRoute(said.failure)) markMet(inner, ws, id, "stars");
+      return markOwed(inner, ws, id, "stars", !fromBeforeRoute(said.failure));
+    }
+    markMet(inner, ws, id, "stars");
     const there = starsSaid(get(said.success, "stars"));
     keepStars(inner, ws, there);
     const held = starsHeld(inner.data.record("choice", likedKey(ws)));
@@ -554,7 +569,8 @@ export function install(inner: Inner): PresetViews {
       if (name === "stars" && get(data, "workspace") === ws) inner.scheduler.enqueue(address, `stars/${address}`, Priority.background, Effect.ignore(carryStars(inner, address)));
     },
     // A stream come back resumed is told again what it missed (the station logs `presets` and `stars`, events.ts), so
-    // it is asked only what this device owes it: a change made here while it was not reached, a carry that failed.
+    // it is asked only what this device owes it (a change made here while it was not reached, a carry that failed) or
+    // where it never read it (`met`: a core updated to this, its stream restored from the cursor its last one kept).
     resumed: (address) =>
       Effect.suspend(() => {
         const owed = owedTo(inner, address);
