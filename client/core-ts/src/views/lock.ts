@@ -49,7 +49,7 @@ import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, type Stated, type Statements, checkChain, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
 import { type Said, bindBytes, bodiesOf, byHash, plan, prevOf } from "../lock-statements.ts";
-import { type BuildsSeen, HAND_OVER_FROM, HAND_OVER_HELD, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, ableBuild, devicesWaited, handOverPlan, mayHandOver } from "../lock-handover.ts";
+import { type BuildsSeen, HAND_OVER_FROM, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, ableBuild, devicesWaited, handOverPlan, mayHandOver } from "../lock-handover.ts";
 import { buildOf, ownBuild } from "../station/oldest.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
@@ -3354,8 +3354,7 @@ export const stationsNotReady = (inner: Inner, ws: string, ids: readonly string[
 /// on every build from it, each workspace once what uses it takes a moved one, `heldBack`), or on a host made for tests
 /// that says so before it (`Host.handOverAuto`).
 export function handsOver(inner: Inner): boolean {
-  // (held for now on every host but one made for tests, src/lock-handover.ts `HAND_OVER_HELD`)
-  return inner.host.handOverAuto === true || ((!HAND_OVER_HELD || inner.host.handOverByTests === true) && HAND_OVER_FROM !== null && now(inner) >= HAND_OVER_FROM);
+  return inner.host.handOverAuto === true || (HAND_OVER_FROM !== null && now(inner) >= HAND_OVER_FROM);
 }
 
 /// How many times one call of `handOver` signs its `moved` at most: each time again where the one before lost its place

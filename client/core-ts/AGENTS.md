@@ -250,11 +250,6 @@ another; the accounts' list's merge across stations and its refills.
   only a web page, with an app device on the chain and not on their log, all stay in by the chain. A `moved` that lost
   its place is never signed again (`#lost`): the next `handOver` works it out again. `test/lock-handover.test.ts` runs it
   on the station's own code, `test/lock-handover-model.test.ts` holds its plan to the model's `m8`.
-- **Held for now** (src/lock-handover.ts `HAND_OVER_HELD`, 2026-11-14): no app hands a chain over by itself, only a host
-  made for tests (`handOverByTests`, `handOverAuto`), until what the locks' rounds showed a moved workspace still does
-  wrong is mended (a device approved after the move never given the vault, a newcomer's first device asked once more,
-  a device asking from the page that waits not let in): a move cannot be undone. What follows is how it is once the
-  hold is taken out.
 - A chain is handed over by itself (views/lock.ts `handsOver`) on every build from `HAND_OVER_FROM` (src/lock-handover.ts;
   a host made for tests may say `handOverAuto` before it), with no date anyone waits for and nobody told to update (the
   user, 2026-11-14: 无感迁移): each workspace once everything that uses it reads a moved one the same way: every station
