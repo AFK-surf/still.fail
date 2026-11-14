@@ -75,15 +75,19 @@ yet and you can add one, add it.
   `src/view/list_foot_room_test.mbt`); a key its page says `comes_whole` (one's own words sent, where no flight
   carries them), coming by data while the list is at its foot and follows it, makes its way as any key does, all else
   where it would be, but what its block holds is drawn as at rest all the way: at full ink and its size from the
-  block's top, not cut to its room, over the rest of its list (its keys under it, its pinned foot: the paint's alone,
+  block's top, not cut to its room, over the rest of its list (its keys under it, its pinned foot), every such key on
+  its way, in their order (the paint's alone,
   `Tree::raised_blocks`, ui's `view_paint` moving what it draws after its list's, cut as where it is; found by a press
   and read out where it is laid); not at its foot, `at_once` or with motion reduced, as any key
   (`src/view/list_key_whole_test.mbt`, `src/ui/list_key_whole_wbtest.mbt`; the coordinator of the migration,
   2026-11-14); what is sent takes it up only: at its foot, in a change by which a key comes at
-  its foot, the stretch from the top of the last key that stays to the column's end is never shorter than it was then
-  while that change's ways go and rests as long as it came to, so what is over the key goes up only by what it needs
-  past all that change gives back under that key's top (the room there, the pinned foot's shrink, a part closing in
-  it, a marked key), never down; and the key coming there sets out from as tall as all that gives back, never taller
+  its foot, or comes before keys that stay under it there (an agent's line: at the foot for the one reading; the
+  coordinator of the migration, 2026-11-14), the stretch from the top of the last key that stays before it to the
+  column's end, whatever stays under it, is never shorter than it was then while that change's ways go and rests as
+  long as it came to, so what is over the key goes up only by what it needs past all that change gives back under that
+  key's top (the room there, the pinned foot's shrink, a part closing in it, a marked key), never down, and what stays
+  under it keeps its place against the column's end (`src/view/list_send_before_tail_test.mbt`); and the key coming
+  there sets out from as tall as all that gives back, never taller
   than itself, two or more in their order each up to its own height, in the one way they were said in, so what it
   holds is at its resting place against that key from the first frame (`src/view/list_send_one_move_test.mbt`); where
   an old view is hosted in its pinned foot (laid out only as the old frame is built), that set-out is worked out in the

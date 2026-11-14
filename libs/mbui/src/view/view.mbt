@@ -775,9 +775,10 @@ pub struct Tree {
   /// its held column), each with the held column whose one way what comes or goes or resizes in it goes in
   /// (Tree::come_group_join), where the list's blocks' insides join it
   priv list_feet : Map[Int, Int]
-  /// each page's list's block drawn over the rest of its list (its keys under it, its pinned foot) while it makes its
-  /// way whole (View::scrolls_window's `comes_whole`), by the list's node: Tree::raised_blocks, the paint's alone
-  priv list_raised : Map[Int, NodeId]
+  /// each page's list's blocks drawn over the rest of its list (its keys under them, its pinned foot) while they make
+  /// their way whole (View::scrolls_window's `comes_whole`), every one on its way, by the list's node:
+  /// Tree::raised_blocks, the paint's alone
+  priv list_raised : Map[Int, Array[NodeId]]
   /// how many builds of the old views hosted in the tree have begun and how many are done (Tree::old_views_building,
   /// old_views_built), and what waits for the next done (a page's list's set-out from what its foot gave back, where an
   /// old view in that foot lays its height only as it is built: View::scrolls_window)
@@ -13637,31 +13638,37 @@ fn Tree::sights_now(self : Tree) -> Unit {
 }
 
 ///|
-/// Each page's list's block drawn over the rest of its list while it makes its way whole (View::scrolls_window's
-/// `comes_whole`): the list's node and the block's, both alive. Read by the paint, which moves what the block draws to
-/// after what the list draws (its keys under it, its pinned foot), cut as where it is: none on a list with none.
+/// Each page's list's blocks drawn over the rest of their list while they make their way whole (View::scrolls_window's
+/// `comes_whole`), every one on its way: the list's node and the block's, both alive. Read by the paint, which moves
+/// what each block draws to after what the list draws (its keys under it, its pinned foot), in the list's order, cut
+/// as where it is: none on a list with none.
 pub fn Tree::raised_blocks(self : Tree) -> Array[(NodeId, NodeId)] {
   if self.list_raised.is_empty() {
     return []
   }
   let out = []
-  self.list_raised.each(fn(list, b) {
-    if list >= 0 && list < self.nodes.length() && self.nodes[list].live && self.alive_id(b) {
-      out.push(({ at: list, gen: self.nodes[list].gen }, b))
+  self.list_raised.each(fn(list, bs) {
+    if list >= 0 && list < self.nodes.length() && self.nodes[list].live {
+      for b in bs {
+        if self.alive_id(b) {
+          out.push(({ at: list, gen: self.nodes[list].gen }, b))
+        }
+      }
     }
   })
   out
 }
 
 ///|
-/// Block `b` of the page's list at node `list` drawn over the rest of it (Some) or none (None): the list's own.
-fn Tree::raise_in_list(self : Tree, list : Int, b : NodeId?) -> Unit {
-  let was = self.list_raised.get(list)
-  match b {
-    Some(id) => self.list_raised[list] = id
-    None => self.list_raised.remove(list)
+/// Blocks `bs` of the page's list at node `list` drawn over the rest of it (none where empty): the list's own.
+fn Tree::raise_in_list(self : Tree, list : Int, bs : Array[NodeId]) -> Unit {
+  let was = self.list_raised.get(list).unwrap_or([])
+  if bs.is_empty() {
+    self.list_raised.remove(list)
+  } else {
+    self.list_raised[list] = bs
   }
-  if was != b {
+  if was != bs {
     // (drawn in another order: painted again)
     self.draws_rev = self.draws_rev + 1
     self.draws_any_rev = self.draws_any_rev + 1
