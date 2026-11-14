@@ -59,6 +59,7 @@ chat_line_room_wbtest.mbt 76 31 78 18
 chat_made_nodes_wbtest.mbt 2 9 27 4
 chat_neighbour_wbtest.mbt 0 1 2 1
 chat_nodes_old_at_once_wbtest.mbt 33 36 42 21
+chat_nodes_read_stays_band_wbtest.mbt 30 20 40 12
 chat_nodes_read_stays_before_wbtest.mbt 10 21 49 8
 chat_nodes_read_stays_before_wide_wbtest.mbt 19 35 60 12
 chat_nodes_read_stays_rows_wbtest.mbt 9 10 15 5
