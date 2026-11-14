@@ -406,6 +406,13 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(modelLimitOf("You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage, to continue."), "Fable");
     assert.equal(modelLimitOf("Claude usage limit reached: you have reached your weekly usage limit"), null);
     assert.equal(modelLimitOf("You've hit your session limit · resets 3:40am"), null);
+    // Claude Code's words for it since 2026-11-14: told as the model's limit too, not the model failing.
+    const hit = "You've hit your Fable limit · resets Nov 20 at 9am (Asia/Tokyo). Switch to another model to continue.";
+    assert.equal(classifyResult(hit), "rate_limit");
+    assert.equal(modelLimitOf(hit), "Fable");
+    for (const text of ["You've hit your weekly limit · resets Oct 8", "You've hit your 5-hour limit · resets 7:50am (UTC)", "You've hit your daily limit"]) {
+      assert.equal(modelLimitOf(text), null, text);
+    }
     assert.equal(classifyResult("session limit configuration is invalid"), "model");
     assert.equal(classifyResult('API Error: 403 {"error":{"type":"forbidden","message":"Request not allowed"}}'), "refused");
     assert.equal(classifyResult("API Error: 403 OAuth token does not meet scope requirement"), "auth");
