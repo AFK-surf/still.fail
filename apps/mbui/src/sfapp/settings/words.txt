@@ -1303,6 +1303,7 @@ web-pages.localStation.thisPc
 web-pages.localStation.title
 web-pages.localStation.update
 web-pages.notifications.enable.allow
+web-pages.notifications.enable.browser
 web-pages.notifications.enable.open
 web-pages.notifications.hidden.done
 web-pages.notifications.hidden.failed
@@ -1357,6 +1358,7 @@ web-pages.permissions.state.default
 web-pages.permissions.state.denied
 web-pages.permissions.state.granted
 web-pages.permissions.state.unknown
+web-pages.permissions.where.browser
 web-pages.permissions.where.mac
 web-pages.permissions.where.windows
 web-pages.profiles.account.each

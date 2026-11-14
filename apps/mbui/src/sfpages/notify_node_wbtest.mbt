@@ -215,6 +215,63 @@ test "通知 made once, as the system has notifications: not asked yet, asked of
 }
 
 ///|
+test "通知 on the web: never answered, 开启 asks the browser again; refused, 在浏览器中允许 says where to allow it, a page opening no settings" {
+  for w in [390.0, 1280.0] {
+    for state in ["default", "denied"] {
+      let at = "\{w} \{state}"
+      let notify : @signals.Signal[Json?] = @signals.signal(None)
+      let marks : @signals.Signal[Json?] = @signals.signal(None)
+      let calls = []
+      let over = fn(base : Source) {
+        notify.set(notify_with(base.topic("notify", Map([])).get().value, [("permission", Json::string(state))]))
+        notify_over(base, notify, marks, calls)
+      }
+      // (a browser's word: never answered, or refused; its page opens none of its settings)
+      let host = fn(t : @ui.Tester) { t.set_notice_permission(state) }
+      let t = setting_tester(Notifications, w, platform=4, h=2400.0, over~, host~)
+      let banner = @sf.t("web-pages.notifications.ways.banner")
+      let shown = fn(s : String) { t.words().iter().any(fn(x) { x.0 == s }) }
+      assert_eq(shown("开启"), state == "default", msg=at)
+      assert_eq(shown("在浏览器中允许"), state == "denied", msg=at)
+      assert_true(!shown("在系统设置中开启"), msg=at)
+      let asks = t.notice_asks()
+      let toast = @sfbase.toast_words()
+      t.click(Button, label=banner)
+      t.draw()
+      assert_eq(t.notice_asks() - asks, if state == "default" { 1 } else { 0 }, msg=at)
+      assert_eq(t.notice_settings_opened(), 0, msg=at)
+      assert_eq(
+        @sfbase.toast_words(),
+        if state == "denied" { "点地址栏左侧的网站信息图标 → 通知 → 允许，然后刷新页面" } else { toast },
+        msg=at,
+      )
+      assert_eq(calls.length(), 0, msg=at)
+    }
+  }
+}
+
+///|
+test "权限 on the web: refused, where to allow it in the browser said, and said again as its button is pressed" {
+  for w in [390.0, 1280.0] {
+    let at = "\{w}"
+    let notify : @signals.Signal[Json?] = @signals.signal(None)
+    let marks : @signals.Signal[Json?] = @signals.signal(None)
+    let over = fn(base : Source) {
+      notify.set(notify_with(base.topic("notify", Map([])).get().value, [("permission", Json::string("denied"))]))
+      notify_over(base, notify, marks, [])
+    }
+    let host = fn(t : @ui.Tester) { t.set_notice_permission("denied") }
+    let t = setting_tester(Permissions, w, platform=4, h=2400.0, over~, host~)
+    let where_ = "点地址栏左侧的网站信息图标 → 通知 → 允许，然后刷新页面"
+    assert_true(t.find(where_) is Some(_), msg=at)
+    t.click(Button, label=@sf.t("web-pages.permissions.open"))
+    t.draw()
+    assert_eq(t.notice_settings_opened(), 0, msg=at)
+    assert_eq(@sfbase.toast_words(), where_, msg=at)
+  }
+}
+
+///|
 test "通知 made once, its settings read the first time: their cards in their bones, none of them found; then the page" {
   for case in page_cases {
     let (w, platform) = case
