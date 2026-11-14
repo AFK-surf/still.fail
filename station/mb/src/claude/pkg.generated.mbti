@@ -1,0 +1,63 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "station/claude"
+
+import {
+  "station/jsjson",
+}
+
+// Values
+pub fn background_of(Turn) -> @jsjson.JValue
+
+pub fn chars(Array[Int32], Int32) -> Array[Int32]
+
+pub fn on_frame(@jsjson.JValue, Turn, (@jsjson.JValue) -> Unit, () -> Unit, () -> Double, (String) -> Unit) -> Unit
+
+pub fn tools_lost_in(@jsjson.JValue, Array[Array[Int32]]) -> Array[Int32]?
+
+pub fn unreachable(Array[Int32]) -> Bool
+
+// Errors
+
+// Types and methods
+pub(all) struct Block {
+  id : Array[Int32]
+  step : String
+  tool : Array[Int32]?
+  mut input : Array[Int32]?
+  subagent : Array[Int32]?
+}
+
+pub(all) struct Live {
+  mut message : Array[Int32]
+  mut blocks : Array[(Int32, Block)]
+  mut tools : Array[Array[Int32]]
+}
+pub fn Live::feed(Self, @jsjson.JValue, () -> Double) -> Array[@jsjson.JValue]
+pub fn Live::new() -> Self
+pub fn Live::of_state(@jsjson.JValue) -> Self
+pub fn Live::state(Self) -> @jsjson.JValue
+
+pub(all) struct Task {
+  id : Array[Int32]
+  kind : String
+  description : Array[Int32]
+  background : Bool
+  started_at : Double?
+}
+
+pub(all) struct Turn {
+  mut busy : Bool
+  mut aborting : Bool
+  mut auth_failure : Array[Int32]?
+  mut closed : Bool
+  mut renews : Bool?
+  mut renewed : Bool?
+  mut tasks : Array[(Array[Int32], Task)]?
+  mut compacting : Bool?
+  mut compact_error : Array[Int32]?
+}
+pub fn Turn::new() -> Self
+
+// Type aliases
+
+// Traits

@@ -16,6 +16,8 @@ import { Said } from "../src/ops/i18n.ts";
 import { REPO_RULES_COMMAND, REPO_RULES_HOOK, hookCommand, hookNode } from "../src/agents/repo-rules.ts";
 import { SLACK_SPOKEN, SPEAKS } from "../src/tools/mcp.ts";
 import { claudeProject } from "../src/read/transcript.ts";
+import { mbReaderBinary } from "../src/read/mb-reader.ts";
+import { platform } from "../src/platform/index.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import { modelLimitOf } from "../src/agents/runtime.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
@@ -166,6 +168,11 @@ test("a command a turn waited on and was never told ended does not outlive the t
   onFrame({ type: "result", result: "ok" }, turn, () => {}, () => {});
   assert.deepEqual(backgroundOf(turn), []);
   assert.deepEqual(turn.tasks, {});
+});
+
+test("its processes are read by the MoonBit program where it is built, else here (claude-here.test.ts)", () => {
+  const hosted = process.env.STILLFAIL_AGENTS_HOST !== "0" && mbReaderBinary() !== null && platform.runnerSocketVisible;
+  assert.equal((driver() as unknown as { agents: unknown }).agents !== null, hosted);
 });
 
 describe("the Claude Code driver", { concurrency: true }, () => {
@@ -702,7 +709,11 @@ describe("the Claude Code driver", { concurrency: true }, () => {
       await session.prompt("gate:12:4:g");
       await a.until((e) => deltas(e).length >= 4);
       let snapshot: unknown = null;
-      if (!crashed) snapshot = JSON.parse(JSON.stringify(session.snapshot()));
+      // (as the hub hands over: what is read of the processes held first, hub.ts `handOver`)
+      if (!crashed) {
+        await first.freeze();
+        snapshot = JSON.parse(JSON.stringify(session.snapshot()));
+      }
       // Stops: the process goes on under its runner, saying the rest of its reply with nobody reading.
       first.detach();
       // (the station let go before the next takes up, as the hub waits: every line handled acknowledged)

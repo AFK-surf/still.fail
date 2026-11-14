@@ -9,6 +9,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import type { RunnerInfo } from "./runner.ts";
+import type { HostedProcess } from "./mb-agents.ts";
 import type { AgentDriver, AgentSession, OpenOptions, RuntimeEvent, RuntimeKind } from "./runtime.ts";
 
 type Json = any;
@@ -83,7 +84,7 @@ export class Waiting {
 
 export abstract class OwnProcessDriver<S extends OwnProcessSession = OwnProcessSession> implements AgentDriver {
   protected readonly data: string;
-  private readonly live = new Set<S>();
+  protected readonly live = new Set<S>();
 
   constructor(data: string) {
     this.data = data;
@@ -149,7 +150,7 @@ export abstract class OwnProcessDriver<S extends OwnProcessSession = OwnProcessS
 }
 
 export abstract class OwnProcessSession<T extends TurnState = TurnState> implements AgentSession {
-  protected proc!: AgentProcess;
+  protected proc!: AgentProcess | HostedProcess;
   protected readonly driver: OwnProcessDriver<any>;
   protected sessionId: string;
   protected turn: T;
@@ -185,7 +186,7 @@ export abstract class OwnProcessSession<T extends TurnState = TurnState> impleme
     return this.driver.runtime();
   }
 
-  attach(proc: AgentProcess) {
+  attach(proc: AgentProcess | HostedProcess) {
     this.proc = proc;
   }
 
@@ -201,7 +202,7 @@ export abstract class OwnProcessSession<T extends TurnState = TurnState> impleme
     };
   }
 
-  private exited(said: string, stderr: string) {
+  protected exited(said: string, stderr: string) {
     // What it wrote to stderr last is the only word of why one that fails as it starts gives.
     const why = stderr === "" ? "" : `: ${stderr}`;
     this.turn.closed = true;
