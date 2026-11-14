@@ -33,7 +33,9 @@ let corner_modes : Array[String] = {
     "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "new-workspace", "new-workspace-code", "rail-menu", "landing", "landing-invited", "blocked", "place",
     "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
     "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed", "chat-feedback", "chat-image-coming",
-    "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-flash-notice", "chat-history-side", "chat-info", "chat-job",
+    "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-flash-notice", "chat-history-side",
+    // (its agent at work: what the history's head shows only then, #6246's stop among its keys)
+    "chat-history-side-working", "chat-info", "chat-job",
     "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters", "chat-letters-info", "chat-letters-open",
     "chat-letters-pop", "chat-letters-side", "chat-things", "chat-things-side", "chat-info-pulls", "chat-link-menu", "chat-loading", "chat-login", "chat-long", "chat-md",
     "chat-model-pop", "chat-model-accounts", "chat-need", "chat-peek", "chat-pick", "chat-preview-apk", "chat-preview-audio",
@@ -117,6 +119,7 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
   let gaps : Array[String] = []
   let moves : Array[String] = []
   let rooms : Array[String] = []
+  let heights : Array[String] = []
   for win in corner_windows {
     let squeezed = squeeze_windows.contains(win.0)
     for mode in corner_modes {
@@ -170,6 +173,22 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
       if squeeze is Some(w) {
         wrong.push(w)
       }
+      // (what is pressed side by side another height than the rest of its row, mbui's Tester::height_faults, against
+      // its bar)
+      let tall = t.height_faults()
+      let bar = corners_heights_known.get(at).unwrap_or(0)
+      if tall.length() != bar {
+        heights.push(
+          "\{at}: \{tall.length()} pressed things another height than their row, \{bar} known (" +
+          (if tall.length() < bar {
+            "fewer: its bar comes down in corners_known_wbtest.mbt"
+          } else {
+            "more than its bar: what is pressed side by side is one height, a button's (@sf.button_height)"
+          }) +
+          ")\n  " +
+          tall.join("\n  "),
+        )
+      }
       // (words a box with its height said does not hold, mbui's Tester::fixed_outgrown, against its bar)
       match outgrown_wrong(at, t.fixed_outgrown(), corners_outgrown_known, "corners_known_wbtest.mbt") {
         Some(w) => wrong.push(w)
@@ -183,6 +202,7 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
       None => ()
     }
   }
+  wrong.append(heights)
   match gaps_wrong(lang, gaps) {
     Some(w) => wrong.push(w)
     None => ()

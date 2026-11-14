@@ -8,7 +8,8 @@
 // scrolling in it); "chat-letters-info" (the chat's sheet with its row for what its agents and other chats' wrote each
 // other), "chat-letters" (their sheet: the chats written with), "chat-letters-open" (one of them opened); the wide
 // frame's "chat-letters-pop" (the chat's "…" open), "chat-jobs-pop" (its services' popover), "chat-letters-side",
-// "chat-jobs-side", "chat-history-side", "chat-service-side" (what is opened beside it: its web service's page, its bar
+// "chat-jobs-side", "chat-history-side", "chat-history-side-working" (that with its agent at work: what its history's head
+// shows only then), "chat-service-side" (what is opened beside it: its web service's page, its bar
 // at the panel's width), "chat-tabs-side" (two of them: the history behind
 // 任务), "chat-model-pop" (its agent's model control's panel
 // open), "chat-model-accounts" (its accounts open over it), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
@@ -27,7 +28,7 @@ pub fn decide_mode(mode : String) -> Bool {
     "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "home-jobs-screens", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-things", "chat-things-side", "chat-info-pulls",
-    "chat-jobs-side", "chat-history-side", "chat-service-side", "chat-tabs-side", "chat-model-pop", "chat-model-accounts", "chat-find", "chat-agent-card",
+    "chat-jobs-side", "chat-history-side", "chat-history-side-working", "chat-service-side", "chat-tabs-side", "chat-model-pop", "chat-model-accounts", "chat-find", "chat-agent-card",
     "chat-station-tag", "home-attention", "home-syncing",
   ].contains(mode)
 }
@@ -357,6 +358,8 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
       } else if session == "s-c1" && (f.mode == "chat-station-tag" || f.mode == "chat-actions") {
         // no agent in it yet: its station's tag in its bar (pressed by the film's step: its card beside it)
         Some(base.map(fn(b) { fix_no_agent(fix_detailed_chat(b)) }))
+      } else if session == "s-c1" && f.mode == "chat-history-side-working" {
+        Some(base.map(fn(b) { with_working(fix_detailed_chat(b)) }))
       } else if session == "s-c1" {
         Some(base.map(fix_detailed_chat))
       } else {

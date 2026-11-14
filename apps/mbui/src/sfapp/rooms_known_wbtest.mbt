@@ -63,8 +63,9 @@
 /// newchat has under them on a phone and a tablet: the composer's three chips behind the panel, old views, the page
 /// behind counted again, 36 more, 457. Each target's room measured by its unparted reach within its holder and window
 /// (@view.press_room), parting with non-overlapping neighbours handled by the hit test without inflating visual gaps
-/// (2026-11-14): 406 fewer, 51.)
-let rooms_known : Map[String, Int] = { "room": 51, "apart": 0, "hover": 0 }
+/// (2026-11-14): 406 fewer, 51. An agent at work with its history beside its chat (chat-history-side-working,
+/// 2026-11-14), what chat-history-side has: its bar's agent key's close in the three wide windows, 3 more, 54.)
+let rooms_known : Map[String, Int] = { "room": 54, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

@@ -52,7 +52,7 @@ let corners_tape_rail : Array[String] = [
   "home-station-updates", "station-updates", "home-station-updates-app", "station-updates-app", "place", "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
   "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose",
   "chat-download", "chat-failed", "chat-feedback", "chat-image-coming", "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-flash-notice",
-  "chat-history-side", "chat-info", "chat-job", "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters",
+  "chat-history-side", "chat-history-side-working", "chat-info", "chat-job", "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters",
   "chat-letters-info", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-things",
   "chat-things-side", "chat-info-pulls", "chat-link-menu", "chat-loading", "chat-login", "chat-long", "chat-md",
   "chat-model-pop", "chat-model-accounts", "chat-need", "chat-peek", "chat-pick", "chat-preview-apk",
@@ -124,3 +124,16 @@ let corners_tape_rail : Array[String] = [
 /// (2026-11-11). A screen not listed has none; none is now (智能体's card's spend, an old view's, on its own line of 26
 /// since, as its box was).
 let corners_outgrown_known : Map[String, Int] = Map([])
+
+///|
+/// What is pressed side by side another height than the rest of its row (mbui's Tester::height_faults; the user,
+/// 2026-10-30: what can be pressed is one height) on every screen in every window (corners_wbtest.mbt), by window,
+/// language and screen: the bar it may only fall from, counted as the rule first ran (2026-11-14). A screen not listed
+/// has none. Listed: 连接's 继续 (a connect's session waiting to go on) in the wide windows, its button 36 and the
+/// icon's button beside it 32.
+let corners_heights_known : Map[String, Int] = Map([
+  ("wide-zh settings-connects", 1),
+  ("wide-win-zh settings-connects", 1),
+  ("wide-en settings-connects", 1),
+  ("wide-win-en settings-connects", 1),
+])
