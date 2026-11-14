@@ -432,7 +432,12 @@ for t in $targets; do
           # branches alike, 254-312 s (cut at its 5 minutes on main 02416d29 43580485463; reply-place 43588784943 298 s),
           # the others 151-235. The third reckoned 1500: by the table its pages 172 s, the first's 637, the second's
           # 795, the fourth's 705, each of those some 10-35 s of the table more, on their four and two)
-          *) specs="4,4,950,1 2,4,430,1 1,4,1500,1 4,4,900,1" ;;
+          # (the third's pages, 235 s by the table on its one program, ran 217-243 s beside kept_rows', answers_still's
+          # and real_size's eleven runs, app 3/4 227-255 s of its 5 minutes on four pushes of 2026-11-14 (43604749359,
+          # 43605560534, 43605643007), the second's 181-235 on its two programs, the first's and fourth's 105-152 on their
+          # four. The third reckoned 1650 and the second 650: by the table the third's pages 132 s, the second's 694 (751),
+          # the first's 622 (529), the fourth's 666 (599))
+          *) specs="4,4,950,1 2,4,650,1 1,4,1650,1 4,4,900,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
