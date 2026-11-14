@@ -7,9 +7,10 @@
 # run's own), a notification (shown, kept, clicked), an update (a newer build put in place and opened), and the web
 # views (WebKitGTK 6.0's): one placed where the app told it, on whole device pixels, and a site and a page speaking with
 # the app; a stream's JPEG frames and its H.264, each shown to its end (streamdemo); a PDF's pages read and drawn
-# (poppler's); a video played (GStreamer's). On GitHub's own Ubuntu (a public repository's: free); the number on the
-# app's icon as the docks are told it; and, of still.fail's app on this host, this machine's station as its own native
-# call says it (apps/mbui/src/host/linux_station.c). When the Linux host changes.
+# (poppler's); a video played (GStreamer's); a folder and a file let go on the window, read. On GitHub's own Ubuntu
+# (a public repository's: free); the number on the app's icon as the docks are told it; and, of still.fail's app on
+# this host, this machine's station as its own native call says it (apps/mbui/src/host/linux_station.c). When the
+# Linux host changes.
 name: mbui-host-linux
 on:
   pull_request:
@@ -38,6 +39,8 @@ on:
       - "libs/mbui/src/kitdemo/gallery/noticecheck.mbt"
       - "libs/mbui/src/kitdemo/gallery/updatecheck.mbt"
       - "libs/mbui/src/kitdemo/gallery/postcheck.mbt"
+      - "libs/mbui/src/kitdemo/gallery/dropcheck.mbt"
+      - "libs/mbui/src/ui/drop.mbt"
       - "libs/mbui/src/ui/messages.mbt"
       - "libs/mbui/src/host/gles_render.h"
       - "libs/mbui/src/host/corner_sl.h"
@@ -131,6 +134,9 @@ jobs:
       - name: "What is picked's contract: the system's picker's answer told between frames, not taken as one begins"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux picked
+      - name: "What is dropped's contract: a folder and a file let go on the window taken and read whole"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux dropped
       - name: "The pictures' contract over a new context: a picture told ready again and drawn again there"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux images

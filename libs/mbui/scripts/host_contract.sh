@@ -40,6 +40,8 @@
 #        stand-in `op` first on PATH and with none (kitdemo's MBUI_OPCHECK, src/kitdemo/gallery/opcheck.mbt)
 #   scripts/host_contract.sh linux picked       what the system's picker gave told between frames, not taken as a frame
 #        begins (kitdemo's MBUI_PICKCHECK with MBUI_PICK_FILES, src/kitdemo/gallery/pickcheck.mbt)
+#   scripts/host_contract.sh linux dropped      a folder and a file let go on the window as a file manager lets them go,
+#        taken by the box there and read whole (kitdemo's MBUI_DROPCHECK, src/kitdemo/gallery/dropcheck.mbt)
 #   scripts/host_contract.sh linux notices      (a session bus) a notification the app shows kept, and clicked by the
 #        run's script (MBUI_DRIVE `notice`, as the desktop's click): what it opens given to the app (kitdemo's
 #        MBUI_NOTICECHECK, src/kitdemo/gallery/noticecheck.mbt)
@@ -949,6 +951,26 @@ INSTALL
       echo "picked contract (linux): what was picked not told between frames"; tail -20 $O/picked.log; exit 1
     fi
     echo "picked contract (linux): told between frames" ;;
+  dropped)
+    # (Linux) files let go on the window as a file manager lets them go (the drive script's `drop`: the host's own drop,
+    # linux_app.c's drop_drive, the way its GTK drop target goes): a folder and a file, taken by the box there and read
+    # (kitdemo's MBUI_DROPCHECK, src/kitdemo/gallery/dropcheck.mbt): the folder's by their way down, each folder named
+    # with a "/" at its end.
+    [ "$H" = linux ] || { echo "dropped contract: Linux only"; exit 1; }
+    U=$PWD/$O/dropped
+    rm -rf "$U"
+    mkdir -p "$U/in/sub"
+    printf 'a\n' > "$U/in/a.txt"
+    printf 'bb\n' > "$U/in/sub/b.txt"
+    printf 'ccc\n' > "$U/c.txt"
+    DRV=$(printf 'drop 480 360 %s|%s\nuntil dropped\n' "$U/in" "$U/c.txt" | base64 | tr -d '\n\r')
+    r=0
+    run "MBUI_DROPCHECK=1 MBUI_DRIVE_B64=$DRV" $O/dropped.log || r=$?
+    grep -a "DROPCHECK\|^DRIVE" $O/dropped.log || true
+    if [ $r != 0 ] || ! grep -aqF "DROPCHECK taken 5: in/,c.txt,in/sub/,in/a.txt,in/sub/b.txt (9 bytes)" $O/dropped.log; then
+      echo "dropped contract (linux): what was let go not taken and read whole"; tail -20 $O/dropped.log; exit 1
+    fi
+    echo "dropped contract (linux): a folder and a file let go, taken and read" ;;
   notices)
     # (Linux) the app as its desktop entry runs it (MBUI_APP_ID: its notifications the desktop's, linux_life.h), a
     # notification shown, then clicked by the run's script as the desktop's click would be: the app says what it opened
@@ -1037,5 +1059,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, badge, secret, a11y, fontscale, posted, picked, op; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, badge, secret, a11y, fontscale, posted, picked, dropped, op; ios: free, done)" >&2; exit 1 ;;
 esac
