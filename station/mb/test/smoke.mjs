@@ -7,7 +7,6 @@ import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
 import { DatabaseSync } from "node:sqlite";
 
 const program = process.argv[2];
@@ -26,8 +25,25 @@ function written(rows) {
 const theirs = written(300);
 const ours = written(300);
 const reader = spawn(program, ["--data", ours.data], { stdio: ["pipe", "pipe", "inherit"] });
-const lines = createInterface({ input: reader.stdout })[Symbol.asyncIterator]();
-const next = async () => JSON.parse((await lines.next()).value);
+// What it says: a line of JSON, and after one that says `bytes` that many bytes, its answer's text (`text` here).
+const out = reader.stdout[Symbol.asyncIterator]();
+let have = Buffer.alloc(0);
+const more = async () => {
+  const { value, done } = await out.next();
+  if (done) throw new Error("it ended");
+  have = Buffer.concat([have, value]);
+};
+const next = async () => {
+  while (have.indexOf(10) < 0) await more();
+  const at = have.indexOf(10);
+  const { bytes, ...head } = JSON.parse(have.subarray(0, at).toString());
+  have = have.subarray(at + 1);
+  if (bytes === undefined) return head;
+  while (have.length < bytes) await more();
+  const text = have.subarray(0, bytes).toString();
+  have = have.subarray(bytes);
+  return { ...head, text };
+};
 try {
   assert.ok("ready" in (await next()), "it says it is ready");
   for (const id of [1, 2]) {
