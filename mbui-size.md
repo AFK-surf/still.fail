@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [8b1493184](https://github.com/AFK-surf/monoid/commit/8b149318444271e2e544a1e60b3afa2db08ad4a3) mbui: main's switches check's runs cut so each run | 1.99 | 2.72 | 11.6 | 31.22 | 41.68 | 27.84 | 53.39 | 96.47 | 111.64 |
 | [091c3fbca](https://github.com/AFK-surf/monoid/commit/091c3fbca1a1d664aebdd0961efd26a4b8ce5267) mbui: the said sweep measures figures as a real fa | 1.99 | 2.72 | 11.59 | 31.22 | 41.66 | 27.83 | 53.38 | 96.58 | 111.63 |
 | [68c30ffb0](https://github.com/AFK-surf/monoid/commit/68c30ffb04cbc742b79143474d3b381e5eaddb73) mbui: the said sweep stretches what a mode puts up | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.68 | 111.51 |
 | [46264c4bd](https://github.com/AFK-surf/monoid/commit/46264c4bd112fcc4e9205ec2d379e58ede045047) Fix chat attachment download names on Windows (#61 | 1.99 | 2.72 | 11.59 | 31.21 | 41.66 | 27.83 | 53.38 | 96.8 | 108.04 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [60c0f75f7](https://github.com/AFK-surf/monoid/commit/60c0f75f746c2888f76df292f7791d3ab7f7d87f) Browser and remote screens as a browser: tabs, an  | 1.98 | 2.7 | 11.49 | 31.09 | 41.37 | 27.71 | 53.13 | 95.9 | 112.49 |
 | [af1435b8b](https://github.com/AFK-surf/monoid/commit/af1435b8b340455e766882dadb33639772390ef2) app tests: answers_still in three runs; app 4/4 at | 1.98 | 2.69 | 11.48 | 31.07 | 41.31 | 27.7 | 53.08 | 95.65 | 108.08 |
 | [34cf511f1](https://github.com/AFK-surf/monoid/commit/34cf511f1a6f8cb11487133f623df2b5491bf3f6) station, core: a handover waits for a member's app | 1.98 | 2.69 | 11.48 | 31.07 | 41.31 | 27.69 | 53.08 | 95.96 | 113.81 |
-| [f653dbf14](https://github.com/AFK-surf/monoid/commit/f653dbf1469116310a30b12715bc6e4d64ba1ba9) test: the lock's test rigs hand a device nothing a | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.65 | 120.4 |
