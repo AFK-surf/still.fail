@@ -166,6 +166,9 @@ export type PersonalEnv = {
   /// The key this device signs workspaces' locks with (its signer), none while it has none: its entry on the chain
   /// says it, so any device of the person's that signs in a workspace can put the others in there (`signKeys`).
   signKey?: () => string | null;
+  /// That signer, made where this device has none yet (as asking to be let in somewhere makes it, views/pair.ts
+  /// `lock.pair`), nobody asked: what a lock begun here says of this device (`begin`). None where it signs nothing.
+  makeSignKey?: () => Effect.Effect<string | null>;
   /// A device taken off: the stations where this lock is bound told, so an older chain brought there counts for nothing.
   told?: (sub: string, chain: Entry[]) => void;
   /// The person's devices to put on their lock as it stands (`chain`), of what workspaces' locks in safe mode say
@@ -279,6 +282,9 @@ export class PersonalLock {
   readonly #pending = new Map<string, Pending[]>();
   /// Whether what is pending is being brought to the stations now (`#deliver`), and asked again meanwhile.
   readonly #delivering = new Map<string, { again: boolean }>();
+  /// Of each person's lock, what `#heard` brought the stations last and they took (`#bringPinned`): the head pinned and
+  /// what the read that it answered showed.
+  readonly #brought = new Map<string, string>();
 
   constructor(env: PersonalEnv) {
     this.#env = env;
@@ -420,7 +426,7 @@ export class PersonalLock {
         // (who was read behind on the chain pinned, or keeping none of it: brought it, as below)
         if (behind || entries.length === 0) {
           const now = this.#pinned.get(sub) ?? [];
-          if (stations) yield* Effect.ignore(this.#env.stations!.bring(sub, now));
+          if (stations) yield* this.#bringPinned(sub, now, heard);
           else this.#env.runner.fork(Effect.ignore(this.#env.cloud(sub, "POST", PATH, { entries: now })));
         }
       } else if (grows) {
@@ -428,7 +434,7 @@ export class PersonalLock {
         if (entries.length > pinned.length) yield* this.#pin(sub, entries);
       } else if (pinned.length > 0 && (entries.length === 0 || behind)) {
         // (the cloud, or the stations, lost it, never had it, or are behind on it: brought back)
-        if (stations) yield* Effect.ignore(this.#env.stations!.bring(sub, pinned));
+        if (stations) yield* this.#bringPinned(sub, pinned, heard);
         // (forked, never waited on: what the cloud keeps is for the devices from before, and counts for nothing here)
         else this.#env.runner.fork(Effect.ignore(this.#env.cloud(sub, "POST", PATH, { entries: pinned })));
       } else if (holds && entries.length > 0 && stations && pinned.length === 0 && (yield* this.#putOnBy(sub, entries))) {
@@ -442,6 +448,21 @@ export class PersonalLock {
       // A station of theirs answered: what is pending here is brought to them now.
       if (stations) this.#deliver(sub);
     });
+  }
+
+  /// The chain pinned brought to the stations where a read (`heard`, its best chain) showed none of it, or one behind on
+  /// it (`#heard`): again only for a reason that changed since a station took it so, the head pinned moved on or the
+  /// read showing something else (a station read alone as its link opened, behind). The same read again after it was
+  /// taken is no reason: each read and each refusal brought it at once, endlessly, where what a station shows was
+  /// not to change by it (round 24 of apps/mbui/e2e/locks-moved.ts, 2026-11-14: the root's person's new app, its old
+  /// log shown as theirs, 878 POSTs in 91 s). Not taken, it is brought at the next read, as before.
+  #bringPinned(sub: string, chain: Entry[], heard: readonly Entry[]): Effect.Effect<void> {
+    if (chain.length === 0) return Effect.void;
+    const why = `${hashOf(chain[chain.length - 1]!)} ${heard.length === 0 ? "-" : `${entryHash(heard[0]!)} ${hashOf(heard[heard.length - 1]!)}`}`;
+    if (this.#brought.get(sub) === why) return Effect.void;
+    return Effect.ignore(Effect.tap(this.#env.stations!.bring(sub, chain), (took) => Effect.sync(() => {
+      if (typeof took === "number" && took > 0) this.#brought.set(sub, why);
+    })));
   }
 
   /// Whether `entries` (a chain that holds, heard of the stations by a device with none pinned) is its person's lock as
@@ -1172,10 +1193,18 @@ export class PersonalLock {
       // refused this device keeps it still, and is to be brought the new one, not taken for a lock begun elsewhere).
       // (the one pinned let go of in the turn, as the genesis is signed: `#signHere`)
       const leaving = [this.#pinned.get(sub), this.#seen.get(sub)].flatMap((c) => (c?.[0] === undefined ? [] : [entryHash(c[0])]));
+      // (its signer said in the genesis, made now where it has none: a lock begun anew on a new app, before it asked to
+      // be let in anywhere, said none, and its device signed nothing of a workspace after, no `#restate` coming unasked;
+      // a newcomer's says it, its signer made as it asks, round 24 of apps/mbui/e2e/locks-moved.ts, 2026-11-14)
+      if (this.#mySignKey() === null) yield* Effect.ignore(this.#env.makeSignKey?.() ?? Effect.void);
       const signKey = this.#mySignKey();
       // (its wait made after the key's prompt: its time begins at the stations)
       yield* this.#append(sub, seed, "genesis", { sub, device: { key, id, label: this.#env.label(), ...(signKey !== null ? { sign_key: signKey } : {}) } }, false, this.asked());
       yield* this.#leave(sub, leaving);
+      // (the chain seen where it stood outside is one it left: no lock begun elsewhere to this device, which began this
+      // one. A device still on the one left goes on hearing it was replaced, `#heard`.)
+      this.#seen.delete(sub);
+      this.#env.changed();
       return seed;
     });
   }

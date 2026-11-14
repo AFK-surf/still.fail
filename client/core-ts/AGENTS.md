@@ -315,7 +315,11 @@ another; the accounts' list's merge across stations and its refills.
   owner takes them out with a removal naming the root's log too (lock-statements.ts `cancelsOf`), said only where
   every station the state names said `rootout` (views/lock.ts `rootOutServed`; else the act is refused as before, as
   it would not do what it means), adds them again and approves their new app as anyone's first (views/pair.ts
-  `admitOf`); `open` and `off` are said from the log that binds them once it is a real admit (`saysOnOff`).
+  `admitOf`); `open` and `off` are said from the log that binds them once it is a real admit (`saysOnOff`). Their
+  new app begins its lock anew (personal-lock.ts `begin`: its signer made first and said in the genesis, the chain left
+  no lock begun elsewhere to it) and brings the chain pinned to the stations again only for a reason that changed since
+  one took it (`#bringPinned`; round 24 of `apps/mbui/e2e/locks-moved.ts`, 2026-11-14: each read and each refusal
+  brought it, 878 POSTs in 91 s). `test/lock-left-out.test.ts` counts its asks.
 - Known, not built for (the lead, 2026-11-14): a station of another workspace from before build 8799 keeps a stale copy
   of the person's log once they say a statement. A root log holding statements of a half-done handover of builds
   9040–9054 that the chain has since contradicted is held back silently; nothing is built for it.

@@ -148,7 +148,7 @@ function leftOutFor(cloud: Cloud, hello: any, device: string, accepted?: Accepte
 /// and the last entries of the workspace's lock (`entries`), so one taken out of it hears so, with no cloud to read it of.
 export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, accepted?: Accepted, sub: string | null = null): Record<string, unknown> {
   if (e instanceof LockRefusal) {
-    const chains = sub === null ? [] : personChainsOf(cloud).of(sub).map(([genesis, entries]) => ({ genesis, entries }));
+    const chains = sub === null ? [] : ownChainsOf(cloud, sub, joinedOf(cloud, claimed(hello))).map(([genesis, entries]) => ({ genesis, entries }));
     const person = chains.length > 0 && JSON.stringify(chains).length <= REFUSAL_PERSON_BYTES ? { person: chains } : {};
     const ws = joinedOf(cloud, claimed(hello));
     const tail: Entry[] = [];
@@ -509,6 +509,23 @@ function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"],
   }
 }
 
+/// The chains of `sub`'s own lock this station keeps, as a device of theirs asking in workspace `ws` is told them (GET
+/// /lock/person, a refusal's `person`): every one, but the root's log of a workspace whose chain moved once the state in
+/// force there binds its person by another log of theirs (rules/AGENTS.md `~root`; the lead, 2026-11-14). Which log is
+/// theirs is the state's to say (what the logs and bodies signed), never the control plane's nor which came last. So,
+/// where the root's person began their lock anew (`restart`, a new genesis): while `~root` still binds them, and once
+/// they are taken out and bound by nothing, both logs are theirs here, as before this rule; once an owner's admit binds
+/// them by the new one, that one alone, so a device still on the root's log hears its person's lock was begun anew
+/// (its core's `replaced`) and the new app never takes the old log for theirs. The root's log is kept and given among
+/// the workspace's logs in every phase (`Cloud.logsOf`, person-sync.ts): the workspace is rooted in it for good.
+export function ownChainsOf(cloud: Cloud, sub: string, workspace: string | null | undefined): [string, unknown[]][] {
+  const all = personChainsOf(cloud).of(sub);
+  const ws = workspace && workspace !== cloud.home() ? workspace : null;
+  const root = cloud.chain(ws)?.state?.moved;
+  const bound = root === undefined ? undefined : cloud.locked(ws)?.state?.persons.get(sub);
+  return bound === undefined || bound === root ? all : all.filter(([genesis]) => genesis !== root);
+}
+
 /// How far a person's chain gone by goes: its last entry's place and hash.
 const personHead = (chain: unknown[]) => ({ seq: chain.length - 1, hash: chain.length === 0 ? null : hashOf(chain.at(-1) as Entry) });
 
@@ -524,7 +541,7 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
     const chains = personChainsOf(cloud);
     // (with what this station serves of the person's logs and the builds of the app devices on the asker's own log, as
     // seen here: what their core reads before it writes a kind an older station or app refuses, device-builds.ts)
-    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried", "bind", "rootout"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
+    if (method === "GET") return [200, { chains: ownChainsOf(cloud, viewer.sub, viewer.workspace).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried", "bind", "rootout"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
     if (method !== "POST") return [405, { error: "GET or POST" }];
     let said: any;
     try {

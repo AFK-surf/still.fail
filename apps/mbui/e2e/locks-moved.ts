@@ -50,6 +50,7 @@
 import { createPrivateKey, createPublicKey, randomBytes } from "node:crypto";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { MOVED_FROM_BUILD, ROOT_OUT_FROM_BUILD } from "../../../station/src/api/moved-from.ts";
 import { check, Device, dir, fail, failures, type J, log, must, stationDo, stationSays, whenChanged, within } from "./device.ts";
 
 const auto = process.env.E2E_HANDOVER !== "call";
@@ -686,9 +687,11 @@ try {
   // 2026-11-14). Her apps closed for good; Z, her new app, finds none of hers to approve it and begins her own lock anew
   // (`adb.personalRestart`, the app's 「我的其它设备都不在了」); frank's asks are those of taking any member out and of
   // approving a first device, Z's those of a lock begun anew. ──
-  await within(Promise.all([vDev, nDev, xDev].map((x) => x.close())), 5000);
+  await within(Promise.all([vDev, pDev, nDev, xDev].map((x) => x.close())), 5000);
   await zDev.signIn();
   const zFrom = zDev.asked();
+  // (what everyone else open has asked so far: nobody but frank and alice is asked anything in this round)
+  const others = [qDev, rDev, sDev, yDev, gDev, tDev, iDev, jDev, kDev, wDev, mDev, oDev, lDev].map((x) => [x, x.asked()] as const);
   await must("Z, alice's new app, every other gone: refused by both; it says her other devices are gone, a lock of her own begun anew", async () => {
     for (const id of both()) log(`  Z sees ${id === fifthId ? "the first" : "the second"}: ${short(await inThree(zDev, id, (s) => s.state !== "online" && s.state !== "connecting" && s.cause === "lock"))}`);
     await zDev.call("adb.personalRestart", { sub: zDev.sub });
@@ -712,11 +715,23 @@ try {
     await zDev.lock(three, (l) => l.signs && l.me?.confirmed, 90_000);
     log(`  Z asked in all: ${zDev.askedWhat(zFrom).join("; ") || "nothing"}`);
   });
-  // (A says 0.1.9170 since round 23, under ROOT_OUT_FROM_BUILD until it is set at push: told to update there, as a
-  // core whose rules would read alice in; a refusal either way)
-  await check("A, of alice's old log, started again: refused by both", async () => {
+  // (A on a release that reads `~root` out, whatever ROOT_OUT_FROM_BUILD is set to at push: refused for the lock)
+  await check("A, of alice's old log, started again on a release that reads her out: refused by both for the lock", async () => {
+    vDev.build = `0.1.${ROOT_OUT_FROM_BUILD}`;
     await vDev.restart();
-    for (const id of both()) log(`  A sees ${id === fifthId ? "the first" : "the second"}: ${short(await inThree(vDev, id, (s) => s.state !== "online" && s.state !== "connecting"))}`);
+    for (const id of both()) log(`  A sees ${id === fifthId ? "the first" : "the second"}: ${short(await inThree(vDev, id, (s) => s.state !== "online" && s.state !== "connecting" && s.cause === "lock"))}`);
+    // (told by the stations that her lock was begun anew: the warning a device of the log left behind is to show)
+    await vDev.personal((p) => p.standing === "replaced", 60_000);
+  });
+  // An app of a release that takes a moved chain but reads a removal of the root's person as nothing: told to update
+  // (请更新) where she is out of `~root`, never refused for the lock; in again once it says a release that reads it.
+  await check("S, hank's, started again on a release under ROOT_OUT_FROM_BUILD: told to update by both, not refused for the lock; on one that reads it, in again", async () => {
+    sDev.build = `0.1.${MOVED_FROM_BUILD}`;
+    await sDev.restart();
+    for (const id of both()) log(`  S sees ${id === fifthId ? "the first" : "the second"}: ${short(await inThree(sDev, id, (s) => s.state === "error" && s.old === "app"))}`);
+    sDev.build = undefined;
+    await sDev.restart();
+    for (const id of both()) await inThree(sDev, id, (s) => s.state === "online");
   });
   await check("frank and hank untouched: Q and S let in by both", async () => {
     for (const x of [qDev, sDev]) for (const id of both()) await inThree(x, id, (s) => s.state === "online");
@@ -731,6 +746,13 @@ try {
     const r = await qDev.call("lock.disable", { workspace: three }).then(() => null, (x: Error) => x);
     log(`  Q's lock.disable: ${r?.message.slice(0, 200) ?? "done"}`);
     if (r === null || !/lock_root_only/.test(r.message)) throw new Error("frank not answered lock_root_only");
+  });
+  await check("nobody else asked anything in this round", async () => {
+    for (const [x, n] of others) {
+      if (x === qDev) log(`  Q (frank) asked in this round: ${x.askedWhat(n).join("; ") || "nothing"}`);
+      else if (x.asked() !== n) throw new Error(`${x.name} asked the person: ${x.askedWhat(n).join("; ")}`);
+    }
+    log(`  Z (alice) asked in this round: ${zDev.askedWhat(zFrom).join("; ") || "nothing"}`);
   });
 } catch (e) {
   fail("the run", e);

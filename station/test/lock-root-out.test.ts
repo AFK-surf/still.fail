@@ -7,9 +7,11 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { MOVED_FROM_BUILD, ROOT_OUT_FROM_BUILD } from "../src/api/moved-from.ts";
-import { Cloud } from "../src/cloud/state.ts";
+import { LockRefusal } from "../src/cloud/lock.ts";
+import { Cloud, personChainsOf } from "../src/cloud/state.ts";
 import { wall } from "../src/ops/fibers.ts";
-import { lockRoute, movedTooOld } from "../src/mesh/serve.ts";
+import { CHAINS_A_PERSON } from "../src/mesh/person-chains.ts";
+import { lockPartRoute, lockRoute, movedTooOld, refusalOf } from "../src/mesh/serve.ts";
 import { Log, bring, ed, handover, station, viewerOf, world } from "./lock-moved-world.ts";
 
 const NOW = 2_000_000;
@@ -201,4 +203,39 @@ test("a core under ROOT_OUT_FROM_BUILD is told to update only where the root's p
   bring(c, w.bob);
   assert.deepEqual(told(), [true, false, true], "out of ~root: under the floor told, at it not");
   assert.equal(movedTooOld(c, v, MOVED_FROM_BUILD - 1), true, "under the move's floor, as before");
+});
+
+// Which log is hers a station says by the state in force (the lead, 2026-11-14; mesh/serve.ts `ownChainsOf`): her
+// devices read it of GET /lock/person and of a refusal's `person`. Her log begun anew (R2) while `~root` binds her, and
+// once she is out bound by nothing: both, as before this rule (a device still on R reads what it read before); once an
+// owner's admit binds her by R2: R2 alone, so a device of R hears her lock was begun anew. R stays among the
+// workspace's logs in every phase, and is never let go as a person's oldest (CHAINS_A_PERSON).
+test("the root's person's own logs, as a station tells them: both while `~root` binds her and once she is out; her new one alone once an admit binds her by it; the root's log among the workspace's logs throughout", () => {
+  const { w, c } = setUp();
+  const r2 = new Log("alice");
+  bring(c, r2);
+  const own = () => {
+    const [, out] = lockPartRoute(c, "person", "GET", Buffer.from(""), viewerOf("alice", r2.app, "owner") as never) as [number, { chains: { genesis: string }[] }];
+    return out.chains.map((x) => (x.genesis === w.alice.genesis ? "R" : x.genesis === r2.genesis ? "R2" : "?")).sort().join(",");
+  };
+  const told = () => {
+    const r = refusalOf(c, { lock: {} }, ed().hex, new LockRefusal("refused"), undefined, "alice") as { person?: { genesis: string }[] };
+    return (r.person ?? []).map((x) => (x.genesis === w.alice.genesis ? "R" : x.genesis === r2.genesis ? "R2" : "?")).sort().join(",");
+  };
+  const logs = () => {
+    const [, out] = lockPartRoute(c, "logs", "GET", Buffer.from(""), viewerOf("bob", w.bob.app, "owner") as never) as [number, { chains: { genesis: string }[] }];
+    return out.chains.some((x) => x.genesis === w.alice.genesis);
+  };
+  assert.deepEqual([own(), told(), logs()], ["R,R2", "R,R2", true], "R2 begun, `~root` binding her");
+  w.bob.say("member.remove", { sub: "alice", cancels: [w.alice.genesis] });
+  bring(c, w.bob);
+  assert.deepEqual([own(), told(), logs()], ["R,R2", "R,R2", true], "taken out, bound by nothing");
+  w.bob.say("member", { sub: "alice", email: "alice@x", lock: r2.genesis, role: "owner" });
+  bring(c, w.bob);
+  assert.equal((of(c, "alice") as any).lock, r2.genesis);
+  assert.deepEqual([own(), told(), logs()], ["R2", "R2", true], "bound by R2");
+  // (more of her logs begun anew than a person's few kept: the root's stays)
+  for (let i = 0; i < CHAINS_A_PERSON + 1; i++) bring(c, new Log("alice"));
+  assert.ok(personChainsOf(c).kept(w.alice.genesis) !== null, "the root's log kept");
+  assert.equal(c.locked()?.waiting, undefined, "the state not waiting for it");
 });
