@@ -40,11 +40,8 @@
 /// them stopped at the old page's 大屏 chat opened over a core 400 ms late: `rows not steady … row m:ts7 went -82 a
 /// frame`). The pictures the fixture's chat holds handed over: what the Testers here hold at most.
 fn init {
-  @ui.rows_steady_known([("src/sfapp/chat_old_at_once_help_wbtest.mbt", 1000)])
-  @ui.sizes_steady_known([("src/sfapp/chat_old_at_once_help_wbtest.mbt", 1000)])
-  @ui.gaps_steady_known([("src/sfapp/chat_old_at_once_help_wbtest.mbt", 1000)])
-  @ui.words_over_known([("src/sfapp/chat_old_at_once_help_wbtest.mbt", 1000)])
-  @ui.host_image_bytes_known([("src/sfapp/chat_old_at_once_help_wbtest.mbt", 4000000)])
+  @ui.rows_steady_known([("src/sfapp/chat_old_at_once_help_wbtest.mbt", 1)])
+  @ui.host_image_bytes_known([("src/sfapp/chat_old_at_once_help_wbtest.mbt", 127704)])
 }
 
 ///|
