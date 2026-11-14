@@ -74,6 +74,108 @@ test "大屏, built as a host builds: words a mouse picked in a message have 引
 }
 
 ///|
+/// A chat ending with a long agent reply like the reported selection: a wrapped list item, followed by another item.
+fn pick_list_tester(calls : Array[Made], w? : Double = 1280.0) -> @ui.Tester {
+  new_run()
+  let text = "好，表 14 保持现状，不加说明。\n\n通读找到的问题里，还剩这些没定（编号沿用之前的）：\n- **7–12**：数字和单位前后不统一。两组 A1/b1 配置；同一批 400 项，系统统计数写成了 218/219/220 三个数；运行预算 20 和 50 分钟；501 和 509 s；sample 数 2,100 和 2,220；表 17 的列没标清楚。\n- **19–21**：可选。摘要补\"than the official Example evaluation\"；表 18 填上 115 s；写明 App 0.8.0b64。\n\n你点编号我就改；都不改的话，就可以收尾合并 #123 了。"
+  let md : Json = [
+    ["p", ["好，表 14 保持现状，不加说明。"]],
+    ["p", ["通读找到的问题里，还剩这些没定（编号沿用之前的）："]],
+    ["list", [
+      ["li", [["b", ["7–12"]], "：数字和单位前后不统一。两组 A1/b1 配置；同一批 400 项，系统统计数写成了 218/219/220 三个数；运行预算 20 和 50 分钟；501 和 509 s；sample 数 2,100 和 2,220；表 17 的列没标清楚。"]],
+      ["li", [["b", ["19–21"]], "：可选。摘要补\"than the official Example evaluation\"；表 18 填上 115 s；写明 App 0.8.0b64。"]],
+    ]],
+    ["p", ["你点编号我就改；都不改的话，就可以收尾合并 #123 了。"]],
+  ]
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done })
+      (base.call)(name, params, done)
+    },
+    topic_read: fn(name, params) {
+      let tp = base.topic(name, params).get().snapshot()
+      match (name, tp.value) {
+        ("chat", Some(Object(o))) => {
+          let messages = match o.get("messages") {
+            Some(Array(a)) => a.copy()
+            _ => []
+          }
+          match messages.last() {
+            Some(Object(m)) => {
+              let m = m.copy()
+              m["text"] = Json::string(text)
+              m["md"] = md
+              messages[messages.length() - 1] = Json::object(m)
+            }
+            _ => ()
+          }
+          let o = o.copy()
+          o["messages"] = Json::array(messages)
+          { ..tp, value: Some(Json::object(o)) }
+        }
+        _ => tp
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+test "大屏, a mouse picks across two list items of one message and quotes the passage" {
+  let calls : Array[Made] = []
+  let t = pick_list_tester(calls)
+  t.check_looks(false)
+  let before = t.audit()
+  let (ax, ay, _, ah) = words_rect(t, "字和单位前后不统一")
+  let (bx, by, bw, bh) = words_rect(t, "表 18")
+  mouse_dragged(t, ax + 1.0, ay + ah / 2.0, bx + bw - 1.0, by + bh / 2.0)
+  let picked = t.ctx().selected_text()
+  assert_true(picked.has_prefix("字和单位前后不统一") && picked.has_suffix("表 18"), msg=picked)
+  guard pill_over(t, by) is Some(_) else {
+    fail("no 引用 over list items: box=\{Repr(t.ctx().selection_box())}, picked=\{Repr(@sfbase.picked.get())}")
+  }
+  assert_eq(t.audit().filter(fn(f) { !before.contains(f) }), [])
+  // The same passage picked upwards has the pill at the other end.
+  t.run_for(@ui.double_click_ms)
+  mouse_dragged(t, bx + bw - 1.0, by + bh / 2.0, ax + 1.0, ay + ah / 2.0)
+  assert_eq(t.ctx().selected_text(), picked)
+  guard pill_over(t, ay) is Some(_) else { fail("no 引用 over the start when picked upwards") }
+  t.run_for(@ui.double_click_ms)
+  guard t.words().filter(fn(w) { w.0 == "引用" && w.2 < ay && w.2 > ay - 60.0 }) is [(_, qx, qy, qw, qh, _), ..] else {
+    fail("no 引用 to press")
+  }
+  mouse_clicked(t, qx + qw / 2.0, qy + qh / 2.0)
+  let quoted = named(calls, "composer.quote")
+  assert_eq(quoted.length(), 1)
+  let q = field(Some(quoted[0].params), "quote")
+  assert_eq((text(q, "text"), text(q, "ts"), text(q, "role")), (picked, "ts11", "agent"))
+  assert_eq(t.ctx().selected_text(), "")
+}
+
+///|
+test "大屏, a mouse picking across two messages is not offered 引用" {
+  let calls : Array[Made] = []
+  let t = pick_list_tester(calls)
+  t.check_looks(false)
+  let (ax, ay, _, ah) = words_rect(t, "推送截图前要先登录")
+  let (bx, by, bw, bh) = words_rect(t, "好，表 14 保持现状")
+  // A previously quotable selection must not keep its pill once the next drag crosses messages.
+  mouse_dragged(t, bx + 1.0, by + bh / 2.0, bx + bw - 1.0, by + bh / 2.0)
+  assert_true(pill_over(t, by) is Some(_))
+  t.run_for(@ui.double_click_ms)
+  mouse_dragged(t, ax + 1.0, ay + ah / 2.0, bx + bw - 1.0, by + bh / 2.0)
+  let picked = t.ctx().selected_text()
+  assert_true(picked.has_prefix("推送截图前要先登录") && picked.has_suffix("好，表 14 保持现状"), msg=picked)
+  assert_true(pill_over(t, by) is None, msg="引用 over words from different messages")
+  assert_eq(named(calls, "composer.quote").length(), 0)
+}
+
+///|
 test "中屏's tape, built as a host builds: words a mouse picked in a message have 引用 over them in the frame it let go in, there after a while and a move, gone after a press" {
   // (this form alone shows it: a default Tester builds the frame again keeping nothing and shows the pill whatever
   // the page's view read)

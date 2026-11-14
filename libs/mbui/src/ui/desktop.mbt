@@ -1460,6 +1460,47 @@ pub fn Ctx::selection_made(self : Ctx) -> Int {
 }
 
 ///|
+/// Whether every paragraph with words picked by the pointer belongs to box `i`, once the pointer has let it go.
+/// Membership is by each rich paragraph's identity, not by the bounds of its glyphs: a wrapped line can extend past
+/// its box, and either the box or its words can be clipped by what scrolls. An empty pick belongs to no box.
+pub fn Ctx::selection_in(self : Ctx, i : Int) -> Bool {
+  guard !picked.dragging && picked.layer is OldLayer(_) && i >= 0 && i < self.count else { return false }
+  let mut any = false
+  for _, span in picked.spans {
+    if span.a < span.b {
+      any = true
+      break
+    }
+  }
+  guard any else { return false }
+  // Like rect_of's old-view selection reader, a kept list row must be built while it reads a pick. The node-based
+  // selection API follows a signal instead (picked_now).
+  if nodes_run.building is Some(_) {
+    built_aside(why="what is picked read by a box")
+  }
+  let nodes : Array[Int] = []
+  self.rich_nodes(i, nodes)
+  let own : Map[Int, Bool] = Map([])
+  for j in nodes {
+    let n = self.nodes[j]
+    match (n.rcut, n.rich) {
+      (Some(r), _) | (None, Some(r)) if r.select => own[r.base] = true
+      _ => ()
+    }
+  }
+  for key, span in picked.spans {
+    if span.a >= span.b {
+      continue
+    }
+    match key {
+      Para(base) if own.contains(base) => ()
+      _ => return false
+    }
+  }
+  true
+}
+
+///|
 /// A press on `id` keeps what is picked with the pointer (a button that does something with it, as a page's control
 /// whose press is not the words' with mousedown's preventDefault: a quote of what is picked). Said each frame it is
 /// drawn.
