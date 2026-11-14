@@ -138,3 +138,39 @@ test "where a page's list and a sidebar's narrower list made after it are both d
   assert_eq(t.visible(), (10, 14))
   assert_eq(t.list_row_boxes()[1].length(), 10, msg="the sidebar's list as it was")
 }
+
+///|
+test "a page's list with a bar over its top (top_covered) reads in view the rows the reader sees, the first the one scroll_to brought: a test stepping back a row at a time walks it in order, as an old view's list" {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  t.check_looks(false)
+  let s = @view.Scroll::list()
+  set_view_app(fn(root) {
+    root.box(fn(page) {
+      page.height(Is(Some(200.0))).width(Is(Some(300.0))) |> ignore
+      // (its top 60 under a bar drawn over it, as a chat's list under its bar: its rows drawn there too)
+      page.scrolls_window(s, fn() { Array::makei(40, fn(i) { i }) }, est=40.0, top_covered=fn() { 60.0 }, fn(b, i) {
+        b.box(fn(r) { r.height(Is(Some(40.0))).words(Is("row \{i}")) |> ignore }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  t.scroll_to(20)
+  t.frame()
+  assert_eq(t.visible().0, 20, msg="brought to its top: \{Repr(t.visible())} \{Repr(t.rows())}")
+  // (row 19 is drawn, under the bar, and is no row in view)
+  assert_true(t.rows().iter().any(fn(r) { r.0 == 19 }), msg="\{Repr(t.rows())}")
+  // (a row back from the first in view, as a test walking up to a row it looks for does)
+  let back = fn() {
+    let (first, _) = t.visible()
+    t.scroll_to(first - 1)
+    t.frame()
+    t.visible().0
+  }
+  let one = back()
+  let two = back()
+  let three = back()
+  assert_eq([one, two, three], [19, 18, 17])
+}

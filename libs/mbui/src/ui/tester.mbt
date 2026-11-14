@@ -2143,15 +2143,13 @@ pub fn Tester::scroll_to_end(self : Tester) -> Unit {
 }
 
 ///|
-/// The first and last rows of the list in view (-1, -1 when none).
+/// The first and last rows of the list in view (-1, -1 when none). A page's list's those the reader sees, between what
+/// covers its top and its pinned foot (ListSeen's `sight`), not those drawn under a bar over it: its first the row
+/// scroll_to brings to its top, as an old list's, so a test stepping back a row at a time walks it in order.
 pub fn Tester::visible(self : Tester) -> (Int, Int) {
   match self.list_on() {
     Old(st) => (st.vis_first, st.vis_last)
-    Tree(l) =>
-      match (l.rows, l.rows.last()) {
-        ([first, ..], Some(last)) => (first.0, last.0)
-        _ => (-1, -1)
-      }
+    Tree(l) => l.sight
   }
 }
 
