@@ -50,6 +50,18 @@ pub fn tool_node(
   ripples? : Bool = false,
   loc~ : SourceLoc,
 ) -> @view.View {
+  let rippled : Ref[PressLook?] = Ref(None)
+  let hand : Ref[TipHand?] = Ref(None)
+  let down : ((@view.Drag) -> Unit)? = if ripples {
+    Some(fn(d) { if rippled.val is Some(r) { (r.down)(d) } })
+  } else {
+    None
+  }
+  let tapped : ((@view.Drag) -> Unit)? = if ripples {
+    Some(fn(d) { if rippled.val is Some(r) { (r.tapped)(d) } })
+  } else {
+    None
+  }
   @headless.toggle(
     made_for=loc,
     parent,
@@ -58,6 +70,16 @@ pub fn tool_node(
     fn() { said().on },
     fn(_) { press() },
     disabled=fn() { said().disabled },
+    hold=@headless.Hold::new(
+      @ui.touch_slop(),
+      @ui.long_press_ms,
+      fn() { @ui.pointing() is Finger },
+      on_hold=fn() { if hand.val is Some(h) { (h.hold)() } },
+      on_lift=fn() { if hand.val is Some(h) { (h.lift)() } },
+      on_cancel=fn() { if hand.val is Some(h) { (h.cancel)() } },
+      down?=down,
+      tapped?=tapped,
+    ),
     fn(v, t) {
       // (where the hand is on it, as a box's hovered look has it: a mouse's pointer over it, a finger pressing it; and
       // where the keyboard's focus shows on it, drawn as the hand on it is: the user, 2026-10-31「焦点就按 hover 样式来」;
@@ -116,66 +138,17 @@ pub fn tool_node(
         |> ignore
       })
       |> ignore
-      // (a finger on it: a tap presses it; held still long_press_ms, its tip shown while it stays down and a while after,
-      // the press then no tap (kit's tooltip's held_long); a mouse's held as long, still a press as it is let go)
       // (a press's ripple over it and, where its ground is one of its own as it goes down (@ui.stands_alone, as the old
       // view's box's own_ground), its sink: picture_button's, @motion.ripple)
-      let rippled = if ripples {
+      rippled.val = if ripples {
         Some(press_look(v, corner, fn() { @ui.stands_alone(ground()) }))
       } else {
         None
       }
-      let hand = match tip {
+      hand.val = match tip {
         Some(tips) => Some(tip_node(tips, v, fn() { said().label }, side=Bottom))
         None => None
       }
-      let held = Ref(false)
-      // (let go on it, as a press is: what is there for a finger as the tree is then, it and nothing over it)
-      let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
-      v.gesture(
-        @ui.touch_slop(),
-        press?=rippled.map(fn(r) { r.down }),
-        tap=fn(d) {
-          if rippled is Some(r) {
-            (r.tapped)(d)
-          }
-          if on_it(d) {
-            t.press()
-          }
-        },
-        hold=(
-          @ui.long_press_ms,
-          fn(_) {
-            held.val = true
-            if @ui.pointing() is Finger {
-              match hand {
-                Some(h) => (h.hold)()
-                None => ()
-              }
-            }
-          },
-        ),
-        drag=fn(d) {
-          if !held.val {
-            // (a mouse's moved on it past the slop: still a press as it is let go on it, as a click is; a finger's so
-            // moved is no tap)
-            if d.kind == Up && @ui.pointing() is Mouse && on_it(d) {
-              t.press()
-            }
-          } else if d.kind == Up || d.kind == Off {
-            held.val = false
-            match (hand, d.kind) {
-              // (called off: none of its holding kept)
-              (Some(h), Off) => (h.cancel)()
-              (Some(h), Up) if @ui.pointing() is Finger => (h.lift)()
-              // (a mouse's held long: a press as it is let go on it)
-              (_, Up) if @ui.pointing() is Mouse && on_it(d) => t.press()
-              _ => ()
-            }
-          }
-        },
-      )
-      |> ignore
     },
   )
 }

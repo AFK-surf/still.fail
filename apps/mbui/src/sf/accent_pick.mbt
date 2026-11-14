@@ -29,57 +29,54 @@ pub fn accent_pick_node(
     }
   })
   let ink_of = fn(a : AccentTone) { if theme().dark { a.dark } else { a.light } }
-  // a dot: in `ink` (an outline round a ＋ where none), with a check where `on`; `press` done as it is pressed
-  let a_dot = fn(row : @view.View, ink : () -> Int64?, on : () -> Bool, name : () -> String, press : () -> Unit) {
-    @headless.choice(row, Radio, name, on, fn(_) { press() }, fn(d, _) {
-      let side = dot_side(theme())
-      let mark = side * accent_check_part
-      let ring = fn() {
-        if ink() is None {
-          alpha(theme().p.text, accent_open_line)
-        } else if lit_node(d) && !on() {
-          alpha(theme().p.text, accent_lit_line)
-        } else {
-          accent_no_ring
-        }
-      }
-      d
-      .width(Is(Some(side)))
-      .height(Is(Some(side)))
-      // (round as a pill is said to be, Full: as round as it can be)
-      .radius(Is(1.0e6))
-      .lines_up(Is(Some(Middle)))
-      .lies_along(Is(Middle))
-      .ground(By(fn() { ink().unwrap_or(accent_no_ring) }))
-      .edge(By(fn() { (2.0, ring()) }))
-      |> ignore
-      d.show(on, fn(c) { icon_node(c, "check", mark, Is(0xFFFFFFFFL)) |> ignore })
-      d.show(fn() { !on() && ink() is None }, fn(c) { icon_node(c, "plus", mark, By(fn() { theme().p.muted })) |> ignore })
-    })
-    |> ignore
-  }
   parent.box(made_for=loc, fn(col) {
     // (narrow, a section's own: in from the page's edge as far as its heading's words, as its note is)
     let start = if look_node(col) is Narrow { accent_narrow_in } else { 0.0 }
     col.gap(Is(accent_column_gap)).padding(Is((start, 0.0, 0.0, 0.0))) |> ignore
-    col.box(fn(row) {
+    @headless.radio_group(col, fn() { "" }, chosen, choose, selected=true, fn(row, rg) {
       row
       .row(Is(true))
       .gap(Is(8.0))
       .lines_up(Is(Some(Middle)))
-      .says(Is(Some(@view.said(RadioGroup))))
       |> ignore
+      let a_dot = fn(key : () -> String, ink : () -> Int64?, name : () -> String) {
+        rg.item(row, key, name, fn(d, item) {
+          let on = fn() { item.chosen() }
+          let side = dot_side(theme())
+          let mark = side * accent_check_part
+          let ring = fn() {
+            if ink() is None {
+              alpha(theme().p.text, accent_open_line)
+            } else if lit_node(d) && !on() {
+              alpha(theme().p.text, accent_lit_line)
+            } else {
+              accent_no_ring
+            }
+          }
+          d
+          .width(Is(Some(side)))
+          .height(Is(Some(side)))
+          // (round as a pill is said to be, Full: as round as it can be)
+          .radius(Is(1.0e6))
+          .lines_up(Is(Some(Middle)))
+          .lies_along(Is(Middle))
+          .ground(By(fn() { ink().unwrap_or(accent_no_ring) }))
+          .edge(By(fn() { (2.0, ring()) }))
+          |> ignore
+          d.show(on, fn(c) { icon_node(c, "check", mark, Is(0xFFFFFFFFL)) |> ignore })
+          d.show(fn() { !on() && ink() is None }, fn(c) { icon_node(c, "plus", mark, By(fn() { theme().p.muted })) |> ignore })
+        })
+        |> ignore
+      }
       for i, a in accents {
         let key = a.key
-        a_dot(row, fn() { Some(ink_of(a)) }, fn() { chosen() == key }, fn() { names().get(i).unwrap_or(key) }, fn() {
-          choose(key)
-        })
+        a_dot(fn() { key }, fn() { Some(ink_of(a)) }, fn() { names().get(i).unwrap_or(key) })
       }
-      a_dot(row, fn() { own().map(fn(h) { ink_of(custom_tone(h)) }) }, fn() { own() is Some(_) }, custom, fn() {
-        if @signals.untracked(own) is None {
-          choose("custom:" + custom_hue_kept.val.to_string())
-        }
-      })
+      a_dot(
+        fn() { "custom:" + own().unwrap_or(custom_hue_kept.val).to_string() },
+        fn() { own().map(fn(h) { ink_of(custom_tone(h)) }) },
+        custom,
+      )
     })
     |> ignore
     // 自定义's hues, as wide as the dots

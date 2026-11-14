@@ -28,10 +28,11 @@
 //   - what a screen reader, the keyboard or such a test could tell changed is the component's;
 //   - so is what the hand could: when a pointer's press counts (how far it may move first, how long it may be held, let
 //     go off it). For a node pressed plainly that is the framework's press, and the component adds nothing. A control
-//     that wants more of the pointer (a hold of its own beside its press) is to be given it by its component, as a
-//     parameter. Not so yet, a debt: still.fail's icon button holds its tip up by a finger's long press, and for that
-//     its look takes the pointer itself (View::gesture) and says again when a mouse's and a finger's press count, each
-//     ending in Button::press. The tip is that app's; when a press counts is not a look's;
+//     that wants more of the pointer (a hold of its own beside its press, or a press held past a hold's time and let go
+//     on it) is given it by its component, as a parameter (`Hold` on `button` and `toggle`, `hold_press` on `toggle`):
+//     still.fail's icon button and bar tool hold their tip up by a finger's long press (`Hold`), and its switch turns on
+//     a press held however long and let go on it (`hold_press`). The tip is that app's; when a press counts is the
+//     component's;
 //   - what only an eye could tell is the look's;
 //   - what every node has whatever it is is the framework's: used, never written again here. What a component needs of
 //     the tree and is not there is added to src/view (View::press, for a press asked by what is no hand), never gone
@@ -63,10 +64,11 @@
 // icon button's debt above). So it is a convention, held by no check: of a component's node a look says what is drawn and
 // laid out, and none of these.
 //
-// Not decided by this sample: a control of several parts (a menu and its items, a dialog's title and body, items made
-// by `each`). `look : (View, Button) -> Unit` is one node handed over once; whether a component of parts makes each
-// part's node and hands it to a look, or adopts nodes its look made (as kit's ToastNode::action does: toast_node.mbt),
-// is decided with the first component that has them.
+// A control of several parts (radio_group.mbt: a group of radio buttons or a bar's tabs, its items fixed or made by
+// `each`): the component makes the group's node, hands it and the group (`RadioGroup[K]`) to its look once, and each
+// `RadioGroup::item` makes that item's node, hands it and what is read of it (`RadioItem`) to the item's look once,
+// and says the item's own words after its look has run, keeping the roving Tab stop and the arrow keys across the
+// living enabled items.
 //
 // A component is tested under a look of the tests' own, found by role and name, each window made by the tests'
 // `window` (window_test.mbt), which holds of every node in it that nothing said from this package's own files is drawn
