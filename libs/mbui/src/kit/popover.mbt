@@ -353,7 +353,8 @@ pub fn tooltip(
   if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter=tip_in, exit=pop_out) is Some(shows) {
     // A previous tooltip may finish its exit only until another claims the slot: never paint two at once.
     if tip_owns(owner) {
-      let o = c.overlay(key, anchor=trigger, outside=false, initial_focus=0, inert=!open, fn() {
+      // (the system's back goes on to what is under it: a tip only says what the pointer rests on, no place to leave)
+      let o = c.overlay(key, anchor=trigger, outside=false, back=false, initial_focus=0, inert=!open, fn() {
         beside(c, key, trigger, side, along, offset, shows, Tooltip, text, fn(c, s, _) { look(c, s, text) }, fn() {  }, at?=at)
       })
       if o.dismissed is Some(_) {

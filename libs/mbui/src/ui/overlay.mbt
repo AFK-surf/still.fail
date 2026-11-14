@@ -91,7 +91,8 @@ pub let layer_ground : Int = -3
 /// A layer over the page (see the file's head), `key` its id's, built by `body`. `modal`: a ground (`scrim`, its
 /// colour; clear by default) under what it holds takes the presses and wheels it does not, and the page is hidden
 /// from the semantics tree; `trap` (with `modal` by default) keeps Tab in it. Dismissed by Escape and the back
-/// (unless not `escape`; an Escape `on_escape` says it took, asked as it comes, within it, no dismissal: one step back
+/// (unless not `escape`; the back, unless not `back` either: a tooltip's, which says what is under the pointer and is
+/// no place back leaves; an Escape `on_escape` says it took, asked as it comes, within it, no dismissal: one step back
 /// inside it), by a press outside (unless not `outside`); none of them while `stays` says it stays, asked as each
 /// comes (what it is doing may not be left: an Escape or a back taken by it all the same, nothing under it told; its
 /// view's own Ctx::dismiss not asked). A press on `anchor` (its trigger's id), or on what it holds, does not dismiss
@@ -109,6 +110,7 @@ pub fn Ctx::overlay(
   modal? : Bool = false,
   trap? : Bool = modal,
   escape? : Bool = true,
+  back? : Bool = escape,
   on_escape? : () -> Bool,
   stays? : () -> Bool,
   outside? : Bool = true,
@@ -232,7 +234,7 @@ pub fn Ctx::overlay(
   }
   // the back to it, unless a layer built in it (over it) takes it after: what it is said over taking back once it took it
   // (Ctx::layer_back_taken)
-  if escape && !inert {
+  if escape && back && !inert {
     // (the system's back is an input: its frames are the framework's; said of this opening, at its place in the
     // window's stack of layers as the layers built are put in it: Ctx::back_says, raise_layers)
     self.back_layer_next = gen

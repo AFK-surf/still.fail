@@ -201,6 +201,29 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
 }
 
 ///|
+test "tooltip: shown, the system's back goes on to what is under it: a tip is no place back leaves" {
+  let shown = Ref(false)
+  let backs = Ref(0)
+  let t = @ui.Tester::new(fn(c) {
+    // (the page's back, taken first as it is drawn: what is over it takes it after)
+    c.on_back(fn() { backs.val += 1 })
+    c.column(gap=40.0, pad=80.0, fn() {
+      let r = @kit.button(c, "Bold", key="bold")
+      shown.val = @kit.tooltip(c, "tip", r.id, "Bold (⌘B)")
+    })
+    |> ignore
+  })
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="Bold").rect
+  t.move_to(x + w / 2.0, y + h / 2.0)
+  t.run_for(@kit.tooltip_delay_ms)
+  assert_true(shown.val)
+  t.back()
+  assert_eq(backs.val, 1)
+  // (still the pointer's: back took nothing of it)
+  assert_true(shown.val)
+}
+
+///|
 test "tooltip: not through a dialog over its trigger: the pointer rests on the dialog's ground, not on the trigger" {
   let shown = Ref(false)
   let open = Ref(false)
