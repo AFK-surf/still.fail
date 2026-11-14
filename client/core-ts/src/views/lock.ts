@@ -49,7 +49,7 @@ import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, type Stated, type Statements, checkChain, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
 import { type Said, bindBytes, bodiesOf, byHash, plan, prevOf } from "../lock-statements.ts";
-import { type BuildsSeen, HAND_OVER_FROM, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, ableBuild, devicesWaited, handOverPlan, mayHandOver } from "../lock-handover.ts";
+import { HAND_OVER_FROM, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, ableBuild, handOverPlan, mayHandOver } from "../lock-handover.ts";
 import { buildOf, ownBuild } from "../station/oldest.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
@@ -820,8 +820,6 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
           if (r._tag === "Success" && arr(get(r.success, "serves")).includes("forks")) p.forks.add(id);
           else p.forks.delete(id);
           if (r._tag === "Success") keepServes(inner, ws, id, SERVES_MOVED.every((x) => arr(get(r.success, "serves")).includes(x)));
-          // (and what it saw of the devices' builds, src/lock-handover.ts `devicesWaited`)
-          if (r._tag === "Success") keepBuilds(inner, LOCK_BUILDS, ws, id, arr(get(r.success, "serves")).includes("builds") ? get(r.success, "builds") : null);
           if (r._tag !== "Success" || !p.serving.has(id)) return null;
           const head = readHead(get(r.success, "head"));
           p.heads.set(id, head);
@@ -3269,65 +3267,33 @@ function keepServes(inner: Inner, ws: string, id: string, serves: boolean): void
   inner.data.put(SERVES, ws, { ready: serves ? [...was, id] : was.filter((x) => x !== id) });
 }
 
-/// What the stations said of the devices' builds (station/src/mesh/device-builds.ts), kept as they say it beside a
-/// workspace's lock (`lockBuilds`, by the workspace, as its GET /lock is read). Per station its `since` (one that answers
-/// without `builds` no longer counted), per device the highest build and the latest sight any of them said: what a
-/// station asleep now said before stands.
-const LOCK_BUILDS = "lockBuilds";
-function buildsHeld(inner: Inner, table: string, key: string): BuildsSeen {
-  const r = inner.data.record(table, key);
-  return isObject(r) && isObject(r.since) && isObject(r.devices) ? (r as unknown as BuildsSeen) : { since: {}, devices: {} };
-}
-/// What station `id` said of the builds as it answered (`said`: its `builds`, null where it serves none): kept, written
-/// only where something changed.
-function keepBuilds(inner: Inner, table: string, key: string, id: string, said: unknown): void {
-  const was = buildsHeld(inner, table, key);
-  const since = { ...was.since };
-  const devices = { ...was.devices };
-  let changed = false;
-  const s = get(said, "since");
-  if (said !== null && typeof s === "number") {
-    if (since[id] !== s) (since[id] = s), (changed = true);
-  } else if (id in since) delete since[id], (changed = true);
-  const told = get(said, "devices");
-  if (isObject(told)) for (const [d, v] of Object.entries(told)) {
-    const build = get(v, "build"), at = get(v, "at");
-    if (typeof build !== "number" || typeof at !== "number") continue;
-    const had = devices[d];
-    if (had !== undefined && had.build >= build && had.at >= at) continue;
-    devices[d] = { build: Math.max(build, had?.build ?? -1), at: Math.max(at, had?.at ?? 0) };
-    changed = true;
-  }
-  if (changed) inner.data.put(table, key, { since, devices });
-}
-
 /// What holds back the handover of `ws`'s chain `entries` by `sub`'s device besides the stations (`stationsWaited`),
 /// saying nothing to anyone (the user, 2026-11-14: 无感迁移, nobody told to update; `handOverState`'s `held` names them
 /// for the tests): this device itself, by the build it says to the stations (`ownBuild`, `0.1.0` where it says none),
 /// not able (`ableBuild`: it moves the chain, and a station of a moved workspace tells a device under MOVED_FROM_BUILD to
 /// update, station/src/mesh/serve.ts `movedTooOld`; the lead, 2026-11-14: builds between this code's and
-/// MOVED_FROM_BUILD have it and must move nothing); each app device the chain lets in but this one not able nor idle by
-/// what its stations saw (`lockBuilds`, src/lock-handover.ts `devicesWaited`); and, for now (each lifted by its own change,
+/// MOVED_FROM_BUILD have it and must move nothing); and, for now (each lifted by its own change,
 /// client/core-ts/AGENTS.md), a web page whose person has no app on the chain (`webOnlyIn`: carried until its `exp`, then
 /// nobody can approve it again there and the page that tells them to install an app is not drawn yet), or more than
 /// HAND_OVER_MEMBERS_MOST members bound to a log (a moved state reads each one's log, `LOGS_MOST` a workspace). The
-/// handover writes nothing in anyone's log (no `writer`, no bound on the root's log's length). Those for now are not
+/// handover writes nothing in anyone's log (no `writer`, no bound on the root's log's length). No other app device is
+/// waited for (the user, 2026-11-14, of a phone of his own not used any more that held his workspace for seven days:
+/// 「用户要是有个设备离线不用了要等 7 天？」; his first word of it had been 「不要等设备全更新」): one on a build that does
+/// not take a moved chain is told to update by a station of the workspace as it next asks (`movedTooOld`), and is in
+/// again once it has, nothing approved anew. Those for now are not
 /// held to (`forNow` false) only where a host made for tests calls `lock.handOver` itself (`handOverByTests`), so what a
 /// move does with such a workspace stays run until they are lifted.
 function heldBack(inner: Inner, ws: string, _sub: string, entries: readonly Entry[], forNow = true): string[] {
   if (entries.length === 0) return [];
   const at = now(inner);
-  let checked: Checked;
   try {
-    checked = checkLock([...entries], at);
+    checkLock([...entries], at);
   } catch {
     return ["chain"];
   }
   const f = fold(entries);
-  const base = bases.get(inner) ?? null;
-  const apps = [...checked.devices].filter(([id, d]) => d.kind === "app" && id !== base).map(([id]) => id);
-  const out = devicesWaited(apps, buildsHeld(inner, LOCK_BUILDS, ws), [...f.stations.keys()], at).map((id) => `device ${id}`);
-  if (!ableBuild(buildOf(ownBuild() || "0.1.0") ?? -1)) out.unshift("own build");
+  const out: string[] = [];
+  if (!ableBuild(buildOf(ownBuild() || "0.1.0") ?? -1)) out.push("own build");
   if (!forNow) return out;
   if (webOnlyIn(f.devices.values(), at).size > 0) out.push("web only");
   if (f.persons.size > HAND_OVER_MEMBERS_MOST) out.push("members");

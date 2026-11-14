@@ -229,9 +229,9 @@ export class Device {
   page: boolean;
   /// The release it says it is (`client.device`'s `build`, `0.1.<n>`, said with each request to a station, which keeps
   /// the highest a device of a lock said: station/src/mesh/device-builds.ts); none: `0.1.0`, a build from the sources,
-  /// taken as one that takes a moved workspace (client/core-ts src/lock-handover.ts `ableBuild`). An app of a release
-  /// before MOVED_FROM_BUILD on a lock holds its workspace's handover back for as long as it is used, as a person's
-  /// app not updated does.
+  /// taken as one that takes a moved workspace (client/core-ts src/lock-handover.ts `ableBuild`). An owner's app of a
+  /// release before MOVED_FROM_BUILD moves nothing itself (views/lock.ts `heldBack`, its own build), so a workspace
+  /// whose owners' apps all say one stays as before a move; no other device's build holds a move back.
   build: string | undefined;
   /// Each request of its core's to a station whose answer it read to its end (`watchRequests`), across its restarts,
   /// as this driver heard of it (`at`: its clock then); and the waits for one (`answered`).

@@ -53,8 +53,8 @@ const appIds = (l: J): string[] => lockDevices(l).filter((d) => d.kind === "app"
 const short = (s: J) => JSON.stringify({ state: s.state, cause: s.cause, message: s.message });
 
 // Every app of these rounds says a release before MOVED_FROM_BUILD (station/src/api/moved-from.ts), as a person's app not
-// updated does: the stations keep it (station/src/mesh/device-builds.ts), so the workspace's chain is not handed over
-// (client/core-ts src/lock-handover.ts `devicesWaited`) and these rounds run the chain of before a move, which workspaces
+// updated does: an owner's device on such a release moves nothing itself (client/core-ts src/views/lock.ts `heldBack`,
+// its own build), so the workspace's chain is not handed over and these rounds run the chain of before a move, which workspaces
 // held back so still use. What a moved workspace does is e2e/locks-moved.ts's. (Saying build 0.1.0, a build from the
 // sources taken as able, the workspace moved at A's first ask from #6102 on, and every round here ran moved: the side
 // run of 2026-11-14 on a3ca1b52.) A web page is not waited for and says none.

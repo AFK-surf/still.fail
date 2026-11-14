@@ -280,11 +280,14 @@ another; the accounts' list's merge across stations and its refills.
   the chain names said in its GET /lock `serves` that it serves `bodies`, `logs`, `builds`, `carried` and `bind` (it reads a
   moved chain as it moved, `stationsWaited`, `keepServes`; never the cloud's word of its version), shown on the owner's
   device (`upgrade`, `upgradeOf`, `waitedLines`: one line a station, the refusal `lock_stations_not_ready` the same); and
-  every app device the chain lets in was last seen by one of its stations on a build from `MOVED_FROM_BUILD`
-  (station/src/api/moved-from.ts; one under `COUNTED_FROM` taken as able, none said not), or not for `IDLE_SECS`
-  (`devicesWaited`, `lockBuilds`), and the device that moves it says such a build itself (`ownBuild`, as it says it to
-  stations; the lead, 2026-11-14: builds between this code's and `MOVED_FROM_BUILD` must move nothing, a station of the
-  moved workspace telling them to update at once), said to nobody (`heldBack`; `handOverState`'s `held`; `lock.handOver` answers
+  the device that moves it says a build from `MOVED_FROM_BUILD` itself (station/src/api/moved-from.ts; `ownBuild`, as it
+  says it to stations; the lead, 2026-11-14: builds between this code's and `MOVED_FROM_BUILD` must move nothing, a
+  station of the moved workspace telling them to update at once), said to nobody (`heldBack`; `handOverState`'s `held`).
+  No other app device is waited for (the user, 2026-11-14: a phone of his own he no longer used held his workspace
+  back, seven days by the rule as it was and nothing on any page saying why: 「用户要是有个设备离线不用了要等 7 天？」):
+  one on a build under `MOVED_FROM_BUILD` is told to update by a station of the workspace as it next asks
+  (station/src/mesh/serve.ts `movedTooOld`: 请更新, 请刷新页面 on the web) and is in again once it has, nothing approved
+  anew. Do not bring a wait for people's devices back. `lock.handOver` answers
   `lock_not_ready` in the upgrade's title). For now, each lifted by its own change: a chain with a web page whose person
   has no app on it (`webOnlyIn`: carried until its `exp`, then nobody can approve it again there, and the page telling
   them to install an app is not drawn yet), and more than `HAND_OVER_MEMBERS_MOST` members bound to a log (`LOGS_MOST` a
