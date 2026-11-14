@@ -1761,7 +1761,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             // as were every slot kept)
             let at = laid_at.get(key.untracked())
             if at is Some(j) && (j < a || j > b) && v.alive() {
-              was_in.park(v) |> ignore
+              was_in.park(v, rest=false) |> ignore
               those[i] = (v, key, wake, None)
             }
           }
@@ -3084,8 +3084,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                     // (a block given another key, woken: what that makes or lets go in it so at once, as were the
                     // block made anew, answering.mbt)
                     answering(within=v, fn() {
-                      key.set(k)
                       wake()
+                      key.set(k)
                     })
                     mine.val = Some((v, key))
                   }
@@ -3093,7 +3093,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                   // into this one, made this one's)
                   Some((v, key, wake, was_in)) if v.alive() => {
                     match was_in {
-                      Some(w) => w.park(v) |> ignore
+                      Some(w) => w.park(v, rest=false) |> ignore
                       None => ()
                     }
                     slot.take_in(v)
@@ -3101,8 +3101,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                     // (a block given another key, woken: what that makes or lets go in it so at once, as were the
                     // block made anew, answering.mbt)
                     answering(within=v, fn() {
-                      key.set(k)
                       wake()
+                      key.set(k)
                     })
                     mine.val = Some((v, key))
                   }
