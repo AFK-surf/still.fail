@@ -1,5 +1,6 @@
 #!/bin/bash
-# UI tests against the fake host (no window), the motion package, the components (kit), the Markdown parser;
+# UI tests against the fake host (no window), the motion package, the components (kit; headless: the headless ones),
+# the Markdown parser;
 # mbui/text's (UAX #29, #14 and #9 against Unicode's own test files); then mbui's text against the
 # platform's own drawing on macOS and in a browser (scripts/textdiff.sh mac web: fails on a string that differs and
 # did not before; TEXTDIFF=0 skips it). UPDATE=1 refreshes snapshots.
@@ -15,7 +16,7 @@ if [ -z "${GITHUB_ACTIONS:-}" ] && [ "${MBUI_WHOLE_SUITE:-}" != 1 ]; then
 fi
 cd "$D/.."
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
-moon_tests -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/figure -p mbui/dmath -p mbui/zip ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
+moon_tests -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/headless -p mbui/figure -p mbui/dmath -p mbui/zip ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
 code=${PIPESTATUS[0]}
 moon_tests -p mbui/text 2>&1 | grep -v "$F" | tail -8
 [ ${PIPESTATUS[0]} = 0 ] || code=1

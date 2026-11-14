@@ -11,7 +11,7 @@ set -o pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
-pkgs=${PKGS:-mbui/ui mbui/motion mbui/kit mbui/kitdemo/gallery mbui/effectdemo}
+pkgs=${PKGS:-mbui/ui mbui/motion mbui/kit mbui/headless mbui/kitdemo/gallery mbui/effectdemo}
 code=0
 for fps in ${FPS:-60 120 24 7}; do
   if [ -n "${GITHUB_ACTIONS:-}" ]; then

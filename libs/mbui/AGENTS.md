@@ -9,7 +9,9 @@ yet and you can add one, add it.
 - `src/view`: the window's tree, made once (below). `src/ui`: the old immediate-mode view (`Ctx`, built again each
   frame) and what both still share: the window's runtime, styles (`style.mbt`, `@ui.css`), the theme, text fields,
   the Tester and its fake host. `src/signals`: alien-signals, ported line for line. `src/motion`: motion as data.
-  `src/kit`: the components (Radix's set, drawn by mbui). `src/flex` (Yoga's layout), `src/text` (shaping,
+  `src/headless`: the headless components, on the window's tree, their looks their callers' (Components, below).
+  `src/kit`: the components before them (Radix's set, drawn by mbui: behaviour and a default look together, on the
+  old view but for its toasts). `src/flex` (Yoga's layout), `src/text` (shaping,
   segmentation), `src/shape`, `src/paint`, `src/skia`, `src/svg`, `src/pixels`: drawing. `src/hostapi` and
   `src/host`: what is asked of a platform and each platform's answer. `src/effect`: Effect-TS's model on the frames'
   clock.
@@ -183,6 +185,21 @@ yet and you can add one, add it.
   the one in use says so once, on the node that holds it (`View::in_use`, `src/view/in_use.mbt`), never widget by
   widget. A test whose key moves the focus along (Tab, Shift+Tab, an arrow) onto what is wholly outside the window
   stops, judged where its ways end (`src/ui/tester_focus_off.mbt`; the coordinator of the migration, 2026-11-12).
+
+## Components: headless, their looks apart
+
+> 感觉 mbui 应该做一套无头组件库 … 再在它之上做 ui 组件库 … 至少虚拟列表不应该每个组件库自己搞
+
+- Three layers (the user, 2026-11-14): the framework (`src/view`: what any node has, done by no component library
+  again), headless components (`src/headless`: what one kind of control is to the hand, the keyboard and a screen
+  reader, drawing and laying out nothing, knowing no theme), and libraries with a look (an app's, as still.fail's; or
+  a default one), which write looks over them and nothing else. The button is the sample the next ones follow (the
+  user, 2026-11-14: 「在这里先做按钮当样板」). `src/headless/headless.mbt`'s head is the rule: whose a thing is, who
+  keeps state, what a look may say of a component's node, and what the sample leaves undecided (a control of several
+  parts). Read it before writing a component or a look; a change to the rule is made there.
+- A new component, and one moved off `Ctx`, goes in `src/headless`, its look given by its caller: never in `src/kit`,
+  whose components stay as they are and go as their callers do (its toasts, `src/kit/toast_node.mbt`, are of the tree
+  and take a look, but set some of it themselves: not yet of this kind).
 
 ## Time in a test is declared, never waited for
 

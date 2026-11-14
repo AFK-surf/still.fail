@@ -266,6 +266,7 @@
     "click-read": {},
     "key-read": {},
     "part-place": {},
+    "button-by-hand": {},
     "layout-told": {},
     "abort-unsaid": {},
     "empty-on-done": {},
@@ -339,6 +340,7 @@
     "click-read": {},
     "key-read": {},
     "part-place": {},
+    "button-by-hand": {},
     "layout-told": {},
     "abort-unsaid": {
       "src/halt/halt.mbt": 1
