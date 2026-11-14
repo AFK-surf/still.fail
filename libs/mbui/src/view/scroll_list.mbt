@@ -64,6 +64,9 @@ priv struct Notch {
   total : Double
   v0 : Double
   t0 : Double
+  /// its ease's time constant (wheel_ease_ms; less where a glide went on toward an end come nearer than its speed eases
+  /// to: Scroll::glide_on)
+  tau : Double
   /// when (ms after `t0`) it is drawn where it comes to, on the pixels it is drawn on (Scroll::ease_drawn_end): all of
   /// it come from then on
   end : Double
@@ -111,8 +114,15 @@ fn Scroll::drawn_by(self : Scroll, tree : Tree, at : Int) -> (Double) -> Double 
 /// out as it sets out from its own curve (what is left (total + k t) e^(-t / τ) changes sign once at most, then only
 /// falls: the last moment it is drawn elsewhere found back from ease_end, then to the µs). On no pixels (a tree none
 /// said), ease_end.
-fn Scroll::ease_drawn_end(self : Scroll, x0 : Double, total : Double, v0 : Double) -> Double {
-  let bound = ease_end(total, v0)
+fn Scroll::ease_drawn_end(
+  self : Scroll,
+  x0 : Double,
+  total : Double,
+  v0 : Double,
+  tau? : Double = wheel_ease_ms,
+  most? : Double,
+) -> Double {
+  let bound = ease_end(total, v0, tau~)
   guard self.host is Some(v) && v.alive() && bound > 0.0 else { return bound }
   let tree = v.tree
   // (what it holds, drawn off as it scrolls: Scroll::held_dy's node)
@@ -120,10 +130,10 @@ fn Scroll::ease_drawn_end(self : Scroll, x0 : Double, total : Double, v0 : Doubl
   guard at >= 0 else { return bound }
   let n = tree.nodes[at]
   guard (tree.rows_grid > 0.0 && n.list_rows) || tree.pixel_grid > 0.0 else { return bound }
-  let most = self.most()
+  let most = most.unwrap_or(self.most())
   let past = self.past_moved(tree.logic_said())
   let by = self.drawn_by(tree, at)
-  let drawn = fn(t : Double) { by(-dclamp(x0 + ease_come(total, v0, t), 0.0, most) + past) }
+  let drawn = fn(t : Double) { by(-dclamp(x0 + ease_come(total, v0, t, tau~), 0.0, most) + past) }
   let rest = drawn(bound)
   let mut t = bound.floor()
   while t > 0.0 && drawn(t) == rest {
@@ -572,7 +582,11 @@ fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
 fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   let (x0, total, v0) = match self.notch.untracked() {
     Some(n) => {
-      let (came, speed) = if t - n.t0 >= n.end { (n.total, 0.0) } else { ease_state(n.total, n.v0, t - n.t0) }
+      let (came, speed) = if t - n.t0 >= n.end {
+        (n.total, 0.0)
+      } else {
+        ease_state(n.total, n.v0, t - n.t0, tau=n.tau)
+      }
       (dclamp(n.x0 + came, 0.0, self.most()), n.total - came + d, speed)
     }
     None => {
@@ -586,7 +600,7 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   (self.settle_off)()
   self.settle_off = fn() {  }
   self.x.set(x0)
-  self.notch.set(Some({ x0, total, v0, t0: t, end: self.ease_drawn_end(x0, total, v0) }))
+  self.notch.set(Some({ x0, total, v0, t0: t, tau: wheel_ease_ms, end: self.ease_drawn_end(x0, total, v0) }))
   self.scrolled_at(t)
   self.list_settles(v, t)
   true
@@ -602,8 +616,33 @@ fn Scroll::glide_to(self : Scroll, v : View, t : Double, to : Double) -> Unit {
   }
   (self.settle_off)()
   self.settle_off = fn() {  }
-  self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, end: self.ease_drawn_end(x, to - x, 0.0) }))
+  self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, tau: wheel_ease_ms, end: self.ease_drawn_end(x, to - x, 0.0, most=dmax(self.most(), to)) }))
   self.scrolled_at(t)
+  self.list_settles(v, t)
+}
+
+///|
+/// The glide it is on (Scroll::glide_to's, gliding on from it here) going on at `t` toward `to` instead (a page's list
+/// gliding to its foot, its foot moved meanwhile: View::scrolls_window), `most` as far as it can go now: from where it
+/// is then and as fast as it moves then, so nothing of it steps or stops there; eased in as quickly as it must to come
+/// to rest at `to` and never past it (its time constant cut to what is left over its speed where its own would carry
+/// it further: what is left then only falls), else as a glide is. Come to `to` or past it already (its end moved up
+/// over where it is): at rest there. Not on one, nothing.
+fn Scroll::glide_on(self : Scroll, v : View, t : Double, to : Double, most : Double) -> Unit {
+  guard self.notch.untracked() is Some(n) else { return }
+  let (came, speed) = ease_state(n.total, n.v0, t - n.t0, tau=n.tau)
+  let x = n.x0 + came
+  let total = to - x
+  (self.settle_off)()
+  self.settle_off = fn() {  }
+  if total <= 0.0 {
+    self.notch.set(None)
+    self.x.set(to)
+    self.list_settles(v, t)
+    return
+  }
+  let tau = if speed > 0.0 && speed * wheel_ease_ms > total { total / speed } else { wheel_ease_ms }
+  self.notch.set(Some({ x0: x, total, v0: speed, t0: t, tau, end: self.ease_drawn_end(x, total, speed, tau~, most~) }))
   self.list_settles(v, t)
 }
 

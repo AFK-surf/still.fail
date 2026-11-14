@@ -19,6 +19,7 @@ fn init {
     // over and under it, where the old list handed over those in view: its 小屏 finger's pick held at its end, 2026-11-13)
     ("src/sfapp/chat_page_nodes_wbtest.mbt", 38548),
     ("src/sfapp/chat_pictures_held_wbtest.mbt", 89156),
+    ("src/sfapp/chat_send_from_above_wbtest.mbt", 89156),
     // (the chat's page made as nodes, its words and a quoted picture sent: the pictures of the rows round what shows,
     // as chat_page_nodes_wbtest's, and the quote's, 2026-11-14)
     ("src/sfapp/chat_sent_seen_wbtest.mbt", 115644),

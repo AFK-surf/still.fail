@@ -153,6 +153,13 @@ yet and you can add one, add it.
   standing limit, which while it binds holds the list by that top and has it off its foot to every rule of its foot,
   however near the foot, and stands till the hand takes the list, an ask, another named, or its key goes
   (`src/view/list_follow_from_test.mbt`; the coordinator of the migration, 2026-11-14).
+- What a page asks of its list (`ListPlace`: a block brought to its top or its middle, back to its foot) is done only
+  in a pass that can do it as asked: one that cannot make the rows that show there, or that a way still going under
+  it would leave short, keeps the ask for the next pass. Asked back to its foot, the list ends at its foot as the foot
+  is when it gets there: where the end moves while it glides (a key measured or come, the pinned foot grown or shrunk),
+  it goes on to where the end is now, from where it is and as fast, never past it; there, it follows its foot where the
+  list does. The hand or another ask ends the glide (`src/view/list_to_end_lands_test.mbt`; the coordinator of the
+  migration, 2026-11-14).
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.

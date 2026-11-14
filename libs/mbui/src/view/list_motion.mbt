@@ -335,12 +335,13 @@ pub let wheel_ease_ms : Double = 42.0
 ///|
 /// How much of a wheel's ease of `total` has come `t` ms after it set out at `v0` (px a ms, the way `total` goes when
 /// positive): solved for the time (critically damped, wheel_ease_ms: what is left (total + (total / τ - v0) t)
-/// e^(-t / τ)), in whole 1/64 px, all of it from ease_end on. The same at any time whatever frames it went by.
-pub fn ease_come(total : Double, v0 : Double, t : Double) -> Double {
-  if t >= ease_end(total, v0) {
+/// e^(-t / τ)), in whole 1/64 px, all of it from ease_end on. The same at any time whatever frames it went by. `tau`: its
+/// time constant, where a way goes on toward an end come nearer than its speed would ease to (Scroll::glide_on).
+pub fn ease_come(total : Double, v0 : Double, t : Double, tau? : Double = wheel_ease_ms) -> Double {
+  if t >= ease_end(total, v0, tau~) {
     total
   } else {
-    let left = (total + (total / wheel_ease_ms - v0) * t) * @dmath.exp(-t / wheel_ease_ms)
+    let left = (total + (total / tau - v0) * t) * @dmath.exp(-t / tau)
     ((total - left) * 64.0).round() / 64.0
   }
 }
@@ -348,13 +349,13 @@ pub fn ease_come(total : Double, v0 : Double, t : Double) -> Double {
 ///|
 /// Where an ease (ease_come) is `t` ms after it set out, and how fast it moves then (px a ms): what a notch turned then
 /// takes over (ui's Ctx::ease_list; Scroll::list's notches).
-pub fn ease_state(total : Double, v0 : Double, t : Double) -> (Double, Double) {
+pub fn ease_state(total : Double, v0 : Double, t : Double, tau? : Double = wheel_ease_ms) -> (Double, Double) {
   let t = dmax(0.0, t)
-  if t >= ease_end(total, v0) {
+  if t >= ease_end(total, v0, tau~) {
     (total, 0.0)
   } else {
-    let k = total / wheel_ease_ms - v0
-    (ease_come(total, v0, t), (v0 + k * t / wheel_ease_ms) * @dmath.exp(-t / wheel_ease_ms))
+    let k = total / tau - v0
+    (ease_come(total, v0, t, tau~), (v0 + k * t / tau) * @dmath.exp(-t / tau))
   }
 }
 
@@ -362,13 +363,13 @@ pub fn ease_state(total : Double, v0 : Double, t : Double) -> (Double, Double) {
 /// When an ease of `total` set out at `v0` has all come (ms after it set out): what is left under 1/128 px from then on.
 /// What is left is at most (|total| + |k| t) e^(-t / τ) (k = total / τ - v0), and t e^(-t / 4τ) at most 4τ / e: so at
 /// most (|total| + 4 |k| τ / e) e^(-3t / 4τ), under 1/128 from the time solved here (a little after the least).
-pub fn ease_end(total : Double, v0 : Double) -> Double {
-  let k = (total / wheel_ease_ms - v0).abs()
-  let most = (total.abs() + 4.0 * k * wheel_ease_ms / @dmath.exp(1.0)) * 128.0
+pub fn ease_end(total : Double, v0 : Double, tau? : Double = wheel_ease_ms) -> Double {
+  let k = (total / tau - v0).abs()
+  let most = (total.abs() + 4.0 * k * tau / @dmath.exp(1.0)) * 128.0
   if most <= 1.0 {
     0.0
   } else {
-    wheel_ease_ms * 4.0 / 3.0 * @dmath.ln(most)
+    tau * 4.0 / 3.0 * @dmath.ln(most)
   }
 }
 

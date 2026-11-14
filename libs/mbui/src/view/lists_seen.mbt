@@ -35,6 +35,9 @@ pub(all) struct ListSeen {
   moving : Bool
   /// whether it is at its foot (Scroll::at_foot_now)
   at_foot : Bool
+  /// where the top of its pinned foot is drawn in the window (View::scrolls_window's `foot`: the foot of where it
+  /// shows less what the foot covers of it, Scroll::foot_covered_now; none, that foot)
+  foot_top : Double
 }
 
 ///|
@@ -97,6 +100,7 @@ pub fn Tree::lists_seen(self : Tree) -> Array[ListSeen] {
       past: s.past(self),
       moving: s.glides_till() is Some(_),
       at_foot: @signals.untracked(fn() { s.at_foot_now() }),
+      foot_top: ld.y + ld.h - @signals.untracked(fn() { s.foot_covered_now() }),
     })
   })
 }
