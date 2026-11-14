@@ -565,7 +565,12 @@ for t in $targets; do
           # 259 s of its 5 minutes three times, the first's 145-212, main e0220aca 43130127033, e046fa45 43132128804,
           # 20027072 43133699456, 2026-11-12)
           # (in three parts since 2026-11-12, the third with none of preview_tree's: its other runs go to the first two)
-          [ "${APP_GROUP:-}" = 4/4 ] && [ "${MBUI_TEST_FPS:-}" = 120 ] && [ "${APP_PART#*/}" = 3 ] && specs="4,4,100,1 4,4,180,1 4,4,0,1"
+          # (but the third has chat_page_nodes' tests 0-14 since, 145-161 s, and the first chat_page_nodes' 14-28 beside
+          # preview_tree's 0-54, 183-218 s, the second preview_tree's 54-121, 121-177: the third's pages 260-272 s of a job
+          # 275-283 of its 5 minutes on main c52e9bd2 43530192044, b4992a65 43546414824, cb22a840 43548862078, the
+          # first's 172-198, the second's 136-199. Reckoned as they run: by the table the third's pages 893 s to 817, the
+          # second's 714 to 817, the first's 743 to 716)
+          [ "${APP_GROUP:-}" = 4/4 ] && [ "${MBUI_TEST_FPS:-}" = 120 ] && [ "${APP_PART#*/}" = 3 ] && specs="4,4,200,1 4,4,150,1 4,4,150,1"
           while read -r g f; do [ "$g" = "${APP_PART%/*}" ] && kept+=("$f"); done < <(page_deal "$specs" "${words[@]:3}")
           [ ${#kept[@]} = 0 ] || mine+=("${words[0]} ${words[1]} ${words[2]} ${kept[*]}")
         else
