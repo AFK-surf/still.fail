@@ -705,64 +705,71 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
       )
     }
     v.box(fn(body) {
-      // its own: removed, added right in the panel (one not wanted is taken away, not turned off)
-      body.show(fn() { manager() || relays().length() > 0 }, fn(sec) {
-        @sf.style_node(sec, fn() { ws_way_own_sec })
-        ws_way_label_node(sec, fn() { @sf.t("android-settings.ways.own") })
-        sec.each(relays, fn(url) { url }, fn(row, url) {
-          row.box(fn(b) {
-            ws_way_row_node(b, fn() { host(url.get()) }, fn() { added_by(url.get()) }, fn(e) {
-              e.show(manager, fn(k) {
-                @sf.row_end_button_node(
-                  k,
-                  fn() { @sf.t("android-settings.members.remove") },
-                  fn() {
-                    let url = @signals.untracked(fn() { url.get() })
-                    let all = @signals.untracked(relays)
-                    @settings.act(
-                      core,
-                      @sf.t("android-settings.relays.removeWhat"),
-                      "workspace.setRelays",
-                      obj([("workspace", str(@signals.untracked(ws))), ("relays", Json::array(all.filter(fn(r) { r != url }).map(str))), ("account", str(here.sub))]),
-                      done=@sf.t("android-settings.relays.removed"),
-                    )
-                  },
-                  disabled=setting,
-                )
-                |> ignore
-              })
-            })
+      @sf.style_node(body, fn() {
+        if @sf.look_node(body) is Wide || (manager() && relays().length() < 4) {
+          ws_way_body_wide
+        } else {
+          ws_way_body_narrow
+        }
+      })
+      // add a custom relay at the top of the panel
+      body.show(fn() { manager() && relays().length() < 4 }, fn(a) {
+        a.box(fn(row) {
+          @sf.style_node(row, fn() {
+            let at = if @sf.look_node(row) is Wide { ws_way_add_row_wide } else { ws_way_add_row_narrow }
+            @sf.panel_words_in_node(row).then(at)
           })
-          |> ignore
-        })
-        sec.show(fn() { manager() && relays().length() < 4 }, fn(a) {
-          a.box(fn(row) {
-            @sf.style_node(row, fn() { @sf.panel_words_in_node(row).then(ws_way_add_row) })
-            row.box(fn(f) {
-              @sf.style_node(f, fn() { ws_way_add_input }, in_row=true)
-              @sf.input_node(
-                f,
-                new_relay,
-                placeholder="https://relay.example.com",
-                label=@sf.t("android-settings.relays.add"),
-                disabled=setting,
-                submitted=fn(_) { add_relay() },
-              )
-              |> ignore
-            })
-            |> ignore
-            @sf.button_node(
-              row,
-              fn() { @sf.t("android-settings.relays.addAction") },
-              add_relay,
-              tone=Primary,
-              busy=setting,
-              disabled=fn() { !can_add() },
+          row.box(fn(f) {
+            @sf.style_node(f, fn() { ws_way_add_input }, in_row=true)
+            @sf.input_node(
+              f,
+              new_relay,
+              placeholder="https://relay.example.com",
+              label=@sf.t("android-settings.relays.add"),
+              disabled=setting,
+              submitted=fn(_) { add_relay() },
             )
             |> ignore
           })
           |> ignore
+          @sf.button_node(
+            row,
+            fn() { @sf.t("android-settings.relays.addAction") },
+            add_relay,
+            tone=Primary,
+            busy=setting,
+            disabled=fn() { !can_add() },
+          )
+          |> ignore
         })
+        |> ignore
+      })
+      // its own relays: each removed right in the panel (one not wanted is taken away, not turned off)
+      body.each(relays, fn(url) { url }, fn(row, url) {
+        row.box(fn(b) {
+          ws_way_row_node(b, fn() { host(url.get()) }, fn() { added_by(url.get()) }, fn(e) {
+            e.show(manager, fn(k) {
+              @sf.row_end_button_node(
+                k,
+                fn() { @sf.t("android-settings.members.remove") },
+                fn() {
+                  let url = @signals.untracked(fn() { url.get() })
+                  let all = @signals.untracked(relays)
+                  @settings.act(
+                    core,
+                    @sf.t("android-settings.relays.removeWhat"),
+                    "workspace.setRelays",
+                    obj([("workspace", str(@signals.untracked(ws))), ("relays", Json::array(all.filter(fn(r) { r != url }).map(str))), ("account", str(here.sub))]),
+                    done=@sf.t("android-settings.relays.removed"),
+                  )
+                },
+                disabled=setting,
+              )
+              |> ignore
+            })
+          })
+        })
+        |> ignore
       })
       // still.fail's relays: one switch for all of them, what it does under it
       let title = fn() { @sf.t("android-settings.ways.ours") }
@@ -818,7 +825,7 @@ fn ws_way_row_node(
 }
 
 ///|
-/// A group's label in the ways' panel in `parent` (its own relays): quiet, on the words' line, `words` as they are said
+/// A group's label in a panel in `parent` (station_retire_panel's): quiet, on the words' line, `words` as they are said
 /// now.
 fn ws_way_label_node(parent : @view.View, words : () -> String) -> Unit {
   parent.box(fn(l) {
@@ -827,6 +834,14 @@ fn ws_way_label_node(parent : @view.View, words : () -> String) -> Unit {
   })
   |> ignore
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_body_wide : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_body_narrow : @ui.Style = @ui.css("w=Full pt=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -846,15 +861,15 @@ let ws_way_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_own_sec : @ui.Style = @ui.css("pb=S2")
+let ws_way_label_at : @ui.Style = @ui.css("pt=S4 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_label_at : @ui.Style = @ui.css("pt=S2 pb=S1")
+let ws_way_add_row_wide : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_add_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter py=S1_5")
+let ws_way_add_row_narrow : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter pt=S3_5 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

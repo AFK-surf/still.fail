@@ -276,7 +276,7 @@ test "the ways' panel, on every screen: a manager adds a relay inline, turns sti
     let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, ways=own) })
     assert_true(t.find("使用官方中继") is Some(_), msg=at)
     assert_true(t.find("关闭后仅使用自定义中继") is Some(_), msg=at)
-    assert_true(t.find("自定义中继") is Some(_), msg=at)
+    assert_true(t.query(TextField, label="添加中继") is Some(_), msg=at)
     assert_true(t.find("直连") is None, msg=at)
     assert_true(t.find("relay.example.com/") is Some(_), msg=at)
     assert_true(t.find("上海中继 添加") is Some(_), msg=at)
@@ -428,13 +428,15 @@ test "where the two panels' words stand on every screen: each under the one befo
       assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{Repr(order[0])} beside \{Repr(order[k])}")
     }
     @sf.presenters_reset()
-    // the ways': custom relays first, then still.fail's relays, all on one left line
+    // the ways': the input at the top, then custom relays, then still.fail's relays, all on one left line
     let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, ways=own) })
-    let order = ["自定义中继", "relay.example.com/", "上海中继 添加", "使用官方中继", "关闭后仅使用自定义中继"].map(fn(
+    let (_, fy, _, fh) = t.get(TextField, label="添加中继").rect
+    let order = ["relay.example.com/", "上海中继 添加", "使用官方中继", "关闭后仅使用自定义中继"].map(fn(
       w,
     ) {
       ws_word(t, w)
     })
+    assert_true(order[0].1 >= fy + fh - 0.5, msg="\{at}: input \{fy}+\{fh} over \{Repr(order[0])}")
     for k in 1..<order.length() {
       assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{Repr(order[k - 1])} over \{Repr(order[k])}")
       assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{Repr(order[0])} beside \{Repr(order[k])}")
