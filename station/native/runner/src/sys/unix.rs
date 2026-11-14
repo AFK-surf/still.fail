@@ -244,6 +244,63 @@ pub fn spawn(program: &str, args: &[String], cwd: Option<&Path>) -> io::Result<(
     Ok((child, Agent { pid }))
 }
 
+/// Starts a terminal's program on a pseudo-terminal of `cols` × `rows`, the leader of a session of its own (which is
+/// its process group, as `spawn`'s is) with the terminal as its controlling one: its stdin, stdout and stderr all the
+/// terminal. The terminal's other side (what it writes, and where its input goes) is the File returned.
+pub fn spawn_pty(program: &str, args: &[String], cwd: Option<&Path>, cols: u16, rows: u16) -> io::Result<(Child, Agent, File)> {
+    use std::os::fd::{FromRawFd, OwnedFd};
+    let (mut master, mut slave) = (-1, -1);
+    let mut size = winsize(cols, rows);
+    // SAFETY: openpty writes the two descriptors; the name and the termios are left as the system's. (macOS says its
+    // termios and winsize are `*mut`, Linux `*const`: a `*mut` is taken as either.)
+    if unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null_mut(), &raw mut size) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: both were just opened and are ours alone.
+    let (master, slave) = unsafe { (OwnedFd::from_raw_fd(master), OwnedFd::from_raw_fd(slave)) };
+    // The program must not hold the runner's side: its end would never be seen.
+    // SAFETY: fcntl on a descriptor of ours.
+    unsafe { libc::fcntl(std::os::fd::AsRawFd::as_raw_fd(&master), libc::F_SETFD, libc::FD_CLOEXEC) };
+    let mut command = Command::new(program);
+    command.args(args).stdin(slave.try_clone()?).stdout(slave.try_clone()?).stderr(slave);
+    // What it reads of the terminal it is in; the rest of the environment is the runner's (the station's).
+    command.env("TERM", "xterm-256color").env("COLORTERM", "truecolor");
+    if let Some(cwd) = cwd {
+        command.current_dir(cwd);
+    }
+    // SAFETY: between fork and exec only async-signal-safe calls: setsid, ioctl.
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if libc::ioctl(0, libc::TIOCSCTTY as _, 0) < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    // (the command, and the slave's copies in it, go once it has started: only the program holds that side then)
+    let child = command.spawn()?;
+    let pid = child.id() as i32;
+    Ok((child, Agent { pid }, File::from(master)))
+}
+
+fn winsize(cols: u16, rows: u16) -> libc::winsize {
+    libc::winsize { ws_row: rows.max(1), ws_col: cols.max(1), ws_xpixel: 0, ws_ypixel: 0 }
+}
+
+/// Tells the terminal's program its terminal is now `cols` × `rows` (it is sent SIGWINCH).
+pub fn resize_pty(master: &File, cols: u16, rows: u16) -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+    let size = winsize(cols, rows);
+    // SAFETY: TIOCSWINSZ on the terminal's side we hold, with a winsize that lives across the call.
+    if unsafe { libc::ioctl(master.as_raw_fd(), libc::TIOCSWINSZ as _, &size) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
 impl Agent {
     pub fn pid(&self) -> i32 {
         self.pid
