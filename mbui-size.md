@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [35915222d](https://github.com/AFK-surf/monoid/commit/35915222d2fcb3a11508fd4ae5f86253d9f1c970) mbui app tests: an options card's answer comes as  | 2.01 | 2.76 | 11.84 | 31.68 | 43.76 | 28.3 | 55.43 | 96.8 | 110.94 |
 | [2469b9c44](https://github.com/AFK-surf/monoid/commit/2469b9c445a2873522332356370cb25cc2152129) native: libghostty-vt prebuilt for every target (t | 2.01 | 2.76 | 11.84 | 31.68 | 43.76 | 28.3 | 55.43 | 96.8 | 110.94 |
 | [2fdea19c0](https://github.com/AFK-surf/monoid/commit/2fdea19c0b22a19aa4e1464fa941570e7dc57458) mesh: a request on a connection to a station's end | 2.01 | 2.75 | 11.83 | 31.68 | 43.75 | 28.3 | 55.43 | 96.86 | 117.74 |
 | [590bf6907](https://github.com/AFK-surf/monoid/commit/590bf69073a62fa834b7f772a052e4105fc0f4ee) station: a person's taps on a Farview tab land whe | 2.01 | 2.75 | 11.83 | 31.68 | 43.75 | 28.3 | 55.43 | 96.86 | 117.74 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [1fa2fedb3](https://github.com/AFK-surf/monoid/commit/1fa2fedb3d3957539191d63faa17128cb223d84b) app tests: read stays looks at the frames a device | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
 | [55f0408a5](https://github.com/AFK-surf/monoid/commit/55f0408a520a311251ae8938e17726627a8e5091) mbui: route pointer-only hover through tree hit-te | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
 | [d86610867](https://github.com/AFK-surf/monoid/commit/d86610867679cb0172c5b5e535abcac3822fbb33) app: an old message's picture there at once, and a | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
-| [24aeb0158](https://github.com/AFK-surf/monoid/commit/24aeb01587e8c5c5f924fafb903c53a7e7b24cc9) mbui: move remaining 22 plain buttons in src/sf ov | 2 | 2.73 | 11.65 | 31.29 | 41.89 | 27.9 | 53.58 | 96.7 | 101.12 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [35915222d](https://github.com/AFK-surf/monoid/commit/35915222d2fcb3a11508fd4ae5f86253d9f1c970) mbui app tests: an options card's answer comes as  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.35 |
 | [2469b9c44](https://github.com/AFK-surf/monoid/commit/2469b9c445a2873522332356370cb25cc2152129) native: libghostty-vt prebuilt for every target (t | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.21 |
 | [2fdea19c0](https://github.com/AFK-surf/monoid/commit/2fdea19c0b22a19aa4e1464fa941570e7dc57458) mesh: a request on a connection to a station's end | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.21 |
 | [590bf6907](https://github.com/AFK-surf/monoid/commit/590bf69073a62fa834b7f772a052e4105fc0f4ee) station: a person's taps on a Farview tab land whe | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.25 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [1fa2fedb3](https://github.com/AFK-surf/monoid/commit/1fa2fedb3d3957539191d63faa17128cb223d84b) app tests: read stays looks at the frames a device | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
 | [55f0408a5](https://github.com/AFK-surf/monoid/commit/55f0408a520a311251ae8938e17726627a8e5091) mbui: route pointer-only hover through tree hit-te | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.26 |
 | [d86610867](https://github.com/AFK-surf/monoid/commit/d86610867679cb0172c5b5e535abcac3822fbb33) app: an old message's picture there at once, and a | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
-| [24aeb0158](https://github.com/AFK-surf/monoid/commit/24aeb01587e8c5c5f924fafb903c53a7e7b24cc9) mbui: move remaining 22 plain buttons in src/sf ov | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
