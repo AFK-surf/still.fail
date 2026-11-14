@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [46264c4bd](https://github.com/AFK-surf/monoid/commit/46264c4bd112fcc4e9205ec2d379e58ede045047) Fix chat attachment download names on Windows (#61 | 1.99 | 2.72 | 11.59 | 31.21 | 41.66 | 27.83 | 53.38 | 96.8 | 108.04 |
 | [aa42b5526](https://github.com/AFK-surf/monoid/commit/aa42b552681f71171a0850116f1ff34b5c5349c0) app: one's own message's states under it leave on  | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.78 | 109.45 |
 | [36f402305](https://github.com/AFK-surf/monoid/commit/36f402305c526312a39418485154718de78cf114) Letters go by their chat's name in an agent's prom | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.5 | 109.04 |
 | [fd28048c8](https://github.com/AFK-surf/monoid/commit/fd28048c844aaa0989ab874a8508cfd90ac76f9f) mbui: the first headless component, a button, its  | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.57 | 114.37 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f653dbf14](https://github.com/AFK-surf/monoid/commit/f653dbf1469116310a30b12715bc6e4d64ba1ba9) test: the lock's test rigs hand a device nothing a | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.65 | 120.4 |
 | [ed9727a1e](https://github.com/AFK-surf/monoid/commit/ed9727a1ec8e87888480d7b2a01ac2bdc6c8cf14) mbui: account rows say name, plan and allowance; m | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.95 | 108.32 |
 | [e5c9cd7ec](https://github.com/AFK-surf/monoid/commit/e5c9cd7ec832482cc1a59cdeecccc05d55117308) app: a chat's picture opened and read whole shows  | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.98 | 108.71 |
-| [a465f1084](https://github.com/AFK-surf/monoid/commit/a465f1084f03e274152f6fc4b2bdef3301ac3de0) natives: a download with nothing coming for 15 s g | 1.97 | 2.69 | 11.42 | 31.01 | 40.97 | 27.63 | 52.78 | 96.04 | 115.5 |
