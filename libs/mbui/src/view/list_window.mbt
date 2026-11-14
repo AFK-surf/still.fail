@@ -1703,16 +1703,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
               // (back to its foot again while it glides there: on from where it is, as fast as it goes)
               (ToEnd, Some(g), Some(n)) if physical_equal(g, n) =>
                 s.glide_on(self, self.cause_at(), dclamp(to, 0.0, most), most)
-              _ =>
-                match ask {
-                  ToEnd => {
-                    if p.end_way is Some(_) {
-                      self.tree.said_glide_at = self.cause_at()
-                    }
-                    s.glide_to(self, self.cause_at(), dclamp(to, 0.0, most), way?=p.end_way)
-                  }
-                  _ => s.glide_to(self, self.cause_at(), dclamp(to, 0.0, most))
-                }
+              _ => s.glide_to(self, self.cause_at(), dclamp(to, 0.0, most))
             }
             end_glide.val = match ask {
               ToEnd => s.notch.untracked()
@@ -3605,8 +3596,6 @@ pub struct ListPlace[K] {
   priv mut from_met : Bool
   priv mut laid_again : () -> Unit
   priv mut glide : (ListAsk[K]) -> Bool
-  /// the way a glide back to its foot goes, where its page said one (ListPlace::to_end's `way`)
-  priv mut end_way : (Double, (Double) -> Double)?
   /// what is told what is in sight as that changes (ListPlace::on_sight), what was told last (ListPlace::sight_now),
   /// and what its list has in sight as it is counted now (none before it is made)
   priv sight_fns : Array[(Sight[K]) -> Unit]
@@ -3618,7 +3607,7 @@ pub struct ListPlace[K] {
 ///|
 /// One for a page's list, asking nothing yet.
 pub fn[K] ListPlace::new() -> ListPlace[K] {
-  { asked: None, from: None, from_met: false, laid_again: fn() {  }, glide: fn(_) { false }, end_way: None, sight_fns: [], sight: None, sight_of: fn() { None }, sight_listened: fn() {  } }
+  { asked: None, from: None, from_met: false, laid_again: fn() {  }, glide: fn(_) { false }, sight_fns: [], sight: None, sight_of: fn() { None }, sight_listened: fn() {  } }
 }
 
 ///|
@@ -3656,17 +3645,10 @@ pub fn[K] ListPlace::centre(self : ListPlace[K], key : K) -> Unit {
 
 ///|
 /// Back to the list's foot (Ctx::list_to_end's): gliding there where `glide` and it is near (else at once), followed
-/// there from then where its list follows its foot. `way`: its glide that long on that curve, not an ease (words sent
-/// read from above: the list's one motion their flight's rise, as at its foot, scrolls_window's `comes_way`; the
-/// coordinator of the migration, 2026-11-15).
-pub fn[K] ListPlace::to_end(
-  self : ListPlace[K],
-  glide? : Bool = true,
-  way? : (Double, (Double) -> Double),
-) -> Unit {
+/// there from then where its list follows its foot.
+pub fn[K] ListPlace::to_end(self : ListPlace[K], glide? : Bool = true) -> Unit {
   self.from = None
   self.asked = None
-  self.end_way = way
   if glide && (self.glide)(ToEnd) {
     return
   }

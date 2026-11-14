@@ -331,7 +331,7 @@ fn Scroll::where_at(self : Scroll, t : Double) -> Double {
     None =>
       match self.notch.get() {
         Some(n) =>
-          dclamp(n.x0 + notch_state(n, t - n.t0).0, 0.0, most)
+          dclamp(n.x0 + (if t - n.t0 >= n.end { n.total } else { ease_come(n.total, n.v0, t - n.t0, tau=n.tau) }), 0.0, most)
         None => dclamp(self.x.get(), 0.0, most)
       }
   }
