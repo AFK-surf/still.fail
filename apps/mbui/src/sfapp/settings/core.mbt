@@ -61,6 +61,10 @@ pub(all) struct Core {
   /// a web page to open (a sign-in's, Slack's): handed to the system's browser (@ui.open_url), said so where nothing
   /// took it
   open_link : (String) -> Unit
+  /// a sign-in to a service as the person, its token kept in their vault (添加 › Slack 账号, an agent's card asking for
+  /// one): by workspace, vault ("plain": the plain library), provider and the agent's request it answers ("" none);
+  /// `done` the item's name, "" where the web's own page finishes it, or why not ("cancelled": given up)
+  vault_oauth : (String, String, String, String, (Result[String, String]) -> Unit) -> Unit
   /// a page opened in the station's own browser (a sign-in's): its tab's screen in the viewer, by station and screen,
   /// gone back from by itself once the tab is gone (closed as the sign-in ends)
   open_screen : (String, String) -> Unit

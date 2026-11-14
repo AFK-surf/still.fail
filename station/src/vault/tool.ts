@@ -35,7 +35,7 @@ export const SECRET_RUN_DESCRIPTION =
   "Run a shell command (sh -c, in your workspace) with a grant from secret_use. By proxy: the grant's placeholder (in the item's variable, or env, and in STILLFAIL_SECRET) is swapped for the value in the command's HTTPS requests to the granted hosts only. By ssh: SSH_AUTH_SOCK holds the key. By env: the value is in the variable. By file: the file is written out for this command alone, its path in the variable (and STILLFAIL_SECRET). A login's account is in STILLFAIL_USERNAME. The output comes back with the value hidden: you never get the value, and must not try to (no printing, encoding or sending it elsewhere). A grant for one use is spent by one run.";
 
 export const SECRET_SAVE_DESCRIPTION =
-  "Ask to keep a credential in the vault of the person you work for: a password, token, API key, SSH key or credential file you need again, or a sign-in to a website (kind browser). A card goes to them in your chat and they approve it in the still.fail app; agents use it later only through secret_use, each use approved. Prefer command over value. With neither, nor path, they type it in on the card, never shown to you: say in reason where they get it. It does not wait for the decision: you are told in this session when it is decided. Kept, this chat may use it at once (the request's id is its grant for secret_run). Skill stillfail-vault says when to offer it and how each kind is kept.";
+  "Ask to keep a credential in the vault of the person you work for: a password, token, API key, SSH key or credential file to reuse, or a sign-in to a website (kind browser). A card goes to them in your chat and they approve it in the still.fail app; agents use it later only through secret_use, each use approved. Prefer command over value. With neither, nor path, they type it in on the card (oauth: sign in to that service for their own), never shown to you: say in reason where they get it. It does not wait: you are told in this session when it is decided. Kept, this chat may use it at once (the request's id is its grant for secret_run). Skill stillfail-vault says when to offer it and how.";
 
 export const SECRET_DESCRIBE_DESCRIPTION =
   "Ask to rename one of secret_list's secrets or to change its about (what it is and how it is used, shown to agents with its name), when they do not say plainly what it is (a name made from a host, a step written nowhere). A card shows its owner the name and about as they are and as they would be; once they approve it in the still.fail app the item says so. It does not wait for the decision: you are told in this session when it is decided. Give at least one of name and about; never a secret in about.";
@@ -146,6 +146,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
           hosts: { type: "array", items: { type: "string" }, description: "proxy: the hosts it may go to (api.github.com). browser: the sites the sign-in is for, each with its subdomains (github.com)." },
           browser: { type: "string", enum: ["chat", "station"], description: "browser: where the sign-in is read from: this chat's browser (default), or the station's own (sign-ins made before each chat had its own)." },
           env: { type: "string", description: "The variable a command gets it in (GH_TOKEN; a file's path: KUBECONFIG)." },
+          oauth: { type: "string", enum: ["slack"] },
           station: { type: "string", description: "Another station of the workspace (its name or id) to run command on, where the password manager is signed in; default this one." },
           person: PERSON,
         },
@@ -173,6 +174,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
           ...(strings(args.hosts) ? { hosts: strings(args.hosts)! } : {}),
           ...(text(args, "station").trim() ? { station: text(args, "station").trim() } : {}),
           ...(args.browser === "chat" || args.browser === "station" ? { browser: args.browser } : {}),
+          ...opt("oauth"),
           ...personOf(args),
           cwd: home,
         });

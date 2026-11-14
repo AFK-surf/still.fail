@@ -549,26 +549,21 @@ pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
     match r {
       Ok(Object(ok)) =>
         match ok.get("url") {
-          Some(String(url)) => {
-            let token = engine.next_auth
-            engine.next_auth += 1
-            engine.auths[token] = fn(back) {
-              match back {
-                Ok(query) =>
-                  client.call(
-                    "auth.complete",
-                    params=Json::object({ "query": Json::string(query) }),
-                    on_done~,
-                  )
-                  |> ignore
-                Err(why) => on_done(Err(error_json("auth", why)))
-              }
-            }
-            if ffi_web_auth(token, url, auth_scheme()) == 0 {
-              engine.auths.remove(token)
+          Some(String(url)) =>
+            if !browser_session(url, fn(back) {
+                match back {
+                  Ok(query) =>
+                    client.call(
+                      "auth.complete",
+                      params=Json::object({ "query": Json::string(query) }),
+                      on_done~,
+                    )
+                    |> ignore
+                  Err(why) => on_done(Err(error_json("auth", why)))
+                }
+              }) {
               on_done(Err(error_json("auth", "no browser session in this build")))
             }
-          }
           _ => on_done(Err(error_json("auth", "auth.begin gave no url")))
         }
       Ok(_) => on_done(Err(error_json("auth", "auth.begin gave no url")))
@@ -576,6 +571,27 @@ pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
     }
   })
   |> ignore
+}
+
+///|
+/// Opens `url` in the system's browser session (`has_browser_session`), which comes back on the app's own scheme
+/// (`app_scheme`): `done` gets the query it came back with, or why not ("cancelled": the person closed it). False
+/// where this build has none (nothing opened, `done` never called).
+pub fn browser_session(url : String, done : (Result[String, String]) -> Unit) -> Bool {
+  let token = engine.next_auth
+  engine.next_auth += 1
+  engine.auths[token] = done
+  if ffi_web_auth(token, url, auth_scheme()) == 0 {
+    engine.auths.remove(token)
+    return false
+  }
+  true
+}
+
+///|
+/// The app's own scheme, which its browser session comes back on (`<scheme>://auth/…`).
+pub fn app_scheme() -> String {
+  auth_scheme()
 }
 
 ///|

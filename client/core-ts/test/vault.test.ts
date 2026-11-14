@@ -25,12 +25,14 @@ import { HostWire, type RequestHead, type StationWire } from "../src/station/wir
 import type { FakeHost } from "../src/testing.ts";
 import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts";
 import { bodyHash, wsTag } from "../src/lock-moved.ts";
-import { hex, utf8 } from "../src/util.ts";
+import { base64url, hex, utf8 } from "../src/util.ts";
 import {
   type BoxCert, type Item, type Request, type Vault, TAG, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext,
   openSeal, recoveryPair, rulesCrypto, saveContext, sealWith, sign, signedOk, toWords, verifies,
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
+import { OAUTH_WAIT_MS, SLACK, handedTo, stateOf as oauthState } from "../src/vault/oauth.ts";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
 import { BOX_KEY, BOX_PUB, UNLOCK_MS, levelVaults, tookOut, waitingAs, waitingChecks } from "../src/views/vault.ts";
 import { handOver, inForceOf, pendingHeld, read as readLock, roster } from "../src/views/lock.ts";
@@ -493,6 +495,59 @@ test("vault calls: set up, a vault of one's own, an item written, opened, unlock
   r.host.secureRefused = true;
   await r.ask("vault.lock", {});
   await fails(r.ask("vault.open", { item: again.id }), "vault_refused");
+  r.core.close();
+});
+
+test("a Slack account signed in to: the code changed for the person's token here, with the verifier alone, kept as a token given to slack.com", async () => {
+  const r = await rig();
+  r.putLock();
+  const setup = await r.ask("vault.setup", {});
+  const v = r.st.vaults.get(setup.made)!;
+  // Where it would come back to only as the app, a loopback or the web's own page.
+  await fails(r.ask("vault.oauthBegin", { vault: v.id, provider: "slack", back: "https" }), "invalid_params");
+  await fails(r.ask("vault.oauthBegin", { vault: v.id, provider: "nobody", back: "web" }), "vault_oauth_unknown");
+  const begun = await r.ask("vault.oauthBegin", { vault: v.id, provider: "slack", back: "fail.still.android" });
+  const url = new URL(begun.url);
+  assert.equal(url.origin + url.pathname, "https://slack.com/oauth/v2/authorize");
+  assert.equal(url.searchParams.get("client_id"), SLACK.clientId);
+  assert.equal(url.searchParams.get("redirect_uri"), "https://stillfail.test/vault/oauth");
+  assert.equal(url.searchParams.get("code_challenge_method"), "S256");
+  assert.match(url.searchParams.get("user_scope") ?? "", /search:read/);
+  assert.equal(url.searchParams.get("scope"), null, "no bot's");
+  const state = url.searchParams.get("state")!;
+  assert.deepEqual(oauthState(state) && { w: oauthState(state)!.w, b: oauthState(state)!.b }, { w: "ws", b: "fail.still.android" });
+  assert.equal(handedTo("fail.still.android", `code=c1&state=${state}`), `fail.still.android://auth/vault?code=c1&state=${state}`);
+  assert.equal(handedTo("http://127.0.0.1:4000/vault/oauth/back", "code=c1"), "http://127.0.0.1:4000/vault/oauth/back?code=c1");
+  assert.equal(handedTo("web", "code=c1"), null);
+  // Slack, answering the code only with the verifier its challenge was made of, and no secret.
+  const asked: Record<string, string>[] = [];
+  stationLater(r.host, (req) => {
+    if (req.url === "https://slack.com/api/oauth.v2.access") {
+      const form = Object.fromEntries(new URLSearchParams(new TextDecoder().decode(req.body!)));
+      asked.push(form);
+      const ok = form.code === "c1" && base64url(sha256(utf8(form.code_verifier ?? ""))) === url.searchParams.get("code_challenge") && !("client_secret" in form);
+      return Promise.resolve(jsonResponse(200, ok ? { ok: true, authed_user: { id: "U1", access_token: "xoxp-1", token_type: "user" }, team: { id: "T1", name: "Acme" } } : { ok: false, error: "invalid_code" }));
+    }
+    if (req.url === "https://slack.com/api/auth.test") return Promise.resolve(jsonResponse(200, req.headers.some(([k, x]) => k === "authorization" && x === "Bearer xoxp-1") ? { ok: true, user: "zz" } : { ok: false }));
+    return undefined;
+  });
+  const done = await r.ask("vault.oauthComplete", { query: `code=c1&state=${state}` });
+  assert.equal(done.name, "Slack · Acme · zz");
+  assert.equal(asked.at(-1)!.redirect_uri, "https://stillfail.test/vault/oauth");
+  const item = [...r.st.items.values()].find((i) => i.vault === v.id && !i.deleted)!;
+  assert.deepEqual(item.listing, { name: "Slack · Acme · zz", kind: "token", modes: ["proxy"], hosts: ["slack.com"], about: item.listing!.about });
+  assert.match(item.listing!.about!, /zz/);
+  const opened = await r.ask("vault.open", { item: item.id });
+  assert.equal(opened.plain.fields.value, "xoxp-1");
+  // Once only: the same state again finds nothing begun.
+  await fails(r.ask("vault.oauthComplete", { query: `code=c1&state=${state}` }), "vault_oauth_stale");
+  // Turned down on Slack's page: nothing kept, and nothing to say but that.
+  const second = new URL((await r.ask("vault.oauthBegin", { vault: v.id, provider: "slack", back: "web" })).url).searchParams.get("state")!;
+  await fails(r.ask("vault.oauthComplete", { query: `error=access_denied&state=${second}` }), "cancelled");
+  // Come back after the hour it waits: begun again.
+  const third = new URL((await r.ask("vault.oauthBegin", { vault: v.id, provider: "slack", back: "web" })).url).searchParams.get("state")!;
+  await r.host.time.pass(OAUTH_WAIT_MS, 60_000);
+  await fails(r.ask("vault.oauthComplete", { query: `code=c1&state=${third}` }), "vault_oauth_stale");
   r.core.close();
 });
 
@@ -1034,6 +1089,35 @@ test("vault calls: a secret an agent asks the person to type in: what they typed
   r.push("vault-request", asksLogin);
   await r.ask("vault.approve", { request: "r_z", scope: "once", typed: { secret: " pw ", username: " admin " } });
   assert.deepEqual((await r.ask("vault.open", { item: login })).plain.fields, { username: "admin", password: " pw " });
+  r.core.close();
+});
+
+test("vault calls: a Slack account an agent asks the person to sign in for: the card's request approved with the token as the browser comes back", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const keeper = fill(9);
+  const item = "i_01JAKEEP00000000000000S1AK";
+  const asked: Request = {
+    id: "r_s", ws: "ws", vault: "", item, session: "k1", chat: "7", mode: "proxy", reason: "以你的身份搜索", hosts: ["slack.com"], box: boxPublic(keeper), at: 1, status: "pending", owner: "a@x.com",
+    save: { kind: "token", name: "Slack · Acme", modes: ["proxy"], hosts: ["slack.com"], typed: true, oauth: "slack" },
+  };
+  r.st.requests.push(asked);
+  r.push("vault-request", asked);
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual(vaults().requests.map((q: any) => [q.id, q.save]), [["r_s", { kind: "token", typed: true, oauth: "slack" }]]);
+  stationLater(r.host, (req) =>
+    req.url === "https://slack.com/api/oauth.v2.access" ? Promise.resolve(jsonResponse(200, { ok: true, authed_user: { id: "U1", access_token: "xoxp-9" }, team: { name: "Acme" } }))
+    : req.url === "https://slack.com/api/auth.test" ? Promise.resolve(jsonResponse(200, { ok: true, user: "zz" })) : undefined);
+  const state = new URL((await r.ask("vault.oauthBegin", { vault: "", provider: "slack", back: "web", request: "r_s" })).url).searchParams.get("state")!;
+  await r.ask("vault.oauthComplete", { query: `code=c&state=${state}` });
+  // Kept under the request's own name and hosts, the chat given it, as one typed in.
+  assert.deepEqual(r.st.items.get(item)!.listing, { name: "Slack · Acme", kind: "token", modes: ["proxy"], hosts: ["slack.com"] });
+  assert.deepEqual((await r.ask("vault.open", { item })).plain.fields, { value: "xoxp-9" });
+  const saved = r.st.saves.at(-1) as any;
+  assert.deepEqual([saved.request, saved.grant.hosts], ["r_s", ["slack.com"]]);
   r.core.close();
 });
 

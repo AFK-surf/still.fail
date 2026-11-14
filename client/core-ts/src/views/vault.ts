@@ -46,6 +46,10 @@
 //                                 library's told to each station keeping it)
 //   deny {request}                turned down, signed
 //   migrate                       the plain library's items moved into one's own vault, encrypted (security mode on)
+//   oauthBegin {vault, provider, back, request?}  a service's sign-in page (`{url}`) for the person to sign in to it as
+//                                 themselves, coming back to `back` (vault/oauth.ts); for an agent's request to keep
+//                                 one (secret_save `oauth`), its card approved with the token as it comes
+//   oauthComplete {query}         what the browser came back with: their token written into `vault` (`{name}`)
 //   lock                          the unlocked keys forgotten now
 //   state                         the `vaults` topic's value, as a call
 import { Effect, Schedule, Semaphore } from "effect";
@@ -71,6 +75,7 @@ import {
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../../../rules/js/rules.js";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
+import * as oauth from "../vault/oauth.ts";
 import { ofAddress } from "../workspace.ts";
 import { stamp } from "../present.ts";
 import type { VaultOutcome } from "./local.ts";
@@ -1142,7 +1147,7 @@ export function vaultsView(inner: Inner, ws: string): J {
     session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at, ...(r.timeout ? { timeoutKind: r.timeout.kind, timeoutSeconds: r.timeout.seconds } : {}),
     howText: r.describe ? describeText(itemName ?? r.describe.was.name, { name: r.describe.name, about: r.describe.about, wasAbout: r.describe.was.about }) : r.save?.about ? aboutText(r.save.about) : howText(r.mode, r.hosts ?? []),
     // A secret an agent asks to keep: what kind, the account it is for, whether the person types it in.
-    ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}), ...(r.save.filename ? { filename: r.save.filename } : {}), ...(r.save.typed ? { typed: true } : {}) } } : {}),
+    ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}), ...(r.save.filename ? { filename: r.save.filename } : {}), ...(r.save.typed ? { typed: true } : {}), ...(r.save.oauth ? { oauth: r.save.oauth } : {}) } } : {}),
     // An item to rename or say what it is: its name and about as they would be (and its about as it was).
     ...(r.describe ? { describe: { name: r.describe.name, about: r.describe.about, wasAbout: r.describe.was.about } } : {}),
     // An item to delete.
@@ -1333,6 +1338,16 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       return p("vault") === PLAIN ? v.putPlain(str(c.params.id), c.params.plain, c.params.listing) : v.putItem(p("vault"), str(c.params.id), c.params.plain, c.params.listing);
     case "deleteItem":
       return p("vault") === PLAIN ? v.deletePlain(p("item")) : v.deleteItem(p("vault"), p("item"));
+    case "oauthBegin":
+      return oauth.begin(inner, c.workspace, p("vault"), p("provider"), p("back"), p("request"));
+    case "oauthComplete":
+      return oauth.complete(
+        inner,
+        c.workspace,
+        p("query"),
+        (vault, plain, listing) => (vault === PLAIN ? v.putPlain(null, plain, listing) : v.putItem(vault, null, plain, listing)),
+        (request, token) => v.approve(request, "once", { secret: token }),
+      );
     case "open":
       // (with its fields as its page shows them, and its kind in a word)
       return (held(inner, c.workspace).plain[p("item")] ? v.openPlain(p("item")) : v.open(p("item"))).pipe(

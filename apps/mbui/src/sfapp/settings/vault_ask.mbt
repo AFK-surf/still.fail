@@ -29,6 +29,8 @@ pub(all) struct Asked {
   username : String
   filename : String
   typed : Bool
+  /// with `typed`, a service the person signs in to for it instead (slack)
+  oauth : String
   station : String
   /// one to rename the item or change its about (secret_describe): its name as it would be (`new_name`), its about
   /// as it would be and as it was (`new_about`, `was_about`)
@@ -118,13 +120,15 @@ let ask_describe_part : @ui.Style = @ui.css("w=Full gap=S0_5 pt=S3")
 pub(all) struct Typed {
   kind : String
   username : String
+  /// a service the person signs in to for it in place of typing it in (slack: `vault_oauth_of`), "" none
+  oauth : String
 }
 
 ///|
 /// The secret to type in of request `save` (its `save`), or None where it is not the person's to type.
 pub fn typed_of(save : Json?) -> Typed? {
   if flag(save, "typed") {
-    Some({ kind: text(save, "kind"), username: text(save, "username") })
+    Some({ kind: text(save, "kind"), username: text(save, "username"), oauth: text(save, "oauth") })
   } else {
     None
   }
@@ -134,7 +138,7 @@ pub fn typed_of(save : Json?) -> Typed? {
 /// The secret to type in of what is asked, or None.
 fn Asked::typed_in(self : Asked) -> Typed? {
   if self.typed {
-    Some({ kind: self.save_kind, username: self.username })
+    Some({ kind: self.save_kind, username: self.username, oauth: self.oauth })
   } else {
     None
   }
@@ -429,9 +433,37 @@ fn vault_asked(c : @ui.Ctx, ask : Asked, full_command? : Bool = false) -> Unit {
     if save && sub != "" {
       runs.push(@ui.span("  " + sub, color=t.p.muted))
     }
-    c.rich(runs, style=@sf.ask_title) |> ignore
+    if ask.oauth != "" {
+      // (one the person signs in to a service for: its mark, what it connects and the item's name, in place of the
+      // title; vault_ask_node's vault_oauth_head_node)
+      c.box(style=vault_oauth_head, fn() {
+        @sf.drawable(c, ask.oauth, vault_oauth_mark) |> ignore
+        c.box(style=vault_oauth_words, fn() {
+          c.text(tr("web-pages.vault.oauth.card.title." + ask.oauth), style=vault_oauth_title) |> ignore
+          c.text(ask.name, style=@sf.ask_note) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    } else {
+      c.rich(runs, style=@sf.ask_title) |> ignore
+    }
     if ask.reason != "" {
       c.text(ask.reason, style=@sf.ask_note) |> ignore
+    }
+    if ask.oauth != "" {
+      // (what signing in lets agents do, and that it stays theirs: vault_oauth_gives_node's)
+      c.box(style=vault_oauth_gives, fn() {
+        for line in vault_oauth_lines {
+          let (icon, key) = line
+          c.box(style=vault_oauth_give, fn() {
+            c.box(style=vault_oauth_give_icon, fn() { @sf.icon(c, icon, size=vault_oauth_glyph, color=t.p.muted) |> ignore }) |> ignore
+            c.text(tr("web-pages.vault.oauth.card." + key + "." + ask.oauth), style=vault_oauth_give_words) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
     }
     if ask.command != "" {
       c.rich([@ui.span(ask.command, mono=true)], style=if full_command { @sf.ask_note } else { ask_command }, breaks=full_command) |> ignore
@@ -455,7 +487,7 @@ fn vault_asked(c : @ui.Ctx, ask : Asked, full_command? : Bool = false) -> Unit {
       })
       |> ignore
     }
-    if ask.how_text != "" && !ask.describe && !ask.remove {
+    if ask.how_text != "" && !ask.describe && !ask.remove && ask.oauth == "" {
       c.text(ask.how_text, style=@sf.ask_note) |> ignore
     }
     let risky = !ask.writes() && (ask.mode == "env" || ask.mode == "file")
@@ -659,8 +691,13 @@ pub fn vault_foot(
   let mut username = ""
   let mut filename = ""
   let mut entered = false
+  // (one the person signs in to a service for in place of typing it: that service, "" none)
+  let signs_in = match typed {
+    Some(ty) => ty.oauth
+    None => ""
+  }
   match (answer, typed) {
-    (Approve(_), Some(ty)) =>
+    (Approve(_), Some(ty)) if ty.oauth == "" =>
       // (reaching out to the foot's corners as the buttons do: a field's ends, a file's button, where theirs are)
       @sf.card_foot_words(on=foot, fn() {
         c.box(style=if foot { ask_typed.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_typed }, fn() {
@@ -701,7 +738,7 @@ pub fn vault_foot(
       })
     _ => ()
   }
-  let empty = typed is Some(_) && secret.trim(chars=" \n\t").to_owned() == ""
+  let empty = typed is Some(_) && signs_in == "" && secret.trim(chars=" \n\t").to_owned() == ""
   // (what goes with the approval: an object, never kept among what the core is doing)
   let given : Json? = match typed {
     Some(_) => {
@@ -761,8 +798,29 @@ pub fn vault_foot(
           (core.push)(Route::Vault)
         })
       } else {
-        let yes = if remove { "android-settings.vault.act.remove" } else if describe { "android-settings.vault.act.change" } else if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
+        let yes = if signs_in != "" { "web-pages.vault.oauth.signIn." + signs_in } else if remove { "android-settings.vault.act.remove" } else if describe { "android-settings.vault.act.change" } else if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
         let approve = fn() {
+          // (存入 by signing in to the service: its page in the browser, the request approved with the token as it
+          // comes back; given up, the buttons again)
+          if signs_in != "" {
+            if core.read_only != "" {
+              (core.say)(core.read_only)
+              return
+            }
+            vault_pending[request] = true
+            (core.vault_oauth)(ws, "", signs_in, request, fn(res) {
+              match res {
+                Ok(_) => ()
+                Err(why) => {
+                  vault_pending.remove(request)
+                  if why != "cancelled" {
+                    (core.say)(fill("android-misc.act.failed", [("what", tr("android-settings.vault.act.saveWhat")), ("error", if why == "" { tr("web-pages.vault.oauth.failed") } else { why })]))
+                  }
+                }
+              }
+            })
+            return
+          }
           let what = tr(if remove { "android-settings.vault.act.removeWhat" } else if describe { "android-settings.vault.act.changeWhat" } else if save { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
           let chosen_scope = if !timed || scope == "once" { if save { "once" } else { scope } } else if minutes <= 60 { "hour" } else { "chat" }
           let params : Array[(String, Json)] = [("workspace", str(ws)), ("request", str(request)), ("scope", str(chosen_scope))]

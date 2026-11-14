@@ -74,8 +74,9 @@ export type Request = {
 export type Describe = { name: string; about: string; was: { name: string; about: string } };
 /// What an agent asks to keep: the item's listing, and the fields of it that are not secret (a login's account name, an
 /// SSH key's public half, a file's name), said on its card. `typed`: the secret is none the agent holds, but what the
-/// person types in (a file: picks) on the card (nothing of it here until then, nothing sealed).
-export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true; about?: string };
+/// person types in (a file: picks) on the card (nothing of it here until then, nothing sealed); with `oauth`, a token the
+/// person signs in to that service for on the card instead (client/core-ts/src/vault/oauth.ts: `slack`).
+export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true; oauth?: string; about?: string };
 export type Sealed = { device: string; box: string; secret: string };
 export type Grant = {
   v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; timeout?: Timeout;

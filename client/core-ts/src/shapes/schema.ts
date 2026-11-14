@@ -520,6 +520,7 @@ export const SHAPES: Record<string, Shape> = {
     ["username", opt("String"), { said: true, doc: "A login's account name." }],
     ["filename", opt("String"), { said: true, doc: "A file's name, where the agent gave one (the file it read, or the name it is to have)." }],
     ["typed", opt("bool"), { doc: "The secret is the person's to type in on the card (the agent has none): a field for it (and a login's\naccount, when `username` is absent; a file: a button that picks it) over the answer, `vault.approve` with `typed`." }],
+    ["oauth", opt("String"), { doc: "With `typed`, a token the person signs in to this service for instead (`slack`): a button for its page in\nplace of the field, `vault.oauthBegin` with the request, which approves it as the browser comes back." }],
   ], { doc: "What an agent asks to keep in the person's vault (secret_save agent 存入): approving it writes it into their\nvault (`vault.approve`, turning it on first where it is not)." }),
   DecisionOption: struct([
     ["label", "String", { said: true }],

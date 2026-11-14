@@ -46,6 +46,11 @@ station's profiles), or anything the person said not to keep.
   - None of these, for one you do not have: the card has a field the person types or pastes it in (a login's account
     too, when you give no `username`; a file, a button that picks it), kept as they approve it and never shown to you. Say in `reason` where they get it
     (OpenCode 控制台 → API Keys), and give `hosts` and `env` as for any.
+  - `oauth: "slack"` (kind `token`, none of the above): the person's own Slack account, to call Slack's Web API as
+    them (search, read and post as themselves, where the workspace's bot is not them): the card has them sign in on
+    Slack's page in the app, their user token kept as they do, given through the proxy to `slack.com` alone. Look in
+    `secret_list` first: one kept is named `Slack · <workspace> · <their name>`. Use it with `secret_run` and
+    `Authorization: Bearer $STILLFAIL_SECRET` on `https://slack.com/api/<method>`.
   - `kind`: `token` (an API key, a bearer token), `login` (a password, with `username`), `ssh_key` (a private key, with
     `public_key` if known), `file` (a credential that is a whole file, at most 64 KB: a kubeconfig, a service account's
     JSON key, a `.p12` certificate, a `.env`), `browser` (a sign-in to websites, `hosts` the sites: their cookies and

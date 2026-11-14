@@ -4,28 +4,49 @@
 
 ///|
 /// 添加 (AddKinds): which kind is added, picked beside what opened it (`from`: the page's 添加; a sheet on Small): a
-/// subscription or a model's key (a profile: the Profile list), or a secret of a kind (its editor, the kind fixed, which
-/// says it is kept in the clear where the library is not locked); each its mark, its name and what it is.
+/// subscription or a model's key (a profile: the Profile list), a Slack account signed in to (`vault_oauth`), or a
+/// secret of a kind (its editor, the kind fixed, which says it is kept in the clear where the library is not locked);
+/// each its mark, its name and what it is.
 pub fn vault_add(core : Core, here : Here, from~ : @sf.Beside) -> Unit {
   let ws = here.workspace
   let v = (core.topic)("vaults", { "workspace": str(ws) }).get().value
   let mine = items(v, "vaults").iter().find_first(fn(x) { flag(Some(x), "mine") })
   let plain = flag(v, "plain")
   let kinds = ["profile"]
+  // (a service signed in to as the person: its token kept as one typed in would be, where one is)
+  let into = match mine {
+    Some(m) => text(Some(m), "id")
+    None => if plain { "plain" } else { "" }
+  }
+  if into != "" {
+    kinds.push("slack")
+  }
   if mine is Some(_) {
     kinds.append(vault_kinds)
   }
   let choices = kinds.map(fn(k) {
-    @sf.choice(
-      k,
-      @sf.t("web-pages.vault.addKind." + k),
-      note=@sf.t("web-pages.vault.addKind." + k + "Detail"),
-      icon=if k == "profile" { "quota" } else { @settings.kind_icon(k) },
-    )
+    match k {
+      "slack" =>
+        @sf.choice(
+          k,
+          @sf.t("web-pages.vault.addKind.slack"),
+          note=@sf.t("web-pages.vault.addKind.slackDetail"),
+          mark=fn(c, size) { @sf.drawable(c, "slack", size) |> ignore },
+        )
+      _ =>
+        @sf.choice(
+          k,
+          @sf.t("web-pages.vault.addKind." + k),
+          note=@sf.t("web-pages.vault.addKind." + k + "Detail"),
+          icon=if k == "profile" { "quota" } else { @settings.kind_icon(k) },
+        )
+    }
   })
   @sf.pick("", choices, "", fn(k) {
     if k == "profile" {
       (core.push)(Profiles(""))
+    } else if k == "slack" {
+      vault_oauth(core, ws, into, "slack")
     } else {
       match mine {
         Some(m) => vault_editor_dialog(core, ws, text(Some(m), "id"), None, kind=k, plain~, kinds=false)
@@ -33,6 +54,21 @@ pub fn vault_add(core : Core, here : Here, from~ : @sf.Beside) -> Unit {
       }
     }
   }, from~, along=End)
+}
+
+///|
+/// 添加 › Slack 账号: the person signs in on the service's page (`Core`'s vault_oauth, the host's browser), their
+/// token kept in `vault` as the vault's rows then show it; a toast says it is kept, or why not (nothing for one given
+/// up, nor where the web's own page finishes it and says so).
+fn vault_oauth(core : Core, ws : String, vault : String, provider : String) -> Unit {
+  (core.vault_oauth)(ws, vault, provider, "", fn(r) {
+    match r {
+      Ok("") | Err("cancelled") => ()
+      Ok(name) => (core.say)(@sf.t("web-pages.vault.oauth.added", args=[("name", name)]))
+      Err("") => (core.say)(@sf.t("web-pages.vault.oauth.failed"))
+      Err(why) => (core.say)(why)
+    }
+  })
 }
 
 ///|

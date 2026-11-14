@@ -1372,6 +1372,35 @@ test("a secret its owner types in: nothing of it held or sealed here, the card a
   }
 });
 
+test("a Slack account its owner signs in to on the card: typed in by their app, the card saying so, given to slack.com alone", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  h.vaults.putVault(w.vault);
+  h.vaults.putBox(w.cert(w.alice));
+  try {
+    // Not a value, a command, another kind or other hosts' way: refused before anything is asked.
+    await assert.rejects(h.secrets.save("s1", { name: "Slack", kind: "token", oauth: "slack", value: "xoxp-1", reason: "r", cwd: h.dir }), /oauth is a token the person signs in for/);
+    await assert.rejects(h.secrets.save("s1", { name: "Slack", kind: "login", oauth: "slack", reason: "r", cwd: h.dir }), /oauth is a token the person signs in for/);
+    await assert.rejects(h.secrets.save("s1", { name: "Slack", kind: "token", oauth: "github", reason: "r", cwd: h.dir }), /oauth is one of slack/);
+    await assert.rejects(h.secrets.save("s1", { name: "Slack", kind: "token", oauth: "slack", modes: ["env"], reason: "r", cwd: h.dir }), /through the proxy to slack.com alone/);
+    const asked = h.secrets.save("s1", { name: "Slack · Acme", kind: "token", oauth: "slack", reason: "以你的身份搜索消息", hosts: ["example.com"], cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(r!.save, { kind: "token", name: "Slack · Acme", modes: ["proxy"], hosts: ["slack.com"], typed: true, oauth: "slack" });
+    const { text, card } = h.cards[0]!;
+    assert.equal(text, "请用 Slack 授权，把「Slack · Acme」存入密钥库：以你的身份搜索消息");
+    assert.deepEqual(card.vault.save, { kind: "token", typed: true, oauth: "slack" });
+    assert.deepEqual(card.vault.hosts, ["slack.com"]);
+    // Her app writes the token it signed in for, as for one typed in.
+    h.vaults.putItem(written(r!, w.alice, { value: "xoxp-1" }));
+    assert.equal(h.secrets.saved(w.state, "alice", { request: r!.id, vault: VAULT }), null);
+    assert.match(await decided(h, asked), /Kept: 「Slack · Acme」/);
+    assert.deepEqual(h.secrets.listings("s1").map((l) => [l.listing.name, l.listing.hosts]), [["Slack · Acme", ["slack.com"]]]);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
 test("a secret its owner types in without security mode: written into their plain library with the fields their app sends, its secret not empty", async () => {
   const h = harness(() => null, "bob@x.com");
   try {

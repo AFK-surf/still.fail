@@ -153,6 +153,7 @@ export const NOTES: [number, string][] = [
   [146, "chat_create takes preset (one of this station's presets, by name or id), fast and context: with a preset it opens as a person opening it with that preset in the app would, and where the preset names its model nothing of runtime, model, effort, fast or context is given beside it; without one the chat has no preset (skill stillfail-chats)."],
   [147, "The memory (MEMORY.md) and skills are now the same on every station of the workspace, kept level by the stations within seconds of an edit. What is true of one machine alone says which station it is of (「Studio：…」); a line or skill marked [<station>] came from that station before; a *.conflict-<station>.* file beside a skill is a version made at the same time elsewhere: merge it in and delete it."],
   [148, "Messages and chat history now say sent_at in UTC where the message ID carries its time, or recorded_at for when the station recorded an opaque ID. ts remains the original message ID. Every turn and steer also says when it was delivered in UTC."],
+  [149, "secret_save takes oauth: \"slack\" (kind token, no value, command or path): the card has the person sign in to Slack in the still.fail app, and their own Slack token is kept in their vault, given through the proxy to slack.com, for calling Slack's API as them; skill stillfail-vault says how."],
 ];
 
 /// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only

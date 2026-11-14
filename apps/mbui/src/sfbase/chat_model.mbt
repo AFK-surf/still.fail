@@ -222,6 +222,8 @@ pub(all) struct VaultAsk {
   /// a file's name, where the agent gave one
   filename : String
   typed : Bool
+  /// with `typed`, a service the person signs in to for it instead (slack): a button for its page, no field
+  oauth : String
   /// one to rename the item or change its about (secret_describe): its name and about as they would be, its about as
   /// it was
   describe : Bool
@@ -498,6 +500,7 @@ pub fn message_of(m : Json) -> Message {
                 username: text(field(a, "save"), "username"),
                 filename: text(field(a, "save"), "filename"),
                 typed: flag(field(a, "save"), "typed"),
+                oauth: text(field(a, "save"), "oauth"),
                 describe: field(a, "describe") is Some(_),
                 new_name: text(field(a, "describe"), "name"),
                 new_about: text(field(a, "describe"), "about"),

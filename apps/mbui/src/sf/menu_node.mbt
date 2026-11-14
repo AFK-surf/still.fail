@@ -237,8 +237,13 @@ pub fn menu_node(
       let marked = fn() {
         let n = content().length()
         let mut any = false
+        let items = content()
         for i in 0..<n {
-          if extras(i).mark is Some(_) {
+          let leads = match items[i] {
+            Some(it) => menu_mark_leads(it, extras(i))
+            None => false
+          }
+          if extras(i).mark is Some(_) && !(leads && lead()) {
             any = true
           }
         }
@@ -336,6 +341,13 @@ pub fn menu_node(
 }
 
 ///|
+/// Whether a row's own mark goes in the menu's column before its words (where the menu has one): it has a mark and
+/// neither a check nor an icon of its own for that column.
+fn menu_mark_leads(item : MenuItem, extra : MenuExtra) -> Bool {
+  extra.mark is Some(_) && item.chosen is None && item.icon == ""
+}
+
+///|
 /// What a menu holds at a place is, by its kind: a line (0), a heading (1), a row (2).
 fn menu_kind(x : MenuItem?) -> Int {
   match x {
@@ -419,11 +431,25 @@ fn menu_row_node(
       }
     })
     |> ignore
-    // (its first line: its column before its words, where the menu has one (a choice's check, or its icon), its own
-    // mark after it, its words, and its value pushed to its end)
+    // (its own mark in that column where it has no check nor icon of its own to go there: a Slack account among kinds
+    // of secret by their icons; one beside a check or an icon goes after it)
+    let mark_leads = fn() { menu_mark_leads(item(), extra) && lead() }
+    // (that mark, drawn by the old frame, as wide as the check's column, where it goes)
+    let mark_in = fn(at : @view.View, m : (@ui.Ctx, Double) -> Unit) {
+      @ui.old(at, fn(c) { m(c, menu_check_w) })
+      .width(Is(Some(menu_check_w)))
+      .height(Is(Some(menu_check_w)))
+      |> ignore
+    }
+    // (its first line: its column before its words, where the menu has one (a choice's check, or its icon, else its
+    // own mark), its own mark after it otherwise, its words, and its value pushed to its end)
     let first_line = fn(into : @view.View) {
       into.show(lead, fn(col) {
         col.width(Is(Some(menu_check_w))).lines_up(Is(Some(Middle))) |> ignore
+        match extra.mark {
+          Some(m) if menu_mark_leads(@signals.untracked(item), extra) => mark_in(col, m)
+          _ => ()
+        }
         let mark = fn() {
           let it = item()
           match it.chosen {
@@ -449,13 +475,9 @@ fn menu_row_node(
           }
         })
       })
-      // (its own mark (a station's, a maker's), drawn by the old frame, as wide as the check's column)
+      // (its own mark (a station's, a maker's) after that column)
       match extra.mark {
-        Some(m) =>
-          @ui.old(into, fn(c) { m(c, menu_check_w) })
-          .width(Is(Some(menu_check_w)))
-          .height(Is(Some(menu_check_w)))
-          |> ignore
+        Some(m) => into.show(fn() { !mark_leads() }, fn(at) { mark_in(at, m) })
         None => ()
       }
       into.box(fn(w) {
@@ -492,7 +514,7 @@ fn menu_row_node(
           .padding(
             By(fn() {
               let w = (if lead() { menu_check_w + gap() } else { 0.0 }) +
-                (if extra.mark is Some(_) { menu_check_w + gap() } else { 0.0 })
+                (if extra.mark is Some(_) && !mark_leads() { menu_check_w + gap() } else { 0.0 })
               (w, 0.0, 0.0, 0.0)
             }),
           )
