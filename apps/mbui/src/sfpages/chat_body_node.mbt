@@ -494,8 +494,7 @@ fn chat_body_node(
       // `comes_way`, the coordinator of the migration, 2026-11-14)
       comes_way=fn(k) {
         if kept.here.contains(k) {
-          // det-ok(motion-length): words sent's own, their flight's (message_words_node's flies_in), sf/motion.mbt kind 4
-          Some((@sfbase.flight_desk_ms, fn(x) { @ui.Flight.at(@sf.dmax((x - sent_up_late) / (1.0 - sent_up_late), 0.0)) }))
+          Some(sent_rise)
         } else {
           None
         }
@@ -537,7 +536,9 @@ fn chat_body_node(
           if @signals.untracked(here.view).newer {
             jump.latest = true
           } else if !scroll.at_foot_now() {
-            place.to_end()
+            // (gliding there on the words' flight's rise, as at its foot: one motion, no glide beside a flight; the
+            // coordinator of the migration, 2026-11-15)
+            place.to_end(way=sent_rise)
           }
         },
         at_start=false,
@@ -877,3 +878,12 @@ fn agent_out_of(
   guard agent != "" else { return None }
   faces.get(agent)
 }
+
+///|
+/// How words sent from here take the chat's list on: their flight's length, its rise 12% late on the flight's ease
+/// (sfbase's flight_up), what is over them and the list's glide to its foot rising with their bubble as one.
+// det-ok(motion-length): words sent's own, their flight's (message_words_node's flies_in), sf/motion.mbt kind 4
+let sent_rise : (Double, (Double) -> Double) = (
+  @sfbase.flight_desk_ms,
+  fn(x) { @ui.Flight.at(@sf.dmax((x - sent_up_late) / (1.0 - sent_up_late), 0.0)) },
+)

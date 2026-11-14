@@ -235,6 +235,10 @@ fn Tree::incoming_now(self : Tree) -> Unit {
 /// Whether node `at` or what holds it is on a way its page said (Style's come_spec of a list key's `comes_way`, Tree's
 /// come_ways_lead): its place moves on that curve, which a flight in to it takes up by going with it.
 fn Tree::rides_said_way(self : Tree, at : Int) -> Bool {
+  // (its list set gliding to its foot on such a way at this moment)
+  if self.said_glide_at == self.cause_now() {
+    return true
+  }
   let mut p = at
   while p >= 0 {
     let n = self.nodes[p]

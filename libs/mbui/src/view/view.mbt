@@ -778,6 +778,9 @@ pub struct Tree {
   // change (View::comes); and those set off so, till their group is said (Tree::come_group_settle): its way the group's)
   priv come_ways_said : Map[Int, (Double, (Double) -> Double)]
   priv come_ways_lead : Map[Int, (Double, (Double) -> Double)]
+  // (the moment a page's list was last set gliding to its foot on a way its page said, ListPlace::to_end's `way`: what
+  // flies in to it then goes with it, shared.mbt's Tree::rides_said_way)
+  priv mut said_glide_at : Double
   /// the places of the page's lists' feet (View::scrolls_window's `foot`, pinned on the list's own node, not under
   /// its held column), each with the held column whose one way what comes or goes or resizes in it goes in
   /// (Tree::come_group_join), where the list's blocks' insides join it
@@ -1364,6 +1367,7 @@ pub fn Tree::new(
     pick_waits: {},
     come_ways_said: {},
     come_ways_lead: {},
+    said_glide_at: -1.0,
     list_feet: {},
     list_raised: {},
     old_builds_begun: 0,

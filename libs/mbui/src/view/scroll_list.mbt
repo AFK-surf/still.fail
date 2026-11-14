@@ -70,6 +70,33 @@ priv struct Notch {
   /// when (ms after `t0`) it is drawn where it comes to, on the pixels it is drawn on (Scroll::ease_drawn_end): all of
   /// it come from then on
   end : Double
+  /// the way its page said it goes (a glide back to a list's foot a send asks: ListPlace::to_end's `way`): that long
+  /// (ms after `t0`) on that curve, not an ease; `base` how much of that curve was gone where it was last set on toward
+  /// another end (Scroll::glide_on), what is left of the curve then taking it from `x0` to `x0 + total`
+  way : (Double, (Double) -> Double)?
+  base : Double
+}
+
+///|
+/// How far notch `n` has come `t` ms after it set out, and how fast (points a ms): on its way where one is said, else
+/// its ease (ease_state), all of it from its end on.
+fn notch_state(n : Notch, t : Double) -> (Double, Double) {
+  if t >= n.end {
+    return (n.total, 0.0)
+  }
+  match n.way {
+    Some((ms, curve)) if ms > 0.0 => {
+      let x = dclamp(t / ms, 0.0, 1.0)
+      let left = 1.0 - n.base
+      guard left > 0.000001 else { return (n.total, 0.0) }
+      let dx = 0.0001
+      let x2 = dmin(x + dx, 1.0)
+      let p = (curve(x) - n.base) / left
+      let speed = if x2 > x { (curve(x2) - curve(x)) / (x2 - x) / ms / left * n.total } else { 0.0 }
+      (n.total * p, speed)
+    }
+    _ => ease_state(n.total, n.v0, t, tau=n.tau)
+  }
 }
 
 ///|
@@ -582,11 +609,7 @@ fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
 fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   let (x0, total, v0) = match self.notch.untracked() {
     Some(n) => {
-      let (came, speed) = if t - n.t0 >= n.end {
-        (n.total, 0.0)
-      } else {
-        ease_state(n.total, n.v0, t - n.t0, tau=n.tau)
-      }
+      let (came, speed) = notch_state(n, t - n.t0)
       (dclamp(n.x0 + came, 0.0, self.most()), n.total - came + d, speed)
     }
     None => {
@@ -600,7 +623,7 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   (self.settle_off)()
   self.settle_off = fn() {  }
   self.x.set(x0)
-  self.notch.set(Some({ x0, total, v0, t0: t, tau: wheel_ease_ms, end: self.ease_drawn_end(x0, total, v0) }))
+  self.notch.set(Some({ x0, total, v0, t0: t, tau: wheel_ease_ms, end: self.ease_drawn_end(x0, total, v0), way: None, base: 0.0 }))
   self.scrolled_at(t)
   self.list_settles(v, t)
   true
@@ -609,14 +632,18 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
 ///|
 /// Sent to `to` from `t` (a page's list asked there: ListPlace), eased in from where it is as a wheel's notch is (ui's
 /// Ctx::ease_list), what it was on by itself stopped there; at rest there at the ease's end.
-fn Scroll::glide_to(self : Scroll, v : View, t : Double, to : Double) -> Unit {
+fn Scroll::glide_to(self : Scroll, v : View, t : Double, to : Double, way? : (Double, (Double) -> Double)) -> Unit {
   let x = self.stopped(t)
   if to == x {
     return
   }
   (self.settle_off)()
   self.settle_off = fn() {  }
-  self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, tau: wheel_ease_ms, end: self.ease_drawn_end(x, to - x, 0.0, most=dmax(self.most(), to)) }))
+  let end = match way {
+    Some((ms, _)) if ms > 0.0 => ms
+    _ => self.ease_drawn_end(x, to - x, 0.0, most=dmax(self.most(), to))
+  }
+  self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t, tau: wheel_ease_ms, end, way, base: 0.0 }))
   self.scrolled_at(t)
   self.list_settles(v, t)
 }
@@ -630,7 +657,7 @@ fn Scroll::glide_to(self : Scroll, v : View, t : Double, to : Double) -> Unit {
 /// over where it is): at rest there. Not on one, nothing.
 fn Scroll::glide_on(self : Scroll, v : View, t : Double, to : Double, most : Double) -> Unit {
   guard self.notch.untracked() is Some(n) else { return }
-  let (came, speed) = ease_state(n.total, n.v0, t - n.t0, tau=n.tau)
+  let (came, speed) = notch_state(n, t - n.t0)
   let x = n.x0 + came
   let total = to - x
   (self.settle_off)()
@@ -641,8 +668,18 @@ fn Scroll::glide_on(self : Scroll, v : View, t : Double, to : Double, most : Dou
     self.list_settles(v, t)
     return
   }
+  // (on a way said: on that same way from where it is to the end come nearer, what is left of its curve taking it there)
+  match n.way {
+    Some((ms, curve)) if ms > 0.0 && t - n.t0 < n.end => {
+      let base = curve(dclamp((t - n.t0) / ms, 0.0, 1.0))
+      self.notch.set(Some({ ..n, x0: x, total, base }))
+      self.list_settles(v, t)
+      return
+    }
+    _ => ()
+  }
   let tau = if speed > 0.0 && speed * wheel_ease_ms > total { total / speed } else { wheel_ease_ms }
-  self.notch.set(Some({ x0: x, total, v0: speed, t0: t, tau, end: self.ease_drawn_end(x, total, speed, tau~, most~) }))
+  self.notch.set(Some({ x0: x, total, v0: speed, t0: t, tau, end: self.ease_drawn_end(x, total, speed, tau~, most~), way: None, base: 0.0 }))
   self.list_settles(v, t)
 }
 
