@@ -538,6 +538,9 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     @sf.set_words(fill)
     // Keep the prefs reader with the tree from its first read, including before the first frame is built.
     root.reacts(fn() { src.topic("prefs", {}).get().value }, @sfbase.language_from_prefs)
+    // (the chat page this device makes, as chosen in 外观's 试用新对话页, told before any page of nodes is made: the first
+    // chat opened is the page chosen)
+    root.reacts(fn() { src.topic("prefs", {}).get().value }, @sfbase.chat_page_from_prefs)
     // (the window's keys as the core's prefs keep them on this device, changed as they are: settings' keymap.mbt)
     root.keymap(By(fn() { @settings.keymap_of(src.topic("prefs", {}).get().value) })) |> ignore
     // (the window's height, what a chat list's and a chat's first window are worked out of wherever they are first

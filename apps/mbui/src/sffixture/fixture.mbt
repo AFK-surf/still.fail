@@ -25,6 +25,8 @@ pub(all) struct Fixture {
   mut app_update : String
   /// how the composer sends (prefs `sendKey`): `mod`, or "" Enter
   mut send_key : String
+  /// the chat page tried (the prefs' `chatPage`: nodes; "" the old)
+  mut chat_page : String
   archived : Map[String, Bool]
   hidden : Map[String, Bool]
   muted : Map[String, Bool]
@@ -1362,6 +1364,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "faces": fixture_faces(f.fonts),
         "keys": fixture_keys(f.keys),
         "sendKey": if f.send_key == "" { Json::null() } else { Json::string(f.send_key) },
+        "chatPage": if f.chat_page == "" { Json::null() } else { Json::string(f.chat_page) },
         "keymap": fixture_keymap(f.keys, send_key=f.send_key),
         // the rail as the core says it (rail.ts railView), none kept: its default
         "railView": match fixture_kept("railView", {}, None) {
@@ -1838,6 +1841,7 @@ fn made_fixture(mode : String) -> Fixture {
     haptics: "",
     app_update: "",
     send_key: "",
+    chat_page: "",
     archived: {},
     hidden: {},
     muted: {},
@@ -2238,6 +2242,11 @@ pub fn fixture(mode : String) -> Source {
           match field(Some(params), "sendKey") {
             Some(String(k)) => f.send_key = k
             Some(Null) => f.send_key = ""
+            _ => ()
+          }
+          match field(Some(params), "chatPage") {
+            Some(String(p)) => f.chat_page = p
+            Some(Null) => f.chat_page = ""
             _ => ()
           }
           match field(Some(params), "listFilter") {

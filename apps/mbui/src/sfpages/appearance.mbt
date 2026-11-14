@@ -31,6 +31,8 @@ pub fn appearance_node(
     if @ui.takes_drops() {
       k.push("drop")
     }
+    // (the chat page tried: last of this device's own, a trial's place)
+    k.push("chatPage")
     if wide() {
       k.push("rail")
     }
@@ -139,6 +141,16 @@ fn appearance_setting(v : @view.View, core : Core, key : String) -> Unit {
         fn() { @settings.pref(core, "haptics") != "off" },
         fn(on) { @settings.set_pref(core, "haptics", if on { "" } else { "off" }) },
         note=fn() { @sf.t("web-pages.appearance.haptics.description") },
+      )
+    // the chat page made as nodes, tried (the prefs' `chatPage`: sfbase's chat_page_from_prefs), off unless turned on:
+    // a chat page made after the switch is pressed is the one chosen
+    "chatPage" =>
+      @sf.setting_switch_node(
+        v,
+        fn() { @sf.t("web-pages.appearance.chatPage.title") },
+        fn() { @settings.pref(core, "chatPage") == "nodes" },
+        fn(on) { @settings.set_pref(core, "chatPage", if on { "nodes" } else { "" }) },
+        note=fn() { @sf.t("web-pages.appearance.chatPage.description") },
       )
     "language" =>
       choice(

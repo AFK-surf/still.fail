@@ -13,7 +13,7 @@ import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 import { setOwnBuild } from "./station/oldest.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "accent", "windowZoom", "motion", "haptics", "appUpdate", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook", "sendKey"];
+const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "accent", "windowZoom", "motion", "haptics", "appUpdate", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook", "sendKey", "chatPage"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
 const TABS_KEPT = 200;
 /// At most this many jobs kept as looked at in one workspace's bell.
@@ -223,6 +223,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if ("appUpdate" in prefs && prefs.appUpdate !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "appUpdate" }));
   if ("windowZoom" in prefs && !["50", "67", "75", "80", "90", "110", "125", "150", "175", "200"].includes(prefs.windowZoom as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "windowZoom" }));
   if ("sendKey" in prefs && prefs.sendKey !== "mod") throw CoreError.invalid(t("core-misc.params.invalid", { error: "sendKey" }));
+  if ("chatPage" in prefs && prefs.chatPage !== "nodes") throw CoreError.invalid(t("core-misc.params.invalid", { error: "chatPage" }));
   if ("dropAs" in prefs && prefs.dropAs !== "file" && prefs.dropAs !== "path") throw CoreError.invalid(t("core-misc.params.invalid", { error: "dropAs" }));
   if ("shareLook" in prefs && !(typeof prefs.shareLook === "string" && SHARE_LOOK.test(prefs.shareLook))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "shareLook" }));
   if ("archiveHint" in prefs && !["off", "done", "reviewed"].includes(prefs.archiveHint as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "archiveHint" }));

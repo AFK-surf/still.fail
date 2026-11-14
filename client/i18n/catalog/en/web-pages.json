@@ -154,6 +154,8 @@
   "web-pages.appearance.motion.full": "Full",
   "web-pages.appearance.haptics.title": "Haptics",
   "web-pages.appearance.haptics.description": "A light tap as you long-press, send or answer a card",
+  "web-pages.appearance.chatPage.title": "Try the new chat page",
+  "web-pages.appearance.chatPage.description": "A new message list: what you read stays put. Still being completed; turn it off if something is wrong",
   "web-pages.appearance.drop.title": "Files dragged into a chat",
   "web-pages.appearance.drop.description": "Path tells the agent where the file is; File puts it on the chat's station",
   "web-pages.appearance.drop.path": "Path",
