@@ -8,7 +8,6 @@ import { Admin } from "./api/admin.ts";
 import { Events as EventStreams, eventsHandoverFile } from "./api/events.ts";
 import { Host } from "./api/host.ts";
 import { jobSeen, sessionSeen, threadSeen } from "./api/seen.ts";
-import { outputAt, tail } from "./read/jobs.ts";
 import { Store as StationStore } from "./store/store.ts";
 import { sees } from "./store/rows.ts";
 import { buildLegacyEntryLookups } from "./store/legacy-said-builder.ts";
@@ -250,8 +249,14 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
         subscribe: (listener) => store.subscribe(listener),
         host: () => admin.sample(),
         jobLog: (id) => store.getJob(id)?.log ?? null,
-        tail,
-        outputAt,
+        logNow: async (id, lines) => {
+          try {
+            const read = JSON.parse(await readers.read("jobLog", { id, lines: String(lines) }, "zh", { told: true }));
+            return { text: read.text, outputAt: read.outputAt ?? null };
+          } catch {
+            return null;
+          }
+        },
         sessionExists: (key) => store.getSession(key) !== null,
         liveSeen: (viewer, key) => { const ws = store.sessionWs(key); return ws !== undefined && sees(viewer, ws); },
         seen: (viewer, of) => ("session" in of ? sessionSeen(store, viewer, of.session) : "thread" in of ? threadSeen(store, viewer, of.thread) : jobSeen(store, viewer, of.job)),

@@ -23,8 +23,7 @@ test("a job's log is told as it grows, by its watch (before the 5 s look)", asyn
     subscribe: () => () => {},
     host: async () => ({}),
     jobLog: (id) => (id === "j" ? join(dir, "j.log") : null),
-    tail: (path) => readFileSync(path, "utf8"),
-    outputAt: () => 7,
+    logNow: async (id) => (id === "j" ? { text: readFileSync(join(dir, "j.log"), "utf8"), outputAt: 7 } : null),
     sessionExists: () => true,
   });
   writeFileSync(join(dir, "j.log"), "one\n");
