@@ -1494,6 +1494,14 @@ export function offOwnLock(inner: Inner, ws: string): boolean {
     const me = inner.adb.personal().keyId();
     if (!told.some((c) => me !== null && checkChain(c, sub)?.devices.has(me) === true)) return true;
   }
+  // The chain as it moved not held here yet (an app just signed in, its links opened before the lock was read: none
+  // held, or the chain from before), its own lock read already: a station's refusal said the chain moved (its `left`,
+  // given only there, `heardLeft` just before),
+  // and its person has a log of their own it is not on, so that log is what lets it in, as below once the lock is held
+  // (2026-11-14, main's side run at 00b417fd9b, N: each station's first refusal named an admin, the next one 50 ms
+  // later, the lock read by then, the right words).
+  // (a station's `left`, whatever is held: `leftIn` reads it only once the chain held moved)
+  if (inner.adb.personal().standing(sub) === "outside" && part(inner, ws).left.size > 0) return true;
   if (!h?.head) return false;
   // Where the chain moved a device not let in is given no state to read whom it names: its person having a log of their
   // own it is not on (`standing`, of their stations' GET /lock/person) is all it knows, and is enough, as only their own
