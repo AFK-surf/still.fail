@@ -402,6 +402,9 @@ export class LoginRun {
   async #closed(code: number | null, signal: NodeJS.Signals | null): Promise<void> {
     this.#exited = true;
     if (!this.active) return;
+    // What it said last on the screen before it is ended: the emulator parses what it is given later, in order.
+    await new Promise<void>((drawn) => this.#term.write("", drawn));
+    if (!this.active) return;
     if (code === 0) return this.#end("done", null);
     const said = lastLines(this.#said);
     this.#end("failed", said !== "" ? said : tr(this.#o.lang, "station.machineLogin.exited", { code: code !== null ? String(code) : (signal ?? "signal") }));
