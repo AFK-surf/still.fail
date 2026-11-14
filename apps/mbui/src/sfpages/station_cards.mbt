@@ -94,10 +94,7 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
             let parts = words.split("\u{0}").map(fn(p) { p.to_owned() }).collect()
             c.text(parts.get(0).unwrap_or(""), style=nt_words) |> ignore
             figure(c, f)
-            let tail = parts.get(1).unwrap_or("")
-            if tail != "" {
-              c.text(tail, style=nt_words_cut) |> ignore
-            }
+            c.text(parts.get(1).unwrap_or(""), style=nt_words_cut) |> ignore
           })
           |> ignore
         _ => ()
@@ -134,18 +131,19 @@ fn station_net_node(p : @view.View, net : () -> Json?) -> Unit {
         l.show(fn() { has("loss") }, fn(f) { figure_node(f, fn() { field(net(), "loss") }) })
       })
       |> ignore
-      part.show(fn() { has("rtt") }, fn(l) {
-        @sf.style_node(l, fn() { nt_line }, in_row=true)
-        @sf.words_node(l, fn() { "·" }, fn() { nt_words }) |> ignore
-        let parts = fn() {
-          let words = @sf.t("web-pages.stations.latency", args=[("latency", "\u{0}")])
-          words.split("\u{0}").map(fn(p) { p.to_owned() }).collect()
-        }
-        @sf.words_node(l, fn() { parts().get(0).unwrap_or("") }, fn() { nt_words }) |> ignore
-        figure_node(l, fn() { field(net(), "rtt") })
-        l.show(fn() { parts().get(1).unwrap_or("") != "" }, fn(tail) {
-          @sf.words_node(tail, fn() { parts().get(1).unwrap_or("") }, fn() { nt_words_cut }) |> ignore
+      part.show(fn() { has("rtt") }, fn(x) {
+        x.box(fn(l) {
+          @sf.style_node(l, fn() { nt_line }, in_row=true)
+          @sf.words_node(l, fn() { "·" }, fn() { nt_words }) |> ignore
+          let parts = fn() {
+            let words = @sf.t("web-pages.stations.latency", args=[("latency", "\u{0}")])
+            words.split("\u{0}").map(fn(p) { p.to_owned() }).collect()
+          }
+          @sf.words_node(l, fn() { parts().get(0).unwrap_or("") }, fn() { nt_words }) |> ignore
+          figure_node(l, fn() { field(net(), "rtt") })
+          @sf.words_node(l, fn() { parts().get(1).unwrap_or("") }, fn() { nt_words_cut }) |> ignore
         })
+        |> ignore
       })
     })
     |> ignore
