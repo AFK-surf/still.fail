@@ -49,7 +49,11 @@ decide() {
   # change to what apps/mbui's beta is made of (scripts/beta.sh APP_SRC: its code, mbui's with its Android host's
   # Java, JZlib among it, the client's, media's, vendor's), to the tool that packs and repacks its APK (mbui's
   # tools/apk: the repacked APK is what the app's delta applier makes byte for byte), or to how it is released (its
-  # deltas too).
+  # deltas too). Not for the four config files the core's key ends with (apps/mbui/scripts/core.sh HBC_TREES: the
+  # root's and station/'s package.json and tsconfig.json), on purpose, here and for the Mac's and Windows' below: the
+  # key keeps a wrong core.hbc from being taken, this says which pushes release the apps, and those four change about
+  # twice a day (station/package.json's packages) without changing the core. One that does change it ships with the
+  # next release, its core made anew because the key changed.
   android_beta=false
   if has '^(apps/mbui/(src|core|android|ios|engine)/|libs/mbui/(src|android)/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|station/src/(updates/keys|api/moved-from)\.ts$|web/public/avatars/index\.json$|media/|vendor/|libs/mbui/tools/apk/|scripts/(release\.sh|native\.ts|delta\.ts|release-deltas\.ts)$|\.github/release\.sh$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$)'; then android_beta=true; fi
   # The beta Mac app: mbui's in the Electron one's place (scripts/release.sh --beta desktop), released, as the
