@@ -17,7 +17,9 @@
 import { mkdirSync } from "node:fs";
 import { link, mkdir, readdir, realpath, stat, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { REPO_RULES_COMMAND } from "./repo-rules.ts";
+import { fileURLToPath } from "node:url";
+import { REPO_RULES_COMMAND, hookCommand } from "./repo-rules.ts";
+import { SPEAKS } from "../tools/mcp.ts";
 import { RenewRefused } from "../accounts/console.ts";
 import { claudeToken as claudeFileToken } from "../accounts/oauth.ts";
 import { log } from "../ops/log.ts";
@@ -199,8 +201,21 @@ const RENEW_ATTEMPTS = 2;
 /// which its deferral rightly keeps out of every request. A subagent it starts (its Agent tool; general-purpose and
 /// Explore, same day) is listed as its parent is: the two whole in its first request (10.7 KB as the station declares
 /// them), where it had their names before, and nothing of the station's instructions, which --append-system-prompt
-/// gives the main agent alone: it holds chat_post unsearched, untold how a chat is posted to.
+/// gives the main agent alone: it is shown chat_post unsearched, untold how a chat is posted to, and its call of it
+/// is refused (`SILENT_SUBAGENTS`).
 export const CLAUDE_TOOL_LOADED = Object.freeze({ "anthropic/alwaysLoad": true });
+
+/// The hook that refuses a subagent the tools a session speaks by (./subagent-hook.mjs says how it knows one).
+export const SUBAGENT_HOOK = fileURLToPath(new URL("./subagent-hook.mjs", import.meta.url));
+/// A subagent never speaks in a chat (tools/mcp.ts `SPEAKS`), and Claude Code gives one every tool of its session: a
+/// PreToolUse hook on exactly those tools, as Claude Code names them, so that no other call starts a process for it.
+/// On every session that has the station's tools, one continued from a terminal too: with the hook and without, a
+/// session's requests were the same (system prompt, tools, messages; 2.1.323, 2026-11-14), so its cache holds. What
+/// it does not hold: a subagent's shell has the session's token as its parent's has, and a call made from there is
+/// the session's to the station.
+const SILENT_SUBAGENTS = {
+  PreToolUse: [{ matcher: TOOL_SERVERS.flatMap((server) => SPEAKS.map((tool) => `mcp__${server}__${tool}`)).join("|"), hooks: [{ type: "command", command: hookCommand(SUBAGENT_HOOK) }] }],
+};
 
 /// What Claude Code brings of its own that a station's chat agent cannot or must not use, kept out of its context (a
 /// fresh session began at 30k tokens, a third of them these; checked on 2.1.289):
@@ -377,6 +392,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     const fast = fastFor(options);
     const settings = {
       ...(ours ? SETTINGS : {}),
+      ...(options.textOnly ? {} : { hooks: { ...(ours ? SETTINGS.hooks : {}), ...SILENT_SUBAGENTS } }),
       ...(file === undefined ? {} : { apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }),
       // The most context it runs with: it compacts on its own at it (its window for the model, clamped to the model's).
       ...(options.context === undefined ? {} : { autoCompactWindow: options.context }),

@@ -6,5 +6,7 @@ import { fileURLToPath } from "node:url";
 
 export const REPO_RULES_HOOK = fileURLToPath(new URL("./repo-rules-hook.mjs", import.meta.url));
 const quoted = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
-/// The hook as a command (failing quietly where the station's files are not, in a sandbox elsewhere).
-export const REPO_RULES_COMMAND = `${quoted(process.execPath)} ${quoted(REPO_RULES_HOOK)} 2>/dev/null || true`;
+/// A hook's file as a command, run by the station's own Node (failing quietly where the station's files are not, in a
+/// sandbox elsewhere).
+export const hookCommand = (file: string) => `${quoted(process.execPath)} ${quoted(file)} 2>/dev/null || true`;
+export const REPO_RULES_COMMAND = hookCommand(REPO_RULES_HOOK);

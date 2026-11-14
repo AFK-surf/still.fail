@@ -88,6 +88,10 @@
   gives its model no parameter description of a schema over 5,000 bytes (0.169.0, measured 2026-11-14): a description
   says what the tool does and when, the details are its skill's in `src/skills/`, which it names (the user,
   2026-11-14). `test/tools-weight.test.ts` holds the ceilings; raising one needs its reason said in the change.
+- A subagent never speaks in a chat (the user, 2026-11-14: 「subagent 不应该能自己发消息」): the tools a session speaks
+  by (`src/tools/mcp.ts` `SPEAKS`) are its own agent's. The endpoint cannot tell a subagent's call from its parent's
+  (one token a session), so each driver keeps its runtime's subagents from them: Claude Code's by a PreToolUse hook
+  (`src/agents/subagent-hook.mjs`); no other runtime's are held yet.
 - What the still.fail team replies on a bug report never reaches an agent by itself (the user, 2026-11-10: it would be
   outside words in someone's session): still.fail cloud gives the replies only to the chat's workspace's members' apps
   (`client/core-ts/src/feedback-replies.ts`), no station reads or holds them, and an agent sees one only as a person

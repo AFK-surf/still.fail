@@ -42,6 +42,14 @@ export const CORE = ["chat_post", "chat_state", "chat_history", "chat_read", "jo
 /// What every turn calls: an agent's answer reaches people only through chat_post, and a turn ends with chat_state.
 export const EVERY_TURN = ["chat_post", "chat_state"];
 
+/// By which a session speaks or acts in chats as itself: it posts, ends its turn, writes to another chat's agent, opens
+/// a chat, leaves one, archives one. They are for the session's own agent alone (the user, 2026-11-14: 「subagent
+/// 不应该能自己发消息」): one it started hands its result back to it and says nothing itself. The endpoint cannot hold
+/// that: a subagent's call comes with its session's token, as its parent's does, so each runtime's driver keeps its
+/// subagents from these (agents/claude.ts `SILENT_SUBAGENTS`). Not OUTWARD, which is where a call lands whoever makes
+/// it: a subagent starts a job or a task as its parent would, and chat_state lands nowhere outside the station.
+export const SPEAKS = ["chat_post", "chat_state", "session_send", "chat_create", "chat_leave", "chat_archive"];
+
 /// What a session's runtime needs of its list of tools; nothing said, the list is every tool as it is.
 export type Listing = {
   /// How many bytes of tools it declares to its model, for one that drops those beyond (`fitted`).

@@ -10,10 +10,11 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { ClaudeDriver, type ClaudeDriverOptions, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
+import { ClaudeDriver, type ClaudeDriverOptions, SUBAGENT_HOOK, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
 import { RenewRefused } from "../src/accounts/console.ts";
 import { Said } from "../src/ops/i18n.ts";
 import { REPO_RULES_HOOK } from "../src/agents/repo-rules.ts";
+import { SPEAKS } from "../src/tools/mcp.ts";
 import { claudeProject } from "../src/read/transcript.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
 import { modelLimitOf } from "../src/agents/runtime.ts";
@@ -181,6 +182,8 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.ok(args.includes("--no-session-persistence"));
     assert.ok(!args.includes("--dangerously-skip-permissions"));
     assert.deepEqual(JSON.parse(args[args.indexOf("--mcp-config") + 1]!), { mcpServers: {} });
+    // With none of the station's tools, nothing to keep a subagent from.
+    assert.equal(JSON.parse(args[args.indexOf("--settings") + 1]!).hooks.PreToolUse, undefined);
     await session.dispose();
   });
 
@@ -219,6 +222,15 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const [rules] = settings.hooks.PostToolUse;
     assert.match(rules.matcher, /^Bash\|Read\|/);
     assert.ok(rules.hooks[0].command.includes(REPO_RULES_HOOK), rules.hooks[0].command);
+    // A subagent kept from the tools a session speaks by (test/subagent-hook.test.ts): those tools and no other, as
+    // Claude Code names them.
+    assert.deepEqual(Object.keys(settings.hooks).sort(), ["PostToolUse", "PreToolUse", "SessionStart"]);
+    const [silent] = settings.hooks.PreToolUse;
+    assert.equal(settings.hooks.PreToolUse.length, 1);
+    assert.equal(silent.matcher, SPEAKS.map((tool) => `mcp__stillfail__${tool}`).join("|"));
+    assert.equal(silent.matcher, "mcp__stillfail__chat_post|mcp__stillfail__chat_state|mcp__stillfail__session_send|mcp__stillfail__chat_create|mcp__stillfail__chat_leave|mcp__stillfail__chat_archive");
+    assert.deepEqual(silent.hooks.map((h: any) => h.type), ["command"]);
+    assert.ok(silent.hooks[0].command.includes(SUBAGENT_HOOK) && silent.hooks[0].command.includes(process.execPath), silent.hooks[0].command);
     const [compacted] = settings.hooks.SessionStart;
     assert.equal(compacted.matcher, "compact");
     assert.ok(compacted.hooks[0].command.includes(REPO_RULES_HOOK), compacted.hooks[0].command);
@@ -243,6 +255,22 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await until(ended(2));
     await session.dispose();
     await until((e) => e.some((x) => x.type === "closed"));
+  });
+
+  test("a session continued from a terminal keeps its subagents from speaking too, and is given nothing else of the station's settings", async () => {
+    const d = driver();
+    const o = options({ instructions: "" });
+    const { push, until } = listen();
+    const session = await d.open(o, push);
+    await session.prompt("say:hi");
+    await until(ended(1));
+    const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
+    assert.ok(!started.argv.includes("--append-system-prompt") && !started.argv.includes("--disallowedTools"));
+    const settings = JSON.parse(started.argv[started.argv.indexOf("--settings") + 1]);
+    assert.deepEqual(Object.keys(settings), ["hooks"]);
+    assert.deepEqual(Object.keys(settings.hooks), ["PreToolUse"]);
+    assert.ok(settings.hooks.PreToolUse[0].hooks[0].command.includes(SUBAGENT_HOOK));
+    await session.dispose();
   });
 
   test("a session kept to less context starts Claude Code compacting at it", async () => {
