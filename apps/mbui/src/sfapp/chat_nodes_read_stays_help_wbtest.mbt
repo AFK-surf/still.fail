@@ -140,8 +140,8 @@ fn rs_answer(k : RsCore) -> Unit {
 
 ///|
 /// The long chat opened on screen `s` with its page made as nodes, at its end and at rest, the core answering at once.
-/// Its list's rows on the device's pixels.
-fn rs_open(s : (String, Double, Double, Int)) -> (@ui.Tester, Source, RsCore) {
+/// Its list's rows on the device's pixels. The opening run on by rs_skip where `skip` is said (else rs_rest).
+fn rs_open(s : (String, Double, Double, Int), skip? : Bool = false) -> (@ui.Tester, Source, RsCore) {
   let (_, w, h, platform) = s
   new_run()
   @sf.presenters_reset()
@@ -183,7 +183,11 @@ fn rs_open(s : (String, Double, Double, Int)) -> (@ui.Tester, Source, RsCore) {
   )
   // (and a frame at each moment a held answer of the core's comes due, however the clock is run on: rs_due)
   t.between_frames(fn() {  }, due=fn() { rs_due(k) })
-  rs_rest(t, long_opened_ms)
+  if skip {
+    rs_skip(t, k, long_opened_ms)
+  } else {
+    rs_rest(t, long_opened_ms)
+  }
   (t, src, k)
 }
 
@@ -223,6 +227,26 @@ fn rs_rest(t : @ui.Tester, ms : Double) -> Unit {
 }
 
 ///|
+/// `ms` gone by with nothing looked at on the way, in one step at any rate as at the default: a frame at each moment a
+/// held answer of the core's comes due on the way (rs_due: what the outside says, told at its moment) and one at its
+/// end, none between; what the app said was due on the way (a wake, a motion's end) is done by that frame, where it is
+/// the same however many frames were drawn on the way. rs_rest at a rate (MBUI_TEST_FPS) draws the rate's frames on
+/// its way while the app asks for frames: as anything moves (the page's slide in, a read up's glide) and as it only
+/// waits for a wake (the scroll bar's hiding after a read up, the composer's let go as the page opens: Ctx::at_rest),
+/// at 120 a second some 3000 of the composer's 7100 frames, none of them looked at. (An opening and a read up at a
+/// rate are chat_nodes_read_stays_wbtest's.)
+fn rs_skip(t : @ui.Tester, k : RsCore, ms : Double) -> Unit {
+  let end = t.time() + ms
+  while t.time() < end - 1.0e-6 {
+    let now = t.time()
+    let due = rs_due(k)
+    // (one already due: the display's next frame)
+    let next = if due <= now + 1.0e-6 { now + t.frame_period() } else { due }
+    t.frame(ms=(if next < end { next } else { end }) - now)
+  }
+}
+
+///|
 /// A stroke reading up by `d` (a finger dragging down on 小屏, the wheel on 大屏), from the middle of the list.
 fn rs_up(t : @ui.Tester, s : (String, Double, Double, Int), d : Double) -> Unit {
   let (_, w, h, platform) = s
@@ -235,12 +259,19 @@ fn rs_up(t : @ui.Tester, s : (String, Double, Double, Int), d : Double) -> Unit 
 }
 
 ///|
-/// Read up about a screen from the end and come to rest, what that asks of the core answered at once.
-fn rs_read_up(t : @ui.Tester, s : (String, Double, Double, Int)) -> Unit {
+/// Read up about a screen from the end and come to rest, what that asks of the core answered at once; its rests run on
+/// by rs_skip where `skip` is given (else rs_rest).
+fn rs_read_up(t : @ui.Tester, s : (String, Double, Double, Int), skip? : RsCore) -> Unit {
+  let rest = fn(ms : Double) {
+    match skip {
+      Some(k) => rs_skip(t, k, ms)
+      None => rs_rest(t, ms)
+    }
+  }
   rs_up(t, s, s.2 * 0.4)
-  rs_rest(t, long_rest_ms)
+  rest(long_rest_ms)
   rs_up(t, s, s.2 * 0.4)
-  rs_rest(t, long_rest_ms * 2.0)
+  rest(long_rest_ms * 2.0)
 }
 
 ///|

@@ -198,9 +198,9 @@ fn rs_composer(
   with_cards? : Bool = true,
 ) -> Array[String] {
   let out : Array[String] = []
-  let (t, src, k) = rs_open(s)
+  let (t, src, k) = rs_open(s, skip=true)
   if !at_end {
-    rs_read_up(t, s)
+    rs_read_up(t, s, skip=k)
   }
   k.late = late
   let held = fn(what : String, grows : Bool, cause : () -> Unit) {
@@ -226,7 +226,7 @@ fn rs_composer(
     out.push("\{name}: the composer's field not focused by a tap (the cause not made)")
   }
   t.type_text("第一行")
-  rs_watch(t, k.late + rs_watch_ms)
+  rs_skip(t, k, k.late + rs_watch_ms)
   rs_push(out, held("\{name}: a second line typed", true, fn() { rs_line(t, s.3, "第二行") }))
   rs_push(out, held("\{name}: a third line typed", true, fn() { rs_line(t, s.3, "第三行") }))
   let add_file = fn() { @sfbase.writing_add(src, draft, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志")) }
@@ -320,15 +320,15 @@ test "a chat's page made as nodes, on 小屏: the keyboard coming up and going, 
       t.resize_next(w, h)
     }
   }
-  let (t, _, k) = rs_open(s)
-  rs_read_up(t, s)
+  let (t, _, k) = rs_open(s, skip=true)
+  rs_read_up(t, s, skip=k)
   rs_focus(t)
-  rs_watch(t, rs_watch_ms)
+  rs_skip(t, k, rs_watch_ms)
   rs_push(broken, rs_read_held(t, k, s, "the keyboard up", up(t)))
   rs_push(broken, rs_read_held(t, k, s, "the keyboard down", down(t)))
-  let (t, _, k) = rs_open(s)
+  let (t, _, k) = rs_open(s, skip=true)
   rs_focus(t)
-  rs_watch(t, rs_watch_ms)
+  rs_skip(t, k, rs_watch_ms)
   rs_push(broken, rs_end_held(t, k, "the keyboard up", up(t)))
   rs_push(broken, rs_end_held(t, k, "the keyboard down", down(t)))
   assert_eq(broken, [])
