@@ -1,4 +1,6 @@
-// A checkbox (mbui kit's checkbox, in still.fail's look: checkbox_look) as a node of the window's tree, made once.
+// A checkbox (mbui kit's checkbox, in still.fail's look: checkbox_look) as a node of the window's tree, made once: its
+// look over mbui's headless toggle (@headless.toggle), whose it is that it is read out a checkbox, on or off, pressed
+// and focused only while not disabled.
 
 ///|
 /// A checkbox in `parent`, on or off as `on` says: 18 square, its corner 6, on the page's ground edged in the theme's
@@ -15,7 +17,7 @@ pub fn check_node(
   disabled? : () -> Bool = fn() { false },
   loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(made_for=loc, fn(b) {
+  @headless.toggle(made_for=loc, parent, Checkbox, label, on, turn, disabled~, fn(b, _) {
     b
     .width(Is(Some(check_side)))
     .height(Is(Some(check_side)))
@@ -38,13 +40,7 @@ pub fn check_node(
       (1.0, line)
     }))
     .alpha(By(fn() { if disabled() { check_disabled_alpha } else { 1.0 } }))
-    .says(By(fn() { Some(@view.said(Checkbox, label=label(), check=if on() { On } else { Off })) }))
     |> ignore
-    presses_node(b, on=fn() { !disabled() }, fn() {
-      if !@signals.untracked(disabled) {
-        turn(!@signals.untracked(on))
-      }
-    })
     b.show(on, fn(m) {
       m
       .words(Is("✓"))

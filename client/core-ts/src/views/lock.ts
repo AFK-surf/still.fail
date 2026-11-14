@@ -42,14 +42,15 @@ import type { SpanContext } from "../trace.ts";
 import { get, hex, isObject, sha256, utf8 } from "../util.ts";
 import { type Checked, checkLock, lockChain, signerIn } from "../vault/lock-check.ts";
 import { AGAIN_MOST, againOf, hashOf, keep, links } from "../lock-keep.ts";
-import { tookOut, tookOutMoved, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
+import { levelVaults, levelVaultsOf, tookOut, tookOutMoved, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
-import { type ChainWeb, type Device as PersonDevice, type PersonalEnv, type Stated, type Statements, checkChain, personOf, personRules } from "../personal-lock.ts";
+import { type Device as PersonDevice, type PersonalEnv, type Stated, type Statements, checkChain, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
 import { type Said, bodiesOf, byHash, plan, prevOf } from "../lock-statements.ts";
-import { type BuildsSeen, HAND_OVER_FROM, HAND_OVER_HELD, HAND_OVER_LOG_MOST, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, devicesWaited, handOverPlan, mayHandOver } from "../lock-handover.ts";
+import { type BuildsSeen, HAND_OVER_FROM, HAND_OVER_HELD, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, ableBuild, devicesWaited, handOverPlan, mayHandOver } from "../lock-handover.ts";
+import { buildOf, ownBuild } from "../station/oldest.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -491,7 +492,7 @@ export function inForceOf(inner: Inner, ws: string, entries: readonly Entry[] = 
   const chains = logsOf(inner, ws, false);
   const names = arr(listed);
   const made = inForce(ws, entries, chains, bodiesHeld(inner, ws), inner.host.nowMs(), (key) => str(names.find((s) => s?.id === key)?.name) || undefined);
-  p.force = { entries, logs, bodies, own, listed, ...goodFor(chains.values(), at), made };
+  p.force = { entries, logs, bodies, own, listed, ...goodFor(chains.values(), at, entries), made };
   // (the vaults follow the state as it is made anew, whatever made it so: a person's log, a body, the clock; in a turn
   // of their own, never on the read that made it, views/vault.ts vaultCome)
   if (entries === held(inner, ws)?.entries) inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => (keepSafe(inner, ws), vaultCome(inner, ws))))));
@@ -818,7 +819,7 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
           else p.serving.delete(id);
           if (r._tag === "Success" && arr(get(r.success, "serves")).includes("forks")) p.forks.add(id);
           else p.forks.delete(id);
-          if (r._tag === "Success") keepServes(inner, ws, id, ["bodies", "logs", "builds"].every((x) => arr(get(r.success, "serves")).includes(x)));
+          if (r._tag === "Success") keepServes(inner, ws, id, SERVES_MOVED.every((x) => arr(get(r.success, "serves")).includes(x)));
           // (and what it saw of the devices' builds, src/lock-handover.ts `devicesWaited`)
           if (r._tag === "Success") keepBuilds(inner, LOCK_BUILDS, ws, id, arr(get(r.success, "serves")).includes("builds") ? get(r.success, "builds") : null);
           if (r._tag !== "Success" || !p.serving.has(id)) return null;
@@ -956,6 +957,7 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     yield* hold(inner, ws, sub, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]), head === null ? [] : parted, logsKept || bodiesKept);
     carry(inner, ws, served);
     carryBodies(inner, ws, served);
+    bringMoved(inner, ws, served);
     // A station of the lock answered: what is pending here is brought to them now.
     deliver(inner, ws);
     return true;
@@ -1047,6 +1049,35 @@ function carry(inner: Inner, ws: string, served: readonly { id: string; head: He
     if (p.carried.has(at)) continue;
     p.carried.add(at);
     inner.runner.fork(Effect.ignore(inner.stations.requests.call(new StationAddr(ws, a.id), "POST", "/lock", { entries: kept, keep: true }, { quiet: true }), { log: "Unhandled", message: "lock entries carried to a station" }));
+  }
+}
+
+/// Where the chain held moved: each station just read (or just said, `stationMoved`) that the state in force here names
+/// and that keeps no lock, or one not at the chain held, brought the chain as it moved with the logs and bodies its
+/// state is made of (POST /lock: the door a station keeping no lock pins one by, station/src/mesh/moved-pin.ts
+/// `pinBrought`, which pins only where that state lets this device in as an owner's and names it). As an unmoved
+/// chain's `station` entry reaches its station whenever it is next read (`carry`, `deliver`): a station not reached at
+/// the press, or refusing it then, is protected as it is next read, nothing pressed again (the lead, 2026-11-14). An
+/// owner's device only (the station refuses any other); once for each station and what is brought, this run, unless it
+/// failed; forked, waited on by no one, never tried again on a timer (the next read tries again).
+function bringMoved(inner: Inner, ws: string, served: readonly { id: string; head: Head | null }[]): void {
+  const h = held(inner, ws);
+  const sub = inner.workspaces.owner(ws);
+  if (!h?.head || sub === null || !movedHere(inner, ws)) return;
+  const f = stateOf(inner, ws);
+  if (f.members.get(sub)?.role !== "owner") return;
+  const logs = [...logsOf(inner, ws, false).values()];
+  const bodies = bodiesHeld(inner, ws);
+  const what = `moved/${h.head.hash}/${logs.map((l) => `${l.length}:${l.length > 0 ? hashOf(l[l.length - 1]!) : ""}`).join(",")}/${bodies.length}`;
+  const p = part(inner, ws);
+  for (const a of served) {
+    if (!f.stations.has(a.id) || (a.head !== null && a.head.genesis === h.head.genesis)) continue;
+    const at = `${a.id}/${what}`;
+    if (p.carried.has(at)) continue;
+    p.carried.add(at);
+    // (not reached, or refused: let go of, so that the next read brings it again)
+    const bring = inner.stations.requests.call(new StationAddr(ws, a.id), "POST", "/lock", { entries: h.entries, logs, bodies }, { quiet: true });
+    inner.runner.fork(Effect.ignore(Effect.tapError(bring, () => Effect.sync(() => p.carried.delete(at))), { log: "Unhandled", message: "a moved lock brought to a station its state names" }));
   }
 }
 
@@ -1175,6 +1206,7 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   heardRefused(inner, ws, told?.person);
   heardTail(inner, ws, told?.entries);
   heardOut(inner, ws, told?.out);
+  heardOwnOnPage(inner, ws, told?.person);
   heardLeft(inner, ws, station, told?.left);
   const h = held(inner, ws);
   const base = p.base ?? bases.get(inner) ?? null;
@@ -1215,6 +1247,19 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   p.refused.set(station, h?.head?.hash ?? null);
   touch(inner, ws);
   return unconfirmed(inner, ws);
+}
+
+/// A web page refused where the chain moved takes its person's own log as the refusal tells it (`person`, as an app
+/// takes it on its own lock, `heardRefused`): a page holds no lock of its person's own, and that log is where it was
+/// taken off (`web.remove`). Else it kept the log as it was given it while in, the state it made still naming it, and
+/// was told for good that the station had not heard of its approval yet (`core-misc.lock.behind`), its page confirmed,
+/// 30 days left (2026-11-14, the locks' end to end, round 16: W taken out on 设置 › 安全).
+function heardOwnOnPage(inner: Inner, ws: string, raw: unknown): void {
+  if (inner.host.appKeys === true || !movedHere(inner, ws) || !Array.isArray(raw)) return;
+  if (keepLogs(inner, ws, raw)) {
+    touch(inner, ws);
+    keepSafe(inner, ws);
+  }
 }
 
 /// What took this device out of a moved workspace, as a station's refusal tells it (station/src/mesh/serve.ts
@@ -1315,10 +1360,16 @@ function outText(inner: Inner, ws: string): string | null {
   return t("core-misc.lock.out", { name, time: format.dateClock(ms, inner.host.utcOffsetMin(ms)) });
 }
 
-/// Why a station is not asked now: it refused this device and the lock has not moved on since.
+/// Why a station is not asked now: it refused this device and the lock has not moved on since. Where the chain moved
+/// it never moves on (what lets a device in is said in its people's logs, which one left out is not given, and nothing
+/// of it reaches the cloud), so a station of the same lock that refused it is asked again at its link's own retry, its
+/// backoff and cap (station/link.ts), as a station that is down is: else a device let in by a statement it is not given
+/// came in only as the person opened the app again or pressed, which a move must not add (the lead, 2026-11-14; the
+/// locks' end to end, round 12: bob's second app, after he was made a member again, never asked again).
 function waiting(inner: Inner, ws: string, station: string): CoreError | null {
   const p = inner.workspaces.get(ws)?.own.get("lock") as Part | undefined;
   if (!p || !p.refused.has(station)) return null;
+  if (movedHere(inner, ws) && keeps(inner, ws, station)) return null;
   if (p.refused.get(station) !== (held(inner, ws)?.head?.hash ?? null)) {
     p.refused.delete(station);
     return null;
@@ -1375,6 +1426,21 @@ export function onBoundPerson(inner: Inner, ws: string): boolean {
 
 /// An app device of this person's in the workspace's lock that is on the lock of their own they bound there, as this
 /// device (on it too) has it: whose, and its key on that lock. None otherwise.
+/// An app device of this device's person's that the state of moved workspace `ws` names by the chain as it moved alone
+/// (`by` "chain": their own log never put it on), where this device is on their own log and that log binds them there:
+/// its person and label. One theirs alone to take off (`removeCarried`). (A member the chain bound to no log and no
+/// statement bound since has no log the state reads: their device goes out only with them, by a removal.)
+function carriedOwn(inner: Inner, ws: string, id: string): { sub: string; label: string } | null {
+  const sub = inner.workspaces.owner(ws);
+  const personal = inner.adb.personal();
+  if (sub === null || personal.standing(sub) !== "member") return null;
+  const f = stateOf(inner, ws);
+  if (f.persons.get(sub) !== personal.root(sub)) return null;
+  const d = f.devices.get(id);
+  if (d === undefined || d.sub !== sub || d.kind !== "app" || d.by !== "chain") return null;
+  return { sub, label: str(d.label) ?? "" };
+}
+
 function onOwnLock(inner: Inner, ws: string, id: string): { sub: string; key: string } | null {
   const sub = inner.workspaces.owner(ws);
   const h = held(inner, ws);
@@ -1406,7 +1472,18 @@ export function signsAs(inner: Inner, ws: string): { locked: boolean; as: "lock"
 export function offOwnLock(inner: Inner, ws: string): boolean {
   const sub = inner.workspaces.owner(ws);
   const h = held(inner, ws);
-  if (sub === null || !h?.head || !inner.host.appKeys) return false;
+  if (sub === null || !inner.host.appKeys) return false;
+  // Told so by the refusal just now: its person's own log, which this device is not on (`heardRefused`, kept as the
+  // refusal came; the person's lock takes it in only once it is loaded here, and a refusal that came first named whom
+  // to ask by what it held before, an admin; 2026-11-14, the side run of f6cfdf7af1, N: 「…或请其管理员…」 then
+  // `lock.pair` "this device waits in no workspace" a moment before it knew).
+  // (only until the person's lock here has heard of one: then it says, `standing` below)
+  const told = inner.adb.personal().standing(sub) === "none" ? (refusedChains.get(inner)?.get(sub) ?? []) : [];
+  if (told.length > 0) {
+    const me = inner.adb.personal().keyId();
+    if (!told.some((c) => me !== null && checkChain(c, sub)?.devices.has(me) === true)) return true;
+  }
+  if (!h?.head) return false;
   // Where the chain moved a device not let in is given no state to read whom it names: its person having a log of their
   // own it is not on (`standing`, of their stations' GET /lock/person) is all it knows, and is enough, as only their own
   // app devices put it on that log and so let it in (2026-11-14, the locks' end to end after #6102: its page and refusal
@@ -1759,66 +1836,43 @@ export function ancestors(own: OwnStandings, id: string): OwnDevice[] {
   return out;
 }
 
-/// The workspaces' locks in safe mode this device holds for `sub`, each with what it says of their devices.
+/// The workspaces' locks in safe mode this device holds for `sub`, each with what it says of their devices. A chain that
+/// moved is read as it moved (its entries before the `moved`, frozen): what the logs have not said yet of those it
+/// named it still says (rules/src/lock/state4.mbt `carry_of`, 2026-11-14), so a person's device the chain named and their
+/// log does not is put on that log by their other device after the move as before it (`approvedIn`), and so taken off
+/// it as any (one whose id or key was ever on the log is never put back).
 function ownLocks(inner: Inner, sub: string): { ws: string; h: Held; f: Folded; own: OwnStandings }[] {
   const out: { ws: string; h: Held; f: Folded; own: OwnStandings }[] = [];
   for (const [ws, owner] of inner.workspaces.owned()) {
     const h = held(inner, ws);
-    // (a chain that moved vouches for nothing more: what its entries said is no longer in force)
-    if (owner !== sub || !h?.head || movedHere(inner, ws)) continue;
-    const f = fold(h.entries);
-    if (!f.disabled) out.push({ ws, h, f, own: ownStandings(h.entries, sub, now(inner)) });
+    if (owner !== sub || !h?.head) continue;
+    const at = h.entries.findIndex((e) => e.kind === "moved");
+    const entries = at < 0 ? h.entries : asMoved(h.entries, at);
+    const f = fold(entries);
+    if (!f.disabled) out.push({ ws, h, f, own: ownStandings(entries, sub, now(inner)) });
   }
   return out;
 }
+/// A moved chain's entries before its `moved`, the same array each time for the same chain held (ownStandings keeps
+/// what it worked out by the array).
+const movedChains = new WeakMap<readonly Entry[], readonly Entry[]>();
+const asMoved = (entries: readonly Entry[], at: number): readonly Entry[] => {
+  let out = movedChains.get(entries);
+  if (out === undefined) movedChains.set(entries, (out = entries.slice(0, at)));
+  return out;
+};
 
 /// What a person's own lock reads of the workspaces' locks (personal-lock.ts `approved`, `vouchers`): the devices to
 /// put on it as it stands (`approvedIn`), this device's own id and signing key telling which is this one; the keys said
 /// up this device's lineages (`vouchersIn`).
-export function ownLockEnv(inner: Inner): Pick<PersonalEnv, "approved" | "vouchers" | "webs" | "handOvers"> {
+export function ownLockEnv(inner: Inner): Pick<PersonalEnv, "approved" | "vouchers"> {
   return {
-    handOvers: (sub) => handOversIn(inner, sub),
-    webs: (sub, genesis) => websIn(inner, sub, genesis),
     approved: (sub, chain) => approvedIn(ownLocks(inner, sub).map((l) => l.own), sub, { id: bases.get(inner) ?? null, signKey: signerOf(inner) }, chain),
     vouchers: (sub) => {
       const base = bases.get(inner) ?? null;
       return base === null ? new Set<string>() : vouchersIn(ownLocks(inner, sub).map((l) => l.own), sub, base);
     },
   };
-}
-
-/// The web pages of `sub`'s that the chains of their workspaces held here name (personal-lock.ts `#addWebs`): of each
-/// chain this device checked itself (`checkLock`, by its clock), not turned off, that binds `sub` to the lock begun by
-/// `genesis`, each `web` device of theirs it names, not run out, nor taken off it; a chain that moved too (it is
-/// frozen as it was and still names them, so a page comes back as its person next does something on their app). One
-/// a page, its `exp` the latest of the chains', `by` the key that signed the entry that named it so there. None until
-/// `web` may be written in their log: a station or app from before `web` refuses a log holding one whole
-/// (rules/AGENTS.md), so only once everything that keeps or reads it takes it (`mayWriteNew`).
-export function websIn(inner: Inner, sub: string, genesis: string): ChainWeb[] {
-  const out = new Map<string, ChainWeb>();
-  const at = now(inner);
-  // (while chains are held from moving, src/lock-handover.ts `HAND_OVER_HELD`, only where one of theirs moved already)
-  if (!handsOver(inner) && !inner.workspaces.owned().some(([ws, owner]) => owner === sub && movedHere(inner, ws))) return [];
-  if (!mayWriteNew(inner, sub)) return [];
-  for (const [ws, owner] of inner.workspaces.owned()) {
-    const h = held(inner, ws);
-    if (owner !== sub || !h?.head) continue;
-    let lock: Checked;
-    try {
-      lock = checkLock([...h.entries], at);
-    } catch {
-      continue;
-    }
-    const f = fold(h.entries);
-    if (lock.disabled || f.persons.get(sub) !== genesis) continue;
-    for (const [id, d] of lock.devices) {
-      if (d.kind !== "web" || d.sub !== sub || typeof d.exp !== "number" || d.exp <= at || (out.get(id)?.exp ?? 0) >= d.exp) continue;
-      let by: string | null = null;
-      for (const e of h.entries) if (e.kind === "device" && (e.body as J)?.id === id) by = str(e.sig?.key);
-      if (by !== null) out.set(id, { id, label: str(get(f.devices.get(id), "label")) ?? "", exp: d.exp, by });
-    }
-  }
-  return [...out.values()];
 }
 
 /// Of what workspaces' locks say of `sub`'s devices (ownStandings): those to put on their own lock as it stands
@@ -1947,7 +2001,9 @@ function ownLockOnce(inner: Inner, sub: string): Effect.Effect<void, CoreError> 
     if (signer === null || base === null) return;
     // (a workspace of theirs with no lock record is not known, not without a lock: read, it asks again, `hold`)
     if (inner.workspaces.owned().some(([ws, owner]) => owner === sub && held(inner, ws) === null)) return;
-    const locks = ownLocks(inner, sub);
+    // (a moved chain begins no lock and is said nothing on: it vouches only for what its person's other device puts on
+    // their log, `approvedIn`)
+    const locks = ownLocks(inner, sub).filter((l) => !movedHere(inner, l.ws));
     const mine = locks.filter((l) => l.own.devices.get(base)?.sign_key === signer);
     if (mine.length === 0) return;
     const relevant = locks.filter((l) => l.own.devices.size > 0);
@@ -2154,6 +2210,8 @@ function personShownOf(inner: Inner) {
 /// as it comes, a late one too: `answered` is whether every station of theirs the control plane saw in SEEN_SECS did,
 /// and one at least. A lock of theirs kept only by a station that did not answer would get a second one begun beside
 /// it; one the control plane has not seen for a month is not waited for.
+
+
 export function personalStations(inner: Inner): NonNullable<PersonalEnv["stations"]> {
   const heardOf = (sub: string): Set<string> => {
     let m = answeredOf.get(inner);
@@ -2206,9 +2264,7 @@ export function personalStations(inner: Inner): NonNullable<PersonalEnv["station
           // back for it alone, is asked again now. Nothing else would ask it until a lock of theirs next moved.
           if (!before && answered(sub)) inner.runner.fork(ownLockFor(inner, at.workspace));
         });
-        // (with what it serves and saw of the builds of this person's own devices, `mayWriteNew`)
-        const builds = (answer: unknown) => Effect.sync(() => keepBuilds(inner, PERSON_BUILDS, sub, at.station, ["logs", "builds"].every((x) => arr(get(answer, "serves")).includes(x)) ? get(answer, "builds") : null));
-        return Effect.tapError(Effect.tap(inner.stations.requests.call(at, "GET", "/lock/person", null, { quiet: true }), (answer) => Effect.andThen(Effect.andThen(noted, kept(at, answer)), builds(answer))), (e) => (e.code === "lock_unconfirmed" ? noted : Effect.void));
+        return Effect.tapError(Effect.tap(inner.stations.requests.call(at, "GET", "/lock/person", null, { quiet: true }), (answer) => Effect.andThen(noted, kept(at, answer))), (e) => (e.code === "lock_unconfirmed" ? noted : Effect.void));
       };
       return Effect.map(answersOf(inner, asked.map(ask), () => OTHERS_MS, asked.map(String)), (answers) => {
         const ok = answers.filter((r) => r._tag === "Success");
@@ -2779,10 +2835,13 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         // refused (the stations let their app devices in on that lock alone), so it asks to join that one instead, the
         // same code shown on a device on it (2026-11-10: a new phone approved here went on being refused, 「已经批过了啊」).
         // (where the chain moved, its person having a log of their own this device is not on: so too, `waitingIn`)
-        if (offOwnLock(inner, c.workspace)) {
-          const sub = inner.workspaces.owner(c.workspace);
-          if (sub !== null) return yield* inner.adb.run({ kind: "personalJoin", sub });
+        // Asked before this device knows which it is (the lock not held yet, or its person's own lock not heard of):
+        // both read first, within the call's wait, as the page that waits would have them (2026-11-14, the side run
+        // of f6cfdf7af1: asked a moment after the first refusal, "this device waits in no workspace").
+        if (!offOwnLock(inner, c.workspace) && (!held(inner, c.workspace)?.head || inner.adb.personal().standing(sub) === "none")) {
+          yield* within.wait(Effect.ignore(Effect.all([read(inner, c.workspace), inner.adb.personal().refresh(sub)], { concurrency: "unbounded", discard: true }), { log: "Unhandled", message: "lock read before asking" }));
         }
+        if (offOwnLock(inner, c.workspace)) return yield* inner.adb.run({ kind: "personalJoin", sub });
         return yield* pairs.run(inner, c.name, c.workspace, c.params);
       case "pairCode":
       case "pairCancel":
@@ -2803,6 +2862,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         // 设置 › 安全 did nothing that lasted).
         const own = onOwnLock(inner, c.workspace, param("device"));
         if (own !== null) {
+          // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
+          yield* levelVaultsOf(inner, own.sub, param("device"));
           const off = yield* withBound(inner, own.sub, Effect.tap(inner.adb.personal().removeDevice(own.sub, own.key, t("core-misc.personal.reason.remove")), () => takeOffBound(inner, own.sub, param("device"))));
           // (pending on their own lock, or, taken there by a station of another workspace of theirs, in this one's:
           // said so either way, as this workspace's page shows it)
@@ -2811,8 +2872,24 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
           // (pending on their own lock alone: its row as this workspace's topic shows it, `ownPendingRows`)
           return off === null ? null : { pending: { ...off.pending, id: `${OWN_PENDING}${off.pending.id}` } };
         }
-        // (where the chain moved, a web page of the person's is taken off their own log, `web.remove`)
-        result = movedHere(inner, c.workspace) ? yield* webMoved(inner, sub, c.workspace, param("device"), "web.remove") : yield* lock.append("device.remove", { id: param("device") });
+        // (where the chain moved, an app device of the person's the chain as it moved carries, not on their own log, is
+        // taken off it there, `removeCarried`; a web page of theirs, `web.remove`)
+        if (movedHere(inner, c.workspace) && carriedOwn(inner, c.workspace, param("device")) !== null) {
+          const d = carriedOwn(inner, c.workspace, param("device"))!;
+          const name = deviceText({ kind: "app", label: d.label });
+          // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
+          yield* levelVaultsOf(inner, d.sub, param("device"));
+          // (the vaults of theirs that held a key for it keyed anew at once, in every moved workspace their log binds, as
+          // `takeOffBound` does: `tookOutMoved`)
+          result = yield* Effect.tap(inner.adb.personal().removeCarried(d.sub, param("device"), d.label, actText({ act: "removeDevice", name })), () =>
+            Effect.sync(() => {
+              for (const [ws, owner] of inner.workspaces.owned()) if (owner === d.sub && movedHere(inner, ws)) tookOutMoved(inner, ws, param("device"));
+              touch(inner, c.workspace);
+            }));
+          break;
+        }
+        // (on the chain, the vaults read first while the device is still in: views/vault.ts `levelVaults`)
+        result = movedHere(inner, c.workspace) ? yield* webMoved(inner, sub, c.workspace, param("device"), "web.remove") : yield* Effect.andThen(levelVaults(inner, c.workspace), lock.append("device.remove", { id: param("device") }));
         break;
       }
       case "disable": {
@@ -2837,8 +2914,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         if (secrets.length > 0) inner.runner.fork(writePlain(inner, c.workspace, secrets));
         break;
       }
-      // The chain handed over to its people's own logs: where chains are handed over by themselves (`handsOver`: the
-      // owner's page offers it as `upgrade.askText` where only an ask is lacking), or the host is one made for tests;
+      // The chain handed over to its people's own logs: where chains are handed over by themselves (`handsOver`; it moves
+      // by itself, `movedBySelf`, asking nobody, so the page offers no button for it), or the host is one made for tests;
       // else as no such call is answered.
       case "handOver":
         if (inner.host.handOverByTests !== true && !handsOver(inner)) return yield* Effect.fail(new CoreError("unknown_call", t("core-misc.call.unknown", { name: "lock.handOver" })));
@@ -2990,7 +3067,8 @@ export function roster(inner: Inner, sub: string, ws: string, what: Roster): Eff
     if ("station" in what) return f.stations.has(what.station) ? yield* lock.append("station.remove", { key: what.station }) : null;
     const member = f.members.get(what.member);
     if ("gone" in what) {
-      if (member !== undefined) return yield* lock.append("member.remove", { sub: what.member });
+      // (the vaults read first, while the member is still in: views/vault.ts `levelVaults`)
+      if (member !== undefined) return yield* Effect.andThen(levelVaults(inner, ws), lock.append("member.remove", { sub: what.member }));
       // Only pending (added here while no station was up): that adding dropped, never having taken effect; signed after
       // it, a removal would mean nothing, and the adding would take effect once a station is next up.
       const items = pendingHeld(inner, ws);
@@ -3076,6 +3154,10 @@ export function sayAdmit(inner: Inner, sub: string, ws: string, meant: Said[], n
 /// that said so before stands; one that answered without them, or was never reached, does not. Never the cloud's word
 /// of their version (the cloud is the adversary, and serves the updates).
 const SERVES = "lockServes";
+/// What a station says it serves before a chain it names is handed over: what a moved chain is made of (`bodies`,
+/// `logs`), its devices' builds (`builds`), and that it reads a moved chain as it moved beside its people's logs
+/// (`carried`, 2026-11-14: every reader must make the same state, station/src/cloud/lock.ts `state4Moved`).
+const SERVES_MOVED = ["bodies", "logs", "builds", "carried"];
 const servesHeld = (inner: Inner, ws: string): string[] => {
   const r = inner.data.record(SERVES, ws);
   return isObject(r) && Array.isArray(r.ready) ? (r.ready as unknown[]).filter((x): x is string => typeof x === "string") : [];
@@ -3087,13 +3169,11 @@ function keepServes(inner: Inner, ws: string, id: string, serves: boolean): void
   inner.data.put(SERVES, ws, { ready: serves ? [...was, id] : was.filter((x) => x !== id) });
 }
 
-/// What the stations said of the devices' builds (station/src/mesh/device-builds.ts), kept as they say it: of a
-/// workspace's lock beside it (`lockBuilds`, by the workspace, as its GET /lock is read), of a person's own devices
-/// beside their lock (`personBuilds`, by the person, as their GET /lock/person is read). Per station its `since` (one
-/// that answers without `builds` no longer counted), per device the highest build and the latest sight any of them
-/// said: what a station asleep now said before stands.
+/// What the stations said of the devices' builds (station/src/mesh/device-builds.ts), kept as they say it beside a
+/// workspace's lock (`lockBuilds`, by the workspace, as its GET /lock is read). Per station its `since` (one that answers
+/// without `builds` no longer counted), per device the highest build and the latest sight any of them said: what a
+/// station asleep now said before stands.
 const LOCK_BUILDS = "lockBuilds";
-const PERSON_BUILDS = "personBuilds";
 function buildsHeld(inner: Inner, table: string, key: string): BuildsSeen {
   const r = inner.data.record(table, key);
   return isObject(r) && isObject(r.since) && isObject(r.devices) ? (r as unknown as BuildsSeen) : { since: {}, devices: {} };
@@ -3121,47 +3201,20 @@ function keepBuilds(inner: Inner, table: string, key: string, id: string, said: 
   if (changed) inner.data.put(table, key, { since, devices });
 }
 
-/// A device of `sub`'s about to go on their own log, face to face with this one (views/pair.ts `approve`), said it runs
-/// `build` (null: it said none, a core from before this): noted as seen now beside what their stations saw
-/// (`personBuilds`), so that what the same ask would write in their log is not held back for a device that said it
-/// takes it. Its word is about itself alone: one that says a build it does not run refuses its own log.
-export function noteBuild(inner: Inner, sub: string, id: string, build: number | null): void {
-  if (build === null) return;
-  const was = buildsHeld(inner, PERSON_BUILDS, sub);
-  const had = was.devices[id];
-  const at = now(inner);
-  if (had !== undefined && had.build >= build && had.at >= at) return;
-  inner.data.put(PERSON_BUILDS, sub, { since: was.since, devices: { ...was.devices, [id]: { build: Math.max(build, had?.build ?? -1), at: Math.max(at, had?.at ?? 0) } } });
-}
-
-/// Whether `sub`'s device here may write in their own log a kind a station or app from before refuses whole (a `ws`
-/// statement, a `web`; rules/AGENTS.md): their log holds one already (those refuse it as it is), or every station of
-/// every workspace they are signed in to here (`personStations`, locked or not) said on GET /lock/person that it serves
-/// `logs` and `builds`, and every app device on their log but this one is able or not seen for IDLE_SECS by what those
-/// stations saw (src/lock-handover.ts `devicesWaited`). Not so: nothing new is written, nobody asked, and what would have
-/// been says nothing (the user, 2026-11-14: nobody told to update).
-export function mayWriteNew(inner: Inner, sub: string): boolean {
-  const personal = inner.adb.personal();
-  const log = personal.entries(sub);
-  if (log.some((e) => e.kind === "ws" || e.kind === "web" || e.kind === "web.remove")) return true;
-  const seen = buildsHeld(inner, PERSON_BUILDS, sub);
-  const stations = personStations(inner, sub).map((a) => a.station);
-  if (stations.length === 0 || stations.some((id) => typeof seen.since[id] !== "number")) return false;
-  const mine = personal.keyId();
-  const apps = [...(checkChain(log, sub)?.devices.values() ?? [])].filter((d) => d.key !== mine).map((d) => d.id);
-  return devicesWaited(apps, seen, stations, now(inner)).length === 0;
-}
-
-/// What holds back the handover of `ws`'s chain `entries` by `sub`'s device besides its plan's waits, saying nothing to
-/// anyone (the user, 2026-11-14: 无感迁移, nobody told to update; `handOverState`'s `held` names them for the tests): each
-/// app device the chain lets in but this one not able nor idle by what its stations saw (`lockBuilds`,
-/// src/lock-handover.ts `devicesWaited`); the person not to write in their log yet (`mayWriteNew`); and, for now (each
-/// lifted by its own change, client/core-ts/AGENTS.md), a web page whose person has no app on the chain (`webOnlyIn`:
-/// the page that tells them to install one is not drawn yet), more than HAND_OVER_MEMBERS_MOST members bound to a log,
-/// or the root's log past HAND_OVER_LOG_MOST with the `more` entries the handover is to say. Those for now are not held
-/// to (`forNow` false) only where a host made for tests calls `lock.handOver` itself (`handOverByTests`), so what a
+/// What holds back the handover of `ws`'s chain `entries` by `sub`'s device besides the stations (`stationsWaited`),
+/// saying nothing to anyone (the user, 2026-11-14: 无感迁移, nobody told to update; `handOverState`'s `held` names them
+/// for the tests): this device itself, by the build it says to the stations (`ownBuild`, `0.1.0` where it says none),
+/// not able (`ableBuild`: it moves the chain, and a station of a moved workspace tells a device under MOVED_FROM_BUILD to
+/// update, station/src/mesh/serve.ts `movedTooOld`; the lead, 2026-11-14: builds between this code's and
+/// MOVED_FROM_BUILD have it and must move nothing); each app device the chain lets in but this one not able nor idle by
+/// what its stations saw (`lockBuilds`, src/lock-handover.ts `devicesWaited`); and, for now (each lifted by its own change,
+/// client/core-ts/AGENTS.md), a web page whose person has no app on the chain (`webOnlyIn`: carried until its `exp`, then
+/// nobody can approve it again there and the page that tells them to install an app is not drawn yet), or more than
+/// HAND_OVER_MEMBERS_MOST members bound to a log (a moved state reads each one's log, `LOGS_MOST` a workspace). The
+/// handover writes nothing in anyone's log (no `writer`, no bound on the root's log's length). Those for now are not
+/// held to (`forNow` false) only where a host made for tests calls `lock.handOver` itself (`handOverByTests`), so what a
 /// move does with such a workspace stays run until they are lifted.
-function heldBack(inner: Inner, ws: string, sub: string, entries: readonly Entry[], more: number, forNow = true): string[] {
+function heldBack(inner: Inner, ws: string, _sub: string, entries: readonly Entry[], forNow = true): string[] {
   if (entries.length === 0) return [];
   const at = now(inner);
   let checked: Checked;
@@ -3174,11 +3227,10 @@ function heldBack(inner: Inner, ws: string, sub: string, entries: readonly Entry
   const base = bases.get(inner) ?? null;
   const apps = [...checked.devices].filter(([id, d]) => d.kind === "app" && id !== base).map(([id]) => id);
   const out = devicesWaited(apps, buildsHeld(inner, LOCK_BUILDS, ws), [...f.stations.keys()], at).map((id) => `device ${id}`);
-  if (!mayWriteNew(inner, sub)) out.push("writer");
+  if (!ableBuild(buildOf(ownBuild() || "0.1.0") ?? -1)) out.unshift("own build");
   if (!forNow) return out;
   if (webOnlyIn(f.devices.values(), at).size > 0) out.push("web only");
   if (f.persons.size > HAND_OVER_MEMBERS_MOST) out.push("members");
-  if (inner.adb.personal().after(sub).length + more > HAND_OVER_LOG_MOST) out.push("log");
   return out;
 }
 
@@ -3196,7 +3248,7 @@ export function stationsWaited(inner: Inner, ws: string, entries: readonly Entry
 /// What `handOver` answers where its `moved` waits for stations (`stationsWaited`): the lines the owner's page shows of
 /// them (`waitedLines`), joined.
 export const stationsNotReady = (inner: Inner, ws: string, ids: readonly string[]): CoreError =>
-  new CoreError("lock_stations_not_ready", waitedLines(inner, ws, { waits: [], stations: ids }).map((l) => l.text).join(t("core-misc.lock.listSep")), 409);
+  new CoreError("lock_stations_not_ready", waitedLines(inner, ws, { stations: ids }).map((l) => l.text).join(t("core-misc.lock.listSep")), 409);
 
 /// Whether chains are handed over by themselves here: from HAND_OVER_FROM by this device's clock (src/lock-handover.ts:
 /// on every build from it, each workspace once what uses it takes a moved one, `heldBack`), or on a host made for tests
@@ -3206,44 +3258,28 @@ export function handsOver(inner: Inner): boolean {
   return inner.host.handOverAuto === true || ((!HAND_OVER_HELD || inner.host.handOverByTests === true) && HAND_OVER_FROM !== null && now(inner) >= HAND_OVER_FROM);
 }
 
-/// How many times one call of `handOver` works its statements out at most: each time again, the chain changed between
-/// them and the `moved` in a way they can say (another ask).
+/// How many times one call of `handOver` signs its `moved` at most: each time again where the one before lost its place
+/// (`#lost`), worked out again from the head.
 const HAND_OVER_ROUNDS = 3;
-/// What `handOver` answers where members the chain names are not ready (a device that signs and no log of their own
-/// bound yet: their devices take their own lock by themselves, `ownLockFor`; or an app device of theirs on the chain
-/// and not on their log): the lines the owner's page shows of them (`waitedLines`), joined.
-export const notReady = (inner: Inner, ws: string, w: { waits: readonly string[]; devices?: readonly { sub: string; id: string }[] }): CoreError =>
-  new CoreError("lock_not_ready", waitedLines(inner, ws, { ...w, stations: [] }).map((l) => l.text).join(t("core-misc.lock.listSep")), 409);
 /// What `lock.handOver` answers where only what says nothing holds it back (`heldBack`): waiting as `lock_not_ready`
 /// waits, in the words the page says of an upgrade not done (none of what holds it back is said: nobody is told to
 /// update, the user, 2026-11-14).
 const heldNotReady = (): CoreError => new CoreError("lock_not_ready", t("core-misc.lock.upgrade.title"), 409);
-/// The ask of a handover's statements: what the person is asked for, as the page's button says it.
-const handOverReason = () => t("core-misc.lock.reason.handOver");
 
 /// How many of those a handover waits for the owner's page names, one a line (`waitedLines`); the rest in a last line.
 const WAITED_LINES = 6;
 
 /// A line of the upgrade of safe mode (the `lock` topic's `upgrade.lines`): its sentence and what it is of; a station's
 /// its address (the workspace it is asked in and its id) and, by its overview as last told, how its update goes while it
-/// does, else whether this person may update it from here (`stationLine`).
+/// does, else whether this person may update it from here (`stationLine`). (Since the chain as it moved is carried,
+/// 2026-11-14, only stations are waited for: no line of a member's or a device's is made, `of` keeps them for the app.)
 type UpgradeLine = { text: string; of: "member" | "device" | "station" | "more"; station?: string; canUpdate?: true; updating?: true; percent?: number };
 
-/// Whom and what a handover of `ws` waits for, a line each, its sentence saying what to do (the owner's page,
-/// `upgradeOf`, and the refusals `lock_not_ready` and `lock_stations_not_ready`): each member not ready by their name (or
-/// email), a device of theirs on the chain and not on their log by its name where the chain names it, each station by
-/// its name; WAITED_LINES at most, the rest counted in a last line.
-function waitedLines(inner: Inner, ws: string, w: { waits: readonly string[]; devices?: readonly { sub: string; id: string }[]; stations: readonly string[] }): UpgradeLine[] {
+/// What a handover of `ws` waits for, a line each, its sentence saying what to do (the owner's page, `upgradeOf`, and the
+/// refusal `lock_stations_not_ready`): each station by its name; WAITED_LINES at most, the rest counted in a last line.
+function waitedLines(inner: Inner, ws: string, w: { stations: readonly string[] }): UpgradeLine[] {
   const chain = fold(held(inner, ws)?.entries ?? []);
-  const people = arr(get(view(inner, ws), "members"));
-  const who = (sub: string) => str(get(people.find((m) => m?.sub === sub), "name")) || chain.members.get(sub)?.email || str(get(people.find((m) => m?.sub === sub), "email")) || sub;
   const lines: UpgradeLine[] = [];
-  for (const sub of w.waits) {
-    const named = (w.devices ?? []).filter((d) => d.sub === sub).map((d) => chain.devices.get(d.id)).filter((d): d is J => d !== undefined && typeof d.label === "string" && d.label !== "");
-    if (named.length === 0 && (w.devices ?? []).some((d) => d.sub === sub)) lines.push({ text: t("core-misc.lock.upgrade.deviceUnnamed", { name: who(sub) }), of: "device" });
-    else if (named.length === 0) lines.push({ text: t("core-misc.lock.upgrade.member", { name: who(sub) }), of: "member" });
-    for (const d of named) lines.push({ text: t("core-misc.lock.upgrade.device", { name: who(sub), device: deviceText({ kind: "app", label: d.label, older: Array.isArray(d.endpoints) }) }), of: "device" });
-  }
   const stations = arr(get(view(inner, ws), "stations"));
   for (const id of w.stations) lines.push(stationLine(inner, new StationAddr(ws, id), t("core-misc.lock.upgrade.station", { name: str(stations.find((s) => s?.id === id)?.name) || chain.stations.get(id) || id.slice(0, 8) })));
   return capped(lines);
@@ -3272,39 +3308,15 @@ function stationLine(inner: Inner, at: StationAddr, text: string): UpgradeLine {
   return { text, of: "station", station, ...(can ? { canUpdate: true as const } : {}) };
 }
 
-/// The stations of `sub`'s workspaces here that hold back what they may write in their own log (`mayWriteNew`): those
-/// that never said on GET /lock/person that they serve `logs` and `builds` (never reached, or one from before: the same
-/// line), each by the workspace it is asked in, this workspace's as its own waited for are said. The devices' builds
-/// that hold it back too say nothing (the user, 2026-11-14: nobody is told to update an app).
-function writerLines(inner: Inner, ws: string, sub: string): UpgradeLine[] {
-  const seen = buildsHeld(inner, PERSON_BUILDS, sub);
-  return capped(personStations(inner, sub).filter((at) => typeof seen.since[at.station] !== "number").map((at) => {
-    const v = view(inner, at.workspace);
-    const name = str(arr(get(v, "stations")).find((s) => s?.id === at.station)?.name) || at.station.slice(0, 8);
-    return stationLine(inner, at, at.workspace === ws
-      ? t("core-misc.lock.upgrade.station", { name })
-      : t("core-misc.lock.upgrade.stationOther", { workspace: str(get(v, "name")) || at.workspace, name }));
-  }));
-}
-
-/// What the owner's device that is to hand `ws` over says of it (the `lock` topic's `upgrade`): whom and what it waits
-/// for (`handOverState`'s `waits` and `stations`), or, where only an ask is lacking (`asks`), the button that asks
-/// (`askText`, `lock.handOver`). Where only what says nothing holds it back (`heldBack`), nothing; but where the person
-/// may not write in their own log for stations of theirs that never said they take it (`writerLines`), those, so that
-/// an upgrade not finished is never shown with no line. None while the `moved` is on its way, once moved, and on any
-/// other device.
+/// What the owner's device that is to hand `ws` over says of it (the `lock` topic's `upgrade`): the stations it waits
+/// for (`handOverState`'s `stations`). None while nothing but what says nothing holds it back, while the `moved` is on
+/// its way, once moved, and on any other device. (No button: the handover asks nobody, 2026-11-14.)
 function upgradeOf(inner: Inner, ws: string): J | null {
   const s = handOverWhere(inner, ws);
-  if (s === null || "moving" in s) return null;
-  const titleText = t("core-misc.lock.upgrade.title");
-  if ("held" in s) {
-    const sub = inner.workspaces.owner(ws);
-    const lines = s.held.includes("writer") && sub !== null ? writerLines(inner, ws, sub) : [];
-    return lines.length > 0 ? { titleText, lines } : null;
-  }
-  return "asks" in s ? { titleText, lines: [], askText: t("core-misc.lock.upgrade.ask") } : { titleText, lines: waitedLines(inner, ws, s) };
+  if (s === null || !("stations" in s)) return null;
+  return { titleText: t("core-misc.lock.upgrade.title"), lines: waitedLines(inner, ws, s) };
 }
-/// A handover's `moved` refused in its turn because what is to be said changed: worked out again (`handOver`).
+/// A handover's `moved` that lost its place, or one by itself refused in its turn: worked out again (`handOver`).
 const LACKING = "lock_handover_lacking";
 
 /// The logs a workspace's chain binds its members by, as its stations give them before it moved (GET /lock/logs, which
@@ -3324,16 +3336,12 @@ function readBound(inner: Inner, ws: string): Effect.Effect<void> {
 /// The workspace's chain handed over to its people's own logs by this device (the operation `lock.handOver`, which only
 /// a host made for tests offers: `Host.handOverByTests`): an owner's own app device, by the signer the chain names it
 /// with, its person bound there to their own log pinned here with this device on it (else refused as a change not
-/// allowed, nobody asked). Members the chain names with a device that signs and no log of their own: it waits for them
-/// (`notReady`, nothing said, nobody asked); those with neither are not said and come in afterwards as a newcomer does,
-/// by their first app device (the owner, 2026-11-13: 「开了安全模式那就需要 app」), the chain's role for them noted here
-/// as `added` notes one (`note`). What the state as if moved lacks of the chain's list is said in this person's own log
-/// in one ask (src/lock-handover.ts; `personal-lock.ts` `say`, with their web pages on the chain and this device's
-/// signer, `#restate`), brought to the workspace's stations as any statement's bodies are; once one of them took every
-/// one, `moved {root}` is signed on the chain by the workspace signer, nobody asked (`Lock.append`'s path), after the
-/// target is made again in its turn from the head held and found said (else said first, another ask; or, where the
-/// chain changed in a way it cannot say, refused as above). Pending (`{pending}`) while no station took what it said or
-/// the `moved`; carried on by calling it again, which says nothing twice. Null: handed over (or it was).
+/// allowed, nobody asked). Nothing is said in anyone's log and nobody is asked or waited for (the lead, 2026-11-14): the
+/// chain as it moved still says what the logs have not (rules/src/lock/state4.mbt `state4_moved`), so `moved {root}` is
+/// signed on the chain by the workspace signer (`Lock.append`'s path) once the state as if moved is the chain's list at
+/// its head (src/lock-handover.ts `handOverPlan`, made again in the turn from the head held: `guard`), every station of
+/// the chain serves what a moved chain is made of (`stationsWaited`) and nothing that says nothing holds it back
+/// (`heldBack`). Pending (`{pending}`) while no station took the `moved`. Null: handed over (or it was).
 export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
     const personal = inner.adb.personal();
@@ -3347,63 +3355,23 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
     if (signer === null || own === null || key === null || personal.standing(sub) !== "member") return yield* Effect.fail(notAllowed());
     const base = yield* new Lock(inner, ws, sub, null).base();
     const who = { sub, genesis: own, key, base, signer: signer.id };
-    const planOf = (entries: readonly Entry[], log: readonly Entry[]) => {
-      const chains = new Map(logsOf(inner, ws, false));
-      chains.set(own, log);
-      return handOverPlan(ws, entries, who, chains, bodiesHeld(inner, ws), now(inner));
-    };
-    const refusal = (p: HandOverPlan): CoreError | null => ("refused" in p ? notAllowed() : "waits" in p ? notReady(inner, ws, p) : null);
-    const salt = () => saltHex(inner);
     const byTests = inner.host.handOverByTests === true;
+    const guard = (entries: readonly Entry[]): CoreError | null => {
+      // (moved meanwhile by itself, `movedBySelf`: handed over, as asked, below)
+      if (movedRoot(entries) !== null) return lockMoved();
+      const p = planHere(inner, ws, who, entries, personal.entries(sub));
+      if ("refused" in p) return p.differs === true ? heldNotReady() : notAllowed();
+      const waited = stationsWaited(inner, ws, entries);
+      if (waited.length > 0) return stationsNotReady(inner, ws, waited);
+      return heldBack(inner, ws, sub, entries, !byTests).length > 0 ? heldNotReady() : null;
+    };
     for (let round = 0; round < HAND_OVER_ROUNDS; round++) {
-      // (what a call before said that no station took yet: brought now, and waited on)
-      if (personal.waitingIn(sub, ws) !== null) {
-        yield* personal.deliverNow(sub);
-        const waiting = personal.waitingIn(sub, ws);
-        if (waiting !== null) return { pending: waiting };
-      }
-      // (moved by itself meanwhile, `movedBySelf`, as what was pending was taken: handed over, as asked)
       if (movedHere(inner, ws)) return null;
-      const p = planOf(held(inner, ws)?.entries ?? [], personal.after(sub));
-      const no = refusal(p);
-      if (no !== null || "refused" in p || "waits" in p) return yield* Effect.fail(no ?? notAllowed());
-      // (held back saying nothing, `heldBack`: answered as a handover waiting is, in the page's words of an upgrade not
-      // done, nothing said and nobody asked)
-      if (heldBack(inner, ws, sub, held(inner, ws)?.entries ?? [], p.says.length + p.webs.length, !byTests).length > 0) {
-        // (a station of the chain that holds it back is named, as before the `moved`)
-        const waited = stationsWaited(inner, ws, held(inner, ws)?.entries ?? []);
-        return yield* Effect.fail(waited.length > 0 ? stationsNotReady(inner, ws, waited) : heldNotReady());
-      }
-      for (const u of p.unsaid) if (notedRole(inner, ws, sub, u.sub, u.email) === null) note(inner, ws, sub, u.sub, u.role);
-      const restate = personal.signKeys(sub).get(base)?.sign_key !== signer.id;
-      if (p.says.length > 0 || p.webs.length > 0 || restate) {
-        yield* personal.say(sub, ws, (after) => {
-          const q = planOf(held(inner, ws)?.entries ?? [], after);
-          if ("refused" in q || "waits" in q) return refusal(q)!;
-          const bodies = bodiesOf(ws, q.says, after, byHash(bodiesHeld(inner, ws)), salt);
-          return { bodies, shown: handOverShown(inner, ws, bodies.length), also: q.webs.map((w) => ({ kind: "web" as const, body: w })) };
-        }, handOverReason());
-        touch(inner, ws);
-        const waiting = personal.waitingIn(sub, ws);
-        if (waiting !== null) return { pending: waiting };
-      }
-      // The `moved`, once every statement is taken: its target made again in the turn, from the head it goes after.
-      const guard = (entries: readonly Entry[]): CoreError | null => {
-        // (moved meanwhile by itself, `movedBySelf`: handed over, as asked, below)
-        if (movedRoot(entries) !== null) return lockMoved();
-        const q = planOf(entries, personal.entries(sub));
-        if ("refused" in q || "waits" in q) return refusal(q);
-        if (q.says.length > 0 || q.webs.length > 0) return new CoreError(LACKING, "what is to be said changed");
-        if (heldBack(inner, ws, sub, entries, 0, !byTests).length > 0) return heldNotReady();
-        const waited = stationsWaited(inner, ws, entries);
-        return waited.length > 0 ? stationsNotReady(inner, ws, waited) : null;
-      };
-      // (the logs it binds read again, and the chain first in the turn, within the wait: a device approved on the chain
-      // meanwhile is found on its log or waited for)
+      const no = guard(held(inner, ws)?.entries ?? []);
+      if (no !== null) return yield* Effect.fail(no);
+      // (the logs it binds read again, and the chain first in the turn, within the wait)
       yield* within.wait(readBound(inner, ws));
       const lock = new Lock(inner, ws, sub, null, { within });
-      // (moved meanwhile by itself, `movedBySelf`, where chains are handed over so and the page's button called this:
-      // handed over, as asked)
       const out = yield* Effect.catch(lock.append("moved", { root: own }, [], false, guard), (e) => (e.code === LACKING ? Effect.succeed(LACKING) : e.code === "lock_moved" && movedHere(inner, ws) ? Effect.succeed(null) : Effect.fail(e)));
       if (out === LACKING) continue;
       touch(inner, ws);
@@ -3412,11 +3380,6 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
     return yield* Effect.fail(new CoreError("lock_refused", t("core-misc.lock.changedMeanwhile", { what: nameOf(inner, ws) }), 409));
   });
 }
-
-/// What `n` statements of a handover of `ws` show while they are not in effect: one row, the last one's, the upgrade
-/// of safe mode (the others ride on it, as `sayMoved`'s said again first do).
-const handOverShown = (inner: Inner, ws: string, n: number): { act: Act | null; name: string }[] =>
-  Array.from({ length: n }, (_, i) => ({ act: i === n - 1 ? ("handOver" as const) : null, name: nameOf(inner, ws) }));
 
 /// Whether `sub`'s device here is the one to hand `ws` over by itself now: chains handed over so (`handsOver`), the
 /// chain held not moved, `sub` the person to (src/lock-handover.ts `mayHandOver`, by the chain held and this clock).
@@ -3442,33 +3405,6 @@ function planHere(inner: Inner, ws: string, who: Who, entries: readonly Entry[],
   return handOverPlan(ws, entries, who, chains, bodiesHeld(inner, ws), now(inner));
 }
 
-/// What this person's own lock says of the handovers due here as it holds the seed for something else
-/// (personal-lock.ts `#addHandOvers`, after `#addApproved`'s devices and pages; the owner, 2026-11-13: a handover asks
-/// nobody by itself, it rides on the next ask of their own lock's key): each workspace of theirs this device hands over
-/// by itself (`handingOver`), its plan worked out in the turn against the log as it stands with what is pending
-/// (`after`), so that what was said is not said twice; one that waits or is refused says nothing (a CoreError, let go).
-export function handOversIn(inner: Inner, sub: string): { ws: string; make: Statements }[] {
-  const who = whoHere(inner, sub);
-  if (who === null) return [];
-  const out: { ws: string; make: Statements }[] = [];
-  for (const [ws, owner] of inner.workspaces.owned()) {
-    if (owner !== sub || !handingOver(inner, ws, sub)) continue;
-    out.push({
-      ws,
-      make: (after) => {
-        const q = planHere(inner, ws, who, held(inner, ws)?.entries ?? [], after);
-        if ("refused" in q || "waits" in q) return new CoreError("lock_not_ready", "refused" in q ? q.refused : `waits for ${q.waits.join(", ")}`);
-        const back = heldBack(inner, ws, sub, held(inner, ws)?.entries ?? [], q.says.length + q.webs.length);
-        if (back.length > 0) return new CoreError("lock_not_ready", `held back: ${back.join(", ")}`);
-        for (const u of q.unsaid) if (notedRole(inner, ws, sub, u.sub, u.email) === null) note(inner, ws, sub, u.sub, u.role);
-        const bodies = bodiesOf(ws, q.says, after, byHash(bodiesHeld(inner, ws)), () => saltHex(inner));
-        return { bodies, shown: handOverShown(inner, ws, bodies.length), also: q.webs.map((w) => ({ kind: "web" as const, body: w })) };
-      },
-    });
-  }
-  return out;
-}
-
 /// The workspaces whose `moved` is being signed here by itself (`movedBySelf`): one at a time a workspace.
 const moving = new WeakMap<Inner, Set<string>>();
 
@@ -3487,13 +3423,10 @@ export function movedBySelf(inner: Inner, ws: string): Effect.Effect<void> {
     if (busy.has(ws)) return;
     const personal = inner.adb.personal();
     const who = whoHere(inner, sub);
-    if (who === null || personal.waitingIn(sub, ws) !== null || personal.signKeys(sub).get(who.base)?.sign_key !== who.signer) return;
-    const q = planHere(inner, ws, who, held(inner, ws)?.entries ?? [], personal.entries(sub));
-    if (!("says" in q) || q.says.length > 0 || q.webs.length > 0 || stationsWaited(inner, ws, held(inner, ws)?.entries ?? []).length > 0 || heldBack(inner, ws, sub, held(inner, ws)?.entries ?? [], 0).length > 0) return;
-    const guard = (entries: readonly Entry[]): CoreError | null => {
-      const p = planHere(inner, ws, who, entries, personal.entries(sub));
-      return "refused" in p || "waits" in p || p.says.length > 0 || p.webs.length > 0 || stationsWaited(inner, ws, entries).length > 0 || heldBack(inner, ws, sub, entries, 0).length > 0 ? new CoreError(LACKING, "not to be moved by itself now") : null;
-    };
+    if (who === null) return;
+    const guard = (entries: readonly Entry[]): CoreError | null =>
+      "refused" in planHere(inner, ws, who, entries, personal.entries(sub)) || stationsWaited(inner, ws, entries).length > 0 || heldBack(inner, ws, sub, entries).length > 0 ? new CoreError(LACKING, "not to be moved by itself now") : null;
+    if (guard(held(inner, ws)?.entries ?? []) !== null) return;
     busy.add(ws);
     yield* Effect.ensuring(
       Effect.ignore(new Lock(inner, ws, sub, null).append("moved", { root: who.genesis }, [], false, guard), { log: "Unhandled", message: "a handover's moved signed by itself" }),
@@ -3503,32 +3436,28 @@ export function movedBySelf(inner: Inner, ws: string): Effect.Effect<void> {
   });
 }
 
-/// Where the handover of `ws` stands on this device (read by tests; the owner's page reads it later, the owner,
-/// 2026-11-14: it says whom it waits for): null, not this device's to hand over by itself (`handingOver`; moved
-/// already, the switch off); `waits`, members whose app device is not ready (`lock_not_ready`), nothing said meanwhile,
-/// and `stations`, those the chain names that have not said they serve what a moved chain is made of
-/// (`stationsWaited`: what is to be said is said meanwhile, the `moved` waits), either empty, not both, no deadline; `asks`, something is still to be said and no ask of the person's own lock's key came yet (what the
-/// security page will offer); `moving`, all said, the `moved` not taken yet. Worked out as read, of what is held.
-export function handOverState(inner: Inner, ws: string): null | { waits: string[]; stations: string[] } | { held: string[] } | { asks: true } | { moving: true } {
-  const s = handOverWhere(inner, ws);
-  return s !== null && "waits" in s ? { waits: s.waits, stations: s.stations } : s;
+/// Where the handover of `ws` stands on this device (read by tests; the owner's page reads it, `upgradeOf`): null, not
+/// this device's to hand over by itself (`handingOver`; moved already, the switch off; refused by the plan); `stations`,
+/// those the chain names that have not said they serve what a moved chain is made of (`stationsWaited`: the `moved`
+/// waits for them, no deadline); `held`, held back by what says nothing to anyone (`heldBack`); `moving`, nothing holds
+/// it back, the `moved` not taken yet. Nothing is ever waited for of a member, nothing asked (2026-11-14). Worked out as
+/// read, of what is held.
+export function handOverState(inner: Inner, ws: string): null | { stations: string[] } | { held: string[] } | { moving: true } {
+  return handOverWhere(inner, ws);
 }
 
-/// `handOverState`, with the devices of members waited for that the chain names and their log does not (the plan's
-/// `devices`), which the owner's page names (`upgradeOf`).
-function handOverWhere(inner: Inner, ws: string): null | { waits: string[]; devices?: { sub: string; id: string }[]; stations: string[] } | { held: string[] } | { asks: true } | { moving: true } {
+function handOverWhere(inner: Inner, ws: string): null | { stations: string[] } | { held: string[] } | { moving: true } {
   const sub = inner.workspaces.owner(ws);
   if (sub === null || movedHere(inner, ws) || !handingOver(inner, ws, sub)) return null;
   const who = whoHere(inner, sub);
   if (who === null) return null;
-  const personal = inner.adb.personal();
-  const q = planHere(inner, ws, who, held(inner, ws)?.entries ?? [], personal.after(sub));
-  if ("refused" in q) return null;
-  const stations = stationsWaited(inner, ws, held(inner, ws)?.entries ?? []);
-  if ("waits" in q || stations.length > 0) return { waits: "waits" in q ? q.waits : [], ...("waits" in q && q.devices !== undefined ? { devices: q.devices } : {}), stations };
-  const back = heldBack(inner, ws, sub, held(inner, ws)?.entries ?? [], q.says.length + q.webs.length);
-  if (back.length > 0) return { held: back };
-  return q.says.length > 0 || q.webs.length > 0 || personal.signKeys(sub).get(who.base)?.sign_key !== who.signer ? { asks: true } : { moving: true };
+  const entries = held(inner, ws)?.entries ?? [];
+  const p = planHere(inner, ws, who, entries, inner.adb.personal().entries(sub));
+  if ("refused" in p && p.differs !== true) return null;
+  const stations = stationsWaited(inner, ws, entries);
+  if (stations.length > 0) return { stations };
+  const back = [...heldBack(inner, ws, sub, entries), ...("refused" in p ? ["list"] : [])];
+  return back.length > 0 ? { held: back } : { moving: true };
 }
 
 /// Turning a moved workspace off or on again by anyone but the root's person: refused, saying who and the way out
@@ -3585,7 +3514,8 @@ function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effec
     const n = as("member", { sub: what.member });
     // (what this person noted as they added them goes with them: `unnote`)
     if ("gone" in what) unnote(inner, ws, what.member, m?.email ?? str(get(arr(get(view(inner, ws), "members")).find((x) => x?.sub === what.member), "email")));
-    if ("gone" in what) return m === undefined ? Effect.succeed(null) : sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n }));
+    // (the vaults read first, while the member is still in: views/vault.ts `levelVaults`)
+    if ("gone" in what) return m === undefined ? Effect.succeed(null) : Effect.andThen(levelVaults(inner, ws, what.member), sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n })));
     if (m?.role === what.role) return Effect.succeed(null);
     // (someone added whose first device has not come: nothing in the lock to change, the cloud's part alone; the role
     // chosen here now is what their admission here says, `note`, an owner's only by an owner)
@@ -3648,7 +3578,14 @@ function stationMoved(inner: Inner, sub: string, ws: string, station: string): E
     const s = arr(get(view(inner, ws), "stations")).find((x) => x?.id === station);
     if (!s) return Effect.fail(CoreError.invalid("not a station of this workspace"));
     const name = str(s.name) || station.slice(0, 8);
-    return sayMoved(inner, sub, ws, [{ kind: "station", key: station }], { act: "protectStation", name }, actText({ act: "protectStation", name }));
+    // Said, and the state in force here naming it: the chain as it moved brought to that station with the logs and
+    // bodies its state is made of, as `joinStation` brings a station the whole chain before a move (the door a station
+    // keeping no lock pins one by: its owner's device, station/src/mesh/moved-pin.ts `pinBrought`, which pins only
+    // where that state names it and lets this device in as an owner's). One that keeps the lock already takes nothing
+    // of it; one that refuses it stays as the security page shows it, not protected.
+    // (not reached now, or refusing it as the statement had not reached the state it checked: brought again as this
+    // device next reads that station and finds it keeps none, `bringMoved`)
+    return Effect.tap(sayMoved(inner, sub, ws, [{ kind: "station", key: station }], { act: "protectStation", name }, actText({ act: "protectStation", name })), () => Effect.sync(() => bringMoved(inner, ws, [{ id: station, head: null }])));
   });
 }
 

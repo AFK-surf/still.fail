@@ -79,6 +79,7 @@ export class RigAdds {
     if (why !== null) return why;
     this.#db.prepare("INSERT INTO rig_adds (ws, rig, body) VALUES (?, ?, ?) ON CONFLICT (ws, rig) DO UPDATE SET body = excluded.body").run(ws, rig.id, JSON.stringify(signed));
     this.#checked.delete(`${ws}\0${rig.id}`);
+    this.#cloud.rigsChanged?.();
     return null;
   }
 

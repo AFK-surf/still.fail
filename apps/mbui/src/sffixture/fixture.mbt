@@ -2106,7 +2106,7 @@ pub fn fixture(mode : String) -> Source {
       }
       match name {
         "session.retry" => {
-          if f.mode == "chat-turn-failed" {
+          if f.mode == "chat-turn-failed" || f.mode == "chat-turn-unanswered" {
             f.step += 1
             f.changed()
           }

@@ -307,12 +307,12 @@ fn nt_audit(t : @ui.Tester, time : Int, copy : Int, act : Int, dot : Int) -> Arr
 /// How many times each of nt_audit's is said of case `c` drawn (open or not) at the system's size of words `scale`:
 /// time, copy, act, dot. At 1.3 复制 is 25 high and the pill 40.6: those in it have their room.
 fn nt_known(c : (String, Message, Json?, Bool), scale : Double) -> (Int, Int, Int, Int) {
-  let (_, m, doing, open) = c
+  let (_, m, doing, _open) = c
   let small = scale == 1.0
   let ends = (m.install is Some(_) || m.reportable) && m.notice_short == "" && m.notice_lines.is_empty()
   (
-    if open { 1 } else { 0 },
-    if small && open && m.notice_detail != "" { 1 } else { 0 },
+    0,
+    0,
     if small && ends && doing is None { 1 } else { 0 },
     if ends { 1 } else { 0 },
   )
@@ -417,7 +417,7 @@ test "what failed said, copied: 已复制 till copied_ms from the press, then �
   t.run_for(@sf.copied_ms)
   assert_true(t.find("已复制") is None, msg="no more after copied_ms")
   assert_true(t.find("复制") is Some(_))
-  let faults = nt_audit(t, 1, 1, 0, 0)
+  let faults = nt_audit(t, 0, 0, 0, 0)
   assert_true(faults.is_empty(), msg=faults.join(" | "))
 }
 

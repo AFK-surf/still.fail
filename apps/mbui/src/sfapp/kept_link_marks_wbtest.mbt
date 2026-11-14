@@ -91,6 +91,10 @@ test "a link in a message left still on a phone, held by a finger: its menu, no 
   for _ in 0..<3 {
     t.run_for(kept_rows_still_ms)
   }
+  // (the page built again with its rows kept: the list moved a point by the wheel, no row of it changed; left still
+  // nothing builds it, its old pictures there at once, not brushed in over a second as they were)
+  t.wheel(195.0, 400.0, -1.0)
+  t.run_for(kept_rows_still_ms)
   assert_true(t.rows_kept() > 0)
   let (x, y, w, h) = t.run_rects(link)[0]
   t.press_at(x + w / 2.0, y + h / 2.0)

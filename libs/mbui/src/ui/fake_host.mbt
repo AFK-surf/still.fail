@@ -366,6 +366,8 @@ impl @hostapi.Host for FakeHost with shape(self, text, size, weight, style, out)
       0.0
     } else if real is Some(a) {
       a
+    } else if self.cjk_marks && c >= 0x2010 && c <= 0x206F && (style & @hostapi.style_proportional) == 0 {
+      size
     } else if c < 0x2E80 {
       if mono {
         size * 0.6
@@ -1889,10 +1891,11 @@ impl @hostapi.Host for FakeHost with nt_cancel(self, tag) {
 }
 
 ///|
-/// 0: what it lets the app show (1 granted, 2 denied, 3 ask, 0 unknown); 1: asked to let it (where it is not granted or
-/// unknown: the person's answer due, as the test said); 2: the answer, as a frame begins (never between frames: the
-/// person answers as the frame after the ask begins); 3: its settings opened, counted; 4: whether it shows the number on
-/// the app's icon, as the system it plays does.
+/// 0: what it lets the app show (1 granted, 2 denied, 3 ask, 4 default, 0 unknown); 1: asked to let it (where it is not
+/// granted or unknown: the person's answer due, as the test said); 2: the answer, as a frame begins (never between
+/// frames: the person answers as the frame after the ask begins), refused leaving it denied, but a browser's "default"
+/// as it was (its prompt put away); 3: its settings opened, counted, as the system it plays has them (none a browser's
+/// page opens: 0, nothing counted); 4: whether it shows the number on the app's icon, as the system it plays does.
 impl @hostapi.Host for FakeHost with nt_state(self, what) {
   match what {
     0 =>
@@ -1900,6 +1903,7 @@ impl @hostapi.Host for FakeHost with nt_state(self, what) {
         "granted" => 1
         "denied" => 2
         "ask" => 3
+        "default" => 4
         _ => 0
       }
     1 => {
@@ -1918,7 +1922,13 @@ impl @hostapi.Host for FakeHost with nt_state(self, what) {
       match self.notice_due {
         Some((yes, _)) if frame_running.val => {
           self.notice_due = None
-          self.notice_perm = if yes { "granted" } else { "denied" }
+          self.notice_perm = if yes {
+            "granted"
+          } else if self.notice_perm == "default" {
+            "default"
+          } else {
+            "denied"
+          }
           if yes {
             1
           } else {
@@ -1928,6 +1938,9 @@ impl @hostapi.Host for FakeHost with nt_state(self, what) {
         _ => -1
       }
     3 => {
+      if self.platform == 4 {
+        return 0
+      }
       self.notice_settings += 1
       1
     }

@@ -122,19 +122,17 @@ fn decision_login_node(
     let card = m().card
     let id = card.map(fn(c) { c.login }).unwrap_or("")
     let other = card.map(fn(c) { c.station }).unwrap_or("")
-    let station = if other == "" {
-      here.station
-    } else {
-      match here.station.find("/") {
-        Some(i) => here.station.exact_view(end=i).to_owned() + "/" + other
-        None => other
-      }
-    }
-    (station, id)
+    (@sfbase.card_login_station(here.station, other), id)
   }
   v.box(fn(b) {
     @sf.style_node(b, fn() { decision_box })
-    b.show(fn() { open() && m().card.bind(fn(c) { c.assignee_text }) is Some(_) }, fn(w) {
+    // (who is to finish it goes with the card as the login ends, as the old view's does (decision.mbt): not left over
+    // its line till the post is settled)
+    let ended = fn() {
+      let l = login_of(core, login().0, login().1)
+      l is Some(_) && !flag(l, "active")
+    }
+    b.show(fn() { open() && !ended() && m().card.bind(fn(c) { c.assignee_text }) is Some(_) }, fn(w) {
       @sf.words_node(w, fn() { m().card.bind(fn(c) { c.assignee_text }).unwrap_or("") }, fn() { settled_line }) |> ignore
     })
     // (none the core does not know: the message's words say it, and nothing takes its room)

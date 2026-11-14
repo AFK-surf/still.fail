@@ -558,7 +558,8 @@ fn narrow_made_as(
                   tips=@sf.TipLayer::new(fn() { Some(v) }),
                   stint~,
                   shows~,
-                  top=fn() { list_top_live(col, r) },
+                  cover=fn() { bar_foot_live(col, r) },
+                  room=list_room,
                   foot=list_foot,
                   composer~,
                   lead=unread_lead(),
@@ -733,7 +734,7 @@ fn narrow_made_top(v : @view.View, has_top~ : Bool) -> Unit {
     v.box(fn(o) {
       o.over(Is(true)) |> ignore
       o.show(fn() { status_top_now(v.window().0) > 0.0 }, fn(paper) {
-        paper.height(By(fn() { Some(status_top_now(v.window().0)) })).ground(By(fn() { @sf.theme().p.bg })) |> ignore
+        paper.height(By(fn() { Some(status_top_now(v.window().0)) })).ground(By(fn() { @sf.theme().p.bg })) |> @sf.ground_node |> ignore
       })
     })
     |> ignore
@@ -781,12 +782,13 @@ fn place_top_bar_glass(
       |> ignore
       // (its words whole: what the page does at its end gives way where the bar has not the room)
       row.box(fn(t) {
-        t.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).height(Is(Some(34.0))).row(Is(true)).lines_up(Is(Some(Middle)))
+        t.grow(Is(1.0)).basis(Is(Some(0.0))).keeps_held(Is(true)).fits(Is(true)).height(Is(Some(34.0))).row(Is(true)).lines_up(Is(Some(Middle)))
         |> ignore
         @sf.top_bar_title_node(t, fn() { place_label(place()) }) |> ignore
       })
       |> ignore
       row.show(fn() { actions() is Some(_) }, fn(a) {
+        a.row(Is(true)).shrink(Is(1.0)) |> ignore
         a.pick(
           fn() {
             match actions() {
@@ -796,7 +798,7 @@ fn place_top_bar_glass(
           },
           fn(k, _) {
             @sf.top_bar_actions_lent(k)
-            k.row(Is(true)).gap(Is(10.0)).lines_up(Is(Some(Middle))) |> ignore
+            k.row(Is(true)).gap(Is(10.0)).lines_up(Is(Some(Middle))).shrink(Is(1.0)) |> ignore
             match @signals.untracked(actions) {
               Some((make, _)) => make(k)
               None => ()

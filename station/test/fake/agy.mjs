@@ -13,7 +13,7 @@ const promptAt = args.indexOf('-p');
 if (promptAt >= 0 && args[promptAt + 1] === '/usage') await printUsage();
 if (args[0] !== 'acp') await signIn();
 async function printUsage() {
-  if (dump) appendFileSync(dump, JSON.stringify({ args, home: process.env.HOME ?? null, geminiDir: process.env.ANTIGRAVITY_GEMINI_DIR ?? null, cloudCodeUrl: process.env.CLOUD_CODE_URL ?? null, key: process.env.GEMINI_API_KEY ?? null, updates: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null }) + '\n');
+  if (dump) appendFileSync(dump, JSON.stringify({ args, home: process.env.HOME ?? null, geminiDir: process.env.ANTIGRAVITY_GEMINI_DIR ?? null, cloudCodeUrl: process.env.CLOUD_CODE_URL ?? null, key: process.env.GEMINI_API_KEY ?? null, updates: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null, fileTokens: process.env.SSH_CLIENT ?? null }) + '\n');
   if (process.env.FAKE_AGY_SIGNED_OUT) {
     process.stdout.write('Authentication required. Please visit the URL to log in:\n  https://accounts.google.com/o/oauth2/auth\n\nWaiting for authentication (timeout 60s)...\n');
     await new Promise(() => {});
@@ -25,8 +25,7 @@ async function printUsage() {
     process.exit(1);
   }
   const tokenPath = join(process.env.ANTIGRAVITY_GEMINI_DIR ?? join(process.env.HOME ?? '', '.gemini'), 'antigravity-cli', 'antigravity-oauth-token');
-  const keyringOk = Boolean(process.env.FAKE_AGY_KEYRING) && (!process.env.FAKE_KEYCHAIN_HOME || process.env.HOME === process.env.FAKE_KEYCHAIN_HOME);
-  if (!existsSync(tokenPath) && !keyringOk) {
+  if (!existsSync(tokenPath)) {
     process.stdout.write('Authentication required. Please visit the URL to log in:\n  https://accounts.google.com/o/oauth2/auth\n\nWaiting for authentication (timeout 60s)...\n');
     await new Promise(() => {});
   }
@@ -93,7 +92,7 @@ const update = (u) => say({ method: 'session/update', params: { sessionId, updat
 const dir = args[args.indexOf('--gemini-dir') + 1];
 const conversations = join(dir, 'antigravity-cli', 'conversations');
 mkdirSync(conversations, { recursive: true });
-if (dump) appendFileSync(dump, JSON.stringify({ args, key: process.env.GEMINI_API_KEY ?? null, updates: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null }) + '\n');
+if (dump) appendFileSync(dump, JSON.stringify({ args, key: process.env.GEMINI_API_KEY ?? null, updates: process.env.AGY_CLI_DISABLE_AUTO_UPDATE ?? null, fileTokens: process.env.SSH_CLIENT ?? null }) + '\n');
 const models = process.env.FAKE_AGY_SUBSCRIPTION
   ? {
       currentModelId: 'gemini-4-carbon-high',

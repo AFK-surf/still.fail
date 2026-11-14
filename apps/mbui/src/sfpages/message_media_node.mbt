@@ -1,7 +1,8 @@
 // A message's picture as nodes of the window's tree (message_files.mbt's image_item, image_coming): in the box its data
 // says (image_box: laid out so before it is decoded, nothing of it changing as it is), what it waits on (its likeness
 // made of its ThumbHash, else the neutral ground) till its host says it is decoded, then brushed in
-// (@sf.image_reveal_node); one sent from here, or one the device had, as it is. Asked of its station and not here yet,
+// (@sf.image_reveal_node) where its message is new while the chat shows (MessageFilesAt's `said`), else whole the
+// moment it is decoded; one sent from here, or one the device had, as it is. Asked of its station and not here yet,
 // all of what stands in for it breathes (@sf.breathe_node), back to whole once it is; how far it has come in a pill at
 // its foot's end from 300 ms after it was first said to be on its way (fading in over 200), from that moment on the
 // timeline, never from when its row was made. One that cannot be had says so; one its station could not be reached
@@ -131,7 +132,7 @@ fn message_image_node(
           })
           @sf.breathe_node(s, waits=asked)
           let picture = fn(v : @view.View) {
-            @sf.image_reveal_node(v, key, likeness, pw, ph, held=as_is, top_crop~) |> ignore
+            @sf.image_reveal_node(v, key, likeness, pw, ph, held=as_is, comes=place.said, top_crop~) |> ignore
           }
           if sw < 1.0 || sh < 1.0 {
             s.box(fn(l) {

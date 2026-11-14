@@ -334,6 +334,24 @@ export function state4(ws: string, root: string, chains: unknown[][], bodies: un
   return { on: out.on, state: taken(out) };
 }
 
+/// `state4` of a workspace whose chain moved (`chain`, its active chain, the `moved` last), rooted in the log its `moved`
+/// names, with what the chain as it moved still says of those it named (rules/src/lock/state4.mbt `state4_moved`, the
+/// model's D6, 2026-11-14): its settings where the root's log says neither `open` nor `off`, its members until a
+/// removal names the `moved` entry's hash, their devices their logs have not said (each `by` "chain"). A chain that
+/// does not fold or did not move: `no root`.
+export function state4Moved(ws: string, chain: Entry[], chains: unknown[][], bodies: unknown[], now: number): { on: "on" | "off" | "not on" | "no root"; state: LockState } {
+  const out = rules.state4_moved_js(ws, chain, chains, bodies, now, crypto);
+  return { on: out.on, state: taken(out) };
+}
+
+/// `roster4` of a workspace whose chain moved, as `state4Moved` reads it: and `carried_keys`, the keys of the app
+/// devices the chain as it moved still says, each `{key, sub}`.
+export function roster4Moved(ws: string, chain: Entry[], chains: unknown[][], bodies: unknown[], without: string[] = []): ReturnType<typeof roster4> & { carried_keys: { key: string; sub: string }[] } {
+  const out = rules.roster_moved_js(ws, chain, chains, bodies, without, crypto);
+  if ("error" in out) throw new Error(out.error);
+  return out;
+}
+
 /// Workspace `ws`'s list as the rules work it out of the same (rules/src/lock/roster.mbt): what is in force (`in_force`,
 /// each `{entry, body}` hash), the entries of its tag whose body is not kept (`lacking`), and the rest `roster_js` says.
 /// `without`: bodies' hashes whose statements are left out of those in force once that is decided (whom a removal took

@@ -138,8 +138,10 @@ fn sao_run(
     _ => tap_send(t)
   }
   let looks = [sao_look(t, answered)]
+  // (each of the display's frames looked at, as an idle host has them: what nothing asks for not drawn, what shows
+  // then the last one's, Tester::frame_as_host)
   while t.time() < press + sao_until_ms {
-    t.frame()
+    t.frame_as_host() |> ignore
     looks.push(sao_look(t, answered))
   }
   (looks, press, before)
@@ -298,17 +300,17 @@ fn sao_pick_faults(late : Double, looks : Array[SaoLook], press : Double, before
 }
 
 ///|
-/// Case `case` on each screen at each of sao_lates: what breaks the principle, each run's said; of (c) alone where
-/// `down`, else of (a) and (b) (each its own block: (c) is the list's way, mbui's View::scrolls_window); `on_pixels`,
-/// sao_run's.
-fn sao_case(case : SaoCase, down~ : Bool, on_pixels? : Bool = false) -> Unit raise {
+/// Case `case` on each screen at each of sao_lates: what breaks the principle, each run's said, (c) apart from (a) and
+/// (b) (each its own block: (c) is the list's way, mbui's View::scrolls_window); `downs` which of the two are held (each
+/// run made once for both); `on_pixels`, sao_run's.
+fn sao_case(case : SaoCase, downs~ : Array[Bool], on_pixels? : Bool = false) -> Unit raise {
   let all : Array[String] = []
   for screen in sao_screens {
     let never = if case is Pick { [] } else { sao_run(screen, case, None, on_pixels~).0 }
     for late in sao_lates {
       let (looks, press, before) = sao_run(screen, case, Some(late), on_pixels~)
       for f in sao_faults(case, late, looks, never, press, before) {
-        if f.has_prefix("(c)") == down {
+        if downs.contains(f.has_prefix("(c)")) {
           all.push("\{screen.0}, the core \{late} ms late: \{f}")
         }
       }
@@ -320,21 +322,17 @@ fn sao_case(case : SaoCase, down~ : Bool, on_pixels? : Bool = false) -> Unit rai
 }
 
 ///|
-test "a chat's page made with its inside nodes, on 小屏 and 大屏, the core late: words sent with no card waiting in the list from the press's frame, the core's word changing nothing seen" {
-  sao_case(Words, down=false)
-}
-
-///|
-test "a chat's page made with its inside nodes, on 小屏 and 大屏, the core late: words sent with no card waiting, nothing over the newest down from the press to rest" {
-  sao_case(Words, down=true)
+test "a chat's page made with its inside nodes, on 小屏 and 大屏, the core late: words sent with no card waiting in the list from the press's frame, the core's word changing nothing seen; nothing over the newest down from the press to rest" {
+  // (the same runs hold both: each made once)
+  sao_case(Words, downs=[false, true])
 }
 
 ///|
 test "a chat's page made with its inside nodes, on 小屏 and 大屏, the core late: words sent under a card waiting answer it and set its agent at work in the press's frame, the core's word changing nothing seen" {
-  sao_case(UnderCard, down=false)
+  sao_case(UnderCard, downs=[false])
 }
 
 ///|
 test "a chat's page made with its inside nodes, on 小屏 and 大屏, the core late: an option picked on a card waiting: the card answered, the answer's row and its agent's working line in one change, at the core's word; nothing seen changing as the station has it" {
-  sao_case(Pick, down=false)
+  sao_case(Pick, downs=[false])
 }

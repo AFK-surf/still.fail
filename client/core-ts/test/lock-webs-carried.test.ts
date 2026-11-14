@@ -1,11 +1,10 @@
-// A member's web pages a workspace's chain names, carried onto their own log by their app as it next holds the seed for
-// something they do (personal-lock.ts `#addWebs`, views/lock.ts `websIn`), end to end on a core whose workspace's
-// stations are the station's own code (station/src/cloud/state.ts `Cloud`, mesh/serve.ts `lockRoute`, `lockPartRoute`,
-// `inLockBringing`, `refusalOf`): said once, with the chain's id, label and exp, in the ask the person answered and in
-// no other; a handover after it leaves the page in, nobody asked again; a handover before it leaves the page out (told
-// so, whom to ask) until the member's app next signs something, no code entered. Never said: a page run out, one the
-// chain took off, one the log took off, another person's (put in by this app), one an owner put in for them; one said
-// is not said again.
+// The web pages a workspace's chain names, carried by the chain as it moved once it moved (the model's D6, the lead's,
+// 2026-11-14: rules/src/lock/state4.mbt `carry_of`), end to end on a core whose workspace's stations are the station's
+// own code (station/src/cloud/state.ts `Cloud`, mesh/serve.ts `lockRoute`, `lockPartRoute`, `inLockBringing`,
+// `refusalOf`): after a handover that says nothing but `moved`, a page the chain lets in is let in by both stations and
+// in force here, whoever approved it (its own person's app, an owner, another's app), nothing said on its person's log
+// and nobody asked, until its `exp` there; one run out, one the chain took off, one its person's log took off are not.
+// (Until 2026-11-14 a member's app carried its own pages onto its log, `#addWebs`; the chain as it moved does that now.)
 //
 // The world: `ws`, its chain s0's (the owner, a log of their own, `owner`); s1 an admin, this core their app, its log
 // pinned here (`myLog`); r2 a member with a log; stations A and B. s1's pages on the chain: W1 (its own app approved it),
@@ -45,7 +44,7 @@ const DAY = 86400;
 
 /// `flag`: the host offers the handover and hands chains over by itself (by default). `bare`: s1's log holds no `web` yet
 /// (WL neither put on nor taken off it), so a page is said only once everything that keeps or reads that log takes one
-/// (views/lock.ts `mayWriteNew`): D, the station of s1's other workspace, says nothing of builds until `d.says`.
+/// (a person log holding none of the new kinds): D, the station of s1's other workspace, says nothing of builds until `d.says`.
 async function setUp(o: { flag?: boolean; bare?: boolean } = {}) {
   const g = grant();
   const base = ed();
@@ -155,12 +154,14 @@ async function setUp(o: { flag?: boolean; bare?: boolean } = {}) {
   const grantAsked = () => run(inner.adb.personal().signGrants("s1", [], "a grant"));
   /// s0 hands the chain over to its people's logs, as an owner's app does (views/lock.ts `handOver`): its statements on
   /// its log, the `moved` on the chain, both at A and B, the core then reading the chain.
-  const handOver = async () => {
-    owner.say("open", { ...SETTINGS(g.keys), email: "o@x.com" }, "ws");
-    owner.say("member", { sub: "s1", email: "a@x.com", lock: gMe, role: "admin" }, "ws");
-    owner.say("member", { sub: "r2", email: "b@x.com", lock: r2.genesis, role: "member" }, "ws");
-    owner.say("station", { key: A }, "ws");
-    owner.say("station", { key: B }, "ws");
+  const handOver = async (said = true) => {
+    if (said) {
+      owner.say("open", { ...SETTINGS(g.keys), email: "o@x.com" }, "ws");
+      owner.say("member", { sub: "s1", email: "a@x.com", lock: gMe, role: "admin" }, "ws");
+      owner.say("member", { sub: "r2", email: "b@x.com", lock: r2.genesis, role: "member" }, "ws");
+      owner.say("station", { key: A }, "ws");
+      owner.say("station", { key: B }, "ws");
+    }
     after(owner.app.signer, "moved", { root: owner.genesis });
     for (const c of Object.values(stations)) {
       bring(c, owner, true, "ws");
@@ -185,66 +186,32 @@ async function setUp(o: { flag?: boolean; bare?: boolean } = {}) {
   return { r, inner, base, stations, W1, WX, WD, WL, WO, WR, asked, webs, grantAsked, handOver, page, run, d, now: () => now };
 }
 
-test("a member's page their app approved on the chain: said on their log as their app next signs something (a grant), in that one ask, the chain's id, label and exp; again, nothing more said", async () => {
+/// The handover as an owner's app makes it now (views/lock.ts `handOver`): `moved`, nothing said in any log.
+const movedAlone = async (w: Awaited<ReturnType<typeof setUp>>) => w.handOver(false);
+
+test("after a handover that says nothing: the chain's pages in at both stations and here, whoever approved them, nothing said on s1's log, nobody asked; one run out, taken off the chain or off s1's log, out", async () => {
   const w = await setUp();
-  assert.deepEqual(w.webs(), [], "nothing said by itself");
-  const out = await w.grantAsked();
-  assert.equal(out.error, undefined, out.error?.message);
-  assert.equal(w.asked(), 1, "the person asked once, for the grant");
-  assert.deepEqual(w.webs().filter((x) => x.id === w.W1.hex), [{ kind: "web", id: w.W1.hex, label: "s1's browser", exp: w.now() + 10 * DAY }], "W1 said once, as the chain names it");
-  const n = w.webs().length;
-  const again = await w.grantAsked();
-  assert.equal(again.error, undefined, again.error?.message);
-  assert.equal(w.asked(), 2);
-  assert.equal(w.webs().length, n, "said already, nothing more said");
-});
-
-for (const [name, k] of [["run out", "WX"], ["taken off the chain", "WD"], ["taken off s1's log", "WL"], ["another person's (r2's, put in by s1's app)", "WR"], ["s1's, put in by the owner", "WO"]] as const) {
-  test(`never said: a page ${name}`, async () => {
-    const w = await setUp();
-    assert.equal((await w.grantAsked()).error, undefined);
-    assert.ok(w.webs().some((x) => x.id === w.W1.hex), "W1 said in the same ask");
-    assert.ok(!w.webs().some((x) => x.id === w[k].hex), `${name}: not said`);
-  });
-}
-
-test("a log holding no web yet, a station of another workspace of theirs that says nothing of builds: nothing said (one from before `web` refuses a log holding one), a chain moved or not; it says so: said at the next ask", async () => {
-  const w = await setUp({ flag: false, bare: true });
-  assert.equal((await w.grantAsked()).error, undefined);
-  assert.deepEqual(w.webs(), [], "nothing said");
-  await w.handOver();
-  assert.equal((await w.grantAsked()).error, undefined);
-  assert.deepEqual(w.webs(), [], "nothing said once the chain moved either");
-  w.d.says = true;
-  await w.run(w.inner.adb.personal().refresh("s1"));
-  assert.equal((await w.grantAsked()).error, undefined);
-  assert.ok(w.webs().some((x) => x.id === w.W1.hex), "W1 said once D said it keeps such logs");
-});
-
-test("said before the handover: in force after it, let in by both stations, nobody asked again", async () => {
-  const w = await setUp();
-  await w.grantAsked();
-  assert.equal(w.asked(), 1);
-  await w.handOver();
-  assert.ok(inForceOf(w.inner, "ws").f.devices.has(w.W1.hex), "W1 in force here");
-  for (const [n, c] of Object.entries(w.stations)) assert.equal(w.page(c, w.W1).in, true, `W1 let in by ${n}`);
-  assert.equal(w.asked(), 1, "nobody asked again");
-});
-
-test("not said before the handover: out after it, told to ask s1's own app; in at both stations once that app next signs something, no code entered", async () => {
-  const w = await setUp();
-  await w.handOver();
-  for (const [n, c] of Object.entries(w.stations)) {
-    const p = w.page(c, w.W1);
-    assert.equal(p.in, false, `W1 out at ${n}`);
-    assert.deepEqual(p.left?.approvers, [w.base.hex], `told to ask s1's own app at ${n}`);
-  }
-  assert.equal(w.asked(), 0);
-  const out = await w.grantAsked();
-  assert.equal(out.error, undefined, out.error?.message);
-  assert.equal(w.asked(), 1, "the one ask, for the grant");
-  assert.ok(w.webs().some((x) => x.id === w.W1.hex), "W1 said, from the chain as it moved");
-  for (const [n, c] of Object.entries(w.stations)) assert.equal(w.page(c, w.W1).in, true, `W1 let in by ${n}`);
+  await movedAlone(w);
   await w.run(read(w.inner, "ws"));
-  assert.ok(inForceOf(w.inner, "ws").f.devices.has(w.W1.hex), "W1 in force here");
+  for (const [n, c] of Object.entries(w.stations)) {
+    // (s1's own pages at s1's hello; r2's is r2's, in force below)
+    for (const k of ["W1", "WO"] as const) assert.equal(w.page(c, w[k]).in, true, `${k} let in by ${n}`);
+    for (const k of ["WX", "WD", "WL"] as const) assert.equal(w.page(c, w[k]).in, false, `${k} out at ${n}`);
+  }
+  const f = inForceOf(w.inner, "ws").f;
+  for (const k of ["W1", "WO", "WR"] as const) assert.ok(f.devices.has(w[k].hex), `${k} in force here`);
+  for (const k of ["WX", "WD", "WL"] as const) assert.ok(!f.devices.has(w[k].hex), `${k} not in force here`);
+  assert.equal(f.devices.get(w.WR.hex)?.sub, "r2", "r2's page is r2's");
+  assert.equal(w.asked(), 0, "nobody asked");
+  assert.equal((await w.grantAsked()).error, undefined);
+  assert.deepEqual(w.webs(), [], "nothing said on s1's log as their app signs something else either");
+});
+
+test("a carried page is out at its exp on the chain, at both stations and here", async () => {
+  const w = await setUp();
+  await movedAlone(w);
+  w.r.host.advance((10 * DAY + 60) * 1000);
+  await w.run(read(w.inner, "ws"));
+  for (const [n, c] of Object.entries(w.stations)) assert.equal(w.page(c, w.W1).in, false, `W1 out at ${n}`);
+  assert.ok(!inForceOf(w.inner, "ws").f.devices.has(w.W1.hex), "W1 not in force here");
 });

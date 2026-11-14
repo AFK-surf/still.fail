@@ -11,11 +11,12 @@ let rule_names : Array[String] = [
   "motion-spring", "built-by-hand", "layout-read-back", "motion-length", "tester-branch", "frame-number", "ui-current",
   "build-clock", "build-motion", "old-list", "list-comes-off", "old-island", "old-panel",
   "click-read", "key-read", "part-place", "button-by-hand", "layout-told", "abort-unsaid", "empty-on-done", "panic-test", "read-before-run", "reset-by-hand",
-  "app-word",
+  "app-word", "frame-walk",
 ]
 
 ///|
 let rule_words : Map[String, String] = {
+  "frame-walk": "a test walks a span of the clock frame by frame with Tester::frame, which draws each frame whether or not anything asks for it: walk it by Tester::frame_as_host (what nothing asks for not drawn, as an idle host draws none) or run_for the span; time nothing happens in is skipped, never walked",
   "app-word": "the code names an app built on it (detlint.json `app_words`: a word, a path of its): a framework knows no app; what an app needs of it is asked of the app, its own native calls (@hostapi.app_said, app_tell), a name it says (@hostapi.set_site_name), its config",
   "frame-request": "the app asks for a frame itself: the framework knows when one is due (an input, an event, an animation's deadline, a layout read)",
   "settle": "waits for, or asks whether, the app is settled: stability is an end-of-test assertion (assert_idle), never what a step waits for",

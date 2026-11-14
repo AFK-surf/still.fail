@@ -90,8 +90,9 @@ pub fn notice_opened() -> String {
 }
 
 ///|
-/// What the system lets the app show (@hostapi.notice_permission): "granted", "denied", "ask", "unknown". A Tester's
-/// host lets it unless the test says otherwise (Tester::set_notice_permission).
+/// What the system lets the app show (@hostapi.notice_permission): "granted", "denied", "ask", "default" (a browser's:
+/// never answered, its prompt shown whenever asked), "unknown". A Tester's host lets it unless the test says otherwise
+/// (Tester::set_notice_permission).
 pub fn notice_permission() -> String {
   @hostapi.notice_permission()
 }
@@ -122,7 +123,8 @@ pub fn notice_answer() -> Bool? {
 
 ///|
 /// Opens the system's settings of the app's notifications, where they are allowed or turned off
-/// (@hostapi.notice_settings): false where it has none to open. Under a Tester counted (Tester::notice_settings_opened).
+/// (@hostapi.notice_settings): false where it has none to open (a browser's page). Under a Tester counted
+/// (Tester::notice_settings_opened), none where it plays a browser (platform 4).
 pub fn notice_settings() -> Bool {
   @hostapi.notice_settings()
 }
@@ -145,7 +147,8 @@ fn platform_badge(platform : Int) -> Bool {
 }
 
 ///|
-/// What the system lets the app show from the next frame on: "granted", "denied", "ask" (not asked yet), "unknown".
+/// What the system lets the app show from the next frame on: "granted", "denied", "ask" (not asked yet, as Android's),
+/// "default" (never answered, as a browser's: refused when asked, it stays so), "unknown".
 pub fn Tester::set_notice_permission(self : Tester, state : String) -> Unit {
   self.fake.notice_perm = state
   self.fake.wants = true

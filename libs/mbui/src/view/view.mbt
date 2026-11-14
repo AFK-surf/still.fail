@@ -764,6 +764,10 @@ pub struct Tree {
   /// in them as the list's group is said (Tree::come_group_settle), and how long what a press there set off goes
   /// (press_stays.mbt), none of their subtrees walked
   priv list_inner : Map[Int, (Bool, Array[View])]
+  /// the places of picks said to leave (pick_leave.mbt) whose way, said in the change being made, may wait for what
+  /// fades over them, each with the moment it waits till: left out of their column's one way of that moment
+  /// (Tree::come_group_settle) where it goes to a smaller place from rest; noted only till the pick's change is made
+  priv pick_waits : Map[Int, Double]
   /// the places of the page's lists' feet (View::scrolls_window's `foot`, pinned on the list's own node, not under
   /// its held column), each with the held column whose one way what comes or goes or resizes in it goes in
   /// (Tree::come_group_join), where the list's blocks' insides join it
@@ -1197,6 +1201,8 @@ pub struct Tree {
   /// told as a node's pointer's shape is said anew (View::cursor): what hosts it shows the pointer's shape again, no frame
   /// asked for it (nothing is drawn for a shape)
   mut on_cursor : () -> Unit
+  /// whether what is pressed shows the hand as the pointer is over it, not the arrow (Tree::hand_over_presses)
+  hands : @signals.Signal[Bool]
   /// what hosts the tree told as what may take input changes (a modal layer said on, what is drawn over what, a node
   /// let go, leaving, said to take no press): what it holds of its own, an old view's press, to ask whether that may
   /// still take input (Tree::takes_presses)
@@ -1333,6 +1339,7 @@ pub fn Tree::new(
     swaps: [],
     come_groups: {},
     list_inner: {},
+    pick_waits: {},
     list_feet: {},
     shown_bys: {},
     shown_followers: {},
@@ -1498,6 +1505,7 @@ pub fn Tree::new(
     rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
     on_cursor: fn() {  },
+    hands: @signals.signal(true),
     on_modals: fn() {  },
     shared_live: {},
     shared_n: 0,
@@ -4288,14 +4296,24 @@ pub fn Tree::claimers_at(
         order.val = o + 1
         let n = self.nodes[c.id.at]
         if self.finger_on(c, cx, cy, s, x, y, at, tracked=false) {
-          if n.on_drag is Some(_) ||
-            n.on_press is Some(_) ||
+          let takes_own = !(n.points || n.hold_only is Some(_))
+          if (takes_own && (n.on_drag is Some(_) || n.on_press is Some(_))) ||
             n.top_row ||
             n.claims is Some(_) ||
             (n.hosted && @signals.untracked(fn() { there(c.id) })) {
             found.val = Some((c.id, o, (cx, cy, cx + c.w * s, cy + c.h * s)))
-          } else if n.covers(a) {
+          } else if takes_own && n.covers(a) {
             covered.val = o
+            match found.val {
+              Some((prev, _, _)) if !self.nodes[prev.at].hosted && self.covers_over(prev, c.id) => found.val = None
+              _ => ()
+            }
+            near.retain(fn(k) {
+              match k.target {
+                Pressed(id) | Dragged(id) => !self.covers_over(id, c.id)
+                _ => false
+              }
+            })
           }
         } else {
           self.near_said(n, c, cx, cy, s, x, y, least, o, near)
@@ -4541,6 +4559,24 @@ pub fn Tree::ground_read(self : Tree, id : NodeId) -> Int {
   } else {
     0
   }
+}
+
+///|
+/// Whether node `id` lights up its ground under the hand (its ground binding read the hand or the focus, or it binds a
+/// ground while watching the hand on itself), whether pointer movement on it chooses it (`on_pointer_moved`), and
+/// whether the hand is on it now.
+pub fn Tree::lit_row_state(self : Tree, id : NodeId) -> (Bool, Bool, Bool) {
+  if !self.alive_id(id) {
+    return (false, false, false)
+  }
+  let n = self.nodes[id.at]
+  let has_ground_bind = n.props.contains(Ground.ord())
+  let watches_hand = n.pointed_cell is Some(_) || n.pressed_cell is Some(_) || n.pointed_in_cell is Some(_)
+  let lights = (n.ground_read & (ground_read_hand | ground_read_focus)) != 0 ||
+    (has_ground_bind && watches_hand)
+  let chooses = n.on_pointer_moved is Some(_)
+  let hand_on = self.pointed == Some(id) || self.pressing == Some(id) || self.pointed_within_at(id.at)
+  (lights, chooses, hand_on)
 }
 
 ///|
@@ -5484,11 +5520,14 @@ fn Tree::measured_now(self : Tree) -> Unit {
     if self.layout_due && self.measured_gen < 0 {
       let g = @flex.computes() + 1
       self.alone_laid_out()
-      self.work.computes = self.work.computes + 1
-      self.measuring = true
-      self.laids = self.laids + 1
-      @flex.compute(self.nodes[0].flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
-      self.measuring = false
+      let root = self.nodes[0].flex
+      if root.dirty || !root.p_ok || root.p_kw != self.last_w || root.p_kh != self.last_h {
+        self.work.computes = self.work.computes + 1
+        self.measuring = true
+        self.laids = self.laids + 1
+        @flex.compute(root, width=self.last_w, height=self.last_h, round=false, reuse=true)
+        self.measuring = false
+      }
       self.measured_gen = g
       // (placed by once things are placed, whatever is laid out again before that: from the first of what was laid out
       // and not placed yet)
@@ -8118,10 +8157,12 @@ fn View::drop(self : View, v : View) -> Unit {
 /// and what it holds bind is at rest (@signals.rest): what is held while it is read (a core's topic) held for none of
 /// them, and nothing of it worked out again meanwhile; what this gives wakes it as it is held again, each binding that
 /// let go of what it read, or whose reads changed meanwhile, worked out anew.
-fn View::park(self : View, v : View) -> () -> Unit {
+fn View::park(self : View, v : View, rest? : Bool = true) -> () -> Unit {
   guard self.live() is Some(n) && v.live() is Some(m) else { return fn() {  } }
   let wakes : Array[() -> Unit] = []
-  self.tree.rest_in(v.at, wakes)
+  if rest {
+    self.tree.rest_in(v.at, wakes)
+  }
   // (laid out nowhere while held by nothing: no size told, as one just made, till it is laid out where it is held next;
   // so what reads it there reads that one, not the one it had here)
   match m.size_cell {
@@ -9127,6 +9168,19 @@ fn Tree::come_group_settle(
   let live = live.filter(fn(w) {
     w.live() is Some(m) && !(m.flex.style.come_to > 0.0 && m.flex.style.come_goal != m.flex.style.come_goal)
   })
+  // (a pick's place said to leave whose way goes to a smaller place from rest while what it showed fades over it: not
+  // of this way; it holds as big as it was till that is gone, setting out then in the way of what goes then
+  // (pick_leave.mbt))
+  let live = if self.pick_waits.is_empty() {
+    live
+  } else {
+    live.filter(fn(w) {
+      !(self.pick_waits.contains(w.at) &&
+        w.live() is Some(m) &&
+        m.flex.style.come_v == 0.0 &&
+        m.flex.style.come_goal < m.flex.style.come_from)
+    })
+  }
   match self.come_groups.get(col) {
     Some((h, _)) if physical_equal(h, g) => self.come_groups.remove(col)
     _ => ()
@@ -10284,9 +10338,12 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     } else {
       let g = @flex.computes() + 1
       self.alone_laid_out()
-      self.work.computes = self.work.computes + 1
-      self.laids = self.laids + 1
-      @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
+      let root = self.nodes[0].flex
+      if root.dirty || !root.p_ok || root.p_kw != w || root.p_kh != h {
+        self.work.computes = self.work.computes + 1
+        self.laids = self.laids + 1
+        @flex.compute(root, width=w, height=h, round=false, reuse=true)
+      }
       if self.walk_from >= 0 && self.walk_from < g {
         self.walk_from
       } else {
@@ -10295,7 +10352,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
     self.measured_gen = -1
     self.walk_from = -1
-    self.walk(0, gen, true)
+    if self.nodes[0].flex.laid_out_at() >= gen {
+      self.walk(0, gen, true)
+    }
     // (what was laid out alone: placed by from it, where what holds it was not laid out)
     for a in self.alone_laid {
       if self.nodes[a.0].live {
@@ -12316,7 +12375,7 @@ fn Tree::inputs_count(self : Tree, at : Int, d : Int) -> Unit {
 /// answer of what a point is for: a press down, its let go landing on what it went down on, the pointer lighting what
 /// it is over (Tree::follow_point), View::finger_target.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
-  self.target_in(x, y, tracked=false)
+  self.target_in(x, y, tracked=false).0
 }
 
 ///|
@@ -12354,8 +12413,8 @@ fn Tree::finger_on(
 
 ///|
 /// The same, what decides where a node takes it (View::takes) read `tracked` (followed by what asks it: Tree::point_at)
-/// or not.
-fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Target {
+/// or not, and whether what it found was reached from round it (`near`, Tree::reached).
+fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> (Target, Bool) {
   // (the logic's moment, what is where taken as of then: View::takes)
   let at = self.logic_said()
   let least = self.least_now()
@@ -12373,8 +12432,9 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
     order.val = o + 1
     self.work.found_walked = self.work.found_walked + 1
     let n = self.nodes[c.id.at]
-    // (a gesture answering a hold alone takes no press nor drag: what is under it does, as were it not there)
-    if n.hold_only is Some(_) {
+    // (a gesture answering a hold alone, or one only pointed at, takes no press nor drag: what is under it does, as
+    // were it not there)
+    if n.hold_only is Some(_) || n.points {
       return
     }
     if self.finger_on(c, cx, cy, s, x, y, at, tracked~) {
@@ -12390,6 +12450,29 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
       } else {
         if n.covers(a) {
           covered.val = o
+          let mut w = 0
+          for i in 0..<found.length() {
+            let keep = match found[i] {
+              Pressed(id) | Dragged(id) | TopRow(id) => !self.covers_over(id, c.id)
+              Hosted(_) => true
+              Nothing => false
+            }
+            if keep {
+              found[w] = found[i]
+              orders[w] = orders[i]
+              boxes[w] = boxes[i]
+              w = w + 1
+            }
+          }
+          found.truncate(w)
+          orders.truncate(w)
+          boxes.truncate(w)
+          near.retain(fn(k) {
+            match k.target {
+              Pressed(id) | Dragged(id) => !self.covers_over(id, c.id)
+              _ => false
+            }
+          })
         }
         return
       }
@@ -12405,7 +12488,8 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
     Some(i) => (orders[i], boxes[i])
     None => (-1, (0.0, 0.0, 0.0, 0.0))
   }
-  self.reached(top, top_order, top_box, near, x, y, least, covered=covered.val)
+  let res = self.reached(top, top_order, top_box, near, x, y, least, covered=covered.val)
+  (res, res != top)
 }
 
 ///|
@@ -12437,13 +12521,21 @@ pub fn Tree::points_now(self : Tree) -> NodeId? {
 fn Tree::points_over(self : Tree, x : Double, y : Double) -> NodeId? {
   let at = self.logic_said()
   let found : Ref[NodeId?] = Ref(None)
-  self.each_drawn_scaled(fn(c, cx, cy, _, s) {
+  self.each_drawn_scaled(fn(c, cx, cy, a, s) {
     if self.finger_on(c, cx, cy, s, x, y, at, tracked=true) {
       let n = self.nodes[c.id.at]
       if n.points {
         found.val = Some(c.id)
-      } else if (n.on_drag is Some(_) && n.claims is None) || n.on_press is Some(_) || n.hosted || n.top_row {
+      } else if (n.on_drag is Some(_) && n.claims is None && n.hold_only is None) ||
+        n.on_press is Some(_) ||
+        n.hosted ||
+        n.top_row {
         found.val = None
+      } else if n.covers(a) {
+        match found.val {
+          Some(prev) if self.covers_over(prev, c.id) => found.val = None
+          _ => ()
+        }
       }
     }
   }, inputs_only=true)
@@ -13027,10 +13119,25 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   // (this one the one followed from now: what it is first told may let it go (another point, none, the tree let go),
   // which this one's number then no longer is)
   let mine = self.point_said
-  let stop = self.queued(fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) }, fn(found) {
-    self.points_hover = found.1
-    then(found.0)
-  })
+  let stop = self.queued(
+    fn() {
+      let (t, from_near) = self.target_in(x, y, tracked=true)
+      let p = match (from_near, t, self.points_over(x, y)) {
+        (true, Pressed(tid) | Dragged(tid), Some(pid)) =>
+          if self.over_all_of(pid) > self.over_all_of(tid) {
+            Some(pid)
+          } else {
+            None
+          }
+        (_, _, p) => p
+      }
+      (t, p)
+    },
+    fn(found) {
+      self.points_hover = found.1
+      then(found.0)
+    },
+  )
   if self.gone || self.point_said != mine {
     stop()
   } else {

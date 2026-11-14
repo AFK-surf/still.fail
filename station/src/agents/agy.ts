@@ -1,19 +1,23 @@
 // Antigravity CLI driver: one `agy acp` per session, spoken to in ACP (acp.ts) with one ACP session in it. See
 //. Beside what ACP says:
-// - its files (sign-in, settings, conversations) are in the profile's, `--gemini-dir`: none of the machine's ~/.gemini;
+// - its files (sign-in, settings, conversations) are in the profile's, `--gemini-dir`: none of the machine's ~/.gemini,
+//   and on macOS none of the login keychain's (`AGY_FILE_TOKENS`);
 // - the station's instructions are appended to its system prompt (`_meta.antigravity.systemPrompt.append` of
 //   session/new and session/load, which initialize says it takes);
 // - it runs without approvals (`--dangerously-skip-permissions`), with no telemetry and no updating itself;
 // - a message for the running turn steers it (`promptTakeover`); its model is session/set_model;
 // - the station keeps the transcript (acp.ts KeptTranscript), with each turn's usage: the prompt's answer says it.
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
-import { lstat, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, rm, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { writePrivateSoon } from "../ops/files.ts";
+import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { AcpDriver, AcpSession, KeptTranscript, type AcpStart } from "./acp.ts";
 import type { Events } from "./own-process.ts";
-import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
+import { accessKind, expandRoute, profileEnv, profileModel } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, failureOf, uuid, type FailureReason, type OpenOptions, type Profile } from "./runtime.ts";
 
 type Json = any;
@@ -27,8 +31,8 @@ export const geminiDir = (home: string) => join(agyHome(home), ".gemini");
 /// Where its sign-in to a Google account lands in that home (its TUI's, `agy` with the profile's agy/ as its HOME:
 /// accounts/login.ts), which the ACP server reads from `--gemini-dir`: a file, `id_token_email` whose account it is.
 export const agyToken = (home: string) => join(geminiDir(home), "antigravity-cli", "antigravity-oauth-token");
-/// Where the station notes the Google account's email when `agyToken` is written or checked, so the account's name and
-/// sign-in marker survive macOS `agy` migrating `agyToken` into the login keychain and unlinking the file.
+/// Where the station notes the Google account's email when `agyToken` is written or checked: the account's name, and
+/// which keychain item is this profile's (`agyTakeBack`).
 export const agyAccountFile = (home: string) => join(agyHome(home), "account.json");
 /// Where `agy acp` keeps its conversation databases under `--gemini-dir` once a signed-in session opens.
 export const agyConversations = (home: string) => join(geminiDir(home), "antigravity-cli", "conversations");
@@ -70,21 +74,54 @@ export async function agyNotedEmail(home: string): Promise<string | null> {
   }
 }
 
-/// On macOS (`platform.hasKeychain`), `agy acp` running with the user's HOME migrates `agyToken(home)` into the login
-/// keychain and unlinks the file. A profile whose sign-in was noted (`agyAccountFile`) or that already opened an ACP
-/// conversation (`agyConversations`) signed in before that migration; an unsigned profile (even with `agy/sessions`
-/// linked by `linkTranscripts`) has neither.
-export async function agyKeychainSignedIn(home: string): Promise<boolean> {
-  if (!platform.hasKeychain) return false;
+/// On macOS, `agy` keeps its sign-in in one login keychain item for the whole user (service `gemini`, account
+/// `antigravity`, through go-keyring's `/usr/bin/security`), which `--gemini-dir` does not separate: it reads that item
+/// before the profile's `agyToken`, and moved the file there, so every profile ran on whichever account was put there
+/// last (2026-11-14: a session moved to another account went on with the first one's quota). Where it thinks it is
+/// in an SSH session it keeps the sign-in in the file alone ("Using file-based token storage because SSH session
+/// detected", 1.5.9), so the station's processes are given that (`agyEnv`, agy-quota.ts).
+export const AGY_FILE_TOKENS = { SSH_CLIENT: "127.0.0.1 0 0" };
+
+/// The keychain item `agy` kept a sign-in in before `AGY_FILE_TOKENS` (go-keyring's encoding taken off), or null.
+/// Replaced in tests.
+export const agyKeychain = {
+  read: () =>
+    new Promise<string | null>((resolve) => {
+      execFile("/usr/bin/security", ["find-generic-password", "-s", "gemini", "-a", "antigravity", "-w"], { timeout: 5000 }, (error, stdout) => resolve(error ? null : String(stdout).trim()));
+    }),
+};
+
+/// go-keyring's stored value as `agy` wrote it: base64 or hex behind a prefix, else as it is.
+export function goKeyringValue(stored: string): string {
+  if (stored.startsWith("go-keyring-base64:")) return Buffer.from(stored.slice("go-keyring-base64:".length), "base64").toString("utf8");
+  if (stored.startsWith("go-keyring-encoded:")) return Buffer.from(stored.slice("go-keyring-encoded:".length), "hex").toString("utf8");
+  return stored;
+}
+
+/// Whether the profile has its sign-in in its `agyToken`, moving it back there from the keychain where `agy` moved it
+/// before `AGY_FILE_TOKENS`: only when the item is the account the profile noted (`agyAccountFile`), since the item is
+/// the last account signed in on the machine, not necessarily this profile's. One whose item is another account's
+/// signs in again. The item is left: it may be the user's own `agy`'s.
+export async function agyTakeBack(home: string): Promise<boolean> {
   try {
-    await lstat(agyAccountFile(home));
+    await lstat(agyToken(home));
     return true;
   } catch {}
+  if (!platform.hasKeychain) return false;
+  const noted = await agyNotedEmail(home);
+  if (noted === null) return false;
+  const stored = await agyKeychain.read();
+  if (stored === null) return false;
+  const text = goKeyringValue(stored);
+  if (agyEmailIn(text) !== noted) return false;
   try {
-    return (await readdir(agyConversations(home))).length > 0;
-  } catch {
+    await writePrivateSoon(agyToken(home), text);
+  } catch (error) {
+    log.warn("agents::agy", "could not move a profile's sign-in out of the keychain", { home, error: String(error) });
     return false;
   }
+  log.info("agents::agy", "a profile's sign-in moved back from the keychain to its file", { home });
+  return true;
 }
 /// How many bytes of the station's tools a session's model is declared (tools/mcp.ts `fitted`). `agy` 1.5.6 in ACP
 /// declares an MCP server's tools only while all of them together stay within about 57-60 KB, dropping the largest
@@ -107,10 +144,12 @@ export const classifyFailure = (text: string): FailureReason =>
 export const agyArgs = (home: string) => ["acp", "--gemini-dir", geminiDir(home), "--dangerously-skip-permissions", "--disable-telemetry"];
 
 /// Environment of an Antigravity CLI process: the station's scrubbed environment, the profile's own variables (which
-/// win), its `--gemini-dir` (`ANTIGRAVITY_GEMINI_DIR`, for sandbox sync too), updates off, and the peer HTTP endpoint.
+/// win), its `--gemini-dir` (`ANTIGRAVITY_GEMINI_DIR`, for sandbox sync too), its sign-in in that file alone
+/// (`AGY_FILE_TOKENS`), updates off, and the peer HTTP endpoint.
 export function agyEnv(options: OpenOptions): Record<string, string> {
   const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "agy"), options.route) };
   env.ANTIGRAVITY_GEMINI_DIR = geminiDir(options.profile.home);
+  if (platform.hasKeychain) Object.assign(env, AGY_FILE_TOKENS);
   env.AGY_CLI_DISABLE_AUTO_UPDATE = "1";
   env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
   return env;
@@ -253,6 +292,11 @@ export class AgyDriver extends AcpDriver<AgySession> {
 
   protected session(options: OpenOptions, events: Events) {
     return new AgySession(this, events, options);
+  }
+
+  protected async begin(options: OpenOptions, events: Events, probe: boolean): Promise<AgySession> {
+    if (accessKind(options.profile) === "subscription") await agyTakeBack(options.profile.home);
+    return super.begin(options, events, probe);
   }
 
   protected starting(options: OpenOptions): AcpStart {

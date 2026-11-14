@@ -20,9 +20,14 @@
 // E2E_PEER_DATA as peer.ts; E2E_WORK, E2E_STATION as e2e-local.sh's.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { Device, dir, fail, failures, type J, log, must, stationDo, whenChanged, within } from "./device.ts";
+import { Device, dir, fail, failures, type J, log, must, stationDo, stationSays, whenChanged, within } from "./device.ts";
 
-const a = new Device("A");
+// The safe-mode half held both ways, as the locks' end to end is (locks.ts `HELD`): A saying build 0.1.9000, under the
+// release a chain moves on, so it stays unmoved, as every real workspace is while the hold is in; with E2E_LOCKS_MOVED=1
+// (scripts/side.sh rigs-as-moved) A says no release, taken as able, so the workspace moves as safe mode comes on and the
+// rigs are taken into a moved workspace (2026-11-14: since #6153 it moved here unasked, the rig never reached).
+const moved = process.env.E2E_LOCKS_MOVED === "1";
+const a = new Device("A", "alice", moved ? {} : { build: "0.1.9000" });
 // What the rig's tasks write, outside every station's directories: the test reads it to see a task ran.
 const out = `${dir}/ran`;
 const NO_GRANT = /no grant of this station/;
@@ -238,6 +243,12 @@ try {
     await a.call("lock.open", { workspace });
     await a.until({ topic: "lock", workspace }, (l) => l?.locked && l.signs);
     await a.stationState(workspace, (s) => s.state === "online");
+    // (moved as safe mode came on, or held unmoved, as this run is: what the station keeps says which)
+    const said = await whenChanged([`${process.env.E2E_STATION}/data`], () => {
+      const s = stationSays("lock-state");
+      return /^MOVED \S+ on /m.test(s) === moved && /^LOCK on /m.test(s) ? s : null;
+    }, 60_000, () => `the station's lock not ${moved ? "moved" : "unmoved"} and on: ${stationSays("lock-state").split("\n").slice(0, 3).join("; ")}`);
+    log(`  the station's lock: ${said.split("\n").slice(0, 2).join("; ")}`);
   });
   await run("build-box-2", true);
   await run("nas-2", true, true);

@@ -106,6 +106,9 @@ struct FakeHost {
   generation_on_face_add : Ref[Bool]
   // what a digit set all one width (@hostapi.style_tabular) adds to its advance, in ems (0 by default: the same either way)
   mut tabular : Double
+  // whether the marks of East Asian Ambiguous width (U+2010 to U+206F) are a whole em unless set proportional
+  // (@hostapi.style_proportional), as a CJK face draws them (false by default: half an em either way)
+  mut cjk_marks : Bool
   // how big each glyph's picture is, in points (6 by 10 by default): what fills an atlas's plots, as large ones do
   mut glyph_box : (Double, Double)
   // what a face given by its number (face_add, a face's preview) adds to a cluster's advance in what is set in it, in
@@ -201,8 +204,9 @@ struct FakeHost {
   mut hold_words : (String, String, String)?
   /// how the app over another app was ended (@ui.over_done), each time: whether on into the app
   overs_done : Array[Bool]
-  /// what the system lets the app show ("granted", "denied", "ask", "unknown": Tester::set_notice_permission), what
-  /// the person answers when asked (None: never), how often the app asked, and the answer due: from the frame after it
+  /// what the system lets the app show ("granted", "denied", "ask", "default", "unknown": Tester::set_notice_permission),
+  /// what the person answers when asked (None: never), how often the app asked, and the answer due: from the frame after
+  /// it
   mut notice_perm : String
   mut notice_reply : Bool?
   mut notice_asks : Int

@@ -2173,6 +2173,22 @@ test "tester-branch" {
 }
 
 ///|
+test "frame-walk" {
+  // a test's while on the time drawing Tester::frame in it: counted; by frame_as_host, a frame given a length, or
+  // outside a test, not
+  found(
+    [
+      ("src/sfapp/a_wbtest.mbt", "test \"t\" {\n  while t.time() < end {\n    t.frame()\n    look(t)\n  }\n}\n"),
+      ("src/sfapp/b_wbtest.mbt", "test \"t\" {\n  while t.time() < end {\n    t.frame_as_host() |> ignore\n  }\n  while t.time() < end {\n    t.frame(ms=16.0)\n  }\n}\n"),
+      ("src/sfapp/c.mbt", "fn c(t : Tester) -> Unit {\n  while t.time() < end {\n    t.frame()\n  }\n}\n"),
+    ],
+    "frame-walk",
+    1,
+  )
+  |> ignore
+}
+
+///|
 test "frame-number" {
   // a frame's or a build's number asked outside mbui's ui: counted; in ui, in a test, a field of that name not
   found(

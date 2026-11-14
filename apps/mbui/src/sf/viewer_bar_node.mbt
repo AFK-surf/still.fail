@@ -208,12 +208,12 @@ fn back_node(
   went : () -> Unit,
   loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(made_for=loc, fn(v) {
+  @headless.button(made_for=loc, parent, words, fn(_) { went() }, fn(v, b) {
     let lit = fn() {
-      v.focus_shown() ||
+      b.focus_shown() ||
       (match @ui.pointing() {
-        Mouse => v.pointed()
-        Finger => v.pressed()
+        Mouse => b.hovered()
+        Finger => b.pressed()
       })
     }
     v
@@ -225,11 +225,7 @@ fn back_node(
     .radius(By(bar_back_corner))
     .shrink(Is(1.0))
     .min_width(Is(Some(0.0)))
-    .presses(Is(true))
-    .focusable(Is(true))
     .ground(By(fn() { if lit() { ink().hover } else { 0L } }))
-    .says(By(fn() { Some(@view.said(Button, label=words())) }))
-    .on_press(went)
     |> ignore
     v.box(fn(i) {
       i

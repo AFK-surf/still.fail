@@ -74,13 +74,13 @@ test("it says it is ready and answers what it has not been moved to with an erro
     const said: (Answer | Ready)[] = [];
     const next = () => new Promise<Answer | Ready>((resolve) => reader.once("message", resolve));
     said.push(await next());
-    reader.postMessage({ id: 7, op: "thread", args: {}, lang: "en", names: [], processes: [], clientKeys: [] });
+    reader.postMessage({ id: 7, op: "noSuchRead", args: {}, lang: "en", names: [], processes: [], clientKeys: [] });
     said.push(await next());
     // no database there: the checkpoint fails as an error answered, and the reader goes on
     reader.postMessage({ id: 8, op: "checkpoint", args: {}, lang: "en", names: [], processes: [], clientKeys: [] });
     said.push(await next());
     assert.ok("ready" in said[0]!);
-    assert.deepEqual(said[1], { id: 7, status: 500, error: "no read thread" });
+    assert.deepEqual(said[1], { id: 7, status: 500, error: "no read noSuchRead" });
     const failed = said[2] as Answer;
     assert.equal(failed.id, 8);
     assert.equal(failed.status, 500);

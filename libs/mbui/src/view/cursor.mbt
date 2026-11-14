@@ -4,11 +4,12 @@
 
 ///|
 /// The pointer's shape over something: the arrow, a hand (what takes presses), the text's I-beam, a resizing edge's
-/// (sideways, up and down), an open hand (what is dragged), and what another machine's pointer may be drawn as besides
+/// (sideways, up and down), a resizing corner's (ResizeNWSE a top left or bottom right one's, ResizeNESW a top right or
+/// bottom left one's), an open hand (what is dragged), and what another machine's pointer may be drawn as besides
 /// (a remote screen's: a closed hand dragging, a crosshair, what cannot be done). What it is over says it
 /// (ui's Ctx::show_cursor, Tree::cursor_of): a field the I-beam, what takes presses the hand, words picked with the
-/// pointer the I-beam; what is none of those as it is (an edge, what a press on goes to a field, a remote screen's
-/// pointer) is said so (ui's Ctx::cursor, View::cursor).
+/// pointer the I-beam; what is none of those as it is (an edge or a corner, what a press on goes to a field, a remote
+/// screen's pointer) is said so (ui's Ctx::cursor, View::cursor).
 #derive(Eq, Debug)
 pub(all) enum Cursor {
   Arrow
@@ -20,6 +21,8 @@ pub(all) enum Cursor {
   Grabbing
   Crosshair
   NotAllowed
+  ResizeNWSE
+  ResizeNESW
 }
 
 ///|
@@ -36,6 +39,8 @@ pub impl Show for Cursor with output(self, logger) {
       Grabbing => "Grabbing"
       Crosshair => "Crosshair"
       NotAllowed => "NotAllowed"
+      ResizeNWSE => "ResizeNWSE"
+      ResizeNESW => "ResizeNESW"
     },
   )
 }
@@ -53,6 +58,8 @@ pub fn Cursor::code(self : Cursor) -> Int {
     Grabbing => 6
     Crosshair => 7
     NotAllowed => 8
+    ResizeNWSE => 9
+    ResizeNESW => 10
   }
 }
 
@@ -95,15 +102,39 @@ pub fn View::cursor(self : View, shape : Live[Cursor?], loc~ : SourceLoc) -> Vie
 }
 
 ///|
-/// The pointer's shape over node `id` as it is now: the one it says (View::cursor); else a hand where a press on it
-/// does something (its on_press) and it takes presses; else the arrow (a node only dragged, a ground). One gone: the
-/// arrow.
+/// The pointer's shape over node `id` as it is now: the one it says (View::cursor); else the shape of what is pressed
+/// (Tree::pressed_shape: a hand, unless the app said otherwise) where a press on it does something (its on_press) and
+/// it takes presses; else the arrow (a node only dragged, a ground). One gone: the arrow.
 pub fn Tree::cursor_of(self : Tree, id : NodeId) -> Cursor {
   guard self.alive_id(id) else { return Arrow }
   let n = self.nodes[id.at]
   match n.cursor {
     Some(c) => c
-    None => if n.on_press is Some(_) && self.takes_presses(id) { Hand } else { Arrow }
+    None => if n.on_press is Some(_) && !n.points && self.takes_presses(id) { self.pressed_shape() } else { Arrow }
+  }
+}
+
+///|
+/// Whether what is pressed shows the hand as the pointer is over it (true, as it starts), or the arrow: a button, a row,
+/// a link in words, of the window's tree and of the old views hosted in it (ui's Ctx::show_cursor, its links'
+/// nodes: tree_links.mbt). An app says false once for the whole window where its platform's own apps keep the arrow
+/// over what they press (Windows' native apps do; the web's and macOS' links show the hand), so none of it shows a
+/// hand; a shape a node or an old view says itself (View::cursor, ui's Ctx::cursor) is still its own. Told anew at
+/// once to a still pointer over the tree (Tree::on_cursor); an old view's at the pointer's next move.
+pub fn Tree::hand_over_presses(self : Tree, on : Bool) -> Unit {
+  if @signals.untracked(fn() { self.hands.get() }) != on {
+    self.hands.set(on)
+    (self.on_cursor)()
+  }
+}
+
+///|
+/// The pointer's shape over what is pressed, as the app said (Tree::hand_over_presses): the hand, else the arrow.
+pub fn Tree::pressed_shape(self : Tree) -> Cursor {
+  if self.hands.get() {
+    Hand
+  } else {
+    Arrow
   }
 }
 

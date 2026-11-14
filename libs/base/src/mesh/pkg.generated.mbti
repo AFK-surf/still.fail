@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub let body_step : Int32
+
 pub fn code_of(Error) -> String
 
 pub let connect_timeout_ms : Int32
@@ -19,7 +21,13 @@ pub let onto_max_ms : Int32
 
 pub let ping_timeout_ms : Int32
 
+pub let probe_ms : Int32
+
+pub let rebind_ms : Int32
+
 pub let renew_ms : Int32
+
+pub let retire_ms : Int32
 
 pub fn said(Error) -> String
 
@@ -52,18 +60,29 @@ pub(all) struct Closed {
 }
 pub fn Closed::words(Self) -> String
 
-pub struct Link {
-  peer : String
+pub struct Inbound {
+  out : Out
   // private fields
 }
+pub fn Inbound::cancel(Self) -> Unit
+pub async fn Inbound::take(Self) -> Bytes?
+
+pub struct Link {
+  peer : String
+  scope : String
+  // private fields
+}
+pub async fn Link::accept(Self) -> Inbound?
 pub async fn Link::admitted(Self) -> @json.Json
-pub fn Link::close(Self) -> Unit
+pub fn Link::close(Self, reason? : String) -> Unit
 pub async fn Link::closed(Self) -> Closed
+pub async fn Link::duplex(Self, String, String, headers? : Array[(String, String)], more? : Map[String, @json.Json]) -> (Reply, Out)
 pub fn Link::ended(Self) -> Closed?
 pub async fn Link::exchange(Self, String) -> @json.Json
 pub fn Link::path(Self) -> String?
 pub fn Link::paths(Self) -> Array[@json.Json]
-pub async fn Link::request(Self, String, String, headers? : Array[(String, String)], body? : Bytes) -> Reply
+pub fn Link::pings(Self) -> Pings
+pub async fn Link::request(Self, String, String, headers? : Array[(String, String)], body? : Bytes, more? : Map[String, @json.Json], wrote? : (Int32) -> Unit) -> Reply
 pub fn Link::usable(Self) -> Bool
 pub fn Link::via(Self) -> String?
 
@@ -71,9 +90,16 @@ pub struct Mesh {
   // private fields
 }
 pub async fn Mesh::close(Self) -> Unit
+pub fn Mesh::current(Self, String, scope? : String) -> Link?
 pub fn Mesh::device_id(Self) -> String
-pub async fn Mesh::link(Self, String, async (String, Bool) -> Presented) -> Link
+pub fn Mesh::drop_link(Self, String, scope? : String, reason? : String) -> Unit
+pub async fn Mesh::health_change(Self, String, Bool, scope? : String) -> Bool
+pub fn Mesh::healthy(Self, String, scope? : String) -> Bool
+pub async fn Mesh::link(Self, String, async (String, Bool) -> Presented, scope? : String) -> Link
 pub async fn Mesh::make(@shell.Shell, Store, Options) -> Self
+pub async fn Mesh::replaced(Self, Link) -> Unit
+pub fn Mesh::standing(Self, String, scope? : String) -> Bool
+pub fn Mesh::wake(Self) -> Unit
 
 pub(all) struct Options {
   alpn : String
@@ -81,6 +107,21 @@ pub(all) struct Options {
   relay_only : Bool
   says : Map[String, @json.Json]?
   refusal : ((@json.Json, String) -> Error?)?
+}
+
+pub struct Out {
+  // private fields
+}
+pub async fn Out::finish(Self) -> Unit
+pub async fn Out::stopped(Self) -> Int32?
+pub async fn Out::write(Self, Bytes) -> Unit
+
+pub(all) struct Pings {
+  samples : Int32
+  srtt : Double
+  dev : Double
+  missed : Int32
+  answered_ms : Int32?
 }
 
 pub(all) struct Presented {

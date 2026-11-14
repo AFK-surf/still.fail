@@ -16,10 +16,10 @@ test "主题色 蓝色 chosen, laid out narrow and wide, with touch and with a m
     assert_eq(@sf.theme().p.accent, orange.light, msg="\{w}")
     let bg_orange = @sf.theme().p.bg
     assert_eq(t.get(Radio, label="橙色").selected, Some(true))
-    // (each dot a press's least room apart from the next: 36 with a mouse, 44 with touch)
+    // (each dot 8 apart from the next)
     let (x0, _, w0, _) = t.get(Radio, label="橙色").rect
-    let (x1, _, w1, _) = t.get(Radio, label="蓝色").rect
-    assert_eq(x1 + w1 / 2.0 - (x0 + w0 / 2.0), @ui.room_least(), msg="\{w}")
+    let (x1, _, _, _) = t.get(Radio, label="蓝色").rect
+    assert_eq(x1 - (x0 + w0), 8.0, msg="\{w}")
     t.click(Radio, label="蓝色")
     t.frame()
     t.frame()

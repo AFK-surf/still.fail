@@ -35,6 +35,8 @@ fn init {
     ("src/sfapp/image_corners_chat_wbtest.mbt", 159102),
     ("src/sfapp/kept_rows_kinds_wbtest.mbt", 243220),
     ("src/sfapp/linger_wbtest.mbt", 89156),
+    // (中屏's chat opened, its workspace switched: the chat's pictures handed over as it showed, 2026-11-14)
+    ("src/sfapp/medium_switch_corners_wbtest.mbt", 38548),
     ("src/sfapp/newchat_send_wbtest.mbt", 231032),
     ("src/sfapp/notices_wbtest.mbt", 999086),
     ("src/sfapp/place_first_wbtest.mbt", 10862),

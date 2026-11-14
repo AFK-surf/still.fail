@@ -8,7 +8,7 @@
 #   sh scripts/side.sh core-ts   one part's
 set -u
 cd "$(dirname "$0")/.."
-parts=${*:-core-ts station rust locks locks-moved rigs cloud}
+parts=${*:-core-ts station rust locks locks-moved locks-as-moved rigs rigs-as-moved cloud}
 status=0
 for part in $parts; do
   echo "· side: $part"
@@ -33,10 +33,17 @@ for part in $parts; do
     # locks-moved-all), a run of its own on ports and directories of its own (28740 is a stray relay's on the CI Mac).
     locks-moved) (cd apps/mbui && E2E_WORK=${RUNNER_TEMP:-/tmp}/side-locks-moved E2E_STATION=/tmp/side-moved-$(id -u) E2E_PORT=28760 \
       E2E_RELAY=28769 bash scripts/e2e-local.sh locks-moved-all) || status=1 ;;
+    # The locks' rounds again with the workspace moved at A's first ask (E2E_LOCKS_MOVED=1, e2e/locks.ts says what is left
+    # out after a move and why): a moved workspace put through what an unmoved one is (the lead, 2026-11-14).
+    locks-as-moved) (cd apps/mbui && E2E_LOCKS_MOVED=1 E2E_WORK=${RUNNER_TEMP:-/tmp}/side-locks-as-moved E2E_STATION=/tmp/side-asmoved-$(id -u) \
+      E2E_PORT=28780 E2E_RELAY=28789 bash scripts/e2e-local.sh locks-all) || status=1 ;;
     # A rig end to end (apps/mbui/e2e/rigs.ts): a machine enrolled as alice's rig beside the test station, asked for by
     # a chat's agent, granted, used, taken back (scripts/e2e-local.sh rigs-all), on ports and directories of its own.
     rigs) (cd apps/mbui && E2E_WORK=${RUNNER_TEMP:-/tmp}/side-rigs E2E_STATION=/tmp/side-rigs-$(id -u) E2E_PORT=28720 \
       E2E_RELAY=28729 bash scripts/e2e-local.sh rigs-all) || status=1 ;;
+    # The same with the workspace moved as safe mode comes on (E2E_LOCKS_MOVED=1, rigs.ts), on ports of its own.
+    rigs-as-moved) (cd apps/mbui && E2E_LOCKS_MOVED=1 E2E_WORK=${RUNNER_TEMP:-/tmp}/side-rigs-as-moved E2E_STATION=/tmp/side-rigsmoved-$(id -u) E2E_PORT=28800 \
+      E2E_RELAY=28809 bash scripts/e2e-local.sh rigs-all) || status=1 ;;
     # A self-hosted cloud on workerd (cloud/side): built, signing people in through an SMTP relay and an OpenID provider of
     # the test's own, over real sockets with a CA of its own.
     cloud) (cd cloud && pnpm side) || status=1 ;;

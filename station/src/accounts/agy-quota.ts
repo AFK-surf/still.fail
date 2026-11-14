@@ -3,9 +3,9 @@
 // (ANTIGRAVITY_GEMINI_DIR=<home>/agy/.gemini; HOME=<home>/agy when its token is in a file, or the user's HOME when
 // kept in the macOS login keychain) without reading or embedding OAuth client credentials in the station.
 import { spawn } from "node:child_process";
-import { lstat, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { devNull } from "node:os";
-import { agyHome, agyKeychainSignedIn, agyToken, geminiDir } from "../agents/agy.ts";
+import { AGY_FILE_TOKENS, agyHome, agyTakeBack, geminiDir } from "../agents/agy.ts";
 import { type Env, platform } from "../platform/index.ts";
 import { type Lang, Said, stationLang, tr } from "../ops/i18n.ts";
 import { withShellCommand } from "../ops/shell-path.ts";
@@ -184,30 +184,21 @@ function parseJsonLine(stdout: string): Json | null {
   return null;
 }
 
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await lstat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export async function agyQuota(home: string, sourceEnv: Env, urls: Urls, lang: Lang = stationLang(), command = "agy"): Promise<ProfileQuota> {
-  const hasFile = await pathExists(agyToken(home));
-  const hasKeychainSignIn = !hasFile && (await agyKeychainSignedIn(home));
-  // Before sign-in (neither a profile token file nor a keychain-migrated sign-in), return signed out immediately
-  // without spawning `agy` or reading the machine keychain for an unsigned profile.
-  if (!hasFile && !hasKeychainSignIn) {
+  // Before sign-in (no token file in the profile's, none to take back from the keychain: agents/agy.ts `agyTakeBack`),
+  // return signed out immediately without spawning `agy`.
+  if (!(await agyTakeBack(home))) {
     throw new Said(tr(lang, "station.quota.signInExpired"));
   }
   const baseEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(sourceEnv)) {
     if (v !== undefined && !SCRUBBED.includes(k)) baseEnv[k] = v;
   }
-  // File-backed profiles isolate HOME to `<home>/agy` so `agy` reads only the profile's token file; keychain-backed
-  // profiles keep `sourceEnv.HOME` (as `AgyDriver` does) so `/usr/bin/security` can reach the user's login keychain.
-  if (hasFile) baseEnv.HOME = agyHome(home);
+  // HOME isolated to `<home>/agy` and the sign-in kept in the file alone (`AGY_FILE_TOKENS`), so `agy` reads only the
+  // profile's token file, never the login keychain's item, which is the machine's last account.
+  baseEnv.HOME = agyHome(home);
+  if (platform.hasKeychain) Object.assign(baseEnv, AGY_FILE_TOKENS);
   baseEnv.ANTIGRAVITY_GEMINI_DIR = geminiDir(home);
   baseEnv.AGY_CLI_DISABLE_AUTO_UPDATE = "1";
   if (urls.agyQuota) baseEnv.CLOUD_CODE_URL = urls.agyQuota;

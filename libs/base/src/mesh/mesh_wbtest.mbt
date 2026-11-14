@@ -188,7 +188,7 @@ test "closed in the turn a link is handed out, before its fibers took a step: it
   let closing = stood.start(() => {
     // (looked at between the others' steps, for far more turns than an opening takes: one that stalled fails the
     // test here, where a wait with no bound would never give the run back)
-    for turns = 0; !(mesh.links.get(peer) is Some({ result: Some(_), .. })); turns = turns + 1 {
+    for turns = 0; !(mesh.links.get({ scope: "", peer }) is Some({ result: Some(_), .. })); turns = turns + 1 {
       guard turns < 1000 else { fail("the opening handed out no link in 1000 turns") }
       @effect.pause()
     }

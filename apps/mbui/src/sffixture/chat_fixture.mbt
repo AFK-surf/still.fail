@@ -463,6 +463,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
           } else if f.mode == "chat-turn-failed" {
             with_failed_turn(rich_chat(f.older), f.step > 0)
+          } else if f.mode == "chat-turn-unanswered" {
+            with_unanswered_turn(rich_chat(f.older), f.step > 0)
           } else if f.mode == "chat-model-limit-before" || f.mode == "chat-model-limit-after" {
             with_model_limit(rich_chat(f.older), f.mode == "chat-model-limit-after")
           } else if f.mode == "chat-run-change" {
@@ -726,6 +728,11 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         "active": true,
         "statusText": "等你在浏览器里登录",
       })
+    // the station's logins, answered as the core answers them (a chat with a login's card opens once they are:
+    // sfbase's chat_opens): nothing under way through still.fail as the station lists it, the viewer one who may only
+    // see how they stand (the card as it was drawn while none was answered)
+    "machineLogins" =>
+      Some({ "supported": true, "loaded": true, "canLogin": false, "canRelay": false, "logins": [], "tools": [] })
     // chat-working: its agent's step, said in more words than a phone's line has room for
     "live" if f.mode == "chat-working" && text(Some(Json::object(params)), "key") == "s-c1" =>
       Some({ "loaded": true, "activity": { "now": { "key": fix_working_now.val.0, "text": fix_working_now.val.1, "important": fix_working_important.val } } })
@@ -2373,6 +2380,35 @@ fn with_failed_turn(v : Json, retried : Bool) -> Json {
     Object(m) => {
       let o = m.copy()
       let words = if @sf.language() == "en" { "Connection lost; reply to retry" } else { "与模型服务的连接中断，回复即可重试" }
+      let notice : Map[String, Json] = { "failed": true, "words": Json::string(words) }
+      if !retried {
+        notice["againSession"] = "s-c1"
+      }
+      o["messages"] = [
+        msg(1, "person", by_person("林"), "请继续处理这个任务", "刚刚", { "mine": true }),
+        msg(2, "ember", { "name": "still.fail" }, "⚠️ " + words, "刚刚", { "notice": Json::object(notice) }),
+      ]
+      o["asks"] = []
+      o["askClear"] = false
+      o["more"] = false
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The chat `v` ending on a turn the station stopped asking for a state ("chat-turn-unanswered"): its notice
+/// (回复即可继续) offers 重试 too till it is pressed (`retried`).
+fn with_unanswered_turn(v : Json, retried : Bool) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let words = if @sf.language() == "en" {
+        "This turn stopped without a result; reply to continue"
+      } else {
+        "本轮未产出结果即停止，回复即可继续"
+      }
       let notice : Map[String, Json] = { "failed": true, "words": Json::string(words) }
       if !retried {
         notice["againSession"] = "s-c1"

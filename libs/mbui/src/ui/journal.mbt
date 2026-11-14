@@ -117,6 +117,10 @@ pub(all) enum HangTrigger {
 pub(all) struct Hang {
   trigger : HangTrigger
   page : String
+  /// how the app laid out what it showed then and the window's size in points (journal_arranged: "" and 0 none said)
+  arranged : String
+  window_w : Double
+  window_h : Double
   sealed_by : Seal
   startup : Bool
   start : Double
@@ -288,6 +292,11 @@ let shown_slot : Ref[Int] = Ref(0)
 let shown_said : Ref[String] = Ref("")
 
 ///|
+/// How the app lays out what it shows and the window's size in points, as it last said (journal_arranged).
+// kept across runs: put back as a run begins (journal_reset)
+let arranged_said : Ref[(String, Double, Double)] = Ref(("", 0.0, 0.0))
+
+///|
 /// The summary's counts by the name shown as each was counted, four a slot (shown_slot's): frames, stalls, late
 /// frames, blocking. A frame presented costs one rise of one of them.
 // kept across runs: put back as a run begins (journal_reset), emptied as the app is hidden (journal_said_shown)
@@ -300,6 +309,15 @@ let shown_counts : FixedArray[Int] = FixedArray::make(4 * (shown_names_most + 2)
 pub fn journal_shows(name : String) -> Unit {
   shown_said.val = name
   shown_slot.val = shown_slot_of(name)
+}
+
+///|
+/// How the app lays out what it shows (`name`, of a few the app has: still.fail's 小屏, 中屏, 大屏) and the window's
+/// size in points (`w`, `h`), told as either changes, never asked each frame: a hang says them as its interval is
+/// sealed, so one can be made again in a Tester's window of that size (the hang reports' `why` alone did not say
+/// which, 2026-11-14).
+pub fn journal_arranged(name : String, w : Double, h : Double) -> Unit {
+  arranged_said.val = (name, w, h)
 }
 
 ///|
@@ -395,6 +413,7 @@ fn journal_reset() -> Unit {
   shown_names.clear()
   shown_slot.val = 0
   shown_said.val = ""
+  arranged_said.val = ("", 0.0, 0.0)
   shown_counts.fill(0)
   journal_listens()
 }
@@ -686,6 +705,9 @@ fn journal_seal(seal : Seal, at : Double) -> Unit {
   let hang = {
     trigger,
     page: journal_shown(),
+    arranged: arranged_said.val.0,
+    window_w: arranged_said.val.1,
+    window_h: arranged_said.val.2,
     sealed_by: seal,
     startup,
     start,
@@ -840,6 +862,8 @@ pub fn Hang::said(self : Hang) -> String {
   let busy = if active > 0.0 { (dmin(self.work_ms / active, 1.0) * 100.0).round() } else { 100.0 }
   "trigger=\{self.trigger.name()} sealed=\{self.sealed_by.name()} phase=\{if self.startup { "startup" } else { "steady" }} " +
   (if self.page != "" { "page=\{self.page} " } else { "" }) +
+  (if self.arranged != "" { "arranged=\{self.arranged} " } else { "" }) +
+  (if self.window_w > 0.0 { "window=\{self.window_w.round()}x\{self.window_h.round()} " } else { "" }) +
   "active=\{journal_ms(active)}ms stall=\{journal_ms(self.stall_ms)}ms work=\{journal_ms(self.work_ms)}ms busy=\{busy}% " +
   "pieces=\{self.pieces} small=\{self.small}/\{journal_ms(self.small_ms)}ms lost=\{self.lost} by: " +
   self.contributors.map(fn(w) { w.said() }).join(" | ") +
@@ -848,7 +872,8 @@ pub fn Hang::said(self : Hang) -> String {
 
 ///|
 /// The hang as JSON (what an app sends of it: still.fail's reports.mbt): its times from its start (ms), each
-/// contributor its kind, start, ms, and a frame's parts; what the app showed as `page` (none said: no field).
+/// contributor its kind, start, ms, and a frame's parts; what the app showed as `page`, how it laid it out as
+/// `arranged` and the window's size as `window_w`, `window_h` (none said: no field).
 pub fn Hang::json(self : Hang) -> Json {
   let active = self.end - self.start
   let contributors = self.contributors.map(fn(w) {
@@ -897,6 +922,13 @@ pub fn Hang::json(self : Hang) -> Json {
   }
   if self.page != "" {
     o["page"] = Json::string(self.page)
+  }
+  if self.arranged != "" {
+    o["arranged"] = Json::string(self.arranged)
+  }
+  if self.window_w > 0.0 {
+    o["window_w"] = Json::number(self.window_w.round())
+    o["window_h"] = Json::number(self.window_h.round())
   }
   Json::object(o)
 }

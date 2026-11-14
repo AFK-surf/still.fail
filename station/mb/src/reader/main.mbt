@@ -64,7 +64,17 @@ fn Reader::answer(self : Reader, line : String) -> Json {
       }
     { "op": String(op), .. } if moved(op) =>
       try {
-        { "id": id, "text": Json::string(self.read(op, ask).stringify()) }
+        @readops.prepare_up_jobs.val = None
+        @readops.prepare_workspace_up_jobs.val = false
+        let answer : Map[String, Json] = { "id": id, "text": Json::string(self.read(op, ask).stringify()) }
+        // (an old session whose up jobs' lookup the pool is to prepare now: read/worker.ts `prepareUpJobs`)
+        if @readops.prepare_up_jobs.val is Some(session) {
+          answer["prepareUpJobs"] = Json::string(session)
+        }
+        if @readops.prepare_workspace_up_jobs.val {
+          answer["prepareWorkspaceUpJobs"] = true
+        }
+        Json::object(answer)
       } catch {
         @readops.Refused(status, m) => { "id": id, "status": Json::number(status.to_double()), "error": Json::string(m) }
         e => { "id": id, "status": 500, "error": Json::string(message(e)) }
@@ -77,7 +87,7 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage"].contains(
     op,
   )
 }
@@ -93,6 +103,10 @@ fn Reader::read(self : Reader, op : String, ask : Json) -> Json raise {
       self.reading = Some(db)
       db
     }
+  }
+  // read/worker.ts `learn`: the model catalog as the pool gives it when it changed
+  if ask.value("catalog") is Some(models) {
+    @readops.learn_catalog(models)
   }
   db.exec("BEGIN")
   defer (db.exec("COMMIT") catch { _ => () })
@@ -130,6 +144,18 @@ fn Reader::read(self : Reader, op : String, ask : Json) -> Json raise {
     "letters" => @readops.thread_letters(db, self.host, self.data, self.sep, ask)
     "summary" => @readops.session_summary(db, self.host, self.data, self.sep, ask)
     "sessions" => @readops.session_list(db, self.host, self.data, self.sep, ask)
+    "session" => @readops.session_page(db, self.host, self.data, self.sep, ask)
+    "threads" => @readops.thread_list_of(db, self.host, self.data, self.sep, ask)
+    "thread" => @readops.thread_of(db, self.host, self.data, self.sep, ask)
+    "turnNotices" => @readops.turn_notices(db, self.host, self.data, self.sep, ask)
+    "saidNotices" => @readops.said_notices(db, self.host, self.data, self.sep, ask)
+    "chats" => @readops.viewer_chat_list(db, self.host, self.data, self.sep, ask)
+    "chatRows" => @readops.viewer_chat_rows(db, self.host, self.data, self.sep, ask)
+    "outflowChats" => @readops.outflow_chats(db, self.host, self.data, self.sep, ask)
+    "openJobs" => @readops.open_jobs(db, self.host, self.data, self.sep, ask)
+    "resourceChats" => @readops.resource_chats(db, self.host, self.data, self.sep, ask)
+    "usage" => @readops.usage_page(db, self.host, self.data, self.sep, ask)
+    "outflowUsage" => @readops.outflow_usage(db, self.host, self.data, self.sep, ask)
     _ => fail("no read \{op}")
   }
 }

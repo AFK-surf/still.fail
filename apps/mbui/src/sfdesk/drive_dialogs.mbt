@@ -643,9 +643,9 @@ let picker_clear : Double = 28.0
 let picker_clear_icon : Double = 14.0
 
 ///|
-/// The stations' rows (rootsList: 4 apart).
+/// The stations' rows (rootsList: flush, only one hovered at a time).
 // kept across runs: a value (no field of it changes)
-let roots_list : @ui.Style = @ui.css("w=Full gap=S1")
+let roots_list : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// A station's row to pick (pickRow): 40 high at least, 6 by 10 in, 10 between, the field's corner; the list's ground

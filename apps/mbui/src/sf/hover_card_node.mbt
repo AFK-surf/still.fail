@@ -237,22 +237,14 @@ pub fn hover_card_node(
   // the window (View::window_held: one carried onto it from elsewhere, or one on it that is not its, a bar's dragging
   // the window, rests on nothing till it is let go, as kit's hover_card's `c.press().down`), whether it takes input, whether it is held open; one a mouse does not press (no `press`), by where the pointer is
   // within it, what a press there is for being another's)
-  let within = press is None
-  // (whether it takes input: one said `tapped` alone says itself it takes no press from a mouse (below), and that is no
-  // "taking input no more" (View::takes_input reads its own say too): so what holds it is asked, which says whether it
-  // would: leaving, said to take none, under a modal layer)
-  let input_of = match (press, tapped, anchor.parent()) {
-    (None, Some(_), Some(p)) => p
-    _ => anchor
-  }
-  let takes = fn() { input_of.takes_input() }
+  let takes = fn() { anchor.takes_input() }
   let state = fn() {
     let mouse = @ui.pointing() is Mouse
     let on_anchor = mouse &&
       (
         match pointed {
           Some(p) => p()
-          None => if within { anchor.pointer_within() } else { anchor.pointed_in() }
+          None => anchor.pointed_in()
         }
       ) &&
       !yielded(yields_to)
@@ -324,7 +316,7 @@ pub fn hover_card_node(
     _ if pointed is Some(_) => ()
     // (said neither: a hold and nothing else (View::gesture's hold alone): a press or a drag on it what holds it's as
     // ever (a row pressed to open, a bar dragged), the finger its once held still that long)
-    (None, None) => anchor.gesture(@ui.touch_slop(), hold=(@ui.long_press_ms, on_held)) |> ignore
+    (None, None) => anchor.points(Is(true)).gesture(@ui.touch_slop(), hold=(@ui.long_press_ms, on_held)) |> ignore
     _ => {
       // (pressed: a tap, a click or Enter does `press` (a finger's tap `tapped` where it is said); a mouse's long press
       // is still a click as it is let go on it, as an icon button's)
@@ -347,7 +339,7 @@ pub fn hover_card_node(
       if press is Some(_) {
         anchor.presses(Is(true)).on_press(pressed) |> ignore
       } else {
-        anchor.presses(By(fn() { @ui.pointing() is Finger })).on_press(pressed) |> ignore
+        anchor.presses(Is(true)).points(By(fn() { @ui.pointing() is Mouse })).on_press(pressed) |> ignore
       }
       anchor.gesture(
         @ui.touch_slop(),

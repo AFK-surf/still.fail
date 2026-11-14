@@ -50,8 +50,8 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { buildOf, ownBuild } from "../station/oldest.ts";
-import { Lock, approvedHere, asked, baseOf, leftIn, noteBuild, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
+import { ownBuild } from "../station/oldest.ts";
+import { Lock, approvedHere, asked, baseOf, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -123,7 +123,7 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 /// A place's `joins`: the lock there has not heard of this person (made a member since it was turned on); `moved`: its
 /// chain moved to its people's own logs, where a web page is let in by an entry of its person's own log (`movedPlace`);
 /// `admit`, there, someone's first device: who is said a member, with the log of their own its hello brought.
-type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; build: number | null; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean; moved?: true; admit?: Admit }[]; hidden: boolean; away: Deferred.Deferred<void> };
+type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean; moved?: true; admit?: Admit }[]; hidden: boolean; away: Deferred.Deferred<void> };
 
 const askings = new WeakMap<Inner, Map<string, Asking>>();
 const askingsOf = (inner: Inner) => {
@@ -276,7 +276,9 @@ function admitOf(inner: Inner, ws: string, account: string, c: { sub: string; em
   // (a note this device may not give refuses as well, whatever the view lowers it to)
   const noted = notedRole(inner, ws, account, c.sub, c.email);
   if (noted !== null && movedPlan(inner, ws, account, c.sub, { lock, role: noted, email: c.email, again: f.members.has(c.sub) }) === null) return null;
-  const a: Admit = { lock, role: lower(noted ?? "member", viewed), email: c.email, again: f.members.has(c.sub) };
+  // (one the state names already, as a member the chain as it moved still names unbound: their role there, which their
+  // devices signed for, the note's where this device noted one; else a member; each lowered to the view's)
+  const a: Admit = { lock, role: lower(noted ?? f.members.get(c.sub)?.role ?? "member", viewed), email: c.email, again: f.members.has(c.sub) };
   return movedPlan(inner, ws, account, c.sub, a) === null ? null : a;
 }
 /// The lower of two roles (viewer, member, admin, owner): the view's word only lowers what this device noted.
@@ -385,7 +387,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
     if (before) Deferred.doneUnsafe(before.away, Effect.void);
     const kind = get(hello.value, "kind") === "app" ? "app" : "web";
     const asking: Asking = {
-      device: peer, build: buildOf(str(get(hello.value, "build")) ?? undefined), name: who.name, email: who.email, kind, label: (str(get(hello.value, "label")) ?? "").slice(0, 120),
+      device: peer, name: who.name, email: who.email, kind, label: (str(get(hello.value, "label")) ?? "").slice(0, 120),
       signKey: kind === "app" ? str(get(hello.value, "sign_key")) : null, code: pairCode((b) => inner.host.randomBytes(b)),
       at: Math.floor(inner.host.nowMs() / 1000), until: inner.host.nowMs() + PAIR_WAIT_MS, places, hidden: false, away: Deferred.makeUnsafe<void>(),
       ...(personal !== null ? { personal: { subs: personal.subs, key: personal.key, seed: yield* Effect.orElseSucceed(inner.adb.personal().unseal(t("core-misc.personal.reason.add")), () => null) } } : {}),
@@ -446,8 +448,6 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       // (its entry pending on their lock, no station of theirs up: the first such row, which the answer carries)
       let pending: unknown = null;
       for (const sub of subs) {
-        // (the build it said, noted as seen here: what the person may write in their log goes by it, `mayWriteNew`)
-        if (a.kind === "app") noteBuild(inner, sub, a.device, a.build);
         // (put on the person's lock, then in the workspaces' where they bound it, as one: `withBound`)
         const add = inner.adb.personal().addDevice(sub, { key, id: a.device, label: a.label, ...(a.signKey !== null ? { sign_key: a.signKey } : {}) }, t("core-misc.personal.reason.add"), seed);
         const added = yield* Effect.result(withBound(inner, sub, Effect.tap(add, () => putOnBound(inner, sub, { id: a.device, label: a.label, signKey: a.signKey }))));
@@ -579,7 +579,7 @@ export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number;
 /// `searching`: other devices or newer locks are still being sought; `lastEnds`: why the last codes went away then.
 /// `lockMoved`: told a workspace's lock moved while looking; `lockSigned`, while waiting for the lock to name this
 /// device after a code was proved (`prove`).
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockSigned?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[] };
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockSigned?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[]; answering?: Map<string, Deferred.Deferred<void>> };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -714,12 +714,12 @@ export function ownLogFor(inner: Inner, workspaces: readonly string[]): Effect.E
     const read = yield* Effect.result(personal.refresh(sub, undefined, personal.asked()));
     if (personal.standing(sub) === "none") {
       if (read._tag === "Failure") return yield* Effect.fail(read.failure);
-      // Begun as a device begins its person's lock before a move: with nobody asked where it may (`mayBeginQuietly`: no
-      // key of its own made before, its stations answered), else the person asked in this device's own words, never
-      // the approver's (2026-11-14, the locks' end to end after #6102: a newcomer's first app was asked 「批准你的新设备」
-      // as it asked to be let in, its key made then).
-      const quiet = personal.mayBeginQuietly(sub) && (yield* personal.beginQuietly(sub));
-      if (!quiet && personal.standing(sub) === "none") yield* personal.begin(sub, t("core-misc.personal.reason.open"));
+      // Begun on the person's act (they asked to be let in): with nobody asked where this device made no key of its own
+      // before (`beginQuietly`'s `acted`: the read just made found none kept, every station it reached saying so; a
+      // station that did not answer holds nobody out of the workspace, as it did not before a move: the lead,
+      // 2026-11-14, after the owner refused a wait said in words), else the person asked once in this device's own
+      // words, never the approver's (the locks' end to end after #6102: a newcomer's first app was asked 「批准你的新设备」).
+      if (!(personal.mayBeginQuietly(sub) && (yield* personal.beginQuietly(sub, true)))) yield* personal.begin(sub, t("core-misc.personal.reason.open"));
     }
     if (personal.standing(sub) !== "member") return null;
     const log = personal.entries(sub);
@@ -822,7 +822,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
           return;
         }
         changed(inner, y);
-        // (its build, as its requests say it: what the device approving it notes of it, views/lock.ts `noteBuild`)
+        // (its build, as its requests say it: read by approving cores from before 2026-11-14, which noted it)
         const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null, build: ownBuild() || "0.1.0", ...(log !== null ? { log } : {}) };
         // A lock can move while credentials or devices are being sought. Follow it for this try, asking newly named
         // approvers too, but never dial one a second time after its seek ended: it may already be showing a code.
@@ -908,15 +908,27 @@ function dial(inner: Inner, y: Trying, id: string, relays: string[], hello: J): 
     const reached = yield* Effect.timeoutOption(dialer.open(inner, id, relays), PAIR_DIAL_MS);
     if (reached._tag === "None") return yield* Effect.fail(CoreError.plainly("pair", "not reached"));
     const d = reached.value;
-    yield* Effect.onError(d.send(hello), () => Effect.sync(() => d.close()));
-    const answer = yield* Effect.orElseSucceed(Effect.timeoutOption(d.next(), PAIR_ANSWER_MS), () => null);
-    // (no word from it, or this try over meanwhile, or another begun: nothing kept of it)
-    if (answer === null || answer._tag === "None" || !looking(inner, y) || !isObject(answer.value) || answer.value.t !== "code") {
-      d.close();
-      return true;
-    }
-    keep(inner, y, id, d, arr(answer.value.workspaces).filter((w): w is string => typeof w === "string"));
-    return true;
+    // (reached and told who asks, its answer not here yet: it may be showing its code already, `prove` waits for it,
+    // till it is kept or let go)
+    const answering = Deferred.makeUnsafe<void>();
+    (y.answering ??= new Map()).set(id, answering);
+    return yield* Effect.ensuring(
+      Effect.gen(function* () {
+        yield* Effect.onError(d.send(hello), () => Effect.sync(() => d.close()));
+        const answer = yield* Effect.orElseSucceed(Effect.timeoutOption(d.next(), PAIR_ANSWER_MS), () => null);
+        // (no word from it, or this try over meanwhile, or another begun: nothing kept of it)
+        if (answer === null || answer._tag === "None" || !looking(inner, y) || !isObject(answer.value) || answer.value.t !== "code") {
+          d.close();
+          return true;
+        }
+        keep(inner, y, id, d, arr(answer.value.workspaces).filter((w): w is string => typeof w === "string"));
+        return true;
+      }),
+      Effect.sync(() => {
+        if (y.answering?.get(id) === answering) y.answering.delete(id);
+        Deferred.doneUnsafe(answering, Effect.void);
+      }),
+    );
   });
 }
 
@@ -1006,6 +1018,16 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     // as having rejected it.
     const checked = [...y.met.values()];
     const results = yield* Effect.forEach(checked, (m) => Effect.map(Effect.result(tryOne(inner, m, base, code)), (r) => [m, r] as const), { concurrency: "unbounded" });
+    // None took it, and a device reached is still to answer with its code (its dial's own wait, PAIR_ANSWER_MS): it may
+    // show the code typed already, its answer on the way (2026-11-14, side run of 09719be0: D typed the code its second
+    // trusted device showed while D had heard only the first's, which said it was wrong). Those it answers with, tried
+    // with the same code; whatever else came meanwhile, as before, is the next code's.
+    if (!results.some(([, r]) => r._tag === "Success" && "approved" in r.success) && (y.answering?.size ?? 0) > 0) {
+      yield* Effect.forEach([...y.answering!.values()], (a) => Deferred.await(a), { discard: true });
+      const late = [...y.met.values()].filter((m) => !checked.includes(m));
+      checked.push(...late);
+      results.push(...(yield* Effect.forEach(late, (m) => Effect.map(Effect.result(tryOne(inner, m, base, code)), (r) => [m, r] as const), { concurrency: "unbounded" })));
+    }
     let approved: J | null = null;
     let left = 0;
     const ends: CoreError[] = [];

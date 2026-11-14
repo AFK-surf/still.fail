@@ -159,39 +159,27 @@ pub fn danger_row_node(
   busy? : () -> Bool = fn() { false },
   loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(made_for=loc, fn(r) {
+  @headless.button(made_for=loc, parent, title, fn(_) { press() }, disabled=busy, fn(r, b) {
     r
     .row(Is(true))
     .gap(Is(12.0))
     .padding(Is((text_in, text_in, text_in, text_in)))
     .radius(Is(@ui.concentric(group_corner, list_pad)))
     .lines_up(Is(Some(Middle)))
-    |> ignore
-    let live = fn() { !busy() }
-    let go = fn() {
-      if @signals.untracked(live) {
-        press()
-      }
-    }
-    r
-    .ground(By(fn() { if live() && lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } }))
-    .presses(By(live))
-    .focusable(By(live))
-    .says(By(fn() { Some(@view.said(Button, label=title())) }))
-    .on_press(go)
+    .ground(By(fn() { if !b.disabled() && lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } }))
     |> ignore
     let rippled = press_look(r, Is(row_corner), fn() { false })
     let on_it = fn(d : @view.Drag) { r.finger_target(d.wx, d.wy) }
     r.gesture(
       @ui.touch_slop(),
-      press=fn(d) { if @signals.untracked(live) { (rippled.down)(d) } },
+      press=fn(d) { if !b.disabled() { (rippled.down)(d) } },
       tap=fn(d) {
         (rippled.tapped)(d)
         if on_it(d) {
-          go()
+          b.press()
         }
       },
-      drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { go() } },
+      drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { b.press() } },
     )
     |> ignore
     words_node(r, title, fn() { danger_row_words }) |> ignore

@@ -1046,10 +1046,14 @@ export class Directory extends DurableObject<Env> {
       const clean = url!.href.replace(/\/+$/, "");
       if (!ours.includes(sameUrl(clean)) && !list.some((u) => sameUrl(u) === sameUrl(clean))) list.push(clean);
     }
-    // A relay of its own taken away is no longer among those turned off either.
+    // A relay of its own taken away is no longer among those turned off either; if none of its relays would stay on,
+    // still.fail's come back on.
     const off = parseRelays(this.#one("SELECT ways_off FROM workspaces WHERE id = ?", id)?.ways_off);
     const ways = waysOf(this.env, list, []).map((w) => sameUrl(w.id));
-    const kept = off.filter((o) => ways.includes(sameUrl(o)));
+    const filtered = off.filter((o) => o === "ours" || ways.includes(sameUrl(o)));
+    const kept = waysOf(this.env, list, filtered).some((w) => w.kind === "relay" && w.on)
+      ? filtered
+      : filtered.filter((o) => o !== "ours" && !ours.includes(sameUrl(o)));
     this.ctx.storage.transactionSync(() => {
       this.#run("UPDATE workspaces SET relays = ? WHERE id = ?", list.length ? JSON.stringify(list) : null, id);
       this.#run("UPDATE workspaces SET ways_off = ? WHERE id = ?", kept.length ? JSON.stringify(kept) : null, id);
@@ -1060,18 +1064,28 @@ export class Directory extends DurableObject<Env> {
 
   /**
    * One way the workspace's devices reach its stations turned on or off (`ways` of its view: a relay, still.fail's or
-   * its own, or a kind of way that is no relay): those off are told to its members in `/v1/me` as `ways_off`, and their
-   * devices do not go that way to its stations (client/core-ts mesh.ts). A relay stays on: the web app goes through
-   * relays alone, and a device that never reached a station yet knows of no other way there.
+   * its own, or a kind of way that is no relay; `ours` for all of still.fail's relays): those off are told to its
+   * members in `/v1/me` as `ways_off`, and their devices do not go that way to its stations (client/core-ts mesh.ts).
+   * A relay stays on: the web app goes through relays alone, and a device that never reached a station yet knows of no
+   * other way there.
    */
   setWay(sub: string, id: string, way: unknown, on: unknown): WorkspaceView {
     this.#role(sub, id, MANAGERS);
     if (typeof way !== "string" || typeof on !== "boolean") fail(400, "invalid_way");
     const row = this.#one("SELECT relays, ways_off FROM workspaces WHERE id = ?", id)!;
-    const ways = waysOf(this.env, parseRelays(row.relays), parseRelays(row.ways_off));
-    const target = ways.find((w) => sameUrl(w.id) === sameUrl(way as string)) ?? fail(400, "invalid_way");
-    const off = ways.filter((w) => (w === target ? !on : !w.on)).map((w) => w.id);
-    if (!ways.some((w) => w.kind === "relay" && !off.includes(w.id))) fail(409, "last_relay");
+    const own = parseRelays(row.relays);
+    const nowOff = parseRelays(row.ways_off);
+    const ours = relayUrls(this.env).map(sameUrl);
+    let off: string[];
+    if (way === "ours") {
+      off = nowOff.filter((o) => o !== "ours" && !ours.includes(sameUrl(o)));
+      if (!on) off.push("ours");
+    } else {
+      const ways = waysOf(this.env, own, nowOff);
+      const target = ways.find((w) => sameUrl(w.id) === sameUrl(way as string)) ?? fail(400, "invalid_way");
+      off = ways.filter((w) => (w === target ? !on : !w.on)).map((w) => w.id);
+    }
+    if (!waysOf(this.env, own, off).some((w) => w.kind === "relay" && w.on)) fail(409, "last_relay");
     this.#run("UPDATE workspaces SET ways_off = ? WHERE id = ?", off.length ? JSON.stringify(off) : null, id);
     this.#changed(id, true);
     return this.#view(sub, id);

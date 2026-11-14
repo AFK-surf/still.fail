@@ -124,12 +124,21 @@ fn chat_body_nodes(
 ) -> Unit {
   // (the composer's node: what is carried over it is its own to show, chat_drop_node)
   let held : Ref[@view.View?] = Ref(None)
-  @sfpages.chat_page_body_node(v, src, r, tips~, stint~, shows~, top=fn() { chat_bar_room(in_pane~) + list_head_gap }, composer=fn(
-    n,
-  ) {
-    held.val = Some(n)
-    composer(n)
-  })
+  // (what covers its top is the bar as it is drawn; its room under it, room)
+  @sfpages.chat_page_body_node(
+    v,
+    src,
+    r,
+    tips~,
+    stint~,
+    shows~,
+    cover=fn() { chat_bar_room(in_pane~) },
+    room=list_head_gap,
+    composer=fn(n) {
+      held.val = Some(n)
+      composer(n)
+    },
+  )
   // ⌘F (chat.find, the keymap's Chat, taken while the tree gives the page keys): the chat's find opened in its bar
   // (wide_bar_of's), as the old page's chat_page took it, but in a chat not made yet
   v.on_action("chat.find", fn(_) {

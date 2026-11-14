@@ -640,6 +640,29 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let showing : Map[K, Bool] = Map([])
   // (the blocks made, each with its key as it is now: what is measured as the column is laid out)
   let blocks : Array[(View, () -> K)] = []
+  // (where what is read in each block starts, as its page marks it (View::read_from): the node, by the block's own
+  // node, let go with it; none in a block that marks none, a list none of whose blocks marks one held as ever)
+  let marks : Map[Int, View] = Map([])
+  s.read_from_said = fn(v) {
+    let mut i = v.at
+    while i >= 0 && i != self.at {
+      for b in blocks {
+        if b.0.at == i && b.0.alive() {
+          let block_at = i
+          let mark_at = v.at
+          marks[block_at] = v
+          v.owns(fn() {
+            if marks.get(block_at) is Some(m) && m.at == mark_at {
+              marks.remove(block_at)
+            }
+          })
+          |> ignore
+          return
+        }
+      }
+      i = self.tree.nodes[i].parent
+    }
+  }
   // (how wide what it holds is given to be, as it is laid out: View::scrolls' fill)
   let room_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
   self.reacts(fn() { (room_w.get(), self.words_redone()) }, fn(_) {
@@ -922,6 +945,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // what showed was: the anchor's stand-ins, in order, once it is no more among the keys (the row a filter leaves out;
   // an item become another), what shows held by the next of them where it was)
   let anchor_else : Array[(K, Double)] = []
+  // (where what is read in the anchor starts in its block, as it was last put, where its block marks it
+  // (View::read_from): held by that start, read anew in each fill; none, held by its top. Each stand-in's the same,
+  // in their order, read for the few marked next under the anchor alone)
+  let anchor_start : Ref[Double?] = Ref(None)
+  // (whether the anchor next put keeps the one held by its start while that start is in sight: not where the hand
+  // moved it or it was asked somewhere since)
+  let read_keeps = Ref(false)
+  let anchor_else_start : Array[Double?] = []
   // (how many blocks it had, and its last, as it was said held where it is at its foot (Scroll::holds_here): blocks
   // come or gone since, with it still at its foot, and it follows its foot again)
   let held_with : Ref[(Int, K?)] = Ref((0, None))
@@ -994,6 +1025,92 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       if laid_at.get(o.0) is Some(i) && i < all.length() {
         return Some((i, o.1))
       }
+    }
+    None
+  }
+  // (where what is read in the anchor, or the stand-in held_at found, started in its block as it was put: none where
+  // it is held by its top)
+  let held_start = fn(all : Places[K]) -> Double? {
+    guard anchor.val is Some((k, _)) else { return None }
+    if laid_at.get(k) is Some(i) && i < all.length() {
+      return anchor_start.val
+    }
+    for j, o in anchor_else {
+      if laid_at.get(o.0) is Some(i) && i < all.length() {
+        return anchor_else_start.get(j).unwrap_or(None)
+      }
+    }
+    None
+  }
+  // (how far under its top what is read in the block of the `i`th key starts, where its block is made and marks it, as
+  // the list is laid out now at the width it is laid out at: Tree::start_in)
+  let start_of = fn(all : Places[K], i : Int) -> Double? {
+    guard !marks.is_empty() && i >= 0 && i < all.length() else { return None }
+    guard room_w.untracked() is Some(w) else { return None }
+    let k = all.key(i)
+    for b in blocks {
+      if b.0.alive() && @signals.untracked(b.1) == k {
+        return match marks.get(b.0.at) {
+          Some(m) if m.alive() =>
+            self.tree.start_in(m.at, b.0.at, w, self.tree.rooming == self.at, self.tree.logic_said())
+          _ => None
+        }
+      }
+    }
+    None
+  }
+  // (how far under its top what is read in the block of the `i`th key started as the list was last laid out, where
+  // that block was laid out and marks it: Tree::start_laid)
+  let start_laid_of = fn(all : Places[K], i : Int) -> Double? {
+    guard !marks.is_empty() && i >= 0 && i < all.length() else { return None }
+    let k = all.key(i)
+    guard showing.contains(k) else { return None }
+    for b in blocks {
+      if b.0.alive() && @signals.untracked(b.1) == k {
+        return match marks.get(b.0.at) {
+          Some(m) if m.alive() => self.tree.start_laid(m.at, b.0.at)
+          _ => None
+        }
+      }
+    }
+    None
+  }
+  // (the first key whose marked start is at or under what covers its top and over its pinned foot's top, the top of
+  // what shows at `top`, `vh` of it showing: where it is among the blocks and how far under its top that start is; none
+  // where no key's start shows)
+  let read_anchor = fn(all : Places[K], top : Double, vh : Double) -> (Int, Double)? {
+    guard !marks.is_empty() && all.length() > 0 else { return None }
+    let (cover, under) = @signals.untracked(fn() { (s.top_covered(), s.foot_covered_now()) })
+    let edge = top + cover
+    let foot = top + vh - under
+    let in_sight = fn(j : Int) -> Double? {
+      guard all.known(j) && holds(all.key(j)) else { return None }
+      match start_of(all, j) {
+        Some(sj) if all.top(j) + sj >= edge - 0.001 && all.top(j) + sj < foot => Some(sj)
+        _ => None
+      }
+    }
+    // (the one held till now, its start still in sight: kept, whatever came into sight over it as what is over it
+    // closed or came, the reader's eyes on it; taken anew once the hand moves the list, as `keep` is false)
+    match (anchor.val, anchor_start.val) {
+      (Some((k, _)), Some(_)) if read_keeps.val =>
+        match laid_at.get(k) {
+          Some(j) if j < all.length() =>
+            match in_sight(j) {
+              Some(sj) => return Some((j, sj))
+              None => ()
+            }
+          _ => ()
+        }
+      _ => ()
+    }
+    let mut j = all.first_past(edge).min(all.length() - 1)
+    while j < all.length() && all.top(j) < foot {
+      match in_sight(j) {
+        Some(sj) => return Some((j, sj))
+        None => ()
+      }
+      j = j + 1
     }
     None
   }
@@ -1459,7 +1576,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // it, and that fill, going out from it alone, let go of every block in sight to make them again. Those that show its
   // stand-ins.)
   let anchor_put = fn(all : Places[K], top : Double, vh : Double, x : Double) {
-    anchor.val = if all.length() > 0 {
+    let read = read_anchor(all, top, vh)
+    anchor_start.val = read.map(fn(r) { r.1 })
+    anchor.val = if read is Some((j, _)) {
+      Some((all.key(j), top - all.top(j)))
+    } else if all.length() > 0 {
       let first = holding(all, all.first_past(top).min(all.length() - 1))
       let mut j = first
       while j < all.length() && all.top(j) < top + vh && !(all.known(j) && holds(all.key(j))) {
@@ -1472,9 +1593,26 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     anchor_x.val = Some(x)
     anchor_else.clear()
+    anchor_else_start.clear()
+    // (held by a marked start: the stand-ins' starts read for the next few marked under it, in sight)
+    let mut starts_left = if read is Some(_) { 3 } else { 0 }
+    let after = match read {
+      Some((j, _)) => j
+      None => all.length()
+    }
     for k in shown_now {
       if holds(k) && laid_at.get(k) is Some(i) && i < all.length() {
         anchor_else.push((k, top - all.top(i)))
+        let st = if starts_left > 0 && i > after && all.top(i) < top + vh {
+          let got = start_of(all, i)
+          if got is Some(_) {
+            starts_left = starts_left - 1
+          }
+          got
+        } else {
+          None
+        }
+        anchor_else_start.push(st)
       }
     }
   }
@@ -1623,7 +1761,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             // as were every slot kept)
             let at = laid_at.get(key.untracked())
             if at is Some(j) && (j < a || j > b) && v.alive() {
-              was_in.park(v) |> ignore
+              was_in.park(v, rest=false) |> ignore
               those[i] = (v, key, wake, None)
             }
           }
@@ -1918,6 +2056,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     let mut ai = start.0
     let mut aoff = start.1
+    // (held by where what is read in it starts (View::read_from): that start as it was put, read anew as each pass of
+    // this fill lays it out, the anchor moved with it; none where it is held by its top, or taken again below)
+    let mut s0 = if anchor_x.val is Some(_) { held_start(places(laid.untracked())) } else { None }
+    let mut read_moved = false
     // (moved by the hand, the wheel or a fling since: the anchor taken again where it is now, by what is counted now,
     // before what comes to show is measured; not moved, the one it had, whatever came or went over it)
     match anchor_x.val {
@@ -1946,6 +2088,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           (floor_end.val)()
         }
         let all = places(laid.untracked())
+        s0 = None
+        read_moved = true
         if all.length() > 0 {
           let i = ai.min(all.length() - 1).max(0)
           let at_now = all.top(i) + aoff
@@ -1965,6 +2109,28 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           let j = if seen < all.length() && all.top(seen) < at_now + vh { seen } else { j }
           ai = j
           aoff = at_now - all.top(j)
+          // (where a block marks what is read in it: the first whose start showed, as the list was last laid out, under
+          // what covers its top where the hand left it, held by that start from there: what comes or goes in this fill
+          // over it moves none of it)
+          if !marks.is_empty() {
+            let (cover, under) = @signals.untracked(fn() { (s.top_covered(), s.foot_covered_now()) })
+            let mut q = all.first_past(at_now + cover).min(all.length() - 1)
+            let mut got = false
+            while !got && q < all.length() && all.top(q) < at_now + vh - under {
+              if all.known(q) && holds(all.key(q)) {
+                match start_laid_of(all, q) {
+                  Some(sq) if all.top(q) + sq >= at_now + cover - 0.001 && all.top(q) + sq < at_now + vh - under => {
+                    ai = q
+                    aoff = at_now - all.top(q)
+                    s0 = Some(sq)
+                    got = true
+                  }
+                  _ => ()
+                }
+              }
+              q = q + 1
+            }
+          }
         }
       }
       _ => ()
@@ -2131,7 +2297,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         aoff = counted(laid.untracked()).h(ai) / 2.0 - (cover + vh - under) / 2.0
       }
       let most = dmax(0.0, whole_now() - vh)
-      top = if follows_foot || to_end { most } else { dclamp(all.top(ai) + aoff, 0.0, most) }
+      // (what is read in it where it starts now, held there: what came or went over that start in it moves none of it)
+      let moved = match s0 {
+        Some(was) if !asked && !pressed_holds && !centring =>
+          match start_of(all, ai) {
+            Some(now) => now - was
+            None => 0.0
+          }
+        _ => 0.0
+      }
+      top = if follows_foot || to_end { most } else { dclamp(all.top(ai) + aoff + moved, 0.0, most) }
       match from {
         Some((i, margin)) if follows_foot && i < all.length() && all.top(i) - margin < most => {
           top = dmax(0.0, all.top(i) - margin)
@@ -2408,8 +2583,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
       None => ()
     }
-    // (the anchor from now, where the scroll is put: anchor_put)
+    // (the anchor from now, where the scroll is put: anchor_put; the one held by its start kept while it is in sight,
+    // unless the hand moved the list or it was asked somewhere)
+    read_keeps.val = !read_moved && !asked && !centring && !to_end
     anchor_put(all, top, vh, top)
+    read_keeps.val = false
     row_vh.val = vh
     // (what is made, the stretch it covers)
     made_now(all)
@@ -2715,11 +2893,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           end.top(i) + end.h(i) > dmax(0.0, whole_of(end) - vh)
         } else {
           let top = top_now(all, at())
-          let under = match held_at(all) {
-            Some((a, _)) => i > a
-            None => true
+          if anchor_start.val is Some(_) {
+            // (held by where what is read starts (View::read_from): where any of it would show under what covers
+            // the top, whichever side of the anchor, over it taking its room upward on its way)
+            all.top(i) + all.h(i) > top + s.top_covered() && all.top(i) < top + vh
+          } else {
+            let under = match held_at(all) {
+              Some((a, _)) => i > a
+              None => true
+            }
+            under && all.top(i) < top + vh
           }
-          under && all.top(i) < top + vh
         }
       } else {
         match gone_from.val.get(k) {
@@ -2900,8 +3084,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                     // (a block given another key, woken: what that makes or lets go in it so at once, as were the
                     // block made anew, answering.mbt)
                     answering(within=v, fn() {
-                      key.set(k)
                       wake()
+                      key.set(k)
                     })
                     mine.val = Some((v, key))
                   }
@@ -2909,7 +3093,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                   // into this one, made this one's)
                   Some((v, key, wake, was_in)) if v.alive() => {
                     match was_in {
-                      Some(w) => w.park(v) |> ignore
+                      Some(w) => w.park(v, rest=false) |> ignore
                       None => ()
                     }
                     slot.take_in(v)
@@ -2917,8 +3101,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                     // (a block given another key, woken: what that makes or lets go in it so at once, as were the
                     // block made anew, answering.mbt)
                     answering(within=v, fn() {
-                      key.set(k)
                       wake()
+                      key.set(k)
                     })
                     mine.val = Some((v, key))
                   }

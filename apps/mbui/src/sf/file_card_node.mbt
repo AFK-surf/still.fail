@@ -124,10 +124,8 @@ fn card_end_node(
 ) -> Unit {
   parent.box(made_for=loc, fn(room) {
     style_node(room, fn() { card_end_room }, in_row=true)
-    room.box(fn(b) {
+    @headless.button(room, label, fn(_) { press() }, fn(b, _) {
       style_node(b, fn() { if lit_node(b) { card_button_hot } else { card_button_box } })
-      b.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
-      presses_node(b, press)
       icon_node(b, icon, if icon == "close" { card_close_icon } else { card_button_icon }, By(fn() {
         let p = theme().p
         if lit_node(b) {

@@ -10,8 +10,8 @@
 /// foot, 42 − 16 = 26 by its side). What would mend it: the row 16 over the foot too, its corner 26.
 // kept across runs: a value (no field of it changes)
 let device_corners_known : Array[String] = [
-  "「移除设备」 (at 396,581 488×36, node 529) (corner 18) in the bottom right of 「开发板 类型 串口设备 地址 /dev/ttyU…」 (at 380,160 520×481, node 460) (corner 42): 16 and 24 from its edges",
-  "「移除设备」 (at 396,581 488×36, node 529) (corner 18) in the bottom left of 「开发板 类型 串口设备 地址 /dev/ttyU…」 (at 380,160 520×481, node 460) (corner 42): 16 and 24 from its edges",
+  "「移除设备」 (at 396,577 488×36, node 539) (corner 18) in the bottom right of 「开发板 类型 串口设备 地址 /dev/ttyU…」 (at 380,164 520×473, node 470) (corner 42): 16 and 24 from its edges",
+  "「移除设备」 (at 396,577 488×36, node 539) (corner 18) in the bottom left of 「开发板 类型 串口设备 地址 /dev/ttyU…」 (at 380,164 520×473, node 470) (corner 42): 16 and 24 from its edges",
 ]
 
 ///|

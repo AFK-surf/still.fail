@@ -58,9 +58,9 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
       preset_menu(src, w, address, v, picked, @sf.Of(from))
     }
   }
-  new_capsule(c, "new/preset", label, floating, fn() {
-    // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
-    let marks = items(v, "presetMarks")
+  // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
+  let marks = items(v, "presetMarks")
+  new_capsule(c, "new/preset", label, floating, marked=name != "" && marks.length() > 0, fn() {
     if name != "" && marks.length() > 0 {
       c.box(style=preset_marks_row, fn() {
         for m in marks {

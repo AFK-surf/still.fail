@@ -8,20 +8,22 @@
 
 ///|
 /// What the history keeps of its own (the rest is the core's): its details folded (for every history, as the web
-/// keeps it); where its runtime keeps each session's transcript (by station and session; "" none), asked once.
+/// keeps it); each session's transcript's place, asked once (wh_transcript); its panel's opening (history_side_open).
 priv struct HistoryOwn {
   shut : @signals.Signal[Bool]
-  transcripts : Map[String, @signals.Signal[String]]
+  transcripts : Map[String, @signals.Signal[String?]]
+  opening : Map[String, @sfbase.PressWait]
 }
 
 ///|
 // kept across runs: put back as a run begins (history_reset)
-let history_own : HistoryOwn = { shut: @signals.signal(false, same=fn(a, b) { a == b }), transcripts: {} }
+let history_own : HistoryOwn = { shut: @signals.signal(false, same=fn(a, b) { a == b }), transcripts: {}, opening: {} }
 
 ///|
 fn history_reset() -> Unit {
   history_own.shut.set(false)
   history_own.transcripts.clear()
+  history_own.opening.clear()
 }
 
 ///|
@@ -341,29 +343,76 @@ fn wh_evict_node(v : @view.View, src : Source, station : String, key : String, t
 }
 
 ///|
-/// Where its runtime keeps the session's transcript on the station's machine (TranscriptLine), in `v`: its file's name
-/// (the whole path in its tip), and its path to copy. Nothing before it is written, nor from a station from before it.
-/// Asked once a run, as it is first made.
-fn wh_transcript_node(v : @view.View, src : Source, station : String, key : String, tips : @sf.TipLayer) -> Unit {
+/// Agent `key`'s history opened in chat `r`'s side panel (its mark pressed: side_toggle): where its runtime keeps the
+/// transcript asked of `src` now (wh_transcript, the one thing its first screen asks by a call, not a topic), the chat
+/// as it is meanwhile; once it is answered (at once where it is already, a path or none), `open` puts it in front,
+/// whole: its line is there from its first frame or never, nothing pushed down under the head after it opened (the
+/// coordinator of the migration, 2026-11-14: over a core 120 or 400 ms late the line came in 28 under the head ~270 ms
+/// after the panel opened). Given up (press_wait: the page left, the workspace switched, something else put up; or its
+/// mark pressed again meanwhile, which then does nothing more). Made in the press's handler; a replay of a run from
+/// before asks nothing ahead (opened at once, the line coming as it did).
+fn history_side_open(src : Source, r : ChatRef, key : String, open : () -> Unit) -> Unit {
+  let chat = chat_key(r)
+  match history_own.opening.get(chat) {
+    Some(w) => {
+      history_own.opening.remove(chat)
+      if w.waiting() {
+        w.give_up()
+        return
+      }
+    }
+    None => ()
+  }
+  if src.read_only || !(src.switches_ahead)() {
+    open()
+    return
+  }
+  let path = wh_transcript(src, r.station, key)
+  let w = @sfbase.press_wait(
+    fn() { path.get() is Some(_) },
+    fn() {
+      history_own.opening.remove(chat)
+      open()
+    },
+    let_go=fn() { history_own.opening.remove(chat) },
+  )
+  if w.waiting() {
+    history_own.opening[chat] = w
+  }
+}
+
+///|
+/// Where agent `key`'s runtime keeps its transcript on `station` (session.transcript), asked of `src` once a run: ""
+/// none (not written yet, a station from before it), None not answered yet.
+fn wh_transcript(src : Source, station : String, key : String) -> @signals.Signal[String?] {
   let me = station + "\u{1}" + key
-  let path = match history_own.transcripts.get(me) {
+  match history_own.transcripts.get(me) {
     Some(p) => p
     None => {
-      let p = @signals.signal("", same=fn(a, b) { a == b })
+      let p : @signals.Signal[String?] = @signals.signal(None, same=fn(a, b) { a == b })
       history_own.transcripts[me] = p
       (src.call)("session.transcript", { "station": Json::string(station), "key": Json::string(key) }, fn(res) {
         match res {
-          Ok(j) => p.set(text(Some(j), "path"))
+          Ok(j) => p.set(Some(text(Some(j), "path")))
           // not written yet, or a station from before it: nothing said
-          Err(_) => ()
+          Err(_) => p.set(Some(""))
         }
       })
       p
     }
   }
-  v.show(at_once=true, fn() { path.get() != "" }, fn(o) {
+}
+
+///|
+/// Where its runtime keeps the session's transcript on the station's machine (TranscriptLine), in `v`: its file's name
+/// (the whole path in its tip), and its path to copy. Nothing before it is written, nor from a station from before it.
+/// Asked once a run (wh_transcript), as its side panel is opened (history_side_open) or as it is first made.
+fn wh_transcript_node(v : @view.View, src : Source, station : String, key : String, tips : @sf.TipLayer) -> Unit {
+  let said = wh_transcript(src, station, key)
+  let path = fn() { said.get().unwrap_or("") }
+  v.show(at_once=true, fn() { path() != "" }, fn(o) {
     let name = fn() {
-      let whole = path.get()
+      let whole = path()
       let cut = match whole.rev_find("/") {
         Some(i) => Some(i)
         None => whole.rev_find("\\")
@@ -392,13 +441,13 @@ fn wh_transcript_node(v : @view.View, src : Source, station : String, key : Stri
           })
           |> ignore
         })
-        @sf.tip_node(tips, words, fn() { path.get() }) |> ignore
+        @sf.tip_node(tips, words, fn() { path() }) |> ignore
       },
       fn(e) {
         @sf.link_node(
           e,
           fn() { @sf.t("web-pages.chat.copyPath") },
-          fn() { @sfbase.copy_out(path.get(), said=@sf.t("web-main.chat.transcriptCopied")) },
+          fn() { @sfbase.copy_out(path(), said=@sf.t("web-main.chat.transcriptCopied")) },
           icon="copy",
         )
         |> ignore

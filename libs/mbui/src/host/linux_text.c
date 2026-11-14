@@ -274,15 +274,19 @@ static PangoFontDescription *desc_for(double size, int weight, int style) {
 }
 
 // style & 8: no ligatures (words with letter spacing, each cluster spaced on its own); style & 32: digits all one
-// width (style.mbt style_tabular)
+// width (style.mbt style_tabular); style & 64: a CJK face's marks narrow among Latin letters (style_proportional)
 static PangoLayout *make_layout(const char *s, int n, double size, int weight, int style) {
   PangoLayout *l = pango_layout_new(ctx);
   PangoFontDescription *d = desc_for(size, weight, style);
   pango_layout_set_font_description(l, d);
   pango_font_description_free(d);
-  if (style & (8 | 32)) {
+  if (style & (8 | 32 | 64)) {
     PangoAttrList *a = pango_attr_list_new();
-    const char *f = (style & 8) && (style & 32) ? "liga=0,clig=0,tnum=1" : (style & 8) ? "liga=0,clig=0" : "tnum=1";
+    char f[48] = "";
+    if (style & 8) strcat(f, "liga=0,clig=0,");
+    if (style & 32) strcat(f, "tnum=1,");
+    if (style & 64) strcat(f, "pwid=1,");
+    f[strlen(f) - 1] = 0;
     pango_attr_list_insert(a, pango_attr_font_features_new(f));
     pango_layout_set_attributes(l, a);
     pango_attr_list_unref(a);

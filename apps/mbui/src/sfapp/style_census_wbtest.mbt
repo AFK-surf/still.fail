@@ -84,11 +84,11 @@ test "styles: how many values of each kind the app's screens use" {
   // which the tree's census does not count (Tree::styled: a node's paddings and its gap down only); the old view's
   // dials were its last 36.
   inspect(counts.to_string(), content=(
-    #|text 37
+    #|text 36
     #|weight 4
-    #|space 24
+    #|space 23
     #|radius 21
-    #|color 80
+    #|color 73
     #|
 
 

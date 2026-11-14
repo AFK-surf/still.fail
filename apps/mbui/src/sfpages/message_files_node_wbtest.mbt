@@ -64,7 +64,7 @@ fn files_here() -> MessageHere {
 ///|
 fn files_place() -> MessageFilesAt {
   let here = files_here()
-  { station: fn() { here.station }, session: fn() { here.session }, view: fn() { here.view } }
+  { station: fn() { here.station }, session: fn() { here.session }, view: fn() { here.view }, said: fn() { true } }
 }
 
 ///|

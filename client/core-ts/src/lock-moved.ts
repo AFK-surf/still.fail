@@ -1,12 +1,12 @@
 // What a workspace's lock says is in force, as this device reads it: its chain folded (`fold`), or, once the chain
-// held holds `moved {root}`, the rules' state of its people's own logs and the statements' bodies this device keeps
-// (rules/src/lock/state4.mbt, station/test/lock-roster4-model.ts D4, its defaults), by this device's clock, as a
-// station's `Cloud.locked` gives it (station/src/cloud/state.ts). Pure: what is kept, read and told is the caller's
-// (views/lock.ts).
+// held holds `moved {root}`, the rules' state of its people's own logs and the statements' bodies this device keeps,
+// read with the chain as it moved (rules/src/lock/state4.mbt `state4_moved`, station/test/lock-roster4-model.ts D4 and
+// D6, its defaults: what the logs have not said yet of those the chain named, it still says), by this device's clock,
+// as a station's `Cloud.locked` gives it (station/src/cloud/state.ts). Pure: what is kept, read and told is the
+// caller's (views/lock.ts).
 //
-// Where the station is stricter than the model it is so here too: a state the model calls "not on" (no `open` or
-// `off` in force here yet) or "no root" (the root's log not kept here) is `waiting`, naming nobody and nothing, never
-// the folded chain's list.
+// Where the station is stricter than the model it is so here too: "no root" (the root's log not kept here) is
+// `waiting`, naming nobody and nothing, never the folded chain's list.
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../../rules/js/rules.js";
 import { type Entry, canonical } from "./lock.ts";
@@ -154,11 +154,18 @@ export type InForce = { said: "chain" | "on" | "off" | "waiting"; root: string |
 /// `web_skew_secs`, station/src/cloud/state.ts WEB_SKEW).
 export const WEB_SKEW = 600;
 
-/// From when until when (unix seconds, `[from, until)`) the state made at `now` of `chains` stands by the clock alone:
-/// between the nearest web device's `at - WEB_SKEW` or `exp` passed and the nearest to come, as a station's `forceOf`
+/// From when until when (unix seconds, `[from, until)`) the state made at `now` of `chains` and the chain held
+/// (`entries`) stands by the clock alone: between the nearest web device's `at - WEB_SKEW` or `exp` passed and the
+/// nearest to come (of the chain's web devices, which it carries until their `exp`, that), as a station's `forceOf`
 /// bounds it. Nothing else the rules' state reads depends on the clock.
-export function goodFor(chains: Iterable<readonly Entry[]>, now: number): { from: number; until: number } {
+export function goodFor(chains: Iterable<readonly Entry[]>, now: number, entries: readonly Entry[] = []): { from: number; until: number } {
   let from = -Infinity, until = Infinity;
+  for (const d of fold(entries).devices.values()) {
+    const x = Number(d?.kind === "web" ? d.exp : NaN);
+    if (!Number.isFinite(x)) continue;
+    if (x <= now) from = Math.max(from, x);
+    else until = Math.min(until, x);
+  }
   for (const es of chains) {
     for (const e of es) {
       if (e.kind !== "web") continue;
@@ -185,7 +192,7 @@ export function inForce(ws: string, entries: readonly Entry[], chains: ReadonlyM
   const root = movedRoot(entries);
   if (root === null) return { said: "chain", root: null, f: fold(entries) };
   const now = Math.floor(nowMs / 1000);
-  const out = rules.state4_js(ws, root, [...chains.values()], bodies, now, crypto) as J;
+  const out = rules.state4_moved_js(ws, entries, [...chains.values()], bodies, now, crypto) as J;
   // (a state the rules cannot make of what is kept is none: nobody is listed)
   if ("error" in out || (out.on !== "on" && out.on !== "off")) return { said: "waiting", root, f: none(), checked: checkedOf(rules.state4_js(ws, root, [], [], now, crypto)) };
   const s = out.state as J;
@@ -196,6 +203,8 @@ export function inForce(ws: string, entries: readonly Entry[], chains: ReadonlyM
   for (const [id, d] of arr(s.devices)) {
     const dev: J = { id, sub: d.sub, kind: d.kind, label: d.label };
     if (typeof d.sign_key === "string") dev.sign_key = d.sign_key;
+    // (one the chain as it moved still says: its person's log never put it on)
+    if (d.by === "chain") dev.by = "chain";
     if (typeof d.exp === "number") dev.exp = d.exp;
     f.devices.set(id, dev);
   }
@@ -221,5 +230,8 @@ export function inForce(ws: string, entries: readonly Entry[], chains: ReadonlyM
     }
     for (const [id, t] of at) if (f.persons.get(f.devices.get(id)?.sub) === g) f.added.set(id, t);
   }
+  // (one the chain as it moved still says: when the chain put it on)
+  const was = fold(entries);
+  for (const [id, d] of f.devices) if (d.by === "chain" && was.added.has(id)) f.added.set(id, was.added.get(id)!);
   return { said: f.disabled ? "off" : "on", root, f, settings: { origins: arr(s.origins).map(String), rp_id: String(s.rp_id ?? ""), cloud_keys: s.cloud_keys ?? null }, checked: checkedOf(out) };
 }
