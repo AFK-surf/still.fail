@@ -465,7 +465,7 @@ let nt_rates : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nt_rate : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+let nt_rate : @ui.Style = @ui.css("row min_w=S16 gap=S1 align=ACenter")
 
 ///|
 /// The rest of a machine (hostDetails: its labels beside each, 14 apart, rows 8 apart, the meta's 12 muted).

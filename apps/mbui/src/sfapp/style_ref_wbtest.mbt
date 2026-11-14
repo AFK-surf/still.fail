@@ -153,16 +153,16 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
   // (the wide ones again, 2026-11-10: a sidebar's marks, words and headings 2 in, where its rows' foot capsules start)
   inspect(out.to_string(), content=(
     #|settings narrow 77022:ba68b727
-    #|station narrow 68962:b084a34
+    #|station narrow 68962:ee95f385
     #|me-reading narrow 23870:8074bf2b
     #|settings wide 169493:802f151e
-    #|station wide 214277:232d9bcb
+    #|station wide 214275:48066f34
     #|me-reading wide 164149:d62b64d1
     #|settings-dark narrow 77290:42efbe58
-    #|station-dark narrow 68824:85eb5585
+    #|station-dark narrow 68824:b6bfb6b0
     #|me-reading-dark narrow 23998:5789351d
     #|settings-dark wide 169413:9d946751
-    #|station-dark wide 213932:42413ff7
+    #|station-dark wide 213930:6354b892
     #|me-reading-dark wide 164135:8c5f9435
     #|
 
