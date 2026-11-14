@@ -129,6 +129,13 @@ test("a view sends its size, a picture first and then only once the host says th
   await view.input({ t: "pointer", kind: "down", x: 0.5, y: 0.5, buttons: 1 });
   await until(() => port.heard.some((m) => m.pointer));
   assert.deepEqual(port.heard.find((m) => m.pointer), { pointer: { type: "down", x: 400, y: 800, button: 0, buttons: 1 } });
+  // the host tells the tab's viewport (no scale): the view's pictures, and so its pointer, keep its own 2x
+  port.said({ size: { width: 400, height: 800 } });
+  await until(() => port.heard.length > 0);
+  await new Promise((r) => setImmediate(r));
+  await view.input({ t: "pointer", kind: "up", x: 0.5, y: 0.5, buttons: 0 });
+  await until(() => port.heard.some((m) => m.pointer?.type === "up"));
+  assert.deepEqual(port.heard.find((m) => m.pointer?.type === "up"), { pointer: { type: "up", x: 400, y: 800, button: 0, buttons: 0 } });
   view.close();
   assert.equal(await view.next(), null);
   assert.equal(screen.viewing(), 0);
