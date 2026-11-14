@@ -53,21 +53,22 @@ test("by the heads, a member's device, one taken out and one left out are given 
   handover(w);
   const c = station(w);
   for (const l of [w.alice, w.bob, w.carol]) bring(c, l);
-  // a log of another workspace kept here, and a statement whose body is not kept here (lacking)
+  // a log of another workspace kept here
   const dan = new Log("dan");
   personChainsOf(c).keep(dan.genesis, dan.entries, WS2);
-  const lost = w.alice.say("member", { sub: "erin", email: "erin@x", lock: dan.genesis, role: "member" });
-  personChainsOf(c).keep(w.alice.genesis, w.alice.entries, WS);
   const stranger = { signer: ed(), base: ed() };
   const member = same(c, viewerOf("carol", w.carol.app), "carol's app", { logs: [dan.genesis, "ab".repeat(32)], bodies: ["cd".repeat(32)] });
   assert.ok(member.logs.length >= 3 && member.bodies.length === 5, "the logs and the bodies");
-  assert.deepEqual(member.lacking, [lost.h], "lacking as GET /lock/bodies says it");
   same(c, viewerOf("carol", stranger), "a device the list does not name (left out: its connection refused, as the whole reads)");
   // carol taken out by alice
   w.alice.say("member.remove", { sub: "carol" });
   bring(c, w.alice);
   assert.equal(c.locked()!.state!.members.has("carol"), false, "carol out");
   same(c, viewerOf("carol", w.carol.app), "carol's app taken out");
+  // a statement whose body is not kept here: lacking, by the heads as by the whole read
+  const lost = w.alice.say("member", { sub: "erin", email: "erin@x", lock: dan.genesis, role: "member" });
+  personChainsOf(c).keep(w.alice.genesis, w.alice.entries, WS);
+  assert.deepEqual(same(c, viewerOf("bob", w.bob.app, "admin"), "bob's app").lacking, [lost.h], "lacking as GET /lock/bodies says it");
   // another workspace's device: nothing by either
   const other = viewerOf("dan", dan.app, "member", WS2);
   assert.deepEqual(whole(c, other), { logs: [], bodies: [], lacking: [] });
