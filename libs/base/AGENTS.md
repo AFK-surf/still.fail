@@ -55,20 +55,26 @@ of its workspace (`moon.work`); `effect` stays in mbui.
 - No Rust shell is linked there. A native test that reaches the shell's C (`shell.c`: through `Shell::start`, or
   the package's `random` and `now`) fails to link, naming `sf_shell_start`: it is not skipped. So a test of what
   stands on the shell is given a stood-in one (`Shell::stood_in`), which reaches none of it and runs on both
-  targets: the mesh's are (`src/mesh/stood_wbtest.mbt` is the peer they share: it answers what the mesh asks of iroh
-  by the shells' names and JSON, and holds back a dial, a read and a connection's end for the test to answer), on a
-  runtime of the test's own clock. What depends on which of two fibers comes first in one turn is set up without
-  running and then run at once (its `start`, `answered`, `run`): a test that runs to rest after every step never
-  sees a fiber cut before its first. A test of the page's shell itself is js's alone (`moon.pkg`'s `targets`:
-  `shell_js_wbtest.mbt`, the page's timers in its hands).
+  targets: the mesh's are (`src/mesh/stood_wbtest.mbt` is the peer they share, and its head says how a test uses
+  it: it answers what the mesh asks of iroh by the shells' names and JSON, and either holds back a dial, a read and
+  a connection's end for the test to answer by hand, or is a peer that answers by itself as the test scripts it:
+  the hello, the control stream's exchanges, a request, a connection's end, each at once, some time later on the
+  test's clock, never, or when the test gives it), on a runtime of the test's own clock. What depends on which of
+  two fibers comes first in one turn is set up without running and then run at once (its `start`, `answered`,
+  `run`): a test that runs to rest after every step never sees a fiber cut before its first. A test of the page's
+  shell itself is js's alone (`moon.pkg`'s `targets`: `shell_js_wbtest.mbt`, the page's timers in its hands).
 - That is all that is tested here of the mesh and the shells: what the mesh asks of a shell and does with its
-  answers, and how the page's shell turns its runtime. No test in this repository opens a link to a peer; `shell.c`
-  is compiled by the native step (moon makes a package's stub with its tests, into an archive nothing there calls)
-  and run by none; and the rest of the JavaScript in `shell_js.mbt` (`extern "js"`, written out in MoonBit:
-  what it does with iroh and its handles) is read by no compiler and run by no test here. What holds those is
-  outside: the messenger's end-to-end suites, a real server and relay, a page in a browser (which reads the page's
-  handles from outside). Two meshes on a simulated network, as the TypeScript one has, are not written yet. After a
-  change to `src/shell`, or to what `src/mesh` asks of a shell, say what ran it there.
+  answers (as it is closed, what it lets go of, how much of a reply it keeps: `src/mesh/mesh_wbtest.mbt`; a link's
+  life against the scripted peer, at the TypeScript mesh's times: its hello and each refusal of it, its pings and
+  three of them missed, its credential's renewal and a refusal of one, its end by the peer, its peer dialled again:
+  `src/mesh/peer_wbtest.mbt`), and how the page's shell turns its runtime. That peer is the test's script, not a
+  door: no test in this repository opens a link to a real peer; `shell.c` is compiled by the native step (moon
+  makes a package's stub with its tests, into an archive nothing there calls) and run by none; and the rest of the
+  JavaScript in `shell_js.mbt` (`extern "js"`, written out in MoonBit: what it does with iroh and its handles) is
+  read by no compiler and run by no test here. What holds those is outside: the messenger's end-to-end suites, a
+  real server and relay, a page in a browser (which reads the page's handles from outside). Two meshes on a
+  simulated network, as the TypeScript one has, are not written yet. After a change to `src/shell`, or to what
+  `src/mesh` asks of a shell, say what ran it there.
 - `src/mesh/words_made.mbt` is made, and committed: `node scripts/mb-base-words.ts` writes it from the device
   base's own words (`client/core-ts/src/lang.zh.json`, `lang.en.json`: the keys `core-logic.mesh.*`), so a word is
   changed there, never here.
@@ -145,5 +151,7 @@ left is another part's:
   is kept (`Link::ended` answers from that, and nothing is asked of it after) or at once where an opening gave it
   up, an endpoint by closing it. A new op that takes a handle says when it goes, in both shells.
 - The times and the bytes are the TypeScript mesh's (`mesh.mbt`'s constants; `src/wire/wire_test.mbt`, line for
-  line), since the peer is the same door: a change to one is a change to what that peer is sent.
+  line; `src/mesh/peer_wbtest.mbt`, a link's lines and when each goes), since the peer is the same door: a change to
+  one is a change to what that peer is sent. One byte the peer sees differs, known: a link let go for its pings is
+  closed here saying `closed`, where that mesh says `woke` of every link it drops (its `dropLink`).
 - A compiler warning is an error or off (`moon.mod`'s `warnings`, mbui's line).
