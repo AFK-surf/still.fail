@@ -9,7 +9,7 @@
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type Cloud, NOT_GIVEN, UNPROTECTED } from "../cloud/state.ts";
-import { BYTES, CHECK_BYTES, type Bytes, NoBytes, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
+import { BYTES, CHECK_BYTES, type Bytes, NoBytes, NoLink, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
 import { answerLock } from "./lock-sync.ts";
 import { answerMarks, stationMarksOf } from "./station-marks.ts";
@@ -268,7 +268,7 @@ export function peerCall(
           return conn;
         },
         (error) => {
-          throw new Error(`peer unavailable or does not support station RPC: ${(error as Error).message}`);
+          throw new NoLink(`peer unavailable or does not support station RPC: ${(error as Error).message}`);
         },
       );
       const settled = () => {
