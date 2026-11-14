@@ -1,169 +1,176 @@
 ---
 name: stillfail-viz
-description: Create inline HTML diagrams, charts, comparisons or interactive widgets in still.fail chats. Use when a small visual explains better than prose; Slack receives an attached file.
+description: Create inline native mbui widgets (.mbui), sandboxed Wasm mini-programs (.wasm), charts, comparisons or interactive diagrams in still.fail chats. Use when a visual or interactive widget explains better than prose; Slack receives an attached file.
 ---
 
-# Inline visualizations
+# Inline visualizations (`.mbui` & `.wasm`)
 
 - Make one only when people need to see or explore something in the chat and it explains better than words. A table
   someone asks for is a Markdown table; a static structure that labeled nodes and edges explain fully is a Mermaid code
-  fence (it draws in still.fail's colours without a file). Use HTML for numbers, motion, adjustable inputs and the rest.
-- A request for a site, an app page or a change to a project is not one: build that in the project.
+  fence (it draws natively in still.fail's colours without a file). Use a `.mbui` widget or `.wasm` mini-program for
+  charts, metrics, comparisons, interactive calculators/simulators, tabs/toggles, checklists and follow-up actions.
+- Prefer `.mbui` / `.wasm` over `.html`: `.mbui` and `.wasm` widgets are rendered natively by still.fail's `mbui` engine
+  (`@view.View` + `@sf` components + `@signals.Signal` + Skia canvas) with zero WebView overhead, synchronous layout
+  height on the very first frame, 120 fps scrolling, automatic light/dark theme tokens, and direct rendering in
+  chat-to-image exports.
+- A request for a site, an app page or a change to a project is not an inline widget: build that in the project. For a
+  mockup of `still.fail`'s own UI, write real `mbui` code (`sffixture`) and render screenshots/video with
+  `apps/mbui/scripts/media.sh` (see `stillfail-show`).
 
 ## Post
 
-Write an HTML fragment in the session workspace, e.g. `release.html`. Attach with
-`chat_post(files=["/abs/path/release.html"])` and put `[Release](release.html)` on its own line in the text. Every
-still.fail app (web, desktop, phones) draws it there. Say its point around the link in a sentence or two:
-notifications and chat lists show only your words, and figures are not read aloud. Don't repeat its data in the text.
-In Slack, attach but omit the Markdown link; files upload below the text, and still.fail's copy of the thread shows
-the file as a card that opens it, not drawn in the message. Say what the figure shows for people staying in Slack.
+Write a `.mbui` JSON file (or a `.wasm` binary mini-program) in the session workspace, e.g. `release.mbui` or
+`sim.wasm`. Attach with `chat_post(files=["/abs/path/release.mbui"])` and put `[Release](release.mbui)` on its own line
+in the text. Every still.fail app (desktop, iOS, Android, web) draws it inline in the message and supports full-screen
+expansion. Say its point around the link in a sentence or two: notifications and chat lists show only your words. Don't
+repeat its data in the text. In Slack, attach the file and omit the Markdown link; say what the figure shows for people
+staying in Slack.
 
-## Fragment
+## `.mbui` Widget Schema
 
-- Only a fragment: no `<!doctype>`, `<html>`, `<head>` or `<body>` (a full document is drawn as written in a 16:9
-  window without any of the below). Keep it under 1 MB: aggregate or downsample big data.
-- Give its root a unique id and find things with `document.getElementById`. Check that every script runs, every
-  element it looks for exists and the main interaction updates the figure.
-- The sandbox has no fetch, XHR or WebSocket, nor the page, station or files. Scripts, styles and fonts may load only
-  from cdnjs.cloudflare.com, esm.sh, cdn.jsdelivr.net, unpkg.com, fonts.googleapis.com and fonts.gstatic.com. Images
-  are data URIs, SVG or canvas.
-- Keep the figure to the figure: no explanatory paragraphs or instructions inside it, only the labels, legends and
-  values it needs, and a screen-reader summary.
+A `.mbui` file is a UTF-8 JSON object with optional initial `state` and a `body` array of declarative `mbui` nodes:
 
-## Design system
-
-The frame loads still.fail's stylesheet: one set of tokens and a set of utility classes under the names you know from
-shadcn and Bootstrap. Use them as they are; never restyle a utility (its size, spacing, border, corner, colour or
-states) and never hard-code a colour (`#fff`, `black`, `slate-500`): light and dark follow the viewer.
-
-### Tokens
-
-- Pairs, a ground and what is on it: `--background`/`--foreground` (the page), `--card`/`--card-foreground`,
-  `--primary`/`--primary-foreground` (ink: the solid control, what is chosen), `--secondary` and `--muted` (a quiet
-  ground) with `--muted-foreground` (the one grey for secondary words), `--accent`/`--accent-foreground` (a soft
-  highlight), `--popover`/`--popover-foreground`.
-- `--border` (only for what has nothing in it: a chart's grid, an empty track), `--input`, `--ring`, `--destructive`.
-- Tones, each an ink and a ground: `--blue`, `--green`, `--yellow`, `--red`, `--purple`, `--orange` and `--blue-bg`….
-- Chart series: `--viz-series-1` (ink, for one measure or the active state) to `--viz-series-6`.
-- `--font-size-base`: everything else follows it, and a phone's is a size up.
-
-### How it looks
-
-- Grey by default. Colour only what must be noticed (a failure, a warning, done) and series past the first; values,
-  labels and states that are normal stay `--foreground` or `--muted-foreground`. A status is `.viz-dot` and words.
-- What is chosen, current or pressed is ink (`--primary`), never orange. The brand's orange is only a fill the
-  stylesheet already gives (a progress bar, a checked box).
-- Set things apart with room and grounds. No borders, outlines, dividers, banners or coloured callout boxes; no
-  shadows. The figure's own surface is transparent and unframed and fills the width.
-- Type: the body size by default, `.text-small` for secondary labels, `h1` for a figure's one title and `h2` for a
-  panel's; weights 400, 500 and 600 for titles. Never set font sizes or line heights; numbers are already one width.
-
-### Surfaces and layout
-
-- `.widget`: a column for the whole figure. `.viz-grid`: equal columns as fit, stacking when narrow (2–3 at full
-  width). `.viz-row`: a wrapping row of related values or actions. `.viz-controls`: a wrapping row of controls.
-- `.card`: the only card. Use it for a number with its label, a selected item's summary, or a bounded interactive
-  field; never around a chart, a table, a map or the whole figure, never one in another, never to frame a section.
-- `.viz-stat` on a `.card`: `.viz-stat-label`, `.viz-stat-value` (a unit in `<small>`), and at most one short line
-  after it (a delta: `<span class="text-success">↑ 8%</span>`). Show 2–4 near the top only when they explain the
-  question; never invent a row of them.
-- `.viz-badge` (add `.is-green`, `.is-red`, `.is-yellow`, `.is-blue`, `.is-purple`): a display-only pill.
-- `.viz-dot` (same tones, and `.is-off`): a status dot before words.
-- `.viz-flow` of `.viz-node` (`.viz-node-title`, `.viz-node-body`; `.is-active` for the current one, a tone only for
-  one that is wrong) with `.viz-arrow` between them: a few boxes in a line.
-- `.progress` > `.progress-bar style="width:40%"`, with `role="progressbar"` and its values.
-- `.viz-dotted-background`: a quiet dot grid behind a mockup.
-
-### Controls
-
-- `.btn`; `.btn-primary` for the one main action, `.btn-secondary`, `.btn-ghost` for low emphasis; `.btn-xs`,
-  `.btn-sm`, `.btn-lg`; `.btn-block` to fill the row. An icon goes before the words inside it. `.btn-icon` is a
-  button of an icon alone (with `aria-label` and `data-tooltip`). `aria-pressed="true"`, `aria-selected="true"` or
-  `.is-selected` mark one chosen. `.btn.viz-tile` is a selectable cell of a dense grid.
-- `.form-label` above `.form-control` (input or textarea) or `.form-select`; `-sm`/`-xs` for smaller ones.
-  `<label class="form-check">` around `.form-check-input` and `.form-check-label`; `.form-switch`; `.form-range`
-  with its value before it.
-- Tabs, switched for you: `.nav.nav-pills[role="tablist"]` of `button.nav-link[role="tab"]` with `id`,
-  `aria-controls` and `aria-selected` (the first `.active`), and `[role="tabpanel"]` panels, the others `hidden`:
-
-```html
-<div class="nav nav-pills" role="tablist" aria-label="Range">
-  <button class="nav-link active" id="week" role="tab" aria-controls="week-panel" aria-selected="true" type="button">Week</button>
-  <button class="nav-link" id="month" role="tab" aria-controls="month-panel" aria-selected="false" type="button">Month</button>
-</div>
-<div id="week-panel" role="tabpanel" aria-labelledby="week">…</div>
-<div id="month-panel" role="tabpanel" aria-labelledby="month" hidden>…</div>
+```json
+{
+  "title": "0.1.9102 发版概览",
+  "subtitle": "双平台安装包与回归状态",
+  "state": {
+    "canary_only": true
+  },
+  "body": [
+    {
+      "type": "grid",
+      "cols": 3,
+      "children": [
+        { "type": "stat", "label": "首帧耗时", "value": "0.4", "unit": "ms", "delta": "↓ 98%", "tone": "green", "spark": [18, 15, 9, 4, 1, 0.4] },
+        { "type": "stat", "label": "WebView 进程", "value": "0", "unit": "个", "delta": "纯原生渲染", "tone": "blue" },
+        { "type": "stat", "label": "滚动帧率", "value": "120", "unit": "fps", "delta": "零异步高度跳变", "tone": "green" }
+      ]
+    },
+    {
+      "type": "tabs",
+      "id": "main_tab",
+      "items": [
+        {
+          "id": "charts",
+          "label": "概览图表",
+          "body": [
+            {
+              "type": "chart",
+              "chart": "bar",
+              "title": "各阶段耗时对比 (ms)",
+              "unit": "ms",
+              "height": 180,
+              "labels": ["解析", "首帧布局", "主题切换", "长图导出"],
+              "series": [
+                { "name": "mbui 原生", "values": [0.2, 0.4, 0.1, 1.2], "tone": "green" },
+                { "name": "HTML WebView", "values": [14.0, 48.0, 18.0, 95.0], "tone": "yellow" }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "checklist",
+          "label": "发版检查单",
+          "body": [
+            { "type": "switch", "key": "canary_only", "label": "仅向 Canary 渠道灰度推送", "note": "开启后首日限流 10% 设备" },
+            {
+              "type": "row",
+              "children": [
+                { "type": "button", "label": "生成灰度发布指令", "variant": "primary", "follow_up": "按 canary_only={canary_only} 生成 0.1.9102 发布指令" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
 ```
 
-- `data-tooltip="text"` on any element shows it on hover, focus and touch; put a truncated label's full text there.
-- Icons are still.fail's own: `<i data-icon="refresh" aria-hidden="true"></i>`, 16 px in the words' colour. Names:
-  agent archive arrow-down arrow-left arrow-right arrow-up arrow-up-right bell bot boxes brain camera chart chat chats
-  check check-circle chevron-down chevron-left chevron-right chevron-up chevrons-up-down close command copy cursor
-  devices disk download edit expand external eye file file-code file-text filter folder folder-plus info key keyboard
-  list log-in log-out minus monitor moon more move paste pause phone photo pin play plug plus power quote redo refresh
-  retry search send server settings shield-check shrink sliders sparks square star stop sun text trash unplug upload
-  user user-plus users volume volume-x wait web. Codex's `data-lucide="…"` works too: a Lucide name still.fail has
-  under another name draws as its own. Never draw icon SVG yourself; after adding icons from a script, call
-  `vizIcons()`.
-- Native `button`, `input`, `select`, `textarea` only; essential content and actions never only on hover.
+### Node types
 
-### Tables and text
+#### Layout & containers
+- `column` / `widget`: vertical stack (`gap` in px, default 10; `children` / `body`).
+- `row` / `controls`: horizontal row (`gap` in px, default 8; `wrap`: `true` by default; `align`: `"center"` or `"top"`; `children`).
+- `grid`: responsive multi-column grid (`cols`: 1–4, default 2; stacks automatically on narrow screens < 460 px; `gap`; `children`).
+- `card`: surface container (`title`, `subtitle`, `badge`, `tone`, `children`). Use for stats, bounded controls or grouped fields; never wrap a chart or table in a card.
+- `divider` / `sep`: thin horizontal rule.
 
-- `.table` on a semantic table (`thead` for the head): framed as the tables in messages are, as wide as its content;
-  in `.table-responsive` when it may be too wide; `.table-sm`; `.text-end` on number cells, `.text-center`,
-  `.text-nowrap`.
-- `.text-small`, `.text-muted` (never for essential values), `.text-destructive` (only errors), `.text-success`,
-  `<code>`, `<pre><code>`, `.sr-only`.
+#### Text, status & badges
+- `h1`, `h2`, `text`: text block (`text` / `value`, `muted`: bool, `small`: bool, `mono`: bool, `bold`: bool, `tone`).
+- `badge`: pill badge (`text` / `label`, `tone`: `"green"`, `"red"`, `"yellow"`, `"blue"`, `"purple"`, `"orange"`).
+- `dot` / `status`: coloured status dot + label (`text` / `label`, `tone`: same tones or `"off"`).
+- `callout`: highlighted note (`title`, `text`, `tone`).
+- `code`: monospace code block (`text` / `code`, `lang`).
 
-## Charts
+#### Metrics, tables & flows
+- `stat`: metric card (`label`, `value`, `unit`, `delta`, `tone`, optional inline `spark`: `[numbers]`). Show 2–4 in a `grid` near the top when key numbers answer the question.
+- `kv`: key-value list (`items`: `[{"label", "value", "mono", "tone", "badge"}]`).
+- `table`: framed data table (`columns` / `headers`: `[strings]`, `align`: `["left"|"right"|"center"]`, `rows`: `[[cells]]`, `sm`: bool). Each cell can be a string/number or an object `{"text", "tone", "mono", "bold", "badge", "spark": [...]}`.
+- `flow`: step pipeline (`nodes`: `[{"title", "body", "active": bool, "tone"}]`) with arrows between steps, wrapping cleanly on narrow screens.
+- `progress`: progress bar (`label`, `value`, `max` default 100, `value_text`, `tone`).
 
-`<viz-chart>` draws a chart from data in its `data` attribute (JSON, single-quoted) or a
-`<script type="application/json">` inside it, in the tokens' colours, sized to its container, with values on hover:
+#### Native charts & vector graphics
+- `chart`: native Skia chart with hover/tap crosshair inspection and automatic series legend:
+  - `"chart"`: `"bar"` (`"stacked": true` optional), `"line"`, `"area"`, `"hbar"` (`"max"` optional), `"donut"`, `"pie"` (`"center"` text optional), `"scatter"` (`"x_unit"` optional).
+  - `"title"`, `"subtitle"`, `"unit"`, `"height"` (default 180).
+  - Data formats:
+    - Single series: `"labels": ["A", "B"], "values": [10, 20]`
+    - Multi-series (`bar`, `line`, `area`): `"labels": […], "series": [{"name": "S1", "values": […], "tone": "blue"}]`
+    - Ranked / proportional items (`hbar`, `donut`, `pie`): `"items": [{"label": "A", "value": 42, "tone": "green", "note": "42%"}]`
+    - Scatter (`scatter`): `"series": [{"name": "S1", "tone": "blue", "points": [[x, y, "label"]]}]`
+- `spark`: compact sparkline (`"values": [1, 4, 2, 8]`, `"tone"`, `"width"`, `"height"`).
+- `svg`: native vector canvas (`"svg"`: SVG markup with `<path>`, `<rect>`, `<circle>`, `<line>`, `<polyline>`, `<polygon>`, `<g>`, `"viewBox": "0 0 W H"` or `"width"`/`"height"`).
 
-| `type` | data |
-|---|---|
-| `bar`, `line`, `area` (`stacked` for bars) | `{"labels":[…],"values":[…]}` or `{"labels":[…],"series":[{"name","values","tone"}]}` |
-| `hbar` (`max`) | `{"labels":[…],"values":[…]}` or `{"items":[{"label","value","tone","note"}]}`: a ranking, shares |
-| `donut`, `pie` (`center` sets the middle words) | `{"items":[{"label","value","tone"}]}` |
-| `scatter` (`x-unit`) | `{"series":[{"name","points":[[x, y, "label"]]}]}` |
+#### Interactive controls & state (`@signals.Signal[Json]`)
+- `tabs`: interactive pill tabs (`"id"`, optional `"state_key"`, `"active"`, `"items": [{"id", "label", "badge", "body": […]}]`).
+- `details` / `collapse`: expandable section (`"id"`, `"title"`, `"subtitle"`, `"open": bool`, `"body": […]`).
+- `switch`: boolean toggle row (`"key"`, `"label"`, `"note"`, `"value"`). Toggling updates `state[key]` and persists widget state.
+- `check`: interactive checkbox row (`"key"`, `"label"`, `"note"`, `"value"`). Toggling updates `state[key]` and persists widget state.
+- `button` / `action`: interactive button (`"label"`, `"variant"`: `"primary"` | `"secondary"` | `"ghost"`, `"set"`: `{"key": value}`, `"inc"`: `"key"`, `"toggle"`: `"key"`, `"wasm_call"`: `"export_fn"`, `"follow_up"`: `"prompt text"`).
+- Conditional visibility on any node: `"when": "key"` (truthy in `state`), `"when": "!key"` (falsy), or `"when": "key=val"`.
+- State interpolation in text & `follow_up`: `{key}` or `${key}` in text, badges, progress bars, or a button's `follow_up` prompt is replaced with the live value of `state[key]`, and the prompt is placed in the chat composer for the user to review and send. State changes are saved automatically to the station (`modelContent` is sent to you alongside the user's next message).
 
-Also `unit`, `height` and `title`. One series is ink; more take `--viz-series-2…` in order with a legend; `tone`
-(`red`, `green`, `yellow`, `blue`, `purple`) only for a series that must stand out. `<viz-spark data="[…]" tone width
-height>` is a small trend line, e.g. in a table cell.
+## Sandboxed Wasm 1.0 Mini-Programs (`.wasm` & `"wasm"`)
 
-- Put the chart straight on the figure's surface under an `h1`/`h2` title; never in a `.card`.
-- Start from the chart for named numbers or a one-off analysis; put takeaways in your message, not in cards above it.
-- For what `<viz-chart>` does not draw (timelines of parallel work, distributions, small multiples, maps), use D3
-  (`<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>`) or handwritten SVG with the same
-  look: `var(--viz-series-n)` for marks, `var(--muted-foreground)` for axis text at 11px or more, thin `var(--border)`
-  grid lines, no frame or fill behind the plot, axis titles with units, `data-tooltip` on each mark. Size each SVG from
-  its container with a `ResizeObserver`; never scale down a fixed-width `viewBox`. For a canvas or a library that needs
-  real colours, read them with `getComputedStyle(document.documentElement).getPropertyValue("--viz-series-2")` and
-  redraw on the `viz:theme` event.
+When a widget needs custom computation (simulations, live aggregations, pricing/capacity calculators, or dynamic view
+generation), use the built-in sandboxed Wasm 1.0 bytecode runtime (`viz_wasm_vm.mbt`):
+- **Cross-platform & iOS-ready**: interpreted in pure MoonBit at ~880 MIPS (~0.02 ms for 20k instructions; 0 ms during
+  list scrolling/animations) with zero JIT requirement.
+- **Deterministic sandbox**:
+  - Capability-based host import allowlist (`mbui` / `env` only; WASI, filesystem, and network imports are rejected at
+    instantiation).
+  - Per-invocation instruction gas metering (`"gas_limit"`, default `1,000,000` instructions per event) that traps
+    infinite loops without blocking the UI thread.
+  - Hard linear memory cap (`64` pages = `4 MiB`) and call stack depth limit (`256`).
+- **Two ways to package**:
+  1. **Embedded controller in `.mbui`**: add `"wasm": "<base64-encoded .wasm>"` (or `"wasm_hex"`) to your `.mbui` JSON.
+     Buttons can invoke any exported function via `"wasm_call": "fn_name"` (with optional `"args": [...]` and `"into": "state_key"`),
+     and state changes automatically invoke exported `mbui_event` or `mbui_update`.
+  2. **Standalone `.wasm` file**: attach `app.wasm` and link `[Title](app.wasm)`. On load, `mbui_init()` runs and emits
+     the initial `.mbui` JSON tree via `mbui.set_tree(ptr, len)` (or returns a `(ptr << 32) | len` `i64` slice).
+- **Host imports (`"mbui"` or `"env"` module)**:
+  - `state_get_i32(key_ptr: i32, key_len: i32, fallback: i32) -> i32`
+  - `state_set_i32(key_ptr: i32, key_len: i32, val: i32)`
+  - `state_get_f64(key_ptr: i32, key_len: i32, fallback: f64) -> f64`
+  - `state_set_f64(key_ptr: i32, key_len: i32, val: f64)`
+  - `state_get_str(key_ptr: i32, key_len: i32, dst_ptr: i32, dst_cap: i32) -> i32`
+  - `state_set_str(key_ptr: i32, key_len: i32, val_ptr: i32, val_len: i32)`
+  - `set_tree(json_ptr: i32, json_len: i32)`: update the widget's `.mbui` JSON tree.
+  - `set_state(json_ptr: i32, json_len: i32)`: merge a JSON object into reactive `state`.
+  - `follow_up(text_ptr: i32, text_len: i32)`: draft a follow-up message in the chat composer.
+  - `input_len() -> i32` and `input_copy(dst_ptr: i32, max_len: i32) -> i32`: read the JSON event payload passed to `mbui_init` / `mbui_event`.
 
-## Composition
+## Design rules
 
-- Choose the smallest composition that answers: one dominant visual, controls only when asked for or essential, one
-  mechanism per state. Never invent search, filter or reset controls, KPI rows, legends that repeat labels, or panels
-  to fill space.
-- Fill the width and work from 736 px down to 320 px: let rows wrap and grids stack; no fixed outer widths, internal
-  scrolling, `position: fixed` or viewport heights. Text never overlaps or clips.
-- A mockup of a product's screen uses that product's own colours and type, defined in the fragment
-  (`light-dark(…, …)`), never these tokens or utilities; `.viz-dotted-background` may sit behind it.
+- Choose the smallest composition that answers: one dominant visual, controls only when useful, no filler panels.
+- Grey by default. Use `tone` (`green`, `red`, `yellow`, `blue`, `purple`, `orange`) only for status, deltas, anomalies or series distinction.
+- Never place a `chart` or `table` inside a `card`.
 
-## Talking back
+## Legacy HTML fallback (`.html`)
 
-`window.openai` (as Codex names it):
-
-- `openai.widgetState` — what the widget kept last time it was shown (or null); `openai.setWidgetState(value)` keeps a
-  JSON value of up to 16 KiB on the station, restored whenever and wherever the message is shown again. Put what you
-  should know in `value.modelContent` (the person's choices, say) and the rest in `value.privateContent`:
-  `modelContent` reaches you with the next message they send, as a note beside it; keeping state never starts a turn.
-  Save after meaningful interactions, never on load.
-- `openai.sendFollowUpMessage({ prompt })` — puts `prompt` in the chat's composer for the person to send, as if they
-  wrote it. Only from their click or key press; it never sends by itself. Use it for drill-downs ("explain this
-  week's spike") with the selected values in the prompt, and label the button for what it asks.
-
-Before posting a large or scripted one, check it renders: open the file in a browser (or a screenshot tool) and fix
-what does not draw or throws.
+Only when a visualization requires custom D3 force layouts or custom Canvas scripting that `.mbui` nodes cannot express,
+you may attach an HTML fragment (`.html`) instead. Keep fragments under 1 MB with no `<!doctype>`/`<html>`, using
+still.fail's CSS tokens (`--foreground`, `--muted-foreground`, `--border`, `--viz-series-1…6`) and `window.openai`
+(`openai.widgetState`, `openai.setWidgetState`, `openai.sendFollowUpMessage`). For everything else, use `.mbui`.

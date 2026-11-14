@@ -330,7 +330,7 @@ pub fn viz_served(html : String, state : Json?, dark : Bool, ground : Int64, scr
 /// Whether a file is a visualization.
 pub fn is_viz(name : String) -> Bool {
   let n = name.to_lower()
-  n.has_suffix(".html") || n.has_suffix(".htm")
+  n.has_suffix(".mbui") || n.has_suffix(".wasm") || n.has_suffix(".html") || n.has_suffix(".htm")
 }
 
 // ── a visualization's file: fetched with what its widget kept ──────────
@@ -439,7 +439,16 @@ fn viz_ask(src : Source, l : VizLoad, station : String, key : String, path : Str
     Json::object(p),
     fn(r) {
       match r {
-        Ok((_, bytes)) => l.html.set(Some(@utf8.decode_lossy(bytes)))
+        Ok((_, bytes)) =>
+          l.html.set(
+            Some(
+              if is_wasm_bytes(bytes) {
+                "wasm:base64:" + viz_base64_encode(bytes)
+              } else {
+                @utf8.decode_lossy(bytes)
+              },
+            ),
+          )
         Err(_) => l.failed.set(true)
       }
     },

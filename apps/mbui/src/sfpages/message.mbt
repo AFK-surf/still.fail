@@ -732,7 +732,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 /// Whether a file is drawn as a visualization where its message places it: an HTML one (PlacedFile, kindOf).
 fn is_viz(name : String) -> Bool {
   let n = name.to_lower()
-  n.has_suffix(".html") || n.has_suffix(".htm")
+  n.has_suffix(".mbui") || n.has_suffix(".wasm") || n.has_suffix(".html") || n.has_suffix(".htm")
 }
 
 ///|

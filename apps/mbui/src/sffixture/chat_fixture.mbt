@@ -475,6 +475,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_md_message(rich_chat(f.older))
           } else if f.mode == "chat-viz" {
             with_viz_message(rich_chat(f.older))
+          } else if f.mode == "chat-mbui" || f.mode == "chat-mbui-dark" {
+            with_mbui_viz_message(rich_chat(f.older))
           } else if f.mode == "chat-file-links" {
             with_file_links(rich_chat(f.older))
           } else if f.mode == "chat-table-images" {
@@ -2068,6 +2070,39 @@ pub let viz_answer : String =
   #|```
 
 ///|
+pub fn with_mbui_viz_message(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), mbui_viz_answer, "1 分钟前", {
+          "attachments": [file("release.mbui", 0, 0, 1600)],
+          "placed": ["release.mbui"],
+          "md": [
+            ["p", [[0, 47]]],
+            ["p", [["a", [[50, 57]], { "href": "release.mbui", "path": "release.mbui" }]]],
+          ],
+          "ending": "all_done",
+        }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+pub let mbui_viz_answer : String =
+  #|把内联 HTML 预览换成了原生 mbui 组件，零 WebView 开销，首帧直接算好高度：
+  #|
+  #|[发布与性能看板](release.mbui)
+
+///|
 /// MBUI_FIXTURE=chat-image-coming: a last message's two pictures still coming from their station (fixture.mbt's
 /// `file`): a photograph (its ThumbHash's field a sky over a meadow), 8400 of its thumbnail's 24000 bytes heard, and a
 /// light screenshot (a report's, 780 × 2600, its ThumbHash's field the page's colour), 0 of its 13249.
@@ -2218,6 +2253,162 @@ pub let table_images_md : Json = [
 pub let fixture_viz_html : String =
   #|<div class="viz-card" style="padding:16px"><b>本周发布</b><p>周一 2 个、周三 1 个、周五 3 个</p>
   #|<button onclick="openai.setWidgetState({seen:true})">看过了</button></div>
+
+///|
+/// MBUI_FIXTURE=chat-mbui's native mbui widget (.mbui declarative JSON + embedded Wasm 1.0 sandbox controller).
+pub let fixture_viz_mbui : String =
+  #|{
+  #|  "title": "0.25.0 发布与性能看板",
+  #|  "wasm": "AGFzbQEAAAABFQRgA39/fwF/YAN/f38AYAAAYAABfwIrAgRtYnVpDXN0YXRlX2dldF9pMzIAAARtYnVpDXN0YXRlX3NldF9pMzIAAQMDAgIDBQMBAAEHHAILbWJ1aV91cGRhdGUAAgpiZW5jaF9zdGVwAAMKSAIZAEEQQQtBAEELQQAQAAR/QQoFQeQACxABCywBAX9BIEEEQQEQAEEBaiEAQSBBBCAAEAFBMEEJQdwAIABBAmxqIgAQASAACws4BABBAAsLY2FuYXJ5X29ubHkAQRALC3JvbGxvdXRfcGN0AEEgCwRydW5zAEEwCwlnYXRlX3Bhc3M=",
+  #|  "state": {
+  #|    "tab": "overview",
+  #|    "canary_only": false,
+  #|    "rollout_pct": 100,
+  #|    "runs": 1,
+  #|    "gate_pass": 94
+  #|  },
+  #|  "root": {
+  #|    "type": "card",
+  #|    "title": "0.25.0 发布与性能看板",
+  #|    "subtitle": "原生 mbui + Wasm 沙箱渲染",
+  #|    "badge": "灰度 ${rollout_pct}%",
+  #|    "badge_tone": "ok",
+  #|    "children": [
+  #|      {
+  #|        "type": "grid",
+  #|        "cols": 3,
+  #|        "children": [
+  #|          {
+  #|            "type": "stat",
+  #|            "label": "首帧布局耗时",
+  #|            "value": "0.4",
+  #|            "unit": "ms",
+  #|            "delta": "-94%",
+  #|            "tone": "ok",
+  #|            "spark": [6.8, 5.2, 3.1, 1.4, 0.6, 0.4]
+  #|          },
+  #|          {
+  #|            "type": "stat",
+  #|            "label": "单组件内存",
+  #|            "value": "48",
+  #|            "unit": "KB",
+  #|            "delta": "-99%",
+  #|            "tone": "ok",
+  #|            "spark": [42000, 38000, 12000, 800, 64, 48]
+  #|          },
+  #|          {
+  #|            "type": "stat",
+  #|            "label": "长图导出等待",
+  #|            "value": "0",
+  #|            "unit": "ms",
+  #|            "delta": "同步直出",
+  #|            "tone": "accent"
+  #|          }
+  #|        ]
+  #|      },
+  #|      {
+  #|        "type": "tabs",
+  #|        "bind": "tab",
+  #|        "options": [
+  #|          {
+  #|            "id": "overview",
+  #|            "label": "概览图表",
+  #|            "body": {
+  #|              "type": "col",
+  #|              "gap": 8,
+  #|              "children": [
+  #|                {
+  #|                  "type": "chart",
+  #|                  "chart": "bar",
+  #|                  "title": "各端每日构建通过次数",
+  #|                  "labels": ["周一", "周二", "周三", "周四", "周五"],
+  #|                  "series": [
+  #|                    { "name": "中大屏", "values": [14, 18, 16, 22, 24] },
+  #|                    { "name": "小屏", "values": [10, 12, 15, 19, 21] }
+  #|                  ],
+  #|                  "height": 88
+  #|                },
+  #|                {
+  #|                  "type": "flow",
+  #|                  "nodes": [
+  #|                    { "label": "Wasm 沙箱", "badge": "0.02 ms", "tone": "info" },
+  #|                    { "label": "Signals", "badge": "第 ${runs} 轮", "tone": "accent" },
+  #|                    { "label": "mbui 节点树", "badge": "GPU 直绘", "tone": "ok" }
+  #|                  ]
+  #|                }
+  #|              ]
+  #|            }
+  #|          },
+  #|          {
+  #|            "id": "checklist",
+  #|            "label": "发版检查单",
+  #|            "body": {
+  #|              "type": "col",
+  #|              "gap": 8,
+  #|              "children": [
+  #|                {
+  #|                  "type": "progress",
+  #|                  "label": "发版前门禁检查",
+  #|                  "value": "${gate_pass}",
+  #|                  "max": 100
+  #|                },
+  #|                {
+  #|                  "type": "table",
+  #|                  "headers": ["检查项", "范围", "状态"],
+  #|                  "rows": [
+  #|                    ["列表首帧高度同步", "宽排法 / 窄排法", { "type": "badge", "label": "通过", "tone": "ok" }],
+  #|                    ["Wasm Gas 门限沙箱", "100 万指令上限", { "type": "badge", "label": "通过", "tone": "ok" }],
+  #|                    ["长图分享直出", "Export", { "type": "badge", "label": "通过", "tone": "ok" }]
+  #|                  ]
+  #|                }
+  #|              ]
+  #|            }
+  #|          }
+  #|        ]
+  #|      },
+  #|      {
+  #|        "type": "switch",
+  #|        "bind": "canary_only",
+  #|        "label": "仅向 Canary 渠道灰度推送",
+  #|        "note": "开启后由 Wasm 切换 10% 灰度验证"
+  #|      },
+  #|      {
+  #|        "type": "row",
+  #|        "justify": "between",
+  #|        "wrap": false,
+  #|        "children": [
+  #|          {
+  #|            "type": "dot",
+  #|            "tone": "ok",
+  #|            "label": "门禁 ${gate_pass}%"
+  #|          },
+  #|          {
+  #|            "type": "row",
+  #|            "gap": 8,
+  #|            "wrap": false,
+  #|            "children": [
+  #|              {
+  #|                "type": "button",
+  #|                "label": "Wasm 复核",
+  #|                "tone": "secondary",
+  #|                "wasm_call": "bench_step"
+  #|              },
+  #|              {
+  #|                "type": "button",
+  #|                "label": "填入跟进结论",
+  #|                "tone": "primary",
+  #|                "action": {
+  #|                  "kind": "follow_up",
+  #|                  "text": "0.25.0 看板已确认（视图：${tab}），开始发版"
+  #|                }
+  #|              }
+  #|            ]
+  #|          }
+  #|        ]
+  #|      }
+  #|    ]
+  #|  }
+  #|}
 
 ///|
 pub fn with_md_message(v : Json) -> Json {

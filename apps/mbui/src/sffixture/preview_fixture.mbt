@@ -27,8 +27,9 @@ pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
     ({ ..at("演示录屏.webm", 5242880.0, 1280.0, 720.0), duration: 12500.0, frames: 375 }, fn() { b"" }),
     (at("会议录音.m4a", 1489000.0, 0.0, 0.0), fn() { b"" }),
     (at("报告.html", 900.0, 0.0, 0.0), fn() { @utf8.encode(fixture_html) }),
-    // the chat's visualization (chat_fixture.mbt MBUI_FIXTURE=chat-viz)
+    // the chat's visualization (chat_fixture.mbt MBUI_FIXTURE=chat-viz / chat-mbui)
     (at("release.html", 1200.0, 0.0, 0.0), fn() { @utf8.encode(fixture_viz_html) }),
+    (at("release.mbui", 1600.0, 0.0, 0.0), fn() { @utf8.encode(fixture_viz_mbui) }),
     (at("list.ts", 600.0, 0.0, 0.0), fn() { @utf8.encode(fixture_code) }),
     (at("说明.md", 500.0, 0.0, 0.0), fn() { @utf8.encode(fixture_md) }),
     (at("数据.csv", 200.0, 0.0, 0.0), fn() { @utf8.encode(fixture_csv) }),
