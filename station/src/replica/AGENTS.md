@@ -72,7 +72,11 @@ below, sends them along).
   after they stopped, `QUIET_UNREACHED_MS`, before it was asked to take them) puts them back to work by itself and rests at `sent`
   (the lead, 2026-11-14): the other keeps what it was sent and puts in nothing by itself (`retire.drop` `keep`), so
   the next hand-over sends only what changed. Never once the other said it took them, nor once it was asked to (it may
-  be taking them: as a cancel, they wait for it).
+  be taking them: as a cancel, they wait for it). Neither station updates itself meanwhile (updates/holds.ts, retire.ts `#holdsNow`; 2026-11-14, a beta's update cut
+  a real one's sending three times): the retired one while it sends, its chats stop and are handed over, until they
+  were taken, it fell back or was called off, the one taking them from the take until it took them or could not, held
+  again as either starts; never while resting (at `sent`, failed, the other's disk full or from before), nor while the
+  other is not reached. A process that stops ends the run under way at once, as a cancel does (`close`).
 - An agent assists (`station_retire`, `retire-asks.ts`; the user, 2026-11-14: 「人应该只需要在关键节点点卡片来确认就行」):
   a person confirms its start and its hand-over, each a card counted only as chosen in the app by an owner or admin of
   the workspace (parts.ts `cardChoice`, checked by the route that closes it, never by the agent); it waits at `sent`
