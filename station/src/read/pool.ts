@@ -6,7 +6,7 @@
 // A reader is a V8 of its own (tens of MB), so they are started when reads come and let go once none has come for a
 // while: an idle station keeps none. One that dies (its heap is bounded) fails what it held and is replaced by the next
 // read.
-import { availableParallelism } from "node:os";
+import { availableParallelism, homedir } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import { catalog } from "../accounts/catalog.ts";
@@ -42,6 +42,7 @@ import { HttpError } from "./views.ts";
 import { MbReader, type ReaderLike, mbReaderBinary } from "./mb-reader.ts";
 import { wall } from "../ops/fibers.ts";
 import { roots as machineRoots } from "./machine.ts";
+import { platform } from "../platform/index.ts";
 import type { CardEditPage, CardMessagePage } from "../store/card-outbox.ts";
 
 /// How long a reader with nothing to do is kept.
@@ -119,10 +120,22 @@ const PAGES = new Set(["timeline", "machineSessions"]);
 const HISTORY = new Set(["timeline", "transcriptState"]);
 /// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
 /// program is there; every other read is a worker's.
-const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage"]);
+const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage", "sessionPlace"]);
 /// The reads of this machine's own Claude Code and Codex sessions: the MoonBit reader is told where they are kept, from
 /// this process's environment (read/machine.ts `roots`), as the worker reads it.
 const MACHINE = new Set(["machineSessions", "machineSession"]);
+/// A file a session's message names (read/sessions.ts `sessionPlace`): the program is given what only this process
+/// knows (its HOME, its home directory, whether macOS's folder permissions apply), the words of its refusals in the
+/// language its args name, and the time (the git listings it keeps a minute, macOS's mounts two seconds).
+const placeOf = (args: unknown) => {
+  const lang = argsLang(args) ?? "zh";
+  return {
+    ...(args as object),
+    env: { home: process.env.HOME ?? "", homedir: homedir(), mac: platform.hasFolderPermissions },
+    words: { notFound: tr(lang, "station.files.notFound"), protected: tr(lang, "station.files.protected"), outside: tr(lang, "station.files.outside") },
+    now: wall.now(),
+  };
+};
 /// The reads that say who someone is in the station's words (read/views.ts `creator`, `authorNames`: the local page, its
 /// admin), and go by the time of day (a share used lately, a card answered lately): the MoonBit reader keeps no words
 /// and its clock is no wall's, so it is given these in the language asked, and the time as the read is asked.
@@ -661,6 +674,7 @@ export class Readers {
     const given = history ? { ...(args as object), words: { inScriptOutput: tr(argsLang(args) ?? "zh", "station.transcript.inScriptOutput") } }
       : line !== this.moved ? args
       : MACHINE.has(op) ? { ...(args as object), roots: machineRoots() }
+      : op === "sessionPlace" ? placeOf(args)
       // (the usage page says its words in the language its args name, as read/ops-usage.ts reads it)
       : WORDED.has(op) ? { ...(args as object), words: wordsIn(op, op === "usage" ? argsLang(args) ?? lang : lang), now: wall.now() }
       : args;
