@@ -262,7 +262,8 @@ another; the accounts' list's merge across stations and its refills.
   `lockBuilds`); web pages not waited for (the user, 2026-11-14: one too old is told to reload once moved); and the
   person may write a kind an older station or app refuses in their own log (views/lock.ts `mayWriteNew`: it holds one
   already, or every station of every workspace of theirs here said `logs` and `builds` on GET /lock/person and each
-  app device on their log is able or idle, `personBuilds`), before the first statement is said and again before the
+  app device on their log is able or idle, `personBuilds`, where one approved face to face is noted by the build its
+  hello says, views/lock.ts `noteBuild`), before the first statement is said and again before the
   `moved`, as `#addWebs` waits for it too. The devices' builds and the writer's other workspaces say nothing to anyone
   (`heldBack`; `handOverState`'s `held` names them for the tests; `lock.handOver` answers `lock_not_ready` in the
   upgrade's title). For now, each lifted by its own change, nor is a chain with a web page whose person has no app on

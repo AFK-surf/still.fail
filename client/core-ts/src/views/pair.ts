@@ -50,7 +50,8 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, approvedHere, asked, baseOf, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
+import { buildOf, ownBuild } from "../station/oldest.ts";
+import { Lock, approvedHere, asked, baseOf, leftIn, noteBuild, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -122,7 +123,7 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 /// A place's `joins`: the lock there has not heard of this person (made a member since it was turned on); `moved`: its
 /// chain moved to its people's own logs, where a web page is let in by an entry of its person's own log (`movedPlace`);
 /// `admit`, there, someone's first device: who is said a member, with the log of their own its hello brought.
-type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean; moved?: true; admit?: Admit }[]; hidden: boolean; away: Deferred.Deferred<void> };
+type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; build: number | null; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean; moved?: true; admit?: Admit }[]; hidden: boolean; away: Deferred.Deferred<void> };
 
 const askings = new WeakMap<Inner, Map<string, Asking>>();
 const askingsOf = (inner: Inner) => {
@@ -384,7 +385,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
     if (before) Deferred.doneUnsafe(before.away, Effect.void);
     const kind = get(hello.value, "kind") === "app" ? "app" : "web";
     const asking: Asking = {
-      device: peer, name: who.name, email: who.email, kind, label: (str(get(hello.value, "label")) ?? "").slice(0, 120),
+      device: peer, build: buildOf(str(get(hello.value, "build")) ?? undefined), name: who.name, email: who.email, kind, label: (str(get(hello.value, "label")) ?? "").slice(0, 120),
       signKey: kind === "app" ? str(get(hello.value, "sign_key")) : null, code: pairCode((b) => inner.host.randomBytes(b)),
       at: Math.floor(inner.host.nowMs() / 1000), until: inner.host.nowMs() + PAIR_WAIT_MS, places, hidden: false, away: Deferred.makeUnsafe<void>(),
       ...(personal !== null ? { personal: { subs: personal.subs, key: personal.key, seed: yield* Effect.orElseSucceed(inner.adb.personal().unseal(t("core-misc.personal.reason.add")), () => null) } } : {}),
@@ -445,6 +446,8 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       // (its entry pending on their lock, no station of theirs up: the first such row, which the answer carries)
       let pending: unknown = null;
       for (const sub of subs) {
+        // (the build it said, noted as seen here: what the person may write in their log goes by it, `mayWriteNew`)
+        if (a.kind === "app") noteBuild(inner, sub, a.device, a.build);
         // (put on the person's lock, then in the workspaces' where they bound it, as one: `withBound`)
         const add = inner.adb.personal().addDevice(sub, { key, id: a.device, label: a.label, ...(a.signKey !== null ? { sign_key: a.signKey } : {}) }, t("core-misc.personal.reason.add"), seed);
         const added = yield* Effect.result(withBound(inner, sub, Effect.tap(add, () => putOnBound(inner, sub, { id: a.device, label: a.label, signKey: a.signKey }))));
@@ -814,7 +817,8 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
           return;
         }
         changed(inner, y);
-        const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null, ...(log !== null ? { log } : {}) };
+        // (its build, as its requests say it: what the device approving it notes of it, views/lock.ts `noteBuild`)
+        const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null, build: ownBuild() || "0.1.0", ...(log !== null ? { log } : {}) };
         // A lock can move while credentials or devices are being sought. Follow it for this try, asking newly named
         // approvers too, but never dial one a second time after its seek ended: it may already be showing a code.
         const asked = new Set<string>();
@@ -1149,7 +1153,7 @@ export function personalBegin(inner: Inner, subs: string[]): Effect.Effect<unkno
     const y = trying(inner, subs.map(personOf));
     const trusted = [...new Set(subs.flatMap((sub) => personal.approvers(sub).map((d) => d.id)))];
     // (the key it signs the workspaces' locks with: a device on the person's lock puts it in those where they bound it)
-    const hello = { t: "hello", v: 1, workspaces: [], kind: "app", label: prefs.deviceName(inner.data) ?? "", sign_key: signer.id, personal: { subs, key } };
+    const hello = { t: "hello", v: 1, workspaces: [], kind: "app", label: prefs.deviceName(inner.data) ?? "", sign_key: signer.id, build: ownBuild() || "0.1.0", personal: { subs, key } };
     y.searching = true;
     inner.runner.fork(
       Effect.gen(function* () {

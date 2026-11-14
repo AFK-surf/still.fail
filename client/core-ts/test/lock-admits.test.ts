@@ -500,6 +500,26 @@ test("a person's own new app device (the personal exchange) where the chains mov
   assert.equal(w.r.cloud.posted.filter((p) => p.ws === "ws" || p.ws === "w2").length, 0, "nothing sent to the chains' cloud");
 });
 
+// The build the new device says in its hello (views/pair.ts) is noted as seen by the device approving it, beside what
+// the person's stations saw (views/lock.ts `noteBuild`, `personBuilds`): what that same ask writes in their log
+// (`mayWriteNew`) is not held back for a device that said it takes it; one that says none is not noted.
+for (const build of ["0.1.9008", undefined] as const) {
+  test(`a person's own new app device saying ${build ?? "no build"} in its hello: ${build ? "noted as seen on 9008 by the device approving it" : "nothing noted"}`, async () => {
+    const w = await setUp({ w2: "moved" });
+    const k = key(7010);
+    const id = key(7110).hex;
+    const [trusted, phone] = await pipe();
+    w.inner.runner.fork(serveTrusted(w.inner, id, ME, trusted));
+    const first = await w.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel", sign_key: "ed25519:" + "13".repeat(32), ...(build ? { build } : {}), personal: { subs: ["s1"], key: k.id } }), phone.next()));
+    assert.deepEqual(first.ok, { t: "code", workspaces: ["person:s1"] });
+    const code = ((await w.prompts()).pairing as { device: string; code: string }[]).find((p) => p.device === id)!.code;
+    const done = await w.run(tryOne(w.inner, { id: ME, d: phone, workspaces: ["person:s1"] }, id, code));
+    assert.equal(done.error, undefined, done.error?.message);
+    const noted = (w.inner.data.record("personBuilds", "s1") as { devices?: Record<string, { build: number }> } | null)?.devices?.[id];
+    assert.equal(noted?.build, build ? 9008 : undefined);
+  });
+}
+
 test("a device whose person was taken out where the chain moved: the refusal's removal and the log entry that commits to it taken, and who took it out and when said", async () => {
   const w = await setUp({ root: "alice", mine: "member" });
   assert.equal(outOf(w.inner, "ws"), null, "in the list: nobody took it out");

@@ -3103,6 +3103,19 @@ function keepBuilds(inner: Inner, table: string, key: string, id: string, said: 
   if (changed) inner.data.put(table, key, { since, devices });
 }
 
+/// A device of `sub`'s about to go on their own log, face to face with this one (views/pair.ts `approve`), said it runs
+/// `build` (null: it said none, a core from before this): noted as seen now beside what their stations saw
+/// (`personBuilds`), so that what the same ask would write in their log is not held back for a device that said it
+/// takes it. Its word is about itself alone: one that says a build it does not run refuses its own log.
+export function noteBuild(inner: Inner, sub: string, id: string, build: number | null): void {
+  if (build === null) return;
+  const was = buildsHeld(inner, PERSON_BUILDS, sub);
+  const had = was.devices[id];
+  const at = now(inner);
+  if (had !== undefined && had.build >= build && had.at >= at) return;
+  inner.data.put(PERSON_BUILDS, sub, { since: was.since, devices: { ...was.devices, [id]: { build: Math.max(build, had?.build ?? -1), at: Math.max(at, had?.at ?? 0) } } });
+}
+
 /// Whether `sub`'s device here may write in their own log a kind a station or app from before refuses whole (a `ws`
 /// statement, a `web`; rules/AGENTS.md): their log holds one already (those refuse it as it is), or every station of
 /// every workspace they are signed in to here (`personStations`, locked or not) said on GET /lock/person that it serves
