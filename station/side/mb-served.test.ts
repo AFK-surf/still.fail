@@ -446,6 +446,37 @@ test("a routed request is answered by the MoonBit program as the admin API answe
   assert.equal(tooOld.head.status, 426);
   assert.equal(JSON.parse(tooOld.body.toString()).update, true);
 
+  // And one too old for its connection's workspace (serve.ts `movedFloor`, told with its member): under the `floor`
+  // said of the connection (ROOT_OUT_FROM_BUILD where the root's person is out, 2026-11-15: answered before as if nothing
+  // were, its link online where Node's routes told it to update); where none is said (a Node from before it), under
+  // MOVED_FROM_BUILD where the chain moved, as before. Each on a connection of its own whose member is told with `told`
+  // (Served.viewer's arguments after the member), of a device of its own: the first request asked before, so it waits
+  // for it.
+  let devices = 0;
+  const answered = async (told: unknown[], builds: number[]) => {
+    const own = await loadMesh().bind({ secretKey: Buffer.alloc(32, 20 + devices++), alpns: [ALPN], relayUrls: [], discovery: false });
+    t.after(() => own.close());
+    const acceptedOne = station.accept();
+    const one = await own.connect(addrOf(station), ALPN);
+    const oneConn = (await acceptedOne)!;
+    // (its first stream is the credential's, Node's, as on any connection)
+    const hello = await one.openBi();
+    await hello.write(Buffer.from('{"hello":1}\n'));
+    assert.equal(await lineOf((await oneConn.acceptBi())!), '{"hello":1}\n');
+    const at = (build: number) => ask(one, { ...routedHead, headers: { ...routedHead.headers, "stillfail-build": `0.1.${build}` } });
+    const said = (a: { head: any; body: Buffer }) => (a.head.status === 426 ? `426 update=${JSON.parse(a.body.toString()).update}` : String(a.head.status));
+    const first = at(builds[0]!);
+    Reflect.apply(served.viewer, served, [oneConn.handed!, viewer, ...told]);
+    const out = [said(await first)];
+    for (const b of builds.slice(1)) out.push(said(await at(b)));
+    return out;
+  };
+  assert.deepEqual(await answered([true, ROOT_OUT_FROM_BUILD], [ROOT_OUT_FROM_BUILD - 1, ROOT_OUT_FROM_BUILD]), ["426 update=true", "200"], "the root's person out: under ROOT_OUT_FROM_BUILD refused, at it answered");
+  assert.deepEqual(await answered([true, MOVED_FROM_BUILD], [MOVED_FROM_BUILD - 1, MOVED_FROM_BUILD]), ["426 update=true", "200"], "the chain moved: under MOVED_FROM_BUILD refused, at it answered");
+  assert.deepEqual(await answered([false, null], [MOVED_FROM_BUILD - 1]), ["200"], "not moved: no floor");
+  assert.deepEqual(await answered([true], [MOVED_FROM_BUILD - 1, MOVED_FROM_BUILD, ROOT_OUT_FROM_BUILD - 1]), ["426 update=true", "200", "200"], "moved, no floor said (a Node from before it): the old rule");
+  assert.equal(given.length, 1, "none of them given to Node");
+
   // another protocol's connections are not routed: its request comes to Node
   const acceptedOther = station.accept();
   const other = await device.connect(addrOf(station), OTHER);
@@ -460,44 +491,3 @@ test("a routed request is answered by the MoonBit program as the admin API answe
   assert.equal(JSON.parse(await lineOf(o2)).path, "/admin/api/chats?shared=1");
 });
 
-// What it refuses a core too old for, of each connection (serve.ts `movedFloor`, told with its member): under the
-// connection's `floor` where one is said (ROOT_OUT_FROM_BUILD where the root's person is out, 2026-11-15: answered
-// before as if nothing were, its link online where Node's routes told it to update); where none is said (a Node from
-// before it), under MOVED_FROM_BUILD where the chain moved, as before.
-test("a core under the floor told of its connection is told to update by the program; one at it answered; a connection told no floor goes by whether the chain moved", { skip, timeout: 60_000 }, async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "mbsf-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const data = join(dir, "data");
-  const store = Store.open(join(data, "stillfail.db"), join(data, "archive"));
-  t.after(() => store.close());
-  const f = await front(dir);
-  t.after(() => f.stop());
-  const mesh = withFront(loadMesh(), f.socket);
-  const station = await mesh.bind({ secretKey: Buffer.alloc(32, 5), alpns: [ALPN], relayUrls: [], discovery: false });
-  t.after(() => station.close());
-  const device = await loadMesh().bind({ secretKey: Buffer.alloc(32, 6), alpns: [ALPN], relayUrls: [], discovery: false });
-  t.after(() => device.close());
-  const served = new Served(binary!, data, async () => ({ status: 200, headers: { "content-type": "application/json" }, body: Buffer.from('{"from":"node"}') }), () => {});
-  t.after(() => served.close());
-  assert.equal(await station.route!(ALPN, await served.start(), SERVED_ROUTES), true);
-  const viewer = { email: "p@x", name: "P", workspace: "ws", role: "owner", home: true };
-  const at = (build: number) => ({ method: "GET", path: "/admin/api/chats?shared=1", headers: { "stillfail-build": `0.1.${build}`, "stillfail-runtimes": RUNTIME_KINDS.join(","), "stillfail-lang": "en" } });
-  /// What requests of `builds` are answered on a connection of its own whose member is told with `said` (Served.viewer's
-  /// arguments after the member: whether the chain moved, the floor). Asked first, so each waits for its member.
-  const answered = async (said: unknown[], builds: number[]) => {
-    const accepted = station.accept();
-    const theirs = await device.connect(addrOf(station), ALPN);
-    const conn = (await accepted)!;
-    const asked = builds.map((b) => ask(theirs, at(b)));
-    Reflect.apply(served.viewer, served, [conn.handed!, viewer, ...said]);
-    return Promise.all(asked.map(async (p) => {
-      const a = await p;
-      return a.head.status === 426 ? `426 update=${JSON.parse(a.body.toString()).update}` : String(a.head.status);
-    }));
-  };
-  assert.deepEqual(await answered([true, ROOT_OUT_FROM_BUILD], [ROOT_OUT_FROM_BUILD - 1, ROOT_OUT_FROM_BUILD]), ["426 update=true", "200"], "the root's person out: under ROOT_OUT_FROM_BUILD refused, at it answered");
-  assert.deepEqual(await answered([true, MOVED_FROM_BUILD], [MOVED_FROM_BUILD - 1, MOVED_FROM_BUILD]), ["426 update=true", "200"], "the chain moved: under MOVED_FROM_BUILD refused, at it answered");
-  assert.deepEqual(await answered([false, null], [MOVED_FROM_BUILD - 1]), ["200"], "not moved: no floor");
-  // a Node from before `floor`: says only whether the chain moved
-  assert.deepEqual(await answered([true], [MOVED_FROM_BUILD - 1, MOVED_FROM_BUILD, ROOT_OUT_FROM_BUILD - 1]), ["426 update=true", "200", "200"], "moved, no floor said: the old rule");
-});

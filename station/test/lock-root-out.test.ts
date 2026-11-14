@@ -289,11 +289,14 @@ test("the MoonBit program is told the floor of a connection's workspace: MOVED_F
   const stream = await conn.openBi();
   await writeLine(stream, { method: "GET", path: "/admin/api/who", headers: {} });
   await stream.finish();
-  assert.equal((await new Reader(stream).line()).status, 200);
+  const answer = await new Reader(stream).line();
+  // (the connection as it is: closed, and why, or open)
+  const open = async () => Promise.race([conn.closed(), Promise.resolve("open")]);
+  assert.deepEqual([answer.status, await open()], [200, "open"], JSON.stringify(answer));
   assert.deepEqual(told, [{ email: "bob@x", moved: true, floor: MOVED_FROM_BUILD }], "its chain moved, she in by `~root`");
   w.bob.say("member.remove", { sub: "alice", cancels: [w.alice.genesis] });
   bring(c, w.bob);
   assert.equal(c.rootOut(null), true);
-  assert.deepEqual(told.at(-1), { email: "bob@x", moved: true, floor: ROOT_OUT_FROM_BUILD }, "told again as she goes out, the connection open");
+  assert.deepEqual([told.at(-1), await open()], [{ email: "bob@x", moved: true, floor: ROOT_OUT_FROM_BUILD }, "open"], "told again as she goes out, the connection open");
   conn.close(0, "done");
 });
