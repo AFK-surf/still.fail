@@ -194,7 +194,10 @@ fn rs_composer(
   with_cards? : Bool = true,
 ) -> Array[String] {
   let out : Array[String] = []
-  let (t, src, k) = rs_open(s)
+  // (off the device's pixels, as this was written and holds on main: on them the last row goes by whole pixels and
+  // the composer's ground, the old view's, does not, so at the end (b) reads 0.5-0.6 pt on both screens at every
+  // lateness, a pixel of the row's: the coordinator of the migration's to rule, #6134)
+  let (t, src, k) = rs_open(s, on_pixels=false)
   if !at_end {
     rs_read_up(t, s)
   }

@@ -90,6 +90,9 @@ fn agent_said_node(
         message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, message_place(@signals.untracked(m)))
         // (its words, or the card in their place: one in the other's place as the post says)
         b.pick(fn() { agent_card_kind(m()) == "" }, fn(p, words) {
+          // (what is read in it starts here, its words or the card in their place, under its head line and what it
+          // quotes: what a page's list holds what shows by, where it starts (View::read_from))
+          p.read_from() |> ignore
           if words {
             // (its words and its files one piece, none apart, as the old list holds them to be picked: pickable's
             // pick_fill; a letter's, drawn by the old view alone, has them 4 apart)

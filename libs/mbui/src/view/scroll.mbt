@@ -108,6 +108,9 @@ pub struct Scroll {
   /// View::scrolls_window's, a plain column's View::scrolls'): given the node before the press is done, what to do once
   /// it is
   priv mut pressed_said : (View) -> () -> Unit
+  /// what it does as a node in it says what is read in its block starts at it (View::read_from): a page's list's
+  /// (View::scrolls_window) keeps it for that block; elsewhere nothing
+  priv mut read_from_said : (View) -> Unit
   /// whether it is at its foot, followed, told only as that changes (Scroll::at_foot_now): a page's list's by its own
   /// blocks and anchor (View::scrolls_window), else by how far it goes as last laid out (View::scrolls)
   priv mut at_foot_said : (() -> Bool)?
@@ -187,6 +190,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     held: false,
     held_said: fn() {  },
     pressed_said: fn(_) { fn() {  } },
+    read_from_said: fn(_) {  },
     at_foot_said: None,
     foot_covered: fn() { 0.0 },
     top_cover: fn() { 0.0 },
@@ -1225,6 +1229,7 @@ pub fn View::scrolls(
     s.held = false
     s.held_said = fn() {  }
     s.pressed_said = fn(_) { fn() {  } }
+    s.read_from_said = fn(_) {  }
     s.fill = fn(_, _, _) {  }
     s.fill_put = fn() {  }
     s.whole = None

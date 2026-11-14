@@ -136,7 +136,8 @@ fn rs_answer(k : RsCore) -> Unit {
 
 ///|
 /// The long chat opened on screen `s` with its page made as nodes, at its end and at rest, the core answering at once.
-fn rs_open(s : (String, Double, Double, Int)) -> (@ui.Tester, Source, RsCore) {
+/// Its list's rows on the device's pixels, but where a caller says not (`on_pixels`).
+fn rs_open(s : (String, Double, Double, Int), on_pixels? : Bool = true) -> (@ui.Tester, Source, RsCore) {
   let (_, w, h, platform) = s
   new_run()
   @sf.presenters_reset()
@@ -158,14 +159,21 @@ fn rs_open(s : (String, Double, Double, Int)) -> (@ui.Tester, Source, RsCore) {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, begun=fn() {
     @sfbase.window_tall.val = h
   })
+  // (a list's rows on the device's pixels, as every host lays them: what is held is where things are drawn, the scroll
+  // moving by whole pixels; off them, as the Tester's own default, the list counts fractions that Scroll::drawn_by draws
+  // put on the pixel, up to half a pixel apart and otherwise as the fraction changes, a mode no device runs)
+  t.set_rows_on_pixels(on_pixels)
+  // (each frame looked at as it was drawn, before what the core answers by then is told: told after the look, it is
+  // laid out at once, and the tree read then is between that answer and the frame that draws it, a frame no device
+  // draws)
   t.each_frame(
     Some(fn() {
       k.now = t.time()
-      rs_answer(k)
       match k.look {
         Some(f) => f()
         None => ()
       }
+      rs_answer(k)
     }),
   )
   rs_run(t, long_opened_ms)
@@ -219,16 +227,41 @@ fn rs_ground(t : @ui.Tester) -> (Double, Double, Double)? {
 }
 
 ///|
-/// The first message of the long chat wholly in sight under the page's head and over the composer: its number and the
-/// top of its words.
+/// The bottom of the page's head (the bar the list runs under): of what is drawn at the window's top across the chat's
+/// pane (over the composer's ground, rs_ground), glass (小屏's bar) or a ground (大屏's), less than a third of the window
+/// `h` tall, the one reaching lowest.
+fn rs_bar(t : @ui.Tester, h : Double) -> Double? {
+  guard rs_ground(t) is Some((gx, _, gw)) else { return None }
+  guard @ui.view_tree() is Some(tree) else { return None }
+  let mut at : Double? = None
+  for d in tree.drawn() {
+    if d.y.abs() < 0.5 &&
+      d.h < h / 3.0 &&
+      d.w > 150.0 &&
+      d.x < gx + gw &&
+      d.x + d.w > gx &&
+      (d.glass is Some(_) || d.ground != 0L) {
+      match at {
+        Some(b) if b >= d.y + d.h => ()
+        _ => at = Some(d.y + d.h)
+      }
+    }
+  }
+  at
+}
+
+///|
+/// The message read: the first of the long chat whose words start at or under the page's head (rs_bar) and end
+/// over the composer's: its number and the top of its words.
 fn rs_read(t : @ui.Tester, k : RsCore, s : (String, Double, Double, Int)) -> (Int, Double)? {
   let bottom = match rs_ground(t) {
     Some((_, y, _)) => y
     None => s.2
   }
+  let bar = rs_bar(t, s.2).unwrap_or(0.0)
   for n in k.l.first.get()..=k.l.last.get() {
     match t.rect_of("第\{n}条：") {
-      Some((_, y, _, h)) if y >= s.2 * 0.12 && y + h <= bottom => return Some((n, y))
+      Some((_, y, _, h)) if y >= bar - 0.001 && y + h <= bottom => return Some((n, y))
       _ => ()
     }
   }
@@ -242,13 +275,47 @@ fn rs_top(t : @ui.Tester, n : Int) -> Double? {
 }
 
 ///|
-/// At the list's end: how far the composer's ground stands under the lowest words drawn over it across its width.
+/// Where the words of the window's tree are that what holds them cuts away whole (a part on its way cut to itself, a
+/// clip), as they are drawn now: Tester::words lists them, but they are drawn nowhere (a card closing over the last
+/// row: its options laid out whole at the size it comes from, under the part's foot as it shrinks).
+fn rs_cut_words() -> Array[(Double, Double)] {
+  guard @ui.view_tree() is Some(tree) else { return [] }
+  let all = tree.drawn_held()
+  let out = []
+  for e in all {
+    let (d, up, _) = e
+    guard d.words != "" else { continue }
+    let mut h = up
+    let mut cut = false
+    while h >= 0 && !cut {
+      let (hd, hu, _) = all[h]
+      if hd.clips && (d.y >= hd.y + hd.h || d.y + d.h <= hd.y) {
+        cut = true
+      }
+      h = hu
+    }
+    if cut {
+      out.push((d.x, d.y))
+    }
+  }
+  out
+}
+
+///|
+/// At the list's end: how far the composer's ground stands under the lowest words drawn over it across its width (not
+/// those cut away whole: rs_cut_words).
 fn rs_end_gap(t : @ui.Tester) -> Double? {
   guard rs_ground(t) is Some((gx, gy, gw)) else { return None }
+  let cut = rs_cut_words()
   let mut low : Double? = None
   for wd in t.words() {
     let (_, x, y, _, h, a) = wd
-    if a > 0.0 && x >= gx && x < gx + gw && y >= 0.0 && y + h <= gy + 0.5 {
+    if a > 0.0 &&
+      x >= gx &&
+      x < gx + gw &&
+      y >= 0.0 &&
+      y + h <= gy + 0.5 &&
+      !cut.iter().any(fn(c) { c.0 == x && c.1 == y }) {
       if low is None || low.unwrap() < y + h {
         low = Some(y + h)
       }

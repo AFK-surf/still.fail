@@ -150,6 +150,8 @@ fn mine_said_node(
         at + "/f",
       )
       col.show(fn() { m().text != "" }, fn(b) {
+        // (what is read in it starts here, its bubble's words: View::read_from)
+        b.read_from() |> ignore
         let cards = message_link_card(src, here.station, "", m)
         mine_bubble_node(
           b,
@@ -305,6 +307,8 @@ fn person_said_node(
         let at = message_place(@signals.untracked(m))
         message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, at)
         b.show(fn() { m().text != "" }, fn(w) {
+          // (what is read in it starts here, its words under its head line: View::read_from)
+          w.read_from() |> ignore
           person_words_node(w, m, found~, found_at~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
         })
         message_files_node(
