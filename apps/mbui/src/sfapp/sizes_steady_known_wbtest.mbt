@@ -17,7 +17,7 @@ fn init {
     ("src/sfapp/daily_paths_wbtest.mbt", 2),
     ("src/sfapp/desk_service_wbtest.mbt", 1),
     ("src/sfapp/home_wbtest.mbt", 1),
-    ("src/sfapp/menu_node_wbtest.mbt", 12),
+    ("src/sfapp/menu_node_wbtest.mbt", 11),
     // (the old composer's caption line 添加说明（可选）, an old fault: its place steps as the quoted picture's room comes
     // in, main -4.82, -12.41, -9.65 a frame round 1566.67, under what is judged; with every way at its exact moment
     // -4.74, -12.83, -9.41, over it. Taken away as the node composer takes its place)
