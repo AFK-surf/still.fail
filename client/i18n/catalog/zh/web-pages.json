@@ -886,6 +886,7 @@
   "web-pages.stations.offline": "离线",
   "web-pages.stations.software": "软件与更新",
   "web-pages.stations.softwareOffline": "station 离线，连接后可查看更新",
+  "web-pages.stationUpdates.app": "当前客户端",
   "web-pages.stations.settingsOffline": "station 离线，连接后可查看和修改设置",
   "web-pages.stations.uses": "{name} 占用",
   "web-pages.stations.total": "共 {total}",

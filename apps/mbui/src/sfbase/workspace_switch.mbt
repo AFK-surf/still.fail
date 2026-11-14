@@ -478,7 +478,6 @@ pub fn page_opens_node(v : @view.View, src : Source) -> Unit {
 /// (opens_ahead_node), never waited for (Home shows, a switch is done, the splash goes, as before they were asked
 /// there). Whether all of it is answered.
 pub fn shell_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
-  ignore(src)
   let of = Json::string(ws)
   let reads : Array[(String, Map[String, Json])] = [
     ("lock", { "workspace": of }),
@@ -490,6 +489,10 @@ pub fn shell_opens(src : Source, ws : String, ask : (String, Map[String, Json]) 
     ("notify", {}),
     ("notify", notify_params(ws)),
   ]
+  // (the stations' newer releases waiting for this person: sfpages station_updates.mbt, the bars' key of them)
+  if (src.asks_station_updates)() {
+    reads.push(("stationUpdates", { "scope": of }))
+  }
   reads.fold(init=true, fn(all, r) { opens_answered(ask(r.0, r.1)) && all })
 }
 

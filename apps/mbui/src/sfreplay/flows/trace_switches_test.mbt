@@ -46,6 +46,8 @@
 /// came.
 /// MBUI_SWITCH_AHEAD (2026-11-14: a choice that switches what its page reads asks ahead of the switch, sfbase's
 /// switch_answered: 用量's days and split, a station's page's parts) off in all 81 as it came.
+/// MBUI_STATION_UPDATES (2026-11-14: the stations' newer releases waiting for this person asked with the shell, their
+/// key beside the app's update) off in all 81 as it came.
 let switches_known : Map[String, Int] = {
   "MBUI_PLACES_BAR": 72,
   "MBUI_DEVICES": 73,
@@ -60,6 +62,7 @@ let switches_known : Map[String, Int] = {
   "MBUI_PROFILE_ROWS": 81,
   "MBUI_HOME_SAME": 81,
   "MBUI_SWITCH_AHEAD": 81,
+  "MBUI_STATION_UPDATES": 81,
 }
 
 ///|

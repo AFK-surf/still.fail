@@ -97,6 +97,8 @@ let corner_modes : Array[String] = {
     "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts", "settings-fonts-code",
     "settings-decisions", "settings-completion", "settings-bars", "settings-about", "settings-changelog", "settings-prices",
     "settings-notify-off", "settings-notify-denied",
+    // (the stations' newer releases waiting: their key over Home, their dialog open: sfpages station_updates.mbt)
+    "home-station-updates", "station-updates", "home-station-updates-app", "station-updates-app",
   ]
   // (and the card to share in each of its other looks: share_looks.mbt)
   for k in @sfpages.share_look_keys()[1:] {

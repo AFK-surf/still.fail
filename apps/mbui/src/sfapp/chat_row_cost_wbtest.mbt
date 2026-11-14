@@ -13,7 +13,9 @@ let row_nodes_large_most : Int = 85
 
 ///|
 /// The most the frame a workspace is switched in on 小屏 may make, let go and lay out (the list 25 ms late).
-let switch_frame_most : (Int, Int, Int) = (551, 545, 407)
+// (2026-11-14: 551, 545, 407 before Home's bar held its key of the stations' newer releases, let go of in the workspace
+// left and made in the one come to)
+let switch_frame_most : (Int, Int, Int) = (560, 554, 414)
 
 ///|
 /// The nodes each of the first `n` rows of the real workspace's list is made of, alone, at rest, in a window `w` by

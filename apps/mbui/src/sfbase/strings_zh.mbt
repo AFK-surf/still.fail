@@ -2734,4 +2734,6 @@ let zh : Map[String, String] = {
   "web-pages.screen.device.back": "返回",
   "web-pages.screen.debug.paneHide": "收起右栏",
   "web-pages.screen.debug.paneShow": "展开右栏",
+  "desktop.update.update": "更新",
+  "web-pages.stationUpdates.app": "当前客户端",
 }

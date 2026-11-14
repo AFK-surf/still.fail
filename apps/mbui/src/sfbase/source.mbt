@@ -155,6 +155,9 @@ pub(all) struct Source {
   /// that is answered (switch_answered): not of a run seen again that was recorded before the app did, whose choice
   /// switched at the press and asked as the page then read
   switches_ahead : () -> Bool
+  /// whether the stations' newer releases waiting for this person are asked for (`stationUpdates`: their key beside
+  /// the app's update, sfpages station_updates.mbt): not of a run seen again that was recorded before the app did
+  asks_station_updates : () -> Bool
 }
 
 ///|
@@ -239,10 +242,12 @@ fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> 
 /// was, core_signal_wbtest.mbt). Home's own lists too (home_lasting): on 小屏 Home switched away from rests on the
 /// stack's shelf and lets go of what it read, and taken back read it anew; shown only as the core answered, its long
 /// jobs and its rows were gone meanwhile and then every row made again and coming in as new (the owner's phone,
-/// 2026-11-12: 50–68 ms, the rows under 今天 drawn as slivers through that frame; bar_places_kept_wbtest.mbt).
+/// 2026-11-12: 50–68 ms, the rows under 今天 drawn as slivers through that frame; bar_places_kept_wbtest.mbt). So is
+// what Home's bar shows of the stations' newer releases (`stationUpdates`: its key made again as Home was taken back).
 // kept across runs: a value (nothing of it changes)
 let lasting : Array[String] = [
   "workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive", "chats", "longJobs", "changelog",
+  "stationUpdates",
 ]
 
 ///|
@@ -660,6 +665,7 @@ pub fn made_source(
     asks_devices: fn() { true },
     asks_outline: fn() { true },
     switches_ahead: fn() { true },
+    asks_station_updates: fn() { true },
   }
 }
 

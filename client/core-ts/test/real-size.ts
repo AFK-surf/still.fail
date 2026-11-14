@@ -472,7 +472,8 @@ export function overviewOf(now: number, station: number): J {
     consoleSignIn: true,
     accountSubsets: true,
     updates: [
-      VERSION("station", "still.fail", "0.1.7018", "0.1.7020", { channel: "beta", auto: true, idleOnly: true }),
+      // (Willow's updated by a person: its newer release offered, views/station-updates.ts)
+      VERSION("station", "still.fail", "0.1.7018", "0.1.7020", { channel: "beta", auto: station !== 1, idleOnly: true }),
       VERSION("claude", "Claude Code", "2.4.12", "2.4.14"),
       VERSION("codex", "Codex", "0.98.0", "0.98.0"),
       VERSION("dsh", "DeepSeek Harness", "1.3.2", "1.3.2"),

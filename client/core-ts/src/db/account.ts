@@ -740,6 +740,12 @@ export class AccountDb {
     return this.#overviewColumn(station, "formerly");
   }
 
+  /// A station's own software as its overview lists it (schema.ts overviewSoftwareOf), undefined while no overview is
+  /// held or it lists none: kept beside its part (`station_part.software`).
+  overviewSoftware(station: string): J {
+    return this.#overviewColumn(station, "software");
+  }
+
   /// What the workspace's profiles read of a station's overview (schema.ts overviewProfiledOf), undefined while no
   /// overview is held: kept beside its part (`station_part.profiled`).
   overviewProfiled(station: string): J {

@@ -545,6 +545,9 @@ pub let trace_switches : Array[String] = [
   // answers in the run's order, where what the run read after the switch (the part's own asks) was sent before the
   // answers to what the press now asks ahead came, so a replay asking ahead would wait on itself)
   "MBUI_SWITCH_AHEAD",
+  // (the stations' newer releases waiting for this person, `stationUpdates`, asked with the shell and read by their key
+  // beside the app's update: sfpages station_updates.mbt. A trace without it has none asked, as its run's app did)
+  "MBUI_STATION_UPDATES",
 ]
 
 ///|

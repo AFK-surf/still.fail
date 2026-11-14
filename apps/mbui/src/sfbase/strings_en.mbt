@@ -2762,4 +2762,6 @@ let en : Map[String, String] = {
   "web-pages.screen.device.back": "Back",
   "web-pages.screen.debug.paneHide": "Hide the side panel",
   "web-pages.screen.debug.paneShow": "Show the side panel",
+  "desktop.update.update": "Update",
+  "web-pages.stationUpdates.app": "This app",
 }
