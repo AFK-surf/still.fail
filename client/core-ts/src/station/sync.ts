@@ -1603,6 +1603,8 @@ export class StationsSync {
       // found after they were asked for): read again where shown or held.
       case "presets":
         if (this.#core.store.inUse({ topic: "presets", station: address }) || this.#links.get(address)?.memory.has(PRESETS)) this.presetsShown(address);
+        // (and the person's records carried again: views/presets.ts)
+        for (const part of this.also) part.event(address, name, data);
         return;
       // A login's terminal as it changes (while one is shown).
       case "login-screen": {

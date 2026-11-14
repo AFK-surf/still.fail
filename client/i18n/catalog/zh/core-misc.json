@@ -356,5 +356,8 @@
   "core-misc.feedback.team": "still.fail 团队",
   "core-misc.feedback.agent": "agent",
   "core-misc.feedback.someone": "有人",
-  "core-misc.feedback.heading": "still.fail 团队回复了 FB-{number}"
+  "core-misc.feedback.heading": "still.fail 团队回复了 FB-{number}",
+  "core-misc.presets.none": "这个预设已经不在了，或者还没读到：重新打开预设列表再试",
+  "core-misc.presets.notYours": "这是别人的预设，只能查看、用它开对话或复制一份成自己的再改",
+  "core-misc.presets.signedOut": "没有能进入这个工作区的已登录账号：先登录再改预设"
 }

@@ -184,6 +184,9 @@ export type Call =
   | { kind: "ways"; name: "setRelays" | "setWay"; workspace: string; params: Record<string, unknown> }
   /// A station's name and mark changed from the app (views/station-marks.ts): on the station, else on still.fail cloud.
   | { kind: "stationMark"; workspace: string; station: string; params: Record<string, unknown> }
+  /// A person's own preset made, changed, deleted, or someone else's copied into theirs (views/presets.ts): on this
+  /// device at once, carried to the workspace's stations after; `station` the page's (a new one's `home`).
+  | { kind: "presets"; name: "add" | "put" | "delete" | "copy"; station: string; params: Record<string, unknown> }
   | { kind: "driveTransfer"; action: "start" | "cancel" | "retry"; params: Record<string, unknown> }
   /// A station's files as they are browsed (views/browse.ts): `drive.browse` and the rest of drive-browse.ts's CALLS,
   /// with what each takes.
@@ -301,6 +304,7 @@ export function counts(call: Call, name: string): boolean {
       return call.name !== "state" && call.name !== "lock" && call.name !== "open";
     case "ways":
     case "stationMark":
+    case "presets":
       return true;
     default:
       return false;
@@ -399,6 +403,11 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
   if (name === "workspace.renameStation") {
     const p = read(params, [["workspace", S, "req"], ["station", S, "req"]]);
     return { kind: "stationMark", workspace: p.workspace as string, station: p.station as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  }
+  if (name === "preset.add" || name === "preset.put" || name === "preset.delete" || name === "preset.copy") {
+    const p = read(params, [["station", S, "req"]]);
+    StationAddr.parse(p.station as string);
+    return { kind: "presets", name: name.slice(7) as "add" | "put" | "delete" | "copy", station: p.station as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
   if (name === "workspace.setRelays" || name === "workspace.setWay") {
     const p = read(params, [["workspace", S, "req"]]);

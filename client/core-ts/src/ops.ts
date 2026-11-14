@@ -471,7 +471,9 @@ function stationOp(name: string, params: unknown): Request | null {
     }
     case "session.new":
       return op("POST", () => "/sessions", p.pick(["runtime", "profile", "profiles", "model", "effort", "fast", "context", "preset"]), { kind: "session", key: null });
-    // The workspace's presets on the station: what a chat starts knowing, chosen as it is opened.
+    // The workspace's presets on the station: what a chat starts knowing, chosen as it is opened. A person's own are
+    // made, changed and deleted on the device and carried to the stations (views/presets.ts, core/calls.ts `presets`):
+    // these requests are what is still sent to a station from before (one that serves no /presets/kept), as before.
     case "preset.add":
       return op("POST", () => "/presets", { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "", ...p.pick(["autoStation", "stations", "model"]) }, { kind: "presets" });
     case "preset.put":
