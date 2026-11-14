@@ -15,7 +15,8 @@ import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer, sender } from "../src/sessions/messages.ts";
 import { handedOf } from "../src/store/rows.ts";
 import { DecisionSessionsUnavailable } from "../src/store/legacy-decision-session.ts";
-import { CREATE, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
+import { CREATE, CREATE_PRESET, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
+import { presetCopyOf } from "../src/sessions/presets.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
 import { forPeer } from "../src/sessions/others.ts";
 import { makeStore } from "../src/read/store.ts";
@@ -1464,6 +1465,70 @@ test("an agent opens a chat on another station: made there once per key, its fir
   });
   assert.ok((await near.refused(keyA, "chat_create", { key: "old", station: "far", text: "x" })).includes("not updated yet"));
   assert.ok((await near.refused(keyA, "chat_create", { key: "nowhere", station: "mars", text: "x" })).includes("orchard"));
+  await near.close();
+  await far.close();
+});
+
+test("an agent opens a chat with a preset as a person would in the app: taken as it is, nothing given beside what it names", async () => {
+  const near = new Rig({ link: true });
+  near.edit((raw) => {
+    raw.profiles[0].models = ["opus", "sonnet"];
+  });
+  const far = new Rig({ link: true, place: { workspace: "ws", station: "far" } });
+  const a = say("<@UBOT> review it");
+  await near.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  const asked: string[] = [];
+  near.hub.onPeer(async (_station, request) => {
+    if (request.method === "peers") return { workspace: "ws", stations: [{ id: "st", name: "cedar" }, { id: "far", name: "orchard" }], current: true };
+    asked.push(request.method);
+    if (request.method === CREATE || request.method === CREATE_PRESET) return createForPeer(far.hub, "st", request);
+    return fromPeer(far.hub, "st", request);
+  });
+  const review = near.hub.presets.add(null, { name: "Review", dirs: [], instructions: "Read every line.", model: { model: "opus", runtime: "claude" } }, "local");
+  near.hub.presets.add(null, { name: "Loose", dirs: [], instructions: "" }, "local");
+  near.hub.presets.add(null, { name: "Far", dirs: [], instructions: "On orchard.", station: "ws/far" }, "local");
+
+  // One that names its model runs it as it says; nothing of it can be given beside it.
+  const said = await near.call(keyA, "chat_create", { key: "review", text: "review the PR", preset: "review" });
+  const child = near.store.openedBy(keyA)[0]!.child;
+  assert.ok(said.includes("this station"), said);
+  assert.deepEqual([near.session(child).runtime, near.session(child).model], ["claude", "opus"]);
+  assert.equal(presetCopyOf(near.session(child).workspace)?.id, review.id);
+  for (const beside of [{ model: "sonnet" }, { runtime: "claude" }, { effort: "high" }, { fast: true }, { context: 200_000 }]) {
+    const why = await near.refused(keyA, "chat_create", { key: "beside", text: "x", preset: review.id, ...beside });
+    assert.ok(why.includes("leave runtime, model, effort, fast and context out"), why);
+  }
+  // One that names no model is chosen as without one, and kept with the chat.
+  await near.call(keyA, "chat_create", { key: "loose", text: "x", preset: "Loose", model: "sonnet" });
+  const loose = near.store.openedBy(keyA).find((o) => o.key === "loose")!.child;
+  assert.deepEqual([near.session(loose).model, presetCopyOf(near.session(loose).workspace)?.name], ["sonnet", "Loose"]);
+  // None named: no preset, whatever the opener's chat has.
+  await near.call(keyA, "chat_create", { key: "none", text: "x", model: "sonnet" });
+  const none = near.store.openedBy(keyA).find((o) => o.key === "none")!.child;
+  assert.equal(presetCopyOf(near.session(none).workspace), null);
+  // An unknown one: told those there are.
+  const unknown = await near.refused(keyA, "chat_create", { key: "u", text: "x", preset: "Nope" });
+  assert.ok(unknown.includes("Review, Loose, Far"), unknown);
+
+  // One that names a station opens there with station left out, its copy taken by that station; on another, refused.
+  asked.length = 0;
+  await near.call(keyA, "chat_create", { key: "far", text: "x", preset: "Far", runtime: "claude" });
+  assert.equal(asked[0], CREATE_PRESET);
+  const there = far.store.listSessions().map((s) => s.key);
+  assert.equal(there.length, 1);
+  const copy = presetCopyOf(far.session(there[0]!).workspace);
+  assert.deepEqual([copy?.name, copy?.instructions], ["Far", "On orchard."]);
+  const elsewhere = await near.refused(keyA, "chat_create", { key: "far2", text: "x", preset: "Far", station: "cedar" });
+  assert.ok(elsewhere.includes("only on station far"), elsewhere);
+  // A station from before presets reached chat_create: refused, nothing opened there without the preset.
+  near.hub.onPeer(async (_station, request) => {
+    if (request.method === "peers") return { stations: [{ id: "far", name: "orchard" }] };
+    throw new Refused("remote tasks are not enabled for this source station");
+  });
+  const old = await near.refused(keyA, "chat_create", { key: "old", text: "x", preset: "Far" });
+  assert.ok(old.includes("not updated yet") && old.includes("with a preset"), old);
   await near.close();
   await far.close();
 });
