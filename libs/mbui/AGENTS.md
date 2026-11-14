@@ -48,7 +48,11 @@ yet and you can add one, add it.
   and shows what it shows now once that is gone and its place holds it whole, its place's way to a smaller one waiting
   for it, of no way said with it, setting out then in the one way of what goes then; a side that makes nothing takes
   no room and no gap at rest, as a show's that is not there: never both seen, no words cut or moved by the way
-  (`src/view/pick_leave.mbt`; a video's capsule; the coordinator of the migration, 2026-11-11 and 2026-11-14). Say
+  (`src/view/pick_leave.mbt`; a video's capsule; the coordinator of the migration, 2026-11-11 and 2026-11-14). Under a
+  page's list whose insides join its way, such a pick is one thing changing look as a key does, and a show's part going
+  or coming (`leave` or not) goes as a key does: its place's way sets out at the cause in the list's group, waiting for
+  nothing, and what goes and what comes are drawn by how far that way has gone (view's `row_held_at`, about their start and top: neither seen at half or less), never cut
+  (`src/view/list_part_leave_test.mbt`; the coordinator of the migration, 2026-11-14: a card answered). Say
   `at_once=true` only where one is in another's place the column does not see (an old view's drawn there, one sidebar
   for another), and on what a row of a page's list shows only while it is the last of its run (its time line under
   it): gone in the change by which a key comes after it, as the old page built the row again without it, the key

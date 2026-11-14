@@ -8278,7 +8278,8 @@ fn View::take_in(self : View, v : View) -> Unit {
 /// `leave`: it leaves over that long first (View::leave), and no shorter than a move it holds that holds its leaving
 /// is (View::moved_by's `holds_leaving`): its end what that move says it is, at the size it is laid out. Down a column
 /// it makes its way in and closes it as it goes (View::comes, View::goes), but as it is made with what holds it, or
-/// `at_once`, or where it is said to go over a time (`leave`: its coming and going its own); along a
+/// `at_once`, or where it is said to go over a time (`leave`: its coming and going its own; but under a page's list, where
+/// what goes and comes goes as a key does, `leave` or not: pick_leave.mbt's head); along a
 /// row the same across where `along_row` is said (Tree::along_row_at; with `at_once`, or where no row lays it out, a
 /// fault).
 #callsite(autofill(loc))
@@ -8307,6 +8308,10 @@ pub fn View::show(
         match gone.val {
           Some(g) if g.alive() && slot.tree.nodes[g.at].left_at >= 0.0 => {
             slot.come_back(g)
+            // (under a page's list, drawn by its way back: pick_leave.mbt's head)
+            if !at_once && slot.tree.pick_held(g) {
+              held_on_way(g, false)
+            }
             had.val = Some(g)
           }
           _ => {
@@ -8314,8 +8319,13 @@ pub fn View::show(
             let v = slot.box(then, loc~)
             // (one that made nothing: no way to make)
             let none = slot.tree.structural(v, said)
-            if !first.val && !at_once && leave <= 0.0 && !none {
+            // (under a page's list, as a key coming, `leave` or not: pick_leave.mbt's head)
+            let held = !first.val && !at_once && !none && slot.tree.pick_held(v)
+            if !first.val && !at_once && (leave <= 0.0 || held) && !none {
               slot.arrives(v)
+            }
+            if held {
+              held_on_way(v, false)
             }
             had.val = Some(v)
           }
@@ -8325,7 +8335,17 @@ pub fn View::show(
       (false, Some(v)) => {
         slot.tree.work.structure = slot.tree.work.structure + 1
         had.val = None
-        gone.val = if slot.goes(v, leave, at_once || leave > 0.0, swaps=true) { Some(v) } else { None }
+        // (under a page's list, as a key going, `leave` or not: its room given back from the cause in the list's one way,
+        // what it holds drawn by that way, never cut: pick_leave.mbt's head)
+        let held = !at_once && slot.tree.pick_held(v)
+        gone.val = if slot.goes(v, if held { 0.0 } else { leave }, !held && (at_once || leave > 0.0), swaps=true) {
+          Some(v)
+        } else {
+          None
+        }
+        if held {
+          held_on_way(v, true)
+        }
       }
       _ => ()
     }
