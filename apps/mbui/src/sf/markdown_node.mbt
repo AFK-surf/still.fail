@@ -51,7 +51,8 @@ pub fn markdown_node(
     // (its words asked of the core as it is made and as they change, none where it is told their reading; read by it
     // till they change or it is let go: md_read_by, as table_node's)
     let reading = Ref("")
-    col.reacts(fn() { if tree() is None { text() } else { "" } }, fn(now) {
+    let raw_text = @signals.computed(fn(_) { if tree() is None { text() } else { "" } }, same=fn(a, b) { a == b })
+    col.reacts(fn() { raw_text.get() }, fn(now) {
       md_read_by(now, 1)
       md_read_by(reading.val, -1)
       reading.val = now
@@ -90,12 +91,12 @@ pub fn markdown_node(
       places: files is Some(_),
       screens,
     }
-    let blocks = fn() { md_node_blocks(text(), tree()) }
+    let blocks = @signals.computed(fn(_) { md_node_blocks(text(), tree()) })
     if one_line {
       // (its first block's words on one line, cut short: markdown's one_line)
-      md_words_node(col, md, fn() { first_words(blocks()) }, md.size, 0, wrap=false, cut=true)
+      md_words_node(col, md, fn() { first_words(blocks.get()) }, md.size, 0, wrap=false, cut=true)
     } else {
-      md_blocks_node(col, md, blocks, false)
+      md_blocks_node(col, md, fn() { blocks.get() }, false)
     }
   })
 }
@@ -177,28 +178,28 @@ fn md_node_blocks(text : String, tree : Json?) -> Array[MdBlock] {
 /// tight list's item's (its paragraphs keep no margin of their own). Each by its place among them, made again where its
 /// kind changes.
 fn md_blocks_node(col : @view.View, md : MdNode, blocks : () -> Array[MdBlock], tight : Bool) -> Unit {
-  let count = fn() { Array::makei(blocks().length(), fn(i) { i }) }
-  col.each(count, fn(i) { i }, fn(slot, i) {
+  let count = @signals.computed(fn(_) { Array::makei(blocks().length(), fn(i) { i }) }, same=fn(a, b) { a.length() == b.length() })
+  col.each(fn() { count.get() }, fn(i) { i }, fn(slot, i) {
     let i = i.untracked()
     let block = fn() { blocks().get(i) }
-    slot
-    .padding(By(fn() {
-      if i == 0 {
-        (0.0, 0.0, 0.0, 0.0)
-      } else {
+    if i == 0 {
+      slot.padding(Is((0.0, 0.0, 0.0, 0.0))) |> ignore
+    } else {
+      let top_pad = @signals.computed(fn(_) {
         let bs = blocks()
         let before = md_node_margins(md, bs[i - 1], tight).1
         let top = match bs.get(i) {
           Some(b) => md_node_margins(md, b, tight).0
           None => 0.0
         }
-        (0.0, dmax(before, top), 0.0, 0.0)
-      }
-    }))
-    |> ignore
+        dmax(before, top)
+      }, same=fn(a, b) { a == b })
+      slot.padding(By(fn() { (0.0, top_pad.get(), 0.0, 0.0) })) |> ignore
+    }
     // (the matches before it: those before the blocks and in the blocks over it)
     let here = { ..md, before: fn() { (md.before)() + md_found_in(md, blocks(), i) } }
-    slot.pick(fn() { block().map(fn(x) { md_block_kind(md, x) }).unwrap_or(-1) }, fn(p, kind) {
+    let kind_sig = @signals.computed(fn(_) { block().map(fn(x) { md_block_kind(md, x) }).unwrap_or(-1) }, same=fn(a, b) { a == b })
+    slot.pick(fn() { kind_sig.get() }, fn(p, kind) {
       md_block_node(p, here, kind, block, tight)
     })
   })

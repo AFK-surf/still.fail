@@ -366,15 +366,43 @@ test "the desk's history beside a chat: scrolling across turns reuses row views 
     t.wheel(1100.0, 500.0, -30.0)
   }
   let w2 = tree.work()
+  for _ in 0..<30 {
+    t.wheel(1100.0, 500.0, 30.0)
+  }
+  let w3 = tree.work()
   let total_made = w2.made - w0.made
   let total_let_go = w2.let_go - w0.let_go
+  let total_computes = w2.computes - w0.computes
   let total_laid = w2.laid - w0.laid
   let total_measured = w2.measured - w0.measured
+  let total_bound = w2.bound - w0.bound
   let warm_made = w2.made - w1.made
   let warm_let_go = w2.let_go - w1.let_go
+  let warm_bound = w2.bound - w1.bound
+  let down_made = w3.made - w2.made
+  let down_let_go = w3.let_go - w2.let_go
+  let down_computes = w3.computes - w2.computes
+  let down_measured = w3.measured - w2.measured
+  let down_bound = w3.bound - w2.bound
   assert_true(
-    total_made <= 220 && total_let_go <= 40 && total_laid <= 400 && total_measured <= 40,
-    msg="total=(\{total_made}, \{total_let_go}, \{total_laid}, \{total_measured})",
+    total_made <= 210 &&
+    total_let_go <= 20 &&
+    total_computes <= 18 &&
+    total_laid <= 380 &&
+    total_measured <= 35 &&
+    total_bound <= 290,
+    msg="total=(\{total_made}, \{total_let_go}, \{total_computes}, \{total_laid}, \{total_measured}, \{total_bound})",
   )
-  assert_true(warm_made == 0 && warm_let_go == 0, msg="warm=(\{warm_made}, \{warm_let_go})")
+  assert_true(
+    warm_made == 0 && warm_let_go == 0 && warm_bound <= 24,
+    msg="warm=(\{warm_made}, \{warm_let_go}, \{warm_bound})",
+  )
+  assert_true(
+    down_made <= 20 &&
+    down_let_go <= 10 &&
+    down_computes <= 8 &&
+    down_measured <= 5 &&
+    down_bound <= 20,
+    msg="down=(\{down_made}, \{down_let_go}, \{down_computes}, \{down_measured}, \{down_bound})",
+  )
 }
