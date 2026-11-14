@@ -313,6 +313,9 @@ fn chat_body_node(
   // unread line are counted from it, as before the bar's own edge was told the list)
   let top = fn() { cover() + room }
   let kept : ChatBodyKept = { sent: {}, sent_as: {} }
+  // (when each key came into the list by data, by the list's `comes`, asked at its cause: what its row reads as it is
+  // made; none for one there as the chat opened, simply there, or come by an answer at once)
+  let came_at : Map[String, Double] = Map([])
   // (worked out once as the view, its entries or what is on its way change; the keys only change as rows come, go or
   // are taken over: each row reads its own by its key)
   let rows = @signals.computed(fn(_) { chat_body_rows(kept, (here.view)(), entries(), sending()) }, same=fn(_, _) {
@@ -437,10 +440,18 @@ fn chat_body_node(
       // entry, an agent at work; the rest, caught up on, read in or there as the chat opened, simply there: what was
       // said before it was shown moves not, sf/motion.mbt's head)
       comes=fn(k) {
-        match rows.get().rows.get(k) {
+        let comes = match rows.get().rows.get(k) {
           Some(r) => chat_body_comes(r.entry)
           None => false
         }
+        // (the moment it came by data, as its cause is taken: an agent's line's first words come in glyph by glyph from
+        // then (working_said_node's `came`); none where it is simply there, or came by an answer at once)
+        if comes && !@view.answering_now() {
+          came_at[k] = v.cause_at()
+        } else {
+          came_at.remove(k)
+        }
+        comes
       },
       // (an agent's line gone at its foot leaves its room under the last row, fading where it is: a turn that ends with
       // no reply carries nothing up to let it fall back; what comes next takes that room first. The owner, 2026-11-12;
@@ -453,7 +464,7 @@ fn chat_body_node(
       place~,
       near_top=(1.0, wants_older, fn() { ask_older(true) }),
       near_foot=(1.0, wants_newer, ask_newer),
-      fn(slot, k) { chat_body_row(slot, src, here, k, rows, side, top, core, keeps, made, jump) },
+      fn(slot, k) { chat_body_row(slot, src, here, k, rows, side, top, core, keeps, made, jump, fn() { came_at.get(k) }) },
     )
     |> ignore
   })
@@ -574,7 +585,8 @@ fn chat_body_node(
 ///|
 /// Row `k` of a chat's list in `slot` (entry_row's, its row's room round it: message_row_frame_node), as its kind's
 /// row draws it, reading what it is by its key in `rows` as that changes; made again only as it comes to be another
-/// kind. What it shows of being gone to (its flash, a search's words marked in it) as `jump` says.
+/// kind. What it shows of being gone to (its flash, a search's words marked in it) as `jump` says; `came`, when its key
+/// came into the list by data (an agent's line's first words in glyph by glyph from then; none: simply there).
 fn chat_body_row(
   slot : @view.View,
   src : Source,
@@ -587,6 +599,7 @@ fn chat_body_row(
   keeps : ChatBodyKeeps,
   made : (String, @view.View) -> Unit,
   jump : ChatJump,
+  came : () -> Double?,
 ) -> Unit {
   let first = @signals.untracked(fn() { rows.get().rows.get(k) })
   guard first is Some(first) else { return }
@@ -735,7 +748,7 @@ fn chat_body_row(
               _ => a0
             }
           },
-          fn() { None },
+          came,
           keeps.steadies,
         )
         |> ignore
