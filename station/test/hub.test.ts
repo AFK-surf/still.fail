@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_FAILED, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_FAILED, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, GO_ON_AFTER_UNANSWERED, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
 import { claudeProject, homesFirst, transcriptPaths } from "../src/read/transcript.ts";
@@ -1337,6 +1337,33 @@ test("an agent that loses the station's tools is started again rather than nudge
   await r.accept(reply(m, "9999.9", "still there?"));
   await settle();
   assert.equal(r.claude.count(), 3);
+  await r.close();
+});
+
+test("a turn given up on for want of a state (回复即可继续) is tried again by its notice's 重试", async () => {
+  const r = new Rig({ maxNudges: 0 });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const agent = r.claude.last();
+  const key = agent.options.route;
+  const thread = r.thread("C1", m.threadTs);
+  agent.complete();
+  await settle();
+  const notice = r.said(thread.id).find((entry) => entry.text.includes("回复即可继续"))!;
+  assert.ok(notice);
+  assert.deepEqual(r.store.lastTurn(key)!.about, { thread: thread.id, seq: notice.n, ts: notice.ts });
+  await r.hub.retryFailed(key, thread.id, notice.n + 1);
+  await settle();
+  assert.equal(agent.prompts.length, 1);
+  await r.hub.retryFailed(key, thread.id, notice.n);
+  await settle();
+  assert.equal(agent.prompts.length, 2);
+  assert.equal(agent.prompts[1], GO_ON_AFTER_UNANSWERED);
+  // Ended in a state since: the old notice starts nothing more.
+  await r.hub.retryFailed(key, thread.id, notice.n);
+  await settle();
+  assert.equal(agent.prompts.length, 2);
   await r.close();
 });
 

@@ -98,6 +98,8 @@ export const GO_ON_AFTER_OVERLOADED = `Your last turn was cut off: the model was
 
 export const GO_ON_AFTER_FAILED = `Your last turn failed (the model service or the connection to it went wrong), and a person asked to try again. Check where you were, then continue the work. Post only if people need to know.`;
 
+export const GO_ON_AFTER_UNANSWERED = `Your last turns ended without a state (or without reaching anyone), and the station stopped asking; a person asked to try again. Check where you were, then post what people still need to see (your answer, results, questions) and end the turn with a state as usual.`;
+
 export const GO_ON_AFTER_REFILL = `Your last turn was cut off: the account it ran on hit its usage limit, and no other account could take over. Its allowance should have refilled by now. Check where you were, then continue the work. Post only if people need to know.`;
 
 export const TOOLS_LOST = `Your last turn could not reach the station's tools (chat_post, chat_state and the rest failed or were not connected), so nothing you said reached anyone. The station restarted your process; the tools work again. Check where you were, then post what people still need to see (your answer, results, questions) and end the turn with a state as usual.`;
