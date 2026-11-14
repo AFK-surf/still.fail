@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [55f0408a5](https://github.com/AFK-surf/monoid/commit/55f0408a520a311251ae8938e17726627a8e5091) mbui: route pointer-only hover through tree hit-te | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
 | [d86610867](https://github.com/AFK-surf/monoid/commit/d86610867679cb0172c5b5e535abcac3822fbb33) app: an old message's picture there at once, and a | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
 | [24aeb0158](https://github.com/AFK-surf/monoid/commit/24aeb01587e8c5c5f924fafb903c53a7e7b24cc9) mbui: move remaining 22 plain buttons in src/sf ov | 2 | 2.73 | 11.65 | 31.29 | 41.89 | 27.9 | 53.58 | 96.7 | 101.12 |
 | [d09a449d5](https://github.com/AFK-surf/monoid/commit/d09a449d525be999873a4f1776d31f04004ad158) mbui: decouple touch hit-area from visual layout s | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.6 | 112.55 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c3432a641](https://github.com/AFK-surf/monoid/commit/c3432a641c2f7c96a0e1b7ac423f3dc2f0679620) vault: agents ask to delete an item (secret_delete | 1.99 | 2.71 | 11.58 | 31.19 | 41.65 | 27.81 | 53.36 | 96.6 | 110.87 |
 | [90eae7989](https://github.com/AFK-surf/monoid/commit/90eae798919e13ce9ea8b8586b4f26a109ea58f9) core: the base says words of its own, of no progra | 1.99 | 2.71 | 11.58 | 31.19 | 41.64 | 27.8 | 53.36 | 96.55 | 111.28 |
 | [49206681f](https://github.com/AFK-surf/monoid/commit/49206681fd5da4fb4db2afee4dd45c325658b6b4) station, core, app: retire a station (its chats, f | 1.99 | 2.71 | 11.58 | 31.19 | 41.64 | 27.8 | 53.36 | 96.96 | 112.67 |
-| [c52e9bd2e](https://github.com/AFK-surf/monoid/commit/c52e9bd2edee63163cd6774f9e516fb81604716e) app: a chat archived from its row says so where th | 1.98 | 2.71 | 11.55 | 31.15 | 41.53 | 27.77 | 53.26 | 96.86 | 114.75 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [55f0408a5](https://github.com/AFK-surf/monoid/commit/55f0408a520a311251ae8938e17726627a8e5091) mbui: route pointer-only hover through tree hit-te | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.26 |
 | [d86610867](https://github.com/AFK-surf/monoid/commit/d86610867679cb0172c5b5e535abcac3822fbb33) app: an old message's picture there at once, and a | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
 | [24aeb0158](https://github.com/AFK-surf/monoid/commit/24aeb01587e8c5c5f924fafb903c53a7e7b24cc9) mbui: move remaining 22 plain buttons in src/sf ov | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
 | [d09a449d5](https://github.com/AFK-surf/monoid/commit/d09a449d525be999873a4f1776d31f04004ad158) mbui: decouple touch hit-area from visual layout s | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
