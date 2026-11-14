@@ -5,20 +5,28 @@
 // as an owner's. Each case on the station's own code (`Cloud.locked`, the rules' `state4_moved`), alice the root's
 // person (log R), bob an owner by her, carol an admin, dave a member.
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { mock, test } from "node:test";
+import type { Admin } from "../src/api/admin.ts";
 import { MOVED_FROM_BUILD, ROOT_OUT_FROM_BUILD } from "../src/api/moved-from.ts";
-import { LockRefusal } from "../src/cloud/lock.ts";
+import { json } from "../src/api/request.ts";
+import { LockRefusal, endpointBytes } from "../src/cloud/lock.ts";
 import { Cloud, personChainsOf } from "../src/cloud/state.ts";
 import { wall } from "../src/ops/fibers.ts";
 import { CHAINS_A_PERSON } from "../src/mesh/person-chains.ts";
-import { lockPartRoute, lockRoute, movedTooOld, refusalOf } from "../src/mesh/serve.ts";
-import { Log, bring, ed, handover, station, viewerOf, world } from "./lock-moved-world.ts";
+import type { Served } from "../src/mesh/served.ts";
+import { ALPN, Reader, lockPartRoute, lockRoute, movedTooOld, refusalOf, serve, writeLine } from "../src/mesh/serve.ts";
+import { GrantKey } from "./fake-control-plane.ts";
+import { Log, WS, bring, ed, handover, station, viewerOf, world } from "./lock-moved-world.ts";
+import { memoryMesh } from "./memory-mesh.ts";
 
 const NOW = 2_000_000;
 mock.method(wall, "now", () => NOW * 1000);
 
-function setUp() {
+/// `cloudKeys`: the keys the workspace's `open` says the control plane signs members' credentials with (none by default).
+function setUp(cloudKeys: unknown[] = []) {
   const w = world();
+  w.settings.cloud_keys = { keys: cloudKeys as never[] };
   handover(w);
   w.alice.say("member", { sub: "bob", email: "bob@x", lock: w.bob.genesis, role: "owner" });
   w.alice.say("member", { sub: "carol", email: "carol@x", lock: w.carol.genesis, role: "admin" });
@@ -238,4 +246,54 @@ test("the root's person's own logs, as a station tells them: both while `~root` 
   for (let i = 0; i < CHAINS_A_PERSON + 1; i++) bring(c, new Log("alice"));
   assert.ok(personChainsOf(c).kept(w.alice.genesis) !== null, "the root's log kept");
   assert.equal(c.locked()?.waiting, undefined, "the state not waiting for it");
+});
+
+// The MoonBit program answers a device's reads, its event stream and its marks itself (mesh/served.ts): what it refuses
+// a core too old for is told it of each connection with its member (serve.ts `admission`'s `told`), by the rule
+// `movedTooOld` goes by (`movedFloor`), and told again as the state in force changes with the connection open. Until
+// 2026-11-15 it was told only whether the chain moved: a core under ROOT_OUT_FROM_BUILD where the root's person was out
+// was told to update by Node's routes and answered by the program's (round 24 of apps/mbui/e2e/locks-moved.ts).
+test("the MoonBit program is told the floor of a connection's workspace: MOVED_FROM_BUILD where its chain moved, ROOT_OUT_FROM_BUILD once the root's person is out of `~root`, told again as she goes out with the connection open", async (t) => {
+  const key = new GrantKey("k");
+  const { w, c } = setUp([key.jwk]);
+  // (no timer of the station's fires here: the credential's expiry, the debounces of its own writes)
+  t.mock.method(wall, "after", () => () => {});
+  const mesh = memoryMesh();
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const [at, device] = await Promise.all([bind(), bind()]);
+  const told: unknown[] = [];
+  // (what is told the program, each change once: as Served.viewer tells it)
+  const served = { viewer: (_: number, v: { email: string } | null, moved?: boolean, floor?: number | null) => {
+    const now = v === null ? null : { email: v.email, moved, floor };
+    if (JSON.stringify(told.at(-1)) !== JSON.stringify(now)) told.push(now);
+  } } as unknown as Served;
+  const admin = { handle: async () => json(200, "{}"), readers: { names: new Map() } } as unknown as Admin;
+  void (async () => {
+    const conn = await at.accept();
+    if (!conn) return;
+    // (a connection the front hands requests of to the program: its id there)
+    Object.assign(conn, { handed: 1 });
+    void serve({ cloud: c, admin, up: () => true, served }, conn).catch(() => {});
+  })();
+  t.after(async () => {
+    c.close();
+    await Promise.all([at.close(), device.close()]);
+  });
+  const conn = await device.connect({ id: at.id() }, ALPN);
+  const first = await conn.openBi();
+  const control = new Reader(first);
+  const credential = key.credential({ typ: "stillfail-member+jwt" }, { iss: "stillfail-cloud", sub: "bob", email: "bob@x", name: "bob", ws: WS, role: "owner", device: device.id(), sid: "s", iat: NOW, exp: NOW + 3600 });
+  await writeLine(first, { credential, protocol: 2, lock: { device: w.bob.app.base.hex, proof: w.bob.app.base.sign(endpointBytes(WS, device.id())) } });
+  assert.equal((await control.line()).ok, true, "bob let in");
+  // (a request answered: the connection opened by then)
+  const stream = await conn.openBi();
+  await writeLine(stream, { method: "GET", path: "/admin/api/who", headers: {} });
+  await stream.finish();
+  assert.equal((await new Reader(stream).line()).status, 200);
+  assert.deepEqual(told, [{ email: "bob@x", moved: true, floor: MOVED_FROM_BUILD }], "its chain moved, she in by `~root`");
+  w.bob.say("member.remove", { sub: "alice", cancels: [w.alice.genesis] });
+  bring(c, w.bob);
+  assert.equal(c.rootOut(null), true);
+  assert.deepEqual(told.at(-1), { email: "bob@x", moved: true, floor: ROOT_OUT_FROM_BUILD }, "told again as she goes out, the connection open");
+  conn.close(0, "done");
 });

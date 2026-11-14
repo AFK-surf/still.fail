@@ -145,13 +145,15 @@ export class Served {
     for (const told of this.#told.values()) server.process.postMessage(JSON.parse(told));
   }
 
-  /// Who connection `conn`'s member is now (null: gone, or no longer let in), and whether its workspace's chain moved.
-  viewer(conn: number, viewer: { email: string; name?: string } | null, moved = false) {
+  /// Who connection `conn`'s member is now (null: gone, or no longer let in), whether its workspace's chain moved, and
+  /// the build under which a core is too old there (serve.ts `movedFloor`; null: none). A program from before `floor`
+  /// goes by `moved` alone, under MOVED_FROM_BUILD.
+  viewer(conn: number, viewer: { email: string; name?: string } | null, moved = false, floor: number | null = null) {
     if (viewer !== null && viewer.name !== undefined && viewer.name !== "" && this.#names.get(viewer.email) !== viewer.name) {
       this.#names.set(viewer.email, viewer.name);
       this.#tell({ names: [[viewer.email, viewer.name]] });
     }
-    const told = JSON.stringify({ viewer: { conn, viewer, moved } });
+    const told = JSON.stringify({ viewer: { conn, viewer, moved, floor } });
     if (this.#told.get(conn) === told) return;
     if (viewer === null) this.#told.delete(conn);
     else this.#told.set(conn, told);

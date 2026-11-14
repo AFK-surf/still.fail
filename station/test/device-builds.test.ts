@@ -11,7 +11,7 @@ import { mock, test } from "node:test";
 import { wall } from "../src/ops/fibers.ts";
 import { Store } from "../src/store/store.ts";
 import { DeviceBuilds, deviceBuildsOf } from "../src/mesh/device-builds.ts";
-import { inLock, lockPartRoute, lockRoute, movedTooOld, sawBuild } from "../src/mesh/serve.ts";
+import { inLock, lockPartRoute, lockRoute, movedFloor, movedTooOld, sawBuild } from "../src/mesh/serve.ts";
 import { MOVED_FROM_BUILD } from "../src/api/moved-from.ts";
 import { Log, WS2, bring, station, viewerOf, world } from "./lock-moved-world.ts";
 
@@ -120,4 +120,6 @@ test("a counted build under MOVED_FROM_BUILD at a workspace whose chain moved: t
   assert.equal(movedTooOld(moved, v, 0), false, "an unnumbered build (a development build's, an iOS app's)");
   assert.equal(movedTooOld(not, v, MOVED_FROM_BUILD - 1), false, "its chain not moved");
   assert.equal(movedTooOld(moved, viewerOf("bob", w.bob.app, "admin", WS2) as never, MOVED_FROM_BUILD - 1), false, "another workspace of the station's");
+  // the floor the MoonBit program is told of a connection in each (mesh/served.ts): the same rule
+  assert.deepEqual([movedFloor(moved, w.ws), movedFloor(not, w.ws), movedFloor(moved, WS2)], [MOVED_FROM_BUILD, null, null], "the floor told: moved, not moved, another workspace");
 });

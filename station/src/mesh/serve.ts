@@ -323,11 +323,20 @@ export function sawBuild(cloud: Cloud, viewer: Admitted["viewer"], headers: Reco
 /// So too one under ROOT_OUT_FROM_BUILD where the state in force has the root's person out of `~root` (`Cloud.rootOut`):
 /// its rules read the removal that took them out as nothing; anywhere else it reads the state as this station does.
 export function movedTooOld(cloud: Cloud, viewer: Admitted["viewer"], build: number | null): boolean {
-  if (build === null || build < COUNTED_FROM || build >= ROOT_OUT_FROM_BUILD) return false;
-  const ws = joinedOf(cloud, viewer.workspace);
-  if (typeof cloud.chain(ws)?.state?.moved !== "string") return false;
+  if (build === null || build < COUNTED_FROM) return false;
+  const floor = movedFloor(cloud, viewer.workspace);
+  return floor !== null && build < floor;
+}
+
+/// The build under which a core of a release is too old in `workspace` here (`movedTooOld`'s rule): MOVED_FROM_BUILD
+/// where its chain moved, ROOT_OUT_FROM_BUILD where the state in force has the root's person out of `~root`, null where
+/// the chain did not move. Told the MoonBit program of each connection with its member (served.ts), which refuses its
+/// requests by it as Node's routes are refused by `movedTooOld`.
+export function movedFloor(cloud: Cloud, workspace: string): number | null {
+  const ws = joinedOf(cloud, workspace);
+  if (typeof cloud.chain(ws)?.state?.moved !== "string") return null;
   // (a Cloud made without the constructor, as tests make one, has none: read on every request, so optional)
-  return build < MOVED_FROM_BUILD || (typeof cloud.rootOut === "function" && cloud.rootOut(ws));
+  return typeof cloud.rootOut === "function" && cloud.rootOut(ws) ? ROOT_OUT_FROM_BUILD : MOVED_FROM_BUILD;
 }
 
 /// The ids of the devices workspace `ws`'s lock here names (null: the home one): its chain's, and where it moved the
@@ -806,7 +815,10 @@ function admission(m: Members, device: string): Admit {
       const viewer = { ...current.viewer, home: m.cloud.home() === current.viewer.workspace };
       // (who asks is remembered by name as the admin API remembers them: Admin.handle, which its requests skip)
       if (viewer.name !== "") m.admin.readers.names.set(viewer.email, viewer.name);
-      m.served.viewer(conn.handed, viewer, typeof m.cloud.chain(joinedOf(m.cloud, viewer.workspace))?.state?.moved === "string");
+      // (told again as the state changes, `gone` on every change of the cloud's and the person logs': so the floor
+      // rises the moment the root's person goes out, and falls as she is back under `~root`)
+      const floor = movedFloor(m.cloud, viewer.workspace);
+      m.served.viewer(conn.handed, viewer, floor !== null, floor);
     };
     return {
       line,
