@@ -52,27 +52,34 @@ const lockDevices = (l: J): J[] => (l.members ?? []).flatMap((m: J) => (m.groups
 const appIds = (l: J): string[] => lockDevices(l).filter((d) => d.kind === "app").map((d) => d.id.slice(0, 8)).sort();
 const short = (s: J) => JSON.stringify({ state: s.state, cause: s.cause, message: s.message });
 
-const a = new Device("A");
-const b = new Device("B");
-const c = new Device("C");
-const d = new Device("D");
-const e = new Device("E");
-const f = new Device("F");
-const g = new Device("G");
-const h = new Device("H", "bob");
-const i = new Device("I", "bob");
-const j = new Device("J");
-const k = new Device("K", "bob");
+// Every app of these rounds says a release before MOVED_FROM_BUILD (station/src/api/moved-from.ts), as a person's app not
+// updated does: the stations keep it (station/src/mesh/device-builds.ts), so the workspace's chain is not handed over
+// (client/core-ts src/lock-handover.ts `devicesWaited`) and these rounds run the chain of before a move, which workspaces
+// held back so still use. What a moved workspace does is e2e/locks-moved.ts's. (Saying build 0.1.0, a build from the
+// sources taken as able, the workspace moved at A's first ask from #6102 on, and every round here ran moved: the side
+// run of 2026-11-14 on a3ca1b52.) A web page is not waited for and says none.
+const HELD = { build: "0.1.9000" };
+const a = new Device("A", "alice", HELD);
+const b = new Device("B", "alice", HELD);
+const c = new Device("C", "alice", HELD);
+const d = new Device("D", "alice", HELD);
+const e = new Device("E", "alice", HELD);
+const f = new Device("F", "alice", HELD);
+const g = new Device("G", "alice", HELD);
+const h = new Device("H", "bob", HELD);
+const i = new Device("I", "bob", HELD);
+const j = new Device("J", "alice", HELD);
+const k = new Device("K", "bob", HELD);
 // (round 13's: carol's apps from before the update, sealing nothing, and a new one of hers; named so as `l` and `n`
 // are the file's names for a lock and a length)
-const lDev = new Device("L", "carol", { sealed: false });
-const mDev = new Device("M", "carol", { sealed: false });
-const nDev = new Device("N", "carol", { sealed: false });
-const oDev = new Device("O", "carol");
+const lDev = new Device("L", "carol", { ...HELD, sealed: false });
+const mDev = new Device("M", "carol", { ...HELD, sealed: false });
+const nDev = new Device("N", "carol", { ...HELD, sealed: false });
+const oDev = new Device("O", "carol", HELD);
 // (round 14's: dave's two apps from before; round 15's: erin's one, sealing)
-const d1 = new Device("D1", "dave", { sealed: false });
-const d2 = new Device("D2", "dave", { sealed: false });
-const e1 = new Device("E1", "erin");
+const d1 = new Device("D1", "dave", { ...HELD, sealed: false });
+const d2 = new Device("D2", "dave", { ...HELD, sealed: false });
+const e1 = new Device("E1", "erin", HELD);
 // (round 16's: a web page of alice's, keeping no keys; named so as `w` is the file's name for a workspace)
 const wDev = new Device("W", "alice", { page: true });
 let dKey = "";
