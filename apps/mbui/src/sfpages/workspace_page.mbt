@@ -705,20 +705,11 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
       )
     }
     v.box(fn(body) {
-      @sf.style_node(body, fn() {
-        if @sf.look_node(body) is Wide || (manager() && relays().length() < 4) {
-          ws_way_body_wide
-        } else {
-          ws_way_body_narrow
-        }
-      })
+      @sf.style_node(body, fn() { ws_way_body })
       // add a custom relay at the top of the panel
       body.show(fn() { manager() && relays().length() < 4 }, fn(a) {
         a.box(fn(row) {
-          @sf.style_node(row, fn() {
-            let at = if @sf.look_node(row) is Wide { ws_way_add_row_wide } else { ws_way_add_row_narrow }
-            @sf.panel_words_in_node(row).then(at)
-          })
+          @sf.style_node(row, fn() { @sf.panel_words_in_node(row).then(ws_way_add_row) })
           row.box(fn(f) {
             @sf.style_node(f, fn() { ws_way_add_input }, in_row=true)
             @sf.input_node(
@@ -838,11 +829,7 @@ fn ws_way_label_node(parent : @view.View, words : () -> String) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_body_wide : @ui.Style = @ui.css("w=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ws_way_body_narrow : @ui.Style = @ui.css("w=Full pt=S2")
+let ws_way_body : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -866,11 +853,7 @@ let ws_way_label_at : @ui.Style = @ui.css("pt=S4 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_add_row_wide : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter pb=S3")
-
-///|
-// kept across runs: a value (no field of it changes)
-let ws_way_add_row_narrow : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter pt=S3_5 pb=S3")
+let ws_way_add_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter pt=S1_5 pb=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
