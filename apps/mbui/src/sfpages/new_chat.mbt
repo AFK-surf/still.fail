@@ -72,7 +72,7 @@ pub fn new_chat_opens(ws : String, ask : (String, Map[String, Json]) -> @sfbase.
 
 ///|
 /// A new chat in workspace `w` (NewChat, NewChatScreen): while its stations are read, the page as it will be on the
-/// station it last started on, its composer taking words but sending nothing; with none at all, the first to add;
+/// station it last started on, its composer sending to that one; with none at all, the first to add;
 /// with none up, said so; nothing to run a chat with yet, its first step; else the page on the station it starts on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFrame) -> Unit {
   let topic = src.topic("newChat", new_chat_asked(w.id)).get().snapshot()
@@ -687,7 +687,7 @@ fn new_tools(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json
 
 ///|
 /// The page's composer (ComposerSlot, the mobile host's): the station's new chat's draft, `width` wide, roomy wide with
-/// the choices in its row; locked while nothing can run it (no model, no runtime) or while its stations are read. Its
+/// the choices in its row; locked while nothing can run it (no model, no runtime), never while its stations are read. Its
 /// place measured (what the scene leaving keeps clear); gone to the chat (`Going`), its place as it was. Held on no
 /// station (none started on yet, the stations' first value not come): its place, no draft asked for.
 fn new_composer_place(
@@ -716,7 +716,12 @@ fn new_composer_place(
         note: [],
         tail: None,
         roomy: wide,
-        locked: held || (!flag(v, "waiting") && (text(v, "runtime") == "" || field(v, "model") is None)),
+        // (while its stations are read it sends to the one it last started on, as it will be: Enter never taken
+        // for nothing; only with none to start on, or the stations not read for good)
+        locked: match state {
+          Held(error) => address == "" || error != ""
+          _ => !flag(v, "waiting") && (text(v, "runtime") == "" || field(v, "model") is None)
+        },
         offline: false,
         warm_agent: false,
       }
