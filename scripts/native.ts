@@ -254,8 +254,11 @@ function mbuiRenderer(app: string, launcher: string): Part {
         throw new Error(`${app} is built on an Apple Silicon Mac`);
       }
       const module = join(ROOT, "apps/mbui");
+      // (for the macOS the app runs on, as mac-app.sh builds it: left to the host's, Xcode 27's SDK held
+      // apple_stream.m's AVAudioEngine connect:to:format: and play deprecated there and the build failed,
+      // mbui-media-runtime's film on main b3e22352 43591756793, 2026-11-14)
       run("bash", [join(module, "scripts/mac.sh"), "build"], {
-        cwd: module, env: { ...process.env, APP: app, MODE: "release" },
+        cwd: module, env: { ...process.env, APP: app, MODE: "release", MACOSX_DEPLOYMENT_TARGET: "12.0" },
       });
       copyFileSync(join(module, `_build/native/release/build/stillfail/${app}/${app}.exe`), join(out, app));
       copyFileSync(join(module, "scripts", launcher), join(out, launcher));
