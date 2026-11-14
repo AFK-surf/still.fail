@@ -691,6 +691,7 @@
   "station.share.notLent": "登录此订阅的 station 未能借出它，可能已离线",
   "station.share.stationsUnknown": "这台 station 还没收到它所在的各个 workspace 里都有哪些 station，过一会儿再改",
   "station.claudeAuth.machineRunsOut": "此 station 的 Claude 登录即将过期，需要重新登录",
+  "station.dsh.noTools": "DeepSeek Harness 没接上这台 station 的工具，再发一条消息会重试",
   "station.notice.denied": "模型服务拒绝了请求（403），未说明原因",
   "station.failure.denied": "模型服务拒绝了请求",
   "station.notice.blocked": "模型服务的防火墙拦截了此 station 的网络出口，换一个出口后重试",

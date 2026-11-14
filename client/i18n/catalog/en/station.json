@@ -700,6 +700,7 @@
   "station.share.notLent": "The station this subscription is signed in on couldn't lend it; it may be offline",
   "station.share.stationsUnknown": "This station hasn't heard yet which stations its workspaces have; try again in a moment",
   "station.claudeAuth.machineRunsOut": "This station's Claude sign-in is about to expire; sign in again",
+  "station.dsh.noTools": "DeepSeek Harness couldn't reach this station's tools; send another message to try again",
   "station.notice.denied": "The provider refused the request (403) without saying why",
   "station.failure.denied": "The provider refused the request",
   "station.notice.blocked": "The provider's firewall blocked this station's network; retry from another one",

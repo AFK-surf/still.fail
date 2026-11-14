@@ -19,6 +19,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { facts } from "../accounts/catalog.ts";
 import { seesImages } from "../accounts/models.ts";
+import { Said, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { LiveFromDsh, chars, type DshLiveState } from "./live.ts";
@@ -46,6 +47,8 @@ export const BRIDGE = fileURLToPath(new URL("./dsh-bridge.mjs", import.meta.url)
 
 /// The patch's entry for the station's tools (dsh's MCP client).
 const TOOLS = "stillfail-tools";
+/// The driver refusing a request because dsh did not mount the station's tools (its answer's `lacks`).
+class NoTools extends Error {}
 /// The id of the request that opens the session; the others carry their own.
 const OPEN = "open";
 /// Where the patch's header for the station's tools reads the session's token.
@@ -247,6 +250,12 @@ export class DshDriver extends OwnProcessDriver<DshSession> {
       session.named(opened.session);
     } catch (error) {
       await session.dispose();
+      // Refused for the station's tools: said as that, with what to do, not as whatever its reason reads like (a
+      // connection refused there is this machine's own, and was told as the model provider's).
+      if (error instanceof NoTools) {
+        log.warn("agents::dsh", "dsh could not mount the station's tools", { session: options.key, error: error.message });
+        throw new Said(tr(stationLang(), "station.dsh.noTools"));
+      }
       throw error;
     }
     return session;
@@ -289,7 +298,7 @@ export class DshSession extends OwnProcessSession<Turn> {
 
   /// A request whose answer is waited for: an error answer rejects.
   request(id: string, op: string, params: Json, late?: string): Promise<Json> {
-    const answer = this.waiting.wait(id, (m) => (typeof m?.error === "string" ? new Error(`dsh ${op}: ${m.error}`) : null), late);
+    const answer = this.waiting.wait(id, (m) => (typeof m?.error !== "string" ? null : m.lacks === "tools" ? new NoTools(`dsh ${op}: ${m.error}`) : new Error(`dsh ${op}: ${m.error}`)), late);
     this.proc.write(JSON.stringify({ id, op, ...params }));
     return answer;
   }

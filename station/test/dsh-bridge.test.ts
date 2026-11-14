@@ -16,7 +16,10 @@ type Fiber = { state: number; await(): Promise<unknown> };
 
 const TOOLS = "stillfail-tools";
 
-function dsh() {
+/// A made-up dsh with the driver in it, its patch naming the entry for the station's tools unless `patched` says its
+/// config otherwise (none at all too).
+function dsh(...patched: [config?: { tools?: string }]) {
+  const config = patched.length > 0 ? patched[0] : { tools: TOOLS };
   /// What was asked of dsh, in order.
   const asked: string[] = [];
   /// What the driver wrote, in order.
@@ -46,7 +49,7 @@ function dsh() {
       resume: async (o: Json) => (asked.push(`resume ${o.resumeSessionId}`), handle(o.resumeSessionId)),
     },
   };
-  const d = driver(ctx, { tools: TOOLS }, (message) => void said.push(message));
+  const d = driver(ctx, config, (message) => void said.push(message));
   return {
     asked,
     /// What the driver wrote so far.
@@ -116,11 +119,22 @@ describe("the station's driver in DeepSeek Harness", () => {
       const opening = d.line({ id: "open", op: "open", cwd: "/w" });
       d.settled(fiber);
       await opening;
-      assert.deepEqual(d.said(), [{ id: "open", error }]);
+      assert.deepEqual(d.said(), [{ id: "open", error, lacks: "tools" }]);
       // No session: a prompt reaches no agent.
       await d.line({ id: "p1", op: "prompt", text: "hi" });
       assert.deepEqual(d.said()[1], { id: "p1", error: "no session is open" });
       assert.deepEqual(d.asked, ["loader settled?"]);
+    }
+  });
+
+  test("a patch from a station before this, which names no entry for the tools, is opened as it was: nothing waited for", async () => {
+    // What an update leaves for a while: this file in place, dsh started by the station before with its own patch.
+    for (const config of [undefined, {}]) {
+      const d = dsh(config);
+      await d.line({ id: "open", op: "open", cwd: "/w" });
+      assert.deepEqual(d.asked, ["create"]);
+      assert.equal(d.said().length, 1);
+      assert.match(d.said()[0].session, /^[0-9a-f-]{36}$/);
     }
   });
 });
