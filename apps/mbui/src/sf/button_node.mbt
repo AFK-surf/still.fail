@@ -2,7 +2,8 @@
 // page or the hover's where the hand is on it (dur_ms, eased out, from the moment that changed); faded while it cannot
 // be pressed; at work, a spinner's room opening before its words (a Move as far as that room) and the spinner turning
 // in it, coming in as it opens; its words changed, its ground and its words going together to where they are laid out
-// (moves_for: the same cause, one length); read out a button, pressed where it is laid out.
+// (moves_for: the same cause, one length). All of that is its look, over mbui's headless button (@headless.button),
+// whose it is that it is read out a button, pressed where it is laid out and by the keyboard, and when it is neither.
 
 ///|
 /// The button in `parent`: `label` its words, `tone` its look, `busy` while what it does is under way (not pressed
@@ -61,17 +62,15 @@ fn button_by(
   let live = fn() { !disabled() && !busy() }
   let solid = tone == Primary || tone == DangerSolid
   let height = button_height()
-  parent.box(made_for=loc, fn(v) {
-    // (the hand on it, or pressing it: how far its ground has gone towards its lit one; at work, how far its spinner is
-    // in and how far its room is open; how faded it is)
+  // (what it is to the hand, the keyboard and a screen reader is mbui's headless button's: read out a button called by
+  // its label, pressed and focused only while not disabled, Enter and Space pressing it. At work is disabled to all of
+  // those, and told apart by the eye alone: said to the component as disabled, its spinner this look's. Here, its look)
+  @headless.button(made_for=loc, parent, label, press, disabled=fn() { !live() }, fn(v, b) {
+    // (the hand on it, or pressing it (the keyboard's focus shown on it, a pointer over it, a finger or the pointer
+    // held on it: which of the button's states light it is this look's): how far its ground has gone towards its lit
+    // one; at work, how far its spinner is in and how far its room is open; how faded it is)
     let lit = fn() {
-      (busy() && (tone == Ghost || tone == GhostDanger)) ||
-      (live() &&
-      (v.focus_shown() ||
-      (match @ui.pointing() {
-        Mouse => v.pointed() || v.pressed()
-        Finger => v.pressed()
-      })))
+      (busy() && (tone == Ghost || tone == GhostDanger)) || (live() && (b.focus_shown() || b.hovered() || b.pressed()))
     }
     let hand = EdgeWay::new(if @signals.untracked(lit) { 1.0 } else { 0.0 })
     let turning = EdgeWay::new(if @signals.untracked(busy) { 1.0 } else { 0.0 })
@@ -119,15 +118,6 @@ fn button_by(
     .radius(Is(height / 2.0))
     .ground(By(fn() { looks().0 }))
     .alpha(By(fn() { seen.shown(v) }))
-    .presses(By(live))
-    // (the keyboard's focus too while it can be pressed, Enter and Space pressing it: button's c.focusable)
-    .focusable(By(live))
-    .says(By(fn() { Some(@view.said(Button, label=label())) }))
-    .on_press(fn() {
-      if @signals.untracked(live) {
-        press(v)
-      }
-    })
     |> ignore
     if across {
       // (as wide as what holds it, whichever way that lays out: its own height kept)

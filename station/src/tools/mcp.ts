@@ -42,6 +42,42 @@ export const CORE = ["chat_post", "chat_state", "chat_history", "chat_read", "jo
 /// What every turn calls: an agent's answer reaches people only through chat_post, and a turn ends with chat_state.
 export const EVERY_TURN = ["chat_post", "chat_state"];
 
+/// By which a session speaks or acts in chats as itself: it posts, ends its turn, writes to another chat's agent, opens
+/// a chat, leaves one, archives one. They are for the session's own agent alone (the user, 2026-11-14: 「subagent
+/// 不应该能自己发消息」): one it started hands its result back to it and says nothing itself. The endpoint cannot hold
+/// that: a subagent's call comes with its session's token, as its parent's does, so each runtime's driver keeps its
+/// subagents from these (agents/claude.ts `SILENT_SUBAGENTS`). Not OUTWARD, which is where a call lands whoever makes
+/// it: a subagent starts a job or a task as its parent would, and chat_state lands nowhere outside the station.
+/// A new tool is sorted into these or out of them in test/speaks.test.ts.
+export const SPEAKS = ["chat_post", "chat_state", "session_send", "chat_create", "chat_leave", "chat_archive"];
+/// The one that speaks only where its method writes (a post, an edit, a reaction, a direct message, as the session's
+/// Slack bot): its own agent's alone as those above are, while a subagent reads Slack as its parent does, so a driver
+/// keeps its subagents from the writes and lets the rest through.
+export const SPEAKS_WRITING = "slack_api";
+/// The Slack methods that write, each a method or the start of some: they land in a thread, so the threads rule
+/// applies to them (sessions/conversations.ts `slackApi`), and they are what a subagent is kept from. One list for
+/// both: what is added here for the one holds for the other.
+export const SLACK_WRITES = [
+  "chat.postMessage",
+  "chat.postEphemeral",
+  "chat.scheduleMessage",
+  "chat.update",
+  "chat.delete",
+  "chat.meMessage",
+  "reactions.add",
+  "reactions.remove",
+  "pins.add",
+  "pins.remove",
+  "files.completeUploadExternal",
+  "assistant.threads.",
+];
+export const isSlackWrite = (method: string) => SLACK_WRITES.some((w) => method.startsWith(w));
+/// What a subagent is kept from in Slack: the writes, and a streamed message, which puts words in a thread as a post
+/// does. Not among the writes: the threads rule finds a write's thread by the message it names, and a stream's later
+/// calls name only the stream's own message, which the station keeps no row of.
+export const SLACK_SPOKEN = [...SLACK_WRITES, "chat.startStream", "chat.appendStream", "chat.stopStream"];
+export const speaksInSlack = (method: string) => SLACK_SPOKEN.some((w) => method.startsWith(w));
+
 /// What a session's runtime needs of its list of tools; nothing said, the list is every tool as it is.
 export type Listing = {
   /// How many bytes of tools it declares to its model, for one that drops those beyond (`fitted`).

@@ -584,7 +584,7 @@ let things_said : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let things_said_when : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+let things_said_when : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -913,7 +913,7 @@ fn media_said_node(row : @view.View, group : Json?) -> Unit {
       @sf.words_node(b, fn() { when.join(" · ") }, fn() { things_said_when }).allow_ellipsis(Is(true)) |> ignore
     }
     if text(group, "words") != "" {
-      @sf.words_node(b, fn() { text(group, "words") }, fn() { things_said_words }) |> ignore
+      @sf.words_node(b, fn() { text(group, "words") }, fn() { things_said_words }).allow_ellipsis(Is(true)) |> ignore
     }
   })
   |> ignore

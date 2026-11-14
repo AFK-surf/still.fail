@@ -43,9 +43,10 @@ const seedOf = (n: number) => {
 const SETTINGS = (keys: unknown) => ({ origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: keys });
 const DAY = 86400;
 
-/// `flag`: the host offers the handover and hands chains over by itself (by default), which alone lets a page be said
-/// before any chain moved.
-async function setUp(o: { flag?: boolean } = {}) {
+/// `flag`: the host offers the handover and hands chains over by itself (by default). `bare`: s1's log holds no `web` yet
+/// (WL neither put on nor taken off it), so a page is said only once everything that keeps or reads that log takes one
+/// (views/lock.ts `mayWriteNew`): D, the station of s1's other workspace, says nothing of builds until `d.says`.
+async function setUp(o: { flag?: boolean; bare?: boolean } = {}) {
   const g = grant();
   const base = ed();
   const k = key(MINE);
@@ -61,8 +62,10 @@ async function setUp(o: { flag?: boolean } = {}) {
     const last = myLog.at(-1)!;
     myLog.push(simSigned({ v: 1, ws: "person:s1", seq: last.seq + 1, prev: entryHash(last as unknown as Entry), at: 1000, kind, body } as Omit<StationEntry, "sig">, k));
   };
-  onMine("web", { id: WL.hex, label: "s1's old browser", exp: 1000 + 20 * DAY });
-  onMine("web.remove", { id: WL.hex });
+  if (o.bare !== true) {
+    onMine("web", { id: WL.hex, label: "s1's old browser", exp: 1000 + 20 * DAY });
+    onMine("web.remove", { id: WL.hex });
+  }
   const gMe = entryHash(myLog[0] as unknown as Entry);
   const appOf = (sub: string, l: Log) => ({ id: l.app.base.hex, sub, kind: "app", label: `${sub}'s app`, sign_key: l.app.signer.id });
   const r = await rig((signer) => {
@@ -117,10 +120,12 @@ async function setUp(o: { flag?: boolean } = {}) {
   };
   const stations = { A: station(A), B: station(B) };
   const viewer = viewerOf("s1", { base }, "admin", "ws");
+  const d = { says: false };
   const original = inner.stations.requests.call.bind(inner.stations.requests);
   inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
     const [ws, id] = addr.toString().split("/");
     if (path.startsWith("/lock") && (id === A || id === B || id === D)) {
+      if ((id === D || ws !== "ws") && d.says && method === "GET" && path === "/lock/person") return Effect.succeed({ chains: [], serves: ["logs", "builds"], builds: { since: Math.floor(clock() / 1000), devices: {} } });
       if (id === D || ws !== "ws") return method === "POST" ? Effect.succeed({}) : Effect.fail(httpError(404, { error: "no route" }));
       const c = id === A ? stations.A : stations.B;
       const [p, q] = path.split("?") as [string, string | undefined];
@@ -177,7 +182,7 @@ async function setUp(o: { flag?: boolean } = {}) {
       return { in: false, left: (refusalOf(c, said, v.device, e, undefined, "s1") as J).left };
     }
   };
-  return { r, inner, base, stations, W1, WX, WD, WL, WO, WR, asked, webs, grantAsked, handOver, page, run, now: () => now };
+  return { r, inner, base, stations, W1, WX, WD, WL, WO, WR, asked, webs, grantAsked, handOver, page, run, d, now: () => now };
 }
 
 test("a member's page their app approved on the chain: said on their log as their app next signs something (a grant), in that one ask, the chain's id, label and exp; again, nothing more said", async () => {
@@ -203,13 +208,17 @@ for (const [name, k] of [["run out", "WX"], ["taken off the chain", "WD"], ["tak
   });
 }
 
-test("a host that does not offer the handover, no chain moved: nothing said (a station or app from before `web` refuses a log holding one); once a chain moved, said", async () => {
-  const w = await setUp({ flag: false });
+test("a log holding no web yet, a station of another workspace of theirs that says nothing of builds: nothing said (one from before `web` refuses a log holding one), a chain moved or not; it says so: said at the next ask", async () => {
+  const w = await setUp({ flag: false, bare: true });
   assert.equal((await w.grantAsked()).error, undefined);
   assert.deepEqual(w.webs(), [], "nothing said");
   await w.handOver();
   assert.equal((await w.grantAsked()).error, undefined);
-  assert.ok(w.webs().some((x) => x.id === w.W1.hex), "W1 said once the chain moved");
+  assert.deepEqual(w.webs(), [], "nothing said once the chain moved either");
+  w.d.says = true;
+  await w.run(w.inner.adb.personal().refresh("s1"));
+  assert.equal((await w.grantAsked()).error, undefined);
+  assert.ok(w.webs().some((x) => x.id === w.W1.hex), "W1 said once D said it keeps such logs");
 });
 
 test("said before the handover: in force after it, let in by both stations, nobody asked again", async () => {

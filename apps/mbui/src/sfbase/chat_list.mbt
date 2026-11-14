@@ -381,8 +381,9 @@ fn at_work(a : Agent) -> Bool {
 /// and what was sent from here before the core has it), not at work by the view nor in `all` yet: at work from the
 /// frame the answer is sent, as the core says them once it has it (views.ts answeredAt), so the agent's line comes in
 /// with the answer, the card folding and the answer coming on one way of the list, not a moment after it (the user,
-/// 2026-11-09: 「点选项时「处理中」立刻出来」).
-fn answered_at(v : ChatView, all : Array[Entry]) -> Array[Agent] {
+/// 2026-11-09: 「点选项时「处理中」立刻出来」). The old page's rows (row_keys) and the page made as nodes'
+/// (sfpages' chat_body_rows) alike.
+pub fn answered_at(v : ChatView, all : Array[Entry]) -> Array[Agent] {
   let out : Array[Agent] = []
   let take = fn(by : String) {
     match v.agents.search_by(fn(a) { a.key == by }) {

@@ -1779,12 +1779,12 @@ test("a station that counts a sessions turns has its detail read once, without t
   push("session", counted(10, 80 * 60_000, { ...turn, id: "t10", startedAt: 94 * 60_000, endedAt: 99 * 60_000 }));
   await host.settle();
   assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), once);
-  assert.equal(card(sessionOf(core, "a"), null).work, t("core-views.agent.work", { n: 10, time: t("core-views.agent.hours", { h: 1, m: 20 }) }), "as many turns and as long as the summary says");
-  // One with turns from before its station kept the work: how many alone, still nothing read.
+  assert.equal(card(sessionOf(core, "a"), null).work, t("core-views.agent.work", { time: t("core-views.agent.hours", { h: 1, m: 20 }) }), "as long as the summary says");
+  // One with turns from before its station kept the work: omitted when no duration is known.
   push("session", counted(11, null, { ...turn, id: "t11", startedAt: 100 * 60_000 }));
   await host.settle();
   assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), once);
-  assert.equal(card(sessionOf(core, "a"), null).work, t("core-views.agent.turns", { n: 11 }));
+  assert.equal(card(sessionOf(core, "a"), null).work, null);
   core.close();
 });
 

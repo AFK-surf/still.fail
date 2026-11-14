@@ -2035,7 +2035,7 @@ test "wide: the workspace's page as on a phone: its name its title, who you are 
   assert_true(t.query(Button, label="添加成员") is Some(_))
   assert_true(t.find("管理员") is Some(_), msg="a role at its row's end")
   // the relays and the ways behind one row (workspace_page.mbt ws_ways_panel)
-  assert_true(t.find("连接方式") is Some(_))
+  assert_true(t.find("中继") is Some(_))
   assert_true(t.find("添加中继") is None)
   // a person pressed: what can be done about them, beside them
   assert_false(@sf.presenting())
@@ -2322,7 +2322,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   let cache = word("91%")
   let names_of = word("费用估算")
   let account = word("林的 Max")
-  let quiet = word("8 轮 · 共干了 1 小时 12 分")
+  let quiet = word("共工作 1 小时 12 分")
   assert_true(
     status.length() == 1 && lines.length() == 1 && cost.length() == 1 && cache.length() == 1 &&
     account.length() == 1 &&

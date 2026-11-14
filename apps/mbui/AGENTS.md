@@ -44,6 +44,16 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   one of its files for each of the web's. A part used by both the phone's pages and the desktop's lives there once and
   both use it; a page keeps no copy of its own. The library imports nothing of the app (detlint's `library-import`):
   what it needs of the app is given to it as the app starts.
+- The library is looks (the user, 2026-11-14; `libs/mbui/AGENTS.md`, Components): what a control is to the hand, the
+  keyboard and a screen reader is mbui's headless component's (`libs/mbui/src/headless`), where there is one, and its
+  part here is that component with still.fail's look (`button_node`, `icon_button_node` over `@headless.button`): it
+  says no role, press or focus of its own. A part whose control has no headless component yet stays as it is until
+  one is made there, the part moved over it in the same change with nothing seen or read out changed: the parts that
+  still say they are a button themselves are counted (detlint's `button-by-hand`) and only fall, a plain one moved over
+  `@headless.button`, one that says pressed, expanded or selected over the component that carries that once it is
+  made. What only still.fail wants of a control stays here, in its look, and no more than that: the icon button's tip
+  held up by a finger's long press is, but its look takes the pointer for it and says again when a press counts,
+  which is the component's (a debt: `src/sf/icon_button_node.mbt`).
 - Its parts are shown on their own, each beside its states, by `src/sfstories` (a story a part, `stories.mbt`), built
   for the browser by `scripts/kit-web.sh` and deployed from main to kit.monoid.zone (`cloud/wrangler.kit.jsonc`).
 
@@ -211,6 +221,11 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   `View::box(words_as_said=true)`, whose words and all made in it are at 1); each screen's bar is in
   `corners_outgrown_known` and `words_large_outgrown_known`, and only falls (the coordinator of the migration,
   2026-11-11).
+- Every screen's switches are pressed as well over a core answering 400 ms late, each press looked at on each frame
+  till its answers have come (`src/sfapp/switches_still_wbtest.mbt`; the coordinator of the migration, 2026-11-13): a
+  press is to change what is seen once, and one seen to change more is a row of `switches_known_wbtest.mbt`, which only
+  falls. Main's alone, after a merge (mbui-check.yml's `switches`). What is no page's own is left out by its kind in
+  that file's one judge, never by a screen's name: a notice, a tip, a number running while seen.
 - Every screen is opened as well on a workspace of real size (`src/sfapp/real_size_wbtest.mbt`; the user, 2026-11-11):
   what the core sends each topic there, written into `src/sfrealsize` by the core's own rig
   (`client/core-ts/test/real-size-app.test.ts`, never by hand), held as a device holds it (asked as a device asks the

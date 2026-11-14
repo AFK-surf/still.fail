@@ -213,6 +213,7 @@ fn wide_reset() -> Unit {
   wide.page_from = 0.0
   wide.landed.set("")
   wide.rail_menu.set(None)
+  rail_menu_drawn.val = None
   wide.rail_drag.set(None)
   attention_from.val = None
   workspace_add_from.val = None

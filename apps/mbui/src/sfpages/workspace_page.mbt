@@ -3,7 +3,7 @@
 // holds; its name and its mark, renamed and picked by its managers; its people in one list (those in it, those added
 // who have not signed in, the invitations out), each pressed by a manager for what can be done about them (their role
 // by the owner, moving them out: a panel, popover or sheet as the presenters say); 添加成员 at the title's end; its
-// 连接方式 a row, its relays and the ways to its stations in a panel it opens (2026-10-29 the user: 不要平铺这么多
+// 中继 a row, its relays and the ways to its stations in a panel it opens (2026-10-29 the user: 不要平铺这么多
 // 设置); leaving or deleting it in red at its foot, asked first. Its rows a list card's on either width (group_node),
 // laid out by the page's width; made once as nodes of the window's tree (page_node).
 

@@ -88,6 +88,13 @@
   gives its model no parameter description of a schema over 5,000 bytes (0.169.0, measured 2026-11-14): a description
   says what the tool does and when, the details are its skill's in `src/skills/`, which it names (the user,
   2026-11-14). `test/tools-weight.test.ts` holds the ceilings; raising one needs its reason said in the change.
+- A subagent never speaks in a chat (the user, 2026-11-14: 「subagent 不应该能自己发消息」): the tools a session speaks
+  by (`src/tools/mcp.ts` `SPEAKS`, and slack_api where its method writes) are its own agent's, which its instructions
+  tell it. The endpoint cannot tell a subagent's call from its parent's (one token a session), so each driver keeps
+  its runtime's subagents from them: Claude Code's by a PreToolUse hook (`src/agents/subagent-hook.mjs`; what that
+  does not hold is said at `SILENT_SUBAGENTS` in `src/agents/claude.ts`); no other runtime's are held yet. A new tool
+  is sorted in `test/speaks.test.ts`; the tools that only put a card before a person or report to the still.fail team
+  are open to subagents until the owner decides.
 - What the still.fail team replies on a bug report never reaches an agent by itself (the user, 2026-11-10: it would be
   outside words in someone's session): still.fail cloud gives the replies only to the chat's workspace's members' apps
   (`client/core-ts/src/feedback-replies.ts`), no station reads or holds them, and an agent sees one only as a person
@@ -157,7 +164,8 @@
   signer at hand to sign it after the head. A device keeps what a station showed it and goes by the same fork choice
   (`client/core-ts/src/lock-keep.ts`), so it follows a station that changes branch; refusing a fresh entry decides
   nothing for any other keeper.
-- Where a lock's active chain holds `moved {root}` (2026-11-13, nothing signs one yet), the state in force there is the
+- Where a lock's active chain holds `moved {root}` (2026-11-13; signed by an owner's device once everything that uses the
+  workspace takes it, client/core-ts/AGENTS.md), the state in force there is the
   rules' `state4` of the root's log, the person logs kept and the statements' bodies kept (`src/cloud/lock-bodies.ts`,
   `mesh/locks/<ws>.bodies.json`), by this station's clock (each app device by the signer its log says, never by its key
   on the log): `Cloud.locked` gives it to every reader of "the lock"
@@ -174,7 +182,8 @@
   it of that log (the refusal's `person`, as before). A device the state in force does not name is told so by that
   refusal's `left` (`leftOf`, 2026-11-14: given no logs, a newcomer's app or a member's new web page read the
   workspace as waiting for good) with whom to ask, the app devices that may let it in: its person's own where the list
-  names them, else the owners' and admins', 16 at most. Not the list: only who can let it in, a hint it dials as
+  names them, else the owners' and admins', 16 at most, and `apps`, whether the list names an app device of its own
+  person's (a web page with none can be approved by nobody there, and is told to install an app). Not the list: only who can let it in, a hint it dials as
   before a move, each device dialled checking all itself. Never while waiting (the state names nobody) nor off.
   Before a chain moves, `GET /lock/logs` gives a device it lets in the logs it binds its members by, as kept here
   (`Cloud.logsOf`): what an owner's device reads before handing it over, so a member's device is not dropped.
@@ -183,6 +192,14 @@
   locked, off or on): a station that pinned the chain goes by the state in force (`leftOut`: never `unpinned`; its home
   off, a joined unlocked one's members taken), and so does `enroll --join` on the machine (`src/cli.ts`
   `joinWorkspace`), which the cloud no longer refuses for a moved home (2026-11-14, `test/lock-moved-joined.test.ts`).
+- What build each device a lock here names last ran is kept by its id in the lock (`src/mesh/device-builds.ts`, in
+  stillfail.db, written only as the build rises or the day changes) and given to a device the lock lets in (GET /lock
+  `builds`, `serves` `builds`; GET /lock/person for the asker's own log's devices), with since when this station keeps
+  them: what a core hands a workspace over by (the user, 2026-11-14: 无感迁移, no date, no switch, nobody told to update).
+  Nothing of a device the asker's lock does not name. A core of a release's build under `MOVED_FROM_BUILD`
+  (`src/api/moved-from.ts`) asking in a workspace whose chain moved is told to update there (426 with `update`, as
+  `coreTooOld`; `src/mesh/serve.ts` `movedTooOld`), which its app shows as the ordinary 请更新 (请刷新页面 on the web); one
+  that says no build is answered as `coreTooOld` answers it. `test/device-builds.test.ts` holds it.
 
 ## Screens
 

@@ -13,6 +13,7 @@ import { type Entry as StationEntry } from "../../../station/src/cloud/lock.ts";
 import { Cloud, personChainsOf, writeState } from "../../../station/src/cloud/state.ts";
 import { wall } from "../../../station/src/ops/fibers.ts";
 import { lockPartRoute, lockRoute } from "../../../station/src/mesh/serve.ts";
+import { deviceBuildsOf } from "../../../station/src/mesh/device-builds.ts";
 import { Core } from "../src/core.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { HostError } from "../src/error.ts";
@@ -2212,7 +2213,7 @@ const signOn = (seed: Uint8Array, ws: string, chain: Entry[], kind: string, body
   const e = { v: 1 as const, ws, seq: chain.length, prev: last ? entryHash(last) : null, at: 1_790_000_000 + chain.length, kind, body };
   return { ...e, sig: { key: key(seed).id, alg: "Ed25519" as const, sig: hex(ed25519.sign(signedBytes(entryHash(e)), seed)) } };
 };
-async function movedRig(secret: boolean, o: { signKey?: boolean; phone?: boolean } = {}) {
+async function movedRig(secret: boolean, o: { signKey?: boolean; phone?: boolean; waiting?: boolean } = {}) {
   const r = await rig(false, false, {}, { stations: [{ id: S, name: "studio", online: true, last_seen: null }] });
   r.putLock();
   if (secret) {
@@ -2248,8 +2249,11 @@ async function movedRig(secret: boolean, o: { signKey?: boolean; phone?: boolean
     assert.equal(t.taken, 1, `the station took the body: ${JSON.stringify(t.refused)}`);
     return prev;
   };
-  said({ kind: "open", origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: {}, email: "a@x.com" });
-  said({ kind: "station", key: S });
+  // (`waiting`: the root's log said nothing of the workspace yet, nor came to the station: its state waits)
+  if (!o.waiting) {
+    said({ kind: "open", origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: {}, email: "a@x.com" });
+    said({ kind: "station", key: S });
+  }
   r.host.storage.set(`personal-lock-${hex(utf8("s1"))}`, utf8(JSON.stringify(own)));
   r.host.storage.set("personal-signer-id", utf8(k.id));
   r.host.secure.set("personal-signer", { value: seed, user: true });
@@ -2448,6 +2452,31 @@ test("a moved workspace: a device taken off its person's own log, no workspace e
   r.core.close();
 });
 
+// The person taking one of their devices off on this one (设置 › 安全's 移除, its own log the only place to take it off
+// once the chain moved): the vaults that held its key keyed anew as part of it, as before a move, the box key read once;
+// so a device of theirs approved or begun anew after it is shown the vault and given its key (2026-11-14, the locks' end
+// to end after #6102: left for the key's next unsealing, a vault never opened again stayed hidden on every new device).
+test("a moved workspace: the person taking another device of theirs off on this one, the vault locked here: asked for the removal and the box key once each, the vault keyed anew without it at once, so a device begun anew is shown it", async () => {
+  const r = await movedRig(true, { phone: true });
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const id = vaults().vaults[0].id;
+  const old = r.st.vaults.get(id)!;
+  const asked = r.host.secureAsked.length;
+  await r.ask("lock.removeDevice", { device: r.phone.hex });
+  await r.settle();
+  assert.equal(inForceOf(r.core.inner, "ws").f.devices.has(r.phone.hex), false, "the phone off");
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.epoch, v.keys.map((k) => k.cert.device)], [old.epoch + 1, ["ab".repeat(32)]], "keyed anew without the phone");
+  assert.deepEqual(r.host.secureAsked.slice(asked).filter((a) => a.key === BOX_KEY).length, 1, `the box key read once: ${JSON.stringify(r.host.secureAsked.slice(asked))}`);
+  assert.equal(vaults().vaults[0]?.waits, undefined, "not waiting");
+  // (what a device begun anew lacks: what of the state took the vault's version; the version now is the state's own)
+  r.core.inner.data.forgetRecord("vaultTook", "ws");
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.settle();
+  assert.deepEqual(vaults().vaults.map((x: any) => x.id), [id], "shown");
+  r.core.close();
+});
+
 test("a moved workspace: a device started anew after a device was taken off (nothing kept of the state that took the vault) shows no waiting vault and asks nobody", async () => {
   const r = await movedRig(true, { phone: true });
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
@@ -2472,7 +2501,7 @@ test("a moved workspace waiting for its root's log: the vaults as its stations h
   await r.settle();
   assert.equal(inForceOf(r.core.inner, "ws").said, "waiting");
   assert.deepEqual([vaults().locked, vaults().canSign, vaults().vaults], [true, false, []]);
-  await fails(r.ask("vault.open", { item: "i_01JAKEEP000000000000000NEW" }), "vault_not_signer");
+  await fails(r.ask("vault.open", { item: "i_01JAKEEP000000000000000NEW" }), "vault_lock_waiting");
   assert.deepEqual(r.host.secureAsked.slice(asked), [], "nobody asked");
   r.core.close();
 });
@@ -2482,10 +2511,41 @@ test("a moved workspace, this device's entry on its log from before signers were
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
   const asked = r.host.secureAsked.length;
   assert.equal(vaults().canSign, false, "not signing here");
-  await fails(r.ask("vault.putItem", { vault: "v_x", plain: { kind: "token", name: "x", fields: { value: "1" } } }), "vault_not_signer");
+  await fails(r.ask("vault.putItem", { vault: "v_x", plain: { kind: "token", name: "x", fields: { value: "1" } } }), "vault_signer_unsaid");
   assert.deepEqual(r.host.secureAsked.slice(asked), [], "nobody asked");
   await r.own("device", { key: key(fill(0x51)).id, id: "ab".repeat(32), label: "this", sign_key: r.me.signer!.id });
   assert.deepEqual([vaults().canSign, vaults().vaults.map((v: any) => v.keyed)], [true, [true]], "said again: its vault here");
+  r.core.close();
+});
+
+// What the vault's page and its refusals say where this device is no signer for a reason that is not its not being
+// trusted (views/vault.ts `whyNot`; both said 此设备未在安全模式中确认 before, 2026-11-14).
+const UNSAID = "此设备需完成一次验证后才能使用密钥库", SYNCING = "正在同步安全模式的成员名单，同步完成后即可使用";
+const putX = { vault: "v_x", plain: { kind: "token", name: "x", fields: { value: "1" } } };
+
+test("a moved workspace, this device's signer not said on its log: the vault's page and its refusal say to verify it once; pressing 验证 asks once, says it, and the vault is as any signer's", async () => {
+  const r = await movedRig(true, { signKey: false });
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  assert.deepEqual([vaults().canSign, vaults().stateText ?? null, vaults().confirmText ?? null], [false, UNSAID, "验证"]);
+  await assert.rejects(r.ask("vault.putItem", putX), (e: Error) => (assert.equal(e.message, UNSAID), true));
+  const asked = r.host.secureAsked.length;
+  assert.equal(await r.ask("lock.confirmSigner", {}), null, "said, a station took it");
+  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => [a.key, a.reason]), [["personal-signer", "确认此设备可以使用密钥库"]], "asked once, saying why");
+  await r.settle();
+  assert.deepEqual([vaults().canSign, vaults().stateText ?? null, vaults().confirmText ?? null, vaults().vaults.map((v: any) => v.keyed)], [true, null, null, [true]], "its vault here, as any signer's");
+  // (said already: pressed again, nothing asked nor signed)
+  const again = r.host.secureAsked.length;
+  assert.equal(await r.ask("lock.confirmSigner", {}), null);
+  assert.equal(r.host.secureAsked.length, again, "nobody asked again");
+  r.core.close();
+});
+
+test("a moved workspace whose state waits for the root's log: the vault's page and its refusal say the members are syncing, with nothing to press", async () => {
+  const r = await movedRig(true, { waiting: true });
+  assert.equal(inForceOf(r.core.inner, "ws").said, "waiting");
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  assert.deepEqual([vaults().canSign, vaults().stateText ?? null, vaults().confirmText ?? null], [false, SYNCING, null]);
+  await assert.rejects(r.ask("vault.putItem", putX), (e: Error & { code?: string }) => (assert.deepEqual([e.code, e.message], ["vault_lock_waiting", SYNCING]), true));
   r.core.close();
 });
 
@@ -2513,6 +2573,9 @@ async function handRig() {
   const st = lockStation(r);
   st.keepLog(own);
   st.keepLog(s2log);
+  // (s2's app seen asking the station on an unnumbered build, able: a handover waits for each app device it lets in to
+  // run one that takes a moved workspace, src/lock-handover.ts `devicesWaited`)
+  deviceBuildsOf(st.c).saw(r.other.hex, 0, Math.floor(r.host.nowMs() / 1000));
   const seen: string[] = [];
   stationReplies(r.host, (req) => {
     const path = new URL(req.url).pathname;

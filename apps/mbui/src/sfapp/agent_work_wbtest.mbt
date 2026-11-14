@@ -128,7 +128,7 @@ test "the history's details: its turns' line says its work after it, none withou
   let forms = fn() { word("后台 4 · 2/6") + word("4 · 2/6") + word("4") }
   // nothing in the background, no checklist: no mark; the line, the tabs, the head and what is under the line
   assert_eq(forms().length(), 0)
-  let turns = word("8 轮 · 共干了 1 小时 12 分")
+  let turns = word("共工作 1 小时 12 分")
   assert_eq(turns.length(), 1)
   let before = t.words().filter(fn(w) { w.5 > 0.5 && w.0 != " · " }).map(fn(w) { (w.0, w.1, w.2) })
   // told: the mark at the turns' line's end, on its line; the line's words whole; nothing else anywhere moved (the
@@ -139,7 +139,7 @@ test "the history's details: its turns' line says its work after it, none withou
   let mark = forms()
   assert_eq(mark.length(), 1)
   assert_true((mark[0].2 - turns[0].2).abs() < 2.0 && mark[0].1 > turns[0].1 + turns[0].3, msg="\{Repr((mark, turns))}")
-  assert_eq(word("8 轮 · 共干了 1 小时 12 分").length(), 1)
+  assert_eq(word("共工作 1 小时 12 分").length(), 1)
   let after = t.words().filter(fn(w) { w.5 > 0.5 && w.0 != " · " && w.0 != mark[0].0 }).map(fn(w) { (w.0, w.1, w.2) })
   assert_eq(after, before)
   assert_eq(word(work_line).length(), 0)
@@ -182,7 +182,7 @@ test "on a phone, its details' turns say its work after them, its head as it was
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
-  let turns = word("8 轮 · 共干了 1 小时 12 分")
+  let turns = word("共工作 1 小时 12 分")
   assert_eq(turns.length(), 1)
   let mark = word("后台 4 · 2/6") + word("4 · 2/6") + word("4")
   assert_eq(mark.length(), 1)
@@ -676,4 +676,40 @@ test "its panel on a wide window by the keyboard: the mark with the focus, Enter
     assert_true(t.focus_said().has_prefix(aw_mark_said), msg="round \{round}: \{t.focus_said()}")
   }
   aw_audited(t, before, "keyboard", open=false)
+}
+
+///|
+test "the history's tiles: 6-char numbers ($1,911, 430.5K) on a 360dp row shrink to fit cleanly with names level at 1.0x and 1.3x" {
+  let card : Json = {
+    "cost": "$1,911",
+    "cache": { "text": "99%" },
+    "context": { "percent": 0, "text": "430.5K", "unknown": true },
+  }
+  for scale in [1.0, words_large_scale] {
+    new_run()
+    let t = @ui.Tester::new(
+      fn(_) {  },
+      tree=fn(root) {
+        root.padding(Is((24.0, 24.0, 24.0, 24.0))) |> ignore
+        agent_tiles_node(root, fn() { Some(card) }, 14.0)
+      },
+      w=360.0,
+      h=400.0,
+      platform=2,
+      scale~,
+    )
+    assert_eq(t.squeeze_faults(), [], msg="scale=\{scale}")
+    let words = t.words()
+    for want in ["$1,911", "99%", "430.5K"] {
+      assert_true(words.any(fn(w) { w.0 == want && w.5 > 0.5 }), msg="scale=\{scale}: missing \{want}")
+    }
+    let name_y = fn(s : String) {
+      match words.iter().find_first(fn(w) { w.0 == s && w.5 > 0.5 }) {
+        Some(w) => w.2
+        None => -1.0
+      }
+    }
+    assert_eq(name_y("费用估算"), name_y("缓存命中"), msg="scale=\{scale}: names not level: words=\{Repr(words)}")
+    assert_eq(name_y("缓存命中"), name_y("上下文"), msg="scale=\{scale}: names not level: words=\{Repr(words)}")
+  }
 }

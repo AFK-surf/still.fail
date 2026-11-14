@@ -16,6 +16,13 @@ function parse(id: string): At | null {
   return m ? { run: m[1]!, n: Number(m[2]) } : null;
 }
 
+/// Whether `id` is at or before `head` in the same run of a station's log: told again by a stream resumed at `head`.
+export function upTo(id: string, head: string): boolean {
+  const at = parse(id);
+  const to = parse(head);
+  return at !== null && to !== null && at.run === to.run && at.n <= to.n;
+}
+
 export class Cursor {
   #at: At | null = null;
   /// As last written down.

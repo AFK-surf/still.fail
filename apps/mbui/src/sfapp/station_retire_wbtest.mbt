@@ -1,5 +1,5 @@
 // A station retired from its workspace (sfpages station_retire_node.mbt): its ⋯'s 迁走聊天并移出… over 移出 only while
-// it may be (the core's `canRetire`), opening a panel of what goes and what stays as the station counts them
+// it may be (the core's `canRetire`) and offered at all (switched off for now: none), opening a panel of what goes and what stays as the station counts them
 // (`copies.retirePreview`), the station to move to chosen in it, then `copies.retire`; as it goes, 迁移 at the top of its
 // page, its steps a row each and what may be done now, each press the core's call with what the call needs (the
 // settings' fixture refuses one without it); and a station taking retired ones' chats in, a row each.
@@ -149,26 +149,31 @@ test "迁移 on a station taking retired ones' chats in: a row each, nothing to 
 }
 
 ///|
-test "its ⋯: 迁走聊天并移出… over 移出 only while it may be retired; pressed, its panel once the station said what goes, Maple chosen, then copies.retire to it" {
-  // (no copies said by the station, or one being retired already: none)
-  for mode in ["settings-station", "settings-station-retire-sending", "settings-station-retire-done"] {
+test "its ⋯: no 迁走聊天并移出… while it is switched off (station_retire_offered), not even where it may be retired; 移出 there as before" {
+  // (no copies said by the station, one being retired already, and one that may be retired: none, as it is off)
+  for mode in ["settings-station", "settings-station-retire-sending", "settings-station-retire-done", "settings-station-retire"] {
     let calls : Array[Made] = []
     let t = retire_tester(calls, mode)
     t.click(Button, label="更多")
     t.run_for(@ui.move_most_ms)
+    assert_eq(t.audit(), [], msg=mode)
     assert_true(retire_said(t, "从 workspace 移除"), msg=mode)
     assert_true(!retire_said(t, "迁走聊天并移出…"), msg=mode)
   }
+  // (and nothing asked of the station for it)
   let calls : Array[Made] = []
   let t = retire_tester(calls, "settings-station-retire")
   t.click(Button, label="更多")
   t.run_for(@ui.move_most_ms)
+  assert_eq(retire_calls(calls, "copies.retirePreview").length(), 0)
+}
+
+///|
+test "its panel (opened over its page, as a press of 迁走聊天并移出… opened it once its station said what goes): Maple chosen, each kind counted and named, then copies.retire to it" {
+  let calls : Array[Made] = []
+  let t = retire_tester(calls, "settings-station-retire-panel")
   assert_eq(t.audit(), [])
-  // (directly over 移出)
-  assert_true(retire_y(t, "迁走聊天并移出…") < retire_y(t, "从 workspace 移除"))
-  retire_press(t, "迁走聊天并移出…")
-  // asked of the station what goes, then its panel: Maple the one up, chosen; each kind counted and named
-  assert_eq(retire_calls(calls, "copies.retirePreview").map(fn(p) { text(Some(p), "station") }), ["ws1/st1"])
+  // Maple the one up, chosen; each kind counted and named
   for w in ["迁走 Willow 的聊天", "迁到", "Maple", "一起迁到 Maple", "聊天", "594 个", "其中 525 个已归档", "连接", "5 个", "账号", "9 个", "无法迁移的", "正在运行的任务和服务", "6 个", "station 外的工作目录", "聊天迁过去，文件留在原处", "3 个", "开始迁移"] {
     assert_true(retire_said(t, w), msg=w + ": " + t.words().map(fn(x) { x.0 }).join("|"))
   }
@@ -181,7 +186,6 @@ test "its ⋯: 迁走聊天并移出… over 移出 only while it may be retired
   let line = t.words().iter().find_first(fn(x) { x.0 == "其中 525 个已归档" }).unwrap().4
   let note = t.words().iter().find_first(fn(x) { x.0 == accounts }).unwrap().4
   assert_true(note <= line * 2.0 + 1.0, msg="its accounts' note \{note} high, a line \{line}")
-  assert_eq(t.audit(), [])
   retire_press(t, "开始迁移")
   let asked = retire_calls(calls, "copies.retire")
   assert_eq(asked.length(), 1)

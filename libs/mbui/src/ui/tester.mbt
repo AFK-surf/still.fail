@@ -170,6 +170,7 @@ fn reset_globals() -> Unit {
   code_fields.clear()
   code_clears.clear()
   bars_hand.clear()
+  clock_moments.clear()
   perf_bytes_said.set(-1.0)
   image_data.clear()
   image_vector_drawers.clear()
@@ -415,6 +416,7 @@ pub fn Tester::new(
     tabular: 0.0,
     glyph_box: (6.0, 10.0),
     faces_wider: {},
+    latin: None,
     views: [],
     view_ids: 0,
     view_ready: {},
@@ -509,6 +511,7 @@ pub fn Tester::new(
     h264,
     audio_here: false,
     h265_here: false,
+    av1_here: false,
     stream_feeds: false,
     stream_layers: false,
     stream_layers_srgb: false,
@@ -3006,6 +3009,19 @@ pub fn Tester::glyphs_moved_on(self : Tester) -> Unit {
 /// shapes ignore it otherwise).
 pub fn Tester::tabular_wider(self : Tester, em : Double) -> Unit {
   self.fake.tabular = em
+}
+
+///|
+/// Each printable ASCII letter (U+0020 to U+007E, 95 of them) measured `regular[c - 32]` ems wide, and `bold[c - 32]`
+/// at weight 600 and more, from now on, outside the code face: as a real face measures it, where the fake host's half
+/// an em is narrower than every real face's digits, `%` and `$` (a figure the fake fitted cut short on a device: the
+/// agent's tiles' `$1,9…`, 2026-11-14). Bold measured so adds no bold_wider.
+pub fn Tester::latin_advances(self : Tester, regular : FixedArray[Double], bold : FixedArray[Double]) -> Unit {
+  guard regular.length() == 95 && bold.length() == 95 else {
+    @halt.saying("latin_advances: 95 advances each, U+0020 to U+007E")
+  }
+  self.fake.latin = Some((regular, bold))
+  words_forgotten()
 }
 
 ///|

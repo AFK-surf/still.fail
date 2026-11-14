@@ -7,7 +7,9 @@
 - A pull request merges once its own checks passed (`gh pr merge --squash`), no queue before it. What a branch's
   pushes leave out, the mbui app's tests and mbui's own at 120, 60, 24 and 7 frames a second, runs on main after the
   merge (`workflows/mbui-check.yml`, `workflows/mbui-ci.yml`; the user, 2026-11-11 15:51 UTC: 「直接合，帧率在 main 上合并后
-  跑」). Red there holds no one back and is mended forward by whoever brought it, never rolled back: the run's
+  跑」); a branch runs at 120, 60 and 24 only the sfapp test files it changed (`rates-changed`; the user, 2026-11-14:
+  「PR 上也跑改到文件的帧率检查」, after four pull requests' own changed tests went red at a rate on main). Red on main
+  holds no one back and is mended forward by whoever brought it, never rolled back: the run's
   `rates-said` says what merged since the last run that went through, the likeliest first (`scripts/rates-said.sh`).
 - Every job says `timeout-minutes`, 5 at most (`scripts/ci-timeouts.py`; only its `LONGER`, runs of the day's or by
   hand, 10). A job that needs longer is made faster.

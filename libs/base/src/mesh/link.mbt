@@ -6,6 +6,12 @@
 let max_head : Int = 64 * 1024
 
 ///|
+/// How much of a reply's body `Reply::rest` keeps unless told otherwise: enough for what a device asks whole (a list,
+/// a page of a log), and no more of a peer's bytes than a device can hold beside its work. What is longer is read as
+/// it comes (`Reply::take`), or asked for with the bound it needs.
+pub let max_body : Int = 16 * 1024 * 1024
+
+///|
 /// A stream of a connection, at the shell.
 priv struct Stream {
   shell : @shell.Shell
@@ -217,7 +223,8 @@ pub fn Reply::header(self : Reply, name : String) -> String? {
 
 ///|
 /// The next of its body as it comes (what came with the head line first); None once it ended. A reply whose `take` is
-/// given up while it waits is to be cancelled, not taken again.
+/// given up while it waits is to be cancelled, not taken again; one whose `take` failed is let go of here (its stream
+/// reset: the shell keeps a stream until it is, or is read to its end), and has ended.
 pub async fn Reply::take(self : Reply) -> Bytes? {
   if self.carry is Some(carry) {
     self.carry = None
@@ -229,6 +236,7 @@ pub async fn Reply::take(self : Reply) -> Bytes? {
   let chunk = self.stream.read() catch {
     e => {
       self.done = true
+      self.stream.reset()
       raise cut(e)
     }
   }
@@ -240,14 +248,46 @@ pub async fn Reply::take(self : Reply) -> Bytes? {
 }
 
 ///|
-/// All of its body, read to its end.
-pub async fn Reply::rest(self : Reply) -> Bytes {
-  let mut all = b""
-  while self.take() is Some(chunk) {
-    all = if all.length() == 0 { chunk } else { all + chunk }
+/// All of its body, read to its end: `most` bytes at most (`max_body` unless said). One longer fails as the piece
+/// that passes the bound comes (`too_long`: nothing past it is kept or read, and the reply is let go of, so the peer
+/// stops sending). Its pieces are kept as they come and joined once at the end.
+pub async fn Reply::rest(self : Reply, most? : Int = max_body) -> Bytes {
+  let pieces : Array[Bytes] = []
+  let mut length = 0
+  while self.take() is Some(piece) {
+    // (asked of the room left, never of a sum: a peer's lengths added up could pass what an Int holds)
+    if piece.length() > most - length {
+      self.cancel()
+      raise MeshError(
+        code="too_long",
+        message=say("reply_unreadable"),
+        cause="a reply's body is longer than the \{most} bytes kept of one",
+      )
+    }
+    length += piece.length()
+    pieces.push(piece)
   }
-  all
+  joined(pieces, length)
 }
+
+///|
+/// `pieces`, `length` bytes together, as one: each copied once.
+fn joined(pieces : Array[Bytes], length : Int) -> Bytes {
+  if pieces.length() == 1 {
+    return pieces[0]
+  }
+  let all : FixedArray[Byte] = FixedArray::make(length, b'\x00')
+  let mut at = 0
+  for piece in pieces {
+    all.blit_from_bytes(at, piece, 0, piece.length())
+    at += piece.length()
+  }
+  as_bytes(all)
+}
+
+///|
+/// `all` as the bytes they are, not copied: nothing writes it after.
+fn as_bytes(all : FixedArray[Byte]) -> Bytes = "%identity"
 
 ///|
 /// Lets go of it: its stream is stopped both ways (nothing more is read, the peer stops sending).
@@ -278,6 +318,10 @@ pub async fn Link::request(
 
 ///|
 async fn Link::ask(self : Link, head : String, body : Bytes) -> Reply {
+  // (ended, and the mesh told so: the shell is asked nothing of its connection after, `Mesh::open`)
+  if self.ended_as_told() is Some(why) {
+    raise MeshError(code="mesh", message=say("cut"), cause="connection closed: \{why.reason}")
+  }
   let opened = self.shell.call("conn.openBi", { "id": self.conn }) catch { e => raise cut(e) }
   guard opened.json is { "id": id, .. } else { raise failed("cut") }
   let stream : Stream = { shell: self.shell, id }
@@ -310,8 +354,20 @@ async fn Link::ask(self : Link, head : String, body : Bytes) -> Reply {
 }
 
 ///|
-/// Why it ended, if it has.
+/// Why it ended, once the mesh was told (by the shell, or by its own closing); none until then.
+fn Link::ended_as_told(self : Link) -> Closed? {
+  self.gone.poll() catch {
+    _ => None
+  }
+}
+
+///|
+/// Why it ended, if it has: what the mesh was told of its end once it was, the shell's word until then (it knows
+/// before the mesh's fiber that waits for it has run).
 pub fn Link::ended(self : Link) -> Closed? {
+  if self.ended_as_told() is Some(why) {
+    return Some(why)
+  }
   let said = self.shell.ask("conn.closeReason", { "id": self.conn }) catch { _ => return Some({ kind: "other", reason: "" }) }
   closed_of(said)
 }

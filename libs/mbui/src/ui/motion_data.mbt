@@ -226,7 +226,48 @@ pub fn Ctx::every(
     None => periods_at(self.clock, from, period)
   }
   self.wake_at_time(next, later=true, loc~)
+  clock_moment_said(next)
   n
+}
+
+///|
+/// The moments, not come yet, in order, of what only the clock brings while it is seen, what is shown not waiting for
+/// it: a count kept by Ctx::every coming to its next period (a run's time said each second), a wait said `later`
+/// holding (Ctx::held: a countdown's next second, the next episode at its end, a toast's time out). Told apart so from
+/// what a cause sets going (Tester::clock_came).
+// kept across runs: emptied as each Tester is made, each taken off as it is read come
+let clock_moments : Array[Double] = []
+
+///|
+/// Moment `at`, one only the clock brings (clock_moments), kept once.
+fn clock_moment_said(at : Double) -> Unit {
+  let mut i = 0
+  while i < clock_moments.length() && clock_moments[i] < at {
+    i = i + 1
+  }
+  if i == clock_moments.length() || clock_moments[i] != at {
+    clock_moments.insert(i, at)
+  }
+}
+
+///|
+/// Whether a moment only the clock brings (clock_moments: a count's next period, a wait said `later` holding) came up
+/// to `to` (the frame just drawn's, say) since this was asked before: what the clock rebuilt then. Those up to `to` are
+/// taken off as they are read.
+pub fn Tester::clock_came(self : Tester, to : Double) -> Bool {
+  self.reads_own()
+  let mut n = 0
+  while n < clock_moments.length() && clock_moments[n] <= to {
+    n = n + 1
+  }
+  if n > 0 {
+    let left = clock_moments.length() - n
+    for k in 0..<left {
+      clock_moments[k] = clock_moments[k + n]
+    }
+    clock_moments.truncate(left)
+  }
+  n > 0
 }
 
 ///|

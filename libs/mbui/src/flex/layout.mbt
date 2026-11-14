@@ -345,6 +345,43 @@ fn rows_room(v : Double, g : Double) -> Double {
 }
 
 ///|
+/// Where a size `size` down a page's list's rows is laid on a host's grid of `g` pixels a point (Style's rows_grid),
+/// on its way from `from` to `goal` (either NaN: at rest, or on no way): as far along between its two rests as laid (each
+/// put up, as a row at rest is) as it is between `from` and `goal`, then put on the grid toward where it goes, never past
+/// its rest as laid: growing, up; closing, down. So a row on its way comes to its rest in whole pixels one way with no
+/// last step as its way ends, on the grid or off it, and two of one change on one curve sum to whole pixels that go one
+/// way. At rest, up. What lays a row of a rows_grid column out (layout_flex) and what reads one there (a page's list's
+/// counts of its keys on their way, the share of a key's block that shows); a height on its way inside a row is laid on
+/// the grid where it is worked out instead (Style's come_grid, come_tall_on).
+pub fn rows_on_way(size : Double, from : Double, goal : Double, g : Double) -> Double {
+  if g <= 0.0 {
+    return size
+  }
+  let up = fn(v : Double) { (v * g - 0.000001).ceil() / g }
+  if !known(from) || !known(goal) || (goal - from).abs() < 0.000001 {
+    return up(size)
+  }
+  let (lf, lg) = (up(from), up(goal))
+  let laid = lf + (lg - lf) * ((size - from) / (goal - from))
+  if goal > from {
+    fmin((laid * g - 0.000001).ceil() / g, lg)
+  } else {
+    fmax((laid * g + 0.000001).floor() / g, lg)
+  }
+}
+
+///|
+/// rows_on_way of item style `s`, `size` tall: between its rests as laid while it is on a way of its own down a column
+/// (Style's come_*, before its way's end), else up.
+fn row_on_grid(s : Style, size : Double, g : Double) -> Double {
+  if known(s.come_now) && known(s.come_ends) && known(s.come_goal) && s.come_now < s.come_ends && !s.come_across {
+    rows_on_way(size, s.come_from, s.come_goal, g)
+  } else {
+    rows_on_way(size, undef, undef, g)
+  }
+}
+
+///|
 /// Whether a container laid out in the current compute() has an absolutely
 /// positioned child: without one, layout_static_absolute has nothing to
 /// place.
@@ -617,6 +654,7 @@ fn size_node(
       any_w = !bx.of_cb_w
       any_h = !bx.of_cb_h
     }
+    let leaf = node.children.length() == 0 && !node.room
     let mut k = 0
     while k < n {
       let same_cb = same(c[k + 4], cb_w) && same(c[k + 5], cb_h)
@@ -625,8 +663,7 @@ fn size_node(
           (
             (any_w || same(c[k + 4], cb_w)) &&
             (any_h || same(c[k + 5], cb_h)) &&
-            same(c[k], kw) &&
-            same(c[k + 1], kh)
+            (leaf || (same(c[k], kw) && same(c[k + 1], kh)))
           )
         ) &&
         reusable(kw, aw, c[k], c[k + 2], c[k + 6]) &&
@@ -716,6 +753,22 @@ fn size_uncached(
   perform : Bool,
 ) -> Double {
   let s = node.style
+  // what it holds kept to its foot while its height goes its way (Style's come_foot), given that height by what lays it
+  // out: laid out whole at the height it comes to, measured so, and moved so its bottom is the node's bottom (its top
+  // cut there as it grows, the room over it empty as it closes)
+  if s.come_foot && perform && known(kh) {
+    s.come_foot = false
+    let now = s.come_now
+    s.come_now = undef
+    size_uncached(node, kw, undef, aw, ah, cb_w, cb_h, false) |> ignore
+    let natural = out_h.val
+    let w = size_uncached(node, kw, natural, aw, ah, cb_w, cb_h, perform)
+    s.come_now = now
+    s.come_foot = true
+    come_keep_foot(node, kh - natural)
+    out_h.val = kh
+    return w
+  }
   // an item coming or going along a row: as wide as its way has got of what it comes to, what it holds laid out whole
   // from its start at that (Style's come_across), as tall as that makes it; given its width by what lays it out (a
   // row's item at its basis), what it holds laid out whole all the same
@@ -740,14 +793,21 @@ fn size_uncached(
     // height
     let now = s.come_now
     s.come_now = undef
-    let fw = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false)
+    size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false) |> ignore
     s.come_now = now
     let natural = out_h.val
     let tall = come_height(s, natural)
     if known(tall) {
       // (what it holds laid out whole, in as much room as it comes to, not in the part of it its way has got: what
-      // is measured in it by the room it is given comes out the same all the way; it, as tall as its way has got)
-      let w = size_uncached(node, if known(kw) { kw } else { fw }, natural, aw, ah, cb_w, cb_h, perform)
+      // is measured in it by the room it is given comes out the same all the way; it, as tall as its way has got.
+      // Across, given what it was given (`kw`, else the room `aw` offers), never the width it came to measured so: a
+      // node told its room (View::by_room) measured in a room offered comes to what it holds there, and laid out again
+      // at that width it is told another room and lays it out otherwise, a table's rows beside each other at 760 and
+      // 586 wide stacked, frame after frame: settings-station-processes' 平铺, the switches' sweep, 2026-11-14)
+      let w = size_uncached(node, kw, natural, aw, ah, cb_w, cb_h, perform)
+      if perform {
+        come_keep_foot(node, tall - natural)
+      }
       out_h.val = tall
       return w
     }
@@ -887,6 +947,19 @@ fn size_uncached(
     return layout_flex(node, b, if known(w) { w } else { fw }, sized, aw, ah, perform)
   }
   layout_flex(node, b, w, h, aw, ah, perform)
+}
+
+///|
+/// What `node` holds, laid out whole at the height its come way goes to, kept to its foot where it says so (Style's
+/// come_foot): moved by `by` (how much shorter it shows than that height, as a negative), so its bottom is the node's
+/// bottom and what is over the node's top is cut there. Nothing where it keeps to its top, as ever.
+fn come_keep_foot(node : Node, by : Double) -> Unit {
+  if !node.style.come_foot || by == 0.0 {
+    return
+  }
+  for c in node.children {
+    c.top = c.top + by
+  }
 }
 
 ///|
@@ -1699,9 +1772,10 @@ fn layout_flex(
         // (a page's list's rows on a host's pixels: each as tall as whole pixels before what is left is worked out, as it
         // is laid (below), so a row that grows is given what is left of whole-pixel rows, not of rows a fraction short
         // that are then put up a pixel over it (a key on its way pushing all over it down by one; a short list's rows past
-        // its foot at rest). Two or more that grow each put up as theirs is: one pixel each at most; no list has two)
+        // its foot at rest). Two or more that grow each put up as theirs is: one pixel each at most; no list has two. One
+        // on its way, between its rests as laid: rows_on_way)
         let hyp = if rows_g > 0.0 {
-          let h = (f.unsafe_get(k * ITEM + HYP) * rows_g - 0.000001).ceil() / rows_g
+          let h = row_on_grid(flow.unsafe_get(at.unsafe_get(k)).style, f.unsafe_get(k * ITEM + HYP), rows_g)
           f.unsafe_set(k * ITEM + HYP, h)
           h
         } else {
@@ -1766,12 +1840,14 @@ fn layout_flex(
           f.unsafe_set(k * ITEM + MAIN, f.unsafe_get(k * ITEM + HYP))
         }
       }
-      // (a page's list's rows on a host's pixels: each as tall as whole pixels, Style's rows_grid)
-      let g = s.rows_grid
-      if g > 0.0 && !row {
+      // (a page's list's rows on a host's pixels: each as tall as whole pixels, Style's rows_grid, as laid above where
+      // nothing flexed it; else on its way between its rests as laid, rows_on_way)
+      if rows_g > 0.0 {
         for k in ln.start..<ln.end {
           let m = f.unsafe_get(k * ITEM + MAIN)
-          f.unsafe_set(k * ITEM + MAIN, (m * g - 0.000001).ceil() / g)
+          if m != f.unsafe_get(k * ITEM + HYP) {
+            f.unsafe_set(k * ITEM + MAIN, row_on_grid(flow.unsafe_get(at.unsafe_get(k)).style, m, rows_g))
+          }
         }
       }
       let mut used = gaps

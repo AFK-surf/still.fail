@@ -132,8 +132,9 @@ export function stationHost(answers: Answers) {
   // of its own (a number, saying 没有权限; a `Status`, its body), or the station's refusal of the link (a CoreError, as the mesh says it: a security mode's); `resumes`:
   // one asked `since` an event says it was told first what came after it; `marks`: one not resumed is told where the
   // log is, an id alone (station/src/api/events.ts); `follows`: one asked `running=1` says it follows the sessions at work
-  // itself (FOLLOWS); `build`: the build its stream's answer says (`stillfail-build`, oldest.ts), none unless given.
-  const gate: { stream: "open" | "fail" | "hang" | number | Status | CoreError; resumes: boolean; marks: boolean; follows: boolean; shared: boolean; build?: string } = { stream: "open", resumes: false, marks: false, follows: true, shared: false };
+  // itself (FOLLOWS); `build`: the build its stream's answer says (`stillfail-build`, oldest.ts), none unless given;
+  // `head`: where its log was as a resumed one joined (`stillfail-head`), what it tells up to it told again.
+  const gate: { stream: "open" | "fail" | "hang" | number | Status | CoreError; resumes: boolean; marks: boolean; follows: boolean; shared: boolean; build?: string; head?: string } = { stream: "open", resumes: false, marks: false, follows: true, shared: false };
   let marked = 0;
   // What it tells as events besides its events stream (GET /resources asked as events), by path: those named here tell
   // what is offered on them (`tell`); one it has an answer for answers that whole, as a station from before does.
@@ -183,14 +184,14 @@ export function stationHost(answers: Answers) {
       const compress = asksCompressed(req) ? zstdBlocks() : null;
       const body: Pull<Uint8Array> = { take: Effect.map(Queue.take(queue), (c) => (c && compress ? compress(c) : c)) };
       const follows = gate.follows && path.includes("running=1");
-      const headers: [string, string][] = [...build, ...(resumed ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(follows ? [["stillfail-follows", "running"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
+      const headers: [string, string][] = [...build, ...(resumed ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(resumed && gate.head !== undefined ? [["stillfail-head", gate.head] as [string, string]] : []), ...(follows ? [["stillfail-follows", "running"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
       return { status: 200, headers, body };
     }),
   );
-  /// Sends an event on the newest open stream.
-  const push = (name: string, data: unknown) => {
+  /// Sends an event on the newest open stream; `id`: its place in the station's log.
+  const push = (name: string, data: unknown, id?: string) => {
     const s = [...streams].reverse().find((x) => !x.closed)!;
-    Queue.offerUnsafe(s.queue, new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
+    Queue.offerUnsafe(s.queue, new TextEncoder().encode(`${id !== undefined ? `id: ${id}\n` : ""}event: ${name}\ndata: ${JSON.stringify(data)}\n\n`));
   };
   const end = () => {
     const s = streams[streams.length - 1];

@@ -232,6 +232,22 @@ pub(all) struct Style {
   // (the share of the way gone for the share of its time gone); none, a Move by how far. A way of its own alone: in a
   // group with others (come_group set), the group's.
   mut come_spec : (Double, (Double) -> Double)?
+  // Not CSS's: whether what it holds keeps to its foot as its come way (come_*) goes, down a column: laid out whole at
+  // the height it comes to as ever, its bottom at the item's bottom all the way, cut at the item's top (a composer
+  // growing from its foot, what is over it going up with it: the view's View::resizes `foot`); else to its top, cut at
+  // its foot. Let go with the way (the view's come_done, a structure's way said anew).
+  mut come_foot : Bool
+  // Not CSS's: the host's grid (pixels a point; 0: none) a height on its way (come_*) is laid on as it goes, toward where
+  // it goes and never past its rest (come_tall_on): closing, its height now put down; growing, put up; at its rest once
+  // less than a pixel of its way is left, its rest as it is. Set by the view as the way sets out (View::comes, a declared
+  // resize of View::resizes) on a node under a page's list on a host's grid whose keys make their way (in one of its
+  // blocks, its head or its foot), so that what holds it, a row put up on the grid round it, goes one way with it
+  // whatever lies beside it; let go as the way ends (come_done). An at_once list's insides go as they did, raw; the rule
+  // comes with the list as it is switched on. What goes by the way's share (the gap before it, its margins, the
+  // padding of a box taking no room holding nothing: come_k) is its share of this height, so goes with it. Never set on a list's own slot (a key on its way is the list's: rows_on_way of its counts)
+  // nor on an item laid in a rows_grid column (layout_flex's rows_on_way): no height is put on the grid twice. A way
+  // going as the grid is set or changed keeps the grid it set out with till it ends.
+  mut come_grid : Double
   // Not CSS's: holding nothing laid out (all it holds laid out nowhere, or none), it is laid out nowhere itself: no
   // room, padding or gap in what holds it (an old view's box `gone_empty`, CSS's :empty { display: none }). Its padding
   // top and foot as much as what it holds is there while what it holds comes from none or goes to none (come_fill: the
@@ -343,6 +359,8 @@ pub fn Style::new() -> Style {
     come_fill: false,
     come_across: false,
     come_spec: None,
+    come_foot: false,
+    come_grid: 0.0,
     gone_empty: false,
     structural: false,
     rows_grid: 0.0,

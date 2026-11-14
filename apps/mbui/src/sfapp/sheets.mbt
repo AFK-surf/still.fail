@@ -805,7 +805,7 @@ fn agent_title_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit
       plain=true,
     )
     c.box(w=Fill(1.0), gap=1.0, fn() {
-      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
+      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false, allow_ellipsis=true) |> ignore
       agent_status(c, src, a)
     })
     |> ignore
@@ -830,6 +830,11 @@ fn open_agent(src : Source, r : ChatRef, key : String) -> Unit {
 ///|
 /// A row of the card: what it is about, what there is of it (`under` it what goes with it:
 /// an account's allowance, a line of its own), what is under way at its end (`trailing`), where a tap leads.
+///|
+// kept across runs: a value (no field of it changes)
+let agent_row_body_style : @ui.Style = @ui.css("w=Full")
+
+///|
 fn agent_row(
   c : @ui.Ctx,
   key : String,
@@ -842,7 +847,7 @@ fn agent_row(
 ) -> Unit {
   info_row(c, key, fn() {
     agent_label(c, label, label_w)
-    c.box(w=Fill(1.0), keep=true, fn() {
+    c.box(style=agent_row_body_style, keep=true, fn() {
       c.text(value, style=agent_row_value, keep=true) |> ignore
       match under {
         Some(f) => f()
@@ -950,6 +955,8 @@ fn agent_lines(c : @ui.Ctx, card : Json?) -> Unit {
         color=if flag(Some(l), "now") { t.p.text } else { t.p.muted },
         wrap=false,
         line=18.0,
+        // (one line each, an agent's own words: cut short where they run past it)
+        allow_ellipsis=true,
       )
       |> ignore
     }
@@ -967,6 +974,25 @@ fn agent_tiles_known(card : Json?) -> Bool {
 ///|
 /// The figures that say most (AgentTiles): what it cost, the cache's hit rate, how full its context is, each large over
 /// its name, side by side; a context worth a look in its level's colour.
+///|
+fn agent_tiles_fit_size(c : @ui.Ctx, figure : String, room : Double) -> Double {
+  let sizes : Array[Double] = if figure.length() > 6 {
+    [16.0, 15.0, 14.0, 13.0, 12.0, 11.0, 10.0]
+  } else {
+    [20.0, 17.0, 16.0, 15.0, 14.0, 13.0, 12.0, 11.0, 10.0]
+  }
+  for sz in sizes {
+    if @sf.node_words_w(figure, c.sp(sz), weight=600) <= room - 1.0 {
+      return sz
+    }
+  }
+  10.0
+}
+
+///|
+/// The figures that say most (UsageTiles.kt): what it cost, the cache's hit rate, how full its context is — 20/26 bold
+/// (shrinking cleanly to fit the tile's inner width so numbers never truncate) above 12/16 muted; its context's opens
+/// what can be done to it when it can be.
 fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = None) -> Unit {
   let t = @sf.theme()
   let context = field(card, "context")
@@ -975,9 +1001,18 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
   if !agent_tiles_known(card) {
     return
   }
+  let tile_count = (if cost != "" { 1 } else { 0 }) +
+    (if cache is Some(Object(_)) { 1 } else { 0 }) +
+    (if context is Some(Object(_)) { 1 } else { 0 })
+  let win_w = c.window_size().0
+  let panel_w = if win_w < @sf.narrow_most { win_w } else { dmin(@sf.dialog_w, win_w - @sf.dialog_margin) }
+  let row_w = dmax(0.0, panel_w - 2.0 * (@sf.panel_card_in + @sf.corner_inset))
+  let tile_w = (row_w - 8.0 * Double::from_int(tile_count - 1)) / Double::from_int(tile_count)
+  let figure_room = dmax(0.0, tile_w - 2.0 * @sf.text_in)
   let tile = fn(figure : String, name : String, color : Int64, open : ContextTile?) {
     // its context's, when something can be done to it (context.mbt): a tap opens it
     let id = if open is Some(_) { c.id("agent/context-tile") } else { 0 }
+    let fig_size = agent_tiles_fit_size(c, figure, figure_room)
     c.box(
       id~,
       w=Fill(1.0),
@@ -996,7 +1031,7 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
         c.box(fn() {
           c.text(
             figure,
-            size=if figure.length() > 6 { 16.0 } else { 20.0 },
+            size=fig_size,
             line=26.0,
             weight=600,
             color~,
@@ -1110,7 +1145,7 @@ fn job_meta(c : @ui.Ctx, job : Json?, size : Double) -> Unit {
       _ => @ui.span(text(pv, "text"))
     }
   })
-  c.rich(runs, size~, color=t.p.muted, wrap=false) |> ignore
+  c.rich(runs, size~, color=t.p.muted, wrap=false, allow_ellipsis=true) |> ignore
 }
 
 ///|
@@ -1125,7 +1160,7 @@ fn job_row(c : @ui.Ctx, key : String, job : Json?, on_press~ : () -> Unit) -> Un
     fn() {
       c.box(pt=job_dot_over, fn() { job_dot(c, text(job, "tone")) }) |> ignore
       c.box(w=Fill(1.0), gap=1.0, fn() {
-        c.text(text(job, "name"), size=t.t.ui, weight=500, color=if off { t.p.muted } else { t.p.text }, wrap=false)
+        c.text(text(job, "name"), size=t.t.ui, weight=500, color=if off { t.p.muted } else { t.p.text }, wrap=false, allow_ellipsis=true)
         |> ignore
         job_meta(c, job, 12.5)
       })
@@ -1287,10 +1322,10 @@ fn job_words_node(parent : @view.View, words : () -> String, look : () -> @view.
 
 ///|
 /// Pieces of words in node `parent` (an old view's rich words), `runs` as they are now, set `look` in `ink` where a
-/// piece says no ink of its own.
+/// piece says no ink of its own; on one line, cut short where they run past it (a job's words are its agent's).
 fn job_runs_node(parent : @view.View, runs : () -> Array[@ui.Run], look : () -> @view.WordsLook, ink : () -> Int64) -> Unit {
   parent.box(fn(w) {
-    w.words_runs(By(runs), look=@signals.untracked(look)).words_look(By(look)).ink(By(ink)) |> ignore
+    w.words_runs(By(runs), look=@signals.untracked(look)).words_look(By(look)).ink(By(ink)).allow_ellipsis(By(fn() { !look().wrap })) |> ignore
   })
   |> ignore
 }

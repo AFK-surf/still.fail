@@ -1016,8 +1016,8 @@ export class Data {
     // Beside it, once its chain moved to its people's logs: the person logs and the statements' bodies its stations
     // gave (views/lock.ts `lockLogs`, `lockBodies`); whom the person here added and as what (`lockAdded`); whether the
     // lock held says it is in safe mode, a few bytes (`lockSafe`); which of its stations last said to this device that
-    // they serve what a moved chain is made of (`lockServes`).
-    if (table === "lockLogs" || table === "lockBodies" || table === "lockAdded" || table === "lockSafe" || table === "lockServes") return [this.#ofWorkspace(key) ?? null, [key, table]];
+    // they serve what a moved chain is made of (`lockServes`); what they saw of its devices' builds (`lockBuilds`).
+    if (table === "lockLogs" || table === "lockBodies" || table === "lockAdded" || table === "lockSafe" || table === "lockServes" || table === "lockBuilds") return [this.#ofWorkspace(key) ?? null, [key, table]];
     // A workspace's ways as its stations keep them (views/ways-stations.ts): in the workspace's, by its id.
     if (table === "ways") return [this.#ofWorkspace(key) ?? null, [key, "ways"]];
     // Its stations' names and marks as they keep them (views/station-marks.ts): in the workspace's, by its id.

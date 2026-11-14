@@ -219,6 +219,9 @@ let h264_said : Ref[Int?] = Ref(None)
 let h265_said : Ref[Int?] = Ref(None)
 
 ///|
+let av1_said : Ref[Int?] = Ref(None)
+
+///|
 let feeds_said : Ref[Int?] = Ref(None)
 
 ///|
@@ -1196,6 +1199,12 @@ impl @hostapi.Host for Native with st_h265_here(_) { said_once(h265_said, fn() {
 
 ///|
 impl @hostapi.Host for Native with st_hevc(_, id, hvcc, w, h) { st_hevc(id, hvcc, w, h) }
+
+///|
+impl @hostapi.Host for Native with st_av1_here(_) { said_once(av1_said, fn() { st_av1_here() }) }
+
+///|
+impl @hostapi.Host for Native with st_av1(_, id, av1c, w, h) { st_av1(id, av1c, w, h) }
 
 ///|
 /// Every platform's draws each glyph on its pixels, a list's rows set on them as it moves.

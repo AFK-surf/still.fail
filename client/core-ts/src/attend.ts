@@ -66,6 +66,9 @@ type Visit = {
   top: number;
   said: Set<number>;
   visible: boolean;
+  /// Come into view again: what it holds by then came while it was not (`top` is taken up to it as it is next made).
+  again: boolean;
+  /// When it came into view again (this device's clock), for its agents: one at work since then started as it showed.
   resumedAt: number | null;
   statuses: Map<string, string>;
   started: Set<string>;
@@ -273,7 +276,10 @@ export class Attend {
         v.started.clear();
         v.statuses.clear();
         v.made = false;
-        if (visible) v.resumedAt = this.#host.nowMs();
+        if (visible) {
+          v.resumedAt = this.#host.nowMs();
+          v.again = true;
+        }
         v.visible = visible;
       }
       if (showing.length === 0) this.visits.delete(key);
@@ -320,13 +326,21 @@ export class Attend {
     let visit = this.visits.get(key);
     if (!visit) {
       const made = session !== null && this.#making.delete(`${station}\u0001${session}`);
-      visit = { at: now, read: known, session, top: newest, said: new Set(), visible: shown.some((f) => f.visible), resumedAt: null, statuses: new Map(), started: new Set(), made };
+      visit = { at: now, read: known, session, top: newest, said: new Set(), visible: shown.some((f) => f.visible), again: false, resumedAt: null, statuses: new Map(), started: new Set(), made };
       this.visits.set(key, visit);
     }
+    // Said: what its station's stream told as it happened (`caught` stops before it: station/topics.ts) after what the
+    // chat held as it came into view. What a stream told again as it resumed, a read caught up on, or what came while it
+    // was out of view is not; told by the stream's own facts, never by the station's clock against this device's.
+    if (visit.again) {
+      visit.top = Math.max(visit.top, newest);
+      visit.again = false;
+    }
     const caught = typeof value.caught === "number" ? value.caught : 0;
+    const told: Set<number> | null = Array.isArray(value.told) ? new Set(value.told) : null;
     for (const m of messages) {
       const n = seq(m);
-      if (visit.visible && n > visit.top && n > caught && (visit.resumedAt === null || (typeof m.createdAt === "number" && m.createdAt >= visit.resumedAt))) visit.said.add(n);
+      if (visit.visible && n > visit.top && n > caught && (told === null || told.has(n))) visit.said.add(n);
     }
     visit.top = Math.max(visit.top, newest);
     if (messages.some((m) => visit.said.has(seq(m)))) out.messages = messages.map((m) => (visit.said.has(seq(m)) ? { ...m, said: true } : m));

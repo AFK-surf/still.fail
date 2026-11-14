@@ -12,6 +12,8 @@ import { fold, movedRoot } from "./lock-moved.ts";
 import { type Body, type Said, bodiesOf, byHash, commitOf } from "./lock-statements.ts";
 import { checkChain, crypto, personOf } from "./personal-lock.ts";
 import { checkLock, signerIn } from "./vault/lock-check.ts";
+import { COUNTED_FROM } from "./station/oldest.ts";
+import { MOVED_FROM_BUILD } from "../../../station/src/api/moved-from.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -53,20 +55,65 @@ export type HandOverPlan =
   /// Members the chain names with a device that signs and no log of their own bound: theirs take their own lock by
   /// themselves (views/lock.ts `ownLockFor`); the handover waits for them. So too a member bound to a log with an app
   /// device that signs on the chain and is not on that log as held here (or whose log is not held): the state as if
-  /// moved names a member's devices by their log alone, so it would be out after the move.
-  | { waits: string[] }
+  /// moved names a member's devices by their log alone, so it would be out after the move: those devices (`devices`,
+  /// by their id on the chain), which the owner's page names (views/lock.ts `upgradeOf`).
+  | { waits: string[]; devices?: { sub: string; id: string }[] }
   /// What is still to be said (`says`, in order; `webs`), whom the chain names that is not said (no log of their own,
   /// no device that signs: `unsaid`, with the chain's role), the target, and the state as if moved once it is said.
   | { says: Said[]; webs: Web[]; unsaid: { sub: string; role: string; email: string }[]; target: Target; asIf: AsIf };
 
 /// From when (unix seconds, by this device's clock) a workspace's chain is handed over by itself (views/lock.ts
-/// `handsOver`): null, never yet. A station or app from before `moved`, `ws` and `web` refuses a chain or log holding
-/// one, so this is set only once the builds that read them have been out seven days, with the floors raised
-/// (rules/AGENTS.md; the root AGENTS.md, Changes, checks and CI).
-export const HAND_OVER_FROM: number | null = null;
+/// `handsOver`): the day this was written (2026-11-14), so on every build from this one. Not a date anyone waits for (the
+/// user, 2026-11-14: 无感迁移, no date, no switch, nobody told to update): what holds a workspace back is what uses it,
+/// each station of its chain saying it serves what a moved chain is made of and each app device it lets in running a
+/// build that takes one (`devicesWaited`), the writer's own log the same (views/lock.ts `mayWriteNew`). It is only
+/// where `mayHandOver`'s fourteen days count from for a chain begun before it.
+export const HAND_OVER_FROM: number | null = 1794614400;
+/// Held for now (2026-11-14): no app hands a chain over by itself. The locks' rounds on real stations, run for the first
+/// time on workspaces that had moved (the main branch's side run after #6102), showed what a moved workspace still
+/// does wrong: a device approved after the move is let in and never given the vault, a new member's first device is
+/// asked once more, a device asking from the page that waits is not let in. A move cannot be undone, so none is made
+/// until those are mended; a host made for tests (`handOverByTests`, `handOverAuto`) goes on handing over, so what a
+/// moved workspace does stays run. Taken out, by the change that mends the last of them.
+export const HAND_OVER_HELD = true;
 /// How long the person who turned safe mode on has to hand the chain over before another owner's device does (the
 /// owner, 2026-11-14): from `HAND_OVER_FROM` or the genesis, whichever is later.
 export const HAND_OVER_FIRST_SECS = 14 * 86400;
+
+/// How long a device no station of the chain has seen is not waited for (the owner was told, 2026-11-14:
+/// 「超过 7 天没上线的设备不等」): it uses nothing meanwhile, and as it comes back a station of a moved workspace tells a
+/// core too old for it to update (station/src/mesh/serve.ts `movedTooOld`).
+export const IDLE_SECS = 7 * 86400;
+/// For now, a chain whose members bound to a log are more than this is not handed over: a workspace said in its people's
+/// logs is bounded (`LOGS_MOST`, 256 logs a workspace) and one past it is a dead end.
+export const HAND_OVER_MEMBERS_MOST = 200;
+/// For now, nor one whose root's log would pass this many entries with the handover's statements (`CHAIN_MOST`, 1024).
+export const HAND_OVER_LOG_MOST = 512;
+
+/// Whether a device that said `build` (its highest, as a station saw it ask: -1, none said) takes a moved workspace: a
+/// release's (COUNTED_FROM on) from MOVED_FROM_BUILD on; one under COUNTED_FROM, a development build's or an iOS app's
+/// (its TestFlight number, libs/mbui/scripts/ios.sh), cannot be told apart and is taken as able (the tests' devices say
+/// such builds; the iOS app updates by TestFlight); none said is not.
+export const ableBuild = (build: number): boolean => build >= 0 && (build < COUNTED_FROM || build >= MOVED_FROM_BUILD);
+
+/// What the stations said of the devices' builds (GET /lock `builds`, GET /lock/person), kept beside a lock: each
+/// station's `since` by its id, and per device the highest build and the latest `at` any of them said.
+export type BuildsSeen = { since: Record<string, number>; devices: Record<string, { build: number; at: number }> };
+
+/// Of the devices `ids`, those a handover (or a write of a kind an older app refuses) waits for, by what the stations
+/// `of` said (`seen`): one seen on a build not able (`ableBuild`) within IDLE_SECS of `now`, and one never seen while the
+/// latest `since` of those stations is within IDLE_SECS (none said: every one not seen is waited for). One not seen
+/// for IDLE_SECS uses nothing, and is not waited for.
+export function devicesWaited(ids: Iterable<string>, seen: BuildsSeen, of: readonly string[], now: number): string[] {
+  const said = of.flatMap((id) => (typeof seen.since[id] === "number" ? [seen.since[id]!] : []));
+  const since = said.length === 0 ? null : Math.max(...said);
+  const out: string[] = [];
+  for (const id of ids) {
+    const d = seen.devices[id];
+    if (d !== undefined ? !ableBuild(d.build) && now - d.at < IDLE_SECS : since === null || now - since < IDLE_SECS) out.push(id);
+  }
+  return out.sort();
+}
 
 /// Who turned safe mode on: the person of the device the genesis names with the key that signed it (its body's
 /// `owner` where it names none so).
@@ -170,8 +217,8 @@ export function handOverPlan(ws: string, entries: readonly Entry[], who: Who, ch
   for (const [id, w] of webs) if ((before.webs.get(id) ?? 0) < w.exp) toWeb.push({ id, label: w.label, exp: w.exp });
   // And what it would be once said: the target, or this device cannot hand it over.
   const asIf = says.length === 0 && toWeb.length === 0 ? before : afterSaying(ws, who, chains, bodies, says, toWeb, now);
-  const out = [...new Set([...apps].filter(([id, a]) => !hasApp(asIf, id, a)).map(([, a]) => a.sub))];
-  if (out.length > 0) return { waits: out.sort() };
+  const lacking = [...apps].filter(([id, a]) => !hasApp(asIf, id, a)).map(([id, a]) => ({ sub: a.sub, id }));
+  if (lacking.length > 0) return { waits: [...new Set(lacking.map((x) => x.sub))].sort(), devices: lacking };
   const off = differs(target, asIf, who.sub);
   if (off !== null) return { refused: `said, the list would not be the chain's: ${off}` };
   return { says, webs: toWeb, unsaid, target, asIf };

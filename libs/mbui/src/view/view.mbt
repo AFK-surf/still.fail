@@ -2576,34 +2576,59 @@ fn Tree::alone_laid_out(self : Tree) -> Unit {
     let at = self.alone_due[j]
     j = j + 1
     let n = self.nodes[at]
-    if n.live && n.flex.dirty && n.flex.laid_given() {
-      self.work.computes = self.work.computes + 1
-      self.laids = self.laids + 1
-      @flex.relayout(n.flex)
-      self.alone_laid.push((at, @flex.computes()))
-      // (what it holds came out another size than it is counted: what holds it laid out again, from the nearest that
-      // lays out alone above it as a change in it is (Tree::layout_marked_at), which measures it there)
-      match self.alone_asks.get(at) {
-        Some(ask) if ask() => {
-          let mut i = n.parent
-          while i >= 0 {
-            let m = self.nodes[i]
+    if n.live && n.flex.dirty {
+      let mut anc_dirty = false
+      let mut p = n.parent
+      while p >= 0 {
+        if !self.nodes[p].slot && self.nodes[p].flex.dirty {
+          anc_dirty = true
+          break
+        }
+        p = self.nodes[p].parent
+      }
+      if !anc_dirty && n.flex.laid_given() {
+        if n.flex.children.is_empty() && n.flex.measure is None {
+          n.flex.dirty = false
+        } else {
+          self.work.computes = self.work.computes + 1
+          self.laids = self.laids + 1
+          @flex.relayout(n.flex)
+          self.alone_laid.push((at, @flex.computes()))
+        }
+        // (what it holds came out another size than it is counted: what holds it laid out again, from the nearest that
+        // lays out alone above it as a change in it is (Tree::layout_marked_at), which measures it there)
+        match self.alone_asks.get(at) {
+          Some(ask) if ask() => {
+            let mut i = n.parent
+            while i >= 0 {
+              let m = self.nodes[i]
+              if !m.slot {
+                m.flex.dirty = true
+                if m.alone && m.flex.laid_given() {
+                  self.alone_due.push(i)
+                  break
+                }
+              }
+              i = m.parent
+            }
+          }
+          _ => ()
+        }
+      } else {
+        // (no longer as it was asked, or what holds it already to be laid out: laid out with what holds it, by the
+        // layout of all of it after this)
+        let mut i = n.parent
+        while i >= 0 {
+          let m = self.nodes[i]
+          if !m.slot {
             m.flex.dirty = true
-            if m.alone && m.flex.laid_given() {
+            if m.alone && m.flex.laid_given() && !anc_dirty {
               self.alone_due.push(i)
               break
             }
-            i = m.parent
           }
+          i = m.parent
         }
-        _ => ()
-      }
-    } else if n.live && n.flex.dirty {
-      // (no longer as it was asked: laid out with what holds it, by the layout of all of it after this)
-      let mut i = n.parent
-      while i >= 0 {
-        self.nodes[i].flex.dirty = true
-        i = self.nodes[i].parent
       }
     }
   }
@@ -5238,6 +5263,18 @@ pub fn rows_slot_on(h : Double, g : Double) -> Double {
 }
 
 ///|
+/// How tall a row `h` tall on its way (`st`'s come_*, at `at`) to `goal` is laid out on a grid of `g` pixels a point: as
+/// flex lays it there (flex's rows_on_way), between its rests as laid, its end where not laid out yet as it will be; as
+/// rows_slot_on past its end.
+fn rows_way_on(st : @flex.Style, h : Double, goal : Double, at : Double, g : Double) -> Double {
+  if !(st.come_ends == st.come_ends && at >= st.come_ends) {
+    @flex.rows_on_way(h, st.come_from, goal, g)
+  } else {
+    rows_slot_on(h, g)
+  }
+}
+
+///|
 /// Node `at` a page's list's rows' holder (Tree::set_rows_grid), its rows laid out on the grid there is; those let go
 /// since no more counted. Made in a row of another such list, a fault (rows_list_nested_said).
 fn Tree::rows_list(self : Tree, at : Int) -> Unit {
@@ -5445,9 +5482,9 @@ fn Tree::measured_now(self : Tree) -> Unit {
   @signals.untracked(fn() {
     self.bound_at(at)
     if self.layout_due && self.measured_gen < 0 {
+      let g = @flex.computes() + 1
       self.alone_laid_out()
       self.work.computes = self.work.computes + 1
-      let g = @flex.computes() + 1
       self.measuring = true
       self.laids = self.laids + 1
       @flex.compute(self.nodes[0].flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
@@ -8108,7 +8145,12 @@ fn View::park(self : View, v : View) -> () -> Unit {
   m.parent = -1
   self.tree.touched(self.at)
   self.tree.order_marked_in(self.at)
-  self.boxes_again()
+  let h = if n.slot { self.tree.box_holder(self.at) } else { self.at }
+  let own = if !m.slot { Some(m.flex) } else { None }
+  match own {
+    Some(b) if self.tree.box_taken_out(h, b) => ()
+    _ => self.boxes_again()
+  }
   self.tree.modals_told(within=v.at)
   // (woken, what changed meanwhile told as an answer: at once, answering.mbt)
   fn() {
@@ -8827,6 +8869,7 @@ fn View::comes(
   st.come_fill = to <= 0.0 || from <= 0.0 || (n.coming && st.come_fill) || fill
   // (a structure's way a Move, whatever a height change declared said before: View::resizes says its own after)
   st.come_spec = None
+  st.come_foot = false
   st.come_from = from
   st.come_v = speed
   st.come_to = to
@@ -8837,6 +8880,16 @@ fn View::comes(
   // (going: as long as its way to nothing; coming, as far as what it comes to, the first time it is laid out)
   st.come_ends = if to <= 0.0 { at + @flex.come_way_ms(from, speed, 0.0) } else { 0.0 / 0.0 }
   st.come_plan = st.come_goal
+  // (under a page's list on a host's grid whose keys make their way (not said at_once: Tree's list_inner, joining), in
+  // one of its blocks, its head or its foot: on that grid as it goes, so what holds it goes one way with it; not a slot
+  // of the list's own, nor what lies in a column laid on that grid itself: those are put on it as rows, flex's
+  // rows_on_way. An at_once list's insides as they were, till it is switched on)
+  let own = tree.column_of(v.at)
+  let list = if own >= 0 { tree.list_of(own) } else { own }
+  st.come_grid = match tree.list_inner.get(list) {
+    Some((true, _)) if !st.come_across && list != own => tree.rows_grid
+    _ => 0.0
+  }
   n.coming = true
   // (one way with what else comes or goes in its column at this moment and what is on its way there now)
   tree.come_group_join(v, st, at)
@@ -9156,6 +9209,8 @@ fn Tree::come_group_settle(
 fn come_done(tree : Tree, v : View, m : Node) -> Unit {
   let st = m.flex.style
   m.coming = false
+  st.come_grid = 0.0
+  st.come_foot = false
   m.come_off = fn() {  }
   st.come_now = 0.0 / 0.0
   // (all of what it comes to, the gap before it whole: as its column lays it out from here, whether it is measured
@@ -10227,9 +10282,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     let gen = if self.measured_gen >= 0 {
       if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
     } else {
+      let g = @flex.computes() + 1
       self.alone_laid_out()
       self.work.computes = self.work.computes + 1
-      let g = @flex.computes() + 1
       self.laids = self.laids + 1
       @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
       if self.walk_from >= 0 && self.walk_from < g {
@@ -10241,10 +10296,13 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.measured_gen = -1
     self.walk_from = -1
     self.walk(0, gen, true)
-    // (what was laid out alone: placed by from it, what holds it laid out or not)
+    // (what was laid out alone: placed by from it, where what holds it was not laid out)
     for a in self.alone_laid {
       if self.nodes[a.0].live {
-        self.walk(a.0, a.1, true)
+        let h = self.box_holder(a.0)
+        if h < 0 || self.nodes[h].flex.laid_out_at() < gen {
+          self.walk(a.0, gen, true)
+        }
       }
     }
     self.alone_laid.clear()
@@ -12555,6 +12613,16 @@ pub fn Tree::reduces_motion(self : Tree, f : () -> Bool) -> Unit {
 /// Node `id` pressed (Tree::target_at's): its callback run outside any tracking, as one change, if it lives.
 pub fn Tree::run_press(self : Tree, id : NodeId) -> Bool {
   self.run_press_at(id, self.time_now())
+}
+
+///|
+/// It pressed now by what is no press delivered to it (a gesture of its own that ends in one, a moment, a reaction):
+/// taken as one delivered is (Tree::run_press_at), so none where the hand's would be none (let go or leaving, it or
+/// what holds it said to take none, left out of its row or in its bones, a modal layer over it that does not hold
+/// it), what it opens or shuts held where it is (press_stays.mbt), its on_press run outside any tracking as one change:
+/// in an event already, part of that one; else an event of now. Whether it was pressed.
+pub fn View::press(self : View) -> Bool {
+  self.tree.run_press(self.id())
 }
 
 ///|

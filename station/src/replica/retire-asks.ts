@@ -70,7 +70,13 @@ export type AsksDeps = {
   notify: (session: string, text: string) => void;
   now: () => number;
   id?: () => string;
+  /// Whether a retirement may be started (`start`) or handed over (`hand_over`) here at all (module.ts
+  /// `RETIRE_STARTS`): off, both are refused before any card is posted, and a card from before confirms nothing.
+  starts: boolean;
 };
+
+/// What an agent is told of `start` and `hand_over` while retiring is switched off (module.ts `RETIRE_STARTS`).
+export const RETIRE_OFF = "retiring a station is switched off for now: it is being fixed after its first use lost files; nothing was started";
 
 /// The cards of station_retire in a session's chat, as the station's other cards are posted (sessions/card-place.ts):
 /// in its latest thread, as its agent, only a still.fail chat's (the app is where it is confirmed).
@@ -154,6 +160,9 @@ export class RetireAsks {
 
   /// station_retire: what the agent of `session` asked, answered as data with what it says in words (`say`).
   async tool(session: string, args: Record<string, unknown>): Promise<Json> {
+    const action = String(args.action ?? "");
+    // (switched off: refused before anything is asked or posted; what is under way is read and called off as before)
+    if (!this.#d.starts && (action === "start" || action === "hand_over")) throw new Refused(RETIRE_OFF);
     const ws = this.#d.wsOf(session);
     const here = this.#d.here();
     if (ws === null || here === null) throw new Refused("this chat is of no workspace: no station of it to retire");
@@ -175,7 +184,6 @@ export class RetireAsks {
           if (e instanceof Refused && /no such retire request|unknown/.test(e.message)) throw new Refused(`station ${target.name || target.id.slice(0, 12)} is from before station_retire: update it first, or retire it from the app`);
           throw e;
         });
-    const action = String(args.action ?? "");
     switch (action) {
       case "preview": {
         const to = args.to === undefined || args.to === "" ? null : named(args.to, "to");
@@ -283,8 +291,16 @@ export class RetireAsks {
       this.#tell(a, `${viewer.email} chose ${option.trim()} on the card: station ${name} is not ${a.kind === "start" ? "retired" : "handed over"}; nothing was done.`);
       return;
     }
-    a.state = "confirmed";
     a.by = viewer.email;
+    // (a card posted before retiring was switched off: confirmed, it starts or hands over nothing)
+    if (!this.#d.starts) {
+      a.state = "failed";
+      a.error = RETIRE_OFF;
+      void this.#save();
+      this.#tell(a, `${viewer.email} confirmed it in the app, but ${RETIRE_OFF}.`);
+      return;
+    }
+    a.state = "confirmed";
     void this.#save();
     const acting = this.#act(a, viewer.email);
     this.#acting.add(acting);

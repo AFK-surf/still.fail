@@ -2,3 +2,8 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }
+
+options(
+  // What an event stream's reader does to many bytes at once is the target's own (sse.mbt): the engine's on js.
+  targets: { "sse_js.mbt": [ "js" ], "sse_native.mbt": [ "not", "js" ] },
+)

@@ -302,6 +302,35 @@ test("an act that would have no effect (a member taking an admin out) is refused
   assert.equal(w.members(), "r1 owner, r2 admin, r3 member, s1 member");
 });
 
+// Taking off or renewing someone else's app device where the chain moved: theirs alone, on their own log (the root
+// AGENTS.md: owners and admins take a member out, never one device of someone else's), refused in words that say so
+// and what to do instead (2026-11-14: `lock_moved`'s English named what people are never told).
+test("an owner taking another member's app device off: refused in words that say it is theirs alone and to take the member out; nobody asked, nothing signed", async () => {
+  const w = await setUp();
+  const theirs = [...inForceOf(w.inner, "ws").f.devices.values()].find((d) => d.kind === "app" && d.sub !== "s1");
+  assert.ok(theirs !== undefined, "another member's app in the state");
+  const before = w.asked();
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.removeDevice", { workspace: "ws", device: theirs.id }), catch: (e) => e as CoreError }));
+  assert.equal(out.error?.message, "此设备属于其他成员，只能由其本人移除；要让此成员不能再访问，请将其移出 workspace");
+  assert.equal(w.asked(), before, "nobody asked");
+  assert.deepEqual(w.said(), [], "nothing signed");
+});
+
+// An app device of the person's own renewed where the chain moved: its log lets it in with no expiry (the rules' state
+// says none for an app), so there is nothing to renew and nothing to refuse. Before, it was refused in the words for
+// another member's device (2026-11-14, the locks' end to end on main after #6102: "B lock.renew: 此设备属于其他成员…").
+test("renewing this person's own app device where the chain moved: done with nothing to do (an app does not run out there); not refused as another's, nobody asked, nothing signed", async () => {
+  const w = await setUp();
+  const mine = inForceOf(w.inner, "ws").f.devices.get(ME);
+  assert.equal(mine?.kind, "app", "this device's app in the state");
+  assert.equal(mine?.exp, undefined, "with no expiry");
+  const before = w.asked();
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.renew", { workspace: "ws", device: ME }), catch: (e) => e as CoreError }));
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.equal(w.asked(), before, "nobody asked");
+  assert.deepEqual(w.said(), [], "nothing signed");
+});
+
 test("no station of the workspace answering: pending, its stations named, in effect once one answers, nothing lost", async () => {
   const w = await setUp();
   w.st.silent = true;

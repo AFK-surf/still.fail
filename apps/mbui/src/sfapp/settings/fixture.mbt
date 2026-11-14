@@ -83,6 +83,9 @@ priv struct SettingsFixture {
   /// the lock's changes made here that no station took yet, by id (settings-security-pending: `fx_pending_rows`),
   /// a failed one dropped by `lock.pendingDismiss`
   pending : Array[String]
+  /// what the upgrade of safe mode waits for, as the core's `upgrade` says it on the owner's device that is to finish it
+  /// (settings-security-upgrade-…: `fx_upgrade`), "" none
+  mut upgrade : String
   /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
   mut pair_ended : String
   /// a device of lin's (Pixel 9) set up without the key to 林的库, waiting on this one for it (settings-vault-prompt),
@@ -177,6 +180,7 @@ let fx : SettingsFixture = {
   pairing_more: false,
   protecting: false,
   pending: [],
+  upgrade: "",
   pair_ended: "",
   key_ask: false,
   key_ask_ended: "",
@@ -341,6 +345,7 @@ fn fixture_reset() -> Unit {
   fx.pairing_more = false
   fx.protecting = false
   fx.pending.clear()
+  fx.upgrade = ""
   fx.pair_ended = ""
   fx.key_ask = false
   fx.key_ask_ended = ""
@@ -724,6 +729,9 @@ pub fn fixture_page(mode : String) -> String {
     "settings-security-off" => fixture_open.desk = "lock-off"
     "settings-security-protecting" => fx.protecting = true
     "settings-security-pending" => fx.pending.append(["p1", "p2", "p3"])
+    // what the upgrade of safe mode waits for (security.mbt upgrade_keys): a station this person may update, one they
+    // may not, a member, a device, more than six, only their ask, a station of another workspace, a station updating
+    m if m.has_prefix("settings-security-upgrade-") => fx.upgrade = m.unsafe_substring(start=26, end=m.length())
     // the run's models listed (model_list.mbt): more than 8, by series, one of another station's to borrow
     "settings-run-models" => {
       fx_many_models.val = true
@@ -789,6 +797,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
     "settings-security-join" | "settings-security-off" | "settings-security-protecting" | "settings-security-pending" => "security"
+    m if m.has_prefix("settings-security-upgrade-") => "security"
     "settings-stations-tasks" | "settings-stations-tasks-outside" | "settings-stations-tasks-theirs" | "settings-stations-devices" => "stations"
     "settings-station-devices" => "station:ws1/st1"
     "settings-station-tasks" | "settings-station-tasks-locked" => "station:ws1/aa11"
@@ -2803,7 +2812,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ),
           ("renew", []),
         ] +
-        fx_pending_fields()),
+        fx_pending_fields() +
+        fx_upgrade_fields()),
       )
     "vaults" =>
       Some(
@@ -3143,6 +3153,12 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           ]),
         ),
       )
+    // the upgrade finished by the person's ask: none left to show
+    "lock.handOver" => {
+      fx.upgrade = ""
+      fx_changed()
+      Some(Ok(Json::null()))
+    }
     // a failed pending change read, dropped (a waiting one stays)
     "lock.pendingDismiss" => {
       let id = text(p, "id")
@@ -4309,6 +4325,84 @@ fn fx_pending_rows() -> Array[Json] {
     ]),
   ]
   all.filter(fn(r) { fx.pending.contains(text(Some(r), "id")) })
+}
+
+///|
+/// What the upgrade of safe mode waits for in the state `fx.upgrade` names, as the core's `upgrade` says it (views/lock.ts
+/// `upgradeOf`): its title, its lines (a sentence each, what it is of, a station's address and whether this person may
+/// update it from here, or how its update goes), or its button where only the person's ask is lacking.
+fn fx_upgrade() -> Json? {
+  let station = fn(name : String, at : String, can : Bool) -> Json {
+    obj(
+      [
+        ("text", str("等待 station \{name}：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」")),
+        ("of", str("station")),
+        ("station", str(at)),
+      ] +
+      (if can { [("canUpdate", Json::boolean(true))] } else { [] }),
+    )
+  }
+  let person = fn(name : String) -> Json {
+    obj([("text", str("等待 \{name}：请其在自己的受信任设备上将 still.fail 更新到最新版本并打开一次")), ("of", str("member"))])
+  }
+  let device = fn(name : String, device : String) -> Json {
+    obj([
+      ("text", str("等待 \{name} 的设备「\{device}」：请其在另一台受信任设备上打开「设置 › 安全」并完成一次验证；该设备已不再使用的话，请其将它移除")),
+      ("of", str("device")),
+    ])
+  }
+  let lines : Array[Json] = match fx.upgrade {
+    "station" => [station("Maple", "ws1/st2", true)]
+    "station-not" => [station("Maple", "ws1/st2", false)]
+    "member" => [person("Ana")]
+    "device" => [device("Ana", "Pixel 8 · still.fail Android")]
+    "many" =>
+      [
+        station("Maple", "ws1/st2", true),
+        person("Ana"),
+        person("ben@example.com"),
+        device("Ana", "Pixel 8 · still.fail Android"),
+        device("周宁", "周宁的 MacBook Air · still.fail 桌面版"),
+        station("Cedar", "ws1/st3", false),
+        obj([("text", str("以及另外 3 项")), ("of", str("more"))]),
+      ]
+    "other" =>
+      [
+        obj([
+          ("text", str("等待「个人」的 station 家里的 mini：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」")),
+          ("of", str("station")),
+          ("station", str("ws2/st9")),
+          ("canUpdate", Json::boolean(true)),
+        ]),
+      ]
+    "updating" =>
+      [
+        obj([
+          ("text", str("等待 station Maple：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」")),
+          ("of", str("station")),
+          ("station", str("ws1/st2")),
+          ("updating", Json::boolean(true)),
+          ("percent", Json::number(40.0)),
+        ]),
+      ]
+    "ask" => []
+    _ => return None
+  }
+  Some(
+    obj(
+      [("titleText", str("安全模式有一项升级尚未完成")), ("lines", Json::array(lines))] +
+      (if fx.upgrade == "ask" { [("askText", str("验证并完成升级"))] } else { [] }),
+    ),
+  )
+}
+
+///|
+/// The `lock` topic's field of the upgrade, while there is one.
+fn fx_upgrade_fields() -> Array[(String, Json)] {
+  match fx_upgrade() {
+    Some(u) => [("upgrade", u)]
+    None => []
+  }
 }
 
 ///|

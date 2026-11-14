@@ -40,6 +40,9 @@ pub(all) struct NewFix {
   /// MBUI_FIXTURE=newchat-preset-bound: the preset picked names its model and the station it is on (the core's
   /// `presetModel`, `presetStations`: those alone offered)
   mut bound : Bool
+  /// MBUI_FIXTURE=newchat-preset-model…: the preset picked names its model alone, which Willow runs and Maple does not
+  /// (the core's choose.ts `#runsBound`: Maple not offered, and said not to run it where the page is on it)
+  mut model_bound : Bool
   /// The first station's repositories being cloned (the `presets` topic's `clones`), and those cloned since, among its
   /// folders (`candidates`)
   clones : Array[Json]
@@ -73,6 +76,7 @@ pub let new_fix : NewFix = {
   preset: "",
   presets_late: false,
   bound: false,
+  model_bound: false,
   clones: [],
   cloned: [],
   presets: [fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")],
@@ -831,14 +835,27 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       _ => s
     }
   }
+  let model_bound = n.preset != "" && n.model_bound
   {
     "kept": Json::string(n.station),
     "stations": if n.preset != "" && n.bound {
       [lend(fix_station(n.station))]
+    } else if model_bound {
+      // the one it is on, and those that run the preset's model (Willow)
+      if n.station == "st1" {
+        [lend(fix_station("st1"))]
+      } else {
+        [lend(fix_station("st1")), lend(fix_station(n.station))]
+      }
     } else {
       [lend(fix_station("st1")), lend(fix_station("st2"))]
     },
-    "presetModel": Json::boolean(n.preset != "" && n.bound),
+    "presetModel": Json::boolean(n.preset != "" && (n.bound || n.model_bound)),
+    "problem": if model_bound && n.station != "st1" {
+      Json::string("Maple 上没有预设「still.fail 开发」的模型 Claude Opus 5.5：请换到有它的 station，或编辑预设、选「不用预设」")
+    } else {
+      Json::null()
+    },
     "presetStations": Json::boolean(n.preset != "" && n.bound),
     "any": true,
     "station": lend(fix_station(n.station)),

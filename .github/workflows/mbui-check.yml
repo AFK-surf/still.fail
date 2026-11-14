@@ -3,7 +3,8 @@
 # they hold nothing back (the preview app is preview.yml's, done waits for neither) and were the last of its pipeline run
 # in half of them: as part of it, the run after waited for them, 16 of 40 runs a median 88 s (2026-10-20).
 # The tests at 120, 60, 24 and 7 frames a second too (app-rates, replay-fps) on main after a merge, in main's own run,
-# and in the day's run; a branch's pushes at the default rate alone (pipeline.yml's call, rates: no): the rates were
+# and in the day's run; a branch's pushes at the default rate, and only the sfapp test files the branch changed at 120,
+# 60 and 24 (rates-changed, below; pipeline.yml's call, rates: no): the rates were
 # about 20 of a push's 47 jobs on GitHub's Linux runners and four fifths of its runner time, and two or three branches
 # pushing at once filled the account's 60, their tests waiting 285-479 s for a runner (the user, 2026-11-11: 帧率只在
 # 合并前跑). A pull request merges once its own checks passed, no queue before it; the rates run on what merged and red
@@ -582,6 +583,93 @@ jobs:
           - { group: 4/4, fps: "7" }
     env: *app-env
     steps: *app-steps
+  # A branch's own test files of sfapp at 120, 60 and 24 frames a second
+  # (the user, 2026-11-14: 「PR 上也跑改到文件的帧率检查」): main's runs at the rates found what a pull request's own changed test files did at them, after it merged,
+  # four times in three days (#5783, #5829, #5902, #5909: a test the pull request changed, red at a rate alone). Only
+  # the files it changed, not the whole set, which stays main's (the file's head): no runner is taken by a push that
+  # changed none, three by one that did, beside app's on app-build's program. Its files are the ones the branch changed
+  # from main (GitHub's compare of the two), not of its newest push alone.
+  rates-files:
+    name: native (the branch's changed test files)
+    if: github.event_name != 'workflow_run' && inputs.rates == 'no'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      files: ${{ steps.files.outputs.files }}
+    steps:
+      - id: files
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          files=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --paginate \
+            --jq '.files[] | select(.status != "removed") | .filename' |
+            sed -n 's|^apps/mbui/\(src/sfapp/[^/]*_wbtest\.mbt\)$|\1|p' | LC_ALL=C sort -u | tr '\n' ' ')
+          echo "files: ${files:-(none)}"
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+  rates-changed:
+    name: native (the branch's changed test files at ${{ matrix.fps }} fps)
+    needs: [app-build, rates-files]
+    if: ${{ !cancelled() && needs.app-build.result == 'success' && needs.rates-files.outputs.files != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        fps: ["120", "60", "24"]
+    env:
+      FPS: ${{ matrix.fps }}
+      MBUI_TEST_MOTION: ${{ (matrix.fps == '120' || matrix.fps == '60') && 'count' || '' }}
+      MOTION_OUT: ${{ github.workspace }}/motion.txt
+      APP_FILES: ${{ needs.rates-files.outputs.files }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with: { name: "mbui-app-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/app-test" }
+      - name: The branch's changed test files (native, at ${{ matrix.fps }} frames a second, on app-build's program)
+        run: |
+          set -o pipefail
+          chmod +x "$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe" "$RUNNER_TEMP/app-test/testexe"
+          echo "=== $APP_FILES"
+          MBUI_TEST_FPS=$FPS TESTEXE="$RUNNER_TEMP/app-test/testexe" \
+          APP_EXE="$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe" APP_INFO="$RUNNER_TEMP/app-test/__whitebox_test_info.json" \
+            TIMES=1 TARGETS=native PARTS=app APP_GROUP=1/1 SFAPP_SHARDS=4 LINES_OUT=40 \
+            bash apps/mbui/scripts/test.sh 2>&1 | tee -a "$RUNNER_TEMP/mbui-test.log"
+      - name: How what moves goes
+        if: always() && env.MBUI_TEST_MOTION == 'count'
+        run: |
+          touch "$MOTION_OUT"
+          bash libs/mbui/scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at $FPS fps" >> "$GITHUB_STEP_SUMMARY"
+      - name: What failed
+        if: failure()
+        run: |
+          failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail[^]]*\] test //; s/ failed.*//' | sort -u)
+          echo "::error title=check-mbui (changed test files at $FPS fps) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
+          {
+            echo "### check-mbui (the branch's changed test files at $FPS fps) failed"
+            echo
+            echo "main runs these at every rate after a merge; here only the files this branch changed. Run one here:"
+            echo "\`cd apps/mbui && . scripts/env.sh && MBUI_TEST_FPS=$FPS moon test --target wasm-gc --release src/sfapp/<file>_wbtest.mbt\`"
+            echo '```'
+            printf '%s\n' "${failed:-(no test named: see the log)}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+  # Every screen's switches pressed over a core answering late, each held to its row of switches_known (src/sfapp's
+  # switches_still_wbtest.mbt): main's own run after a merge and the day's, never a branch's pushes (the coordinator of
+  # the migration, 2026-11-13: too long for them), at the default rate alone, on four runners, its runs dealt round
+  # them (scripts/test.sh APP_GROUP=switches)
+  switches:
+    name: native (app switches part ${{ matrix.part }})
+    needs: app-build
+    if: ${{ !cancelled() && needs.app-build.result == 'success' && github.event_name != 'workflow_run' && inputs.rates != 'no' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [switches]
+        fps: [""]
+        part: [1/4, 2/4, 3/4, 4/4]
+    env: *app-env
+    steps: *app-steps
   # (each per-file bar of the app's set beside the most one Tester of its file found under it in the runs at 60, 120
   # and the default rate, all their jobs' together: a file's tests run in one job, but a Tester made in another file's
   # helper is filed under that file, whose own tests may run in another (scripts/motion_bars.sh). A bar to fall or a
@@ -589,7 +677,7 @@ jobs:
   # 2026-11-12), and what merged since is said by rates-said)
   motion-bars:
     name: native (the app's bars against what was found)
-    needs: [native, replay-fps, app, app-rates]
+    needs: [native, replay-fps, app, app-rates, switches]
     if: ${{ always() && github.event_name != 'workflow_run' && inputs.rates != 'no' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -614,7 +702,7 @@ jobs:
   # through, the likeliest first (scripts/rates-said.sh), for whoever brought it to mend forward. Red here holds no pull
   # request back. (actions: read: this run's jobs and main's runs before it; its callers grant it)
   rates-said:
-    needs: [native, app-build, replay-build, replay-fps, app, app-rates, motion-bars]
+    needs: [native, app-build, replay-build, replay-fps, app, app-rates, switches, motion-bars]
     if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 3

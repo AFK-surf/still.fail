@@ -6,8 +6,10 @@ export type Ty = string | { opt: Ty } | { vec: Ty } | { map: Ty } | { tuple: Ty[
 /// someone outside the app wrote (a person, an agent, a station, a machine: a name, a title, a notice, a command, an
 /// error), or a line the core makes with them in it, shown as they are: any length, any lines. What shows them is
 /// checked with them at their longest (apps/mbui: the squeeze sweep's stretched pass, made of `said_paths`). Never a key
-/// other data names a thing by, nor Markdown the core reads.
-export type Field = { name: string; ty: Ty; default: boolean; skipNone: boolean; client?: Ty; doc?: string; said: boolean };
+/// other data names a thing by, nor Markdown the core reads. `widest`: a figure the core writes (what it cost, its tokens,
+/// a count, a size), as it writes it at its widest that is likely: of a length a fixture's small one never shows. What
+/// shows it is checked with it so (the same stretched pass, made of `widest_paths`).
+export type Field = { name: string; ty: Ty; default: boolean; skipNone: boolean; client?: Ty; doc?: string; said: boolean; widest?: string };
 /// `client: false`: a shape only the core uses (the clients get no type for it).
 type Common = { doc?: string; client: boolean };
 export type Shape =
@@ -15,7 +17,7 @@ export type Shape =
   | ({ kind: "enum"; values: string[]; default: string | null } & Common)
   | ({ kind: "tagged"; tag: string; content: string; variants: Record<string, Ty>; names: Record<string, string> } & Common);
 
-type FieldOptions = { default?: true; skipNone?: true; client?: Ty; doc?: string; said?: true };
+type FieldOptions = { default?: true; skipNone?: true; client?: Ty; doc?: string; said?: true; widest?: string };
 type Options = { doc?: string; client?: false };
 
 export const opt = (ty: Ty): Ty => ({ opt: ty });
@@ -33,7 +35,7 @@ export function struct(fields: [string, Ty, FieldOptions?][], o: Options & { def
     default: o.default === true,
     client: o.client !== false,
     doc: o.doc,
-    fields: fields.map(([name, ty, f = {}]) => ({ name, ty, default: f.default === true, skipNone: isOpt(ty) && (o.keepNone !== true || f.skipNone === true), client: f.client, doc: f.doc, said: f.said === true })),
+    fields: fields.map(([name, ty, f = {}]) => ({ name, ty, default: f.default === true, skipNone: isOpt(ty) && (o.keepNone !== true || f.skipNone === true), client: f.client, doc: f.doc, said: f.said === true, widest: f.widest })),
   };
 }
 

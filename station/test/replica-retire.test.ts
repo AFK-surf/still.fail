@@ -26,11 +26,13 @@ import { Exporter, genDir, nothingTold, ownDir } from "../src/replica/export.ts"
 import { keepers } from "../src/replica/peers.ts";
 import { build, takeBack, takeBackSoon } from "../src/replica/restore.ts";
 import { QUIET_UNREACHED_MS, RETRY_MOST_MS, RETRY_MS, Retire, connectsThere, rebuildGits } from "../src/replica/retire.ts";
-import { RetireAsks, chatCards, confirmLabel, declineLabel } from "../src/replica/retire-asks.ts";
+import { RETIRE_OFF, RetireAsks, chatCards, confirmLabel, declineLabel } from "../src/replica/retire-asks.ts";
+import { hold, holding } from "../src/updates/holds.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
 import { memoryMark } from "../src/replica/agent-carry.ts";
 import type { CarriedJob } from "../src/replica/carry-worker.ts";
 import { Admin } from "../src/api/admin.ts";
+import { routes } from "../src/api/routes/copies.ts";
 import type { Request } from "../src/api/request.ts";
 import { StationParts } from "../src/parts.ts";
 import { newMessage } from "../src/store/store.ts";
@@ -73,8 +75,12 @@ type Node = {
   quieted: string[]; unquieted: string[]; retired: string[]; moved: string[][]; connects: string[]; bindings: Record<string, string>;
   took: { bindings: Record<string, string>; notes: { session: string; text: string }[] }[];
   down: boolean; free: number; git: boolean; placeFails: number; gathers: number; restores: number; gathered: ((g: Gathered, n: number) => void) | null;
-  /// A gathering that goes on until it is called off (a station with a million files).
+  /// A gathering that goes on until it is called off (a station with a million files), and who is told as one begins.
   hang: boolean;
+  hanging: (() => void) | null;
+  /// What its answers to `retire.lacking` wait for (none: they do not), and who is told as one waits.
+  gate: Promise<void> | null;
+  gated: (() => void) | null;
   /// Its own accounts, those that cannot move, and what happened in order (`account:<id>`, `connects`).
   accounts: { id: string; name: string }[]; unmovable: Set<string>; events: string[];
   /// What went in the messages and the workers' answers: the most entries in one, the largest answer.
@@ -85,6 +91,8 @@ type Node = {
   up: CarriedJob[]; started: (CarriedJob & { id: string })[]; startFails: Map<string, string>; said: [string, string][]; told: [string, string][];
   /// Its agent home, station_retire there, the cards it posted and whether the last still waits, and its retire.puts.
   agent: string; asks: RetireAsks; cards: { session: string; text: string; card: Json }[]; cardState: "same" | "other" | "none"; puts: number;
+  /// The holds on its updating itself it has now (updates/holds.ts, through which each goes too).
+  held: number;
 };
 
 /// The most hashes a message of the test's stations asks of (the stations' own is LACK_MOST).
@@ -94,6 +102,9 @@ class Mesh {
   readonly nodes = new Map<string, Node>();
   readonly roster: string[] = [];
   readonly clock = testClock();
+  /// Whether its stations' station_retire may start and hand over (module.ts RETIRE_STARTS), as each node's parts are
+  /// made (again).
+  starts = true;
 
   add(nid: string, made?: { data: string; store: Store }): Node {
     const data = made?.data ?? dataDir(nid.slice(0, 4));
@@ -101,7 +112,7 @@ class Mesh {
     const bus = new PeerBus({ sleep: async () => {} });
     const node = {
       id: nid, data, store, bus, quieted: [], unquieted: [], retired: [], moved: [], connects: [], bindings: {}, took: [], down: false, free: 1e15, git: true, placeFails: 0, gathers: 0, restores: 0, gathered: null, hang: false, accounts: [], unmovable: new Set(), events: [], most: 0, answer: 0, homeIs: HOME,
-      up: [{ session: "chat:a", name: "dev", command: "npm run dev" }], started: [], startFails: new Map(), said: [], told: [], agent: join(data, "agent"), cards: [], cardState: "same", puts: 0,
+      up: [{ session: "chat:a", name: "dev", command: "npm run dev" }], started: [], startFails: new Map(), said: [], told: [], agent: join(data, "agent"), cards: [], cardState: "same", puts: 0, held: 0, hanging: null, gate: null, gated: null,
     } as unknown as Node;
     const count = (v: Json) => {
       for (const k of ["hashes", "lacking"]) if (Array.isArray(v?.[k])) node.most = Math.max(node.most, v[k].length);
@@ -111,6 +122,10 @@ class Mesh {
       if (there === undefined || there.down || node.down) throw new Error("station unreachable");
       count(request);
       if (request?.method === "retire.put") node.puts++;
+      if (request?.method === "retire.lacking" && there.gate !== null) {
+        there.gated?.();
+        await there.gate;
+      }
       const answer = across(await there.bus.handle(ws ?? "", nid, across(request)));
       count(answer);
       return answer;
@@ -177,6 +192,18 @@ class Mesh {
       agentHome: () => node.agent,
       drives: (station, session) => node.asks.drives(station, session),
       ofWorkspace: () => true,
+      // (each counted here as well as held for real; let go of twice fails the test)
+      hold: () => {
+        const letGo = hold();
+        node.held++;
+        let gone = false;
+        return () => {
+          if (gone) throw new Error("a hold let go of twice");
+          gone = true;
+          node.held--;
+          letGo();
+        };
+      },
       unquiet: (ws) => void node.unquieted.push(ws),
       retired: (ws) => void node.retired.push(ws),
       accounts: {
@@ -201,7 +228,9 @@ class Mesh {
       work: {
         gather: async (dataDir, db, ws, home, scratch, signal, agent) => {
           if (node.hang) {
-            return new Promise<Gathered>((_, reject) => signal?.addEventListener("abort", () => reject(new Error("called off"))));
+            const going = new Promise<Gathered>((_, reject) => signal?.addEventListener("abort", () => reject(new Error("called off"))));
+            node.hanging?.();
+            return going;
           }
           const g = answered(gather(dataDir, db, ws, home, scratch, agent ?? null));
           node.gathers++;
@@ -226,6 +255,8 @@ class Mesh {
       },
       notify: (session, text) => void node.told.push([session, text]),
       now: () => this.clock.currentTimeMillisUnsafe(),
+      // (switched on, as it is to be once its fixes passed their drill, unless a test says: module.ts RETIRE_STARTS)
+      starts: this.starts,
     });
     bus.on("replica.", node.copies.answers());
     bus.on("retire.", node.retire.answers((peer) => this.roster.includes(peer)));
@@ -490,9 +521,11 @@ test("a copy B could not put in is not put in again by itself: said to A, whose 
   assert.equal(r.reason, "failed");
   assert.equal(r.retriable, true);
   assert.equal(r.cancellable, true);
-  // (its chats work again here meanwhile: the hand-over fell back to `sent`)
+  // (its chats work again here meanwhile: the hand-over fell back to `sent`; nothing holds either station's updating)
   assert.equal(r.step, "sent");
   assert.deepEqual(a.unquieted, [HOME]);
+  assert.equal(a.held, 0);
+  assert.equal(b.held, 0);
   // started again, neither tries it again by itself
   const restores = b.restores;
   await mesh.restart(B);
@@ -1198,7 +1231,7 @@ test("a station_retire card counts only as an owner or admin of its workspace ch
   } as unknown as Retire;
   const asks = new RetireAsks({
     data: dataDir("asks"), here: () => id("a"), roster: () => [{ id: id("a"), name: "aaaa" }, { id: id("b"), name: "bbbb" }], wsOf: () => HOME, retire,
-    ask: async () => { throw new Error("no other station here"); }, cards: chatCards(hub as Json), notify: (_s, t) => void told.push(t), now: () => 1,
+    ask: async () => { throw new Error("no other station here"); }, cards: chatCards(hub as Json), notify: (_s, t) => void told.push(t), now: () => 1, starts: true,
   });
   const parts = new StationParts();
   parts.cardChoice("retire", { may: (v, c, at) => asks.may(v, c, at), chosen: (v, c, o, at) => asks.chosen(v, c, o, at) });
@@ -1251,4 +1284,218 @@ test("a station_retire card counts only as an owner or admin of its workspace ch
   assert.equal(starts().length, 1, "nothing started by it");
   assert.equal(asks.get(waiting.ask)!.state, "asked");
   store.close();
+});
+
+test("a station's updating itself is held while an update would cut the retirement: on the station retired while it sends and from its chats stopping until they were taken, on the one taking them from the take until it took them, across its restart; never at sent, nor once done", async () => {
+  const { mesh, A, B, C, a, b } = await setup();
+  const c = mesh.nodes.get(C)!;
+  const seen: number[] = [];
+  a.gathered = (_g, n) => void seen.push(n === 1 ? a.held : a.held * 10);
+  await c.asks.tool("chat:c1", { action: "start", station: A.slice(0, 4), to: B.slice(0, 4) });
+  c.asks.chosen({ email: "o@x" } as Json, c.cards.at(-1)!.card, confirmLabel("start"), lastAt(c));
+  await mesh.settle();
+  assert.equal(step(a), "sent");
+  assert.equal(a.held, 0, "not at sent");
+  assert.equal(b.held, 0, "nothing taken yet");
+  await c.asks.tool("chat:c1", { action: "hand_over", station: A.slice(0, 4) });
+  c.asks.chosen({ email: "o@x" } as Json, c.cards.at(-1)!.card, confirmLabel("hand_over"), lastAt(c));
+  await mesh.settle();
+  assert.deepEqual(seen, [1, 10], "held while sending, and once the chats stopped");
+  assert.equal(step(a), "handing");
+  assert.equal(takingStep(b), "restart");
+  assert.equal(a.held, 1);
+  assert.equal(b.held, 1);
+  // B started again (not by an update: its own, or a crash) before it put them in: held again as it starts
+  await mesh.restart(B);
+  assert.equal(b.held, 1);
+  await mesh.settle();
+  // A started again in `handing`: held again
+  await mesh.restart(a.id);
+  assert.equal(a.held, 1);
+  await mesh.settle();
+  await mesh.restart(B, true);
+  await mesh.settle();
+  assert.equal(step(a), "done");
+  assert.equal(a.held, 0, "let go once the other took them");
+  assert.equal(b.held, 0);
+  await mesh.restart(a.id);
+  await mesh.restart(B);
+  await mesh.settle();
+  assert.equal(a.held + b.held, 0, "never once done");
+  assert.equal(holding(), 0);
+});
+
+test("a hold on updating let go of as a retirement is called off with its chats stopped, and as a take B could not put in fails", async () => {
+  const { mesh, B, a, b, bData } = await setup();
+  // (the second gathering, its chats stopped, goes on until it is called off: the cancel made once it began)
+  a.gathered = (_g, n) => {
+    if (n === 1) a.hang = true;
+  };
+  const begun = new Promise<void>((r) => void (a.hanging = r));
+  await a.retire.retire(HOME, B, "p@x");
+  await begun;
+  assert.equal(step(a), "quiet");
+  assert.equal(a.held, 1);
+  // (answered without the clock moved: nothing of it waits on a timer)
+  const at = mesh.clock.currentTimeMillisUnsafe();
+  await a.retire.cancel(HOME);
+  assert.equal(mesh.clock.currentTimeMillisUnsafe(), at);
+  a.hanging = null;
+  await mesh.settle();
+  assert.equal(a.retire.overview(HOME).retiring, null);
+  assert.equal(a.held, 0);
+  a.hang = false;
+  a.gathered = null;
+  // taken by B, which cannot put it in: both let go (A falls back to `sent`, B rests failed)
+  await a.retire.retire(HOME, B, "p@x");
+  await mesh.settle();
+  assert.equal(b.held, 1);
+  const copy = join(bData, "restore", "copy");
+  for (const gen of readdirSync(copy)) if (gen !== "files") rmSync(join(copy, gen, "log"), { recursive: true, force: true });
+  await mesh.restart(B, true);
+  await mesh.settle();
+  assert.equal(takingStep(b), "failed");
+  assert.equal(step(a), "sent");
+  assert.equal(a.held + b.held, 0);
+  // dropped by a cancel there too: nothing held
+  await a.retire.cancel(HOME);
+  await mesh.settle();
+  assert.equal(a.held + b.held, 0);
+  assert.equal(holding(), 0);
+});
+
+test("a sending failure that is tried again by itself is not told to who asked until it has failed for RETRY_MOST_MS in a row, then once, saying how long", async () => {
+  const { mesh, A, B, C, a, b } = await setup();
+  const c = mesh.nodes.get(C)!;
+  // (B not reached from the first gathering on: the sending fails, and is tried again)
+  a.gathered = (_g, n) => {
+    if (n === 1) b.down = true;
+  };
+  await c.asks.tool("chat:c1", { action: "start", station: A.slice(0, 4), to: B.slice(0, 4) });
+  c.asks.chosen({ email: "o@x" } as Json, c.cards.at(-1)!.card, confirmLabel("start"), lastAt(c));
+  await mesh.settle();
+  assert.equal(step(a), "sending");
+  assert.equal(a.retire.overview(HOME).retiring!.reason, "offline");
+  const failing = () => toldTo(c, "chat:c1").filter((t) => t.includes("sending the files"));
+  assert.deepEqual(failing(), [], "not told of a failure tried again by itself");
+  assert.equal(a.held, 0, "not held while sending to a station not reached");
+  for (let i = 0; i < 3; i++) {
+    await advance(mesh, RETRY_MOST_MS);
+    await mesh.settle();
+  }
+  assert.equal(failing().length, 1, failing().join("\n"));
+  assert.match(failing()[0]!, /has been failing for \d+ min \(offline\)/);
+  // (what does not go on by itself is told at once: B's disk too small)
+  b.down = false;
+  b.free = 1000;
+  await advance(mesh, RETRY_MOST_MS);
+  await mesh.settle();
+  assert.equal(a.retire.overview(HOME).retiring!.reason, "full");
+  assert.equal(failing().length, 2);
+  assert.match(failing()[1]!, /failed \(full\)/);
+});
+
+test("a cancel made while the chats stop answers at each point the step passes through: before the gathering answers, while what changed is sent; the hold let go of each time", async () => {
+  const { mesh, B, a, b } = await setup();
+  // during the send: the other station holds back its answer to what it lacks until the cancel was made
+  let release: () => void = () => {};
+  a.gathered = (_g, n) => {
+    if (n === 2) b.gate = new Promise<void>((r) => void (release = r));
+  };
+  const waiting = new Promise<void>((r) => void (b.gated = r));
+  await a.retire.retire(HOME, B, "p@x");
+  await waiting;
+  assert.equal(step(a), "quiet");
+  assert.equal(a.held, 1);
+  const cancelled = a.retire.cancel(HOME);
+  // (the request in flight answers; the run stops before the next file, and the cancel goes on)
+  b.gate = null;
+  release();
+  await cancelled;
+  assert.equal(a.retire.overview(HOME).retiring, null);
+  assert.equal(a.held, 0);
+  assert.deepEqual(a.unquieted, [HOME]);
+  await mesh.settle();
+  assert.deepEqual(b.retire.overview(HOME).taking, []);
+  assert.equal(holding(), 0);
+});
+
+test("a station that stops while its chats' gathering goes on ends it at once: its process hands over without waiting for it, and the next goes on from where it stood", async () => {
+  const { mesh, B, a, b } = await setup();
+  a.gathered = (_g, n) => {
+    if (n === 1) a.hang = true;
+  };
+  const begun = new Promise<void>((r) => void (a.hanging = r));
+  await a.retire.retire(HOME, B, "p@x");
+  await begun;
+  assert.equal(step(a), "quiet");
+  const at = mesh.clock.currentTimeMillisUnsafe();
+  await a.retire.close();
+  assert.equal(mesh.clock.currentTimeMillisUnsafe(), at);
+  assert.equal(a.held, 0, "let go as it closed");
+  // started again: still quiet, held again, and it goes on
+  a.hang = false;
+  a.hanging = null;
+  await mesh.restart(a.id);
+  assert.equal(a.held, 1);
+  await mesh.settle();
+  assert.equal(step(a), "handing");
+  await mesh.restart(B, true);
+  await mesh.settle();
+  assert.equal(step(a), "done");
+  assert.equal(a.held + b.held, 0);
+});
+
+test("retiring switched off (module.ts RETIRE_STARTS): POST /retire refused in words, nothing written nor asked of the other; station_retire's start and hand_over post no card and say so, a card from before confirms nothing; preview, status and cancel answer as before", async () => {
+  const { mesh, A, B, C, a, b } = await setup();
+  const c = mesh.nodes.get(C)!;
+  const post = (starts: boolean, lang: "zh" | "en" = "zh") => routes({ copies: a.copies, retire: a.retire, starts }).find((r) => r.method === "POST" && r.pattern.test("/retire"))!.handle({
+    method: "POST", path: "/retire", query: [], headers: {}, body: Buffer.from(JSON.stringify({ to: B })),
+    viewer: { sub: "o", email: "o@x", name: "o", role: "owner", workspace: HOME, device: "d" }, lang,
+  } as unknown as Request, []);
+  for (const lang of ["zh", "en"] as const) {
+    const r = await post(false, lang);
+    assert.equal(r.status, 409);
+    assert.deepEqual(JSON.parse(String(r.body)), { error: tr(lang, "station.retire.off") });
+  }
+  assert.match(tr("zh", "station.retire.off"), /迁走聊天并移出暂时关闭/);
+  await mesh.settle();
+  assert.equal(a.retire.overview(HOME).retiring, null);
+  assert.equal(existsSync(join(a.data, "replica", "retiring.json")), false, "nothing written");
+  assert.deepEqual(b.retire.overview(HOME).taking, [], "the other told nothing");
+  // (an agent's retirement under way from before: started and at sent, its hand-over's card waiting)
+  const asked = { action: "start", station: A.slice(0, 4), to: B.slice(0, 4) };
+  assert.equal((await c.asks.tool("chat:c1", asked)).card, "posted");
+  c.asks.chosen({ email: "o@x" } as Json, c.cards.at(-1)!.card, confirmLabel("start"), lastAt(c));
+  await mesh.settle();
+  assert.equal(step(a), "sent");
+  assert.equal((await c.asks.tool("chat:c1", { action: "hand_over", station: A.slice(0, 4) })).card, "posted");
+  const waiting = c.cards.at(-1)!;
+  const cards = c.cards.length;
+  // switched off, the station started again
+  mesh.starts = false;
+  await mesh.restart(C);
+  await assert.rejects(c.asks.tool("chat:c1", { action: "hand_over", station: A.slice(0, 4) }), (e: Error) => e instanceof Refused && e.message === RETIRE_OFF);
+  await assert.rejects(c.asks.tool("chat:c2", { action: "start", station: B.slice(0, 4), to: A.slice(0, 4) }), (e: Error) => e instanceof Refused && e.message === RETIRE_OFF);
+  assert.equal(c.cards.length, cards, "no card posted");
+  assert.equal(RETIRE_OFF, "retiring a station is switched off for now: it is being fixed after its first use lost files; nothing was started");
+  // the card from before, chosen now: nothing handed over, its agent told why
+  c.asks.chosen({ email: "o@x" } as Json, waiting.card, confirmLabel("hand_over"), lastAt(c));
+  await mesh.settle();
+  assert.equal(step(a), "sent");
+  assert.deepEqual(a.quieted, [], "the chats still work");
+  assert.ok(toldTo(c, "chat:c1").some((t) => t === `o@x confirmed it in the app, but ${RETIRE_OFF}.`), toldTo(c, "chat:c1").join("\n"));
+  // what reads and calls off answers as before
+  const preview = await c.asks.tool("chat:c1", { action: "preview", station: A.slice(0, 4), to: B.slice(0, 4) });
+  assert.equal(preview.preview.chats, 2);
+  assert.match(preview.say, /would move 2 chats/);
+  assert.match((await c.asks.tool("chat:c1", { action: "status", station: A.slice(0, 4) })).say, /waiting for the hand-over to be confirmed/);
+  assert.match((await c.asks.tool("chat:c1", { action: "cancel", station: A.slice(0, 4) })).say, /Called off/);
+  await mesh.settle();
+  assert.equal(a.retire.overview(HOME).retiring, null);
+  // (switched on, the same route starts it: it is the switch that refused)
+  const on = await post(true);
+  assert.equal(on.status, 202);
+  assert.equal(step(a), "sending");
+  await mesh.settle();
 });

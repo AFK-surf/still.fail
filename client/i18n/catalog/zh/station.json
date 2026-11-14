@@ -234,6 +234,7 @@
   "station.retire.card.otherStation": "另一台 station",
   "station.retire.ownersOnly": "只有工作区的所有者或管理员能确认迁移 station",
   "station.retire.askGone": "这张卡片的请求已经不在了：请让 agent 重新发起",
+  "station.retire.off": "迁走聊天并移出暂时关闭：这个功能正在修复，修好后再开放",
   "station.connect.stationAway": "这个对话所在的 station（{station}）现在连不上，你的消息没送到。等它上线后再发一次。",
   "station.connect.ownerEmail": "所属用户必须是邮箱地址",
   "station.connect.ownerWho": "只有 workspace 的 owner、管理员或当前所属用户可以更改所属用户",

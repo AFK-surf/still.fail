@@ -9,7 +9,9 @@ yet and you can add one, add it.
 - `src/view`: the window's tree, made once (below). `src/ui`: the old immediate-mode view (`Ctx`, built again each
   frame) and what both still share: the window's runtime, styles (`style.mbt`, `@ui.css`), the theme, text fields,
   the Tester and its fake host. `src/signals`: alien-signals, ported line for line. `src/motion`: motion as data.
-  `src/kit`: the components (Radix's set, drawn by mbui). `src/flex` (Yoga's layout), `src/text` (shaping,
+  `src/headless`: the headless components, on the window's tree, their looks their callers' (Components, below).
+  `src/kit`: the components before them (Radix's set, drawn by mbui: behaviour and a default look together, on the
+  old view but for its toasts). `src/flex` (Yoga's layout), `src/text` (shaping,
   segmentation), `src/shape`, `src/paint`, `src/skia`, `src/svg`, `src/pixels`: drawing. `src/hostapi` and
   `src/host`: what is asked of a platform and each platform's answer. `src/effect`: Effect-TS's model on the frames'
   clock.
@@ -119,10 +121,22 @@ yet and you can add one, add it.
   hands no number for either (the coordinator of the migration, 2026-11-12). A height change a handler declares
   (`View::resizes`) makes its way as what comes does, in its column's one way (in a list's foot the list's, the room
   under the last block following the foot as it shows), alone by its spec, nothing where it comes out as tall; one not
-  declared is at once; what draws a ground by how tall something shows is given that (`View::shown_by`).
+  declared is at once; what draws a ground by how tall something shows is given that (`View::shown_by`). Said `foot`,
+  what it holds keeps to its foot all the way, cut at its top (flex Style's `come_foot`; an old view hosted in it too):
+  a composer grows from its foot, what is over it going up with it as one (`src/view/list_foot_keeps_foot_test.mbt`;
+  the coordinator of the migration, 2026-11-14).
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.
+- A page's list's rows on the host's pixels rest at their heights put up. A height on its way under it (in a block,
+  its head or its foot: a part coming or closing, a declared resize; any depth, beside anything) is laid on that grid
+  where it is worked out, toward where it goes and never past its rest (flex Style's `come_grid`, set by
+  `View::comes`), so the row round it goes one way with it and is at its rest before the way ends; only under a list
+  whose keys make their way: an `at_once` list's insides go raw as they did, the rule coming with each as it is
+  switched on. A row on a way of its own (a key coming or going) is laid between its two rests as laid (flex's
+  `rows_on_way`, what the list counts it by too). No height is put on the grid twice, and none is put up by a reader of
+  its own, or a send's column steps down as its ways end (`src/flex/rows_grid_way_test.mbt`,
+  `src/flex/rows_grid_held_way_test.mbt`).
 - What is pressed in a column that scrolls (a page's list or a plain one) stays where it was pressed, all the way, as
   what the press opens or shuts round it comes or goes, over it or under it, at the column's foot too (the user,
   2026-11-12: 「所有点击展开的控件，展开和收起前后点击的元素位置不能变化」): the framework's, from the press
@@ -184,6 +198,21 @@ yet and you can add one, add it.
   widget. A test whose key moves the focus along (Tab, Shift+Tab, an arrow) onto what is wholly outside the window
   stops, judged where its ways end (`src/ui/tester_focus_off.mbt`; the coordinator of the migration, 2026-11-12).
 
+## Components: headless, their looks apart
+
+> 感觉 mbui 应该做一套无头组件库 … 再在它之上做 ui 组件库 … 至少虚拟列表不应该每个组件库自己搞
+
+- Three layers (the user, 2026-11-14): the framework (`src/view`: what any node has, done by no component library
+  again), headless components (`src/headless`: what one kind of control is to the hand, the keyboard and a screen
+  reader, drawing and laying out nothing, knowing no theme), and libraries with a look (an app's, as still.fail's; or
+  a default one), which write looks over them and nothing else. The button is the sample the next ones follow (the
+  user, 2026-11-14: 「在这里先做按钮当样板」). `src/headless/headless.mbt`'s head is the rule: whose a thing is, who
+  keeps state, what a look may say of a component's node, and what the sample leaves undecided (a control of several
+  parts). Read it before writing a component or a look; a change to the rule is made there.
+- A new component, and one moved off `Ctx`, goes in `src/headless`, its look given by its caller: never in `src/kit`,
+  whose components stay as they are and go as their callers do (its toasts, `src/kit/toast_node.mbt`, are of the tree
+  and take a look, but set some of it themselves: not yet of this kind).
+
 ## Time in a test is declared, never waited for
 
 > 一个测试里动画是多少帧，跑多久现实时间，对测试不会有任何影响。如果测试断言了动画第 3 秒应该是什么样，测试就能正确得到
@@ -195,7 +224,8 @@ yet and you can add one, add it.
 - So every test the Tester runs, mbui's and the app's, runs again with frames drawn on `run_for`'s way (while the app
   asks for them, as a host draws them) at 60, 120, 24 and 7 a second (`MBUI_TEST_FPS`, `scripts/fps_check.sh`; in CI
   mbui-ci's `native at …` and mbui-check's `… at … fps`, a runner a rate; on main after a merge, not on a branch's
-  pushes (the user, 2026-11-11 15:51 UTC: 「直接合，帧率在 main 上合并后跑」: red there mended forward), and in the
+  pushes (the user, 2026-11-11 15:51 UTC: 「直接合，帧率在 main 上合并后跑」: red there mended forward), but for the app's
+  test files a branch changed, at 120, 60 and 24 (mbui-check's `rates-changed`; the user, 2026-11-14), and in the
   day's run), and must come out the same; the app's sweeps of
   each screen at rest (screens, squeeze_said, words_large, corners, contrast) only at the default rate, a rate having
   found nothing in them the default run did not (the user, 2026-11-11: each part of the tests is run for what it is

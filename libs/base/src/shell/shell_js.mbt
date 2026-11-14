@@ -16,10 +16,19 @@
 //                      path a relay's: no `ip`)
 //   istream.read/write/finish/reset                    the stream's own; a read answers its end as `{end: true}`
 //
-// A handle is a number, as the Rust shell's (`{"id": n}`): an endpoint, a connection (kept as why it ended once it
-// has: asked after, it answers that), a stream (let go of once reset, or read to its end and finished). As natively,
-// a wait given up is not a call given up but for a dial: a read let go of goes on (iroh-wasm's `read` holds the
-// stream's receiving half), so a stream is not read again after that, but reset.
+// A handle is a number, as the Rust shell's (`{"id": n}`), and a page lives long: each is let go of, none kept for
+// the page's life.
+//   a stream       once reset, or read to its end and finished; and with its connection, as that ends (its control
+//                  stream, which is neither; a reply's left unread): as the Rust shell lets a connection's go;
+//   a connection   kept as why it ended once it has (asked after, it answers that), until it is closed with
+//                  `forget` (`conn.close {id, forget: true}`: the mesh's, once it was told the end and keeps why
+//                  itself, or at once of one an opening gave up, ended or not) or its endpoint closes. The Rust
+//                  shell reads no `forget` and keeps that of every connection it had: there it is that shell's to
+//                  let go;
+//   an endpoint    as it is closed, with every connection of it and their streams. Nothing is answered of it after
+//                  (the Rust shell still says a closed one's id: the mesh keeps it and asks none).
+// As natively, a wait given up is not a call given up but for a dial: a read let go of goes on (iroh-wasm's `read`
+// holds the stream's receiving half), so a stream is not read again after that, but reset.
 //
 // There is no loop to pump from: every answer is an event of the page's (a promise's), given to its fiber and then
 // followed by a turn of the runtime, and so is a timer of the runtime's come due (`Shell::start`).
@@ -35,10 +44,15 @@ priv type Page
 extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, String, Bytes) -> Unit) -> Page =
   #|(prefix, irohAt, answered) => {
   #|  const none = new Uint8Array(0);
-  #|  // by handle: {endpoint} or, closed, {unbound: its id}; {conn} or, ended, {gone: why}; {stream, finished, ended}
+  #|  // by handle: {endpoint}; {conn, of: its endpoint, closed: why it ended, once it has} or, ended, {gone: why, of};
+  #|  // {stream, on: its connection, finished, ended}
   #|  const handles = new Map();
   #|  let last = 0;
   #|  const keep = (handle) => (handles.set(++last, handle), last);
+  #|  // a connection's streams let go of (as it ends, or is let go of itself)
+  #|  const streamsGo = (conn) => {
+  #|    for (const [id, h] of handles) if (h.on === conn) handles.delete(id);
+  #|  };
   #|  // by the call of a dial under way: what gives it up
   #|  const dials = new Map();
   #|  let iroh = null;
@@ -70,7 +84,6 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|        return [{ id: keep({ endpoint: await module.bind({ secretKey: bytes ?? none, relayUrls: a.relayUrls ?? [] }) }) }];
   #|      }
   #|      case "iroh.connect": {
-  #|        if (h?.unbound !== undefined) throw new Error("the endpoint is closed");
   #|        if (h?.endpoint === undefined) throw new Error("not an endpoint");
   #|        let giveUp = () => {};
   #|        let gave = false;
@@ -78,8 +91,19 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|        dials.set(id, () => { gave = true; giveUp(); });
   #|        try {
   #|          const conn = await h.endpoint.connect(a.addr, bytes ?? none, [], given);
-  #|          const kept = keep({ conn });
-  #|          conn.closedInfo().then((why) => handles.set(kept, { gone: why }), () => {});
+  #|          // (its endpoint closed meanwhile: nothing would let go of a connection kept now)
+  #|          if (handles.get(a.id) !== h) {
+  #|            conn.close(0, "closed");
+  #|            throw new Error("the endpoint is closed");
+  #|          }
+  #|          const entry = { conn, of: a.id, closed: conn.closedInfo().catch((e) => ({ kind: "other", reason: said(e) })) };
+  #|          const kept = keep(entry);
+  #|          // Ended, however it did: its streams go, and what is kept of it is why (unless it was let go of first).
+  #|          entry.closed.then((why) => {
+  #|            if (handles.get(kept) !== entry) return;
+  #|            handles.set(kept, { gone: why, of: a.id });
+  #|            streamsGo(kept);
+  #|          });
   #|          return [{ id: kept }];
   #|        } catch (e) {
   #|          throw gave ? new Error("cancelled") : e;
@@ -89,16 +113,34 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|      }
   #|      case "iroh.close":
   #|        if (h?.endpoint !== undefined) {
-  #|          handles.set(a.id, { unbound: h.endpoint.id() });
+  #|          // let go of with all that was its: its connections, ended or not, and their streams
+  #|          handles.delete(a.id);
+  #|          for (const [id, one] of handles) {
+  #|            if (one.of !== a.id) continue;
+  #|            handles.delete(id);
+  #|            streamsGo(id);
+  #|          }
   #|          await h.endpoint.close();
   #|        }
   #|        return [{}];
-  #|      case "conn.openBi":
-  #|        return [{ id: keep({ stream: await connection(h).openBi(), finished: false, ended: false }) }];
+  #|      case "conn.openBi": {
+  #|        const opened = await connection(h).openBi();
+  #|        // (ended, or let go of, meanwhile: its streams went then, and this one would stay)
+  #|        if (handles.get(a.id) !== h) throw new Error("connection closed");
+  #|        return [{ id: keep({ stream: opened, on: a.id, finished: false, ended: false }) }];
+  #|      }
   #|      case "conn.closed":
-  #|        return [h?.gone !== undefined ? h.gone : await connection(h).closedInfo()];
+  #|        if (h?.gone !== undefined) return [h.gone];
+  #|        connection(h);
+  #|        return [await h.closed];
   #|      case "conn.close":
   #|        if (h?.gone === undefined) connection(h).close(a.code ?? 0, a.reason ?? "");
+  #|        // `forget`: nothing is asked of it after (the mesh was told its end, or gave it up with its opening, where
+  #|        // it is closed just above): let go of, its streams with it
+  #|        if (a.forget === true) {
+  #|          handles.delete(a.id);
+  #|          streamsGo(a.id);
+  #|        }
   #|        return [{}];
   #|      case "istream.read": {
   #|        const came = await stream(h).read();
@@ -137,11 +179,9 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|    switch (op) {
   #|      case "iroh.endpointId":
   #|        if (h?.endpoint !== undefined) return h.endpoint.id();
-  #|        if (h?.unbound !== undefined) return h.unbound;
   #|        break;
   #|      case "iroh.relayStatus":
   #|        if (h?.endpoint !== undefined) return h.endpoint.relayStatus();
-  #|        if (h?.unbound !== undefined) return [];
   #|        break;
   #|      case "conn.closeReason":
   #|        if (h?.conn !== undefined) return h.conn.closeReason() ?? null;
@@ -173,9 +213,11 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|      }
   #|    },
   #|    soon: (turn) => queueMicrotask(turn),
+  #|    // (a delay past 2^31-1 ms a browser takes for none and fires at once: the most it takes is asked instead, and
+  #|    // the turn that comes of it, finding nothing due, asks again for what is left)
   #|    wake: (ms, turn) => {
   #|      clearTimeout(timer);
-  #|      timer = ms < 0 ? 0 : setTimeout(turn, ms);
+  #|      timer = ms < 0 ? 0 : setTimeout(turn, Math.min(ms, 2147483647));
   #|    },
   #|  };
   #|}
@@ -194,7 +236,8 @@ extern "js" fn page_soon(page : Page, turn : () -> Unit) -> Unit =
   #|(page, turn) => page.soon(turn)
 
 ///|
-/// `turn` run `ms` from now, in the place of the one asked before (the page's one timer); negative: none.
+/// `turn` run `ms` from now, in the place of the one asked before (the page's one timer); negative: none. It may
+/// come early (after 2^31-1 ms where `ms` is more): whoever asks looks at the clock when it does.
 extern "js" fn page_wake(page : Page, ms : Double, turn : () -> Unit) -> Unit =
   #|(page, ms, turn) => page.wake(ms, turn)
 
@@ -215,9 +258,10 @@ let page : Ref[Page?] = Ref(None)
 /// under `dir` (the key `<dir>:<key>`, in hex), and iroh is the module at `iroh` (an address of the page's server:
 /// iroh-wasm's JavaScript, its wasm beside it), loaded as the first endpoint is bound. From now on `rt` is turned by
 /// the page's events: once what woke a fiber is over (an answer of the shell's, a fork from the page's own code), and
-/// as its next timer comes due. So `rt` is a runtime on this clock (`Runtime::live(now)`), and nothing else ticks it.
+/// as its next timer comes due, by `rt`'s own clock. So `rt` is a runtime on a clock of the page's
+/// (`Runtime::live(now)`), and nothing else ticks it.
 pub fn Shell::start(rt : @effect.Runtime, dir : String, iroh~ : String) -> Shell {
-  let shell : Shell = { rt, waiting: Map([]), next: 0L }
+  let shell = Shell::of_target(rt)
   let made = page_start(dir, iroh, (id, kind, text, bytes) => shell.settle(id.to_int64(), kind, text, bytes))
   page.val = Some(made)
   // (one turn for all that woke since the last: asked once, run as a microtask; then the page's timer set for the
@@ -229,7 +273,7 @@ pub fn Shell::start(rt : @effect.Runtime, dir : String, iroh~ : String) -> Shell
     rt.tick()
     match rt.next_timer() {
       Some(at) => {
-        let left = at - now()
+        let left = at - rt.now()
         page_wake(made, if left < 0L { 0.0 } else { left.to_double() }, () => (wake.val)())
       }
       None => page_wake(made, -1.0, () => ())

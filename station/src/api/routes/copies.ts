@@ -7,6 +7,7 @@ import { managesStation } from "../../mesh/credential.ts";
 import type { Copies } from "../../replica/copies.ts";
 import type { Retire } from "../../replica/retire.ts";
 import { Refused } from "../../mesh/bus.ts";
+import { tr } from "../../ops/i18n.ts";
 
 const body = (r: Request): any => {
   try {
@@ -16,7 +17,9 @@ const body = (r: Request): any => {
   }
 };
 
-export const routes = ({ copies, retire }: { copies: Copies; retire: Retire }): Route[] => [
+/// `starts`: whether a retirement may be started here (replica/module.ts `RETIRE_STARTS`); off, POST /retire is refused
+/// in words and writes nothing, the rest answering as before.
+export const routes = ({ copies, retire, starts }: { copies: Copies; retire: Retire; starts: boolean }): Route[] => [
   // This station retired from the asker's workspace: its chats there go on on `to` (replica/retire.ts). The
   // workspace's owners and admins; GET /retire/preview says what it would move; DELETE calls it off (refused, in words, where it cannot be), POST /retire/again tries
   // a step that failed again now: resting at `sent` after a hand-over failed, the hand-over itself (its chats pause
@@ -27,6 +30,7 @@ export const routes = ({ copies, retire }: { copies: Copies; retire: Retire }): 
     pattern: /^\/retire$/,
     handle: async (r: Request) => {
       if (!managesStation(r.viewer)) return error(403, "only the workspace's owners and admins retire a station");
+      if (!starts) return error(409, tr(r.lang, "station.retire.off"));
       const b = body(r);
       if (typeof b?.to !== "string") return error(400, "to is needed: the station the chats go to");
       try {

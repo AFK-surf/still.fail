@@ -2414,8 +2414,9 @@ test "build-motion: each way a closure goes on to a paint taker, one at a time" 
 
 ///|
 test "part-place" {
-  // a library's part made in the node it is given: counted where it takes no place of its caller's; one that takes it,
-  // one that makes nothing in it (it only sets what it looks like), a page's, and a test's not
+  // a library's part made in the node it is given (a box in it, or a headless component's node): counted where it
+  // takes no place of its caller's; one that takes it, one that makes nothing in it (it only sets what it looks like),
+  // one that only names the node inside a function it hands a component, a page's, and a test's not
   let cfg = Config::new(
     @rjson.parse(
       (
@@ -2429,7 +2430,7 @@ test "part-place" {
     [
       (
         "src/sf/parts.mbt",
-        "pub fn a_node(parent : @view.View, label : () -> String) -> Unit {\n  parent.box(fn(b) { b.words(By(label)) |> ignore }) |> ignore\n}\n\n#callsite(autofill(loc))\npub fn b_node(parent : @view.View, loc~ : SourceLoc) -> Unit {\n  parent.box(made_for=loc, fn(_) {  }) |> ignore\n}\n\nfn c_look(v : @view.View) -> Unit {\n  v.ground(Is(0L)) |> ignore\n}\n\nfn d_node(p : @view.View) -> @view.View {\n  p.box(fn(_) {  })\n}\n",
+        "pub fn a_node(parent : @view.View, label : () -> String) -> Unit {\n  parent.box(fn(b) { b.words(By(label)) |> ignore }) |> ignore\n}\n\n#callsite(autofill(loc))\npub fn b_node(parent : @view.View, loc~ : SourceLoc) -> Unit {\n  parent.box(made_for=loc, fn(_) {  }) |> ignore\n}\n\nfn c_look(v : @view.View) -> Unit {\n  v.ground(Is(0L)) |> ignore\n}\n\nfn d_node(p : @view.View) -> @view.View {\n  p.box(fn(_) {  })\n}\n\npub fn e_node(parent : @view.View, label : () -> String) -> @view.View {\n  @headless.button(parent, label, fn(_) {  }, fn(v, _) { v.ground(Is(0L)) |> ignore })\n}\n\n#callsite(autofill(loc))\npub fn f_node(parent : @view.View, label : () -> String, loc~ : SourceLoc) -> @view.View {\n  @headless.button(made_for=loc, parent, label, fn(_) {  }, fn(_, _) {  })\n}\n\nfn g_node(other : @view.View, parent : @view.View) -> @view.View {\n  @headless.button(made_for=at, parent, label, fn(_) {  }, fn(v, _) { tip(other, v) })\n}\n\nfn h_node(p : @view.View, off : () -> Bool) -> @view.View {\n  @headless.button(\n    disabled=off,\n    p,\n    label,\n    press,\n    look,\n  )\n}\n",
       ),
       ("src/sfpages/page.mbt", "fn p(parent : @view.View) -> Unit {\n  parent.box(fn(_) {  }) |> ignore\n}\n"),
       ("src/sf/x_wbtest.mbt", "fn t(parent : @view.View) -> Unit {\n  parent.box(fn(_) {  }) |> ignore\n}\n"),
@@ -2437,7 +2438,36 @@ test "part-place" {
     rule="part-place",
     cfg~,
   )
-  assert_eq(fs.map(fn(f) { f.line }), [1, 14])
+  assert_eq(fs.map(fn(f) { f.line }), [1, 14, 18, 31])
+}
+
+///|
+test "button-by-hand" {
+  // a library's part that says it is a button itself: counted (a call each, whatever else it says: pressed, expanded);
+  // another role, a look over the headless button, a page's, a test's and the framework's not
+  let cfg = Config::new(
+    @rjson.parse(
+      (
+        #|{"mbt": {"roots": ["src"], "framework": ["src/kit"]}, "library": {"roots": ["src/sf"]}}
+      ),
+    ) catch {
+      _ => panic()
+    },
+  )
+  let fs = lint_of(
+    [
+      (
+        "src/sf/parts.mbt",
+        "fn a_node(v : @view.View) -> Unit {\n  v.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore\n  v.says(Is(Some(@view.said(Link, label=\"l\")))) |> ignore\n  v.says(\n    By(fn() {\n      Some(@view.said(Button, label=label(), expanded=open()))\n    }),\n  )\n  |> ignore\n}\n\nfn b_node(p : @view.View, loc~ : SourceLoc) -> @view.View {\n  @headless.button(made_for=loc, p, label, press, look)\n}\n",
+      ),
+      ("src/sfpages/page.mbt", "fn p(v : @view.View) -> Unit {\n  v.says(Is(Some(@view.said(Button, label=\"l\")))) |> ignore\n}\n"),
+      ("src/sf/x_wbtest.mbt", "test \"t\" {\n  v.says(Is(Some(@view.said(Button, label=\"l\")))) |> ignore\n}\n"),
+      ("src/kit/toast.mbt", "fn t(v : @view.View) -> Unit {\n  v.says(Is(Some(@view.said(Button, label=\"l\")))) |> ignore\n}\n"),
+    ],
+    rule="button-by-hand",
+    cfg~,
+  )
+  assert_eq(fs.map(fn(f) { f.line }), [2, 6])
 }
 
 ///|

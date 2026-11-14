@@ -12,19 +12,25 @@ import { type Args, jsString } from "./args.ts";
 import { attach } from "./conversations.ts";
 import type { Hub } from "./hub.ts";
 import { INTERNAL_CONNECT } from "./internal.ts";
-import { newSession } from "./lifecycle.ts";
+import { type NewChat, newSession } from "./lifecycle.ts";
 import { chatNamed, postFrom, sender } from "./messages.ts";
 import { Refused } from "./neighbours.ts";
 import { fromBefore, linkedStation, peersOf, sessionThreadOf } from "./others.ts";
 import { sendable, sendAlong } from "./peer-files.ts";
 import { RUNTIME_KINDS, type RuntimeKind } from "../agents/runtime.ts";
 import { USED_WITHIN_MS, askWhich, candidates, choose } from "./model-choice.ts";
+import { sameModel } from "./config.ts";
+import { contextAsked } from "./context-cap.ts";
+import { type Preset, type PresetCopy, type PresetModel, presetCopyInput } from "./presets.ts";
 import { STATION_AUTHOR } from "../store/rows.ts";
 
 type Json = any;
 
 /// The method another station's agent opens a chat here by.
 export const CREATE = "session.create";
+/// The same with a preset (its copy in `presetCopy`): a method of its own, so a station from before refuses it rather
+/// than opening the chat without the preset.
+export const CREATE_PRESET = "session.create.preset";
 /// The method a station tells the opener of a chat how one of its turns ended.
 export const NOTICE = "session.notice";
 
@@ -68,10 +74,16 @@ function starterOf(hub: Hub, key: string): string {
 /// A new session in a chat of its own for an opener: its runtime, model and effort as asked; the model and effort it
 /// takes after its opener's (`inherited`) are dropped where no profile here runs them. Told no effort, it runs the one
 /// its starter `createdBy` uses most here with that runtime and model, dropped too where it is not run (the model's
-/// own default otherwise: Codex's for gpt-6.1-terra is low, where its people run max). In workspace `ws` (the opener's).
-function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; effort: string | null; inherited: boolean; title: string | null; createdBy: string; ws: string | null }) {
-  const usual = o.effort === null ? usualEffort(hub, o.createdBy, o.runtime, o.model) : null;
-  const options = { runtime: o.runtime, model: o.model, effort: o.effort ?? usual, title: o.title, createdBy: o.createdBy, ws: o.ws };
+/// own default otherwise: Codex's for gpt-6.1-terra is low, where its people run max), unless a preset's model
+/// configuration is what it runs (`bound`: as the app opens one, the model's own default where the preset names none).
+/// In workspace `ws` (the opener's). `more`: what else it is opened with, as the app would (its preset, Fast, context).
+function makeChat(
+  hub: Hub,
+  o: { runtime: RuntimeName; model: string | null; effort: string | null; inherited: boolean; title: string | null; createdBy: string; ws: string | null; bound?: boolean },
+  more: Partial<Pick<NewChat, "preset" | "presetCopy" | "fast" | "context" | "profile" | "profiles">> = {},
+) {
+  const usual = o.effort === null && o.bound !== true ? usualEffort(hub, o.createdBy, o.runtime, o.model) : null;
+  const options: NewChat = { ...more, runtime: o.runtime, model: o.model, effort: o.effort ?? usual, title: o.title, createdBy: o.createdBy, ws: o.ws };
   try {
     return newSession(hub, options);
   } catch (error) {
@@ -83,6 +95,44 @@ function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; eff
     if (!o.inherited || (o.model === null && o.effort === null)) throw error;
     return newSession(hub, { ...options, model: null, effort: null });
   }
+}
+
+/// The preset an agent names (chat_create `preset`): one of this station's in workspace `ws`, by its id or its name.
+function presetNamed(hub: Hub, ws: string | null, named: string): Preset {
+  const all = hub.presets.list(ws ?? hub.workspaces()[0] ?? null);
+  const lower = named.toLowerCase();
+  const found = all.find((p) => p.id === named) ?? all.find((p) => p.name.toLowerCase() === lower);
+  if (found) return found;
+  if (all.length === 0) throw new Error(`no preset ${named}: this station has none (people make them in the app). Leave preset out to open the chat with none`);
+  throw new Error(`no preset ${named} on this station; its presets: ${all.map((p) => p.name).join(", ")}`);
+}
+
+/// The stations (ids) preset `p` opens its chats on; none: any.
+const presetStations = (p: { station?: string; stations?: string[] }): string[] =>
+  (p.station !== undefined ? [p.station] : (p.stations ?? [])).map((s) => s.slice(s.lastIndexOf("/") + 1));
+
+/// What a chat opened with a preset naming its model configuration `pm` runs, all of it the preset's as the app opens
+/// it (core choose.ts `boundChoice`): its runtime, where the preset names none the first of workspace `ws` here that
+/// runs the model.
+function boundHere(hub: Hub, ws: string | null, pm: PresetModel, name: string) {
+  const runtime = pm.runtime ?? candidates(hub.profilesIn(ws), null).find((c) => c.model !== null && sameModel(c.model, pm.model))?.runtime;
+  if (runtime === undefined || !RUNTIMES.includes(runtime as RuntimeName)) throw new Error(`the preset ${name} runs ${pm.model}, which no account on the station it is opened on runs`);
+  return {
+    choice: { runtime: runtime as RuntimeName, model: pm.model, effort: pm.effort ?? null, bound: true },
+    more: { fast: pm.fast ?? null, context: pm.context ?? null, profile: pm.profile ?? null, profiles: pm.profiles ?? null },
+  };
+}
+
+/// Preset `p` of this station as a chat on another station is opened with (as the app gives one, core choose.ts):
+/// each folder said to be where it is (`here`: this station, by its id) unless that is the chat's station `there`, and
+/// what it binds the chat to with it.
+function copyFor(p: Preset, here: string, there: string): PresetCopy {
+  const dirs = p.dirs.map(({ station, stationName, guides: _g, skills: _k, ...d }) => {
+    if (station === undefined) return { ...d, elsewhere: here };
+    return station.slice(station.lastIndexOf("/") + 1) === there ? d : { ...d, elsewhere: stationName || station };
+  });
+  const stations = p.station !== undefined ? [p.station] : p.stations;
+  return { id: p.id, name: p.name, dirs, instructions: p.instructions, ...(p.model ? { model: p.model } : {}), ...(stations && stations.length > 0 ? { stations } : {}) };
 }
 
 /// The effort `createdBy` started most of their chats here on (runtime, model) with lately (the latest of those used
@@ -182,6 +232,18 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   if (runtime !== null && !RUNTIMES.includes(runtime as RuntimeName)) throw new Error(`runtime must be one of ${RUNTIMES.join(", ")}`);
   const model = given(args, "model");
   const effort = given(args, "effort");
+  if (args.fast !== undefined && args.fast !== null && typeof args.fast !== "boolean") throw new Error("fast must be true or false");
+  const fast = typeof args.fast === "boolean" ? args.fast : null;
+  const context = contextAsked(args.context ?? undefined, stationLang()) ?? null;
+  // A preset is taken as it is, as a person opening a chat with it in the app takes it (the user, 2026-11-14: 「有预设
+  // 就只能直接用预设，或者设置用户也能手动指定的部分，没有特权」): where it names its model configuration nothing of it is
+  // given beside it; where it names stations, the chat opens on one of them (the one, where it names one).
+  const presetName = given(args, "preset");
+  const preset = presetName === null ? null : presetNamed(hub, row.ws ?? null, presetName);
+  if (preset?.model && (runtime !== null || model !== null || effort !== null || fast !== null || context !== null)) {
+    throw new Error(`the preset ${preset.name} runs ${preset.model.model} as it says (its runtime, effort, Fast and context too): leave runtime, model, effort, fast and context out, or leave preset out to choose them yourself`);
+  }
+  const bindsTo = preset === null ? [] : presetStations(preset);
   // Without a model of its own it runs what its starter uses most where it is opened (chosen there), never its
   // opener's: the opener's model may be one that station has no profile for.
   const choice = { runtime: (runtime ?? row.runtime) as RuntimeName, model, effort, inherited: false };
@@ -189,7 +251,11 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   if (title !== null && chars(title) > 120) throw new Error("title is too long (at most 120 characters)");
   const paths: string[] = Array.isArray(args.files) ? args.files.map(jsString) : [];
   const files = sendable(hub, key, paths);
-  const there = await stationNamed(hub, key, given(args, "station"));
+  const there = await stationNamed(hub, key, given(args, "station") ?? (bindsTo.length === 1 ? bindsTo[0]! : null));
+  const target = there ?? hub.station();
+  if (preset !== null && bindsTo.length > 0 && target !== null && !bindsTo.includes(target)) {
+    throw new Error(`the preset ${preset.name} opens its chats only on station${bindsTo.length > 1 ? "s" : ""} ${bindsTo.join(", ")}: name one of them as station`);
+  }
 
   const createdBy = starterOf(hub, key);
   const [from, fromLink] = sender(hub, key);
@@ -211,8 +277,10 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
     return opened({ session: before.child, link: before.link, thread }, there, true);
   }
   if (there === null) {
-    const chosen = model === null ? chosenHere(hub, createdBy, row.ws ?? null, runtime as RuntimeName | null) : choice;
-    const [child, chat] = makeChat(hub, { ...choice, ...chosen, title, createdBy, ws: row.ws ?? null });
+    const bound = preset?.model ? boundHere(hub, row.ws ?? null, preset.model, preset.name) : null;
+    const chosen = bound !== null ? bound.choice : model === null ? chosenHere(hub, createdBy, row.ws ?? null, runtime as RuntimeName | null) : choice;
+    const more = { ...(preset !== null ? { preset: preset.id } : {}), fast, context, ...bound?.more };
+    const [child, chat] = makeChat(hub, { ...choice, ...chosen, title, createdBy, ws: row.ws ?? null }, more);
     const link = hub.link(child) ?? null;
     hub.store.insertOpened({ childStation: "", child, parentStation: "", parent: key, key: k, title, link, openerTitle: from });
     const thread: SessionThread = { thread: chat, connect: INTERNAL_CONNECT };
@@ -224,13 +292,20 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   const call = peersOf(hub, key)!;
   // `choose`: the station it is opened on picks the model (`runtimeGiven`: of that runtime); one from before it runs the
   // runtime's default there.
-  const request: Json = { method: CREATE, session: key, key: k, title, ...choice, choose: model === null, runtimeGiven: runtime !== null, createdBy, from: { title: from, link: fromLink } };
+  // With a preset, its copy (`presetCopy`), whose model configuration, where it names one, the station there runs.
+  const request: Json = {
+    method: preset !== null ? CREATE_PRESET : CREATE,
+    session: key, key: k, title, ...choice, choose: model === null, runtimeGiven: runtime !== null, createdBy, from: { title: from, link: fromLink },
+    ...(fast !== null ? { fast } : {}),
+    ...(context !== null ? { context } : {}),
+    ...(preset !== null ? { presetCopy: copyFor(preset, hub.station() ?? "", there) } : {}),
+  };
   let made: Json;
   try {
     made = await call(there, request);
   } catch (error) {
     const why = (error as Error).message;
-    if (error instanceof Refused && fromBefore(why)) throw new Error(`station ${there} is not updated yet: chats cannot be opened there`);
+    if (error instanceof Refused && fromBefore(why)) throw new Error(`station ${there} is not updated yet: chats cannot be opened there${preset !== null ? " with a preset" : ""}`);
     throw new Error(`not opened on station ${there}: ${why}. If it timed out it may have been opened: call chat_create again with the same key, which gives that chat rather than another`);
   }
   const child = typeof made?.session === "string" ? made.session : "";
@@ -271,9 +346,20 @@ export async function createForPeer(hub: Hub, peer: string, request: Json, ws: s
   const title = given(request, "title");
   const createdBy = given(request, "createdBy") ?? `${peer}/${parent}`;
   const model = given(request, "model");
+  // With a preset (CREATE_PRESET): its copy, and the model configuration it names run as it says.
+  const copy = request?.method === CREATE_PRESET ? presetCopyInput(request?.presetCopy) : null;
+  const bound = copy?.model ? boundHere(hub, ws, copy.model, copy.name) : null;
   // Its opener named no model: what its starter uses most here (an opener from before this sends its own, inherited).
-  const chosen = request?.choose === true && model === null ? chosenHere(hub, createdBy, ws, request?.runtimeGiven === true ? (runtime as RuntimeName) : null) : { runtime: runtime as RuntimeName, model };
-  const [child] = makeChat(hub, { ...chosen, effort: given(request, "effort"), inherited: request?.inherited === true, title, createdBy, ws });
+  const chosen = bound !== null ? bound.choice
+    : request?.choose === true && model === null ? chosenHere(hub, createdBy, ws, request?.runtimeGiven === true ? (runtime as RuntimeName) : null)
+    : { runtime: runtime as RuntimeName, model };
+  const more = {
+    fast: typeof request?.fast === "boolean" ? (request.fast as boolean) : null,
+    context: contextAsked(request?.context ?? undefined, stationLang()) ?? null,
+    ...(copy !== null ? { presetCopy: copy } : {}),
+    ...bound?.more,
+  };
+  const [child] = makeChat(hub, { effort: given(request, "effort"), ...chosen, inherited: request?.inherited === true, title, createdBy, ws }, more);
   // What its opener was called (its chat's way back to it says so while that chat is not in the viewer's list).
   const openerTitle = typeof request?.from?.title === "string" && request.from.title !== "" ? (request.from.title as string) : null;
   hub.store.insertOpened({ childStation: "", child, parentStation: peer, parent, key: k, title, link: hub.link(child) ?? null, openerTitle });

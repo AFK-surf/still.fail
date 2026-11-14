@@ -882,7 +882,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         match laid_at.get(w.1) {
           Some(i) if i < n => {
             let h = all.h(i)
-            let now = rows_slot_on(@flex.come_tall_at(st, h, at), g)
+            let now = rows_way_on(st, @flex.come_tall_at(st, h, at), st.come_to * h, at, g)
             froms.push(i + 1)
             lefts.push(h - now)
             own_at.push(i)
@@ -901,7 +901,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           None => n
         }
         froms.push(i)
-        lefts.push(-rows_slot_on(@flex.come_tall_at(st, 0.0, at), g))
+        lefts.push(-rows_way_on(st, @flex.come_tall_at(st, 0.0, at), 0.0, at, g))
       }
     }
     { col: all, froms, lefts, own_at, own_h }
@@ -2192,7 +2192,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       } else {
         let kept = now.copy()
         for k in showed {
-          if laid_at.contains(k) && !kept.contains(k) {
+          if laid_at.get(k) is Some(i) &&
+            i < all.length() &&
+            all.top(i) + all.h(i) > top &&
+            all.top(i) < top + vh &&
+            !kept.contains(k) {
             kept.push(k)
           }
         }
@@ -2378,6 +2382,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     // (what the last pass found, alone: what showed before and shows no more let go now, in this layout)
     show_only(found)
+    self.tree.room_bindings_run()
     slots_cover(places(laid.untracked()), found, top, vh)
     let live = blocks.filter(fn(b) { b.0.alive() })
     blocks.clear()
@@ -2484,8 +2489,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let seen_on_way : Map[Int, (View, Array[View])] = Map([])
   // (how much of the block of row `v` on its way shows, 0 to 1, where it is drawn: one number, as the layout puts it,
   // its height then over its height at rest, each as its column lays it out (on the host's pixels where it sets a page's
-  // list's rows on them: rows_slot_on, as flex rounds a row's height), so that what it holds drawn at it fills what shows
-  // and its foot steps with the slot's, never between; as far as it set out from, where its way is not measured yet; 1
+  // list's rows on them: as flex lays a row on its way, flex's rows_on_way), so that what it holds drawn at it fills what
+  // shows and its foot steps with the slot's, never between; as far as it set out from, where its way is not measured yet; 1
   // off its way. Read by the clock where it is drawn (View::drawn_while): `laid` is told what is measured, not each
   // layout of the way)
   let shown_share = fn(v : View) -> Double {
@@ -2497,11 +2502,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let whole = rows_slot_on(dmax(st.come_from, if st.come_goal == st.come_goal { st.come_goal } else { 0.0 }), g)
     guard ends == ends && whole > 0.0 else { return if st.come_from > 0.0 { 1.0 } else { 0.0 } }
     let t = v.drawn_while(fn(now) { now < ends })
-    let shown = match @flex.come_state(st, if t == @double.infinity { ends } else { t }) {
+    let at = if t == @double.infinity { ends } else { t }
+    let shown = match @flex.come_state(st, at) {
       Some((h, _)) => h
       None => whole
     }
-    dmin(rows_slot_on(shown, g) / whole, 1.0)
+    dmin(rows_way_on(st, shown, st.come_goal, at, g) / whole, 1.0)
   }
   let seen_from = fn(v : View) {
     // (the same view already seen so: nothing to do; another made at its index since, or one let go, replaced)
@@ -2821,6 +2827,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         Some(self.tree.rows_slot(my_tall.get().unwrap_or(est)))
       }))
       .shrink(Is(0.0))
+      .holds_whole()
       // (as tall as it is counted, as wide as the column: what changes in what shows laid out from it alone; where that
       // comes out another height than it is counted, or what shows in it was never measured (one taken from another's
       // slot), the column laid out again, which measures it: Tree::alone_asks)

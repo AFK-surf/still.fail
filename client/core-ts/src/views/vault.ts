@@ -411,6 +411,19 @@ function fits(inner: Inner, ws: string): Fits {
 /// they take it or what is held no more.
 const over = (ok: boolean, okHad: () => boolean, later: boolean) => (ok && !okHad()) || (later && (ok || !okHad()));
 
+/// Why this device is no signer of `ws`'s vaults, where that is not its not being trusted there (`core-misc.vault.notSigner`,
+/// which said it of both of these before, 2026-11-14): the workspace's chain moved and its state waits for the root's log
+/// or its `open` (it names nobody yet, views/lock.ts `inForceOf`); or the state is in force and this device is on its
+/// person's own log with its signer not said there (personal-lock.ts `signerUnsaid`), which the state names it by, so a
+/// press says it (`confirm`: the call `lock.confirmSigner`). Null otherwise.
+function whyNot(inner: Inner, ws: string): { code: string; text: string; confirm: boolean } | null {
+  const force = inForceOf(inner, ws);
+  if (force.said === "waiting") return { code: "vault_lock_waiting", text: t("core-misc.vault.lockWaiting"), confirm: false };
+  const sub = inner.workspaces.owner(ws);
+  if (force.said === "on" && sub !== null && inner.adb.personal().signerUnsaid(sub)) return { code: "vault_signer_unsaid", text: t("core-misc.vault.signerUnsaid"), confirm: true };
+  return null;
+}
+
 /// This device in the lock: the one whose signing key is this app's, where it is its person's own (one an admin put
 /// in under their name signs nothing, so keeps no vault).
 function me(lock: Checked, signer: string | null | undefined): { device: string; sub: string } | null {
@@ -974,6 +987,14 @@ export function tookOut(inner: Inner, ws: string, id: string): void {
   at.add(id);
 }
 
+/// A device this one took off its person's own log at their asking where `ws`'s chain moved (views/lock.ts
+/// `takeOffBound`): as `tookOut`, and the vaults that held a key for it keyed anew now (`rekeyGone`), the state in force
+/// having no workspace entry whose taking would run it.
+export function tookOutMoved(inner: Inner, ws: string, id: string): void {
+  tookOut(inner, ws, id);
+  if (able(inner)) inner.runner.fork(Effect.ignore(new Vaults(inner, ws, null).rekeyGone(), { log: "Unhandled", message: "vaults keyed anew" }));
+}
+
 /// The keys unsealed here given to the members' devices set up that have none (the vaults of this person's own):
 /// forked, nothing asked of the person (`Vaults.giveKept`).
 function giveKept(inner: Inner, ws: string): void {
@@ -1105,7 +1126,9 @@ export function vaultsView(inner: Inner, ws: string): J {
       return { ...requestRow(r, r.save?.name ?? r.describe?.was.name ?? r.remove?.name ?? listing?.name ?? null, h.vaults[r.vault]?.name ?? personal, listing?.lasts ?? h.vaults[r.vault]?.lasts ?? "chat"), ...(notHere(r, self?.device ?? null, m.box ?? null) ? { notHere: true } : {}) };
     });
   // What is left of the plain library from before security mode, to be moved into the person's vault.
-  return { ...base, canSign: self !== null, setUp: mine !== undefined && mine.box === m.box, vaults, requests, ...statusWords(vaults, requests), ...(plainItems.length > 0 ? { plainLeft: plainItems.length } : {}) };
+  // (no signer here for a reason of its own: its words, and the press that ends it where one does)
+  const why = self === null ? whyNot(inner, ws) : null;
+  return { ...base, canSign: self !== null, ...(why !== null ? { stateText: why.text, ...(why.confirm ? { confirmText: t("core-misc.vault.confirm") } : {}) } : {}), setUp: mine !== undefined && mine.box === m.box, vaults, requests, ...statusWords(vaults, requests), ...(plainItems.length > 0 ? { plainLeft: plainItems.length } : {}) };
 }
 
 const clockOf = (inner: Inner) => {
@@ -1342,7 +1365,10 @@ class Vaults {
       const who = signer ? me(lock, signer.id) : null;
       // (in the lock, signing with this app's key, but put in under this person's name by someone else)
       if (signer && !who && [...lock.devices.values()].some((d) => d.kind === "app" && d.sign_key === signer.id)) return yield* fail("vault_not_own", t("core-misc.vault.notOwn"));
-      if (!signer || !who) return yield* fail("vault_not_signer", t("core-misc.vault.notSigner"));
+      if (!signer || !who) {
+        const why = whyNot(inner, self.ws);
+        return yield* (why !== null ? fail(why.code, why.text) : fail("vault_not_signer", t("core-misc.vault.notSigner")));
+      }
       return { lock, signer, self: who };
     });
   }

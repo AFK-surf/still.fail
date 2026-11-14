@@ -21,8 +21,8 @@
 #                                   wrote is kept before down (`kept locks`)
 #   scripts/e2e-local.sh locks-moved-all  up, e2e/locks-moved.ts (a workspace's chain handed over to its people's own
 #                                   logs, and its acts after), down (scripts/side.sh locks-moved); kept as locks-all's.
-#                                   E2E_HANDOVER=auto: handed over by itself as A answers an ask for something else,
-#                                   nothing calling lock.handOver (the default: the call)
+#                                   handed over by itself as A answers an ask for something else, nothing calling
+#                                   lock.handOver (E2E_HANDOVER=call: the call, as before HAND_OVER_FROM)
 #   scripts/e2e-local.sh rigs       a rig end to end against what `up` started (e2e/rigs.ts: a machine enrolled as
 #                                   alice's rig beside the test station, asked for, granted, used, taken back)
 #   scripts/e2e-local.sh rigs-all   up, rigs, down (the side run's, scripts/side.sh rigs); rigs failed, kept the same

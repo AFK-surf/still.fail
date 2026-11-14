@@ -8,6 +8,9 @@ description: Retire a still.fail station (move its chats, jobs, memory, accounts
 `station_retire` moves everything of one station's chats in this workspace to another station. You prepare and
 check; a person confirms two cards in the still.fail app. The tool's description says the actions.
 
+Starting a retirement (`start`, `hand_over`) is switched off for now, while the fixes after its first use are made:
+both are refused and post no card; `preview`, `status`, `cancel` and `again` answer as before.
+
 ## Before start
 
 1. `station_retire {action: "preview", station, to}`: what moves, what stays, whether `to` is reached, has git and

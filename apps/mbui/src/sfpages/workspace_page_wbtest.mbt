@@ -25,7 +25,7 @@ test "the workspace's ways its devices reach its stations, at each width: one ro
     // the page: the row alone, what is off said at its end
     assert_true(t.find("已关闭 1 项") is Some(_), msg=at)
     assert_true(t.find("Tailscale") is None, msg=at)
-    t.tap_text("连接方式")
+    t.tap_text("中继")
     t.run_for(@ui.move_most_ms)
     assert_true(@sf.presenting(), msg=at)
     assert_true(t.find("北京") is Some(_), msg=at)
@@ -277,7 +277,7 @@ test "the ways' panel, on every screen: a manager adds a relay (the panel closes
   for screen in ws_screens {
     let at = screen.0
     let calls : Array[(String, Json)] = []
-    let t = ws_opened(screen, "连接方式", fn(s) { ws_changing(s, calls, ways=own) })
+    let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, ways=own) })
     assert_true(t.find("still.fail 的中继") is Some(_), msg=at)
     assert_true(t.find("此 workspace 的中继") is Some(_), msg=at)
     assert_true(t.find("直连") is Some(_), msg=at)
@@ -313,7 +313,7 @@ test "the ways' panel to one who is no manager: each way seen, none turned; no r
   for screen in ws_screens {
     let at = screen.0
     let calls : Array[(String, Json)] = []
-    let t = ws_opened(screen, "连接方式", fn(s) { ws_changing(s, calls, workspace=as_member) })
+    let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, workspace=as_member) })
     assert_true(@sf.presenting(), msg=at)
     assert_true(t.find("北京") is Some(_), msg=at)
     assert_true(t.find("此 workspace 的中继") is None, msg=at)
@@ -336,7 +336,7 @@ test "a way being set: its switches not turned meanwhile, as the core says they 
   let doing = fn() -> Json? {
     Some({ "doing": [{ "call": "workspace.setWay", "params": { "workspace": "ws1", "way": "lan" }, "stage": "running" }] })
   }
-  let t = ws_opened(ws_screens[0], "连接方式", fn(s) { ws_changing(s, calls, doing~) })
+  let t = ws_opened(ws_screens[0], "中继", fn(s) { ws_changing(s, calls, doing~) })
   // (read out so: each switch disabled)
   for w in ["Cloudflare", "北京", "局域网", "Tailscale", "打洞"] {
     assert_true(t.get(Switch, label=w).disabled, msg=w)
@@ -361,7 +361,7 @@ test "the ways' panel follows the core on every screen: a way turned elsewhere s
       })
     }
     let workspace = fn(v : Json?) { if now.get() >= 2 { ws_said(v, "role", Json::string("member")) } else { v } }
-    let t = ws_opened(screen, "连接方式", fn(s) { ws_changing(s, calls, workspace~, ways~) })
+    let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, workspace~, ways~) })
     assert_eq(t.get(Switch, label="局域网").check, Some(On), msg=at)
     assert_true(t.query(Button, label="添加中继") is Some(_), msg=at)
     now.set(1)
@@ -405,7 +405,7 @@ test "where the two panels' words stand on every screen: each under the one befo
     }
     @sf.presenters_reset()
     // the ways': the groups' labels and the ways' titles on one line, down in the core's order
-    let t = ws_opened(screen, "连接方式", fn(s) { ws_changing(s, calls) })
+    let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls) })
     let order = ["still.fail 的中继", "Cloudflare", "北京", "此 workspace 的中继", "添加中继", "直连", "局域网", "在同一局域网时直连", "Tailscale", "打洞"].map(fn(
       w,
     ) {

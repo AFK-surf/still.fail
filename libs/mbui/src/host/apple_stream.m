@@ -866,6 +866,10 @@ int32_t mb_host_h264_here(void) { return 1; }
 // H.265 where this Mac or iPhone decodes it on its hardware (every Apple silicon Mac, iPhone 7 and later).
 int32_t mb_host_h265_here(void) { return VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC) ? 1 : 0; }
 
+// AV1 not decoded here yet (Windows' alone: win_stream.cpp): a stream's AV1 config is let go, its frames with it.
+int32_t mb_host_av1_here(void) { return 0; }
+void mb_host_stream_av1(int32_t sid, moonbit_bytes_t av1c, int32_t w, int32_t h) { (void)sid; (void)av1c; (void)w; (void)h; }
+
 // (VideoToolbox decodes here by itself, frame for frame: nothing for the framework to drive, @hostapi.stream_feeds)
 int32_t mb_host_stream_feeds(void) { return 0; }
 void mb_host_stream_codec(int32_t sid, moonbit_string_t cmd, moonbit_bytes_t data) {}

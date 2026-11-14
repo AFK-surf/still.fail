@@ -362,11 +362,23 @@ export const CHAT_CREATE = {
       },
       "model": {
         "type": "string",
-        "description": "Its agent's model. Default: the one the person it goes to has opened most chats with on that station, when one clearly leads; when none does, it is not opened and you are told them: ask the person which, then call again with it."
+        "description": "Its agent's model. Default: the one the person it goes to uses most on that station, when one clearly leads; else it is not opened and you are told which to ask them about."
       },
       "effort": {
         "type": "string",
         "description": "Its agent's reasoning effort. Default: the one that person has opened most chats with on that runtime and model there lately, else its model's."
+      },
+      "fast": {
+        "type": "boolean",
+        "description": "Fast mode."
+      },
+      "context": {
+        "type": "integer",
+        "description": "The most context it runs with, in tokens."
+      },
+      "preset": {
+        "type": "string",
+        "description": "One of this station's presets, by name or id, taken as it is (skill stillfail-chats). Left out: none."
       },
       "files": {
         "type": "array",

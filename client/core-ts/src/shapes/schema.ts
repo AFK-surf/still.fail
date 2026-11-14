@@ -1951,6 +1951,7 @@ export const SHAPES: Record<string, Shape> = {
     ["nameText", "String", { said: true, doc: "Their name, or their email." }],
     ["roleText", "String", { doc: "Their role as the security pages name it." }],
     ["groups", vec("LockGroup")],
+    ["appText", opt("String"), { doc: "To owners and admins, safe mode on and not upgraded yet: this member has a web page in it and no app, which\nthe upgrade will need (views/lock.ts `webOnlyIn`)." }],
   ], { doc: "A member in the workspace's lock, with their devices by app." }),
   LockStation: struct([
     ["id", "String"],
@@ -1969,6 +1970,8 @@ export const SHAPES: Record<string, Shape> = {
     ["unsigned", opt("bool"), { doc: "In the lock, an app, but not signing with this device's key (let in before it kept one, or its key since\nlost): it may be made one that signs (a trusted device), approved as a new one is (`lock.pair`)." }],
     ["ownLock", opt("bool"), { doc: "Its person bound a lock of their own here that this app is not on: the stations let it in on that lock\nalone, so it waits however the workspace's names it, and `lock.pair` asks to join that one (`pair` its try)." }],
     ["pair", opt("LockPair"), { doc: "Its try to be approved face to face (or made one that signs), once it began (`lock.pair`)." }],
+    ["outText", opt("String"), { said: true, doc: "Its person taken out of an upgraded workspace: by whom and when, and whom to ask to be added again\n(views/lock.ts `outOf`)." }],
+    ["needsAppText", opt("String"), { said: true, doc: "A web page left out of an upgraded workspace whose person has no app in it: nobody can approve it there, so\nit says to install an app first, and it is not offered to ask (`waiting` false, no `pair`; views/lock.ts `needsAppIn`)." }],
   ], { doc: "This device in the workspace's lock." }),
   LockPending: struct([
     ["id", "String", { doc: "Which one (`lock.pendingDismiss`, `adb.personalPendingDismiss`); in a workspace's `lock`, one of the person's own lock begins `own:`." }],
@@ -1996,7 +1999,24 @@ export const SHAPES: Record<string, Shape> = {
     ["attention", "u32"],
     ["pending", vec("LockPending"), { default: true, doc: "The changes this device made that no station of the lock took yet, oldest first, then those to its person's own lock\n(one made in both once); none from a core of before." }],
     ["pendingText", opt("String"), { doc: "Their heading (以下改动还没有生效), while there are any." }],
+    ["upgrade", opt("LockUpgrade"), { doc: "The upgrade of safe mode (its chain handed over to its people's own logs) not finished, on the owner's device\nthat is to finish it: what it waits for, or its button (views/lock.ts `upgradeOf`). None elsewhere, while it is on its\nway, and once done; none from a core of before." }],
+    ["rootText", opt("String"), { said: true, doc: "An upgraded workspace, to an owner who is not the person who turned it on: that only that person turns it\noff or on again, and the way out (shown where turning it off or on would be)." }],
+    ["onAgainText", opt("String"), { doc: "An upgraded workspace that is off, to the person who turned it on: the button that turns it on again\n(`lock.open`)." }],
+    ["appText", opt("String"), { doc: "Safe mode on and not upgraded yet, on a web page in it whose person has no app in it: that the upgrade will\nneed one, and to install one (views/lock.ts `webOnlyIn`)." }],
   ], { doc: "The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts)." }),
+  LockUpgrade: struct([
+    ["titleText", "String"],
+    ["lines", vec("LockUpgradeLine"), { doc: "Whom and what it waits for, a line each saying what to do (six at most, then how many more)." }],
+    ["askText", opt("String"), { doc: "Where only the person's ask is lacking: the button that asks once and finishes it (`lock.handOver`)." }],
+  ], { doc: "The upgrade of safe mode on the owner's device that is to finish it (the `lock` topic's `upgrade`)." }),
+  LockUpgradeLine: struct([
+    ["text", "String", { said: true, doc: "The sentence: whom or what it waits for and what to do." }],
+    ["of", "String", { doc: "What it is of: `member`, `device`, `station`, or `more` (how many more there are)." }],
+    ["station", opt("String"), { doc: "A station's: its address as calls take it (`software.update`'s `station`), the workspace it is asked in\nand its id." }],
+    ["canUpdate", "bool", { default: true, doc: "A station's: this person may update it from here, as its own page offers its update (an owner or admin of\nthat workspace, it online, its software updatable and newer or its update failed): its press calls\n`software.update`." }],
+    ["updating", "bool", { default: true, doc: "A station's: its update is under way, as its overview says." }],
+    ["percent", opt("i64"), { client: opt("I54"), doc: "While it updates, how much of its download is in, 0–100, when known (drawn as its own page draws it)." }],
+  ], { doc: "A line of the upgrade of safe mode (`LockUpgrade.lines`; views/lock.ts `waitedLines`, `writerLines`)." }),
   LockPromptWorkspace: struct([
     ["id", "String"],
     ["name", "String", { said: true }],
@@ -2011,6 +2031,7 @@ export const SHAPES: Record<string, Shape> = {
     ["label", "String", { said: true }],
     ["code", "String", { doc: "The code to type on the new device: shown here only, never sent." }],
     ["deviceText", "String", { said: true, doc: "Its name as people know it (LockDevice `fullText`)." }],
+    ["roleText", opt("String"), { doc: "Someone's first device in an upgraded workspace: the role approving lets them in as (批准后以管理员身份加入;\nviews/pair.ts `admitOf`), each workspace's by its name where it asks in several." }],
     ["workspaces", vec("LockPromptWorkspace"), { doc: "Where it asks to be let in and this device approves it." }],
     ["created_at", "i64", { client: "I54", doc: "When it asked." }],
     ["time", opt(map("Stamp")), { doc: "Its times in words (`created_at`)." }],
@@ -2132,6 +2153,8 @@ export const SHAPES: Record<string, Shape> = {
     ["available", "bool", { doc: "An app keeping keys in the system's secure storage (a web page is not)." }],
     ["locked", "bool", { doc: "The workspace's lock is on and checks out: the vault needs it." }],
     ["canSign", "bool", { doc: "This device signs in the lock." }],
+    ["stateText", opt("String"), { said: true, doc: "Not signing (`canSign` false) for a reason that is not its not being trusted, in words: an upgraded\nworkspace's members still syncing, or this device to be verified once (`confirmText`). Absent otherwise (views/vault.ts `whyNot`)." }],
+    ["confirmText", opt("String"), { said: true, doc: "With `stateText`, where a press ends it: its words; it calls `lock.confirmSigner` (this device's signer said\non its person's own log, the person asked once), after which this device signs as any other." }],
     ["setUp", "bool", { doc: "This device's box key is published (`vault.setup`)." }],
     ["vaults", vec("VaultRow")],
     ["requests", vec("VaultRequest")],
@@ -2673,7 +2696,7 @@ export const SHAPES: Record<string, Shape> = {
   WorkspaceWaysView: struct([
     ["ways", vec("WayRow")],
     ["off", "u32", { doc: "How many are turned off." }],
-    ["offLabel", "String", { doc: "全部开启, 已关闭 2 项: the workspace page's 连接方式 row says it." }],
+    ["offLabel", "String", { doc: "全部开启, 已关闭 2 项: the workspace page's 中继 row says it." }],
   ], { doc: "How a workspace's members' devices reach its stations (the `workspaceWays` view, views/ways.ts): still.fail's relays,\nthe workspace's own, the ways straight to a station; each on or turned off. As its stations keep them\n(views/ways-stations.ts), else from `/v1/me`; kept on the device." }),
   WayRow: struct([
     ["id", "String", { doc: "A relay's URL, or the kind (lan, tailnet, direct): what `workspace.setWay` is given." }],
@@ -3183,8 +3206,8 @@ export const SHAPES: Record<string, Shape> = {
     ["quota", opt("Quota")],
   ], { doc: "A chat's agent's profile as its page reads it where it has no `account`: its name and what is left of it." }),
   AgentCardView: struct([
-    ["work", opt("String"), { doc: "Its turns, and how long the finished ones took: 8 轮 · 共干了 1 小时 12 分." }],
-    ["cost", opt("String"), { doc: "What its calls would cost at API prices ($4.20, ≥$4.20 with some unpriced)." }],
+    ["work", opt("String"), { doc: "How long the finished turns took: 共工作 1 小时 12 分." }],
+    ["cost", opt("String"), { widest: "$8,888", doc: "What its calls would cost at API prices ($4.20, ≥$4.20 with some unpriced)." }],
     ["tokens", opt("String"), { doc: "Its tokens in and out: 输入 1.2M · 输出 34K." }],
     ["cache", opt("AgentCardMeter"), { doc: "How much of what it sent was read from the cache." }],
     ["context", opt("AgentCardMeter"), { doc: "The context it carries on with, against its model's window (amber from 80%, red from 95%)." }],

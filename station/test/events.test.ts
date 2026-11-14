@@ -250,6 +250,36 @@ test("a shared stream coming back is told a chat created while nobody followed",
   await back.close();
 });
 
+test("a stream coming back says where the log was as it joined: what it tells up to there is told again, after it as it happens", async () => {
+  const { events, rows, change } = setup(testClock().clock);
+  rows["a@x"] = [{ id: "1", title: "one", ws: "w" }];
+  const lost = await openedShared(events);
+  change({ type: "session", key: "1" });
+  await settle();
+  const heard = lost.got.findLast((e) => e.id)!.id!;
+  await lost.close();
+  rows["a@x"] = [...rows["a@x"]!, { id: "2", title: "new", ws: "w" }];
+  change({ type: "session", key: "2" });
+  await settle();
+  const answer = await events.open(viewer("a@x"), "zh", false, [], [], heard, false, [], false, true);
+  const back = reader(answer.body as AsyncIterable<Buffer>);
+  const head = (answer.headers as Record<string, string>)["stillfail-head"]!;
+  await settle();
+  const n = (id: string) => Number(id.split(".")[1]);
+  const told = (id: string) => back.got.find((e) => e.event === "chat-shared" && e.data.id === id && e.id);
+  assert.ok(told("2") && n(told("2")!.id!) <= n(head), `${head} ${told("2")?.id}`);
+  rows["a@x"] = [...rows["a@x"]!, { id: "3", title: "later", ws: "w" }];
+  change({ type: "session", key: "3" });
+  await settle();
+  assert.ok(told("3") && n(told("3")!.id!) > n(head), `${head} ${told("3")?.id}`);
+  // Not resumed: none said.
+  const answered = await events.open(viewer("a@x"), "zh", false, [], [], null, false, [], false, true);
+  assert.equal((answered.headers as Record<string, string>)["stillfail-head"], undefined);
+  const fresh = reader(answered.body as AsyncIterable<Buffer>);
+  await fresh.close();
+  await back.close();
+});
+
 test("a shared stream coming back after station handover is told a chat created while away", async () => {
   const time = testClock();
   const file = join(mkdtempSync(join(tmpdir(), "events-")), "run", "events.json");

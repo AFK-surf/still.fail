@@ -2,12 +2,12 @@
 # The tests on native, on any system (a test's program links no host's code: its host is the Tester's fake,
 # mbui/hostapi): the same tests as on JS (scripts/test.sh), each package's; what differs between the two backends
 # shows here.
-#   scripts/test_native.sh [PKG…]      by default ui, view, motion, kit, md, kitdemo's gallery (the hosts' kept runs),
+#   scripts/test_native.sh [PKG…]      by default ui, view, motion, kit, headless, md, kitdemo's gallery (the hosts' kept runs),
 #                                      effecttest, effectdemo
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
-pkgs=${*:-mbui/ui mbui/view mbui/motion mbui/kit mbui/figure mbui/kitdemo/gallery mbui/effecttest mbui/effectdemo}
+pkgs=${*:-mbui/ui mbui/view mbui/motion mbui/kit mbui/headless mbui/figure mbui/kitdemo/gallery mbui/effecttest mbui/effectdemo}
 args=()
 for p in $pkgs; do args+=(-p "$p"); done
 # The kinds of test program a package has none of (internal: a test in its own files; blackbox: *_test.mbt;
@@ -21,7 +21,7 @@ for p in $pkgs; do
   [ -n "$(ls "$d"/*_wbtest.mbt 2>/dev/null)" ] || empty="$empty ${p#mbui/}/$n.whitebox_test"
 done
 export MBC_EMPTY_TESTS="$empty"
-# The small packages' programs (motion's, kit's, the gallery's, effecttest's, effectdemo's: a few files of tests each,
+# The small packages' programs (motion's, kit's, headless's, the gallery's, effecttest's, effectdemo's: a few files of tests each,
 # the whole of mbui in each) compiled without optimising (MBC_LIGHT_TESTS, as apps/mbui/scripts/test.sh has it): what
 # they test is the code, not how fast it runs. A change to ui or view compiles their units again in each of them
 # beside ui's and view's own: ~400 s of the 845 s of compile on CI's four cores, the native job past its 5 minutes,

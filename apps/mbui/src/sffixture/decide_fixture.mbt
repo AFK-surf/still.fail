@@ -404,7 +404,7 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
     "agentCard" if f.mode == "chat-agent-unsaid" =>
       Some(
         Some({
-          "work": "8 轮 · 共干了 1 小时 12 分",
+          "work": "共工作 1 小时 12 分",
           "latest": [
             { "key": "k1", "text": "读了 src/ui/list.mbt" },
             { "key": "k2", "text": "跑了列表的测试" },
@@ -416,7 +416,7 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
     "agentCard" =>
       Some(
         Some({
-          "work": "8 轮 · 共干了 1 小时 12 分",
+          "work": "共工作 1 小时 12 分",
           "cost": "$4.20",
           "cache": { "percent": 91, "text": "91%", "level": "ok" },
           "context": { "percent": 64, "text": "64%", "level": "ok" },

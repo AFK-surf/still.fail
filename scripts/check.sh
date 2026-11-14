@@ -396,6 +396,11 @@ if part ts; then
   if touches '^libs/base/|^client/core-ts/src/lang\.(zh|en)\.json$|^scripts/mb-base-words\.ts$'; then
     step "the base in MoonBit says the device base's words" node scripts/mb-base-words.ts --check
   fi
+  # And its reader of an event stream reads as the device base's in TypeScript does (client/core-ts/src/sse.ts), which
+  # stays: the cases its tests hold it to (libs/base/src/wire/sse_made_test.mbt) are what that reader gives.
+  if touches '^libs/base/src/wire/|^client/core-ts/src/sse\.ts$|^scripts/mb-base-sse\.ts$'; then
+    step "the base in MoonBit reads an event stream as the device base does" node scripts/mb-base-sse.ts --check
+  fi
   # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
   # their JS dependencies and the real wasm package even when no TS file changed.
   core_tests=0
@@ -442,12 +447,13 @@ if [ $full = 1 ]; then
     if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root after core pnpm test; fi
   fi
   # The base in MoonBit (libs/base): every package under its src/ (each directory with a moon.pkg) type-checked for
-  # native and for js, and every package's tests run on both (today wire alone has any); for a change to it or to
+  # native and for js, and every package's tests run on both (wire's; the mesh's, on a shell stood in for it; on js
+  # the turning of the page's shell); for a change to it or to
   # what it is built with of mbui: effect, and halt, which effect imports (scripts/mb-base.ts holds that list to
   # effect's moon.pkg and to the line below). By package, never the workspace, and writing no interface (--no-mbti):
   # mbui is a member of its workspace, and moon would write mbui's pkg.generated.mbti files too. No Rust shell is
   # linked here: a native test that reaches the shell's C does not link, and says so (libs/base/AGENTS.md). No test
-  # opens a link, and nothing reads the page's shell's JavaScript.
+  # opens a link to a peer, and nothing reads what the page's shell's JavaScript does with iroh.
   if part ts && touches '^libs/base/|^libs/mbui/src/(effect|halt)/|^libs/mbui/moon\.(mod|work)$'; then
     if has moon; then
       # shellcheck disable=SC2016 # the command's own variable, expanded by its shell

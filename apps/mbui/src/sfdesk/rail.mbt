@@ -449,42 +449,64 @@ pub fn open_rail_menu(place : String) -> Unit {
 }
 
 ///|
+/// The menu as last drawn open, held while it goes out so its contents and anchor do not change during its exit.
+priv struct RailMenuDrawn {
+  place : String
+  from : (Double, Double, Double, Double)?
+  kept : Array[String]
+  entries : Array[@kit.Entry]
+  icons : Map[String, String]
+  mut replaced : Bool
+}
+
+///|
+// kept across runs: put back by wide_reset
+let rail_menu_drawn : Ref[RailMenuDrawn?] = Ref(None)
+
+///|
 /// The rail's menu (from a right click on it), beside the place right clicked (else its
 /// first), 8 past it, clear of the window's buttons' row: the places not in it (pressed, their page; their ＋, shown on
 /// the row pointed at, puts one in it and the rail is changed from there), 从侧边条移除 the place right clicked,
 /// 自定义侧边条, 侧边条恢复默认 when it was changed.
 fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let (place, from) = match wide.rail_menu.get() {
-    Some(m) => m
+  let showing = wide.rail_menu.get()
+  let drawn = match showing {
+    Some((place, from)) => {
+      let kept = rail_items(src, w.id)
+      // (提醒 is no page, nor the one in view at the rail's foot: put in from 自定义侧边条)
+      let extra = rail_in_view(src, w)
+      let away = rail_places(src).filter(fn(i) { !kept.contains(i) && i != "attention" && i != extra })
+      let entries : Array[@kit.Entry] = []
+      let icons : Map[String, String] = Map([])
+      if away.length() > 0 {
+        entries.push(@kit.menu_label(@sf.t("web-main.rail.away")))
+        for i in away {
+          entries.push(@kit.menu_item("go:" + i, label=rail_label(src, i)))
+          icons["go:" + i] = rail_icon(i)
+        }
+        entries.push(@kit.menu_separator())
+      }
+      if place != "" && kept.contains(place) && kept.length() > 1 {
+        entries.push(@kit.menu_item("remove", label=@sf.t("web-main.rail.remove", args=[("name", rail_label(src, place))])))
+        icons["remove"] = "minus"
+      }
+      entries.push(@kit.menu_item("customize", label=@sf.t("web-main.rail.customize")))
+      icons["customize"] = "sliders"
+      if flag(rail_of(src, w.id), "changed") {
+        entries.push(@kit.menu_item("reset", label=@sf.t("web-main.rail.reset")))
+        icons["reset"] = "refresh"
+      }
+      let drawn : RailMenuDrawn = { place, from, kept, entries, icons, replaced: false }
+      rail_menu_drawn.val = Some(drawn)
+      drawn
+    }
+    None if rail_menu_drawn.val is Some(m) => m
     None => {
       @sf.dropdown(c, "rail-menu", false, 0, [], {}, @sf.menu_w) |> ignore
       return
     }
   }
-  let kept = rail_items(src, w.id)
-  // (提醒 is no page, nor the one in view at the rail's foot: put in from 自定义侧边条)
-  let extra = rail_in_view(src, w)
-  let away = rail_places(src).filter(fn(i) { !kept.contains(i) && i != "attention" && i != extra })
-  let entries : Array[@kit.Entry] = []
-  let icons : Map[String, String] = Map([])
-  if away.length() > 0 {
-    entries.push(@kit.menu_label(@sf.t("web-main.rail.away")))
-    for i in away {
-      entries.push(@kit.menu_item("go:" + i, label=rail_label(src, i)))
-      icons["go:" + i] = rail_icon(i)
-    }
-    entries.push(@kit.menu_separator())
-  }
-  if place != "" && kept.contains(place) && kept.length() > 1 {
-    entries.push(@kit.menu_item("remove", label=@sf.t("web-main.rail.remove", args=[("name", rail_label(src, place))])))
-    icons["remove"] = "minus"
-  }
-  entries.push(@kit.menu_item("customize", label=@sf.t("web-main.rail.customize")))
-  icons["customize"] = "sliders"
-  if flag(rail_of(src, w.id), "changed") {
-    entries.push(@kit.menu_item("reset", label=@sf.t("web-main.rail.reset")))
-    icons["reset"] = "refresh"
-  }
+  let { place, from, kept, entries, icons, .. } = drawn
   // (beside the place it was asked on, where that was as it was asked: rail_node's)
   let (ax, ay, aw, ah) = from.unwrap_or((0.0, rail_menu_clear, rail_w - side_into_rail, 0.0))
   // a place's ＋: put in, the rail changed from there, the menu gone
@@ -495,7 +517,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       @sf.dropdown(
         c,
         "rail-menu",
-        true,
+        showing is Some(_),
         0,
         entries,
         icons,
@@ -503,6 +525,8 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         side=Right,
         offset=rail_menu_off,
         at=(ax, dmax(ay, rail_menu_clear), aw, ah),
+        // The adder takes this menu's place: it must be reachable as soon as it opens.
+        show_exit=!drawn.replaced,
         row_end=fn(c, s) {
           if s.entry.value.has_prefix("go:") {
             let i = s.entry.value.exact_view(start=3).to_owned()
@@ -510,6 +534,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               let next = kept.copy()
               next.push(i)
               rail_keep(src, w.id, next)
+              drawn.replaced = true
               wide.editing.set(true)
               wide.rail_menu.set(None)
             })
@@ -525,7 +550,10 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   match m.chosen {
     Some("remove") => rail_keep(src, w.id, kept.filter(fn(i) { i != place }))
     Some("reset") => rail_keep(src, w.id, words_in(items(rail_view(src), "default")))
-    Some("customize") => wide.editing.set(true)
+    Some("customize") => {
+      drawn.replaced = true
+      wide.editing.set(true)
+    }
     Some(v) if v.has_prefix("go:") => rail_go(c, src, w, v.exact_view(start=3).to_owned())
     _ => ()
   }

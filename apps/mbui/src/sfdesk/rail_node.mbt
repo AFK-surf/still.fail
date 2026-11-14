@@ -838,7 +838,7 @@ fn rail_workspaces_node(r : @view.View, src : Source, tips : @sf.TipLayer, at : 
                 name + " · " + said
               }
             }
-            rail_key_node(
+            let key = rail_key_node(
               row,
               tips,
               at,
@@ -886,7 +886,8 @@ fn rail_workspaces_node(r : @view.View, src : Source, tips : @sf.TipLayer, at : 
                 })
               },
             )
-            |> ignore
+            // A workspace has no place to remove, but the rail's menu still opens beside the workspace asked on.
+            key.on_menu(fn(_) { wide.rail_menu.set(Some(("", Some(key.placed_window_now())))) }) |> ignore
           },
         )
       })

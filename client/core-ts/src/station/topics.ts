@@ -674,6 +674,10 @@ export class StationTopics implements Owner {
     // A window kept to the chat's end is at its end even while the summary is ahead of what is held (a message just
     // said, its entry on its way): what comes joins it as it does, not a page to load after it.
     const value: Record<string, unknown> = { first: window.first, last, caught: Math.min(window.caught, last), entries, thread: summary, title: row === undefined ? null : (get(row, "title") ?? null), end: window.last === null };
+    // Of what is past `caught`, what came as it was said (the rest was caught up on, read or told again: attend.ts).
+    const past: number[] = [];
+    for (const n of told ?? []) if (n > window.caught && n >= window.first && n <= last) past.push(n);
+    value.told = past.sort((a, b) => a - b);
     // The page before, being read or why it was not (#older).
     const older = this.#olders.get(tk);
     if (older?.reading) value.older = "reading";

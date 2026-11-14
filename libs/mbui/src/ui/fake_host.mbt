@@ -339,8 +339,8 @@ impl @hostapi.Host for FakeHost with font_metrics(self, size, weight, style, out
 
 ///|
 /// Fake shaping: one cluster per extended grapheme cluster, as real hosts
-/// make them; Latin half an em wide (0.6 in the code face), everything else
-/// a full em.
+/// make them; Latin half an em wide (0.6 in the code face; ASCII as a real face where the test says:
+/// Tester::latin_advances), everything else a full em.
 impl @hostapi.Host for FakeHost with shape(self, text, size, weight, style, out) {
   if self.live is Some(l) {
     return l.host.shape(text, size, weight, style, out)
@@ -355,10 +355,19 @@ impl @hostapi.Host for FakeHost with shape(self, text, size, weight, style, out)
   while i < n && k < cap {
     let c = text.at(i).to_int()
     let len = @text.next_grapheme(text, i) - i
+    let mono = (style & @hostapi.style_mono) != 0
+    // (a letter measured as a real face measures it: latin_advances)
+    let real = match self.latin {
+      Some((regular, bold)) if !mono && c >= 32 && c <= 126 =>
+        Some(size * (if weight >= 600 { bold[c - 32] } else { regular[c - 32] }))
+      _ => None
+    }
     let adv = if c == 10 {
       0.0
+    } else if real is Some(a) {
+      a
     } else if c < 0x2E80 {
-      if (style & @hostapi.style_mono) != 0 {
+      if mono {
         size * 0.6
       } else {
         size * 0.5
@@ -366,7 +375,7 @@ impl @hostapi.Host for FakeHost with shape(self, text, size, weight, style, out)
     } else {
       size
     }
-    let adv = if weight >= 600 && c != 10 { adv + size * self.bold } else { adv }
+    let adv = if weight >= 600 && c != 10 && real is None { adv + size * self.bold } else { adv }
     let adv = if self.ui_face != 0.0 && c != 10 && in_ui_face(style) { adv + size * self.ui_face } else { adv }
     let adv = if self.tabular != 0.0 && c >= 48 && c <= 57 && (style & @hostapi.style_tabular) != 0 {
       adv + size * self.tabular
@@ -1968,6 +1977,11 @@ impl @hostapi.Host for FakeHost with st_hevc(self, id, hvcc, w, h) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with st_av1(self, id, av1c, w, h) {
+  fake_fed(self, id, "av1 \{w}x\{h} av1c=\{av1c.length()}")
+}
+
+///|
 impl @hostapi.Host for FakeHost with st_frame(self, id, data, key, ts) {
   fake_fed(self, id, "frame key=\{key != 0} ts=\{ts} bytes=\{data.length()}")
 }
@@ -2082,6 +2096,16 @@ impl @hostapi.Host for FakeHost with st_h264_here(self) {
 /// Whether it decodes H.265 (Tester::set_h265).
 impl @hostapi.Host for FakeHost with st_h265_here(self) {
   if self.h265_here {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+/// Whether it decodes AV1 (Tester::set_av1).
+impl @hostapi.Host for FakeHost with st_av1_here(self) {
+  if self.av1_here {
     1
   } else {
     0

@@ -510,6 +510,10 @@ void mb_host_stream_direct(int32_t id, double route, double after, int32_t what)
 int32_t mb_host_h265_here(void) { return 0; }
 void mb_host_stream_hevc(int32_t id, moonbit_bytes_t hvcc, int32_t w, int32_t h) { (void)id; (void)hvcc; (void)w; (void)h; }
 
+// Nor AV1 (Windows' decodes it: win_stream.cpp).
+int32_t mb_host_av1_here(void) { return 0; }
+void mb_host_stream_av1(int32_t id, moonbit_bytes_t av1c, int32_t w, int32_t h) { (void)id; (void)av1c; (void)w; (void)h; }
+
 // A frame not to be shown, a decoder emptied, the sound's clock and volume (@hostapi.stream_frame_shown, stream_flush,
 // stream_audio_played, _queued, _volume): win_stream.cpp's alone so far. Here a frame not to be shown is decoded as
 // any (below); the rest nothing, or 0.

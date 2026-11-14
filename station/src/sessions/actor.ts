@@ -1212,7 +1212,9 @@ export class SessionActor {
     for (const m of said) {
       if (names.has(m.message.author)) continue;
       if (m.message.authorKind === "agent") {
-        names.set(m.message.author, this.agentName(m.message.author, m.message.thread));
+        // A letter goes by the chat it came from, as its station marked it: its writer may be of another station.
+        const letter = m.message.letter;
+        names.set(m.message.author, letter?.way === "in" && letter.title !== "" ? letter.title : this.agentName(m.message.author, m.message.thread));
         continue;
       }
       if (m.message.authorKind !== "person") continue;

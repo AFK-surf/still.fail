@@ -1230,6 +1230,23 @@ export class Store {
     });
   }
 
+  /// The builds the devices a lock here names said, as kept (mesh/device-builds.ts): each device's id, highest build
+  /// (-1: none said) and when it was last seen (unix seconds).
+  deviceBuilds(): { id: string; build: number; at: number }[] {
+    return this.#all("SELECT id, build, at FROM device_builds").map((r) => ({ id: String(r.id), build: Number(r.build), at: Number(r.at) }));
+  }
+
+  /// A device's build and when it was last seen, kept (mesh/device-builds.ts writes it only as one or the other moved on).
+  putDeviceBuild(id: string, build: number, at: number): void {
+    this.#run("INSERT INTO device_builds (id, build, at) VALUES (?1, ?2, ?3) ON CONFLICT (id) DO UPDATE SET build = excluded.build, at = excluded.at", id, build, at);
+  }
+
+  /// Since when this station keeps the devices' builds: `now` the first time it is asked, the same ever after.
+  deviceBuildsSince(now: number): number {
+    this.#run("INSERT OR IGNORE INTO device_builds_since (one, at) VALUES (1, ?1)", now);
+    return Number(this.#one("SELECT at FROM device_builds_since WHERE one = 1")?.at ?? now);
+  }
+
   /// What a session's calls used as last kept (`setSessionUsage`); null before any.
   sessionUsage(key: string): Json | null {
     if (!usageTotalsComplete(this.db, key)) return null;

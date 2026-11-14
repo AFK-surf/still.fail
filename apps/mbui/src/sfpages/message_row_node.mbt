@@ -71,3 +71,10 @@ fn message_row_frame_node(
   })
   { key, node, menu_on: fn() { false } }
 }
+
+///|
+/// How long a small part of a chat's row that holds words fades where it is as it goes, one in its place seen once that
+/// is gone and its place holds it whole (View::pick's `leave`, pick_leave.mbt; the coordinator of the migration,
+/// 2026-11-13: no words of it cut by its way): what goes from a list, as long (@sf.leave_ms). A fold stays a fold, and
+/// what a row shows only while it is the last of its run goes at once (mine_said_node's `lone`).
+let msg_part_leave_ms : Double = @sf.leave_ms

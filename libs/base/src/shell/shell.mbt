@@ -11,6 +11,10 @@
 //            randomness, asked by the same names with the same JSON (shell_js.mbt, which says what a page cannot do
 //            of them); its answers come as the page's own events, each followed by a turn of the runtime.
 // Each gives `Shell::start`, `now`, `random`, and the two below that a call goes out by (`send`, `asked`).
+//
+// And a third that is no target's, for a test of what stands on a shell (the mesh) with nothing linked and no page:
+// `Shell::stood_in`, whose calls are given to the test, which answers them (`Shell::answer`, `Shell::refuse`). So a
+// shell carries its own ways out (`calls`, `asks`, `draws`), and nothing above this package asks which it is.
 
 ///|
 /// What the shell said went wrong, in its words.
@@ -32,6 +36,67 @@ pub struct Shell {
   /// The calls not answered yet, by their ids.
   priv waiting : Map[Int64, @effect.Deferred[Answer]]
   priv mut next : Int64
+  /// How a call goes out, answered later as its id; how one is asked that answers at once; where random bytes come
+  /// from. The target's (`Shell::of_target`), or a test's (`Shell::stood_in`).
+  priv calls : (Int64, String, Json, Bytes?) -> Unit
+  priv asks : (String, Json) -> Json raise ShellError
+  priv draws : (Int) -> Bytes
+}
+
+///|
+/// The target's shell for the fibers of `rt`, once it is started (`Shell::start`).
+fn Shell::of_target(rt : @effect.Runtime) -> Shell {
+  {
+    rt,
+    waiting: Map([]),
+    next: 0L,
+    calls: (id, op, args, bytes) => send(id, op, args.stringify(), bytes),
+    asks: (op, args) => {
+      let json : Json = @json.parse(asked(op, args.stringify())) catch {
+        e => raise ShellError("the shell's answer is not JSON: \{e}")
+      }
+      match json {
+        { "error": String(e), .. } => raise ShellError(e)
+        { "value": v, .. } => v
+        _ => Json::null()
+      }
+    },
+    draws: random,
+  }
+}
+
+///|
+/// A shell that is a test's: every call asked of it is given to `calls` with its id, to be answered when the test
+/// says (`Shell::answer`, `Shell::refuse`: at once, later or never), and what is asked at once is `asks`'s to answer
+/// or to fail. Its random bytes are `draws`'s, so a key made on it is the same each run. Nothing of a target's shell
+/// is reached through it: what is tested on it links no library and loads no page.
+pub fn Shell::stood_in(
+  rt : @effect.Runtime,
+  calls~ : (Int64, String, Json, Bytes?) -> Unit,
+  asks~ : (String, Json) -> Json raise ShellError,
+  draws~ : (Int) -> Bytes,
+) -> Shell {
+  { rt, waiting: Map([]), next: 0L, calls, asks, draws }
+}
+
+///|
+/// The call `id` of a test's shell is answered: its JSON and, where it carries any, its bytes.
+pub fn Shell::answer(self : Shell, id : Int64, json : Json, bytes? : Bytes) -> Unit {
+  guard self.waiting.get(id) is Some(done) else { return }
+  self.waiting.remove(id)
+  ignore(done.succeed({ json, bytes }))
+}
+
+///|
+/// The call `id` of a test's shell failed, in the shell's words.
+pub fn Shell::refuse(self : Shell, id : Int64, why : String) -> Unit {
+  self.settle(id, 2, why, b"")
+}
+
+///|
+/// `n` bytes of the shell's randomness (a key): the system's, under a target's shell.
+pub fn Shell::random(self : Shell, n : Int) -> Bytes {
+  (self.draws)(n)
 }
 
 ///|
@@ -52,7 +117,7 @@ pub async fn Shell::call(
   }
   let done : @effect.Deferred[Answer] = @effect.Deferred::new()
   self.waiting[id] = done
-  send(id, op, args.stringify(), bytes)
+  (self.calls)(id, op, args, bytes)
   done.wait()
 }
 
@@ -61,21 +126,13 @@ pub async fn Shell::call(
 /// connection closed), from code that is no fiber's too.
 pub fn Shell::tell(self : Shell, op : String, args : Json, bytes? : Bytes) -> Unit {
   self.next += 1L
-  send(self.next, op, args.stringify(), bytes)
+  (self.calls)(self.next, op, args, bytes)
 }
 
 ///|
 /// Asks the shell what it answers at once, on this thread (what is known of a handle: `iroh.endpointId`, `conn.paths`).
 pub fn Shell::ask(self : Shell, op : String, args : Json) -> Json raise ShellError {
-  ignore(self)
-  let json : Json = @json.parse(asked(op, args.stringify())) catch {
-    e => raise ShellError("the shell's answer is not JSON: \{e}")
-  }
-  match json {
-    { "error": String(e), .. } => raise ShellError(e)
-    { "value": v, .. } => v
-    _ => Json::null()
-  }
+  (self.asks)(op, args)
 }
 
 ///|

@@ -2172,6 +2172,10 @@ void mb_host_stream_hevc(int32_t id, moonbit_bytes_t hvcc, int32_t w, int32_t h)
   (*env)->DeleteLocalRef(env, b);
 }
 
+// AV1 not decoded here yet (Windows' alone: win_stream.cpp).
+int32_t mb_host_av1_here(void) { return 0; }
+void mb_host_stream_av1(int32_t id, moonbit_bytes_t av1c, int32_t w, int32_t h) { (void)id; (void)av1c; (void)w; (void)h; }
+
 // ---- routes: a remote screen's frames straight from the app's engine (apple_stream.m's, the same) ----
 //
 // Where the app's engine reads a remote screen itself (still.fail's shell: mb_stream_route_take, handed over by the
