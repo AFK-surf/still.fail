@@ -137,6 +137,12 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         }
         return Effect.succeed({});
       }
+      case "clientReports":
+        inner.useCounts.setOn(call.on);
+        return Effect.succeed({});
+      case "clientShown":
+        inner.useCounts.shown(call.page);
+        return Effect.succeed({});
       case "signOut":
         return Effect.as(inner.accounts.signOut(call.account), null);
       // The account deleted in the cloud (DELETE /v1/me), then forgotten here as signing out does.
@@ -214,6 +220,8 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         return Effect.try({
           try: () => {
             prefs.device(inner.data, call.facts);
+            const app = isObject(call.facts) ? call.facts.app : undefined;
+            if (typeof app === "string") inner.deviceApp = app;
             inner.adb.deviceTold();
             hooks.device?.(inner, call.facts);
             const build = isObject(call.facts) ? call.facts.build : undefined;

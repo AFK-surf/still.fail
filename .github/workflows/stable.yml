@@ -154,7 +154,14 @@ jobs:
           # The installer's signature (its .sig): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           RELEASE_DIR: ${{ runner.temp }}/release
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: |
+          # the PostHog project its core sends what people use to (apps/mbui/scripts/core.sh posthog_define)
+          if [ -n "${POSTHOG_JSON:-}" ]; then
+            (umask 077 && printf '%s' "$POSTHOG_JSON" > "$RUNNER_TEMP/posthog.json")
+            export STILLFAIL_POSTHOG="$RUNNER_TEMP/posthog.json"
+          fi
+          unset POSTHOG_JSON
           # This checkout is the reviewed release and can be older than the workflow.
           git show "$GITHUB_SHA:apps/mbui/scripts/win-compiler.sh" > "$RUNNER_TEMP/win-compiler.sh"
           . "$RUNNER_TEMP/win-compiler.sh"

@@ -1711,6 +1711,11 @@ export interface PrefsView {
 	 */
 	sendKey?: string;
 	/**
+	 * Whether what people use is counted and sent from this device where its host keeps no switch of its own
+	 * (设置 → 关于 → 发送使用统计和错误报告: macOS, Windows, Linux, the web; use-counts.ts): `off`, or none for on.
+	 */
+	reports?: string;
+	/**
 	 * Which chat page this device makes (设置 → 外观 → 试用新对话页): `nodes`, the one made as nodes, tried while it
 	 * is being completed; or (none) the one of before.
 	 */
@@ -1795,6 +1800,11 @@ export interface PrefsView {
 	/** The most a file opened and let go is brought whole by itself on this device, in bytes: 0 any; none: 1 GB. */
 	fillMax?: number;
 	device?: DeviceView;
+	/**
+	 * Whether this device's core sends what people use (use-counts.ts: a build given still.fail's project, on
+	 * its own cloud); none: it sends nothing, and the app tells it nothing of it.
+	 */
+	counted?: boolean;
 	/** The product's name on this app's channel: still.fail or youdid.wtf (monoid or monoid.zone on monoid's cloud). */
 	productName?: string;
 	/**

@@ -13,7 +13,7 @@ import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 import { setOwnBuild } from "./station/oldest.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "accent", "windowZoom", "motion", "haptics", "appUpdate", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook", "sendKey", "chatPage"];
+const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "accent", "windowZoom", "motion", "haptics", "appUpdate", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook", "sendKey", "chatPage", "reports"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
 const TABS_KEPT = 200;
 /// At most this many jobs kept as looked at in one workspace's bell.
@@ -124,12 +124,19 @@ function listFiltersOf(v: unknown): Map_ {
   return isObject(v) ? Object.fromEntries(Object.entries(v).filter(([, f]) => LIST_FILTERS.includes(f as string))) : {};
 }
 
+/// Whether this core sends what people use (use-counts.ts `sends`: a build given still.fail's project, on its own
+/// cloud), said with the prefs as `counted`: the app then tells it whether to (`client.reports`) and what it shows.
+let counted = false;
+export function setCounted(on: boolean): void {
+  counted = on;
+}
+
 /// The prefs as they go out: the current product name, the reader's settings whole, the bottom bars (each workspace's
 /// too), the faces, and the keymap and the rail.
 export function shown(v: unknown): unknown {
   if (!isObject(v)) return v;
   const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
-  return { ...v, productName: brand.name(), product: brand.current().name, listFilter: listFiltersOf(v.listFilter), reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v) };
+  return { ...v, productName: brand.name(), product: brand.current().name, listFilter: listFiltersOf(v.listFilter), reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v), ...(counted ? { counted: true } : {}) };
 }
 
 /// What is kept, as kept (no defaults filled in).
@@ -223,6 +230,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if ("appUpdate" in prefs && prefs.appUpdate !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "appUpdate" }));
   if ("windowZoom" in prefs && !["50", "67", "75", "80", "90", "110", "125", "150", "175", "200"].includes(prefs.windowZoom as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "windowZoom" }));
   if ("sendKey" in prefs && prefs.sendKey !== "mod") throw CoreError.invalid(t("core-misc.params.invalid", { error: "sendKey" }));
+  if ("reports" in prefs && prefs.reports !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "reports" }));
   if ("chatPage" in prefs && prefs.chatPage !== "nodes") throw CoreError.invalid(t("core-misc.params.invalid", { error: "chatPage" }));
   if ("dropAs" in prefs && prefs.dropAs !== "file" && prefs.dropAs !== "path") throw CoreError.invalid(t("core-misc.params.invalid", { error: "dropAs" }));
   if ("shareLook" in prefs && !(typeof prefs.shareLook === "string" && SHARE_LOOK.test(prefs.shareLook))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "shareLook" }));

@@ -555,6 +555,20 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     // (what the app shows, by its kind alone, told the window thread's journal as it changes, on every host: what its
     // hang reports and the device's performance record say; no frame asks it)
     root.reacts(fn() { @sfbase.shown_kind(shown_now(src, root.window().0)) }, @ui.journal_shows)
+    // (to a core that counts what people use (client/core-ts's use-counts.ts: a build given still.fail's project, on
+    // its own cloud), whether to, as the settings say, and while it does what the app shows by that same kind alone,
+    // each as it changes; nothing to one that does not, as under a Tester or a replay)
+    root.reacts(fn() { @sfbase.counts_told(src, @sfbase.shown_kind(shown_now(src, root.window().0))) }, fn(told) {
+      match told {
+        Some((on, kind)) => {
+          (src.call)("client.reports", { "on": Json::boolean(on) }, @sfbase.answer_unread)
+          if on {
+            (src.call)("client.shown", { "page": Json::string(kind) }, @sfbase.answer_unread)
+          }
+        }
+        None => ()
+      }
+    })
     // (how it lays out what it shows, 小屏/中屏/大屏 by @sf.layout's name, and the window's size, told the journal as
     // either changes: what a hang report says beside the page, so it is made again in a Tester's window of that size)
     root.reacts(

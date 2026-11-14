@@ -9,6 +9,13 @@ dir="$RUNNER_TEMP/mac-prebuild"
 case "${1:-}" in
   start)
     mkdir -p "$dir"
+    # the PostHog project the core sends what people use to (scripts/core.sh posthog_define): the file the bundling
+    # step writes too, the same, so that core.hbc made here is the one it takes
+    if [ -n "${POSTHOG_JSON:-}" ]; then
+      (umask 077 && printf '%s' "$POSTHOG_JSON" > "$RUNNER_TEMP/posthog.json")
+      export STILLFAIL_POSTHOG="$RUNNER_TEMP/posthog.json"
+    fi
+    unset POSTHOG_JSON
     : > "$dir/packages-pending"
     nohup bash "$0" work > "$dir/log" 2>&1 < /dev/null &
     echo "$!" > "$dir/pid"

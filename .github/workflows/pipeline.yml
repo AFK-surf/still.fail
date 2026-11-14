@@ -884,6 +884,10 @@ jobs:
       # The core's native parts can build while MoonBit and the old Moon build are restored; the app's Moon build can
       # then run beside pnpm and the icon restore. The same scripts, target and compiler are used by mac-app.sh below.
       - name: Start the Mac app build
+        env:
+          # the PostHog project the app's core sends what people use to (mac-release-prebuild.sh), as the bundling
+          # step below gives it, so that core.hbc is made once
+          POSTHOG_JSON: ${{ github.ref == 'refs/heads/main' && secrets.POSTHOG_JSON || '' }}
         run: |
           touch "$RUNNER_TEMP/start"
           bash .github/mac-release-prebuild.sh start
@@ -1111,7 +1115,14 @@ jobs:
           # The installer's signature (its .sig): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           RELEASE_DIR: ${{ runner.temp }}/release
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: |
+          # the PostHog project its core sends what people use to (apps/mbui/scripts/core.sh posthog_define)
+          if [ -n "${POSTHOG_JSON:-}" ]; then
+            (umask 077 && printf '%s' "$POSTHOG_JSON" > "$RUNNER_TEMP/posthog.json")
+            export STILLFAIL_POSTHOG="$RUNNER_TEMP/posthog.json"
+          fi
+          unset POSTHOG_JSON
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release.sh --beta desktop-win
       - name: Put its files (named by its version, nothing points at them until put writes the feeds)
