@@ -764,6 +764,10 @@ pub struct Tree {
   /// in them as the list's group is said (Tree::come_group_settle), and how long what a press there set off goes
   /// (press_stays.mbt), none of their subtrees walked
   priv list_inner : Map[Int, (Bool, Array[View])]
+  /// the places of picks said to leave (pick_leave.mbt) whose way, said in the change being made, may wait for what
+  /// fades over them, each with the moment it waits till: left out of their column's one way of that moment
+  /// (Tree::come_group_settle) where it goes to a smaller place from rest; noted only till the pick's change is made
+  priv pick_waits : Map[Int, Double]
   /// the places of the page's lists' feet (View::scrolls_window's `foot`, pinned on the list's own node, not under
   /// its held column), each with the held column whose one way what comes or goes or resizes in it goes in
   /// (Tree::come_group_join), where the list's blocks' insides join it
@@ -1335,6 +1339,7 @@ pub fn Tree::new(
     swaps: [],
     come_groups: {},
     list_inner: {},
+    pick_waits: {},
     list_feet: {},
     shown_bys: {},
     shown_followers: {},
@@ -9158,6 +9163,19 @@ fn Tree::come_group_settle(
   let live = live.filter(fn(w) {
     w.live() is Some(m) && !(m.flex.style.come_to > 0.0 && m.flex.style.come_goal != m.flex.style.come_goal)
   })
+  // (a pick's place said to leave whose way goes to a smaller place from rest while what it showed fades over it: not
+  // of this way; it holds as big as it was till that is gone, setting out then in the way of what goes then
+  // (pick_leave.mbt))
+  let live = if self.pick_waits.is_empty() {
+    live
+  } else {
+    live.filter(fn(w) {
+      !(self.pick_waits.contains(w.at) &&
+        w.live() is Some(m) &&
+        m.flex.style.come_v == 0.0 &&
+        m.flex.style.come_goal < m.flex.style.come_from)
+    })
+  }
   match self.come_groups.get(col) {
     Some((h, _)) if physical_equal(h, g) => self.come_groups.remove(col)
     _ => ()

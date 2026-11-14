@@ -6,8 +6,8 @@
 // go moves it not at all; a line, a file or a quote moves it up only, never down, and it ends up by just what the
 // composer grew; (b) in every frame the composer's ground does not come over the last row's words, and stands no
 // further under them than it did at rest before or after, whichever is more (the two go one way). Each within half a
-// device pixel. The focus is let go as a person lets it go: with a finger the keyboard put away (its own key, Back),
-// with keyboard and mouse Tab away from the field.
+// device pixel, but (b)'s further under within one for now (rsc_end_held says why). The focus is let go as a person
+// lets it go: with a finger the keyboard put away (its own key, Back), with keyboard and mouse Tab away from the field.
 
 ///|
 /// The lowest words drawn over the composer's ground across its width (the last row's at the end): their text, where
@@ -56,6 +56,10 @@ fn rsc_end_held(t : @ui.Tester, k : RsCore, what : String, grows : Bool, cause :
   guard seen.last() is Some((_, Some(b1), Some(g1))) else { return Some("\{what}: the last row or the composer not drawn at rest") }
   let grew = g0 - g1
   let most_gap = if g0 - b0 > g1 - b1 { g0 - b0 } else { g1 - b1 }
+  // ((b)'s further under: a device pixel, not half: the last row goes by whole pixels and the composer's ground, the old
+  // view's, does not, so a frame may stand them a pixel of the row's apart. Back to half once the composer is made as
+  // nodes: the coordinator of the migration, 2026-11-14)
+  let far_still = 1.0 / @ui.view_tree().unwrap().root().pixel_scale()
   let faults : Array[String] = []
   if grows && grew <= rs_still {
     faults.push("the composer grew \{rs_n(grew)} (the cause not made)")
@@ -92,7 +96,7 @@ fn rsc_end_held(t : @ui.Tester, k : RsCore, what : String, grows : Bool, cause :
           over_most = b - g
           over_at = f.0
         }
-        if g - b - most_gap > rs_still && g - b - most_gap > far_most {
+        if g - b - most_gap > far_still && g - b - most_gap > far_most {
           far_most = g - b - most_gap
           far_at = f.0
         }
@@ -194,10 +198,7 @@ fn rs_composer(
   with_cards? : Bool = true,
 ) -> Array[String] {
   let out : Array[String] = []
-  // (off the device's pixels, as this was written and holds on main: on them the last row goes by whole pixels and
-  // the composer's ground, the old view's, does not, so at the end (b) reads 0.5-0.6 pt on both screens at every
-  // lateness, a pixel of the row's: the coordinator of the migration's to rule, #6134)
-  let (t, src, k) = rs_open(s, on_pixels=false)
+  let (t, src, k) = rs_open(s)
   if !at_end {
     rs_read_up(t, s)
   }
