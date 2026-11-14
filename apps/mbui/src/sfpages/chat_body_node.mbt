@@ -273,6 +273,9 @@ priv struct ChatBodyKeeps {
   opened : @sf.LiveMap[String, Bool]
   copied : @sf.LiveMap[String, Double]
   steadies : ActivitySteadies
+  /// each agent at work's picture on its line, by its key, while that line is made (working_said_node's): what a
+  /// message of its coming by data comes out of (agent_said_node's `out_of`)
+  faces : Map[String, @view.View]
 }
 
 ///|
@@ -305,7 +308,7 @@ fn chat_body_node(
   lead? : Double = unread_lead,
   scroll? : @view.Scroll = @view.Scroll::list(),
   place? : @view.ListPlace[String] = @view.ListPlace::new(),
-  keeps? : ChatBodyKeeps = { opened: notices_open, copied: @sf.LiveMap::new(), steadies: ActivitySteadies::new() },
+  keeps? : ChatBodyKeeps = { opened: notices_open, copied: @sf.LiveMap::new(), steadies: ActivitySteadies::new(), faces: Map([]) },
   made? : (String, @view.View) -> Unit = fn(_, _) {  },
   read? : (@view.ListPlace[String], @view.Scroll, () -> ChatBodyRows) -> Unit = fn(_, _, _) {  },
   to? : ChatRef,
@@ -749,7 +752,7 @@ fn chat_body_row(
       KPerson =>
         more.val = person_said_node(p, src, here, k, side, top, m, found~, found_at~, lit~, share=message_share_of(src, here, m), over~).menu_on
       KAgent =>
-        more.val = agent_said_node(p, src, here, k, side, top, m, found~, found_at~, lit~, share=message_share_of(src, here, m), core~, over~, code=fn(lang) {
+        more.val = agent_said_node(p, src, here, k, side, top, m, found~, found_at~, lit~, share=message_share_of(src, here, m), core~, over~, out_of=agent_out_of(keeps.faces, here, m, came), code=fn(lang) {
           if lang == "mermaid" {
             Some(fn(b, code) { @sfbase.viz_mermaid_node(b, src, here.station, code, fn() { @sf.theme().p.subtle }, here.tips) })
           } else {
@@ -798,6 +801,7 @@ fn chat_body_row(
           },
           came,
           keeps.steadies,
+          faces=keeps.faces,
         )
         |> ignore
       }
@@ -845,4 +849,20 @@ fn ask_again_ms(fails : Int) -> Double {
     }
   }
   ms
+}
+
+///|
+/// The picture an agent's message `m` comes out of: its agent's at work, on its line (`faces`, working_said_node's),
+/// where the message comes by data while the chat is watched (`came`: chat_body_comes, not answered at once) and that
+/// line is made; none else, the message simply there (sf/motion.mbt: what was said before it was shown moves not).
+fn agent_out_of(
+  faces : Map[String, @view.View],
+  here : MessageNodeHere,
+  m : () -> Message,
+  came : () -> Double?,
+) -> @view.View? {
+  guard @signals.untracked(came) is Some(_) else { return None }
+  let agent = @signals.untracked(fn() { message_agent_of(here, m().by.agent) })
+  guard agent != "" else { return None }
+  faces.get(agent)
 }

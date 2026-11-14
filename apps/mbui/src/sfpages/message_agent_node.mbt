@@ -9,8 +9,9 @@
 // Not here yet, each where it comes in:
 // - a Mermaid chart: as its code till then; `code` takes viz_mermaid_node once it is in main (#5525).
 // - a vault item's card asking for a file to be picked (message_card_node's NotYet): nothing drawn for it yet.
-// - its picture held under the pane's top as a long one scrolls past (c.stick), and its coming out of its agent's picture
-//   (emit): the list's, as the list is made of nodes.
+// - its picture held under the pane's top as a long one scrolls past (c.stick).
+// Its coming out of its agent's picture is here (agent_said_node's `out_of`): grown out of it, one flight; the line
+// folding to its picture first and the picture's own glide (emit.mbt's Fold, Float, Return) are not.
 
 ///|
 /// The card an agent's message shows in place of its words (prose_with_files'), by kind: a vault item's, a phone's, a
@@ -59,9 +60,26 @@ fn agent_said_node(
   screens? : @sf.ScreensNode,
   shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
   core? : @settings.Core? = None,
+  out_of? : @view.View? = None,
 ) -> MessageRowNode {
   let menu_on : Ref[() -> Bool] = Ref(fn() { false })
   let row = message_row_frame_node(v, key, side, top, over~, fn(r) {
+    // (come by data while its agent was at work: out of that agent's picture on its line (`out_of`), grown from as
+    // wide as it to its own place, a flight, sf/motion.mbt kind 4; View::flies_in. The old page's Spit, emit.mbt)
+    match out_of {
+      Some(face) =>
+        r.flies_in(
+          // det-ok(motion-length): a message coming out of its agent's picture, emit.mbt's Spit
+          @motion.flight_by(@motion.tween(@sfbase.Pose::Spit.ms(), ease=Out)),
+          fn(to) {
+            let (fx, fy, fw, _) = face.laid_window_now()
+            guard fw > 0.0 && to.2 > 0.0 else { return None }
+            Some((fx, fy, fw, fw * to.3 / to.2))
+          },
+        )
+        |> ignore
+      None => ()
+    }
     let (_, on) = message_others_node(
       r,
       here,

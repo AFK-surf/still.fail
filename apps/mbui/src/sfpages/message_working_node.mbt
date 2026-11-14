@@ -68,6 +68,7 @@ fn working_said_node(
   came : () -> Double?,
   steadies : ActivitySteadies,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
+  faces? : Map[String, @view.View] = Map([]),
 ) -> MessageRowNode {
   let live = fn() {
     @sfbase.hold(src, @sfbase.chat_scope(here.station, here.session), "live", {
@@ -116,6 +117,17 @@ fn working_said_node(
           line.box(fn(face) {
             @sf.style_node(face, fn() { activity_face })
             face.box(fn(av) { agent_avatar_node(av, fn() { a().maker }, fn() { a().runtime }, fn() { "" }) |> ignore })
+            |> ignore
+            // (what a message of its agent's coming while it is at work comes out of: agent_said_node's `out_of`; told no more
+            // as it is let go)
+            let agent = @signals.untracked(a).key
+            faces[agent] = face
+            face.owns(fn() {
+              match faces.get(agent) {
+                Some(f) if f.id() == face.id() => faces.remove(agent)
+                _ => ()
+              }
+            })
             |> ignore
             // (its agent's card over its picture and the ring over it under a pointer, as over a message's picture:
             // the line's press and hold its own as ever)
