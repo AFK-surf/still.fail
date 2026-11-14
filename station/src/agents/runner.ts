@@ -26,6 +26,8 @@ export type RunnerInfo = {
   socket: string;
   /// It gives back stdout's disk only up to an ack's `keep` (one from before gives back up to the ack).
   keeps?: boolean;
+  /// A terminal's (`pty`): its program on a pseudo-terminal (terminals/).
+  pty?: boolean;
 };
 
 export type Exit = { code: number | null; signal: string | null };
@@ -34,6 +36,10 @@ export type Exit = { code: number | null; signal: string | null };
 export { runnerBinary };
 
 export const runnersDir = (data: string) => join(data, "run", "runners");
+
+/// A person's terminal's runner (terminals/), not an agent's: its id's start. What takes up agents' runners leaves it.
+export const TERMINAL_RUNNER = "term-";
+export const isTerminalRunner = (id: string) => id.startsWith(TERMINAL_RUNNER);
 
 /// Whether a runner of before (its info file there, itself alive) still keeps its process: its socket there (one on its
 /// way out has removed it). A pipe cannot be looked at (see above): the info file, which goes with it, says so then.
@@ -51,13 +57,14 @@ export class CommandMissing extends Error {
 }
 
 /// Starts `program` under a runner, its environment `env` (the agent's whole environment), in `cwd`.
-export async function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string): Promise<RunnerInfo> {
+/// `pty`: the program on a pseudo-terminal of that size (a person's terminal, terminals/), not on pipes.
+export async function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string, pty?: { cols: number; rows: number }): Promise<RunnerInfo> {
   // Looked for as the runner would (its PATH is `env`'s): one not there is told apart from a runner that failed.
   env = await withShellCommand(program, env);
   if (!/[\\/]/.test(program) && platform.findCommand(program, env) === null) return Promise.reject(new CommandMissing(program));
   return new Promise((resolve, reject) => {
     // Lower than the station (ops/nice.ts), the runtime it starts and what that starts too.
-    const [command, given] = niced(runnerBinary(), ["--dir", runnersDir(data), "--id", id, "--cwd", cwd, "--", program, ...args]);
+    const [command, given] = niced(runnerBinary(), ["--dir", runnersDir(data), "--id", id, "--cwd", cwd, ...(pty ? ["--pty", `${pty.cols}x${pty.rows}`] : []), "--", program, ...args]);
     const child = spawn(command, given, {
       env,
       stdio: ["ignore", "pipe", "pipe"],
