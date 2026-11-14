@@ -204,6 +204,34 @@ fn tree_sel_at(x : Double, y : Double, finger? : Bool = false) -> SelTarget? {
 }
 
 ///|
+/// Whether a mouse at (x, y) is over a paragraph of the window's tree that can be picked (tree_sel_at's, where a press
+/// there picks), found by where each is drawn and cut alone, none laid out for it: what the pointer's shape is over
+/// (view_over_words), worked out as often as the pointer moves.
+fn tree_words_under(x : Double, y : Double) -> Bool {
+  guard pointing() is Mouse && view_app.val is Some(tree) else { return false }
+  tree.laid_as_now()
+  let found = Ref(false)
+  tree.each_drawn_scaled(fn(c, cx, cy, a, s) {
+    if found.val || c.runs.is_empty() || a <= 0.0 || !tree.allows(c.id) {
+      return
+    }
+    if x < cx || y < cy || x >= cx + c.w * s || y >= cy + c.h * s {
+      return
+    }
+    let (bx0, by0, bx1, by1) = tree.seen_bounds(c.id)
+    if x < bx0 || y < by0 || x >= bx1 || y >= by1 {
+      return
+    }
+    match tree.view_of(c.id) {
+      Some(v) if v.lent(words_picks) == Some(true) &&
+        v.lent(@view.runs_picker).map(fn(f) { physical_equal(f, words_picker) }) == Some(true) => found.val = true
+      _ => ()
+    }
+  })
+  found.val
+}
+
+///|
 /// Whether what is picked with the pointer is of the window's tree's words (a layer of its: SelLayer's TreeLayer).
 fn tree_picking() -> Bool {
   picked.layer is TreeLayer(_)

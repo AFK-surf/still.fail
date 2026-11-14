@@ -643,8 +643,6 @@ fn chat_body_row(
   let pill_over = fn(pill : @view.View, key : String) { chat_flash_node(pill, key, jump, round=true) }
   slot.pick(fn() { chat_body_kind(entry()) }, fn(p, kind) {
     made(k, p)
-    // (its words, picked with the pointer, are of its key: a message's quoted by it, chat_quote_node)
-    @ui.picked_of(p, k) |> ignore
     let m0 = match @signals.untracked(entry) {
       Said(m) => m
       _ => chat_body_none
@@ -704,7 +702,12 @@ fn chat_body_row(
         })
         more.val = mine_said_node(p, src, here, k, side, top, mine, found~, found_at~, share=message_share_of(src, here, mine), over~, out~, since=fn() { since.get() }).menu_on
       }
-      KNotice => notice_said_node(p, src, here, k, side, top, m, keeps.opened, keeps.copied, pill_over~) |> ignore
+      KNotice => {
+        // (its words, picked with the pointer, are of its key, as a message's are from where they are read: quoted by
+        // it, all of them taken by 全选, chat_quote_node)
+        @ui.picked_of(p, k, whole=true) |> ignore
+        notice_said_node(p, src, here, k, side, top, m, keeps.opened, keeps.copied, pill_over~) |> ignore
+      }
       KPerson =>
         more.val = person_said_node(p, src, here, k, side, top, m, found~, found_at~, share=message_share_of(src, here, m), over~).menu_on
       KAgent =>

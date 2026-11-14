@@ -500,6 +500,7 @@ fn view_forget() -> Unit {
   old_show_due.val = None
   view_handed.val = None
   view_point.val = None
+  view_over_words.val = false
   view_fingers[0] = -1
   view_fingers[1] = -1
   view_fingers[2] = 0
@@ -4973,6 +4974,12 @@ fn shape_extent(s : Shape) -> (Double, Double) {
 let view_point : Ref[(Double, Double)?] = Ref(None)
 
 ///|
+/// Whether a mouse's pointer, as it was last said where it is, is over words of the window's tree picked with the
+/// pointer (tree_words_under), no press held: found at an input (view_pointed), as what it is over is.
+// kept across runs: put back as a run begins (view_forget)
+let view_over_words : Ref[Bool] = Ref(false)
+
+///|
 /// A pointer's event `kind` at (x, y): where a mouse points now (a press, a move, a release where it is), nowhere once it
 /// is gone from the window (7) or the hand is a finger. Said before the event is taken; what it points at is told once
 /// the tree has things as of the event (view_point_tell).
@@ -4993,6 +5000,12 @@ fn view_pointed() -> Unit {
   match view_app.val {
     Some(tree) => {
       tree.bring_to(view_moment())
+      // (over words of the tree's picked with the pointer, a press held nowhere: the pointer's shape over them,
+      // view_cursor_tell)
+      view_over_words.val = match (view_point.val, view_held.val) {
+        (Some((x, y)), None) => tree_words_under(x, y)
+        _ => false
+      }
       view_point_tell(tree)
     }
     None => ()
@@ -6197,18 +6210,25 @@ let view_shape_of : Ref[ShapeOf] = Ref(OfOld)
 /// the one it was pressed with); else of what the pointer is over (view_shape_of): a node's (Tree::cursor_of: what it
 /// says, an arrow said one never the hand of what lies under it), the old views', or the arrow. Told as the pointer is
 /// told where it is, as what a still pointer is over changes, as a press goes down or up, and as the old frame works
-/// its own out.
+/// its own out. Where what the pointer is over of the tree's shows the arrow and it is over words of the tree's picked
+/// with the pointer (view_over_words), the I-beam, as over an old view's (Ctx::show_cursor).
 fn view_cursor_tell() -> Unit {
   let kind = match (view_app.val, view_held.val) {
     (None, _) => desk.old_shape
     (Some(tree), Some(Dragging(id))) | (Some(tree), Some(Node(id))) => tree.cursor_of(id).code()
     (Some(_), Some(Old(_, _))) => desk.old_shape
-    (Some(tree), _) =>
-      match view_shape_of.val {
+    (Some(tree), _) => {
+      let k = match view_shape_of.val {
         OfNode(id) => tree.cursor_of(id).code()
         OfOld => desk.old_shape
         OfGround => Cursor::Arrow.code()
       }
+      if k == Cursor::Arrow.code() && !(view_shape_of.val is OfOld) && view_over_words.val {
+        Cursor::IBeam.code()
+      } else {
+        k
+      }
+    }
   }
   if kind != desk.shown {
     desk.shown = kind

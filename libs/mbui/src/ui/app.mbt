@@ -1306,8 +1306,13 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         }
       }
       // On a finger's tap, a field keeps the keyboard while its surroundings are read or used. A mouse on nothing
-      // still lets the focus go; another field takes it on its own tap.
-      None => if target == 0 && c.focus_allowed() != 0 && !(pointing() is Finger && c.field_focused()) {
+      // still lets the focus go; another field takes it on its own tap. Words of the window's tree picked with the
+      // pointer are no nothing: a press that began picking them (select_press, above) keeps a field's focus, as one on
+      // an old view's page's words does (focus_on_press), so what is written goes on and ⌘C copies what was picked.
+      None => if target == 0 &&
+        c.focus_allowed() != 0 &&
+        !(pointing() is Finger && c.field_focused()) &&
+        !(tree_picking() && picked.from.base != NoSel && c.field_focused()) {
         c.focus_moved(0)
       }
     }

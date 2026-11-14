@@ -93,6 +93,9 @@ fn agent_said_node(
           // (what is read in it starts here, its words or the card in their place, under its head line and what it
           // quotes: what a page's list holds what shows by, where it starts (View::read_from))
           p.read_from() |> ignore
+          // (and what is picked of it is of its key, what is read of it alone, not its head line: quoted by it, all of
+          // it taken by 全选, chat_quote_node)
+          @ui.picked_of(p, key, whole=true) |> ignore
           if words {
             // (its words and its files one piece, none apart, as the old list holds them to be picked: pickable's
             // pick_fill; a letter's, drawn by the old view alone, has them 4 apart)

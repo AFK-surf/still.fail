@@ -152,6 +152,9 @@ fn mine_said_node(
       col.show(fn() { m().text != "" }, fn(b) {
         // (what is read in it starts here, its bubble's words: View::read_from)
         b.read_from() |> ignore
+        // (and what is picked of it is of its key, its bubble's words alone: quoted by it, all of them taken by 全选,
+        // chat_quote_node)
+        @ui.picked_of(b, key, whole=true) |> ignore
         let cards = message_link_card(src, here.station, "", m)
         mine_bubble_node(
           b,
@@ -309,6 +312,9 @@ fn person_said_node(
         b.show(fn() { m().text != "" }, fn(w) {
           // (what is read in it starts here, its words under its head line: View::read_from)
           w.read_from() |> ignore
+          // (and what is picked of it is of its key, its words alone, not its head line: quoted by it, all of them
+          // taken by 全选, chat_quote_node)
+          @ui.picked_of(w, key, whole=true) |> ignore
           person_words_node(w, m, found~, found_at~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
         })
         message_files_node(

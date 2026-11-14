@@ -256,9 +256,37 @@ fn finger_menu() -> (Double, Double, Double, Double, Int)? {
 }
 
 ///|
-/// All the words of the old view and layer a finger picked in, as laid out (those scrolled away kept as they were).
+/// All the words of the old view and layer a finger picked in, as laid out (those scrolled away kept as they were); of
+/// the window's tree's, where what holds the words picked says they are whole of what they are of (picked_of's
+/// `whole`: a message's), all of that alone (those paragraphs said of what such words picked are of), not all the
+/// page's.
 fn Ctx::finger_select_all(self : Ctx) -> Unit {
-  let laid = (self.sel_laid() + tree_sels()).filter(fn(t) { t.layer == picked.layer && t.island == picked.island })
+  let sels = self.sel_laid() + tree_sels()
+  // (what the words picked now are of, where what showed them said them whole of it: tree_sels has said each found)
+  let ofs : Array[String] = []
+  match view_app.val {
+    Some(tree) =>
+      picked.spans.each(fn(k, s) {
+        match picked_shown.get(k) {
+          Some((id, Some(o))) if s.a < s.b && !ofs.contains(o) =>
+            match tree.view_of(id) {
+              Some(v) if v.lent(picked_wholes) == Some(true) => ofs.push(o)
+              _ => ()
+            }
+          _ => ()
+        }
+      })
+    None => ()
+  }
+  let laid = sels.filter(fn(t) {
+    t.layer == picked.layer &&
+    t.island == picked.island &&
+    (ofs.is_empty() ||
+    (match picked_shown.get(t.base) {
+      Some((_, Some(o))) => ofs.contains(o)
+      _ => false
+    }))
+  })
   if laid.is_empty() {
     return
   }

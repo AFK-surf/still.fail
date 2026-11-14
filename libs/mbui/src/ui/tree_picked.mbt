@@ -35,9 +35,19 @@ let picked_ofs : @view.Lent[String] = @view.Lent::new()
 let keeps_picks : @view.Lent[Bool] = @view.Lent::new()
 
 ///|
+/// Whether what node `v` holds is said whole of what it is of (picked_of's `whole`), the nearest that says it.
+// kept across runs: what each node lends (View::lends), let go with it
+let picked_wholes : @view.Lent[Bool] = @view.Lent::new()
+
+///|
 /// The words node `v` holds (its own and those of what it holds that are picked with the pointer: words_picked) are
-/// of `of` (a message's id), said for what is picked of them (WordsPicked's `of`). `v`.
-pub fn picked_of(v : @view.View, of : String) -> @view.View {
+/// of `of` (a message's id), said for what is picked of them (WordsPicked's `of`). Said `whole`, they are one whole
+/// to a select all over a finger's pick in them (the system's text menu's): it takes all the words said of what is
+/// picked, not all the page's (finger_select_all: a message's 全选). `v`.
+pub fn picked_of(v : @view.View, of : String, whole? : Bool = false) -> @view.View {
+  if whole {
+    v.lends(picked_wholes, true) |> ignore
+  }
   v.lends(picked_ofs, of)
 }
 
