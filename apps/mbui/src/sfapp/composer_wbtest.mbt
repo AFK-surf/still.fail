@@ -686,6 +686,8 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
+  // (the page made as nodes: its list's ways, the row's way in, which the old list's name above does not say)
+  cr_ways_end(t)
   //  told end:false as it comes, its room
   // opening, end:true once it is open; at its end as it rests
   assert_true(ends.contains(false))
@@ -707,6 +709,7 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
+  cr_ways_end(t)
   assert_eq(ends[ends.length() - 1], true)
   let mut k = 1
   while k < told.length() {
@@ -715,6 +718,15 @@ test "at its end, a row that comes at it: the core told the end is not in view w
     k += 1
   }
   fix_clock.val = None
+}
+
+///|
+/// `t` run on to where the ways of the window's tree going now end (none: as it is).
+fn cr_ways_end(t : @ui.Tester) -> Unit {
+  match @ui.view_tree() {
+    Some(tree) if tree.ways_end() > t.time() => t.run_for(tree.ways_end() - t.time())
+    _ => ()
+  }
 }
 
 ///|

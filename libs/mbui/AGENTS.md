@@ -152,7 +152,10 @@ yet and you can add one, add it.
   (`ListPlace::follow_from`: a chat's answer read from its top), that top a margin under what covers the list's top: a
   standing limit, which while it binds holds the list by that top and has it off its foot to every rule of its foot,
   however near the foot, and stands till the hand takes the list, an ask, another named, or its key goes
-  (`src/view/list_follow_from_test.mbt`; the coordinator of the migration, 2026-11-14).
+  (`src/view/list_follow_from_test.mbt`; the coordinator of the migration, 2026-11-14). What it reports in sight
+  (`ListPlace::on_sight`) is what is seen: a key coming by data is not seen whole, nor its end seen (Sight's
+  `foot_whole`; `at_foot` is where it lays out), till it is drawn whole, told once at its way's end, in the change where
+  it comes at once (`src/view/list_sight_coming_test.mbt`; the coordinator of the migration, 2026-11-14).
 - What a page asks of its list (`ListPlace`: a block brought to its top or its middle, back to its foot) is done only
   in a pass that can do it as asked: one that cannot make the rows that show there, or that a way still going under
   it would leave short, keeps the ask for the next pass. Asked back to its foot, the list ends at its foot as the foot
