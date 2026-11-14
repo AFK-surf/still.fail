@@ -12,25 +12,28 @@
 /// What a person wrote (person_words') in `v`, as `m` says it as it changes: in the face for what people wrote (the
 /// theme's `words`), in pieces as the core gave them, links in blue; a link tapped opens where it leads, held (or right
 /// clicked) its menu; the words `found` says in bold, marked where `found_at` says (found_marks: the one the find is
-/// at of them, -1 none; None not marked); each link's card while a mouse rests on it where `cards` says
+/// at of them, -1 none; None not marked), the passage `lit` says lit where they have it (passage_marks: a quote's that
+/// led here, as it flashes); each link's card while a mouse rests on it where `cards` says
 /// them (drawn in its layer: a chat's link_peeks, message_link_card). The words' node.
 fn person_words_node(
   v : @view.View,
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
   found_at? : () -> Int? = fn() { None },
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   cards? : (@sf.TipLayer, (@sf.LinkOf) -> @sf.LinkCard?),
 ) -> @view.View {
   let runs = fn() {
     let now = m()
     @sf.found_weight(@sfbase.person_runs(now.text, now.words, @sf.theme().p.accent, chat_title=chat_title_of(now)), found())
   }
-  // (what a find marks of them: found_marks)
+  // (what a find marks of them: found_marks; and the passage lit where they have it: passage_marks)
   let marks = fn() {
-    match found_at() {
+    let found = match found_at() {
       Some(at) => @sf.found_marks(runs(), found(), at)
       None => []
     }
+    found + @sf.passage_marks(runs(), lit())
   }
   let shown : @signals.Signal[Array[(String, String, Int)]] = @signals.signal([])
   let links : Ref[@ui.RunsLinks?] = Ref(None)
@@ -87,11 +90,12 @@ fn mine_bubble_node(
   m : () -> Message,
   found : () -> Array[String],
   found_at : () -> Int?,
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   cards? : (@sf.TipLayer, (@sf.LinkOf) -> @sf.LinkCard?),
 ) -> Unit {
   v.box(fn(b) {
     @sf.style_node(b, fn() { bubble.then(@ui.style(max_w=Fixed(mine_most_of((here.width)())))) })
-    person_words_node(b, m, found~, found_at~, cards?) |> ignore
+    person_words_node(b, m, found~, found_at~, lit~, cards?) |> ignore
   })
   |> ignore
 }
@@ -122,6 +126,7 @@ fn mine_said_node(
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
   found_at? : () -> Int? = fn() { None },
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   share? : MessageShare? = None,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
   out? : () -> Outgoing? = fn() { None },
@@ -162,6 +167,7 @@ fn mine_said_node(
           m,
           fn() { if said() { found() } else { [] } },
           fn() { if said() { found_at() } else { None } },
+          lit=fn() { if said() { lit() } else { ("", 0L) } },
           cards=(here.tips, fn(l) { if said() { cards(l) } else { None } }),
         )
         // (offered once it is the chat's, by the message it is then)
@@ -287,6 +293,7 @@ fn person_said_node(
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
   found_at? : () -> Int? = fn() { None },
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   share? : MessageShare? = None,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
 ) -> MessageRowNode {
@@ -315,7 +322,7 @@ fn person_said_node(
           // (and what is picked of it is of its key, its words alone, not its head line: quoted by it, all of them
           // taken by 全选, chat_quote_node)
           @ui.picked_of(w, key, whole=true) |> ignore
-          person_words_node(w, m, found~, found_at~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
+          person_words_node(w, m, found~, found_at~, lit~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
         })
         message_files_node(
           b,

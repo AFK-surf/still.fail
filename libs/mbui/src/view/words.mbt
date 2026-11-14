@@ -138,7 +138,9 @@ pub fn View::runs_picked(self : View, span : Live[(Int, Int)], loc~ : SourceLoc)
 ///|
 /// A part of a node's words in pieces marked under them (View::runs_marks): from, until (in their text's terms, as what
 /// is picked is), a ground in `ground`, and where `line` is not 0 a line under it in that colour, `line_w` thick at its
-/// foot (what is found: each a ground; the one gone to a line under it too).
+/// foot (what is found: each a ground; the one gone to a line under it too); `round` above 0, its ground one a line,
+/// round that much at the mark's two ends (its first line's start, its last line's end) and square where it runs on to
+/// the next line, as a passage picked is drawn in an old view (a quote's passage lit where it is gone to).
 #derive(Eq, Debug)
 pub(all) struct RunsMark {
   from : Int
@@ -146,6 +148,7 @@ pub(all) struct RunsMark {
   ground : Int64
   line : Int64
   line_w : Double
+  round : Double
 }
 
 ///|

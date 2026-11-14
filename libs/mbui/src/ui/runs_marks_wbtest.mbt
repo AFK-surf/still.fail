@@ -47,8 +47,8 @@ test "parts of a node's words marked: each a ground where its words are, line by
   assert_eq(drawn_in(t, 0xFF0000FFL).length(), 0)
   // ("hello" found; "wide world", across its two lines, the one gone to)
   marks.set([
-    { from: 0, to: 5, ground: 0xFF0000FFL, line: 0L, line_w: 0.0 },
-    { from: 6, to: 16, ground: 0x0000FFFFL, line: 0x00FF00FFL, line_w: 2.0 },
+    { from: 0, to: 5, ground: 0xFF0000FFL, line: 0L, line_w: 0.0, round: 0.0 },
+    { from: 6, to: 16, ground: 0x0000FFFFL, line: 0x00FF00FFL, line_w: 2.0, round: 0.0 },
   ])
   t.draw()
   let red = drawn_in(t, 0xFF0000FFL)

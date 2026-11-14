@@ -2460,7 +2460,31 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
     // (what of it is marked, under all of it and under what is picked of it: View::runs_marks, each part its ground and
     // where it says so a line at its foot, each line of it where that line is drawn)
     for m in c.runs_marks {
-      if m.from < m.to {
+      if m.from < m.to && m.round > 0.0 {
+        // (one ground a line, round at the mark's two ends: as an old view's passage picked, Ctx::paint_selection)
+        let lines : Array[(Double, Double, Double, Double)] = []
+        for r in lay.rects(m.from, m.to) {
+          let (x, y, w, h) = r
+          match lines.last() {
+            Some((lx, ly, lw, lh)) if y < ly + lh && y + h > ly => {
+              let x0 = dmin(lx, x)
+              let y0 = dmin(ly, y)
+              lines[lines.length() - 1] = (x0, y0, dmax(lx + lw, x + w) - x0, dmax(ly + lh, y + h) - y0)
+            }
+            _ => lines.push(r)
+          }
+        }
+        for k, rect in lines {
+          let dx = rich_shift_at(lay, rect.1 + rect.3 / 2.0, center_in)
+          if (m.ground & 0xFFL) != 0L {
+            self.emit_rect(rect.0 + dx, rect.1, rect.2, rect.3, 0.0, m.ground, 0.0, 0L, 1.0)
+            let r = dmin(m.round, dmin(rect.2, rect.3) / 2.0)
+            let first = if k == 0 { r } else { 0.0 }
+            let last = if k == lines.length() - 1 { r } else { 0.0 }
+            self.corners_each(self.ninst - 1, first, last, last, first)
+          }
+        }
+      } else if m.from < m.to {
         for rect in lay.rects(m.from, m.to) {
           let dx = rich_shift_at(lay, rect.1 + rect.3 / 2.0, center_in)
           if (m.ground & 0xFFL) != 0L {

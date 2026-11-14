@@ -12,7 +12,9 @@
 /// tables scroll; `copy`: its tables offer to be copied; `fit_tables`: each table shown whole in the column, as much
 /// smaller as makes it fit, rather than part of it left to scroll to (a chat's shared picture: markdown's); `paths`: the files its paths name are a session's (chips);
 /// `found`: words found, in bold; `found_at`, where a find marks them (None: in bold alone): each coloured in, the one it
-/// is at (counting them through all its words, -1 none) with a line at its foot (found_marks); `on_link` where a link leads, `on_link_hold` a link held; `on_link_shown`, each
+/// is at (counting them through all its words, -1 none) with a line at its foot (found_marks); `lit`, a passage of
+/// its words and the ground it is lit on now, where a paragraph's words have it (passage_marks: a quote's that led
+/// here, as it flashes); `on_link` where a link leads, `on_link_hold` a link held; `on_link_shown`, each
 /// paragraph's links as they are (its words' node, each link's way, its words and its first run: what shows over one
 /// while it is pointed at, @ui.runs_links' `shown`); `link_cards`, the card each link has (drawn in its layer while a
 /// mouse rests on that link: link_cards_node); `one_line`: its first block's words alone, on one line as wide as
@@ -36,6 +38,7 @@ pub fn markdown_node(
   paths? : Bool = false,
   found? : () -> Array[String] = fn() { [] },
   found_at? : () -> Int? = fn() { None },
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
   on_link_shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
@@ -80,6 +83,7 @@ pub fn markdown_node(
       paths,
       found,
       found_at,
+      lit,
       before: fn() { 0 },
       on_link,
       on_link_hold,
@@ -117,6 +121,8 @@ priv struct MdNode {
   /// where a find marks what is found (markdown_node's `found_at`), and how many of its matches come before this part
   /// of the words (in their order: what the one it is at is counted by)
   found_at : () -> Int?
+  /// a passage lit where a paragraph's words have it, and its ground now (markdown_node's `lit`)
+  lit : () -> (String, Int64)
   before : () -> Int
   on_link : (String) -> Unit
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?
@@ -641,13 +647,14 @@ fn md_words_node(
   let words = p.box(made_for=loc, fn(w) {
     w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
     // (what a find marks of them, as what it found and where it is change: found_marks, the one it is at counted
-    // through all the words; a search's, every one)
+    // through all the words; a search's, every one; and a passage lit where these words have it: passage_marks)
     w.runs_marks(By(fn() {
-      match (md.found_at)() {
+      let found = match (md.found_at)() {
         Some(at) =>
           found_marks(runs(), (md.found)(), if at == found_all { at } else if at < 0 { -1 } else { at - (md.before)() })
         None => []
       }
+      found + passage_marks(runs(), (md.lit)())
     }))
     |> ignore
     // (on one line as wide as they are, cut short with an ellipsis where the column is narrower: one_line's)
