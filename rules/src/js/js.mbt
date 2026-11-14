@@ -781,13 +781,15 @@ pub fn state4_js(ws : String, root : String, chains : JsValue, bodies : JsValue,
 
 ///|
 /// `state4_js` of a workspace whose chain moved (`chain`, its active chain, the `moved` last: rules/src/lock/state4.mbt
-/// `state4_moved`), rooted in the log its `moved` names, with what the chain as it moved still says.
+/// `state4_moved`), rooted in the log its `moved` names, with what the chain as it moved still says; and `root_in`,
+/// whether the root's person is bound by `~root`.
 pub fn state4_moved_js(ws : String, chain : JsValue, chains : JsValue, bodies : JsValue, now : Double, crypto : JsCrypto) -> JsValue {
   let cs = chains_of(chains) catch { @form.Invalid(why) => return refused(why) }
   let ch = entries_of(chain) catch { @form.Invalid(why) => return refused(why) }
   let st = @lock.state4_moved(ws, ch, cs, bodies_of(bodies), now, crypto)
   let o = held(st.lock)
   js_put(o, "on", js_of_str(st.on))
+  js_put(o, "root_in", js_of_bool(st.root_in))
   o
 }
 

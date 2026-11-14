@@ -52,3 +52,15 @@
   taken: a removed signer whose log reaches a reader (by a station or the cloud, the lock's adversary) can so put the
   member back to unbound with those devices out until then; proofs by several of the member's signers outweighing one
   is not built.
+- After a move the root's person is a member like any other (the lead, 2026-11-14; the owner's: a moved workspace does
+  for every person what an unmoved one does): the root's log is what the workspace is rooted in and what its pair
+  says always counts, as an owner's, but that its person is in the list, bound by it, is an implicit admit (`~root`,
+  `roster.mbt` `root_admit`; the model's D7, `rootOut`), which an owner's `member.remove` of them cancels only where
+  its `cancels` names the root's genesis hash (a removal of them from before this rule named nothing that counts, and
+  still does nothing for every reader). While it is in it binds them before any other admit of theirs; once it is out
+  their real admits bind them as anyone's (none in: not in the list), and nothing of the chain as it moved is carried
+  of theirs. Known and taken: a device of the root's log, its person taken out, still says statements that count if
+  they reach a reader (as before, when its person could not be taken out at all), and the root's word against an
+  owner's is the root's, so the root's person with a device in hand is never locked out by an owner for good. A reader
+  from before reads such a removal as nothing: a core says one only where every station the list names says
+  `rootout` in its `serves`.

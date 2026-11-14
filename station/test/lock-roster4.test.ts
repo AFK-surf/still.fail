@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { WORKERS, pct, pool, print, toldLines } from "./lock-fork-pool.ts";
 import { A3_NAMES, type A4Y, type Family, type Job3, V3, v3Name } from "./lock-roster-model.ts";
-import type { Job4, M1Out, M3Out, M5Clock } from "./lock-roster4-model.ts";
+import type { Job4, M1Out, M3Out, M5Clock, M9Case } from "./lock-roster4-model.ts";
 
 const RUNS = Number(process.env.LOCK_ROSTER4_RUNS ?? 6);
 const CASES = Number(process.env.LOCK_ROSTER4_CASES ?? 6);
@@ -78,6 +78,7 @@ const M8_ROWS: { label: string; o: Omit<Extract<Job4, { t: "m8" }>, "t" | "n"> }
 ];
 const m8Rows = M8_ROWS.map((r) => ask<Any>({ t: "m8", n: CASES, ...r.o }));
 const again = ask<boolean>({ t: "again", steps: STEPS });
+const m9Row = ask<M9Case[][]>({ t: "m9", n: CASES });
 
 // ── the tables ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -99,6 +100,9 @@ test("M1: agreement with bodies delayed, reordered, and one held back for good",
       if (r.notLevel) for (const l of r.notLevel) print(`  not level once given: ${l}`);
       assert.equal(r.oracleBad, 0, "with nothing lacking, the kept bodies and every body made give different states");
       print(`(the model's check: ${r.oracle} keepers lacking nothing, the state from every body made the same at all)`);
+      // (D7: no drawn removal names the root's log, so a reader from before reads every state as one of now)
+      print(`D7: end states read as before it and as now ${r.beforeChecks}, differing ${r.beforeDiffer} (in worlds where a removal named the root's log ${r.beforeNamed})`);
+      assert.equal(r.beforeDiffer - r.beforeNamed, 0, "a state read as before D7 differs where no removal named the root's log");
     }
   }
 });
@@ -219,6 +223,17 @@ test("M8: the handover that waits for nobody, the chain as it moved carried", as
     if (row.o.self || row.o.rival) assert.ok(r.later.bind[1] > 0 && r.later.bind[0] === r.later.bind[1], `bind held at ${r.later.bind}`);
   }
   print(`(M8 printed, ${since()}; ${WORKERS} worker threads)`);
+});
+
+test("M9: the root's person taken out and let in again (D7)", async () => {
+  const seeds = await m9Row;
+  print(`\n== M9: alice the root's person (log R), bob an owner, carol an admin, xena a member; each case fresh, ${seeds.length} seeds ==`);
+  for (const [i, c] of seeds[0]!.entries()) {
+    const same = seeds.every((cs) => cs[i]!.alice.replace(/#\w+/g, "#") === c.alice.replace(/#\w+/g, "#") && cs[i]!.bob === c.bob);
+    const agree = seeds.filter((cs) => cs[i]!.agree).length;
+    print(`${c.label}: alice ${c.alice}; bob ${c.bob}; keepers agree in ${agree}/${seeds.length} seeds; the same in every seed ${same}; read as before D7: alice ${c.before}`);
+  }
+  print(`(M9 printed, ${since()})`);
 });
 
 test("the fourth round's model is deterministic: the same seed, the same world", async () => {

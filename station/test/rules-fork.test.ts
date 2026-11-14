@@ -95,7 +95,7 @@ test("the rules' person logs, bodies, lists and states are the fourth round's mo
 test("the rules are the fourth round's model's on its scripted worlds: bodies no one's, web devices by a keeper's clock, a revoked key, off and on again, the handover, the handover that waits for nobody", async () => {
   assert.ok(ask !== null, "no rules to compare");
   const o = sum(await scriptedOut);
-  print(`person logs and a workspace, scripted: ${o.worlds} seeds of M2, M5, a revoked key's web device and off, M6, M7's four rows, M8's two, ${o.checks} chains compared, ${o.branched} children beaten, ${o.refusedSeen} entries refused, ${o.statements} statements' reasons; ${o.differ.length} differ`);
+  print(`person logs and a workspace, scripted: ${o.worlds} seeds of M2, M5, a revoked key's web device and off, M6, M7's four rows, M8's seven, M9's cases, ${o.checks} chains compared, ${o.branched} children beaten, ${o.refusedSeen} entries refused, ${o.statements} statements' reasons; ${o.differ.length} differ`);
   told(o);
   for (const d of o.differ.slice(0, 3)) print(`  ${d.slice(0, 300)}`);
   assert.equal(o.differ.length, 0, "the rules and the model differ (the first are printed above)");
