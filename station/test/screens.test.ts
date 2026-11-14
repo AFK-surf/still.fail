@@ -1194,7 +1194,7 @@ test("the list: GET /screens with each source's access; an old station's 404; `s
   // What a station without screens (one from before) answers.
   assert.equal((await ask(new Admin({ names: new Map(), read: async () => "{}" } as any), "en")).status, 404);
   // On the event stream, in each stream's language.
-  const events = new Events({ readers: { read: async () => "[]" } as any, said: () => [], subscribe: () => () => {}, host: async () => ({}), jobLog: () => null, tail: () => "", outputAt: () => null, sessionExists: () => false });
+  const events = new Events({ readers: { read: async () => "[]" } as any, said: () => [], subscribe: () => () => {}, host: async () => ({}), jobLog: () => null, logNow: async () => null, sessionExists: () => false });
   const zh = (await events.open(viewer, "zh", false, [], [])).body as AsyncIterableIterator<Buffer>;
   const en = (await events.open(viewer, "en", false, [], [])).body as AsyncIterableIterator<Buffer>;
   events.screens((lang) => hub.listed(lang));

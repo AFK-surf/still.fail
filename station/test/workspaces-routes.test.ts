@@ -221,8 +221,7 @@ test("a viewer's event streams carry only their workspace's changes", async () =
       subscribe: (l) => ((listener = l), () => {}),
       host: async () => ({}),
       jobLog: () => null,
-      tail: () => "",
-      outputAt: () => null,
+      logNow: async () => null,
       sessionExists: (key) => r.store.getSession(key) !== null,
       seen: (viewer, of) => ("session" in of ? sessionSeen(r.store, viewer, of.session) : "thread" in of ? threadSeen(r.store, viewer, of.thread) : jobSeen(r.store, viewer, of.job)),
     });
