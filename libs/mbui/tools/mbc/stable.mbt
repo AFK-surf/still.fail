@@ -418,7 +418,10 @@ fn split_stable(
   }
   // a big package in pieces by source file (its #line's), as C is compiled: an edit moves the lines of the functions
   // after it in its file, and only that file's piece changes. A file bigger than a unit (a generic one's instances:
-  // core's Map for each of the program's types) in pieces of its own by its functions' names
+  // core's Map for each of the program's types) in pieces of its own by the types its functions are instances for
+  // (type_args): by their names, a branch's one new type's instances (a Map's keys, get, set, iter...) were spread
+  // over 20 of core's 32 pieces of that file and 21 of view's, each compiled again (with mbui's view and signals, some
+  // 60 of the 280 units a branch's 360 lines of sfpages had to compile, mbui-chat-nodes-outline, 2026-11-14)
   let file_key = rest.map(fn(f) {
     match line_file(f.text) {
       Some(path) => {
@@ -461,7 +464,7 @@ fn split_stable(
         cat([
           base,
           b"_",
-          utf8((crc32(new) % sub.reinterpret_as_uint()).to_string()),
+          utf8((crc32(type_args(new)) % sub.reinterpret_as_uint()).to_string()),
         ])
       } else {
         base
@@ -1405,4 +1408,36 @@ fn Heap::pop(self : Heap) -> Int {
     }
   }
   top
+}
+
+///|
+/// What a function is an instance for: its name from the first `G` that opens moonc's type arguments (`Map0keysG…E`,
+/// not a type's own name, which follows a `0`), its closures' `C…l…` taken off its end, so a type's instances of one
+/// generic file and their closures are one piece of it; a name with none, itself.
+fn type_args(name : Bytes) -> Bytes {
+  let mut end = name.length()
+  while true {
+    // (a closure's: C<digits>l<digits> at the end)
+    let mut j = end
+    while j > 0 && is_digit(name[j - 1]) {
+      j -= 1
+    }
+    if j == end || j == 0 || name[j - 1] != b'l' {
+      break
+    }
+    let mut k = j - 1
+    while k > 0 && is_digit(name[k - 1]) {
+      k -= 1
+    }
+    if k == j - 1 || k == 0 || name[k - 1] != b'C' {
+      break
+    }
+    end = k - 1
+  }
+  for i in 1..<end {
+    if name[i] == b'G' && name[i - 1] != b'0' && name[i - 1] != b'_' {
+      return sub(name, i, end)
+    }
+  }
+  name
 }
