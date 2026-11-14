@@ -67,6 +67,18 @@ test("boxed formulas keep a hollow frame, including nested and scaled boxes", ()
   assert(subscript.rects[0]![3] > 0 && subscript.rects[0]![3] < 67, "the frame's stroke scales with the subscript");
 });
 
+test("a rule with a non-positive dimension leaves the rest of the formula visible", () => {
+  for (const rule of [String.raw`\rule{1em}{-2pt}`, String.raw`\rule{-1em}{2pt}`]) {
+    const alone = mathDrawing(rule, false);
+    assert(alone, rule);
+    assert.equal(alone.rects.length, 0, "a rule with a non-positive dimension draws no rectangle");
+    const withContent = mathDrawing(`x+${rule}+y`, false);
+    assert(withContent, rule);
+    assert.equal(withContent.rects.length, 0);
+    assert.equal(withContent.draw.length, mathDrawing("x+y", false)!.draw.length + 1, "other glyphs remain visible");
+  }
+});
+
 test("macros cannot leak between messages; invalid and recursive TeX stay source", () => {
   assert(mathDrawing(String.raw`\def\mine{x}\mine`, false));
   assert.equal(mathDrawing(String.raw`\mine`, false), null);

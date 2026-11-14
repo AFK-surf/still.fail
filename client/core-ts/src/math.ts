@@ -115,8 +115,10 @@ function typeset(source: string, display: boolean): MathDrawing {
         case "rect": {
           const x = finite(attrs.x ?? "0"), y = finite(attrs.y ?? "0");
           const w = finite(attrs.width ?? "0"), h = finite(attrs.height ?? "0");
+          // TeX rules with no positive area draw nothing, but must not hide the rest of the formula.
+          if (w <= 0 || h <= 0) return;
           const t = finite(paint.strokeWidth.replace(/px$/, ""));
-          if (w < 0 || h < 0 || t < 0 || finite(attrs.rx ?? "0") !== 0 || finite(attrs.ry ?? "0") !== 0) {
+          if (t < 0 || finite(attrs.rx ?? "0") !== 0 || finite(attrs.ry ?? "0") !== 0) {
             throw new Error("Unsupported formula rectangle");
           }
           const [sx, sy, tx, ty] = move;
