@@ -37,7 +37,7 @@ priv struct BtCase {
 }
 
 ///|
-fn bt_case(part_h : Double, next_h : Double) -> BtCase {
+fn bt_case(part_h : Double, next_h : Double, way? : (Double, (Double) -> Double)) -> BtCase {
   let keys = @signals.signal(bt_keys([70, 50]), same=fn(a, b) { a == b })
   let foot = @signals.signal(su_foot, same=fn(a, b) { a == b })
   let part = @signals.signal(true, same=fn(a, b) { a == b })
@@ -51,6 +51,7 @@ fn bt_case(part_h : Double, next_h : Double) -> BtCase {
         est=40.0,
         follows=fn() { true },
         leaves_room=fn(k) { k == 50 },
+        comes_way=fn(k) { if k == 72 { way } else { None } },
         foot=fn(f) {
           f.box(fn(b) {
             b.height(By(fn() { Some(foot.get()) })).shrink(Is(0.0)) |> ignore
@@ -305,5 +306,25 @@ test "the line let go by itself once all rests, said to leave its room: as ever,
       assert_true((s.y72 - seen[0].y72).abs() <= 0.5 && (s.y9 - seen[0].y9).abs() <= 0.5, msg="\{at}, look \{i}: 行72 \{seen[0].y72} to \{s.y72}, 行9 \{seen[0].y9} to \{s.y9}")
     }
     assert_eq(seen[seen.length() - 1].line, rc_none, msg="\{at}: the line still drawn at rest")
+  }
+}
+
+///|
+test "a key put before the line on a way its page said (comes_way, 520 ms on its curve), what gives back as before: the line kept against the foot's top, nothing over it down, the key against L, at every rate" {
+  let way = (520.0, fn(x : Double) { x * x * (3.0 - 2.0 * x) })
+  for give in [
+    { part: false, foot: 0.0, declared: false, come: [72], again: [] },
+    { part: true, foot: 0.0, declared: false, come: [72], again: [] },
+    { part: false, foot: 30.0, declared: true, come: [72], again: [] },
+    { part: false, foot: 0.0, declared: false, come: [72], again: [73] },
+  ] {
+    for rate in rc_rates {
+      let c = bt_case(if give.part { 22.0 } else { 0.0 }, 64.0, way~)
+      let seen = bt_walk(c, give, rate)
+      bt_none(
+        bt_faults(seen, set_out=give.again.length() == 0),
+        "part \{give.part} foot \{give.foot} again \{give.again.length()}, at \{rate} a second",
+      )
+    }
   }
 }

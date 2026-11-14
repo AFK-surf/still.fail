@@ -1336,6 +1336,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         Some(n) if (n.coming || !coming) &&
           n.flex.style.come_at == cause &&
           n.flex.style.come_ends == n.flex.style.come_ends => end = dmax(end, n.flex.style.come_ends)
+        // (on a way its page said, its end not laid out yet: that way's length from the cause, scrolls_window's
+        // `comes_way`, longer than a Move may be)
+        Some(n) if n.coming && n.flex.style.come_at == cause && n.flex.style.come_spec is Some((ms, _)) =>
+          end = dmax(end, cause + ms)
         _ => ()
       }
     }
@@ -2764,7 +2768,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                   _ => {
                     (m.come_off)()
                     st.come_group = None
-                    st.come_ends = cause + @flex.come_way_ms(from, 0.0, h)
+                    // (on a way its page said: that way's length still, from where it now sets out; else a Move's)
+                    st.come_ends = match st.come_spec {
+                      Some((ms, _)) if ms > 0.0 => st.come_at + ms
+                      _ => cause + @flex.come_way_ms(from, 0.0, h)
+                    }
                     if st.come_ends <= cause + 0.001 {
                       come_done(tree, row, m)
                     } else {

@@ -9290,6 +9290,29 @@ fn Tree::come_group_settle(
   if live.length() + under_way.length() < 2 {
     return
   }
+  // (one still on a way its page said, as this sets out (a list key's `comes_way`): the group of this moment goes on
+  // what is left of that way, from where it has it to its end, so nothing of it is set on a Move halfway; scrolls_window)
+  if g.spec is None {
+    for k in under_way {
+      let n = self.nodes[k]
+      match n.flex.style.come_spec {
+        Some((ms, curve)) if n.list_key_way && ms > 0.0 && at < n.flex.style.come_at + ms => {
+          let u0 = dmax((at - n.flex.style.come_at) / ms, 0.0)
+          let c0 = curve(u0)
+          if c0 < 0.999999 {
+            g.spec = Some(
+              (
+                n.flex.style.come_at + ms - at,
+                fn(x) { (curve(u0 + x * (1.0 - u0)) - c0) / (1.0 - c0) },
+              ),
+            )
+          }
+          break
+        }
+        _ => ()
+      }
+    }
+  }
   for k in under_way {
     let ms = self.nodes[k].flex.style
     guard @flex.come_state(ms, at) is Some((h, sp)) else { continue }
@@ -9331,6 +9354,14 @@ fn Tree::come_group_settle(
 /// The way of node `m` (of `v`) there: laid out as it is, cut as it says, and what followed the clock for it let go.
 fn come_done(tree : Tree, v : View, m : Node) -> Unit {
   let st = m.flex.style
+  // (its way made longer since this moment was asked for (a group it went on in set out later, on a way said: Tree's
+  // come_group_settle, a list's send set-out): at rest at the end it has now, not before)
+  if m.coming && st.come_ends == st.come_ends && st.come_ends > tree.cause_now() + 0.001 {
+    (m.come_off)()
+    m.come_off = v.at_moment(st.come_ends, fn() { come_done(tree, v, m) })
+    tree.hand_at_end(st.come_ends)
+    return
+  }
   m.coming = false
   m.come_uncut = false
   m.list_key_way = false
