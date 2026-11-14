@@ -325,7 +325,8 @@ pub fn open_triple_panel(
 /// 12). `saved`: what is said once a model picked
 /// (onConfirm's toast: a chat's, from its next turn; a connect's, its model bound; nothing where nothing runs on it yet,
 /// a new chat's or a new connect's). `floating`: over a page rather than in a row (a new chat's over its
-/// composer, narrow): a capsule of the composer's glass.
+/// composer, narrow): a capsule of the composer's glass. `bound`: what it runs is another's to say (a preset's), its
+/// panel never opened; `on_bound` what a press on it opens instead, beside it.
 pub fn model_triple(
   c : @ui.Ctx,
   src : Source,
@@ -336,6 +337,7 @@ pub fn model_triple(
   floating? : Bool = false,
   saved? : String = "",
   bound? : Bool = false,
+  on_bound? : (@sf.Beside) -> Unit,
 ) -> Unit {
   let t = @sf.theme()
   let v = match face {
@@ -382,6 +384,11 @@ pub fn model_triple(
     c.on_press(id, fn() {
       go()
     })
+  }
+  // (`bound`, pressed: what holds it says so, `on_bound` beside it)
+  match on_bound {
+    Some(f) if bound && offers => c.on_press(id, fn() { f(Of(id)) })
+    _ => ()
   }
   // (asked from elsewhere: opened as it is seen)
   if can && !open && triple.asked == me {

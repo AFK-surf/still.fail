@@ -97,29 +97,62 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
 fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, picked : String, from : @sf.Beside) -> Unit {
   let pick = fn(id : String, at : String) { fn() { @sfbase.pick_new(src, w.id, { "preset": Json::string(id), "presetStation": Json::string(at) }) } }
   let all = items(v, "presets")
-  // (which station each is of, said only where they are of more than one)
-  let several = all.iter().any(fn(p) { text(Some(p), "station") != text(all.get(0), "station") })
   let menu : Array[@sf.MenuItem?] = [Some(@sf.menu_item_of(@sf.t("web-main.preset.none"), pick("", ""), chosen=picked == ""))]
   for p in all {
     let one = Some(p)
     let id = text(one, "id")
     let at = text(one, "station")
-    let label = if several { text(one, "name") + " · " + text(one, "stationName") } else { text(one, "name") }
-    menu.push(Some(@sf.menu_item_of(label, pick(id, at), chosen=id == picked && at == text(v, "presetStation"))))
+    menu.push(Some(@sf.menu_item_of(preset_menu_label(all, p), pick(id, at), chosen=id == picked && at == text(v, "presetStation"))))
   }
   menu.push(None)
   if picked != "" {
-    let at = text(v, "presetStation")
-    menu.push(
-      Some(
-        @sf.menu_item_of(@sf.t("web-main.preset.editNamed", args=[("name", text(v, "presetName"))]), fn() {
-          preset_dialog(src, w, if at == "" { address } else { at }, picked, items(v, "stations"), browse_station=address)
-        }, icon="edit"),
-      ),
-    )
+    menu.push(Some(preset_edit_item(src, w, address, v, picked)))
   }
   menu.push(Some(@sf.menu_item_of(@sf.t("web-main.preset.newRow"), fn() { preset_dialog(src, w, address, "", items(v, "stations")) }, icon="plus")))
   @sf.menu(menu, from~, title=@sf.t("web-main.preset.label"))
+}
+
+///|
+/// Preset `p` as the menu of `all` (the page's `presets`) names it: by its name alone, where it is kept no concern of
+/// who picks it (the user, 2026-11-14: 「用户大部分时候不需要知道这个」); its station's name after it only to tell it
+/// from another of the same name on another station.
+fn preset_menu_label(all : Array[Json], p : Json) -> String {
+  let name = text(Some(p), "name")
+  let at = text(Some(p), "station")
+  let twin = all.iter().any(fn(o) { text(Some(o), "name") == name && text(Some(o), "station") != at })
+  if twin {
+    name + " · " + text(Some(p), "stationName")
+  } else {
+    name
+  }
+}
+
+///|
+/// 编辑「X」 of the preset picked (`picked`, of the station the page says, `presetStation`): its dialog, browsing on
+/// the composer's station.
+fn preset_edit_item(src : Source, w : Workspace, address : String, v : Json?, picked : String) -> @sf.MenuItem {
+  let at = text(v, "presetStation")
+  @sf.menu_item_of(@sf.t("web-main.preset.editNamed", args=[("name", text(v, "presetName"))]), fn() {
+    preset_dialog(src, w, if at == "" { address } else { at }, picked, items(v, "stations"), browse_station=address)
+  }, icon="edit")
+}
+
+///|
+/// What a control the picked preset holds fixed (its model, its station) opens as it is pressed: a menu saying so in
+/// its title (`title`), and the two ways to change it, 编辑 the preset and 不用预设 (the user, 2026-11-14: a press that
+/// did nothing looked broken).
+fn preset_fixed_menu(src : Source, w : Workspace, address : String, v : Json?, title : String, from : @sf.Beside) -> Unit {
+  let picked = text(v, "preset")
+  @sf.menu(
+    [
+      Some(preset_edit_item(src, w, address, v, picked)),
+      Some(@sf.menu_item_of(@sf.t("web-main.preset.none"), fn() {
+        @sfbase.pick_new(src, w.id, { "preset": Json::string(""), "presetStation": Json::string("") })
+      }, icon="close")),
+    ],
+    from~,
+    title~,
+  )
 }
 
 ///|

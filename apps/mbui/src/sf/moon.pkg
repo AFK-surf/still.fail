@@ -12,6 +12,7 @@ import {
   "moonbitlang/core/math",
   "mbui/dmath",
   "mbui/zip",
+  "mbui/text",
 }
 
 import {

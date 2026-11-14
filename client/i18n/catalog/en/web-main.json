@@ -1132,6 +1132,8 @@
   "web-main.preset.deleteTitle": "Delete the preset “{name}”?",
   "web-main.preset.deleteBody": "Chats already opened with it keep it.",
   "web-main.preset.editNamed": "Edit “{name}”",
+  "web-main.preset.fixedModel": "Model set by preset {name}",
+  "web-main.preset.fixedStation": "Station set by preset {name}",
   "web-main.preset.newRow": "New preset",
   "web-main.preset.namePlaceholder": "e.g. still.fail work",
   "web-main.preset.dirsHint": "The repositories and folders this kind of work uses",
