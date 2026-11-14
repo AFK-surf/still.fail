@@ -437,7 +437,10 @@ for t in $targets; do
           # 43605560534, 43605643007), the second's 181-235 on its two programs, the first's and fourth's 105-152 on their
           # four. The third reckoned 1650 and the second 650: by the table the third's pages 132 s, the second's 694 (751),
           # the first's 622 (529), the fourth's 666 (599))
-          *) specs="4,4,950,1 2,4,650,1 1,4,1650,1 4,4,900,1" ;;
+          # (dealt so, the third's job was 132-170 s on main 2c8f3745 43607717744 and branches after, the first's
+          # 212-243 and the fourth's 227-261: too many taken from the third. Reckoned 1580: by the table its pages 188 s,
+          # the first's 598, the second's 690, the fourth's 643)
+          *) specs="4,4,950,1 2,4,650,1 1,4,1580,1 4,4,900,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
