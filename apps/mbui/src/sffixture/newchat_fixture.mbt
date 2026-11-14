@@ -187,6 +187,22 @@ fn fix_other(id : String, name : String, whose : String, home : String, home_nam
 }
 
 ///|
+/// Someone else's preset `id` of the made-up workspace's given another name (a fixture's mode: one as long as a person
+/// gives one).
+pub fn fix_other_rename(id : String, name : String) -> Unit {
+  for i, p in new_fix.others {
+    match p {
+      Object(m) if text(Some(p), "id") == id => {
+        let c = m.copy()
+        c["name"] = Json::string(name)
+        new_fix.others[i] = Json::object(c)
+      }
+      _ => ()
+    }
+  }
+}
+
+///|
 /// The `otherPresets` topic: the other members' presets as a list shows them, and whether more may come.
 pub fn fix_other_presets() -> Json {
   {

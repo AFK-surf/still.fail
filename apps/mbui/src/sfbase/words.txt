@@ -2708,7 +2708,7 @@ web-main.preset.cloneFailed
 web-main.preset.choose
 web-main.preset.others
 web-main.preset.othersNone
-web-main.preset.copyMine
+web-main.preset.copyNamed
 web-main.preset.copyFailed
 web-pages.screen.debug.app
 web-pages.screen.device.back

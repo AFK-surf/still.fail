@@ -52,7 +52,8 @@ let corner_modes : Array[String] = {
     "newchat-preset-new", "newchat-preset-new-add", "newchat-preset-new-browse", "newchat-preset-new-browse-repos",
     "newchat-preset-new-clone", "newchat-preset-new-clones",
     // (the presets' menu: one's own; the other members', a level further in, and none of them; someone else's picked)
-    "newchat-preset", "newchat-preset-others", "newchat-preset-others-none", "newchat-preset-theirs", "player-audio", "player-ended",
+    "newchat-preset", "newchat-preset-others", "newchat-preset-others-none", "newchat-preset-theirs",
+    "newchat-preset-theirs-long", "player-audio", "player-ended",
     "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
     "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
     "lock-none", "lock-security", "lock-upgrade", "lock-waiting", "lock-wrong", "screen-agent-driving",

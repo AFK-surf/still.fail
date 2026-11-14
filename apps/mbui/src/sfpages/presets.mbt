@@ -3,7 +3,7 @@
 // A person sees their own; the other members' are one press further in (the user, 2026-11-14: 「用户默认只能看到自己的
 // 预设，想要查看别人的预设需要额外操作」): looked at, opened a chat with and copied into one's own, never edited or
 // deleted here (the lead, 2026-11-14). Its control opens a menu of them (不用预设 and each of one's own, the one picked
-// checked, someone else's picked among them with whose it is; 编辑 the one picked or, someone else's, 复制为我的预设;
+// checked, someone else's picked among them with whose it is; 编辑 the one picked or, someone else's, 复制「X」为我的预设;
 // 新预设; 其他成员的预设, a level further in, asked of the core at that press). A preset is made or changed in a dialog
 // of nodes (what it is read of the core's `preset`): its folders
 // first (each a row with its ×; 添加目录 a step further in: the folders the stations found, searched by name, 浏览文件夹…
@@ -135,7 +135,7 @@ fn preset_menu_open(src : Source, w : Workspace, address : String, v : Json?, fr
 /// The person's presets as a menu (the model's and the station's picks' look): 不用预设 and each of their own, the one
 /// picked checked, and someone else's where that is the one picked, checked, whose it is after its name (`whose`: ""
 /// where that was not said), so what is picked is always in sight; under a line, for the one picked 编辑「X」 (one's
-/// own) or 复制为我的预设 (someone else's), 新预设, and 其他成员的预设, a level further in. With none of their own and
+/// own) or 复制「X」为我的预设 (someone else's), 新预设, and 其他成员的预设, a level further in. With none of their own and
 /// none picked, no 不用预设 (its one choice would be the one there) and no line.
 fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, whose : String, from : @sf.Beside) -> Unit {
   let picked = text(v, "preset")
@@ -245,13 +245,13 @@ fn preset_others_open(src : Source, w : Workspace, v : Json?, from : @sf.Beside)
 }
 
 ///|
-/// 复制为我的预设, in place of 编辑 for someone else's preset picked: copied into the person's own (`preset.copy`, made on
+/// 复制「X」为我的预设, in place of 编辑 for someone else's preset picked: copied into the person's own (`preset.copy`, made on
 /// the page's station `address`), the copy picked, and its dialog opened so it can be changed. Not copied, said why
 /// and that it can be pressed again.
 fn preset_copy_item(src : Source, w : Workspace, address : String, v : Json?) -> @sf.MenuItem {
   let picked = text(v, "preset")
   let stations = items(v, "stations")
-  @sf.menu_item_of(@sf.t("web-main.preset.copyMine"), fn() {
+  @sf.menu_item_of(@sf.t("web-main.preset.copyNamed", args=[("name", text(v, "presetName"))]), fn() {
     (src.call)("preset.copy", Json::object({ "station": Json::string(address), "id": Json::string(picked) }), fn(r) {
       match r {
         Ok(made) => {
@@ -292,7 +292,7 @@ fn preset_edit_item(src : Source, w : Workspace, address : String, v : Json?, pi
 
 ///|
 /// What a control the picked preset holds fixed (its model, its station) opens as it is pressed: a menu saying so in
-/// its title (`title`), and the two ways to change it, 编辑 the preset (复制为我的预设 for someone else's, never edited
+/// its title (`title`), and the two ways to change it, 编辑 the preset (复制「X」为我的预设 for someone else's, never edited
 /// here) and 不用预设 (the user, 2026-11-14: a press that did nothing looked broken).
 fn preset_fixed_menu(src : Source, w : Workspace, address : String, v : Json?, title : String, from : @sf.Beside) -> Unit {
   let picked = text(v, "preset")

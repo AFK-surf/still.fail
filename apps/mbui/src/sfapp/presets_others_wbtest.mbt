@@ -1,7 +1,7 @@
 // The new chat's presets' menu (sfpages presets.mbt) as a person's own and the other members' (the user, 2026-11-14:
 // 「用户默认只能看到自己的预设，想要查看别人的预设需要额外操作」): the menu lists one's own; 其他成员的预设 under its
 // line a level further in, asked of the core at that press and opened whole; someone else's picked there the page's,
-// shown checked with whose it is, 复制为我的预设 in place of 编辑 (the lead, 2026-11-14: never edited or deleted here).
+// shown checked with whose it is, 复制「X」为我的预设 in place of 编辑 (the lead, 2026-11-14: never edited or deleted here).
 
 ///|
 /// The fixture's source for `mode`, the calls made kept in `calls` and the topics asked in `asked` (by name, as each is
@@ -95,24 +95,24 @@ test "with none from other members, the level says so in one line" {
 }
 
 ///|
-test "with someone else's picked, the menu shows it checked with whose it is, 复制为我的预设 in place of 编辑" {
+test "with someone else's picked, the menu shows it checked with whose it is, 复制「X」为我的预设 in place of 编辑" {
   for wide in [false, true] {
     new_run()
     // (picked before the window is made: a wide frame asks its new chat as it is made, ahead of the mode)
     @sffixture.new_fix.preset = "p-ops"
     let t = preset_mode("newchat-preset-theirs", wide~)
     assert_true(shows(t, "线上排障 · 林夏") && shows(t, "still.fail 开发"), msg="wide \{wide}: \{runs(t)}")
-    assert_true(shows(t, "复制为我的预设"), msg=runs(t))
+    assert_true(shows(t, "复制「线上排障」为我的预设"), msg=runs(t))
     assert_false(shows_start(t, "编辑「"), msg=runs(t))
   }
 }
 
 ///|
-test "复制为我的预设 copies it into one's own, picks the copy and opens its dialog to change it" {
+test "复制「X」为我的预设 copies it into one's own, picks the copy and opens its dialog to change it" {
   new_run()
   let calls : Array[Made] = []
   let t = preset_mode("newchat-preset-theirs", src=others_src("newchat-preset-theirs", calls, []))
-  choose(t, "复制为我的预设")
+  choose(t, "复制「线上排障」为我的预设")
   t.run_for(@ui.move_most_ms)
   let copied = named(calls, "preset.copy")
   guard copied.length() == 1 else { fail("no preset.copy: \{Repr(calls.map(fn(m) { m.name }))}") }
@@ -126,7 +126,7 @@ test "复制为我的预设 copies it into one's own, picks the copy and opens i
 }
 
 ///|
-test "a control the other's preset holds offers 复制为我的预设 and 不用预设, never 编辑" {
+test "a control the other's preset holds offers 复制「X」为我的预设 and 不用预设, never 编辑" {
   new_run()
   @sffixture.new_fix.preset = "p-ops"
   @sffixture.new_fix.bound = true
@@ -134,14 +134,14 @@ test "a control the other's preset holds offers 复制为我的预设 and 不用
   guard t.find("Willow") is Some((x, y)) else { fail("no Willow: \{runs(t)}") }
   t.tap(x, y)
   t.run_for(@ui.move_most_ms)
-  assert_true(shows_start(t, "Station 已被 ") && shows(t, "复制为我的预设") && shows(t, "不用预设"), msg=runs(t))
+  assert_true(shows_start(t, "Station 已被 ") && shows(t, "复制「线上排障」为我的预设") && shows(t, "不用预设"), msg=runs(t))
   assert_false(shows_start(t, "编辑「"), msg=runs(t))
 }
 
 ///|
 test "the presets' menus keep every rule, on a phone and on a desk" {
   let faults : Array[String] = []
-  for mode in ["newchat-preset", "newchat-preset-others", "newchat-preset-others-none", "newchat-preset-theirs"] {
+  for mode in ["newchat-preset", "newchat-preset-others", "newchat-preset-others-none", "newchat-preset-theirs", "newchat-preset-theirs-long"] {
     for wide in [false, true] {
       new_run()
       let t = preset_mode(mode, wide~)
