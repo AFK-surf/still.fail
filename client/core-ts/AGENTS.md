@@ -198,7 +198,10 @@ another; the accounts' list's merge across stations and its refills.
   (kept beside the vaults, `vaultTook`, as the vaults held change and as the state is made anew, never as a topic is
   answered; a device begun anew since kept none and shows it not), and is keyed anew by its owner's device as its key
   is next unsealed for something the person does; an item that device writes meanwhile, the key in hand, waits for
-  that first (vault.ts `#writable`, 2026-11-14), never refused for its own device's keying. A device taken out
+  that first (vault.ts `#writable`, 2026-11-14), never refused for its own device's keying. Where this device signs no vault while the state waits, or
+  while its log does not say its signer (an entry from before signers were said), the vaults' topic and refusals say so
+  (`stateText`, vault.ts `whyNot`), the latter with a press, `confirmText`: `lock.confirmSigner` says it on its log by itself,
+  the person asked once (personal-lock.ts `confirmSigner`; else `#restate` says it as another ask comes). A device taken out
   takes what its refusal tells of the removal (views/lock.ts `heardOut`, by the rules as any logs and bodies), and
   `outOf` says who took it out and when (the `lock` topic's `me.outText`, with whom to ask to be added again). A device the stations' state does not name
   is given no log nor body, and told by their refusal that it is left out and whom to ask (views/lock.ts

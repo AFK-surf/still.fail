@@ -1230,6 +1230,8 @@ pub let said_paths : Map[String, Array[String]] = {
     "uses.*.howText",
   ],
   "vaults": [
+    "stateText",
+    "confirmText",
     "vaults.*.name",
     "vaults.*.ownerName",
     "vaults.*.members.*.name",

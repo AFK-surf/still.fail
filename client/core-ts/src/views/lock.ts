@@ -2818,6 +2818,12 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         if (inner.host.handOverByTests !== true && !handsOver(inner)) return yield* Effect.fail(new CoreError("unknown_call", t("core-misc.call.unknown", { name: "lock.handOver" })));
         result = yield* handOver(inner, sub, c.workspace);
         break;
+      // This device's signer said on its person's own log, by itself (personal-lock.ts `confirmSigner`): the vault's
+      // page offers it where a moved workspace's state does not name this device by it (views/vault.ts `whyNot`).
+      case "confirmSigner":
+        result = yield* inner.adb.personal().confirmSigner(sub, t("core-misc.lock.reason.confirmSigner"));
+        inner.views?.vaultChanged(null);
+        break;
       default:
         return yield* Effect.fail(CoreError.invalid(`no lock call ${c.name}`));
     }
