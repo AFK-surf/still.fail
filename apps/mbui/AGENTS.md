@@ -278,6 +278,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   built on the build station by `scripts/media-dev-build.sh KEY INBOX "" mbui-film-wasm` (the job's `runtime.key`),
   in a station task's mirror as it is: no `.git`, no `MBUI_TOOLS` needed. Never the native `sffix` (`scripts/mac.sh`)
   for a still: it compiles the whole framework's C, 45-90 s a build against the Wasm renderer's 10-20 s (2026-11-14).
+- A picture says what every rule finds in the frame it drew (`rules:` lines, `Tester::audit`), after it is written. One
+  made for people is drawn at 3 (`MBUI_FILM_SCALE=3`; the user, 2026-11-14), at rest (not a way's middle frame), in
+  the state asked about (a menu or panel open where that is the change), and is sent with none of those lines that its
+  change brought (a before keeps its own, said as such).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture
   with a kept one: that is slow, and what it waits for is never the app's own. A device runs only the host's
   contracts (`mbui-host-*`), the render contracts, and a few end-to-end smoke flows that wait for named events; their

@@ -262,6 +262,12 @@ pub fn draw() -> Int {
   }
   instance_data.val = values
   ground.val = bg
+  // Every rule the frame is held to (Tester::audit), said once what is drawn is taken: a picture for people is looked
+  // at by its agent with what the rules find in it, never by eye alone (the user, 2026-11-14: a message's words on its
+  // file's card at 0 apart, shown and passed; mbui's film/picture.mbt says them the same).
+  let rules = t.audit()
+  for fault in rules { println("rules: \{fault}") }
+  println("rules: \{rules.length()} found")
   count
 }
 ///|

@@ -7,7 +7,8 @@
 /// is built by the Tester with the native host's text and pictures, then drawn by the host's offscreen renderer. Returns false if
 /// the dimensions are invalid, the host has no renderer, an image failed or is still pending, or the PNG cannot be
 /// written. `transparent` clears the output's ground to transparent while keeping the scene's own shapes and their
-/// alpha. The theme's corner rule and word overlap are checked unless the view opts out. A view that deliberately
+/// alpha. The theme's corner rule and word overlap are checked unless the view opts out; every rule's faults
+/// (Tester::audit) are said after the PNG is written. A view that deliberately
 /// depicts an exception can accept precisely its expected corner faults with `corner_faults_ok`.
 pub fn picture(
   view : (@ui.Ctx) -> Unit,
@@ -104,16 +105,6 @@ pub fn picture(
   if at > 0.0 {
     t.run_for_exact(at)
   }
-  // (MBUI_RULES=1: every corner and spacing fault of the frame said, whatever the picture accepts)
-  if arg("MBUI_RULES") == "1" {
-    for fault in t.corner_faults() {
-      say("rules: corner: \{fault}")
-    }
-    for fault in t.gap_faults() {
-      say("rules: gap: \{fault}")
-    }
-    say("rules: checked")
-  }
   // Check the captured frame explicitly so a bad corner reports why and returns false instead of aborting the process.
   if corners_held {
     let faults = t.corner_faults()
@@ -140,6 +131,17 @@ pub fn picture(
     return false
   }
   say("picture: \{path} (\{(w * scale).round().to_int()} × \{(h * scale).round().to_int()})")
+  // Every rule the frame drawn is held to (Tester::audit: room, squeeze, spacing, corners, contrast, words outgrown),
+  // said after it is written, whatever the picture accepts: a picture made for people is looked at by the agent that
+  // made it with what the rules find in it, never by eye alone (still.fail's user, 2026-11-14: a message's words on its
+  // file's card at 0 apart, shown and passed). MBUI_RULES=0 says none.
+  if arg("MBUI_RULES") != "0" {
+    let faults = t.audit()
+    for fault in faults {
+      say("rules: \{fault}")
+    }
+    say("rules: \{faults.length()} found")
+  }
   true
 }
 
