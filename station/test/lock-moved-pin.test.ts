@@ -54,12 +54,12 @@ test("protected after the move: the plane's moved chain offered, not pinned; pin
   assert.equal(t.s2.leftOut(WS), "unpinned");
   t.plane([t.w.first, t.w.moved]);
   assert.equal(t.s2.chain(WS), null, "the plane's word pins nothing");
-  assert.ok(t.s2.movedOffered.has(WS), "offered");
+  assert.ok(t.s2.movedOffered?.has(WS) === true, "offered");
   assert.equal(await pinMoved(t.s2, t.call, WS, t.peers, t.me), true);
   assert.equal(t.s2.chain(WS)?.state?.head, entryHash(t.w.moved), "the chain pinned");
   assert.ok(t.s2.locked(WS)?.state?.stations.has(t.me), "its state in force names this station");
   assert.equal(t.s2.leftOut(WS), null, "in the workspace by its lock");
-  assert.equal(t.s2.movedOffered.has(WS), false, "the offer let go");
+  assert.equal(t.s2.movedOffered?.has(WS) === true, false, "the offer let go");
 });
 
 test("not protected (no statement names it): s0 gives it no body, the state made names it not, nothing pinned", async () => {
@@ -74,7 +74,7 @@ test("not protected (no statement names it): s0 gives it no body, the state made
 test("a chain from the plane that did not move: nothing offered (pinned only where it names this station, as before)", async () => {
   const t = setUp({ protect: true });
   t.plane([t.w.first]);
-  assert.equal(t.s2.movedOffered.has(WS), false, "not offered");
+  assert.equal(t.s2.movedOffered?.has(WS) === true, false, "not offered");
   assert.equal(await pinMoved(t.s2, t.call, WS, t.peers, t.me), false);
   assert.equal(t.s2.chain(WS), null);
 });

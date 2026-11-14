@@ -39,7 +39,7 @@ async function fetched(call: PeerCall, peer: string, ws: string): Promise<{ logs
 /// `peers` gives, names this station (`me`): whether it was. Nothing where a lock of `ws` is pinned here already, where
 /// the chain did not move, or where no station gave what makes a state naming this one.
 export async function pinMoved(cloud: Cloud, call: PeerCall, ws: string, peers: readonly string[], me: string): Promise<boolean> {
-  const entries = cloud.movedOffered.get(ws);
+  const entries = cloud.movedOffered?.get(ws);
   if (entries === undefined || cloud.chain(ws) !== null || cloud.leftOut(ws) !== "unpinned") return false;
   if (!entries.some((e: Entry) => e.kind === "moved")) return false;
   for (const peer of peers) {
@@ -58,9 +58,9 @@ export async function pinMoved(cloud: Cloud, call: PeerCall, ws: string, peers: 
     }
     if (!names) continue;
     // (what changed while it was asked: pinned meanwhile, or the offer let go, changes nothing here)
-    if (cloud.chain(ws) !== null || cloud.movedOffered.get(ws) !== entries) return false;
+    if (cloud.chain(ws) !== null || cloud.movedOffered?.get(ws) !== entries) return false;
     keep(cloud, ws, ws, entries, got.logs, got.bodies);
-    cloud.movedOffered.delete(ws);
+    cloud.movedOffered?.delete(ws);
     return true;
   }
   return false;

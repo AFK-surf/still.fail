@@ -214,7 +214,7 @@ export function followLock(cloud: Cloud, call: PeerCall, after: (ms: number, f: 
     }
     // A joined workspace this station pins no lock of, whose chain the plane brought moved: pinned once a station of it
     // gives what makes a state naming this one (mesh/moved-pin.ts), tried again as a failure is, till it does.
-    for (const j of st.joined ?? []) if (cloud.movedOffered.has(j.workspace)) pin(j.workspace, (j.peers ?? []).map((p: any) => p?.id).filter((id: unknown): id is string => typeof id === "string"));
+    for (const j of st.joined ?? []) if (cloud.movedOffered?.has(j.workspace)) pin(j.workspace, (j.peers ?? []).map((p: any) => p?.id).filter((id: unknown): id is string => typeof id === "string"));
   };
   const pin = (workspace: string, peers: string[]) => {
     const key = `${workspace}|moved`;
