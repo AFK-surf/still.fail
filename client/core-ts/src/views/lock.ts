@@ -49,7 +49,7 @@ import { ofAddress } from "../workspace.ts";
 import { type Device as PersonDevice, type PersonalEnv, type Stated, type Statements, checkChain, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
 import { type Said, bindBytes, bodiesOf, byHash, plan, prevOf } from "../lock-statements.ts";
-import { HAND_OVER_FROM, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, ableBuild, handOverPlan, mayHandOver } from "../lock-handover.ts";
+import { HAND_OVER_FIRST_SECS, HAND_OVER_FROM, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, ableBuild, handOverPlan, mayHandOver } from "../lock-handover.ts";
 import { buildOf, ownBuild } from "../station/oldest.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
@@ -202,6 +202,10 @@ type Part = {
   /// and `lockBodies` records, the person's own log, who would hand over; and the span of this device's clock it
   /// stands for (`spanOf`).
   plan: { entries: readonly Entry[]; logs: unknown; bodies: unknown; log: readonly Entry[]; own: readonly Entry[]; who: string; from: number; until: number; made: HandOverPlan } | null;
+  /// Until when (unix seconds, by this device's clock) the `lock` topic as last made (`lockView`) says what it says by
+  /// the clock alone: the first moment a day count, a device's run out or renewal, a recent device, the state in force
+  /// or the handover's plan would read otherwise. A read that brings nothing new tells the topic only past it (`hold`).
+  shownUntil: number;
   /// Stations that refused this device for the lock, and the lock's head then.
   refused: Map<string, string | null>;
   /// Where the chain moved: the stations whose refusal said this device is left out of the state in force there
@@ -353,7 +357,7 @@ export function live<D extends { exp?: unknown }>(d: D | undefined, at: number):
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ force: null, plan: null, refused: new Map(), left: new Map(), leftApps: new Map(), approved: false, behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null, turn: Semaphore.makeUnsafe(1), forks: new Set(), shown: new Set(), carried: new Set(), handled: new Set(), tries: new Map(), again: new Map(), delivering: { running: false, again: false } }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ force: null, plan: null, shownUntil: -Infinity, refused: new Map(), left: new Map(), leftApps: new Map(), approved: false, behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null, turn: Semaphore.makeUnsafe(1), forks: new Set(), shown: new Set(), carried: new Set(), handled: new Set(), tries: new Map(), again: new Map(), delivering: { running: false, again: false } }));
 
 /// This device's base key known: kept for every workspace.
 const knowBase = (inner: Inner, ws: string, base: string) => {
@@ -1162,7 +1166,7 @@ function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries:
     inner.runner.fork(keepToPerson(inner, ws));
     inner.runner.fork(ownLockFor(inner, ws));
     // The vault's too: whether it is locked, this device confirmed in it, whose vaults are trusted (views/vault.ts).
-    if (same && !made && !told) return;
+    if (same && !made && !told && Math.floor(inner.host.nowMs() / 1000) < p.shownUntil) return;
     lockSeen(inner).touch(`lock ${ws}`, `draft ${ws}`, "prompts");
     inner.views?.vaultChanged(ws);
     // This device not in the lock: it waits, and asks to be approved only by hand (`lock.pair`, its waiting page):
@@ -2488,6 +2492,20 @@ export function lockView(inner: Inner, ws: string): J {
   const waits = force.said === "waiting" && leftIn(inner, ws) === null;
   const sub = inner.workspaces.owner(ws);
   const at = now(inner);
+  // (the first moment after `at` that what is made here reads otherwise by the clock alone: `shownUntil`)
+  let until = Infinity;
+  const upto = (x: number) => {
+    if (Number.isFinite(x) && x > at && x < until) until = x;
+  };
+  // A count of whole days `x - at` (ceil), or `at - x` (floor), changes at its next step.
+  const dayStep = (x: number, ceil: boolean) => upto(ceil ? x - 86400 * (Math.ceil((x - at) / 86400) - 1) : x + 86400 * (Math.floor((at - x) / 86400) + 1));
+  for (const d of f.devices.values()) {
+    if (typeof d?.exp !== "number") continue;
+    upto(d.exp);
+    upto(d.exp - RENEW_SECS);
+    dayStep(d.exp, true);
+  }
+  for (const t of f.added.values()) upto(t + RECENT_SECS);
   const signer = signers.get(inner) ?? null;
   const people = new Map<string, J>(arr(get(v, "members")).map((m) => [m.sub, m]));
   // Its person bound a lock of their own here, and this app is not on it as far as it knows (`own`): what it asks to
@@ -2523,6 +2541,7 @@ export function lockView(inner: Inner, ws: string): J {
     // day, on its way to a station; one the cloud would say of and has not in 31 days, not since.
     const said = told(d);
     const lastSeen = typeof said?.last_seen === "number" ? said.last_seen : null;
+    if (lastSeen !== null) dayStep(lastSeen, false);
     const label = str(said?.label) || d.label || "";
     const used = mine ? t("web-pages.security.thisDevice")
       : lastSeen !== null ? usedText(at - lastSeen)
@@ -2610,6 +2629,17 @@ export function lockView(inner: Inner, ws: string): J {
       .sort((a: J, b: J) => Number(b.showing) - Number(a.showing) || (b.lastSeen ?? -1) - (a.lastSeen ?? -1));
   }
   const upgrade = upgradeOf(inner, ws);
+  // (what the state in force, the handover's plan and the chain's check stand for; when chains are handed over by
+  // themselves here and by whom: src/lock-handover.ts `mayHandOver`)
+  if (p.force !== null && p.force.entries === h?.entries) upto(p.force.until);
+  if (p.plan !== null && p.plan.entries === h?.entries) upto(p.plan.until);
+  const checked = h ? chainChecks.get(h.entries) : undefined;
+  if (checked !== undefined) upto(checked.until);
+  if (HAND_OVER_FROM !== null) {
+    upto(HAND_OVER_FROM);
+    if (h?.entries[0] !== undefined) upto(Math.max(HAND_OVER_FROM, h.entries[0].at) + HAND_OVER_FIRST_SECS);
+  }
+  p.shownUntil = until;
   const out = outText(inner, ws);
   const root = movedHere(inner, ws) && role === "owner" && force.said !== "waiting" ? rootOf(inner, ws) : null;
   const rootText = root !== null && root.sub !== sub ? t("core-misc.lock.rootOnlyPage", { name: root.name }) : null;
