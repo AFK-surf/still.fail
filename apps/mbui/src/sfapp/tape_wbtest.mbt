@@ -86,8 +86,8 @@ test "the layout by the window's width alone, on every screen: what a phone's or
 
 ///|
 /// What shows of the page beside the sidebar in use pressed (the window `w` wide): the page comes over.
-fn page_over(t : @ui.Tester, w : Double) -> Unit {
-  t.tap(w - @sfdesk.tape_shows / 2.0, 400.0)
+fn page_over(t : @ui.Tester, w : Double, y? : Double = 400.0) -> Unit {
+  t.tap(w - @sfdesk.tape_shows / 2.0, y)
   t.run_for(@ui.move_most_ms)
 }
 
@@ -385,8 +385,10 @@ test "on the tape a chat chosen in the sidebar shows beside it, the sidebar stil
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is Chat({ session: "s-c1", .. }))
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
-  // what shows of the page pressed: it comes over
-  page_over(t, 720.0)
+  // what shows of the page pressed: it comes over (pressed clear of a message's ⋯: the pointer left on it, the toggle
+  // gives the composer the keys and the back after it is the composer's, as it was at 400 once a message's parts were
+  // 4 apart again and its ⋯ came there)
+  page_over(t, 720.0, y=480.0)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_true(app.nav.top() is Chat({ session: "s-c1", .. }))
   // the sidebar's toggle (⌘\, its place pressed again, ⌘K's command): nothing folds, nothing moves
