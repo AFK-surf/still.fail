@@ -47,6 +47,13 @@ import type { CardEditPage, CardMessagePage } from "../store/card-outbox.ts";
 
 /// How long a reader with nothing to do is kept.
 const IDLE_MS = 60_000;
+/// What a read is refused with while what it needs is prepared first (`answer` prepares it and asks again): each the
+/// start of such a refusal's words. What answers a read elsewhere (mesh/served.ts) gives such a one back to be read here.
+export const READS_PENDING = [LEGACY_EDITS_PENDING, LEGACY_SAID_PENDING, PAGE_LETTER_PENDING, LAST_MESSAGE_PENDING, SESSION_BINDINGS_PENDING,
+  CC_SESSIONS_PENDING, JOB_NAME_FIRST_PENDING, CARD_POSTS_PENDING, CLOSED_CARDS_PENDING, PEOPLE_TIME_PENDING, TURN_COUNT_PENDING,
+  SAID_PENDING, USAGE_DETAIL_PENDING, USAGE_CHATS_PENDING, REMOTE_RUNS_PENDING, OUTFLOW_CHATS_PENDING, RECENT_CHAT_PENDING,
+  SESSION_LIST_PENDING];
+
 /// A read that waited or took longer than this is logged, with what it was.
 const SLOW_MS = 2_000;
 
