@@ -215,12 +215,19 @@ function listing(inner: Inner, ws: string, held: Held, id: string): string[] {
 }
 
 /// What others' presets were read of each station of a workspace, while the `otherPresets` topic is shown or since.
-type OthersRead = { at: Map<string, PresetRecord[]>; reading: Set<string> };
+/// `reading`: the stations still waited for, each by the read it is waited for in (a later read's is not let go by an
+/// earlier one's deadline).
+type OthersRead = { at: Map<string, PresetRecord[]>; reading: Map<string, number> };
+
+/// How long others' presets wait for a station as a press reads them (`otherPresets`'s `reading`): one linked but slow
+/// or hung no longer holds the press past it; what it says later still comes into the list while it is held.
+export const OTHERS_WAIT_MS = 1500;
 
 export class PresetViews implements Owner {
   readonly #inner: Inner;
   readonly #marks = new Marks();
   readonly #others = new Map<string, OthersRead>();
+  #reads = 0;
 
   constructor(inner: Inner) {
     this.#inner = inner;
@@ -249,15 +256,20 @@ export class PresetViews implements Owner {
   /// Others' presets read again of every station of `ws` reached now, each as it answers.
   readOthers(ws: string): void {
     const inner = this.#inner;
-    const read = this.#others.get(ws) ?? { at: new Map(), reading: new Set() };
+    const read = this.#others.get(ws) ?? { at: new Map(), reading: new Map() };
     this.#others.set(ws, read);
+    const n = ++this.#reads;
+    const done = (address: string) =>
+      Effect.sync(() => {
+        if (read.reading.get(address) !== n) return;
+        read.reading.delete(address);
+        this.#marks.touch(ws);
+      });
     for (const s of stationsOf(inner, ws)) {
       if (!reached(inner, s.address)) continue;
-      read.reading.add(s.address);
-      inner.scheduler.enqueue(s.address, `otherPresets/${s.address}`, Priority.shown, Effect.ensuring(Effect.ignore(this.#readOthersOf(ws, s.address)), Effect.sync(() => {
-        read.reading.delete(s.address);
-        this.#marks.touch(ws);
-      })));
+      read.reading.set(s.address, n);
+      inner.scheduler.enqueue(s.address, `otherPresets/${s.address}`, Priority.shown, Effect.ensuring(Effect.ignore(this.#readOthersOf(ws, s.address)), done(s.address)));
+      inner.runner.fork(Effect.andThen(Effect.sleep(OTHERS_WAIT_MS), done(s.address))); // timer: a deadline on a station's answer
     }
     this.#marks.touch(ws);
   }
@@ -282,7 +294,7 @@ export class PresetViews implements Owner {
 
   /// Others' presets as station `address` of `ws` said them now.
   heard(ws: string, address: string, found: PresetRecord[]): void {
-    const read = this.#others.get(ws) ?? { at: new Map(), reading: new Set() };
+    const read = this.#others.get(ws) ?? { at: new Map(), reading: new Map() };
     this.#others.set(ws, read);
     read.at.set(address, found);
     this.#refreshPicked(ws, found);

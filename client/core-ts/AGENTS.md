@@ -157,7 +157,8 @@ another; the accounts' list's merge across stations and its refills.
 - A station from before (GET /presets/kept answers `no route`) is never PUT to, read and written the old way, and a
   chat on it is opened by the preset's id where it lists it; everywhere else by `presetCopy` of what the device holds.
 - People see their own presets; others' only at a press (`otherPresets`, read as shown, kept in memory but for the one
-  picked). Someone else's is looked at, opened with and copied (`preset.copy`), never changed from here.
+  picked; its `reading` waits for a station `OTHERS_WAIT_MS` at most, so one slow or hung holds the press no longer,
+  what it says later joining the list while it is held). Someone else's is looked at, opened with and copied (`preset.copy`), never changed from here.
 
 ## A lock held here
 

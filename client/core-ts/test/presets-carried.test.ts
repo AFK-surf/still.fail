@@ -22,8 +22,10 @@ import { handlers } from "../src/core/execute.ts";
 import { CoreError } from "../src/error.ts";
 import { GONE_KEPT, type KeptRecord, type PresetRecord, canonical, isGone } from "../src/preset-records.ts";
 import { TABLE, heldOf, starredKeys, starsHeld } from "../src/presets-kept.ts";
-import { PresetViews, carryAll, install, likedKey, whoIn } from "../src/views/presets.ts";
+import { OTHERS_WAIT_MS, PresetViews, carryAll, install, likedKey, whoIn } from "../src/views/presets.ts";
 import { overview } from "./station-fixture.ts";
+import { Runner } from "../src/runtime.ts";
+import { FakeHost } from "../src/testing.ts";
 
 const WS = "ws";
 const ME = { sub: "s1", email: "a@x.com", name: "阿一" };
@@ -98,7 +100,10 @@ function before(id: string): Rig {
 }
 
 /// One device of `who`'s, reaching `stations` (those `up`): its kept records, a scheduler and forks run by `settle`.
-function device(who: { sub: string; email: string; name: string }, stations: Rig[]) {
+function device(who: { sub: string; email: string; name: string }, stations: Rig[], live = false) {
+  // (the core's fibers on a test's clock: a deadline waits for it, never for the wall's)
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
   const records = new Map<string, unknown>();
   const up = new Set(stations.map((s) => s.address));
   const queue: Effect.Effect<unknown, unknown>[] = [];
@@ -136,20 +141,26 @@ function device(who: { sub: string; email: string; name: string }, stations: Rig
         t.topic === "stations" ? { ok: stations.map((s) => ({ id: s.id, name: s.id.toUpperCase(), station: s.address, online: up.has(s.address) })) } : t.topic === "overview" ? { ok: lists.get(`overview`) } : undefined,
       inUse: () => false,
     },
-    scheduler: { enqueue: (_l: string, _k: string, _p: number, e: Effect.Effect<unknown, unknown>) => void queue.push(e) },
-    runner: { fork: (e: Effect.Effect<unknown, unknown>) => void queue.push(e) },
+    // (`live`: what is enqueued runs as the core runs it, each a fiber of its own, the test moving the clock on)
+    scheduler: { enqueue: (_l: string, _k: string, _p: number, e: Effect.Effect<unknown, unknown>) => void (live ? runner.fork(Effect.ignore(e)) : queue.push(e)) },
+    runner: { fork: (e: Effect.Effect<unknown, unknown>) => runner.fork(e) },
     workspaces: { owner: () => who.sub },
     accounts: { list: () => [who] },
     host: { nowMs: () => clock.now },
     router: { owners: [] as unknown[] },
   } as unknown as Inner;
   const views: PresetViews = install(inner);
+  /// What is queued run in turn, and what was forked let run (the clock moved on a few milliseconds), until none is left.
   const settle = async () => {
-    while (queue.length > 0) await Effect.runPromise(Effect.ignore(queue.shift()!));
+    do {
+      while (queue.length > 0) await Effect.runPromise(Effect.ignore(queue.shift()!));
+      await host.time.pass(20);
+    } while (queue.length > 0);
   };
   const also = () => (inner.stations as unknown as { also: { read: (a: string) => Effect.Effect<void, CoreError>; event: (a: string, n: string, d: unknown) => void }[] }).also;
   return {
     inner,
+    host,
     views,
     records,
     asked,
@@ -464,4 +475,27 @@ test("a preset of nobody said yet, deleted on one station by someone else's app 
   const at = (s: Rig) => s.presets.kept(null, { sub: ME.sub, email: ME.email }).find((r) => r.id === old.id);
   assert.deepEqual([at(s2)?.owner, at(s2) !== undefined && isGone(at(s2)!)], [ME.sub, true], "and on S2");
   assert.deepEqual([at(s1)?.owner, at(s1) !== undefined && isGone(at(s1)!)], [ME.sub, true], "S1's of nobody replaced by A's");
+});
+
+test("others' presets wait for a slow station only so long: the press is let go, what it says later still joins the list", async () => {
+  const a = station("a");
+  const slow = station("b");
+  a.presets.add(null, { name: "Bo's on a", dirs: [] }, YOU.email, YOU.sub);
+  slow.presets.add(null, { name: "Bo's on b", dirs: [] }, YOU.email, YOU.sub);
+  // (b linked and reached, its answer held until the test lets it go)
+  let letGo = () => {};
+  const gate = new Promise<void>((resolve) => (letGo = resolve));
+  const answer = slow.answer;
+  slow.answer = (viewer) => (method, path, body) =>
+    path === "/presets/others" ? Effect.flatMap(Effect.promise(() => gate), () => answer(viewer)(method, path, body)) : answer(viewer)(method, path, body);
+  const d = device(ME, [a, slow], true);
+  const others = () => (d.views.compute({ topic: "otherPresets", scope: WS }) as { ok: { reading: boolean; presets: { name: string }[] } }).ok;
+  d.views.start({ topic: "otherPresets", scope: WS });
+  await d.host.time.pass(10);
+  assert.deepEqual([others().reading, others().presets.map((p) => p.name)], [true, ["Bo's on a"]], "a answered, b still waited for");
+  await d.host.time.pass(OTHERS_WAIT_MS);
+  assert.deepEqual([others().reading, others().presets.map((p) => p.name)], [false, ["Bo's on a"]], "b no longer holds the press");
+  letGo();
+  await d.host.time.pass(10);
+  assert.deepEqual([others().reading, others().presets.map((p) => p.name).sort()], [false, ["Bo's on a", "Bo's on b"]], "b's joins the list as it comes");
 });
