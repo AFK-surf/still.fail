@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [059d395fb](https://github.com/AFK-surf/monoid/commit/059d395fbd56c640d83268da1843419dbe633cd3) mbui: what nothing asks for is not drawn on a span | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.67 | 115.89 |
 | [0ad0b4e91](https://github.com/AFK-surf/monoid/commit/0ad0b4e9125680fe2355b738580d3b645205f6dd) mbui: skip clean root layout and resting spare bin | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.6 | 107.15 |
 | [98dcf55f5](https://github.com/AFK-surf/monoid/commit/98dcf55f5aefba7f861612b673777fb5e6d865d1) mbui: a pick said to leave holds its place for wha | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.6 | 107.15 |
 | [65eb7a7e2](https://github.com/AFK-surf/monoid/commit/65eb7a7e2016b7784cde553da3ae9d4152824814) mbui: an agent's history opens in the side panel o | 2 | 2.74 | 11.67 | 31.31 | 41.96 | 27.92 | 53.63 | 96.6 | 107.15 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [9f35adb9e](https://github.com/AFK-surf/monoid/commit/9f35adb9ea7f320bedea545262bbf469726ab14d) mbui: the new chat page's answered agent at work f | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.37 | 111.2 |
 | [5a114683e](https://github.com/AFK-surf/monoid/commit/5a114683e899f682316f3331785b651faac35ddd) app,views: fit agent KPI figures to tile width and | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.49 | 112.91 |
 | [ba25bbd60](https://github.com/AFK-surf/monoid/commit/ba25bbd6019449485485a55dec2e7bf1470bd00e) mbui: every screen's switches pressed over a late  | 1.99 | 2.72 | 11.59 | 31.2 | 41.66 | 27.81 | 53.38 | 96.68 | 106.47 |
-| [b4992a650](https://github.com/AFK-surf/monoid/commit/b4992a650bfa5082655beb1abd8fcc7d7b4346fb) fix(mbui): the folder picker and 连接's filter switc | 1.99 | 2.72 | 11.59 | 31.2 | 41.66 | 27.81 | 53.38 | 96.5 | 112.9 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [059d395fb](https://github.com/AFK-surf/monoid/commit/059d395fbd56c640d83268da1843419dbe633cd3) mbui: what nothing asks for is not drawn on a span | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
 | [0ad0b4e91](https://github.com/AFK-surf/monoid/commit/0ad0b4e9125680fe2355b738580d3b645205f6dd) mbui: skip clean root layout and resting spare bin | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
 | [98dcf55f5](https://github.com/AFK-surf/monoid/commit/98dcf55f5aefba7f861612b673777fb5e6d865d1) mbui: a pick said to leave holds its place for wha | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.16 |
 | [65eb7a7e2](https://github.com/AFK-surf/monoid/commit/65eb7a7e2016b7784cde553da3ae9d4152824814) mbui: an agent's history opens in the side panel o | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.39 |
