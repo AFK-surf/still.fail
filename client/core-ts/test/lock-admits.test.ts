@@ -17,7 +17,7 @@ import { key, signed } from "../../../station/test/lock-world-sim.ts";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, WEB_DEVICE_SECS, entryHash, next, shortCode } from "../src/lock.ts";
 import { bodyHash, inForce, wsTag } from "../src/lock-moved.ts";
-import { added, enrolled, held, inForceOf, lockView, outOf, read, roster } from "../src/views/lock.ts";
+import { added, enrolled, held, inForceOf, lockView, offOwnLock, outOf, read, roster } from "../src/views/lock.ts";
 import * as format from "../src/format.ts";
 import { hooks } from "../src/core/execute.ts";
 import { dialer, ownLogFor, serveTrusted, tryOne } from "../src/views/pair.ts";
@@ -61,7 +61,7 @@ type Asked = { at: string; method: string; path: string; body: string };
 /// `root: "alice"`: alice's log (r1) is the root and says those, and s1 as `mine` (`none`: not at all). `view`: the
 /// workspace's view's members (the control plane's word of each one's role). `own`: s1's own log, this device on it
 /// (`on`), none at all (`none`), or one of another device of theirs this device is not on (`other`).
-async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: "owner" | "admin" | "member" | "none"; view?: { sub: string; email: string; role: string }[]; own?: "on" | "none" | "other" } = {}) {
+async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: "owner" | "admin" | "member" | "none"; view?: { sub: string; email: string; role: string }[]; own?: "on" | "none" | "other"; keyMade?: number } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const me = person("s1", MINE, ME);
@@ -83,6 +83,11 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
     ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME),
     ...(o.w2 === "moved" ? { w2: genesis("w2", signer, true, [{ key: B, name: "b" }], g.keys, ME) } : o.w2 === "chain" ? { w2: genesis("w2", signer, true, [], g.keys, ME) } : {}),
   }), (host) => {
+    // (`keyMade`: a key of its own made before, on no log, as an app that made one and never began)
+    if (o.keyMade !== undefined) {
+      host.storage.set("personal-signer-id", new TextEncoder().encode(key(o.keyMade).id));
+      host.secure.set("personal-signer", { value: seedOf(o.keyMade), user: true });
+    }
     if (o.own !== undefined && o.own !== "on") return;
     host.storage.set(`personal-lock-${Buffer.from("s1").toString("hex")}`, new TextEncoder().encode(JSON.stringify(me.chain)));
     host.storage.set("personal-signer-id", new TextEncoder().encode(me.k.id));
@@ -478,6 +483,29 @@ test("a device on its person's own log brings that log where the chain moved: in
   assert.equal((await w.run(ownLogFor(w.inner, []))).ok, null, "none where no workspace it waits in moved");
 });
 
+// A newcomer's first app where the chain moved brings a log of its own, begun as it asks to be let in (`ownLogFor`). It is
+// begun as before a move: with nobody asked where this device made no key of its own before, else the person asked in
+// this device's words (2026-11-14, the locks' end to end after #6102: asked 「批准你的新设备」, the approver's words, as
+// its key was made then).
+test("a device with no log of its person's where the chain moved: one begun as it asks to be let in, nobody asked, its key made then", async () => {
+  const w = await setUp({ own: "none" });
+  const before = w.asked();
+  const log = await w.run(ownLogFor(w.inner, ["ws"]));
+  assert.equal(log.error, undefined, log.error?.message);
+  assert.equal((log.ok as Entry[] | null)?.[0]?.kind, "genesis", "a log begun");
+  assert.equal(w.inner.adb.personal().standing("s1"), "member", "this device on it");
+  assert.deepEqual(w.r.host.secureAsked.slice(before), [], "nobody asked");
+});
+
+test("a device with no log of its person's where the chain moved, its key made before: one begun, the person asked once in this device's words", async () => {
+  const w = await setUp({ own: "none", keyMade: 7444 });
+  const before = w.asked();
+  const log = await w.run(ownLogFor(w.inner, ["ws"]));
+  assert.equal(log.error, undefined, log.error?.message);
+  assert.equal(w.inner.adb.personal().standing("s1"), "member", "this device on it");
+  assert.deepEqual(w.r.host.secureAsked.slice(before).map((a) => a.reason), ["确认这是你的设备"], "asked once, in this device's words");
+});
+
 test("a person's own new app device (the personal exchange) where the chains moved: put on their own log alone, and so let into every moved workspace of theirs, nothing signed on a chain", async () => {
   const w = await setUp({ w2: "moved" });
   const k = key(7009);
@@ -570,20 +598,34 @@ async function asking(own: "on" | "none" | "other") {
   return { ...w, pair, dialled, ALICE_APP };
 }
 
-test("the new device whose person has no log of their own: it begins one as it asks, the person asked once for that and not again for the asking, and its hello carries it", async () => {
+// (asked once for the log before the lead's decision of 2026-11-14: after a move a device asks exactly where it would
+// before one, so a log begun with a key made then asks nobody; where its key was made before, the tests above)
+test("the new device whose person has no log of their own: it begins one as it asks, nobody asked (its key made then), and its hello carries it", async () => {
   const w = await asking("none");
   const before = w.asked();
   const { error, hello } = await w.pair();
   assert.equal(error, undefined, error?.message);
   const personal = w.inner.adb.personal();
   assert.equal(personal.standing("s1"), "member", "a log of s1's own begun, this device on it");
-  assert.equal(w.asked() - before, 1, "the person asked once");
+  assert.equal(w.asked() - before, 0, "nobody asked");
   assert.ok(hello !== null, `alice's app dialled (${w.dialled.join(", ")})`);
   assert.deepEqual(hello.workspaces?.map((x) => x.ws), ["ws"], "asking in ws");
   assert.equal(hello.personal, undefined, "not the personal exchange");
   const log = hello.log ?? [];
   assert.equal(log.length > 0 && entryHash(log[0]!), entryHash(personal.entries("s1")[0]!), "its hello carries the log begun");
   assert.equal((log[0]?.body as { sub?: string; device?: { key?: string } } | undefined)?.device?.key, personal.keyId(), "this device's key its genesis's");
+});
+
+// A device not let in where the chain moved is given no state, so what it knows of whom to ask is its person's own log
+// (`standing`): one it is not on is what it joins, as before a move where they bound it (views/lock.ts `offOwnLock`). Its
+// page says so (`me.ownLock`, the pair shown being that log's) and its refusal names its own trusted devices alone
+// (2026-11-14, the locks' end to end after #6102: J's page never said `ownLock`, and its refusal sent it to an admin too).
+test("the new device whose person has a log it is not on, where the chain moved: its page says it joins that log (so its refusal names its own trusted devices, no admin)", async () => {
+  const w = await asking("other");
+  const lock = await w.r.watch({ topic: "lock", workspace: "ws" });
+  const me = (await lock()).me;
+  assert.equal(me?.ownLock, true, `joins its own log: ${JSON.stringify(me)}`);
+  assert.equal(offOwnLock(w.inner, "ws"), true);
 });
 
 test("the new device whose person has a log it is not on: nothing asked in the moved workspace, no log begun; once on that log (the personal exchange) it asks there with it, nobody asked", async () => {

@@ -42,7 +42,7 @@ import type { SpanContext } from "../trace.ts";
 import { get, hex, isObject, sha256, utf8 } from "../util.ts";
 import { type Checked, checkLock, lockChain, signerIn } from "../vault/lock-check.ts";
 import { AGAIN_MOST, againOf, hashOf, keep, links } from "../lock-keep.ts";
-import { tookOut, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
+import { tookOut, tookOutMoved, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
@@ -1407,6 +1407,14 @@ export function offOwnLock(inner: Inner, ws: string): boolean {
   const sub = inner.workspaces.owner(ws);
   const h = held(inner, ws);
   if (sub === null || !h?.head || !inner.host.appKeys) return false;
+  // Where the chain moved a device not let in is given no state to read whom it names: its person having a log of their
+  // own it is not on (`standing`, of their stations' GET /lock/person) is all it knows, and is enough, as only their own
+  // app devices put it on that log and so let it in (2026-11-14, the locks' end to end after #6102: its page and refusal
+  // said to ask its trusted devices or an admin, and nothing on it said its request was its own log's).
+  if (movedHere(inner, ws) && !stateOf(inner, ws, h.entries).devices.has(part(inner, ws).base ?? bases.get(inner) ?? "")) {
+    const standing = inner.adb.personal().standing(sub);
+    if (standing !== "none" && standing !== "member") return true;
+  }
   return stateOf(inner, ws, h.entries).persons.has(sub) && !onBoundPerson(inner, ws);
 }
 
@@ -1519,6 +1527,15 @@ export function takeOffBound(inner: Inner, sub: string, id: string): Effect.Effe
   return Effect.gen(function* () {
     const within = asked(inner);
     for (const [ws, owner] of inner.workspaces.owned()) {
+      // Where the chain moved, their own log is all there is to take it off: the vaults of theirs that held a key for
+      // it are keyed anew as part of what the person asked, the box key read once if it must be, as a removal did
+      // before a move (`Lock.append`'s `tookOut`). Left for the key's next unsealing, a device of theirs approved or
+      // begun anew after it was not shown the vault at all, nor given its key (2026-11-14, the locks' end to end after
+      // #6102: a vault never opened again stayed hidden on every new device, and setting one up made an empty 个人).
+      if (owner === sub && movedHere(inner, ws)) {
+        tookOutMoved(inner, ws, id);
+        continue;
+      }
       const at = owner === sub ? signsBound(inner, ws) : null;
       const d = at === null ? undefined : live(fold(at.h.entries).devices.get(id), now(inner));
       if (at === null || d === undefined || d.sub !== sub || d.kind !== "app" || id === at.base) continue;
@@ -2762,8 +2779,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         // refused (the stations let their app devices in on that lock alone), so it asks to join that one instead, the
         // same code shown on a device on it (2026-11-10: a new phone approved here went on being refused, 「已经批过了啊」).
         // (where the chain moved, its person having a log of their own this device is not on: so too, `waitingIn`)
-        const standing = inner.adb.personal().standing(sub);
-        if (offOwnLock(inner, c.workspace) || (movedHere(inner, c.workspace) && inner.host.appKeys === true && standing !== "none" && standing !== "member")) {
+        if (offOwnLock(inner, c.workspace)) {
           const sub = inner.workspaces.owner(c.workspace);
           if (sub !== null) return yield* inner.adb.run({ kind: "personalJoin", sub });
         }
@@ -3595,6 +3611,9 @@ function webMoved(inner: Inner, sub: string, ws: string, id: string, kind: "web"
     const f = stateOf(inner, ws);
     const d = f.devices.get(id);
     if (d === undefined) return Effect.fail(CoreError.invalid("no such device in the lock"));
+    // (an app device of this person's own, renewed: its log lets it in with no expiry, so nothing is to be done;
+    // 2026-11-14, the locks' end to end after #6102 had it refused as another member's)
+    if (d.kind !== "web" && kind === "web" && d.sub === sub) return Effect.succeed(null);
     // (another's app device: theirs alone to take off or renew, on their own log; an owner takes the person out)
     if (d.kind !== "web") return Effect.fail(new CoreError("lock_moved", t("core-misc.lock.othersDevice"), 409));
     if (d.sub !== sub || f.persons.get(sub) !== inner.adb.personal().root(sub)) return Effect.fail(new CoreError("forbidden", t("core-misc.lock.notAllowed")));

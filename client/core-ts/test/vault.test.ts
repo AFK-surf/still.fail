@@ -2452,6 +2452,31 @@ test("a moved workspace: a device taken off its person's own log, no workspace e
   r.core.close();
 });
 
+// The person taking one of their devices off on this one (设置 › 安全's 移除, its own log the only place to take it off
+// once the chain moved): the vaults that held its key keyed anew as part of it, as before a move, the box key read once;
+// so a device of theirs approved or begun anew after it is shown the vault and given its key (2026-11-14, the locks' end
+// to end after #6102: left for the key's next unsealing, a vault never opened again stayed hidden on every new device).
+test("a moved workspace: the person taking another device of theirs off on this one, the vault locked here: asked for the removal and the box key once each, the vault keyed anew without it at once, so a device begun anew is shown it", async () => {
+  const r = await movedRig(true, { phone: true });
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const id = vaults().vaults[0].id;
+  const old = r.st.vaults.get(id)!;
+  const asked = r.host.secureAsked.length;
+  await r.ask("lock.removeDevice", { device: r.phone.hex });
+  await r.settle();
+  assert.equal(inForceOf(r.core.inner, "ws").f.devices.has(r.phone.hex), false, "the phone off");
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.epoch, v.keys.map((k) => k.cert.device)], [old.epoch + 1, ["ab".repeat(32)]], "keyed anew without the phone");
+  assert.deepEqual(r.host.secureAsked.slice(asked).filter((a) => a.key === BOX_KEY).length, 1, `the box key read once: ${JSON.stringify(r.host.secureAsked.slice(asked))}`);
+  assert.equal(vaults().vaults[0]?.waits, undefined, "not waiting");
+  // (what a device begun anew lacks: what of the state took the vault's version; the version now is the state's own)
+  r.core.inner.data.forgetRecord("vaultTook", "ws");
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.settle();
+  assert.deepEqual(vaults().vaults.map((x: any) => x.id), [id], "shown");
+  r.core.close();
+});
+
 test("a moved workspace: a device started anew after a device was taken off (nothing kept of the state that took the vault) shows no waiting vault and asks nobody", async () => {
   const r = await movedRig(true, { phone: true });
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });

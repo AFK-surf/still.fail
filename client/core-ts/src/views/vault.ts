@@ -987,6 +987,14 @@ export function tookOut(inner: Inner, ws: string, id: string): void {
   at.add(id);
 }
 
+/// A device this one took off its person's own log at their asking where `ws`'s chain moved (views/lock.ts
+/// `takeOffBound`): as `tookOut`, and the vaults that held a key for it keyed anew now (`rekeyGone`), the state in force
+/// having no workspace entry whose taking would run it.
+export function tookOutMoved(inner: Inner, ws: string, id: string): void {
+  tookOut(inner, ws, id);
+  if (able(inner)) inner.runner.fork(Effect.ignore(new Vaults(inner, ws, null).rekeyGone(), { log: "Unhandled", message: "vaults keyed anew" }));
+}
+
 /// The keys unsealed here given to the members' devices set up that have none (the vaults of this person's own):
 /// forked, nothing asked of the person (`Vaults.giveKept`).
 function giveKept(inner: Inner, ws: string): void {

@@ -224,14 +224,21 @@ export class Device {
   sealed: boolean;
   /// A web page's, not an app's (no keys of an app, nothing sealed).
   page: boolean;
+  /// The release it says it is (`client.device`'s `build`, `0.1.<n>`, said with each request to a station, which keeps
+  /// the highest a device of a lock said: station/src/mesh/device-builds.ts); none: `0.1.0`, a build from the sources,
+  /// taken as one that takes a moved workspace (client/core-ts src/lock-handover.ts `ableBuild`). An app of a release
+  /// before MOVED_FROM_BUILD on a lock holds its workspace's handover back for as long as it is used, as a person's
+  /// app not updated does.
+  build: string | undefined;
   /// Each request of its core's to a station whose answer it read to its end (`watchRequests`), across its restarts,
   /// as this driver heard of it (`at`: its clock then); and the waits for one (`answered`).
   answers: { station: string; method: string; path: string; at: number }[] = [];
   #heard = new Set<() => void>();
-  constructor(name: string, user = "alice", opts: { sealed?: boolean; page?: boolean } = {}) {
+  constructor(name: string, user = "alice", opts: { sealed?: boolean; page?: boolean; build?: string } = {}) {
     this.name = name;
     this.user = user;
     this.page = opts.page ?? false;
+    this.build = opts.build;
     this.sealed = !this.page && (opts.sealed ?? true);
     this.child = this.#fork(false);
   }
@@ -267,7 +274,7 @@ export class Device {
   #about(): J {
     return this.page
       ? { client: "still.fail e2e", app: "web", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" }
-      : { client: "still.fail e2e", app: "desktop", model: this.name };
+      : { client: "still.fail e2e", app: "desktop", model: this.name, ...(this.build === undefined ? {} : { build: this.build }) };
   }
   /// The app quit and started again: the same data, a core anew (what it was subscribed to forgotten). `sealed: true`
   /// on a device from before: the app updated, its host sealing now; left out, as it was.

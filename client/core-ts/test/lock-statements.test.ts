@@ -316,6 +316,21 @@ test("an owner taking another member's app device off: refused in words that say
   assert.deepEqual(w.said(), [], "nothing signed");
 });
 
+// An app device of the person's own renewed where the chain moved: its log lets it in with no expiry (the rules' state
+// says none for an app), so there is nothing to renew and nothing to refuse. Before, it was refused in the words for
+// another member's device (2026-11-14, the locks' end to end on main after #6102: "B lock.renew: 此设备属于其他成员…").
+test("renewing this person's own app device where the chain moved: done with nothing to do (an app does not run out there); not refused as another's, nobody asked, nothing signed", async () => {
+  const w = await setUp();
+  const mine = inForceOf(w.inner, "ws").f.devices.get(ME);
+  assert.equal(mine?.kind, "app", "this device's app in the state");
+  assert.equal(mine?.exp, undefined, "with no expiry");
+  const before = w.asked();
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.renew", { workspace: "ws", device: ME }), catch: (e) => e as CoreError }));
+  assert.equal(out.error, undefined, out.error?.message);
+  assert.equal(w.asked(), before, "nobody asked");
+  assert.deepEqual(w.said(), [], "nothing signed");
+});
+
 test("no station of the workspace answering: pending, its stations named, in effect once one answers, nothing lost", async () => {
   const w = await setUp();
   w.st.silent = true;
