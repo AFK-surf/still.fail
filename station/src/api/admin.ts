@@ -143,7 +143,9 @@ export class Admin {
       read: async (r, op, args) => {
         try {
           const signal = r.method === "GET" || (r.method === "POST" && READS.test(r.path)) ? r.signal : undefined;
-          return json(200, await this.readers.read(op, args, r.lang, { background: r.background === true, signal }));
+          const options = { background: r.background === true, signal };
+          // (as bytes, passed on as the reader gave them; a test's stand-in for the readers may give text alone)
+          return json(200, "readBytes" in this.readers ? await this.readers.readBytes(op, args, r.lang, options) : await (this.readers as Readers).read(op, args, r.lang, options));
         } catch (e) {
           return error(e instanceof HttpError ? e.status : 500, (e as Error).message);
         }

@@ -63,9 +63,13 @@ type Asked = {
   background: boolean;
   at: number;
   took: number;
-  resolve: (text: string) => void;
+  resolve: (text: Text) => void;
   reject: (error: Error) => void;
 };
+
+/// A read's answer: its text, or its bytes as the MoonBit reader gave them (never decoded where they are only passed on:
+/// `readBytes`).
+type Text = string | Buffer;
 
 /// A line of reads and the readers that answer it, at most `size` of them, the first read first. `room`: bulk reads leave
 /// one of them for a chat read (what devices ask).
@@ -266,7 +270,8 @@ export class Readers {
         // read 40 MB of a transcript in 10 s on a station short of memory (2026-11-03), every write and read waiting on the
         // disk meanwhile.
         if (asked.background) line.rested = now + (now - asked.took);
-        if (answer.text !== undefined) {
+        const text = answer.body ?? answer.text;
+        if (text !== undefined) {
           const session = answer.prepareUpJobs;
           if (session !== undefined && !this.preparingUpJobs.has(session)) {
             this.preparingUpJobs.add(session);
@@ -280,7 +285,7 @@ export class Readers {
               if (!this.closed) log.warn("readers", "preparing workspace up jobs failed", { error: (error as Error).message });
             }).finally(() => { this.preparingWorkspaceUpJobs = false; });
           }
-          asked.resolve(answer.text);
+          asked.resolve(text);
         }
         else asked.reject(new HttpError(answer.status ?? 500, answer.error ?? "read failed"));
       }
@@ -327,7 +332,16 @@ export class Readers {
   /// page): after every other read waiting, and one at a time. In line with the rest, a sweep's pages (1 to 4 s each on
   /// a station, 2 to 7 MB of a Codex transcript read: 2026-11-03) held the sidebar, a session opened and the rest 10 s and
   /// more behind them, four at once from each device.
-  read(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false, signal }: { told?: boolean; background?: boolean; signal?: AbortSignal } = {}): Promise<string> {
+  read(op: string, args: unknown, lang: Ask["lang"], options: { told?: boolean; background?: boolean; signal?: AbortSignal } = {}): Promise<string> {
+    return this.answer(op, args, lang, options).then((text) => typeof text === "string" ? text : text.toString());
+  }
+
+  /// A read's answer as bytes, for what only passes it on (a device's request): the MoonBit reader's as it gave them.
+  readBytes(op: string, args: unknown, lang: Ask["lang"], options: { told?: boolean; background?: boolean; signal?: AbortSignal } = {}): Promise<Buffer> {
+    return this.answer(op, args, lang, options).then((text) => typeof text === "string" ? Buffer.from(text) : text);
+  }
+
+  private answer(op: string, args: unknown, lang: Ask["lang"], { told = false, background = false, signal }: { told?: boolean; background?: boolean; signal?: AbortSignal } = {}): Promise<Text> {
     if (op === "usage") return this.usageRead(args, lang, told, signal);
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
     if (op === "outflowChats") return this.outflowChatsRead(args, lang, told, signal);
@@ -483,7 +497,7 @@ export class Readers {
     return this.covered(this.ccIndex.readyLatest(sessions, signal), signal);
   }
 
-  private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
+  private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<Text> {
     while (!this.closed) {
       try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
       catch (error) {
@@ -584,7 +598,7 @@ export class Readers {
     }
   }
 
-  private async usageRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+  private async usageRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<Text> {
     const viewer = (args as { viewer?: InWorkspace | null } | null)?.viewer ?? null;
     const history = (args as { history?: unknown } | null)?.history === true;
     while (!this.closed) {
@@ -609,7 +623,7 @@ export class Readers {
     throw new HttpError(502, "station stopping");
   }
 
-  private async outflowUsageRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+  private async outflowUsageRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<Text> {
     const ws = (args as { ws?: InWorkspace } | null)?.ws;
     const viewer: InWorkspace = ws !== null && typeof ws === "object" && typeof ws.workspace === "string"
       ? { workspace: ws.workspace, home: ws.home === true } : { workspace: "\u0000home", home: true };
@@ -624,7 +638,7 @@ export class Readers {
     throw new HttpError(502, "station stopping");
   }
 
-  private async outflowChatsRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+  private async outflowChatsRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<Text> {
     const ws = (args as { ws?: InWorkspace } | null)?.ws;
     const viewer: InWorkspace = ws !== null && typeof ws === "object" && typeof ws.workspace === "string"
       ? { workspace: ws.workspace, home: ws.home === true } : { workspace: "\u0000home", home: true };
@@ -639,7 +653,7 @@ export class Readers {
     throw new HttpError(502, "station stopping");
   }
 
-  private async recentChatRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+  private async recentChatRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<Text> {
     const a = args as { ws?: unknown; home?: unknown } | null;
     const ws = a?.ws, home = a?.home;
     if ((ws !== null && typeof ws !== "string") || (home !== null && typeof home !== "string"))
@@ -655,7 +669,7 @@ export class Readers {
     throw new HttpError(502, "station stopping");
   }
 
-  private async sessionListRead(args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
+  private async sessionListRead(args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<Text> {
     while (!this.closed) {
       try { return await this.saidRead("sessions", args, lang, told, background, signal); }
       catch (error) {
@@ -668,7 +682,7 @@ export class Readers {
   }
 
   /// `first`: before the reads waiting (CHECKPOINT).
-  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<string> {
+  private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<Text> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     if (signal?.aborted) return Promise.reject(cancelled());
     const history = this.mbReader !== null && HISTORY.has(op);

@@ -85,6 +85,23 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 }
 
 ///|
+/// An answer said to the pool: its text, where it has one, as its bytes after its head line (`bytes` their count, read
+/// as they are by read/mb-reader.ts), not as a JSON string in it: the station's Node neither unescapes nor decodes it, and
+/// gives it on as it is (on a station of 2342 chats, the shared chat list's 583 KB took its main thread 2.6 ms a read
+/// to unescape and decode, of the 4.1 ms of CPU each took there).
+fn say_answer(host : @host.Host, answer : Json) -> Unit {
+  guard answer is Object(fields) && fields.get("text") is Some(String(text)) else {
+    host.say(answer.stringify())
+    return
+  }
+  let body = @utf8.encode(text)
+  let head = Map::from_iter(fields.iter().filter(kv => kv.0 != "text"))
+  head["bytes"] = Json::number(body.length().to_double())
+  host.say(Json::object(head).stringify())
+  host.out(body)
+}
+
+///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
   ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage", "timeline", "transcriptState", "sessionPlace", "changed"].contains(
@@ -900,7 +917,7 @@ fn main {
         host.say(ready.stringify())
         while host.line() is Some(line) {
           if line != "" {
-            host.say(reader.answer(line).stringify())
+            say_answer(host, reader.answer(line))
           }
         }
       })

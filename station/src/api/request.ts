@@ -62,7 +62,8 @@ export const param = (r: Request, name: string) => r.query.find(([k]) => k === n
 
 const JSON_HEADERS = { "content-type": "application/json", "cache-control": "no-store" };
 
-export const json = (status: number, text: string): Answer => ({ status, headers: { ...JSON_HEADERS }, body: Buffer.from(text) });
+/// (`text` as bytes: a read's as the MoonBit reader gave them, pool.ts `readBytes`)
+export const json = (status: number, text: string | Buffer): Answer => ({ status, headers: { ...JSON_HEADERS }, body: typeof text === "string" ? Buffer.from(text) : text });
 export const error = (status: number, message: string): Answer => json(status, JSON.stringify({ error: message }));
 
 /// A path segment as the pages send it (a + is a +).
