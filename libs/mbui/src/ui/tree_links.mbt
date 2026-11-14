@@ -230,7 +230,7 @@ pub fn runs_link_piece(
 
 ///|
 /// The part of node `v`'s words in pieces (View::words_runs) from `from` until `to` (in their text's terms, as
-/// View::runs_marks says them), as a piece of `v` (View::beside's `piece`, ListPlace::bring_piece's): the box round all
+/// View::runs_marks says them), as a piece of `v` (View::beside's `piece`, View::sought's): the box round all
 /// its pieces of line, laid out as wide as `v` is laid out as it is asked, in its own terms. None where its words hold
 /// no such part now (none, or said again shorter). Its words laid out once each time it is asked.
 pub fn runs_piece(v : @view.View, from : Int, to : Int) -> (Double, Double) -> (Double, Double, Double, Double)? {

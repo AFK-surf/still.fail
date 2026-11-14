@@ -173,6 +173,23 @@ fn runs_text(runs : Array[@ui.Run]) -> String {
 }
 
 ///|
+/// What of words in pieces `runs` a go-to brings before the eyes (View::sought): the first part a find marks with its
+/// line (`found`, found_marks': the one the reader is at, or a search's first), else the passage a quote that led here
+/// quoted (`passage`, however lit it is now), where they have it; none else.
+pub fn sought_part(runs : Array[@ui.Run], found : Array[@view.RunsMark], passage : String) -> (Int, Int)? {
+  for m in found {
+    if m.line != 0L {
+      return Some((m.from, m.to))
+    }
+  }
+  if passage == "" {
+    None
+  } else {
+    find_passage(runs_text(runs), passage)
+  }
+}
+
+///|
 /// The passage `lit` says (its words, and the ground it is drawn on as lit now: a quote's that led here, as it flashes;
 /// "" or a clear ground none) where words in pieces `runs` have it (find_passage: its spaces and line breaks aside), a
 /// ground a line round at its two ends (the theme's Md corner), as a passage picked in a message is drawn; none where

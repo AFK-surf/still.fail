@@ -151,7 +151,9 @@ fn chat_goes_to(
         }
         jump.went = (target, off)
         jump.put.set(1)
-        place.bring(k, offset=@sfbase.kept_place_under(off, c))
+        // (what was meant in it before the eyes too, where it lies low in a long message: a search's words, a quote's
+        // passage; not back where the reader was: ListPlace::bring's `sought`, what its words mark: View::sought)
+        place.bring(k, offset=@sfbase.kept_place_under(off, c), sought=back is None)
         // (back where the reader was: nothing of it shown; a search's: its words marked, nothing flashing; else it
         // flashes, from now)
         if back is None {
