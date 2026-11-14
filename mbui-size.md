@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [c40e7b9c2](https://github.com/AFK-surf/monoid/commit/c40e7b9c2c06b0c0fdb5bb1b5dbe9ea0c2ad2c27) lock: a workspace with a member who only uses the  | 2.03 | 2.79 | 12.03 | 31.92 | 44.66 | 28.52 | 55.91 | 98.34 | 112.1 |
 | [06809c991](https://github.com/AFK-surf/monoid/commit/06809c991dcae9b24bef5bac28a67255bbdad96d) station: a person's message with quotes written by | 2.03 | 2.79 | 12.03 | 31.92 | 44.65 | 28.52 | 55.91 | 98.7 | 114.74 |
 | [754cfc5d0](https://github.com/AFK-surf/monoid/commit/754cfc5d0997511b1703a2ac0d9a055667b972ed) mbui: words on a halo (View::words_halo), blurred  | 2.03 | 2.79 | 12.03 | 31.92 | 44.65 | 28.52 | 55.91 | 98.55 | 114.74 |
 | [37844aadc](https://github.com/AFK-surf/monoid/commit/37844aadcfab0680ab733f3b370088a1fbb0128b) station: names given by hand and a card let go wri | 2.03 | 2.79 | 11.99 | 31.89 | 44.56 | 28.5 | 55.85 | 98.44 | 114.08 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [76d5976b2](https://github.com/AFK-surf/monoid/commit/76d5976b26223d234e8a38ae985146807aece46a) app: a chat's page made as nodes lets go with the  | 2.01 | 2.75 | 11.83 | 31.68 | 43.75 | 28.3 | 55.43 | 97.03 | 108.8 |
 | [2d8076f76](https://github.com/AFK-surf/monoid/commit/2d8076f7619bd042d184db62c7b65aa4f8ab23a3) mbui app: the search field tucked over the chats'  | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.27 | 55.38 | 97.04 | 115.29 |
 | [0c831587d](https://github.com/AFK-surf/monoid/commit/0c831587d9eaca5e7e89a65cc52d0b94a0fab48d) mbui app: the chat's page made as nodes reads whet | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.27 | 55.38 | 97.04 | 115.29 |
-| [bfba44a09](https://github.com/AFK-surf/monoid/commit/bfba44a09ea918bee595e5912c61c6c0586d3a14) mbui app: a quote's card pressed on the chat's pag | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.26 | 55.38 | 96.7 | 115.89 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [c40e7b9c2](https://github.com/AFK-surf/monoid/commit/c40e7b9c2c06b0c0fdb5bb1b5dbe9ea0c2ad2c27) lock: a workspace with a member who only uses the  | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
 | [06809c991](https://github.com/AFK-surf/monoid/commit/06809c991dcae9b24bef5bac28a67255bbdad96d) station: a person's message with quotes written by | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
 | [754cfc5d0](https://github.com/AFK-surf/monoid/commit/754cfc5d0997511b1703a2ac0d9a055667b972ed) mbui: words on a halo (View::words_halo), blurred  | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
 | [37844aadc](https://github.com/AFK-surf/monoid/commit/37844aadcfab0680ab733f3b370088a1fbb0128b) station: names given by hand and a card let go wri | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [76d5976b2](https://github.com/AFK-surf/monoid/commit/76d5976b26223d234e8a38ae985146807aece46a) app: a chat's page made as nodes lets go with the  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.12 |
 | [2d8076f76](https://github.com/AFK-surf/monoid/commit/2d8076f7619bd042d184db62c7b65aa4f8ab23a3) mbui app: the search field tucked over the chats'  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.12 |
 | [0c831587d](https://github.com/AFK-surf/monoid/commit/0c831587d9eaca5e7e89a65cc52d0b94a0fab48d) mbui app: the chat's page made as nodes reads whet | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.38 |
-| [bfba44a09](https://github.com/AFK-surf/monoid/commit/bfba44a09ea918bee595e5912c61c6c0586d3a14) mbui app: a quote's card pressed on the chat's pag | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.38 |
