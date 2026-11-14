@@ -53,7 +53,12 @@
 #        through the app: its length and size once ready, (Linux) the middle of its first frame as the canvas drew it
 #        red and its frames' times read, played to its end, a frame grabbed (kitdemo's MBUI_PLAYCHECK,
 #        src/kitdemo/gallery/playcheck.mbt); on Android, sent behind as it plays and brought back: paused as it went
-#   scripts/host_contract.sh linux badge        (a session bus) the number on the app's icon as a dock is told it
+#   scripts/host_contract.sh windows stream     test/host/streamcheck-av1.obu (a second of AV1, 64 × 48 at 10 frames a
+#        second) decoded by the host's stream as an MP4's samples are handed over (kitdemo's MBUI_STREAMCHECK,
+#        src/kitdemo/gallery/streamcheck.mbt): where the system has its AV1 decoder (the AV1 Video Extension), its last
+#        frame shown at its size; with MBUI_NO_AV1=1, as a machine without it: the app told so first, every frame let go
+#        and none shown, the run ending as ever
+#   scripts/host_contract.sh linux badge       (a session bus) the number on the app's icon as a dock is told it
 #        (Canonical's LauncherEntry: its Update signal) and given it when it asks (Query) (kitdemo's MBUI_BADGECHECK,
 #        src/kitdemo/gallery/badgecheck.mbt)
 #   scripts/host_contract.sh linux links        (a session bus: dbus-run-session's) the app started with a link of its
@@ -758,6 +763,25 @@ INSTALL
         *"PLAYCHECK paused"*) echo "play contract ($H): sent behind as it played, ${l##*PLAYCHECK }" ;;
         *) echo "play contract ($H): sent behind as it played, it said \"${l:-nothing}\", not paused"; tail -30 $O/play-behind.log; exit 1 ;;
       esac
+    fi ;;
+  stream)
+    [ "$H" = windows ] || { echo "stream contract: Windows' (the only host that decodes AV1)"; exit 1; }
+    vars="MBUI_STREAMCHECK=$(base64 < test/host/streamcheck-av1.obu | tr -d '\n\r') MBUI_STREAMCHECK_SIZE=64x48"
+    # (no decoder: said so, and the frames let go, none shown)
+    run "MBUI_NO_AV1=1 $vars" $O/stream-none.log || true
+    have=$(grep -a "STREAMCHECK" $O/stream-none.log | sed 's/.*STREAMCHECK/STREAMCHECK/' | tr -d '\r' | paste -sd'|' -)
+    want="STREAMCHECK here 0|STREAMCHECK shown none"
+    [ "$have" = "$want" ] || { echo "stream contract (windows, no AV1): the host said \"$have\", not \"$want\""; tail -20 $O/stream-none.log; exit 1; }
+    echo "stream contract (windows, no AV1): $have"
+    run "$vars" $O/stream.log || true
+    have=$(grep -a "STREAMCHECK" $O/stream.log | sed 's/.*STREAMCHECK/STREAMCHECK/' | tr -d '\r' | paste -sd'|' -)
+    if [ "${have%%|*}" = "STREAMCHECK here 0" ]; then
+      # (a machine without the AV1 Video Extension: nothing more to look at here)
+      echo "stream contract (windows): no AV1 decoder on this machine, $have"
+    else
+      want="STREAMCHECK here 1|STREAMCHECK shown 64x48 at 9"
+      [ "$have" = "$want" ] || { echo "stream contract (windows): the host said \"$have\", not \"$want\""; tail -20 $O/stream.log; exit 1; }
+      echo "stream contract (windows): $have ($(grep -a 'win: streams: AV1\|win: stream .*AV1' $O/stream.log | tr -d '\r' | paste -sd';' -))"
     fi ;;
   fontscale)
     [ "$H" = windows ] || { echo "fontscale contract: Windows'"; exit 1; }

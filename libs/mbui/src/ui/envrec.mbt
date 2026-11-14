@@ -9,7 +9,7 @@
 //   ENV {"motion":0|1,"glass":0|1,"dark":0|1,"inset":0|1,"h264":0|1,"feed":0|1,"layer":0|1|2,"ime":H,"copy":0|1,"font":S}
 //       motion reduced, transparency reduced (glass solid), dark, the window's inset, H.264 decoded (a tape without it:
 //       not), its decoder driven from here (stream_feed.mbt; a tape without it: not), a stream shown by the host's video
-//       layer (stream.mbt; 2 one that shows it as sRGB; a tape without it: not), H.265 decoded ("h265":1, said only then), the soft
+//       layer (stream.mbt; 2 one that shows it as sRGB; a tape without it: not), H.265 decoded ("h265":1, said only then), AV1 decoded ("av1":1, said only then), the soft
 //       keyboard's height (points; each step of its motion a line), the system saying a copy itself (device.mbt), the
 //       system's size of words (font_scale; said only when not 1, a line without it: 1)
 
@@ -46,6 +46,9 @@ fn env_at_frame() -> Unit {
   // (said only where it does: a tape without it, not)
   if h265_here() {
     m["h265"] = Json::number(1.0)
+  }
+  if av1_here() {
+    m["av1"] = Json::number(1.0)
   }
   let fs = font_scale()
   if fs != 1.0 {
@@ -150,6 +153,7 @@ fn replay_env(f : FakeHost, line : String) -> Unit {
   f.h264 = on("h264", f.h264)
   f.audio_here = on("audio", false)
   f.h265_here = on("h265", false)
+  f.av1_here = on("av1", false)
   f.stream_feeds = on("feed", f.stream_feeds)
   f.stream_layers = on("layer", f.stream_layers)
   f.stream_layers_srgb = match m.get("layer") {

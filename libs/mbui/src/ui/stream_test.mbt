@@ -190,6 +190,53 @@ test "H.265: its config handed over and its frames decoded where the host decode
 }
 
 ///|
+/// An av1C as an MP4's box holds it: marker and version, profile 0 level 8, 8-bit 4:2:0, then its sequence header OBU
+/// (type 1, its size after it).
+let av1c : Bytes = b"\x81\x08\x0c\x00\x0a\x0b\x00\x00\x00\x24\xc4\xff\xdf\x00\x68\x02\x10"
+
+///|
+test "AV1: asked before it is played; its config handed over and its frames decoded where the host decodes it, let go where it does not" {
+  let v = screen()
+  // (no AV1 decoder: an app plays it another way, and a stream given it lets its frames go)
+  assert_false(@ui.av1_here())
+  v.s.av1(av1c, 1280, 720)
+  v.s.frame(b"\x12\x00\x32\x05\x10", true, 5.0)
+  assert_eq(v.t.stream_fed(v.s.id()), [])
+  v.t.draw()
+  assert_eq(v.acks, [5.0])
+  v.t.set_av1(true)
+  assert_true(@ui.av1_here())
+  // (not H.265's, nor H.264's: either may be had without it)
+  assert_false(@ui.h265_here())
+  v.s.av1(av1c, 1280, 720)
+  v.s.frame(b"\x32\x03\x30\x00\x00", false, 6.0)
+  v.s.frame(b"\x12\x00\x32\x05\x10", true, 7.0)
+  v.s.frame(b"\x32\x03\x30\x00\x00", false, 8.0)
+  assert_eq(v.t.stream_fed(v.s.id()), [
+    "av1 1280x720 av1c=17", "frame key=true ts=7 bytes=5", "frame key=false ts=8 bytes=5",
+  ])
+  v.t.stream_shows(v.s.id(), 7.0, 1280, 720)
+  v.t.stream_shows(v.s.id(), 8.0, 1280, 720)
+  v.t.draw()
+  assert_eq(v.acks, [5.0, 6.0, 7.0, 8.0])
+  assert_eq(v.s.shown_at(), Some(8.0))
+  assert_eq(v.s.size(), Some((1280, 720)))
+  // a seek: emptied, and nothing taken till the next key frame
+  v.s.flush()
+  v.s.frame(b"\x32\x03\x30\x00\x00", false, 9.0)
+  v.s.frame(b"\x12\x00\x32\x05\x10", true, 10.0)
+  assert_eq(v.t.stream_fed(v.s.id()).filter(fn(l) { l.has_prefix("frame") }).last(), Some(
+    "frame key=true ts=10 bytes=5",
+  ))
+  // H.264 again after it: as before, whether or not AV1 is decoded
+  v.t.set_av1(false)
+  v.s.h264(avcc, 640, 360)
+  v.s.frame(b"\x00\x00\x00\x01\x65", true, 11.0)
+  assert_eq(v.t.stream_fed(v.s.id()).last(), Some("frame key=true ts=11 bytes=5"))
+  v.s.close()
+}
+
+///|
 test "closed: the host told, its frames out no longer awaited, nothing more said or drawn" {
   let v = screen(h264=false)
   v.s.jpeg(b"\xff\xd8", 1.0)

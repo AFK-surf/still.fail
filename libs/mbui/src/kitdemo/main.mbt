@@ -28,6 +28,8 @@ fn main {
   let imaged = @ui.env("MBUI_IMAGECHECK")
   // MBUI_PLAYCHECK=<a video, base64>: played by the host's player, its bytes read through the app (playcheck.mbt)
   let play = @ui.env("MBUI_PLAYCHECK")
+  // MBUI_STREAMCHECK=<AV1's OBUs, base64>: decoded by the host's stream, the picture shown said (streamcheck.mbt)
+  let streamed = @ui.env("MBUI_STREAMCHECK")
   // MBUI_BADGECHECK=<n>: the number on the app's icon set, for the desktop's side to be asked (badgecheck.mbt)
   let badge = @ui.env("MBUI_BADGECHECK")
   // MBUI_SECRETCHECK=kept|taken|left|end: a secret copied, the app ending, for the clipboard to be read (secretcheck.mbt)
@@ -70,6 +72,8 @@ fn main {
       @gallery.pdf_check_run(c, pdf)
     } else if play != "" {
       @gallery.play_check_run(c, play)
+    } else if streamed != "" {
+      @gallery.stream_check_run(c, streamed)
     } else if badge != "" {
       @gallery.badge_check_run(c, badge)
     } else if secret != "" {

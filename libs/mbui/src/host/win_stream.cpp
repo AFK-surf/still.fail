@@ -1,7 +1,10 @@
 // Streams on Windows (src/hostapi/stream.mbt, @ui's Stream): a stream's work on the thread pool, one piece after another
 // in the order it came: JPEG frames decoded by WIC; H.264 (and H.265, where Windows has its decoder and the GPU decodes
 // it) by the system's decoder (Media Foundation's: its config an avcC or an hvcC, its access units in AVCC, each made
-// Annex B for it, a key frame after its parameter sets), low latency (a frame out as it goes in).
+// Annex B for it, a key frame after its parameter sets), low latency (a frame out as it goes in). AV1 (where Windows has
+// its decoder: the AV1 Video Extension's) by the same way: its config an av1C or its OBUs, its temporal units handed
+// over as they are (OBUs with their sizes), a key frame after the config's sequence header where it has none of its
+// own; 8-bit 4:2:0 only (what the decoder gives of a 10-bit picture is not NV12: no decoder started, its frames let go).
 //
 // On the GPU where it can (the renderer's device, made with video support: win_render.cpp): the decoder given a DXGI
 // device manager decodes in hardware into Direct3D surfaces, each frame copied off its surface into an NV12 texture of
@@ -88,16 +91,18 @@ struct StreamFrame {
   Gpu gpu;                        // NV12 on the GPU (gpu.tex NULL: none)
 };
 
-// A piece of a stream's work: a JPEG frame, a config (an avcC or an hvcC, the picture's size), an access unit or its
-// decoder emptied (a flush: `key` 1 drained first)
+// A piece of a stream's work: a JPEG frame, a config (an avcC, an hvcC or an av1C, the picture's size), an access unit
+// or its decoder emptied (a flush: `key` 1 drained first)
 enum { JOB_JPEG, JOB_CONFIG, JOB_FRAME, JOB_FLUSH };
+// what a config is of
+enum { CODEC_H264, CODEC_HEVC, CODEC_AV1 };
 struct StreamJob {
   int kind;
   double ts;
   uint8_t *data;
   size_t len;
   int key, w, h;
-  int hevc;       // a config's: an hvcC (H.265)
+  int codec;       // a config's: CODEC_*
   uint64_t route;  // a frame's: the route it came by (mb_stream_route_take), 0 the app's
   int hidden;      // a frame's: decoded for those after it, never shown (mb_host_stream_frame_shown's `show` 0)
 };
@@ -111,7 +116,8 @@ struct Fed {
 };
 
 // A stream's decoder (its config's, started anew with each and as it fails; the stream's work's alone): the system's
-// H.264 or H.265; the config's parameter sets in Annex B, put before each key frame; its NAL lengths' size; whether it
+// H.264, H.265 or AV1 (`codec`); the config's parameter sets in Annex B (AV1's: its OBUs as they are, `seq` whether a
+// sequence header is among them), put before each key frame; its NAL lengths' size (AV1's: none); whether it
 // waits for a key frame; the next frame's count; what was fed it, oldest first; the config's size; the picture it gives
 // (NV12: its size as shown, its rows' count, its colours: BT.709, video range unless it says); whether it decodes on
 // the GPU (given the device manager: its frames Direct3D surfaces)
@@ -126,7 +132,7 @@ struct H264 {
   int nfed, cap_fed;
   UINT32 cw, ch, w, h, rows;
   int bt601, full;
-  int hevc, gpu, streaming;
+  int codec, seq, gpu, streaming;
 };
 
 // a few of a stream's NV12 textures kept to be decoded into again
@@ -331,10 +337,10 @@ static int gpu_decodes(const GUID &profile) {
   return 0;
 }
 
-// The system's H.265 decoder (Windows' HEVC Video Extensions, where installed: a decoder found by what it takes, not by
-// a class of its own), NULL none.
-static IMFTransform *hevc_decoder(void) {
-  MFT_REGISTER_TYPE_INFO in = {MFMediaType_Video, MFVideoFormat_HEVC};
+// The system's decoder of `sub` (MFVideoFormat_HEVC: Windows' HEVC Video Extensions; MFVideoFormat_AV1: its AV1 Video
+// Extension; where installed: a decoder found by what it takes, not by a class of its own), NULL none.
+static IMFTransform *decoder_of(const GUID &sub) {
+  MFT_REGISTER_TYPE_INFO in = {MFMediaType_Video, sub};
   IMFActivate **found = NULL;
   UINT32 n = 0;
   IMFTransform *t = NULL;
@@ -681,7 +687,7 @@ static int h264_kept_take(H264 *d, UINT32 w, UINT32 h) {
 }
 
 static void h264_stop(H264 *d) {
-  if (d->dec && d->gpu && d->streaming && !d->hevc) h264_keep(d);
+  if (d->dec && d->gpu && d->streaming && d->codec == CODEC_H264) h264_keep(d);
   else if (d->dec) d->dec->Release();
   d->dec = NULL;
   d->streaming = 0;
@@ -754,6 +760,49 @@ static int hvcc_read(H264 *d, const uint8_t *a, size_t n) {
   return sets >= 3;
 }
 
+// Whether `a` (n bytes) are whole OBUs (AV1's low overhead format, each but the last with its size) and whether a
+// sequence header (type 1) is among them: -1 not OBUs, else 1 or 0.
+static int obus_seq(const uint8_t *a, size_t n) {
+  int seq = 0;
+  for (size_t at = 0; at < n;) {
+    uint8_t head = a[at];
+    if (head & 0x80) return -1;
+    int type = (head >> 3) & 15, ext = (head >> 2) & 1, sized = (head >> 1) & 1;
+    at += 1 + ext;
+    if (at > n) return -1;
+    size_t len = n - at;
+    if (sized) {
+      len = 0;
+      int i = 0;
+      for (;; i++) {
+        if (i == 8 || at >= n) return -1;
+        uint8_t b = a[at++];
+        len |= (size_t)(b & 0x7f) << (7 * i);
+        if (!(b & 0x80)) break;
+      }
+      if (len > n - at) return -1;
+    }
+    if (type == 1) seq = 1;
+    at += len;
+  }
+  return seq;
+}
+
+// An AV1 config: an av1C (AV1-ISOBMFF 2.3: its marker and version 0x81, three bytes more, then its configOBUs) or
+// OBUs alone (a sequence header), kept as they are to put before a key frame that has none: 0 neither
+static int av1c_read(H264 *d, const uint8_t *a, size_t n) {
+  if (n >= 4 && a[0] == 0x81) a += 4, n -= 4;
+  int seq = obus_seq(a, n);
+  if (seq < 0) return 0;
+  d->nal_len = 0;
+  d->seq = seq;
+  free(d->head);
+  d->head = (uint8_t *)malloc(n ? n : 1);
+  if (n) memcpy(d->head, a, n);
+  d->nhead = n;
+  return 1;
+}
+
 // the decoder's output NV12, and what it says of it (its size as shown, its rows as given, its colours): 1 set
 static int h264_output(H264 *d) {
   for (DWORD i = 0;; i++) {
@@ -779,8 +828,11 @@ static int h264_output(H264 *d) {
   }
 }
 
-// The decoder for the config's picture, w × h, from the next key frame (H.264's, or H.265's: d->hevc), decoding on the
-// GPU where it will (given the device manager before its types: d->gpu), else in software: 1 started.
+static const char *codec_name(int codec) { return codec == CODEC_AV1 ? "AV1" : codec == CODEC_HEVC ? "H.265" : "H.264"; }
+
+// The decoder for the config's picture, w × h, from the next key frame (H.264's, H.265's or AV1's: d->codec), decoding
+// on the GPU where it will (given the device manager before its types: d->gpu), else in software: 1 started. None (the
+// system has no such decoder, or it takes no such picture): 0, its frames let go as they come (h264_frame).
 static int h264_start(Stream *s, UINT32 w, UINT32 h) {
   H264 *d = s->h264;
   d->need_key = 1;
@@ -791,7 +843,7 @@ static int h264_start(Stream *s, UINT32 w, UINT32 h) {
     if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return 0;
     mf_started = 1;
   }
-  if (!d->hevc && !InterlockedCompareExchange(&s->no_gpu, 0, 0) && h264_kept_take(d, w, h)) {
+  if (d->codec == CODEC_H264 && !InterlockedCompareExchange(&s->no_gpu, 0, 0) && h264_kept_take(d, w, h)) {
     d->gpu = d->streaming = 1;
     fprintf(stdout, "win: stream %d: H.264 %ux%u decoded on the GPU (a decoder kept)\n", s->id, w, h);
     fflush(stdout);
@@ -800,8 +852,8 @@ static int h264_start(Stream *s, UINT32 w, UINT32 h) {
   IMFMediaType *in = NULL;
   IMFAttributes *at = NULL;
   HRESULT hr = S_OK;
-  if (d->hevc) {
-    d->dec = hevc_decoder();
+  if (d->codec != CODEC_H264) {
+    d->dec = decoder_of(d->codec == CODEC_AV1 ? MFVideoFormat_AV1 : MFVideoFormat_HEVC);
     if (!d->dec) hr = MF_E_TOPO_CODEC_NOT_FOUND;
   } else {
     hr = CoCreateInstance(CLSID_CMSH264DecoderMFT, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&d->dec));
@@ -819,7 +871,10 @@ static int h264_start(Stream *s, UINT32 w, UINT32 h) {
   }
   if (SUCCEEDED(hr)) hr = MFCreateMediaType(&in);
   if (SUCCEEDED(hr)) hr = in->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-  if (SUCCEEDED(hr)) hr = in->SetGUID(MF_MT_SUBTYPE, d->hevc ? MFVideoFormat_HEVC : MFVideoFormat_H264);
+  if (SUCCEEDED(hr))
+    hr = in->SetGUID(MF_MT_SUBTYPE, d->codec == CODEC_AV1    ? MFVideoFormat_AV1
+                                    : d->codec == CODEC_HEVC ? MFVideoFormat_HEVC
+                                                             : MFVideoFormat_H264);
   if (SUCCEEDED(hr)) hr = MFSetAttributeSize(in, MF_MT_FRAME_SIZE, w, h);
   if (SUCCEEDED(hr)) hr = in->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
   if (SUCCEEDED(hr)) hr = d->dec->SetInputType(0, in, 0);
@@ -834,13 +889,13 @@ static int h264_start(Stream *s, UINT32 w, UINT32 h) {
   if (SUCCEEDED(hr)) hr = d->dec->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
   if (SUCCEEDED(hr)) hr = d->dec->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
   if (FAILED(hr)) {
-    fprintf(stdout, "win: stream %d: no %s decoder (%08lx)\n", s->id, d->hevc ? "H.265" : "H.264", (unsigned long)hr);
+    fprintf(stdout, "win: stream %d: no %s decoder (%08lx)\n", s->id, codec_name(d->codec), (unsigned long)hr);
     fflush(stdout);
     h264_stop(d);
     return 0;
   }
   d->streaming = 1;
-  fprintf(stdout, "win: stream %d: %s %ux%u decoded %s\n", s->id, d->hevc ? "H.265" : "H.264", w, h,
+  fprintf(stdout, "win: stream %d: %s %ux%u decoded %s\n", s->id, codec_name(d->codec), w, h,
           d->gpu ? "on the GPU" : "in software");
   fflush(stdout);
   return 1;
@@ -854,7 +909,7 @@ static void h264_broken(Stream *s, HRESULT hr) {
   fed_dropped(s);
   say(s, "b");
   // (not to be taken up again, and on the GPU not released either: h264_keep)
-  if (d->gpu && !d->hevc) d->dec = NULL;
+  if (d->gpu && d->codec == CODEC_H264) d->dec = NULL;
   h264_stop(d);
   h264_start(s, d->cw, d->ch);
 }
@@ -1001,9 +1056,13 @@ static void h264_config(Stream *s, StreamJob *j) {
   H264 *d = s->h264;
   fed_dropped(s);
   h264_stop(d);
-  d->hevc = j->hevc;
-  if (!(j->hevc ? hvcc_read(d, j->data, j->len) : avcc_read(d, j->data, j->len))) {
-    fprintf(stdout, "win: stream %d: its config is no %s\n", s->id, j->hevc ? "hvcC" : "avcC");
+  d->codec = j->codec;
+  int read = j->codec == CODEC_AV1    ? av1c_read(d, j->data, j->len)
+             : j->codec == CODEC_HEVC ? hvcc_read(d, j->data, j->len)
+                                      : avcc_read(d, j->data, j->len);
+  if (!read) {
+    fprintf(stdout, "win: stream %d: its config is no %s\n", s->id,
+            j->codec == CODEC_AV1 ? "av1C" : j->codec == CODEC_HEVC ? "hvcC" : "avcC");
     fflush(stdout);
     return;
   }
@@ -1031,8 +1090,15 @@ static void h264_frame(Stream *s, StreamJob *j) {
     return let_go(s, j->ts, j->route, j->hidden);
   }
   size_t k = 0;
-  if (j->key) memcpy(p, d->head, d->nhead), k = d->nhead;
-  for (size_t at = 0; at + d->nal_len <= j->len;) {
+  if (d->codec == CODEC_AV1) {
+    // (a temporal unit as it is; a key frame with no sequence header of its own after the config's)
+    if (j->key && d->seq && obus_seq(j->data, j->len) == 0) memcpy(p, d->head, d->nhead), k = d->nhead;
+    memcpy(p + k, j->data, j->len);
+    k += j->len;
+  } else if (j->key) {
+    memcpy(p, d->head, d->nhead), k = d->nhead;
+  }
+  for (size_t at = 0; d->codec != CODEC_AV1 && at + d->nal_len <= j->len;) {
     size_t n = 0;
     for (int i = 0; i < d->nal_len; i++) n = (n << 8) | j->data[at + i];
     at += d->nal_len;
@@ -1112,7 +1178,7 @@ static int h265_decoder_here(void) {
   here = 0;
   if (!gpu_decodes(D3D11_DECODER_PROFILE_HEVC_VLD_MAIN)) return 0;
   HRESULT ci = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-  IMFTransform *t = hevc_decoder();
+  IMFTransform *t = decoder_of(MFVideoFormat_HEVC);
   if (t) {
     IMFAttributes *at = NULL;
     UINT32 aware = 0;
@@ -1122,6 +1188,34 @@ static int h265_decoder_here(void) {
   }
   if (SUCCEEDED(ci)) CoUninitialize();
   fprintf(stdout, "win: streams: H.265 %s\n", here ? "decoded on the GPU" : "not decoded here");
+  fflush(stdout);
+  return here;
+}
+
+// Whether AV1 is decoded here: the system has its decoder (the AV1 Video Extension, from the Store; none without it).
+// On the GPU where it decodes AV1's profile 0 (given the device manager as a stream starts: h264_start), else in
+// software, the decoder's own: a recording's picture, not a screen's live, so not the GPU's alone as H.265 is. Asked
+// once. MBUI_NO_AV1=1: none, as a machine without the extension (the streams' contract: the app's way past it).
+static int av1_decoder_here(void) {
+  static int here = -1;
+  if (here >= 0) return here;
+  const char *no = getenv("MBUI_NO_AV1");
+  if (no && *no && *no != '0') {
+    fprintf(stdout, "win: streams: AV1 not decoded here (MBUI_NO_AV1)\n");
+    fflush(stdout);
+    return here = 0;
+  }
+  if (!mf_started) {
+    if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return here = 0;
+    mf_started = 1;
+  }
+  HRESULT ci = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+  IMFTransform *t = decoder_of(MFVideoFormat_AV1);
+  here = t != NULL;
+  if (t) t->Release();
+  if (SUCCEEDED(ci)) CoUninitialize();
+  int gpu = here && video_here() && dxgi_manager && gpu_decodes(D3D11_DECODER_PROFILE_AV1_VLD_PROFILE0);
+  fprintf(stdout, "win: streams: AV1 %s\n", !here ? "not decoded here (no AV1 Video Extension)" : gpu ? "decoded on the GPU" : "decoded in software");
   fflush(stdout);
   return here;
 }
@@ -1522,7 +1616,14 @@ void mb_host_stream_hevc(int32_t id, moonbit_bytes_t hvcc, int32_t w, int32_t h)
   Stream *s = stream_of(id);
   if (!s) return;
   s->direct_at = -1;
-  queue_job(s, {JOB_CONFIG, 0, NULL, 0, 0, w, h, 1, 0}, hvcc);
+  queue_job(s, {JOB_CONFIG, 0, NULL, 0, 0, w, h, CODEC_HEVC, 0}, hvcc);
+}
+
+void mb_host_stream_av1(int32_t id, moonbit_bytes_t av1c, int32_t w, int32_t h) {
+  Stream *s = stream_of(id);
+  if (!s) return;
+  s->direct_at = -1;
+  queue_job(s, {JOB_CONFIG, 0, NULL, 0, 0, w, h, CODEC_AV1, 0}, av1c);
 }
 
 void mb_host_stream_frame(int32_t id, moonbit_bytes_t data, int32_t key, double ts) {
@@ -1969,5 +2070,8 @@ void mb_host_stream_pointer_at(int32_t id, double x, double y, int32_t shown) {
 
 // H.265 where the GPU decodes it through the system's decoder (h265_decoder_here): the station asked for it first.
 int32_t mb_host_h265_here(void) { return h265_decoder_here(); }
+
+// AV1 where the system has its decoder (av1_decoder_here).
+int32_t mb_host_av1_here(void) { return av1_decoder_here(); }
 
 }  // extern "C"

@@ -305,6 +305,8 @@ struct FakeHost {
   mut h264 : Bool
   /// whether it decodes H.265 (Tester::set_h265; a run's ENV line)
   mut h265_here : Bool
+  /// whether it decodes AV1 (Tester::set_av1; a run's ENV line)
+  mut av1_here : Bool
   /// whether its H.264 decoder is driven from here (stream_feed.mbt: Tester::set_stream_feeds; a run's ENV line)
   mut stream_feeds : Bool
   /// whether a stream may be shown by a system video layer of the host's (stream.mbt: Tester::set_stream_layers; a

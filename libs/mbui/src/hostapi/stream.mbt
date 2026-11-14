@@ -17,7 +17,8 @@
 // Hosts: Android (Streams.java: MediaCodec onto a SurfaceTexture, driven by the framework, copied into a texture of the
 // frame's size as it is shown; JPEG by BitmapFactory), macOS and iOS (apple_stream.m: VideoToolbox into Metal-compatible pixel buffers;
 // JPEG by ImageIO), the browser (web/host.js: WebCodecs' VideoDecoder where there is one; JPEG by createImageBitmap),
-// Windows (win_stream.cpp: H.264 by Media Foundation's decoder, where the system has it; JPEG by WIC), Linux (linux_stream.c: H.264 by GStreamer's
+// Windows (win_stream.cpp: H.264 by Media Foundation's decoder, where the system has it, H.265 and AV1 by the system's
+// own where installed; JPEG by WIC), Linux (linux_stream.c: H.264 by GStreamer's
 // decodebin, live, where it has a decoder of it; JPEG by gdk-pixbuf).
 //
 // A frame decoded and not shown (`stream_frame_shown`: what a seek decodes up to its picture) and a decoder emptied
@@ -120,6 +121,18 @@ pub fn h265_here() -> Bool { st_h265_here() != 0 }
 /// A config for H.265: its hvcC and the picture's size, as `stream_h264`'s; its access units go to `stream_frame`
 /// (each NAL after its length). Only where `h265_here`.
 pub fn stream_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit { st_hevc(id, hvcc, w, h) }
+
+///|
+/// Whether this host decodes AV1 (8-bit 4:2:0: a recording's picture). Asked before an AV1 stream is opened: where it
+/// does not (Windows without the AV1 Video Extension, every other host so far) the app plays it another way.
+pub fn av1_here() -> Bool { st_av1_here() != 0 }
+
+///|
+/// A config for AV1: its av1C (AV1-ISOBMFF's AV1CodecConfigurationRecord, as an MP4's `av1C` box holds it after its
+/// header) or its OBUs alone (a sequence header), and the picture's size, as `stream_h264`'s; its temporal units go to
+/// `stream_frame` as an MP4's samples hold them (OBUs, each with its size; no temporal delimiter needed), a key frame
+/// with no sequence header of its own given the config's. Only where `av1_here`. Windows' alone so far.
+pub fn stream_av1(id : Int, av1c : Bytes, w : Int, h : Int) -> Unit { st_av1(id, av1c, w, h) }
 
 ///|
 /// Whether the host plays a stream's 48 kHz stereo PCM16 system audio.

@@ -228,6 +228,8 @@ pub(open) trait Host {
   st_direct(Self, Int, Double, Double, Int) -> Unit = _
   st_h265_here(Self) -> Int = _
   st_hevc(Self, Int, Bytes, Int, Int) -> Unit = _
+  st_av1_here(Self) -> Int = _
+  st_av1(Self, Int, Bytes, Int, Int) -> Unit = _
   st_open(Self) -> Int = _
   st_h264(Self, Int, Bytes, Int, Int) -> Unit = _
   st_frame(Self, Int, Bytes, Int, Double) -> Unit = _
@@ -3288,3 +3290,15 @@ fn st_h265_here() -> Int { current.val.st_h265_here() }
 
 ///|
 fn st_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit { current.val.st_hevc(id, hvcc, w, h) }
+
+///|
+impl Host with st_av1_here(_) { 0 }
+
+///|
+impl Host with st_av1(_, _, _, _, _) { () }
+
+///|
+fn st_av1_here() -> Int { current.val.st_av1_here() }
+
+///|
+fn st_av1(id : Int, av1c : Bytes, w : Int, h : Int) -> Unit { current.val.st_av1(id, av1c, w, h) }

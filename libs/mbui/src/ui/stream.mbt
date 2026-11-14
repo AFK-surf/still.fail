@@ -1,6 +1,6 @@
 // A picture the host decodes frame by frame, drawn by the app as an image (still.fail's remote screens: its Android
 // app's remote/Decoders.kt and ScreenSession.kt): the app hands it a sender's frames, H.264 (`h264`, a config, then
-// `frame`s) or JPEG (`jpeg`), and draws it where it likes (`Ctx::stream`), under and over what it paints, faded,
+// `frame`s; H.265's `hevc` and AV1's `av1` the same, where the host decodes them) or JPEG (`jpeg`), and draws it where it likes (`Ctx::stream`), under and over what it paints, faded,
 // frosted, zoomed and panned as any picture. Not a native view: nothing of it is the system's but the decoding.
 //
 // The sender sends a few frames ahead of the last one the app acknowledged, so each frame comes back through `shown`
@@ -59,6 +59,8 @@ pub struct Stream {
   priv mut h264 : Bool
   /// (its config H.265's: `hevc`)
   priv mut hevc : Bool
+  /// (its config AV1's: `av1`)
+  priv mut av1 : Bool
   priv mut cw : Int
   priv mut ch : Int
   /// frames let go until a key frame
@@ -137,6 +139,7 @@ pub fn Stream::new(
     broken,
     h264: false,
     hevc: false,
+    av1: false,
     cw: 0,
     ch: 0,
     need_key: true,
@@ -178,6 +181,7 @@ pub fn Stream::h264(self : Stream, avcc : Bytes, w : Int, h : Int) -> Unit {
   self.open()
   self.h264 = true
   self.hevc = false
+  self.av1 = false
   self.cw = w
   self.ch = h
   self.need_key = true
@@ -241,7 +245,13 @@ pub fn Stream::frame(self : Stream, data : Bytes, key : Bool, ts : Double, show?
   }
   self.open()
   self.hand_over(ts)
-  let decodes = if self.hevc { h265_here() } else { h_h264_here() }
+  let decodes = if self.av1 {
+    av1_here()
+  } else if self.hevc {
+    h265_here()
+  } else {
+    h_h264_here()
+  }
   if self.id == 0 || !self.h264 || !decodes || (self.need_key && !key) {
     self.let_go(ts, wake=show)
     return
@@ -309,11 +319,40 @@ pub fn Stream::hevc(self : Stream, hvcc : Bytes, w : Int, h : Int) -> Unit {
   self.open()
   self.h264 = true
   self.hevc = true
+  self.av1 = false
   self.cw = w
   self.ch = h
   self.need_key = true
   if self.id != 0 && h265_here() {
     @hostapi.stream_hevc(self.id, hvcc, w, h)
+  }
+}
+
+///|
+/// Whether this host decodes AV1 (8-bit 4:2:0; Windows' with the system's AV1 Video Extension). An app asks it before
+/// it plays AV1 through a stream, and plays it another way where it is false. Under a Tester, false unless
+/// Tester::set_av1; a run's tape keeps the host's (its ENV line says it only when it does).
+pub fn av1_here() -> Bool {
+  @hostapi.av1_here()
+}
+
+///|
+/// A config for AV1 (`av1c`: its AV1CodecConfigurationRecord, an MP4's `av1C` box's payload, or its sequence header
+/// OBU alone; the picture `w` × `h` pixels), as `h264`'s: its temporal units after it go to `frame` as an MP4's samples
+/// hold them (OBUs, each with its size). Only where `av1_here`: elsewhere its frames are let go.
+pub fn Stream::av1(self : Stream, av1c : Bytes, w : Int, h : Int) -> Unit {
+  if self.closed {
+    return
+  }
+  self.open()
+  self.h264 = true
+  self.hevc = false
+  self.av1 = true
+  self.cw = w
+  self.ch = h
+  self.need_key = true
+  if self.id != 0 && av1_here() {
+    @hostapi.stream_av1(self.id, av1c, w, h)
   }
 }
 
@@ -1075,4 +1114,10 @@ pub fn Tester::set_stream_hides(self : Tester, on : Bool) -> Unit {
 /// Whether its host decodes H.265 (h265_here; false until set).
 pub fn Tester::set_h265(self : Tester, on : Bool) -> Unit {
   self.fake.h265_here = on
+}
+
+///|
+/// Whether its host decodes AV1 (av1_here; false until set).
+pub fn Tester::set_av1(self : Tester, on : Bool) -> Unit {
+  self.fake.av1_here = on
 }
