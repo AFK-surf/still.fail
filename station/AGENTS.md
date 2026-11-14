@@ -261,6 +261,15 @@
   who took it; a view's own reopen (its link went, a resize) never takes it. An agent's view is not one of them: its
   input waits while a person drives (`src/tools/computer.ts`). Each side is told it in a notice (「独占这块应该需要有提示」).
 
+## Terminals
+
+- A member's terminal on the station (`src/terminals/`; the user, 2026-11-14) is a runner's (`--pty`, its id
+  `term-…`, its meta in `<data>/run/terminals/`), taken up by the next station as an agent's is; what takes up agents'
+  runners leaves those (`isTerminalRunner`). Every member but a read-only one opens one and types (one at a time, 接管
+  as a screen's); a read-only member looks. A workspace sees only its own. A view is given the runner's screen first
+  (libghostty-vt's, native/runner `screen`), then only the output past it. Not on a station that only runs tasks yet
+  (it serves no device): that is a step of its own.
+
 ## Devices (设备)
 
 - A device is what agents use that runs no station (the user, 2026-11-10): attached to a station (on its USB, in its
