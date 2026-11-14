@@ -11,7 +11,9 @@
 /// key it had in sight (none before it was laid out: what waits to be decided is out of view only once it is); whether
 /// it stands where a go-to put it (1 brought, 2 there: the page before not asked till the reader moves it; 0 not) and
 /// the message that go-to went to and its top under the list's (-1 none); the
-/// message ⌘F last asked the window moved about (chat.around, -1 none); the row last gone to that flashes and the moment it was gone to ("" none); the row a search opened the chat at and its words,
+/// message ⌘F last asked the window moved about (chat.around, -1 none); the row last gone to that flashes, the moment
+/// it was gone to and the passage of it a quote that led there quoted, where its words have it ("" none: the row lit
+/// whole); the row a search opened the chat at and its words,
 /// marked there for as long as the list is; 对话目录's round button while it shows (what ⌘G opens the outline beside).
 priv struct ChatJump {
   away : @signals.Signal[Bool]
@@ -20,7 +22,7 @@ priv struct ChatJump {
   put : @signals.Signal[Int]
   mut went : (Double, Double)
   mut around : Double
-  flashed : @signals.Signal[(String, Double)]
+  flashed : @signals.Signal[(String, Double, String)]
   found : @signals.Signal[(String, Array[String])]
   mut outline_at : @view.View?
 }
@@ -35,7 +37,7 @@ fn ChatJump::new() -> ChatJump {
     put: @signals.signal(0, same=fn(a, b) { a == b }),
     went: (-1.0, 0.0),
     around: -1.0,
-    flashed: @signals.signal(("", -1.0), same=fn(a, b) { a == b }),
+    flashed: @signals.signal(("", -1.0, ""), same=fn(a, b) { a == b }),
     found: @signals.signal(("", []), same=fn(a, b) { a == b }),
     outline_at: None,
   }
@@ -128,6 +130,12 @@ fn chat_goes_to(
     }
     match at {
       Some(k) => {
+        // (the passage a quote that led here quoted, where the message's words have it: lit alone as it flashes,
+        // chat_passage_lit; else the row lit whole, Chat.tsx Quotes' jump)
+        let passage = match (@sfbase.go_to_passages.get(chat), rs.rows.get(k).map(fn(row) { row.entry })) {
+          (Some(p), Some(Said(m))) if !m.system && @sf.find_passage(m.text, p) is Some(_) => p
+          _ => ""
+        }
         @sfbase.go_tos.remove(chat)
         @sfbase.go_to_passages.remove(chat)
         let back = @sfbase.go_back_offsets.get(chat)
@@ -151,8 +159,18 @@ fn chat_goes_to(
             jump.found.set((k, words))
           } else {
             let at = v.cause_at()
-            jump.flashed.set((k, at))
+            jump.flashed.set((k, at, passage))
             @sfbase.flash_rest_nodes.val = at + @sfbase.flash_ms
+            // (the chat's reading told the message gone to and what of it is lit, as the old page's list tells it:
+            // where the reader is, reader_top's)
+            match rs.rows.get(k).map(fn(row) { row.entry }) {
+              Some(Said(m)) => {
+                let rd = @sfbase.reading_of(chat)
+                rd.flash = m.ts
+                rd.flash_passage = passage
+              }
+              _ => ()
+            }
           }
         }
       }
@@ -409,37 +427,68 @@ fn chat_ask_node(
 }
 
 ///|
-/// What a row gone to shows of it (msgFlash, flash_start's): the accent's ground under what `row` holds (its outermost
-/// node: across the list, square; a notice's pill, round: `round`), coming in over flash_in_ms on the ease-out, held to
-/// flash_held_ms, gone by flash_ms on Leave, from the moment the chat went to row `key` (ChatJump's `flashed`), made then
-/// or later; with motion reduced lit whole for flash_ms, then not.
-fn chat_flash_node(row : @view.View, key : String, jump : ChatJump, round? : Bool = false) -> Unit {
+/// What a row gone to shows of it (msgFlash, flash_start's), led there by no quote's passage its words have: the
+/// accent's ground under what `row` holds (its outermost node: across the list, square; a notice's pill, round:
+/// `round`), as lit as its flash is (`flash`: chat_flash_way's for row `key`).
+fn chat_flash_node(row : @view.View, key : String, jump : ChatJump, flash : @motion.Way, round? : Bool = false) -> Unit {
   row.box(fn(b) {
-    let way = @motion.Way::new(0.0)
-    let due : Ref[() -> Unit] = Ref(fn() {  })
     b.over(Is(true)).presses(Is(false)) |> ignore
     if round {
       b.radius(Is(1.0e6)) |> ignore
     }
-    b.reacts(fn() { chat_gone(jump) }, fn(g) {
-      let (k, at) = g
-      guard k == key && at >= 0.0 && b.cause_at() < at + @sfbase.flash_ms else { return }
-      (due.val)()
-      way.go(1.0, @motion.tween(@sfbase.flash_in_ms, ease=Out), at~)
-      let out = at + (if @ui.reduced_motion() { @sfbase.flash_ms } else { @sfbase.flash_held_ms })
-      due.val = b.at_moment(out, fn() {
-        way.go(0.0, @motion.tween(@sfbase.flash_ms - @sfbase.flash_held_ms, ease=Leave), at=out)
-      })
-    })
-    b.owns(fn() { (due.val)() }) |> ignore
-    b.ground(By(fn() { lit_by(@ui.tree_theme().color(AccentBg), way.shown_on(b)) })) |> ignore
+    b.ground(
+      By(fn() {
+        match chat_gone(jump) {
+          (k, _, "") if k == key => lit_by(@ui.tree_theme().color(AccentBg), flash.shown_on(b))
+          _ => 0L
+        }
+      }),
+    )
+    |> ignore
   })
   |> ignore
 }
 
 ///|
-/// The row the chat last went to that flashes, and the moment it was gone to ("" none), followed.
-fn chat_gone(jump : ChatJump) -> (String, Double) {
+/// The passage of row `key` a quote that led there quoted (ChatJump's `flashed`), lit where its words have it as the
+/// row's flash goes (chat_flash_way, in node `v`, what makes the row): its words and the ground it is drawn on now, the
+/// accent's as a passage picked in a message is (picked_alpha), as lit as the flash is; ("", clear) for another row, or
+/// one lit whole. What a message's words mark it by (passage_marks). As lit as the row's flash is (`flash`, read in
+/// node `v`: chat_flash_way's for it).
+fn chat_passage_lit(v : @view.View, key : String, jump : ChatJump, flash : @motion.Way) -> () -> (String, Int64) {
+  fn() {
+    match chat_gone(jump) {
+      (k, _, passage) if k == key && passage != "" =>
+        (passage, lit_by(@sf.alpha(@sf.theme().p.accent, @sfbase.picked_alpha), flash.shown_on(v)))
+      _ => ("", 0L)
+    }
+  }
+}
+
+///|
+/// How lit row `key` gone to is (0 to 1), followed in node `b` (what makes the row): coming in over flash_in_ms on the
+/// ease-out, held to flash_held_ms, gone by flash_ms on Leave, from the moment the chat went to it (ChatJump's
+/// `flashed`: the press's, its cause), made then or later; with motion reduced lit whole for flash_ms, then not.
+fn chat_flash_way(b : @view.View, key : String, jump : ChatJump) -> @motion.Way {
+  let way = @motion.Way::new(0.0)
+  let due : Ref[() -> Unit] = Ref(fn() {  })
+  b.reacts(fn() { chat_gone(jump) }, fn(g) {
+    let (k, at, _) = g
+    guard k == key && at >= 0.0 && b.cause_at() < at + @sfbase.flash_ms else { return }
+    (due.val)()
+    way.go(1.0, @motion.tween(@sfbase.flash_in_ms, ease=Out), at~)
+    let out = at + (if @ui.reduced_motion() { @sfbase.flash_ms } else { @sfbase.flash_held_ms })
+    due.val = b.at_moment(out, fn() {
+      way.go(0.0, @motion.tween(@sfbase.flash_ms - @sfbase.flash_held_ms, ease=Leave), at=out)
+    })
+  })
+  b.owns(fn() { (due.val)() }) |> ignore
+  way
+}
+
+///|
+/// The row the chat last went to that flashes, the moment it was gone to and the passage of it lit ("" none), followed.
+fn chat_gone(jump : ChatJump) -> (String, Double, String) {
   jump.flashed.get()
 }
 

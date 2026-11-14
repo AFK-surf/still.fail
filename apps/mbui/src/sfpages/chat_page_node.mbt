@@ -132,7 +132,14 @@ pub fn chat_page_body_node(
         width,
         tips,
         stint,
-        jump: None,
+        // (a quote's card pressed: the message it quotes gone to, where the chat holds it, and the passage it quotes lit
+        // there alone where its words have it, as the old page's cards (message.mbt quote_cards): chat_goes_to)
+        jump: Some(fn(ts, passage) {
+          match @signals.untracked(view).messages.iter().find_first(fn(m) { m.ts == ts }) {
+            Some(m) => @sfbase.go_to(r, m.seq, passage~)
+            None => ()
+          }
+        }),
       }
       let core = @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }).map(fn(w) { @sfbase.settings_core(src, w) })
       chat_body_node(

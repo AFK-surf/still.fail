@@ -640,11 +640,14 @@ fn chat_body_row(
       _ => Some(-1)
     }
   }
-  // (a message gone to: its row lit across the list, a notice's pill alone)
-  let over = fn(row : @view.View, key : String) { chat_flash_node(row, key, jump) }
-  let pill_over = fn(pill : @view.View, key : String) { chat_flash_node(pill, key, jump, round=true) }
   slot.pick(fn() { chat_body_kind(entry()) }, fn(p, kind) {
     made(k, p)
+    // (gone to: how lit it is as its flash goes, one way for the row; its row lit across the list, a notice's pill
+    // alone, or the passage a quote that led here quoted lit in its words alone: chat_passage_lit)
+    let flash = chat_flash_way(p, k, jump)
+    let over = fn(row : @view.View, key : String) { chat_flash_node(row, key, jump, flash) }
+    let pill_over = fn(pill : @view.View, key : String) { chat_flash_node(pill, key, jump, flash, round=true) }
+    let lit = chat_passage_lit(p, k, jump, flash)
     let m0 = match @signals.untracked(entry) {
       Said(m) => m
       _ => chat_body_none
@@ -702,7 +705,7 @@ fn chat_body_row(
             None => ()
           }
         })
-        more.val = mine_said_node(p, src, here, k, side, top, mine, found~, found_at~, share=message_share_of(src, here, mine), over~, out~, since=fn() { since.get() }).menu_on
+        more.val = mine_said_node(p, src, here, k, side, top, mine, found~, found_at~, lit~, share=message_share_of(src, here, mine), over~, out~, since=fn() { since.get() }).menu_on
       }
       KNotice => {
         // (its words, picked with the pointer, are of its key, as a message's are from where they are read: quoted by
@@ -711,9 +714,9 @@ fn chat_body_row(
         notice_said_node(p, src, here, k, side, top, m, keeps.opened, keeps.copied, pill_over~) |> ignore
       }
       KPerson =>
-        more.val = person_said_node(p, src, here, k, side, top, m, found~, found_at~, share=message_share_of(src, here, m), over~).menu_on
+        more.val = person_said_node(p, src, here, k, side, top, m, found~, found_at~, lit~, share=message_share_of(src, here, m), over~).menu_on
       KAgent =>
-        more.val = agent_said_node(p, src, here, k, side, top, m, found~, found_at~, share=message_share_of(src, here, m), core~, over~, code=fn(lang) {
+        more.val = agent_said_node(p, src, here, k, side, top, m, found~, found_at~, lit~, share=message_share_of(src, here, m), core~, over~, code=fn(lang) {
           if lang == "mermaid" {
             Some(fn(b, code) { @sfbase.viz_mermaid_node(b, src, here.station, code, fn() { @sf.theme().p.subtle }, here.tips) })
           } else {
