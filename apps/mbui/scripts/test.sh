@@ -448,7 +448,11 @@ for t in $targets; do
           # 245-275 beside send_steady's three; the first's 132-197 and the third's 142-183. The fourth reckoned 900,
           # the first 1060 and the third 1590: by the table the first's pages 523 s, the second's 711, the third's 205,
           # the fourth's 682)
-          *) specs="4,4,1060,1 2,4,700,1 1,4,1590,1 4,4,900,1" ;;
+          # (dealt so, the fourth's job was the longest of the four on main's runs of the evening, 241-257 s (ab5e69b4
+          # 43639248574: 197, 219, 168, 257), the third's 163-212: the fourth reckoned 980, the third 1550. By the
+          # table the first's pages 567 s, the second's 683, the third's 259, the fourth's 612, where they were 533,
+          # 688, 211 and 689 with the files merged since)
+          *) specs="4,4,1030,1 2,4,730,1 1,4,1550,1 4,4,980,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
