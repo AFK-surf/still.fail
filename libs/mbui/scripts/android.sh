@@ -37,6 +37,7 @@ APK_FILE=$APK_OUT/app-$VARIANT.apk
 # The SDK the machine says, or the usual macOS SDK location (CI: ANDROID_HOME, ANDROID_NDK_LATEST_HOME).
 SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
 NDK=${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-$SDK/ndk/28.2.13676358}}
+[ -d "$NDK" ] || NDK=$(ls -d "$SDK"/ndk/* 2>/dev/null | sort -V | tail -1)
 HOST_TAG=$([ "$(uname)" = Darwin ] && echo darwin-x86_64 || echo linux-x86_64)
 TC=$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin
 # ABI: the libraries' (default arm64-v8a, a phone's; x86_64 for an x86 machine's emulator: CI's, scripts/render_android.sh)
