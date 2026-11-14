@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [4a1db5287](https://github.com/AFK-surf/monoid/commit/4a1db52876df9685bc141f09024c61d7c1ebdd9b) fix(station): a DeepSeek Harness session is opened | 1.99 | 2.72 | 11.59 | 31.2 | 41.66 | 27.81 | 53.38 | 96.6 | 111.63 |
 | [93c11f443](https://github.com/AFK-surf/monoid/commit/93c11f443550f7fab3ea6837e56a0729eb2dec55) presets: name presets alone in the menu; a control | 1.99 | 2.72 | 11.59 | 31.2 | 41.66 | 27.81 | 53.38 | 96.62 | 109.24 |
 | [d53e54908](https://github.com/AFK-surf/monoid/commit/d53e54908b54d27778233e54e1b9c16fbecd0e77) station, core, app: an agent assists a station's r | 1.99 | 2.72 | 11.59 | 31.2 | 41.65 | 27.81 | 53.36 | 96.63 | 114.47 |
 | [3ee6f477a](https://github.com/AFK-surf/monoid/commit/3ee6f477a9ecbf33555410466e907673d9ac1107) mbui: a key of a page's list on its way grows from | 1.99 | 2.72 | 11.58 | 31.19 | 41.65 | 27.81 | 53.36 | 96.42 | 102.72 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [26e2cffa0](https://github.com/AFK-surf/monoid/commit/26e2cffa0f7303317690ee26d7fcd3e73cc872ed) Windows: no more than 120 frames a second by defau | 1.97 | 2.68 | 11.4 | 30.97 | 40.91 | 27.6 | 52.73 | 95.77 | 95.19 |
 | [26e2cffa0](https://github.com/AFK-surf/monoid/commit/26e2cffa0f7303317690ee26d7fcd3e73cc872ed) Windows: no more than 120 frames a second by defau | 1.97 | 2.68 | 11.4 | 30.97 | 40.91 | 27.6 | 52.73 | 95.95 | 104.62 |
 | [f1011412c](https://github.com/AFK-surf/monoid/commit/f1011412cbd55a950c83f2a62464226f94753938) fix(mbui): a viewer closed sets out no way after i | 1.97 | 2.68 | 11.4 | 30.97 | 40.91 | 27.6 | 52.73 | 95.83 | 104.33 |
-| [8e40aba93](https://github.com/AFK-surf/monoid/commit/8e40aba934f3980ad9fe9873ac47584900944078) mbui app: what is sent and the message it becomes  | 1.97 | 2.68 | 11.4 | 30.97 | 40.9 | 27.6 | 52.73 | 95.75 | 112.86 |
