@@ -1,7 +1,7 @@
 ///|
 /// What the mesh fails with: `code` for a program to go by ("mesh" where the peer was not reached or what it said was
-/// not understood; "credential_refused" where it refused the credential; "invalid_params"; a code the peer's refusal
-/// names), `message` for people, in their language (words.mbt), and `cause`: what was said underneath (the shell's
+/// not understood; "credential_refused" where it refused the credential; "too_long" where a reply's body passed the
+/// bound it was read with (`Reply::rest`); "invalid_params"; a code the peer's refusal names), `message` for people, in their language (words.mbt), and `cause`: what was said underneath (the shell's
 /// words), for a log, never shown.
 pub(all) suberror MeshError {
   MeshError(code~ : String, message~ : String, cause~ : String)

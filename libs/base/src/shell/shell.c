@@ -53,11 +53,16 @@ static void completed(void *ctx, uint64_t id, const uint8_t *json, size_t json_l
 }
 
 /// Starts the shell, keeping what it keeps in `dir` (NUL-terminated): 1, or 0 where it did not start. What it keeps
-/// there is this device's alone (its key): the directory and the files made in it from now on are its user's only.
+/// there is this device's alone (its key): the shell writes each value it keeps as a file of its user's only, whatever
+/// the process's umask, which is the program's and is not touched here. The directory is its user's only where it
+/// was not there and the shell made it (what the shell made over it is as the umask has it: nothing is kept there);
+/// one that was there is left as it is.
 int32_t bsh_start(moonbit_bytes_t dir) {
   if (shell != NULL) return 1;
-  umask(077);
+  struct stat was;
+  int made = stat((const char *)dir, &was) != 0;
   shell = sf_shell_start((const char *)dir, completed, NULL);
+  if (shell != NULL && made) (void)chmod((const char *)dir, 0700);
   return shell != NULL;
 }
 
