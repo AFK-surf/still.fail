@@ -242,7 +242,7 @@ for t in $targets; do
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
       src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:2 src/sfapp/send_steady_wbtest.mbt:@1@2
       src/sfapp/chat_page_nodes_wbtest.mbt:2 src/sfapp/answers_still_wbtest.mbt:@2@3@4@5
-      src/sfapp/switches_still_wbtest.mbt:12)
+      src/sfapp/switches_still_wbtest.mbt:32)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -516,9 +516,11 @@ for t in $targets; do
       # 54-124 s, main 85413543 42736997391, station-conversations-survive 42739107408, 2026-11-10)
       "src/sfapp/preview_tree_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "" | 60) echo 1 ;; *) echo 4 ;; esac ;;
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
-      # (switches_still's twelve, every screen's switches pressed over a core answering late, on three runners of their
-      # own, four side by side on each one's four cores: main's alone, after a merge (mbui-check.yml's switches), its
-      # 960 walks some 700 s in Wasm in one process on Studio, 2026-11-13)
+      # (switches_still's thirty-two, every screen's switches pressed over a core answering late, on four runners of
+      # their own, every fourth of them on each (APP_PART), eight side by side on its four cores: main's alone, after a
+      # merge (mbui-check.yml's switches). Its screens' time is not even along the file: in twelve runs by count, three
+      # a runner, one run of tests 26-53 took 263 s alone and its runner's first part was cut at its 5 minutes, main
+      # ba25bbd6 43547208033, 2026-11-14)
       "src/sfapp/switches_still_wbtest.mbt "*) echo switches ;;
       # (send_steady's three on the fourth, beside its pages on its four cores: the deal reckons them there)
       "src/sfapp/send_steady_wbtest.mbt "*) echo 4 ;;
