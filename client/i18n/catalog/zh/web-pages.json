@@ -1988,5 +1988,13 @@
   "web-pages.screen.tabsCount": "{count} 个标签页",
   "web-pages.screen.tabsCount.one": "1 个标签页",
   "web-pages.screen.wholeScreen": "整个屏幕",
-  "web-pages.screen.windows": "窗口"
+  "web-pages.screen.windows": "窗口",
+  "web-pages.terminal.title": "终端",
+  "web-pages.terminal.openRow": "打开终端",
+  "web-pages.terminal.copyCwd": "复制工作目录",
+  "web-pages.terminal.end": "结束会话",
+  "web-pages.terminal.typing": "{name} 控制中",
+  "web-pages.terminal.looking": "另有 {count} 人在看",
+  "web-pages.terminal.nobody": "没人在看",
+  "web-pages.terminal.ended": "已结束"
 }

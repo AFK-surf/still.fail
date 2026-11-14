@@ -832,11 +832,13 @@ fn page_view(
         // (a Farview tab: made once, narrow_shell.mbt's)
         Screen(at) if @sfpages.farview_screen(at.screen) => ()
         Screen(at) => @sfpages.screen_page(c, src, at, system_frame())
+        // (made once: narrow_shell.mbt's terminal_node)
+        Terminal(_) => ()
       }
       // the page runs under the status bar; it keeps the paper behind its icons, moving with it (App.kt: the list, a
       // place's top page with the bar and a chat have frosted bars there instead; a book and a film their own)
       let own_top = match page {
-        Home | Chat(_) | NewChat | DriveRead(_) | DrivePlay(_) => true
+        Home | Chat(_) | NewChat | DriveRead(_) | DrivePlay(_) | Terminal(_) => true
         Place(_) | Files => root
         _ => false
       }

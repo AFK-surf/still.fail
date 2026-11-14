@@ -672,6 +672,11 @@ pub fn open_mode(mode : String) -> Unit {
     // the profiles' place with Willow's own Codex login offered with its allowance (settings-profiles-offer's)
     @settings.fixture_page("settings-profiles-offer") |> ignore
     app.nav.replace(Place("profiles"))
+  } else if mode == "terminal" || mode == "terminal-taken" {
+    // one of its terminals: typed into here (terminal), or by someone else, its 接管 over it (terminal-taken)
+    // (over Willow's page, as it is opened from there)
+    open_setting("station:ws1/st1")
+    app.nav.push(Terminal({ station: "ws1/st1", terminal: if mode == "terminal" { "term-2" } else { "term-1" }, watch: false, cwd: "" }))
   } else if mode.has_prefix("place-") {
     // a place of the rail's in the wide frame: place-stations, place-profiles, place-connects,
     // place-usage

@@ -5,6 +5,9 @@
 // those a mode puts a sheet or panel up on counted again that day, once the workspace was held as a device holds it (a
 // chat asked `compact`, the sheet or panel reading the real values too).
 
+// Raised once, 2026-11-15: a wide station's page's overview holds its terminals' 打开终端 row (sfpages
+// station_terminals_node.mbt), a row of a new thing it shows, not more done for what it showed before.
+
 ///|
 let real_size_known : Map[String, (Int, Int, Int)] = {
   "phone webdemo": (434, 499, 92),
@@ -571,8 +574,8 @@ let real_size_known : Map[String, (Int, Int, Int)] = {
   "wide settings-vault-items": (930, 1888, 496),
   "wide settings-vault-item": (205, 180, 8),
   "wide settings-stations": (205, 180, 8),
-  "wide settings-station": (547, 1069, 280),
-  "wide settings-station-offline": (547, 1069, 280),
+  "wide settings-station": (597, 1193, 296),
+  "wide settings-station-offline": (597, 1193, 296),
   "wide settings-station-env": (495, 893, 156),
   "wide settings-station-processes": (705, 1532, 532),
   "wide settings-station-mark": (921, 1384, 304),
@@ -592,15 +595,15 @@ let real_size_known : Map[String, (Int, Int, Int)] = {
   "wide settings-station-retire-panel-none": (631, 1319, 396),
   "wide settings-station-retire-panel-joined": (631, 1319, 396),
   "wide settings-station-retire-panel-long": (631, 1319, 396),
-  "wide settings-station-retire-sending": (547, 1069, 280),
-  "wide settings-station-retire-sent": (545, 1061, 280),
-  "wide settings-station-retire-sent-failed": (545, 1061, 280),
-  "wide settings-station-retire-quiet": (547, 1069, 280),
-  "wide settings-station-retire-failed": (547, 1069, 280),
-  "wide settings-station-retire-accounts": (547, 1069, 280),
-  "wide settings-station-retire-done": (547, 1069, 280),
-  "wide settings-station-retire-done-left": (547, 1069, 280),
-  "wide settings-station-taking": (547, 1069, 280),
+  "wide settings-station-retire-sending": (597, 1193, 296),
+  "wide settings-station-retire-sent": (597, 1193, 296),
+  "wide settings-station-retire-sent-failed": (597, 1193, 296),
+  "wide settings-station-retire-quiet": (597, 1193, 296),
+  "wide settings-station-retire-failed": (597, 1193, 296),
+  "wide settings-station-retire-accounts": (597, 1193, 296),
+  "wide settings-station-retire-done": (597, 1193, 296),
+  "wide settings-station-retire-done-left": (597, 1193, 296),
+  "wide settings-station-taking": (597, 1193, 296),
   "wide settings-profile-move": (480, 810, 208),
   "wide settings-profile-move-key": (246, 364, 28),
   "wide settings-stations-add": (310, 262, 21),
@@ -683,12 +686,12 @@ let real_size_known : Map[String, (Int, Int, Int)] = {
   "wide settings-security-upgrade-updating": (446, 841, 140),
   "wide settings-stations-tasks": (205, 180, 8),
   "wide place-stations-tasks": (196, 175, 8),
-  "wide settings-station-tasks": (547, 1069, 280),
-  "wide settings-station-tasks-other": (547, 1069, 280),
-  "wide settings-station-tasks-locked": (547, 1069, 280),
+  "wide settings-station-tasks": (597, 1193, 296),
+  "wide settings-station-tasks-other": (597, 1193, 296),
+  "wide settings-station-tasks-locked": (597, 1193, 296),
   "wide settings-stations-devices": (205, 180, 8),
   "wide place-stations-devices": (196, 175, 8),
-  "wide settings-station-devices": (547, 1069, 280),
+  "wide settings-station-devices": (597, 1193, 296),
   "wide settings-run": (205, 180, 8),
   "wide settings-run-models": (205, 180, 8),
   "wide settings-run-accounts": (205, 180, 8),
@@ -771,4 +774,10 @@ let real_size_known : Map[String, (Int, Int, Int)] = {
   "wide screen-user-tabs": (1287, 2204, 279),
   "wide screen-windows": (1287, 2204, 279),
   "wide screen-window": (1287, 2204, 279),
+  "phone settings-station-terminals": (712, 854, 196),
+  "phone terminal": (482, 576, 154),
+  "phone terminal-taken": (488, 585, 156),
+  "wide settings-station-terminals": (597, 1193, 296),
+  "wide terminal": (237, 218, 20),
+  "wide terminal-taken": (243, 228, 26),
 }

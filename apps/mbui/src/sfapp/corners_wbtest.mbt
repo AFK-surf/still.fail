@@ -64,7 +64,7 @@ let corner_modes : Array[String] = {
     "screen-full-tools", "screen-gone", "screen-keys", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-pages", "screen-read-only",
     "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "screen-user-pages", "screen-user-tabs", "screen-windows", "screen-window", "settings-home", "settings-appearance",
     "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
-    "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
+    "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-terminals", "settings-station-offline", "settings-station-env", "settings-station-processes",
     "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-updated", "settings-station-network", "settings-station-copies", "settings-station-copies-alone",
     "settings-station-restore", "settings-station-restore-offer", "settings-station-restore-confirm", "settings-station-restore-confirm-long",
     "settings-station-restored",
@@ -101,6 +101,8 @@ let corner_modes : Array[String] = {
     "settings-notify-off", "settings-notify-denied",
     // (the stations' newer releases waiting: their key over Home, their dialog open: sfpages station_updates.mbt)
     "home-station-updates", "station-updates", "home-station-updates-app", "station-updates-app",
+    // (a terminal's page, typed into here and by someone else: terminal_wbtest.mbt; its station's list is settings-station-terminals, beside settings-station)
+    "terminal", "terminal-taken",
   ]
   // (and the card to share in each of its other looks: share_looks.mbt)
   for k in @sfpages.share_look_keys()[1:] {

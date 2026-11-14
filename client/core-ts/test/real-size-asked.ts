@@ -24,6 +24,7 @@ import { Browsing } from "../src/drive-browse.ts";
 import { driveCount, kindOf } from "../src/drive.ts";
 import { Notices } from "../src/notices.ts";
 import { screensView } from "../src/screens.ts";
+import { terminalsView } from "../src/terminals.ts";
 import { sharedPlace } from "../src/station/rows-made.ts";
 import type { Store } from "../src/store.ts";
 import type { FakeHost } from "../src/testing.ts";
@@ -128,6 +129,8 @@ export const ASKED: Record<string, Record<string, unknown> & { topic: string }> 
   // (a station's screens, sfpages/station_page.mbt; its network, sfpages/station_facts.mbt; the workspace's ways,
   // sfpages/workspace_page.mbt)
   "screens": { topic: "screens", station },
+  // (a station's terminals among its screens, sfpages/station_terminals_node.mbt: none open there)
+  "terminals": { topic: "terminals", station },
   "stationNet": { topic: "stationNet", station },
   "workspaceWays": { topic: "workspaceWays", workspace: "ws" },
   // (what the chat and others wrote each other, sfdesk/letters.mbt; its things, sfpages/things.mbt, and looked in)
@@ -219,6 +222,7 @@ function pageOwners(inner: Inner, notices: Notices, screens: () => J): Owner[] {
     of(["vaultUses"], (topic) => usesView(inner, String(topic.workspace), String(topic.vault), String(topic.item))),
     of(["joinable"], (topic) => joinable(inner, String(topic.workspace))),
     of(["memberships"], (topic) => memberships(inner, String(topic.station))),
+    of(["terminals"], (topic) => terminalsView(inner, String(topic.station), { terminals: [], outdated: false })),
     of(["screens"], (topic) => screensView(inner, String(topic.station), topic.station === CHAT.station ? screens() : { screens: [], outdated: false }, true)),
   ];
 }

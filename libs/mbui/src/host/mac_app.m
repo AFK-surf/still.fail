@@ -15,6 +15,7 @@
 #include <pwd.h>
 #import "apple.h"
 #include "post.h"
+#include "term.h"
 #include "done_watch.h"
 #include "update_delta.h"  // (the Updates' delta)
 #include "app_calls.h"  // the app's own calls

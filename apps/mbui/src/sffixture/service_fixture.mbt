@@ -78,6 +78,9 @@ pub fn fixture_stream(
     }
     return (@sfbase.screen_made_stream.val)(params, on_value, done)
   }
+  if name == "terminal.view" {
+    return fixture_terminal_view(params, on_value)
+  }
   if name != "station.preview" {
     done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
     return 0

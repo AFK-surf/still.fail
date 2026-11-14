@@ -2626,11 +2626,9 @@ web-pages.workspace.noSuchStation
 web-pages.workspace.owner
 web-pages.workspace.people
 web-pages.workspace.resizeSidebar
-
 web-pages.drive.viewAll
 web-pages.drive.pinnedFolders
 web-pages.screen.none
-
 web-pages.stations.network.advanced
 web-pages.stations.network.algorithm
 web-pages.stations.network.cubic
@@ -2725,3 +2723,14 @@ web-pages.profiles.share.hereNote
 web-pages.profiles.share.whereNote
 web-pages.profiles.share.switchNote
 web-pages.profiles.share.stationsNote
+web-pages.screen.look
+web-pages.screen.controlling
+web-pages.terminal.title
+web-pages.terminal.openRow
+web-pages.terminal.copyCwd
+web-pages.terminal.end
+web-pages.terminal.typing
+web-pages.terminal.looking
+web-pages.terminal.nobody
+web-pages.terminal.ended
+web-pages.screen.control

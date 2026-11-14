@@ -17,6 +17,7 @@
 #include <zlib.h>
 #include "moonbit.h"
 #include "post.h"
+#include "term.h"
 #include "app_calls.h"  // the app's own calls
 #include "done_watch.h"
 #include "corner_sl.h"

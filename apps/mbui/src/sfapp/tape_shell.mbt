@@ -20,6 +20,7 @@ fn taped_shell(v : @view.View, src : Source) -> Unit {
   // (page_local_ms at most), as a page pushed on a phone slides in then
   @sfdesk.tape_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
+  wide_terminal(v, src)
   wide_viewer(v, src)
   // a workspace switched shows once all its rail, sidebar and the page its pane lands on open on is answered (sfdesk's
   // frame_opens), the screen as it was till then (sfbase's workspace_switch_node)
@@ -36,9 +37,37 @@ fn paned_shell(v : @view.View, src : Source) -> Unit {
   // a page opened in the pane shows once the core has given what it shows (page_local_ms at most: pane_page_wait, pane_pages)
   @sfdesk.pane_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
+  wide_terminal(v, src)
   wide_viewer(v, src)
   // (a workspace switched: as taped_shell's)
   @sfbase.workspace_switch_node(v, src, @sfdesk.frame_opens)
+}
+
+///|
+/// A station's terminal on top over the wide frame, over all of it as a station's screen is (terminal_node): nodes
+/// of the tree's of its own, a modal layer while it is on top, its way back the page under it by name; made again for
+/// another terminal.
+fn wide_terminal(v : @view.View, src : Source) -> Unit {
+  v.pick(
+    at_once=true,
+    fn() {
+      match app.nav.top() {
+        Terminal(at) => Some(at)
+        _ => None
+      }
+    },
+    fn(n, at) {
+      guard at is Some(at) else { return }
+      n.over(Is(true)).modal(Is(true)).takes_back(fn() { @sfbase.close_page(Terminal(at)) |> ignore }) |> ignore
+      let back = fn() {
+        let pages = app.nav.pages()
+        if pages.length() >= 2 { @sfbase.back_label(pages[pages.length() - 2]) } else { @sf.t("common.back") }
+      }
+      @sfpages.terminal_node(n, src, at, back~, on_back=fn() { @sfbase.close_page(Terminal(at)) |> ignore }, top=fn() {
+        0.0
+      }, width=fn() { n.window().0 })
+    },
+  )
 }
 
 ///|

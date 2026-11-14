@@ -203,7 +203,7 @@ test "a station's page in three parts: 概览 what runs on it, 进程 what still
   let t = station_tester("ws1/st1")
   // 概览: what runs on it, its screens and files
   assert_true(t.find("概览") is Some(_))
-  assert_true(t.find("屏幕与浏览器") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("屏幕、浏览器与终端") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("文件") is Some(_))
   assert_true(t.find("设备信息") is None)
   // 进程: what still.fail uses of the machine
@@ -893,7 +893,7 @@ test "a station's overview: its browser one row opening it, the agents' pages an
       station_all_screens_node(p, core, here, s)
     }, w~, h=900.0, platform~)
     // a person's own pages: one row (how many in its note), none of them listed, nothing of their sleep
-    assert_true(t.find("屏幕与浏览器") is Some(_), msg=at)
+    assert_true(t.find("屏幕、浏览器与终端") is Some(_), msg=at)
     assert_true(t.find("打开浏览器") is Some(_), msg=at)
     assert_true(t.find("2 个标签页") is Some(_), msg=at)
     assert_true(t.find("收件箱 - Proton Mail") is None, msg=at)

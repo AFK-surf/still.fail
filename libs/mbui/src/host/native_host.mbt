@@ -1093,6 +1093,31 @@ impl @hostapi.Host for Native with cl_picture(_, id) {
 }
 
 ///|
+impl @hostapi.Host for Native with tm_open(_, cols, rows) {
+  tm_open(cols, rows)
+}
+
+///|
+impl @hostapi.Host for Native with tm_write(_, id, data) {
+  tm_write(id, data)
+}
+
+///|
+impl @hostapi.Host for Native with tm_resize(_, id, cols, rows) {
+  tm_resize(id, cols, rows)
+}
+
+///|
+impl @hostapi.Host for Native with tm_lines(_, id) {
+  tm_lines(id)
+}
+
+///|
+impl @hostapi.Host for Native with tm_close(_, id) {
+  tm_close(id)
+}
+
+///|
 impl @hostapi.Host for Native with cl_text(_, id) {
   cl_text(id)
 }

@@ -22,6 +22,7 @@
 #include <dlfcn.h>
 #include <mach-o/dyld.h>
 #include "post.h"
+#include "term.h"
 #include "app_calls.h"  // the app's own calls
 
 mb_callbacks mb_cb;

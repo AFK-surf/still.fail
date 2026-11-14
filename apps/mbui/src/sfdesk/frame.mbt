@@ -274,7 +274,7 @@ pub fn bring_page() -> Unit {
 /// sidebar's (the chats', the settings', 文件's, the archive's, a rail's place's), nor what is over the whole
 /// window (a screen, a file read or played).
 pub fn shown_in_page(p : Page) -> Bool {
-  !(p is (Home | Settings | Place(_) | Files | Archived | Screen(_) | DriveRead(_) | DrivePlay(_)))
+  !(p is (Home | Settings | Place(_) | Files | Archived | Screen(_) | Terminal(_) | DriveRead(_) | DrivePlay(_)))
 }
 
 ///|
@@ -681,7 +681,7 @@ let side_over_rail : Double = 3.0
 /// workspace's, a page under it), else the stack's top popped, but for the new chat beside the chats alone: the page
 /// there is never empty (land: popped, a new chat would come again), so nothing to go back to.
 pub fn wide_back(src : Source) -> (() -> Unit)? {
-  let over_all = app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_))
+  let over_all = app.nav.top() is (Screen(_) | Terminal(_) | DriveRead(_) | DrivePlay(_))
   if wide.tape.get() && !over_all {
     match tape_back_to() {
       Some(p) => Some(fn() { wide.tape_ask.set(Some(p)) })
@@ -863,7 +863,7 @@ fn tape_pull_clamp(at : (Double, Double, Double), p : TapePane, drag : Double) -
 /// taken off, as a phone's are: the page's stack, Ctx::nav_flat's; what is over the whole window put away, the
 /// sidebar's own: wide_back).
 fn tape_back_to() -> TapePane? {
-  if !wide.tape.get() || app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_)) {
+  if !wide.tape.get() || app.nav.top() is (Screen(_) | Terminal(_) | DriveRead(_) | DrivePlay(_)) {
     return None
   }
   match wide.tape_at.get() {
@@ -1156,7 +1156,7 @@ fn main_page(
     NewChat => new_chat_page(c, src, w)
     // a station's screen, a drive's text read, a film played are over the whole window (sfapp's signed_in), not in
     // the pane
-    Screen(_) | DriveRead(_) | DrivePlay(_) => ()
+    Screen(_) | Terminal(_) | DriveRead(_) | DrivePlay(_) => ()
     // 已归档, none of its chats open beside the list: what it is
     Archived => archive_main(c)
     // a web service: as those above once the station says whose chat runs it; till then nothing, not found said so

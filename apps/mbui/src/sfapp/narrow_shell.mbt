@@ -670,6 +670,13 @@ fn narrow_made_as(
       made("connect/" + station + "/" + id, fn(p, core, here, frame, stint, _acts) {
         @sfpages.connect_node(p, src, core, here, station, id, on_back=core.pop, frame~, stint~)
       })
+    // a station's terminal: the whole window, its bar under the status bar (terminal_node)
+    Terminal(at) =>
+      made("terminal/" + at.station + "/" + at.terminal, fn(p, core, _here, frame, _stint, _acts) {
+        @sfpages.terminal_node(p, src, at, back=fn() { frame().back.unwrap_or(@sf.t("common.back")) }, on_back=core.pop, top=fn() {
+          frame().top
+        })
+      })
     // (by its station: another station's another page, not this one become it)
     Setting(Station(address)) =>
       made("station/" + address, fn(p, core, here, frame, stint, _acts) {

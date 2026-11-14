@@ -529,6 +529,10 @@ export function Sun(props: IconProps) {
   return <Svg {...props}><circle cx="12" cy="12" r="4" /><path d="M12 2.5V4.5 M12 19.5V21.5 M2.5 12H4.5 M19.5 12H21.5 M5.3 5.3L6.7 6.7 M17.3 17.3L18.7 18.7 M5.3 18.7L6.7 17.3 M17.3 6.7L18.7 5.3" /></Svg>;
 }
 
+export function Terminal(props: IconProps) {
+  return <Svg {...props}><path d="M8 4H16Q20.5 4 20.5 8.5V15.5Q20.5 20 16 20H8Q3.5 20 3.5 15.5V8.5Q3.5 4 8 4Z M7.5 9L10.5 12L7.5 15 M12.5 15H16.5" /></Svg>;
+}
+
 export function TextSize(props: IconProps) {
   return <Svg {...props}><path d="M3 7V4.5H13.5V7 M8.25 4.5V19.5 M14 12.5V11H21V12.5 M17.5 11V19.5" /></Svg>;
 }
@@ -748,6 +752,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "star": Star,
   "stop": Stop,
   "sun": Sun,
+  "terminal": Terminal,
   "text-size": TextSize,
   "text": Text,
   "think": Think,

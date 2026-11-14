@@ -243,6 +243,11 @@ pub(open) trait Host {
   cl_read(Self) -> Int = _
   cl_state(Self, Int) -> Int = _
   cl_picture(Self, Int) -> Int = _
+  tm_open(Self, Int, Int) -> Int = _
+  tm_write(Self, Int, Bytes) -> Unit = _
+  tm_resize(Self, Int, Int, Int) -> Unit = _
+  tm_lines(Self, Int) -> String = _
+  tm_close(Self, Int) -> Unit = _
   cl_text(Self, Int) -> String = _
   cl_png(Self, Int) -> Bytes = _
   cl_files(Self, Int) -> Int = _
@@ -1342,6 +1347,31 @@ impl Host with cl_state(_, _) {
 ///|
 impl Host with cl_picture(_, _) {
   0
+}
+
+///|
+impl Host with tm_open(_, _, _) {
+  0
+}
+
+///|
+impl Host with tm_write(_, _, _) {
+  ()
+}
+
+///|
+impl Host with tm_resize(_, _, _, _) {
+  ()
+}
+
+///|
+impl Host with tm_lines(_, _) {
+  ""
+}
+
+///|
+impl Host with tm_close(_, _) {
+  ()
 }
 
 ///|
@@ -3105,6 +3135,31 @@ fn cl_state(id : Int) -> Int {
 ///|
 fn cl_picture(id : Int) -> Int {
   current.val.cl_picture(id)
+}
+
+///|
+fn tm_open(cols : Int, rows : Int) -> Int {
+  current.val.tm_open(cols, rows)
+}
+
+///|
+fn tm_write(id : Int, data : Bytes) -> Unit {
+  current.val.tm_write(id, data)
+}
+
+///|
+fn tm_resize(id : Int, cols : Int, rows : Int) -> Unit {
+  current.val.tm_resize(id, cols, rows)
+}
+
+///|
+fn tm_lines(id : Int) -> String {
+  current.val.tm_lines(id)
+}
+
+///|
+fn tm_close(id : Int) -> Unit {
+  current.val.tm_close(id)
 }
 
 ///|

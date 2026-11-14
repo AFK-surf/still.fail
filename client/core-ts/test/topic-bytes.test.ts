@@ -105,7 +105,6 @@ const NOT_MEASURED: Record<string, string> = {
   adbCard: "four fields, its line a word of the core's or the phone's message (adb.ts card)", releases: "one number (core.ts `told`)",
   fonts: "the fonts of a fixed catalogue, by id (font-files.ts, fonts.ids, SHARE_LOOKS_FILES)", drivePlace: "three fields (DrivePlace)",
   filesTabs: "twelve tabs at most, each of one or two panes (drive-browse.ts MOST_TABS)",
-  terminals: "sixteen terminals a station at most, each a few fields and the names on it (station/src/terminals/terminals.ts MOST)",
   previewLoad: "200 rows at most, past it only while those that load have not finished (preview-load.ts)",
   accounts: UNBOUNDED, workspaces: UNBOUNDED, loginSessions: UNBOUNDED, status: UNBOUNDED, connection: UNBOUNDED, draft: UNBOUNDED, composer: UNBOUNDED,
   notify: UNBOUNDED, prefs: UNBOUNDED, doing: UNBOUNDED, adbShare: UNBOUNDED, rigs: UNBOUNDED, downloads: UNBOUNDED, driveTransfers: UNBOUNDED, lockPrompts: UNBOUNDED,
@@ -206,6 +205,8 @@ const EMPTY: Record<string, Record<string, string>> = {
   "changelog news": { tabs: ASKED_SO },
   // (a rig's devices', a station that only runs tasks: the workspace has none)
   "devices": { "devices[].requests": NONE },
+  // (a station's terminals: none open on the workspace of real size)
+  "terminals": { terminals: NONE },
   // (names chosen, a tree's folders open, columns widened by hand)
   "driveBrowse phone": { "chosen.names": STATE, open: STATE, widths: STATE },
   "driveBrowse columns": { "chosen.names": STATE, open: STATE, widths: STATE },
@@ -498,6 +499,7 @@ const STILL: Record<string, string> = {
   // (a model control's: what the station's accounts read, their allowances, a station down move none of it, choose.ts)
   "pick": BY_PAGE("pick.set, pick.save, pick.like, pick.forget"),
   "joinable": BY_PAGE("station.join: the stations of the account's workspaces, one joining another"),
+  "terminals": BY_PAGE("terminal.view, terminal.end: a member opening one or ending it; the workspace has none open"),
   "memberships": READ_ONCE("views/memberships.ts readSoon, and again by station.join"),
   "workspaceWays": BY_PAGE("workspace.setWay: the rest is still.fail's relays, as /v1/me lists them"),
   "changelog news": UNTOLD("what this build got since the changelog was last shown: the device's build, said as a run starts (client.device), and the changelog shown (changelog.seen), on its own page"),
