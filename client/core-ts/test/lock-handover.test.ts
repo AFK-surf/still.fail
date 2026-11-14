@@ -21,10 +21,10 @@ import { Effect } from "effect";
 import { type Entry as StationEntry, entryHash as stationHash, fold as stationFold } from "../../../station/src/cloud/lock.ts";
 import { Cloud, personChainsOf, writeState } from "../../../station/src/cloud/state.ts";
 import { wall } from "../../../station/src/ops/fibers.ts";
-import { inLock, lockPartRoute, lockRoute, sawBuild } from "../../../station/src/mesh/serve.ts";
+import { inLock, lockPartRoute, lockRoute, movedTooOld, sawBuild } from "../../../station/src/mesh/serve.ts";
 import { deviceBuildsOf } from "../../../station/src/mesh/device-builds.ts";
 import { buildOf } from "../../../station/src/api/oldest.ts";
-import { HAND_OVER_FROM } from "../src/lock-handover.ts";
+import { HAND_OVER_FROM, devicesWaited } from "../src/lock-handover.ts";
 import { type Dev, type Key, Log, bring, dev, ed, signed, viewerOf } from "../../../station/test/lock-moved-world.ts";
 import { d4Diff, d4Old } from "../../../station/test/lock-roster4-model.ts";
 import { key, signed as simSigned } from "../../../station/test/lock-world-sim.ts";
@@ -684,6 +684,14 @@ const asks = (w: Awaited<ReturnType<typeof setUp>>, sub: string, d: { base: Key 
   }
 };
 
+test("devicesWaited: seen on 9007 lately waited, on 9008 or an unnumbered build not, none said waited; never seen waited while a station's since is within seven days or no station said one, not after", () => {
+  const now = 10 * DAY;
+  const seen = { since: { A: now - DAY }, devices: { a: { build: 9007, at: now - DAY }, b: { build: 9008, at: now }, c: { build: 0, at: now }, d: { build: -1, at: now }, e: { build: 9007, at: now - 8 * DAY } } };
+  assert.deepEqual(devicesWaited(["a", "b", "c", "d", "e", "f"], seen, ["A"], now), ["a", "d", "f"]);
+  assert.deepEqual(devicesWaited(["f"], seen, ["A"], now + 7 * DAY), [], "never seen, the station's since seven days back");
+  assert.deepEqual(devicesWaited(["f"], seen, ["B"], now + 30 * DAY), ["f"], "never seen, no station of those said a since");
+});
+
 test("an app device seen on build 9007: nothing said, nothing moved, no line, nobody asked beyond the ask it rides on; it asks with 9008: handed over at the next ask", async () => {
   const w = await setUp({ builds: { r2: "0.1.9007" } });
   assert.deepEqual(handOverState(w.inner, "ws"), { held: [`device ${w.bob.app.base.hex}`] });
@@ -708,7 +716,7 @@ test("an app device seen on build 9007: nothing said, nothing moved, no line, no
   assert.equal(w.asked(), 2);
 });
 
-test("an app device never seen: waited for; once the stations kept builds seven days, not; handed over at the next ask", async () => {
+test("an app device never seen: waited for; once the stations kept builds seven days, not; handed over at the next ask; it comes back on 9007: told to update there", async () => {
   const w = await setUp({ builds: { r3: null } });
   assert.deepEqual(handOverState(w.inner, "ws"), { held: [`device ${w.xena.app.base.hex}`] });
   assert.equal((await w.askGrant()).error, undefined);
@@ -720,6 +728,12 @@ test("an app device never seen: waited for; once the stations kept builds seven 
   assert.deepEqual(w.said().map((x) => x.what), MOVED_SAYS);
   await w.run(read(w.inner, "ws"));
   assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved");
+  // xena's app back on 9007 at a station of the moved workspace: told to update there (426, station/src/mesh/serve.ts)
+  for (const c of Object.values(w.stations)) {
+    const a = admitted("r3", w.xena.app, "member");
+    assert.equal(movedTooOld(c, a.viewer as never, 9007), true, "9007: too old for the moved workspace");
+    assert.equal(movedTooOld(c, a.viewer as never, 9008), false);
+  }
 });
 
 test("a web page that is the only device not able (it said no build): not waited for, handed over at the next ask", async () => {

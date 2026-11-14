@@ -98,11 +98,12 @@ export type BuildsSeen = { since: Record<string, number>; devices: Record<string
 /// latest `since` of those stations is within IDLE_SECS (none said: every one not seen is waited for). One not seen
 /// for IDLE_SECS uses nothing, and is not waited for.
 export function devicesWaited(ids: Iterable<string>, seen: BuildsSeen, of: readonly string[], now: number): string[] {
-  const since = Math.max(-Infinity, ...of.flatMap((id) => (typeof seen.since[id] === "number" ? [seen.since[id]!] : [])));
+  const said = of.flatMap((id) => (typeof seen.since[id] === "number" ? [seen.since[id]!] : []));
+  const since = said.length === 0 ? null : Math.max(...said);
   const out: string[] = [];
   for (const id of ids) {
     const d = seen.devices[id];
-    if (d !== undefined ? !ableBuild(d.build) && now - d.at < IDLE_SECS : !(now - since >= IDLE_SECS)) out.push(id);
+    if (d !== undefined ? !ableBuild(d.build) && now - d.at < IDLE_SECS : since === null || now - since < IDLE_SECS) out.push(id);
   }
   return out.sort();
 }
