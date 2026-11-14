@@ -51,7 +51,7 @@ import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { ownBuild } from "../station/oldest.ts";
-import { Lock, approvedHere, asked, baseOf, beginsFor, beginsHere, bindsHere, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
+import { Lock, approvedHere, asked, baseOf, beginsFor, beginsHere, bindsHere, leftAppsIn, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -740,15 +740,19 @@ export function ownLogFor(inner: Inner, workspaces: readonly string[]): Effect.E
 }
 
 /// Whether the chain held of moved workspace `ws` names `sub` a member with an own app device that signs, bound to no
-/// log, this device not one of theirs it names, and this device knows no lock of theirs: a new device of a member whose
-/// devices are from before own logs, approved by one of those, which begins their log in that ask (personal-lock.ts
-/// `seedFor`), as before the move; not by an owner's or admin's (`waitingIn`'s `first`, `ownLogFor`).
+/// log, this device not one of theirs it names, this device knows no lock of theirs, and a station of the workspace
+/// that left it out said the list in force still names an app device of theirs (`leftAppsIn`): a new device of a member
+/// whose devices are from before own logs, approved by one of those, which begins their log in that ask
+/// (personal-lock.ts `seedFor`), as before the move; not by an owner's or admin's (`waitingIn`'s `first`, `ownLogFor`).
+/// The chain held alone cannot say it: frozen at the move, it still names one taken out since (and added again), or
+/// whose every device was taken off, whose new app is then a newcomer, its own log begun and an owner or admin asked
+/// (the lead, 2026-11-14: else nobody could let them in). Nothing said yet: not carried, the newcomer's way.
 export function carriedUnbound(inner: Inner, ws: string, sub: string): boolean {
   const h = held(inner, ws);
   if (!h?.head || !movedHere(inner, ws) || inner.adb.personal().standing(sub) !== "none") return false;
   const chain = fold(h.entries);
   const base = baseOf(inner);
-  return chain.members.has(sub) && !chain.persons.has(sub) && (base === null || chain.devices.get(base)?.sub !== sub) && [...chain.devices.values()].some((d) => d.sub === sub && d.kind === "app" && d.own !== false && typeof d.sign_key === "string");
+  return leftAppsIn(inner, ws) && chain.members.has(sub) && !chain.persons.has(sub) && (base === null || chain.devices.get(base)?.sub !== sub) && [...chain.devices.values()].some((d) => d.sub === sub && d.kind === "app" && d.own !== false && typeof d.sign_key === "string");
 }
 
 /// Where the new device reaches a trusted one: its mesh's endpoint, dialling the trusted device's id on PAIR_ALPN

@@ -1319,6 +1319,15 @@ export function leftIn(inner: Inner, ws: string): string[] | null {
   return [...new Set([...p.left.values()].flat())];
 }
 
+/// Whether a station of moved workspace `ws` that left this device out said the list in force names an app device of its
+/// person's (its refusal's `apps`, station/src/mesh/serve.ts `leftOf`: theirs on their log, or carried by the chain as it
+/// moved, `by` "chain"): what only the stations' state says, never the chain held (frozen at the move: one taken out and
+/// added again, or whose devices were all taken off, it still names). False where none said so.
+export function leftAppsIn(inner: Inner, ws: string): boolean {
+  if (leftIn(inner, ws) === null) return false;
+  return [...part(inner, ws).leftApps.values()].includes(true);
+}
+
 /// Whether this web page, left out of moved workspace `ws` (`leftIn`, the state not given it), is one nobody can let in:
 /// its stations said the list names no app device of its person's (their refusal's `apps`, station/src/mesh/serve.ts
 /// `leftOf`), and only their own app approves a web page there (views/pair.ts `movedPlace`), so it asks nobody and says

@@ -25,7 +25,8 @@
 //     in their list (the lead, 2026-11-14). A comes back on a release that moves the chain, and it moves with nobody
 //     asked, ivy carried, bound to no log. At the end: I approves her third app K from its page (one ask on I, nobody
 //     else asked, K given her vault, ivy bound to the log begun in that ask by her own `bind`), her web page W, takes J
-//     off; A makes her an admin and takes her out, as any member.
+//     off; A makes her an admin and takes her out, as any member; added again, her new app L is a newcomer and A
+//     approves it face to face (one ask on A, nothing on L).
 // Chains are handed over by themselves on every build from HAND_OVER_FROM (client/core-ts src/lock-handover.ts; the
 // user, 2026-11-14: 无感迁移, no date, no switch), so by default nothing calls `lock.handOver`: P's joining alice's own
 // lock face to face, the ask for something else that A answers, is moved from round 19's start to where the call was
@@ -65,6 +66,8 @@ const jDev = new Device("J", "ivy", { sealed: false });
 const iDev = new Device("I", "ivy");
 const kDev = new Device("K", "ivy");
 const wDev = new Device("W", "ivy", { page: true });
+// ivy's new app once she was taken out and added again (round 23's end)
+const lDev = new Device("L", "ivy");
 const fifthData = `${process.env.E2E_STATION}/data`;
 const sixthData = `${process.env.E2E_STATION}-b/data`;
 try {
@@ -610,9 +613,19 @@ try {
     await vDev.call("workspace.removeMember", { account: vDev.sub, workspace: three, member: iDev.sub });
     await atBoth("ivy out", (s) => memberAt(s, iDev.sub) === null);
   });
+  await check("A adds ivy again; her new app L, a newcomer now (the list names no app of hers), approved by A face to face: in at both, one ask on A, nothing on L", async () => {
+    await vDev.call("workspace.addMembers", { account: vDev.sub, workspace: three, role: "member", emails: ["ivy@example.test"] });
+    await lDev.signIn();
+    const lFrom = lDev.asked();
+    const asked = await asksOf(vDev, () => approvedInThree(lDev));
+    log(`  A asked: ${asked.join("; ") || "nothing"}`);
+    if (asked.length !== 1) throw new Error(`A asked ${asked.length} times`);
+    if (lDev.asked() !== lFrom) throw new Error(`L asked the person: ${lDev.askedWhat(lFrom).join("; ")}`);
+    await atBoth("ivy in again, bound", (s) => memberAt(s, iDev.sub) === "member" && personAt(s, iDev.sub));
+  });
 } catch (e) {
   fail("the run", e);
 }
 log(failures() === 0 ? "ALL PASSED" : `${failures()} FAILED`);
-await within(Promise.all([vDev, pDev, xDev, qDev, rDev, sDev, yDev, gDev, tDev, nDev, iDev, jDev, kDev, wDev].map((x) => x.close())), 5000);
+await within(Promise.all([vDev, pDev, xDev, qDev, rDev, sDev, yDev, gDev, tDev, nDev, iDev, jDev, kDev, wDev, lDev].map((x) => x.close())), 5000);
 process.exit(failures() === 0 ? 0 : 1);

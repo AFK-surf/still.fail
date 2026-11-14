@@ -42,7 +42,9 @@ type Approver = { where: (hello: J) => string[]; approve: (hello: J) => J };
 
 /// `named`: s1 a member by X's log (`noApp`: a log no station was given, so naming no app of s1's). `web`: this core a
 /// web page. `waiting`: the station given no root's log. `older`: a station from before its refusal said `apps`.
-async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean; personHeld?: boolean } = {}) {
+/// `carried`: s1 a member the chain names with X as an app of theirs, bound to no log, no log of theirs anywhere (the
+/// state carries them by the chain alone).
+async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean; personHeld?: boolean; carried?: boolean } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const alice = new Log("r1"), bob = new Log("r2"), x = new Log("s1");
@@ -54,8 +56,8 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   const app = (l: Log) => ({ id: l.app.base.hex, sub: l.sub, kind: "app", label: `${l.sub}'s app`, sign_key: l.app.signer.id });
   const body = {
     owner: "r1", ...settings, passkeys: [], stations: [{ key: A, name: "a" }], gateways: [],
-    members: [{ sub: "r1", email: "r1@x.com", role: "owner" }, { sub: "r2", email: "r2@x.com", role: "admin" }, ...(o.named ? [{ sub: "s1", email: "s1@x.com", role: "member" }] : [])],
-    devices: [app(alice), app(bob), ...(o.named ? [app(x)] : [])],
+    members: [{ sub: "r1", email: "r1@x.com", role: "owner" }, { sub: "r2", email: "r2@x.com", role: "admin" }, ...(o.named || o.carried ? [{ sub: "s1", email: "s1@x.com", role: "member" }] : [])],
+    devices: [app(alice), app(bob), ...(o.named || o.carried ? [app(x)] : [])],
   };
   const first = signed({ v: 1, ws: "ws", seq: 0, prev: null, at: 1000, kind: "genesis", body }, alice.app.signer);
   const moved = signed({ v: 1, ws: "ws", seq: 1, prev: stationHash(first), at: 1000, kind: "moved", body: { root: alice.genesis } }, alice.app.signer);
@@ -136,6 +138,8 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
       const a = approvers.get(id);
       if (a === undefined) return yield* there.send({ t: "no", error: "not_here" });
       const where = a.where(hello);
+      // (one that would sign nothing for it shows no code, as views/pair.ts `serveTrusted` answers)
+      if (where.length === 0) return yield* there.send({ t: "no", error: "not_here" });
       yield* there.send({ t: "code", workspaces: where });
       const m = (yield* there.next()) as J;
       const p = pakeStart(CODE, pairSession(base.hex, id, where), (b) => b.fill(5));
@@ -166,7 +170,7 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   const now = () => Math.floor(r.host.nowMs() / 1000);
   /// What a failure says of where it got: the station's refusals and admissions, the page.
   const why = () => `refused ${st.refusals.length}, last left ${JSON.stringify(st.refusals.at(-1)?.left)?.slice(0, 30)} error ${String(st.refusals.at(-1)?.error).slice(0, 80)}; admitted ${st.admitted}; standing ${inner.adb.personal().standing("s1")}`;
-  return { why, r, inner, c, st, alice, bob, x, base, A, approvers, dialled, run, ask, page, bring, now, hello };
+  return { why, r, inner, c, st, alice, bob, x, base, A, approvers, dialled, run, ask, page, bring, now, hello, moved };
 }
 
 /// Whom the page lists: each member's sub.
@@ -402,4 +406,57 @@ test("a web page of someone with no app, told by a station from before (no `apps
   const after = await w.page();
   assert.deepEqual(new Set(w.dialled), new Set([w.alice.app.base.hex, w.bob.app.base.hex]), "the owners' and admins' apps dialled");
   assert.deepEqual([after.me.confirmed, after.me.pair?.state, (after.me.pair?.approvers as J[]).map((a) => a.showing)], [false, "none", [false, false]]);
+});
+
+// A member the chain names with an app of theirs (X) and binds to no log, no log of theirs anywhere: their new app asks
+// their own devices and begins no log of its own, the device of theirs that approves it beginning their log in that ask
+// (views/pair.ts `carriedUnbound`). Only while the stations' list still names an app of theirs (their refusal's
+// `apps`): the chain held, frozen at the move, says nothing of one taken out since and added again, whose new app is
+// a newcomer, its own log begun and an owner or admin asked, as before the move (the lead, 2026-11-14: else nobody
+// could let them in).
+test("a carried member with no log, the list naming an app of theirs: their new app begins no log, brings its key to join theirs, and asks their own app alone", async () => {
+  const w = await setUp({ carried: true });
+  await w.page();
+  assert.equal(w.st.refusals.at(-1)?.left?.apps, true, `told the list names an app of theirs (${w.why()})`);
+  const hellos: J[] = [];
+  w.approvers.set(w.x.app.base.hex, { where: (hello) => (hellos.push(hello), []), approve: () => ({ t: "no" }) });
+  const asked = await w.ask("lock.pair", { workspace: "ws" });
+  assert.equal(asked.error, undefined, asked.error?.message);
+  await w.page();
+  assert.ok(w.dialled.includes(w.x.app.base.hex), `their own app dialled (${w.why()})`);
+  assert.equal(w.dialled.includes(w.alice.app.base.hex), false, "no owner's");
+  assert.equal(w.inner.adb.personal().standing("s1"), "none", "no log begun here");
+  assert.ok(hellos.length > 0 && hellos[0].log === undefined && typeof hellos[0].personal?.key === "string", `its hello brings its key to join theirs, no log (${JSON.stringify(hellos[0])?.slice(0, 200)})`);
+});
+
+test("a carried member taken out and added again: their new app, told the list names no app of theirs, begins its log, asks an owner, and is admitted face to face, bound by that admit", async () => {
+  const w = await setUp({ carried: true });
+  w.alice.say("member.remove", { sub: "s1", cancels: [stationHash(w.moved)] }, "ws");
+  w.bring(w.alice);
+  // (its link's next hello, as its own retry dials it: refused again, now told the list names no app of theirs)
+  w.hello();
+  await w.page();
+  assert.equal(w.c.locked()!.state!.members.has("s1"), false, "out of the station's list");
+  assert.equal(w.st.refusals.at(-1)?.left?.apps, false, `told the list names no app of theirs (${w.why()})`);
+  w.approvers.set(w.alice.app.base.hex, {
+    // (an owner's app shows a code only for a newcomer whose hello brings their log, views/pair.ts `admitOf`)
+    where: (hello) => (Array.isArray(hello.log) && hello.log.length > 0 ? ["ws"] : []),
+    approve: (hello) => {
+      w.alice.say("member", { sub: "s1", email: "s1@x.com", lock: stationHash(hello.log[0]), role: "member" }, "ws");
+      w.bring(w.alice);
+      return { t: "approved", workspaces: ["ws"], failed: [] };
+    },
+  });
+  const asked = await w.ask("lock.pair", { workspace: "ws" });
+  assert.equal(asked.error, undefined, asked.error?.message);
+  const trying = await w.page();
+  assert.ok(w.dialled.includes(w.alice.app.base.hex), `an owner's app dialled (${w.why()})`);
+  assert.equal(trying.me.pair?.state, "code", `a code shown by the owner's app, the hello bringing its log (${JSON.stringify(trying.me.pair)?.slice(0, 200)}; ${w.why()})`);
+  const done = await w.ask("lock.pairCode", { workspace: "ws", code: CODE });
+  assert.equal(done.error, undefined, done.error?.message);
+  const after = await w.page();
+  assert.equal(after.me.confirmed, true, `in (${w.why()})`);
+  const log = w.inner.adb.personal().root("s1");
+  assert.ok(log !== null, "its own log begun");
+  assert.equal(w.c.locked()!.state!.persons.get("s1"), log, "bound at the station by that admit");
 });
