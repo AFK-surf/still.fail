@@ -430,8 +430,52 @@ fn steps_main_node(v : @view.View, body : (@view.View) -> Unit) -> Unit {
 }
 
 ///|
-/// One event in `v`: its mark in the gutter and what `body` makes beside it; the turn's rail from under its mark
-/// (`rail`: to the next event's; `rail_last`: on to the next item), or a state's block in its colour behind it.
+/// Zero-width side rail in the existing 16px panel left margin (`@sf.outset_start(8.0)`), connecting events in a turn
+/// without adding horizontal indentation.
+fn rail_node(parent : @view.View, on : Bool) -> Unit {
+  if on {
+    parent.box(fn(r) {
+      r.over(Is(true)) |> ignore
+      @sf.style_node(r, fn() { h_rail })
+      steps_box_node(r, h_rail_line, fn(_) {  })
+    })
+    |> ignore
+  }
+}
+
+///|
+fn rail_live_node(parent : @view.View, on : () -> Bool) -> Unit {
+  parent.show(on, fn(r) {
+    r.over(Is(true)) |> ignore
+    @sf.style_node(r, fn() { h_rail })
+    steps_box_node(r, h_rail_line, fn(_) {  })
+  })
+}
+
+///|
+fn group_rail_node(parent : @view.View, rail : () -> Bool, open : () -> Bool) -> Unit {
+  parent.show(fn() { rail() || open() }, fn(r) {
+    r.over(Is(true)) |> ignore
+    @sf.style_node(r, fn() { if rail() { h_rail } else { h_rail_end } })
+    steps_box_node(r, h_rail_line, fn(_) {  })
+  })
+}
+
+///|
+/// Zero-width left accent bar inside an expanded step card's existing 12px left padding (`pl=S1 py=S2`), marking the
+/// exact vertical span of the expanded item without taking horizontal content space.
+fn step_side_bar_node(parent : @view.View, failed : Bool, in_card? : Bool = true) -> Unit {
+  parent.box(fn(r) {
+    r.over(Is(true)) |> ignore
+    @sf.style_node(r, fn() { if in_card { step_bar_in_card } else { step_bar_out } })
+    steps_box_node(r, if failed { step_bar_line_red } else { step_bar_line }, fn(_) {  })
+  })
+  |> ignore
+}
+
+///|
+/// One event in `v`: its mark in the gutter and what `body` makes beside it; the turn's rail in the outer margin
+/// (`rail`: to the next event's; `rail_last`: on to the next item).
 fn ev_node(
   v : @view.View,
   icon : String,
@@ -454,9 +498,8 @@ fn ev_node(
     }
   }
   steps_box_node(v, h_ev, fn(e) {
-    ignore(rail)
-    ignore(rail_last)
     ignore(row)
+    rail_node(e, rail || rail_last)
     e.box(fn(i) {
       @sf.style_node(i, fn() { h_icon })
       if icon == "pulse" {
@@ -594,7 +637,8 @@ fn item_node(
       let ends = text(content, "ends")
       let failed = flag(content, "failed")
       steps_box_node(v, h_ev_stack, fn(ev) {
-        ev_node(ev, "send", "", if failed { "red" } else { "accent" }, rail=ends != "", rail_last=ends == "" && rail, fn(b) {
+        rail_node(ev, ends != "" || rail)
+        ev_node(ev, "send", "", if failed { "red" } else { "accent" }, fn(b) {
           steps_box_node(b, h_label, fn(l) {
             label_wraps(l)
             steps_words(l, fn() { @sf.t("web-main.history.sentTo") }, h_label_words)
@@ -746,7 +790,12 @@ fn one_line_node(
   })
   |> ignore
   // (opening and closing across its full width with a soft bottom cut)
-  steps_reveal_node(v, open, fn(b) { steps_box_node(b, h_one_card, whole) })
+  steps_reveal_node(v, open, fn(b) {
+    steps_box_node(b, h_one_card, fn(c) {
+      step_side_bar_node(c, tone == "red")
+      whole(c)
+    })
+  })
 }
 
 ///|
@@ -884,7 +933,8 @@ fn received_node(
   let notice = text(m, "notice")
   let job = notice == "job"
   steps_box_node(v, h_ev_stack, fn(ev) {
-    ev_node(ev, "received", "", "", rail~, rail_last~, fn(b) {
+    rail_node(ev, rail || rail_last)
+    ev_node(ev, "received", "", "", fn(b) {
       steps_box_node(b, h_label, fn(l) {
         label_wraps(l)
         steps_words(l, fn() {
@@ -1106,6 +1156,7 @@ fn task_node(v : @view.View, key : String, task : Json?, rail : Bool, rail_last 
         } else {
           let use_card = !answer.contains("```")
           steps_box_node(p, if use_card { h_one_card } else { h_one_body }, fn(w) {
+            step_side_bar_node(w, failed, in_card=use_card)
             if agent {
               md_node(w, answer, field(task, "md"), small=true)
             } else {
@@ -1244,7 +1295,7 @@ fn group_node(
   let rows = items(g, "rows")
   let calls = rows.iter().any(fn(r) { text(Some(r), "kind") == "step" })
   steps_box_node(v, h_group, fn(gv) {
-    ignore(rail)
+    group_rail_node(gv, fn() { rail }, open)
     gv.box(fn(h) {
       @sf.style_node(h, fn() { h_group_head })
       let hot = fn() { @sf.lit_node(h) }
@@ -1310,13 +1361,19 @@ fn group_rows_node(
       if text(rv, "kind") == "thought" {
         if calls {
           let thought_words = text(content, "text")
-          let thought_look = if thought_words.contains("```") { h_step_body } else { h_step_card }
+          let in_card = !thought_words.contains("```")
+          let thought_look = if in_card { h_step_card } else { h_step_body }
           opened_node(list, src, station, key, rk, content, fn(sum) {
             steps_words(sum, fn() { @sf.t("web-main.history.thinking") }, h_step_name)
             steps_box_node(sum, h_grow_clip, fn(c) {
               steps_words(c, fn() { if steps_own.opened.contains(rk) { "" } else { text(content, "first") } }, h_step_hint_line)
             }, in_row=true)
-          }, fn(body) { steps_box_node(body, thought_look, fn(t) { md_node(t, thought_words, field(content, "md"), small=true) }) })
+          }, fn(body) {
+            steps_box_node(body, thought_look, fn(t) {
+              step_side_bar_node(t, false, in_card~)
+              md_node(t, thought_words, field(content, "md"), small=true)
+            })
+          })
         } else {
           whole_node(list, src, station, key, rk, content, fn(body) {
             steps_box_node(body, h_thinking, fn(t) { md_node(t, text(content, "text"), field(content, "md"), small=true) })
@@ -1444,7 +1501,7 @@ fn ev_live_node(
     }
   }
   steps_box_node(v, h_ev, fn(e) {
-    ignore(rail_last)
+    rail_live_node(e, rail_last)
     e.box(fn(i) {
       @sf.style_node(i, fn() { h_icon })
       @sf.icon_node(i, icon, 14.0, By(ink)) |> ignore
@@ -1535,7 +1592,7 @@ fn steps_reused_row_node(
                   let gk = fn() { item_key() + "/group" }
                   let open = fn() { steps_own.opened.contains(gk()) }
                   steps_box_node(m, h_group, fn(gv) {
-                    ignore(has_rail)
+                    group_rail_node(gv, has_rail, open)
                     gv.box(fn(h) {
                       @sf.style_node(h, fn() { h_group_head })
                       let hot = fn() { @sf.lit_node(h) }
@@ -1618,7 +1675,8 @@ fn steps_reused_row_node(
                   let msg_kind = (base - 7) % 3
                   let msg = fn() { items(content(), "messages").get(0) }
                   steps_box_node(m, h_ev_stack, fn(ev) {
-                    ev_live_node(ev, "received", fn() { "" }, has_rail, fn(eb) {
+                    rail_live_node(ev, has_rail)
+                    ev_live_node(ev, "received", fn() { "" }, fn() { false }, fn(eb) {
                       steps_box_node(eb, h_label, fn(l) {
                         label_wraps(l)
                         steps_words(l, fn() { @sf.t("web-main.history.message.before") }, h_label_words)
@@ -1657,7 +1715,8 @@ fn steps_reused_row_node(
                 16 | 17 => {
                   let link = base == 16
                   steps_box_node(m, h_ev_stack, fn(ev) {
-                    ev_live_node(ev, "send", fn() { "accent" }, has_rail, fn(eb) {
+                    rail_live_node(ev, has_rail)
+                    ev_live_node(ev, "send", fn() { "accent" }, fn() { false }, fn(eb) {
                       steps_box_node(eb, h_label, fn(l) {
                         label_wraps(l)
                         steps_words(l, fn() { @sf.t("web-main.history.sentTo") }, h_label_words)
@@ -1981,6 +2040,7 @@ fn tool_body_node(v : @view.View, src : Source, station : String, key : String, 
         p,
         if failed && call_parts.is_empty() { tool_body_card_red } else { tool_body_card },
         fn(b) {
+          step_side_bar_node(b, failed)
           if call_parts.length() > 0 {
             steps_box_node(b, tool_section, fn(s) {
               for idx, part in call_parts {
@@ -2008,6 +2068,7 @@ fn tool_body_node(v : @view.View, src : Source, station : String, key : String, 
       )
     } else {
       steps_box_node(p, tool_body_box, fn(b) {
+        step_side_bar_node(b, failed, in_card=false)
         if call_parts.length() > 0 {
           steps_box_node(b, if call_has_code_or_diff { tool_section } else { tool_section_card }, fn(s) {
             for idx, part in call_parts {
@@ -2955,6 +3016,36 @@ let h_ev : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 let h_ev_stack : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
+/// Outer turn/group side line in the existing 16px panel left margin (`x = 8px`), taking 0px of horizontal content space.
+// kept across runs: a value (no field of it changes)
+let h_rail : @ui.Style = @ui.css("w=Full h=Full pt=S1").then(@sf.outset_start(8.0)).then(@sf.outset_bottom(14.0))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_rail_end : @ui.Style = @ui.css("w=Full h=Full pt=S1 pb=S1").then(@sf.outset_start(8.0))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_rail_line : @ui.Style = @ui.css("w=SPx h=Full radius=Full bg=Border")
+
+///|
+/// Inner expanded-step side bar inside the card's existing left padding (`x = 20px`), taking 0px of extra layout space.
+// kept across runs: a value (no field of it changes)
+let step_bar_in_card : @ui.Style = @ui.css("w=Full h=Full pl=S1 py=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_bar_out : @ui.Style = @ui.css("w=Full h=Full pt=S1 pb=S2").then(@sf.outset_start(4.0))
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_bar_line : @ui.Style = @ui.css("w=SPx h=Full radius=Full bg=Border")
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_bar_line_red : @ui.Style = @ui.css("w=SPx h=Full radius=Full bg=Danger")
+
+///|
 /// An event's mark (hIcon): 20 square, on whatever it stands on: the turn's rail runs from under it, so nothing of it
 /// covers the rail. As high as its event's first line (ev's `row`), its mark in its middle.
 // kept across runs: a value (no field of it changes)
@@ -3112,7 +3203,7 @@ let h_one_body : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1, py=S2, px=S3, radius=@sf.custom_field_r, bg=@sf.faint_ground)
+let h_one_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1, py=S2, pl=S3_5, pr=S3, radius=@sf.custom_field_r, bg=@sf.faint_ground)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3212,7 +3303,7 @@ let h_step_body : @ui.Style = @ui.css("w=Full pt=S1 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1_5, py=S2, px=S3, radius=@sf.custom_field_r, bg=@sf.faint_ground)
+let h_step_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1_5, py=S2, pl=S3_5, pr=S3, radius=@sf.custom_field_r, bg=@sf.faint_ground)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3248,7 +3339,7 @@ let tool_body_box : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_body_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1_5, py=S2, px=S3, gap=S1_5, radius=@sf.custom_field_r, bg=@sf.faint_ground)
+let tool_body_card : @ui.Style = @ui.style(w=Full, mt=S0_5, mb=S1_5, py=S2, pl=S3_5, pr=S3, gap=S1_5, radius=@sf.custom_field_r, bg=@sf.faint_ground)
 
 ///|
 // kept across runs: a value (no field of it changes)
