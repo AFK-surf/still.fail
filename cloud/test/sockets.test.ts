@@ -38,7 +38,12 @@ function received(h: Harness, ws: NonNullable<Awaited<ReturnType<Harness["fetch"
     now,
     async take(): Promise<any[]> {
       await h.heard(ws);
-      return got.splice(0);
+      // (as whom it tells of what: what it says changed taken off, events.test.ts `bare`)
+      return got.splice(0).map((e) => {
+        if (typeof e !== "object" || e === null) return e;
+        const { entry: _e, rev: _r, set: _s, unset: _u, put: _p, gone: _g, ...rest } = e;
+        return rest;
+      });
     },
   };
 }

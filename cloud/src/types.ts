@@ -25,7 +25,11 @@ export interface InvitationView { id: string; role: Role; email: string | null; 
 export interface PendingInvitation { id: string; workspace: string; name: string; role: Role; inviter: string; expires_at: number }
 /** An email added to a workspace whose account has not signed in yet: a member from its first sign-in on. */
 export interface AddedView { email: string; role: Role; added_by: string; added_at: number }
-export interface WorkspaceView { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; /** Absent with none (and from a cloud before them). */ rigs?: RigView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; ways_off?: string[]; /** Every way, on or off (setWay). */ ways?: WayView[]; lock?: LockHead | null; /** In security mode now: a lock not turned off. */ locked?: true; lock_requests?: number }
+/** What changed of a workspace's view, as its `workspace` event tells it (directory.ts `#told`): its lists by their
+ * entries' keys (members by `sub`, stations, rigs and invitations by `id`, added by `email`). */
+export interface ViewTold { set?: Record<string, unknown>; unset?: string[]; put?: Record<string, unknown[]>; gone?: Record<string, unknown[]> }
+/** rev: the version of what the view says alike to every member (directory.ts `#told`), once a change was told so. */
+export interface WorkspaceView { rev?: number; id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; /** Absent with none (and from a cloud before them). */ rigs?: RigView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; ways_off?: string[]; /** Every way, on or off (setWay). */ ways?: WayView[]; lock?: LockHead | null; /** In security mode now: a lock not turned off. */ locked?: true; lock_requests?: number }
 
 /** How far the workspace's lock goes as the cloud keeps it: null, none. */
 export interface LockHead { seq: number; hash: string; genesis: string }
@@ -42,8 +46,13 @@ export interface LockRequestView { base: string; sub: string; email: string; kin
  * `requests`: only its requests to be let in changed (`/lock/requests`, which apps from before ask and drop), nothing
  * a device of today reads; one from before refetches. */
 export type AccountEvent =
-  | { type: "workspaces" }
-  | { type: "workspace"; id: string; lock?: { head: LockHead | null; locked: boolean }; requests?: true }
+  /** `entry`: the account's own entry of a workspace it stays in, as its `/v1/me` lists it now (a device holding the
+   * list puts it in place, reading nothing); without, the list read again. */
+  | { type: "workspaces"; entry?: WorkspaceSummary }
+  /** `rev`: the view's version before the change and after (WorkspaceView `rev`), and what changed between (`set` its
+   * fields put, `unset` those gone, `put` its lists' entries put, `gone` their keys taken out, ViewTold): a device
+   * holding the version before patches it, reading nothing; without, or another version held, the view read again. */
+  | ({ type: "workspace"; id: string; lock?: { head: LockHead | null; locked: boolean }; requests?: true; rev?: [number, number] } & ViewTold)
   | { type: "release" }
   | { type: "relays" }
   /** The team or someone of the chat replied on a bug report from a chat of the workspace: its replies read again (GET /v1/workspaces/<id>/feedback). */

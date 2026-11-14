@@ -33,12 +33,19 @@ async function listen(h: Harness, token: string) {
     // Every event of the calls before (h.heard).
     async take(): Promise<string[]> {
       await h.heard(ws);
-      return got.splice(0).map((e) => JSON.stringify(e)).sort();
+      return got.splice(0).map((e) => JSON.stringify(bare(e))).sort();
     },
   };
 }
 
 type Listener = Awaited<ReturnType<typeof listen>>;
+
+/** An event as whom it tells of what: what it says changed (a list's entry, a view's change and versions) taken off,
+ * which "what a change tells is what reading again gives" holds. */
+function bare(e: AccountEvent): AccountEvent {
+  const { entry: _e, rev: _r, set: _s, unset: _u, put: _p, gone: _g, ...rest } = e as AccountEvent & Record<string, unknown>;
+  return rest as AccountEvent;
+}
 
 /** A station's object (test/worker.ts): its presence sweep, and when its socket closing has been handled. */
 async function stationObject(h: Harness, station: string): Promise<{ sweepAt(ms: number): Promise<boolean>; left(): Promise<void> }> {
@@ -459,6 +466,85 @@ test("a request to be let in asked or dropped says so in its event: nothing a de
     await expect(on, { alice: [{ type: "workspace", id: w, requests: true }] }, "asked");
     assert.equal((await alice("DELETE", `/v1/workspaces/${w}/lock/requests/${base}`)).status, 200);
     await expect(on, { alice: [{ type: "workspace", id: w, requests: true }] }, "dropped");
+  } finally {
+    await h.close();
+  }
+});
+
+/** A view held made what its event told (as the core does, client/core-ts src/sync/cloud.ts `patched`). */
+function patched(held: any, e: any): any {
+  const next = { ...held, ...(e.set ?? {}), rev: e.rev[1] };
+  for (const k of e.unset ?? []) delete next[k];
+  for (const [list, key] of Object.entries({ members: "sub", stations: "id", rigs: "id", invitations: "id", added: "email" })) {
+    const put: any[] = e.put?.[list] ?? [];
+    const gone = new Set(e.gone?.[list] ?? []);
+    if (put.length === 0 && gone.size === 0) continue;
+    const fresh = new Map(put.map((x) => [x[key], x]));
+    const items = (held[list] ?? []).flatMap((x: any) => {
+      if (gone.has(x[key])) return [];
+      const p = fresh.get(x[key]);
+      if (!p) return [x];
+      fresh.delete(x[key]);
+      return [{ ...x, ...p }];
+    });
+    items.push(...fresh.values());
+    if (list === "rigs" && items.length === 0) delete next.rigs;
+    else next[list] = items;
+  }
+  return next;
+}
+
+// The locks' end to end, 2026-11-15: every device of every member read `/v1/me` and the view whole at each change of a
+// workspace's people or stations, 110 of an account's 187 requests in a minute. Each member is told what changed instead.
+test("what a change tells is what reading again gives: the view by its versions, a member's entry of their list", async () => {
+  const h = await harness();
+  try {
+    const tokens = { alice: await h.login("alice"), bob: await h.login("bob"), carol: await h.login("carol") };
+    const alice = h.as(tokens.alice), bob = h.as(tokens.bob), carol = h.as(tokens.carol);
+    const on = { alice: await listen(h, tokens.alice.access_token), bob: await listen(h, tokens.bob.access_token), carol: await listen(h, tokens.carol.access_token) };
+    const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
+    const got: Record<string, any[]> = { alice: [], bob: [], carol: [] };
+    for (const [name, l] of Object.entries(on)) l.ws.addEventListener("message", (event) => void (event.data === "pong" || got[name]!.push(JSON.parse(event.data as string))));
+    const read = async (who: ReturnType<Harness["as"]>) => (await (await who("GET", `/v1/workspaces/${w}`)).json()) as any;
+    const listed = async (who: ReturnType<Harness["as"]>) => ((await (await who("GET", "/v1/me")).json()) as any).workspaces.find((x: any) => x.id === w);
+    const held: Record<string, any> = { alice: await read(alice) };
+    let patchedOnce = 0;
+    // One change made, then each member's events taken as a device would: a list's entry put in place of the one held,
+    // a view patched where the version before is held, read again otherwise (a member new to it, one whose role changed).
+    const after = async (what: string, change: () => Promise<unknown>, members: Record<string, ReturnType<Harness["as"]>>) => {
+      await change();
+      for (const l of Object.values(on)) await l.take();
+      for (const [name, who] of Object.entries(members)) {
+        for (const e of got[name]!.splice(0)) {
+          if (e.type === "workspaces" && e.entry) assert.deepEqual(e.entry, await listed(who), `${what}: ${name}'s entry of the list`);
+          if (e.type !== "workspace" || e.id !== w) continue;
+          if (e.rev && held[name]?.rev === e.rev[0]) {
+            held[name] = patched(held[name], e);
+            patchedOnce++;
+          } else held[name] = await read(who);
+        }
+        assert.deepEqual(held[name], await read(who), `${what}: ${name}'s view as told`);
+      }
+      for (const name of Object.keys(got)) got[name]!.splice(0);
+    };
+    await after("rename", () => alice("PATCH", `/v1/workspaces/${w}`, { name: "House" }), { alice });
+    await after("an invitation", () => alice("POST", `/v1/workspaces/${w}/invitations`, { role: "member", email: "bob@example.test" }), { alice });
+    const invitation = ((await (await bob("GET", "/v1/me")).json()) as any).invitations[0].id;
+    await after("bob joins", () => bob("POST", `/v1/invitations/${invitation}/accept`), { alice, bob });
+    await after("carol added", () => alice("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["carol@example.test"] }), { alice, bob, carol });
+    const bobSub = held.alice.members.find((m: any) => m.email === "bob@example.test").sub;
+    const carolSub = held.alice.members.find((m: any) => m.email === "carol@example.test").sub;
+    await after("bob an admin", () => alice("PATCH", `/v1/workspaces/${w}/members/${bobSub}`, { role: "admin" }), { alice, bob, carol });
+    const station = await enrollStation(h, alice, w, "willow");
+    await after("a station enrolled", async () => {}, { alice, bob, carol });
+    await after("the station renamed", () => alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { name: "big willow", emoji: "🍎" }), { alice, bob, carol });
+    await after("an icon", () => alice("PATCH", `/v1/workspaces/${w}`, { icon: "glyph:rocket:blue", emoji: "🚀" }), { alice, bob, carol });
+    await after("the icon taken away", () => alice("PATCH", `/v1/workspaces/${w}`, { icon: "", emoji: "" }), { alice, bob, carol });
+    await after("added by email, not signed in yet", () => bob("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["erin@example.test"] }), { alice, bob, carol });
+    await after("carol out", () => alice("DELETE", `/v1/workspaces/${w}/members/${carolSub}`), { alice, bob });
+    await after("the station out", () => alice("DELETE", `/v1/workspaces/${w}/stations/${station.id}`), { alice, bob });
+    console.log(`PATCHED ${patchedOnce}`);
+    assert.ok(patchedOnce >= 15, `the views told were patched (${patchedOnce}), not read again`);
   } finally {
     await h.close();
   }

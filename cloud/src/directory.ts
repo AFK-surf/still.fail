@@ -26,7 +26,7 @@ import { showsOf, type Shows } from "./noticeText";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl, waysOf } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
-import type { AccountEvent, StationEvent, AddedView, Admission, AdminFeedback, FeedbackReply, WorkspaceFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, RigView, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, ViewTold, StationEvent, AddedView, Admission, AdminFeedback, FeedbackReply, WorkspaceFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, RigView, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 import { apply, asEntry, entryHash, genesis, keepLockAt, LockAppendRefused, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
 export type { Role };
 
@@ -130,6 +130,7 @@ export class Directory extends DurableObject<Env> {
     ctx.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS users (sub TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', picture TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, last_seen INTEGER, admitted TEXT, beta INTEGER);
       CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_by TEXT NOT NULL, created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS told (workspace TEXT PRIMARY KEY, rev INTEGER NOT NULL, view TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS members (workspace TEXT NOT NULL, sub TEXT NOT NULL, role TEXT NOT NULL, added_at INTEGER NOT NULL, PRIMARY KEY (workspace, sub));
       CREATE INDEX IF NOT EXISTS members_by_user ON members (sub);
       CREATE TABLE IF NOT EXISTS invitations (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, role TEXT NOT NULL, email TEXT, created_by TEXT NOT NULL, expires_at INTEGER NOT NULL);
@@ -508,9 +509,74 @@ export class Directory extends DurableObject<Env> {
    */
   #changed(workspace: string, list: boolean, also: Iterable<string> = [], only: "lock" | "requests" | null = null): void {
     for (const station of this.#stationsIn(workspace)) this.#sendState(station);
-    const subs = [...this.#members(workspace), ...also];
-    const said = only === "lock" ? { lock: { head: this.#lockHead(workspace), locked: this.#locked(workspace) } } : only === "requests" ? { requests: true as const } : {};
-    this.#tell(subs, ...(list ? [LIST] : []), { type: "workspace", id: workspace, ...said });
+    if (only !== null) {
+      const said = only === "lock" ? { lock: { head: this.#lockHead(workspace), locked: this.#locked(workspace) } } : { requests: true as const };
+      this.#tell([...this.#members(workspace), ...also], { type: "workspace", id: workspace, ...said });
+      return;
+    }
+    // Each member is told what changed of the view and of their entry of the list (`#told`), so their devices read
+    // neither again: every device of every member read both whole at each change (the locks' end to end, 2026-11-15:
+    // of an account's 187 requests in a minute, 49 `/v1/me` and 61 the view). Those whose role changed, or who were not
+    // members before, get the view whole as before (what they see of it changed beyond what the others are told), and
+    // whoever else is told (`also`: taken out, or invited) the list read again.
+    const told = this.#told(workspace);
+    const members = new Map((told?.now.members ?? []).map((m) => [m.sub, m.role]));
+    const before = new Map((told?.before?.members ?? []).map((m) => [m.sub, m.role]));
+    const groups = new Map<string, { subs: string[]; events: AccountEvent[] }>();
+    const into = (key: string, sub: string, events: () => AccountEvent[]) => {
+      let group = groups.get(key);
+      if (!group) groups.set(key, (group = { subs: [], events: events() }));
+      group.subs.push(sub);
+    };
+    const plain: AccountEvent = { type: "workspace", id: workspace };
+    for (const [sub, role] of members) {
+      const listed: AccountEvent[] = list && told ? [{ type: "workspaces", entry: told.entry(role) }] : list ? [LIST] : [];
+      const same = told !== null && told.before !== null && before.get(sub) === role;
+      const manager = MANAGERS.includes(role);
+      into(`${role} ${same}`, sub, () => [...listed, same && told ? { type: "workspace", id: workspace, rev: told.rev, ...told.change(manager) } : plain]);
+    }
+    const others = [...new Set(also)].filter((sub) => !members.has(sub));
+    if (others.length > 0) groups.set("others", { subs: others, events: [...(list ? [LIST] : []), plain] });
+    for (const { subs, events } of groups.values()) this.#tell(subs, ...events);
+  }
+
+  /** What a workspace's view says alike to every member: `#view` but the viewer's role and lock requests, the managers'
+   * parts (invitations, added) of it, `rigs` with none too. */
+  #alike(id: string): AlikeView | null {
+    const w = this.#one("SELECT id, name, created_at, relays, ways_off, emoji, icon FROM workspaces WHERE id = ?", id);
+    if (!w) return null;
+    const members = this.#rows(`
+      SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(${SHOWN_PICTURE}, '') AS picture, m.role, m.added_at
+      FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
+    const stations = this.#stationViews(id).map(({ workspace: _, ...station }) => station);
+    const invitations = this.#rows("SELECT id, role, email, created_by, expires_at FROM invitations WHERE workspace = ? AND expires_at > ? ORDER BY expires_at", id, nowSeconds()) as unknown as InvitationView[];
+    const added = this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[];
+    return { id, name: w.name as string, ...marks(w.emoji, w.icon), created_at: w.created_at as number, members, stations, rigs: this.#rigViews(id), invitations, added, relays: parseRelays(w.relays), ...offOf(w.ways_off), ways: waysOf(this.env, parseRelays(w.relays), parseRelays(w.ways_off)), lock: this.#lockHead(id), ...(this.#locked(id) ? { locked: true } : {}) };
+  }
+
+  /**
+   * A workspace's view as it is now against the one last told (kept in `told`, with its version): the versions before
+   * and after (one more where anything changed), what changed for a manager and for anyone else, and a member's entry
+   * of their list by their role. Nothing kept yet (a workspace not changed since, or moved in): what is now is kept,
+   * at a version above any before (this second's thousandths), and `before` is null.
+   */
+  #told(workspace: string): { before: AlikeView | null; now: AlikeView; rev: [number, number]; change: (manager: boolean) => ViewTold; entry: (role: Role) => WorkspaceSummary } | null {
+    const now = this.#alike(workspace);
+    if (!now) return null;
+    const kept = this.#one("SELECT rev, view FROM told WHERE workspace = ?", workspace);
+    const before = kept ? (JSON.parse(kept.view as string) as AlikeView) : null;
+    const text = JSON.stringify(now);
+    const was = kept ? (kept.rev as number) : nowSeconds() * 1000;
+    const rev: [number, number] = [was, !kept || kept.view === text ? was : was + 1];
+    if (kept?.view !== text) this.#run("INSERT INTO told (workspace, rev, view) VALUES (?, ?, ?) ON CONFLICT (workspace) DO UPDATE SET rev = excluded.rev, view = excluded.view", workspace, rev[1], text);
+    const { members, stations, ...rest } = now;
+    return {
+      before,
+      now,
+      rev,
+      change: (manager) => (before === null ? {} : viewTold(before, now, manager)),
+      entry: (role) => ({ id: now.id, name: now.name, ...marks(rest.emoji, rest.icon), role, created_at: now.created_at, stations: stations.length, members: members.length, relays: now.relays, ...(now.ways_off ? { ways_off: now.ways_off } : {}) }) as WorkspaceSummary,
+    };
   }
 
   /**
@@ -759,19 +825,10 @@ export class Directory extends DurableObject<Env> {
   /** A workspace as the caller sees it (what its changes answer with: called within them, it is not counted again). */
   #view(sub: string, id: string): WorkspaceView {
     const role = this.#role(sub, id);
-    const w = this.#one("SELECT id, name, created_at, relays, ways_off, emoji, icon FROM workspaces WHERE id = ?", id)!;
-    const members = this.#rows(`
-      SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(${SHOWN_PICTURE}, '') AS picture, m.role, m.added_at
-      FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
-    const stations = this.#stationViews(id).map(({ workspace: _, ...station }) => station);
-    const rigs = this.#rigViews(id);
-    const invitations = MANAGERS.includes(role)
-      ? this.#rows("SELECT id, role, email, created_by, expires_at FROM invitations WHERE workspace = ? AND expires_at > ? ORDER BY expires_at", id, nowSeconds()) as unknown as InvitationView[]
-      : [];
-    const added = MANAGERS.includes(role)
-      ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
-      : [];
-    return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, ...(rigs.length ? { rigs } : {}), invitations, added, relays: parseRelays(w.relays), ...offOf(w.ways_off), ways: waysOf(this.env, parseRelays(w.relays), parseRelays(w.ways_off)), lock: this.#lockHead(id), ...(this.#locked(id) ? { locked: true } : {}), lock_requests: this.#lockRequestCount(id, sub, role) };
+    const { rigs, invitations, added, ...alike } = this.#alike(id)!;
+    const told = this.#one("SELECT rev FROM told WHERE workspace = ?", id);
+    const manager = MANAGERS.includes(role);
+    return { ...(told ? { rev: told.rev as number } : {}), ...alike, role, ...(rigs.length ? { rigs } : {}), invitations: manager ? invitations : [], added: manager ? added : [], lock_requests: this.#lockRequestCount(id, sub, role) };
   }
 
   /**
@@ -1122,7 +1179,7 @@ export class Directory extends DurableObject<Env> {
     const told = [...this.#members(id), ...this.#invitees(id)];
     const stations = this.#stationsIn(id).map((station) => ({ station, home: this.#memberships(station)[0] }));
     this.ctx.storage.transactionSync(() => {
-      for (const table of ["members", "invitations", "added", "station_members", "enrollments", "lock_entries", "lock_aside", "devices", "lock_requests"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
+      for (const table of ["members", "invitations", "added", "station_members", "enrollments", "lock_entries", "lock_aside", "devices", "lock_requests", "told"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
       this.#run("DELETE FROM workspaces WHERE id = ?", id);
     });
     this.#tell(told, LIST, { type: "workspace", id });
@@ -2356,8 +2413,9 @@ for (const name of ["workspace", "createWorkspace", "updateWorkspace", "deleteWo
 for (const name of ["adminUsers", "setMayCreate", "adminPending", "setPending", "removePending", "setBlocked", "setBeta", "adminDeleteWorkspace", "adminCreateWorkspace", "adminSetLimits",
   "adminEnrollment", "adminWorkspaces", "inviteCodes", "createInviteCode", "revokeInviteCode", "adminFeedback", "setFeedbackStatus", "replyToFeedback", "adminLoad"]) FAMILIES[name] = "admin";
 /** The tables that are this object's own, not moved into another cloud: its sockets' generations, the outbox to the
- * objects (made again as things change), its counts. */
-const MOVE_SKIPPED = new Set(["outbox", "live", "hits"]);
+ * objects (made again as things change), its counts, the views as last told (`#told`: begun again by the next change,
+ * at a version above any before). */
+const MOVE_SKIPPED = new Set(["outbox", "live", "hits", "told"]);
 for (const name of ["moveExport", "moveImport", "moveAccounts"]) FAMILIES[name] = "admin";
 /** What it runs for itself rather than being called for. */
 const UNCOUNTED = new Set(["constructor", "handOff", "migrateStationMembers", "migrateFreePlan", "send", "settled", "sweep"]);
@@ -2418,6 +2476,33 @@ function cleanIcon(value: unknown, origins: string[]): string | null {
  * guests': the clients fetch a person's by its address); else null. */
 function cleanPicture(value: unknown, origins: string[]): string | null {
   return typeof value === "string" && origins.some((origin) => isIconUrl(origin, value)) ? value : null;
+}
+/** What a workspace's view says alike to every member (directory.ts `#alike`), as kept to be told against. */
+type AlikeView = Omit<WorkspaceView, "role" | "rev" | "rigs" | "lock_requests"> & { rigs: RigView[] };
+/** A view's lists, each by the key of its entries (what a device patches by). */
+const KEYED = { members: "sub", stations: "id", rigs: "id", invitations: "id", added: "email" } as const;
+/** What changed from `before` to `now`, told so (AccountEvent `workspace`): a manager's with the invitations and the
+ * added, anyone else's without, as their views are. */
+function viewTold(before: AlikeView, now: AlikeView, manager: boolean): ViewTold {
+  const told: Required<ViewTold> = { set: {}, unset: [], put: {}, gone: {} };
+  const was = before as unknown as Record<string, unknown>;
+  const is = now as unknown as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(was), ...Object.keys(is)])) {
+    if (key in KEYED) continue;
+    if (!(key in is)) told.unset.push(key);
+    else if (JSON.stringify(was[key]) !== JSON.stringify(is[key])) told.set[key] = is[key];
+  }
+  for (const [list, key] of Object.entries(KEYED)) {
+    if (!manager && (list === "invitations" || list === "added")) continue;
+    const entries = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+    const held = new Map(entries(was[list]).map((e) => [e[key], JSON.stringify(e)]));
+    const put = entries(is[list]).filter((e) => held.get(e[key]) !== JSON.stringify(e));
+    const keys = new Set(entries(is[list]).map((e) => e[key]));
+    const gone = [...held.keys()].filter((k) => !keys.has(k));
+    if (put.length > 0) told.put[list] = put;
+    if (gone.length > 0) told.gone[list] = gone;
+  }
+  return Object.fromEntries(Object.entries(told).filter(([, v]) => (Array.isArray(v) ? v.length > 0 : Object.keys(v).length > 0))) as ViewTold;
 }
 /** A workspace's emoji and icon as its views carry them: each only when set (clients from before them know neither). */
 function marks(emoji: unknown, icon: unknown): { emoji?: string; icon?: string } {
