@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1f334fe33](https://github.com/AFK-surf/monoid/commit/1f334fe33c9f4d61f764622d000753469ba76889) mbui: at a chat's end on the page made as nodes, t | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.72 | 110.43 |
 | [2f8293e39](https://github.com/AFK-surf/monoid/commit/2f8293e39835f8a614e2dd732bb0d1f7ec272697) mbui: the pointer's corner shapes (Cursor::ResizeN | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.72 | 110.43 |
 | [187988cb9](https://github.com/AFK-surf/monoid/commit/187988cb96817a92c31fb7fc9601253e1e52082b) station: sessions' summaries and the session list  | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.58 | 103.28 |
 | [6b92c390c](https://github.com/AFK-surf/monoid/commit/6b92c390cbdac8dce1576111917d5c7b3328e2cb) station: a chat's entries and letters read by the  | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.88 | 112.98 |
@@ -45,9 +46,9 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [dd8703938](https://github.com/AFK-surf/monoid/commit/dd87039384c912b79eced0ecf04443f593e28be6) test(mbui app): 添加账号 with three stations, and a ke | 1.98 | 2.7 | 11.52 | 31.12 | 41.44 | 27.73 | 53.19 | 97.4 | 110 |
 | [8e65df79d](https://github.com/AFK-surf/monoid/commit/8e65df79d68957c9231b4a2b1f99361a7aff570b) core: the base's words, host and traces its own: n | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.74 | 53.19 | 97.26 | 111.09 |
 | [0b084bbe9](https://github.com/AFK-surf/monoid/commit/0b084bbe9e7db0dad894ab0af7fbe8fba3e63a06) core: a vault is written on a station the workspac | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.73 | 53.18 | 95.85 | 116.71 |
-| [c3fbd4046](https://github.com/AFK-surf/monoid/commit/c3fbd40467787b57b6c344ebfb048560c0e04074) mbui: what an answer changed at once is no jolt of | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.73 | 53.18 | 95.83 | 110.48 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1f334fe33](https://github.com/AFK-surf/monoid/commit/1f334fe33c9f4d61f764622d000753469ba76889) mbui: at a chat's end on the page made as nodes, t | 0.4 | 0.52 | 1.94 | 3.07 | 4.43 | 1.44 | 3.76 | 56.98 |
