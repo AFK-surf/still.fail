@@ -302,6 +302,7 @@ fn notice_words_node(v : @view.View, here : MessageNodeHere, m : () -> Message, 
 
 ///|
 /// A run's change with no sides (a notice's words that are none such: drawn as nothing).
+// kept across runs: a value (no field of it changes)
 let no_sides : RunSides = { was: "", now: "", to: "", was_maker: "", was_runtime: "", now_maker: "", now_runtime: "" }
 
 ///|
