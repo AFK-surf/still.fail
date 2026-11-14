@@ -1,4 +1,5 @@
 import {
+  "fvclient/stage",
   "mbui/halt",
   "moonbitlang/core/double",
   "mbui/pixels",

@@ -102,12 +102,15 @@ test "a Farview tab: asked as shown, Hello as it goes live, the page drawn in ti
   r.t.draw()
   let tiles = r.t.drawlist_images().filter(fn(i) { i.1.has_prefix("farview-") })
   assert_true(tiles.length() >= 2)
-  // a tap on the page: the host's, at that point of the page
+  // a tap on the page: the host's, at that point of the page, as a browser's press and let go
   r.sent.clear()
   r.t.tap(60.0, h / 2.0 + (844.0 - h))
   r.t.draw()
-  let taps = r.sent.map(fn(b) { farview_said(b) }).flatten().filter(fn(m) { m is Tap(_, _) })
-  assert_eq(taps.length(), 1)
+  let taps = r.sent
+    .map(fn(b) { farview_said(b) })
+    .flatten()
+    .filter_map(fn(m) { if m is Person(p) && p.contains("\"pointer\"") { Some(p.contains("\"down\"")) } else { None } })
+  assert_eq(taps, [true, false])
   // gone: the view let go
   r.shown.set(false)
   r.t.draw()
