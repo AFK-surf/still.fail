@@ -18,13 +18,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
-import { type Entry, canonical, entryHash, signedBytes } from "../src/cloud/lock.ts";
+import { type Entry, canonical } from "../src/cloud/lock.ts";
 import { Cloud, personChainsOf, writeState } from "../src/cloud/state.ts";
 import { wall } from "../src/ops/fibers.ts";
 import { bodiesGiven } from "../src/mesh/person-sync.ts";
 import { hashOf } from "./lock-fork-choice-model.ts";
-import { type Body, type D4, type D4Member, type W4Options, WS2, World4, bodyHash, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, revoked } from "./lock-roster4-model.ts";
-import { type Family, type Holder, V3, type V3v, drawSteps3, spec } from "./lock-roster-model.ts";
+import { type Body, type D4, type D4Member, type W4Options, WS2, World4, bodyHash, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, m8, revoked, bareChain } from "./lock-roster4-model.ts";
+import { type Family, type Holder, V3, type V3v, drawSteps3 } from "./lock-roster-model.ts";
 import { Rng, WS } from "./lock-world-sim.ts";
 
 let clock = 0;
@@ -49,22 +49,10 @@ const sorted = (xs: Iterable<string>) => [...xs].sort().join(",");
 
 /// The workspace chain of `ws` a station under test pins: the model keeper's old chain where it keeps one (M7), else a
 /// genesis whose owner is the root's person with the root's app, and its `moved {root}`.
-const made = new Map<string, Entry[]>();
 function chainFor(w: World4, h: Holder, ws: string, root: string): Entry[] {
   const old = w.x.old.get(h);
   if (old !== undefined && ws === WS) return old.active.map((x) => old.store.get(x)!);
-  const id = `${ws}|${root}`;
-  const had = made.get(id);
-  if (had) return had;
-  const app = spec("alice's app");
-  const sign = (e: Omit<Entry, "sig">): Entry => ({ ...e, sig: { key: app.signer.id, alg: "Ed25519", sig: app.signer.sign(signedBytes(entryHash(e as Entry))) } }) as Entry;
-  const g = sign({ v: 1, ws, seq: 0, prev: null, at: 1000, kind: "genesis", body: {
-    owner: "alice", origins: [], rp_id: "", cloud_keys: { keys: [] }, members: [{ sub: "alice", email: "alice@x", role: "owner" }],
-    devices: [{ id: app.base.hex, sub: "alice", kind: "app", label: app.name, sign_key: app.signer.id }], passkeys: [], stations: [], gateways: [],
-  } });
-  const moved = sign({ v: 1, ws, seq: 1, prev: entryHash(g), at: 1000, kind: "moved", body: { root } });
-  made.set(id, [g, moved]);
-  return [g, moved];
+  return bareChain(ws, root);
 }
 
 /// A station under test standing for keeper `h` in `ws`: made once a world (and anew for a drawn other order), given
@@ -284,6 +272,7 @@ export function scriptedWorlds(from: number, to: number): Out {
       for (const kind of ["web", "off"] as const) for (const parent of ["same", "any"] as const) revoked(seed, kind, parent);
       m6(seed);
       for (const m of [{}, { away: true }, { attack: "same" as const }, { attack: "any" as const }]) m7(seed, m);
+      for (const m of [{}, { away: true }]) m8(seed, m);
       o.worlds++;
     }
   } finally {

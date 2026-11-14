@@ -82,13 +82,17 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   const root = o.root === "alice" ? alice : me;
   const bodies: unknown[] = [];
   bodies.push(say(root, "open", { ...SETTINGS, email: "a@x.com" }));
+  // (the chain's own list, the rig's genesis: s1 its owner, s2 a member, carried once it moved until a removal of each
+  // is said, rules `state4_moved`; the root says one of each but its own person, so what follows says the list alone)
+  bodies.push(say(root, "member.remove", { sub: "s2", cancels: [] }));
+  if (o.root === "alice") bodies.push(say(alice, "member.remove", { sub: "s1", cancels: [] }));
   if (o.root === "alice") bodies.push(say(alice, "member", { sub: "s1", email: "a@x.com", lock: gOf(me), role: o.mine ?? "owner" }));
   bodies.push(say(root, "member", { sub: "r2", email: "b@x.com", lock: gOf(bob), role: "admin" }));
   bodies.push(say(root, "station", { key: A }));
   bodies.push(say(bob, "member", { sub: "r3", email: "c@x.com", lock: gOf(xena), role: "member" }));
   // (w2, where `two`: rooted in s1's log too, B its station)
   const bodies2: unknown[] = [];
-  if (o.two) bodies2.push(say(me, "open", { ...SETTINGS, email: "a@x.com" }, "w2"), say(me, "station", { key: B }, "w2"));
+  if (o.two) bodies2.push(say(me, "open", { ...SETTINGS, email: "a@x.com" }, "w2"), say(me, "member.remove", { sub: "s2", cancels: [] }, "w2"), say(me, "station", { key: B }, "w2"));
   const g = grant();
   let mine: Signer | null = null;
   const r = await rig((signer) => ((mine = signer), { ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME), ...(o.two ? { w2: genesis("w2", signer, true, [{ key: B, name: "b" }], g.keys, ME) } : {}) }), (host) => {

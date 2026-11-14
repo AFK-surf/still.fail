@@ -2,7 +2,7 @@
 // station is stricter on purpose: a state the model calls "not on" or "no root" is one it waits in, naming nobody and
 // giving nobody a body). Drawn worlds (both of round three's variants, fault-free and with faults; as drawn, one body
 // held back for good, two workspaces) and the scripted ones (M2, M5 with its clocks, a revoked key's web device and
-// `off`, M6, M7's four rows). LOCK_MOVED_MODEL_SEEDS (3), _STEPS (120), _SCRIPTED (1) give more.
+// `off`, M6, M7's four rows, M8's two: the chain carried once moved, so nothing waits for an `open`). LOCK_MOVED_MODEL_SEEDS (3), _STEPS (120), _SCRIPTED (1) give more.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { pool, print } from "./lock-fork-pool.ts";
@@ -38,7 +38,7 @@ test("on the model's drawn worlds every station has the model keeper's logs, bod
   const o = sum(await drawn);
   told("drawn", o);
   assert.equal(o.differ.length, 0, "the station and the model differ (the first are printed above)");
-  assert.ok(Object.keys(o.refused).length > 0 && o.lacking > 0 && o.on > 0 && o.waiting > 0 && o.given > 0 && o.toldOut > 0, "not trivial worlds");
+  assert.ok(Object.keys(o.refused).length > 0 && o.lacking > 0 && o.on > 0 && o.given > 0 && o.toldOut > 0, "not trivial worlds");
 });
 
 test("on the model's scripted worlds too: bodies no one's, web devices by a keeper's clock, a revoked key, off and on again, the handover", async () => {

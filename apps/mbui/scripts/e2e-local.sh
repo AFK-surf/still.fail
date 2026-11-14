@@ -477,20 +477,21 @@ lock_state() {
   [ -n "$f" ] || { echo "LOCK off"; return; }
   (cd $E/station && node --input-type=module -e "
 import { readFileSync } from 'node:fs';
-const { fold, state4 } = await import('./src/cloud/lock.ts');
+const { fold, state4Moved } = await import('./src/cloud/lock.ts');
 const j = JSON.parse(readFileSync(process.argv[1], 'utf8'));
 const chain = fold(j.entries ?? j, null);
 let s = chain;
 if (chain.moved !== undefined && !chain.disabled) {
   // (its chain moved to its people's logs: the state in force is the rules' of the logs and bodies this station keeps,
-  // by its clock, as station/src/cloud/state.ts forceOf makes it; LOCK says it on or off, MOVED the root and how)
+  // read with the chain as it moved, by its clock, as station/src/cloud/state.ts forceOf makes it; LOCK says it on or
+  // off, MOVED the root and how)
   const data = process.argv[1].replace(/\/mesh\/.*$/, '');
   const read = (f, or) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return or; } };
   const kept = read(data + '/mesh/person-chains.json', {});
   const logs = Object.values(kept.chains ?? kept).filter((c) => Array.isArray(c));
   const ws = (j.entries ?? j)[0].ws;
   const bodies = (read(data + '/mesh/locks/' + ws + '.bodies.json', {}).bodies ?? []);
-  const f = state4(ws, chain.moved, logs, bodies, Math.floor(Date.now() / 1000));
+  const f = state4Moved(ws, j.entries ?? j, logs, bodies, Math.floor(Date.now() / 1000));
   s = { ...f.state, disabled: f.on !== 'on', seq: chain.seq, head: chain.head };
   console.log('MOVED ' + chain.moved.slice(0, 12) + ' ' + f.on.replace(' ', '-') + ' logs=' + logs.length + ' bodies=' + bodies.length);
 }

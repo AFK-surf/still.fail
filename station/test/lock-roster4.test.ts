@@ -65,6 +65,12 @@ const M7_ROWS: { label: string; o: Omit<Extract<Job4, { t: "m7" }>, "t" | "n"> }
   { label: "a second moved, any place, reading A", o: { attack: "any", reading: "A" } },
 ];
 const m7Rows = M7_ROWS.map((r) => ask<Any>({ t: "m7", n: CASES, ...r.o }));
+const M8_ROWS: { label: string; o: Omit<Extract<Job4, { t: "m8" }>, "t" | "n"> }[] = [
+  { label: "carried (D6)", o: {} },
+  { label: "carried, s2 away through the changes", o: { away: true } },
+  { label: "not carried (D6 off: the logs alone)", o: { carry: false } },
+];
+const m8Rows = M8_ROWS.map((r) => ask<Any>({ t: "m8", n: CASES, ...r.o }));
 const again = ask<boolean>({ t: "again", steps: STEPS });
 
 // ── the tables ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -193,6 +199,17 @@ test("M7: the handover", async () => {
     if (r.otherLog && i >= 3) toldLines(`M7 ${row.label}`, r.otherLog.slice(-30));
   }
   print(`(M7 printed, ${since()}; ${WORKERS} worker threads)`);
+});
+
+test("M8: the handover that waits for nobody, the chain as it moved carried", async () => {
+  print(`\n== M8: alice's app signs \`moved\` alone; members of kinds (a), (b1), (b2) and a page alone (w) at the move, ${CASES} drawn workspaces a row ==`);
+  for (const [i, row] of M8_ROWS.entries()) {
+    const r = await m8Rows[i];
+    const later = Object.entries(r.later as Record<string, [number, number]>).map(([k, [a, b]]) => `${k} ${a}/${b}`).join(", ");
+    print(`${row.label}: entries alice's log said for it ${r.said}; keepers compared ${r.compared}/${r.keepers}, rooted in alice's log ${r.atAlice}; the chain's list at its head right after the move at ${r.same}/${r.compared}; fields differing: ${said(r.diffs)}${r.first.length ? ` (${r.first.join("; ")})` : ""}; app devices not their person's own left behind ${r.behind}; later, holding at the end: ${later}; something taken out named again ${r.back}${r.backLog ? ` (${r.backLog})` : ""}`);
+    if (i === 0 && r.example) for (const l of r.example) print(`  ${l}`);
+  }
+  print(`(M8 printed, ${since()}; ${WORKERS} worker threads)`);
 });
 
 test("the fourth round's model is deterministic: the same seed, the same world", async () => {

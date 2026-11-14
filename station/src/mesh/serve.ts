@@ -211,8 +211,13 @@ function toldOut(cloud: Cloud, ws: string | null, device: string, hello: any): {
   if (cloud.chain(ws)?.state?.moved === undefined) return null;
   const proof = lockProof(hello?.lock);
   const ids = new Set([device, ...(proof && endpointProof(ws ?? cloud.home() ?? "", proof.base, device, proof.proof) ? [proof.base] : [])]);
-  // (a removal took out the keys of its subject's log: those the logs kept here put on with these ids)
+  // (a removal took out the keys of its subject's log: those the logs kept here put on with these ids; and the key the
+  // chain as it moved named each with, for a device it carried)
   const keys = new Set(ids);
+  for (const id of ids) {
+    const k = cloud.chain(ws)?.state?.devices.get(id)?.sign_key;
+    if (k !== undefined) keys.add(k);
+  }
   for (const [, entries] of personChainsOf(cloud).every()) {
     for (const e of entries) {
       const d = (e.kind === "genesis" ? (e.body as any)?.device : e.kind === "device" ? e.body : null) as { id?: unknown; key?: unknown } | null;
@@ -373,7 +378,9 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     const atHash = at !== undefined && at.seq === from ? { after_hash: hashOf(at) } : {};
     // (`builds`: what build each device its lock names last ran, as seen here, device-builds.ts; given only to a device the
     // lock let in, as admission let this one, and of a workspace with none, of nobody)
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
+    // (`carried`: a moved chain read as it moved beside its people's logs, cloud/lock.ts `state4Moved`, 2026-11-14: every
+    // reader must make the same state, so a core hands a chain over only once each of its stations says it)
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds", "carried"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
@@ -497,7 +504,7 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
     const chains = personChainsOf(cloud);
     // (with what this station serves of the person's logs and the builds of the app devices on the asker's own log, as
     // seen here: what their core reads before it writes a kind an older station or app refuses, device-builds.ts)
-    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
+    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
     if (method !== "POST") return [405, { error: "GET or POST" }];
     let said: any;
     try {
@@ -563,7 +570,9 @@ export function inLock(cloud: Cloud, admitted: Admitted, named: string, endpoint
   if (locked.waiting === true) throw new LockRefusal(NOT_GIVEN);
   const v = admitted.viewer;
   const { device, role } = admit(locked.state, { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof }, nowSecs());
-  if (device.kind === "app" && locked.state.persons.has(v.sub)) {
+  // (an app device the chain as it moved still says, its person's log never having put it on, `by` "chain": let in by
+  // the state, which no log it brings can say more of than the log kept here does)
+  if (device.kind === "app" && locked.state.persons.has(v.sub) && device.by !== "chain") {
     const person = onPersonalLock(cloud, admitted, named, endpoint, hello);
     if (person === null) throw new LockRefusal("this device goes by its person's own lock in this workspace, and it brought none");
     return person;
