@@ -96,26 +96,35 @@ test("a routed request is answered by the MoonBit program as the admin API answe
     assert.deepEqual(v, viewer);
     return { status: 200, headers: { "content-type": "application/json" }, body: Buffer.from('{"from":"node"}') };
   }, (_, build) => builds.push(build), async (v, head) => {
-    // an event stream as Node's events make one: two pieces, then one more each time `more` is called, till let go
+    // an event stream as Node's events make one (api/events.ts `relay`): two pieces, then one more told every stream
+    // each time `more` is called (the one text, as `emit` tells it), till let go
     assert.deepEqual(v, viewer);
     assert.equal(head.path, "/admin/api/events?shared=1");
     const pieces = ["retry: 3000\n\n", "event: made\ndata: {}\n\n"];
-    const body: AsyncIterableIterator<Buffer> = {
+    const body: AsyncIterableIterator<Buffer> & { relay?: unknown } = {
       [Symbol.asyncIterator]: () => body,
-      next: async () => {
-        while (pieces.length === 0 && !events.gone) await new Promise<void>((r) => (events.more = () => { pieces.push(`event: x\ndata: ${events.told++}\n\n`); r(); }));
-        if (events.gone) return { done: true, value: undefined };
-        return { done: false, value: Buffer.from(pieces.shift()!) };
-      },
+      next: async () => ({ done: true, value: undefined }),
       return: async () => {
-        events.gone = true;
-        events.letGo();
+        events.sinks = events.sinks.filter((k) => k !== sink);
+        if (events.sinks.length === 0) events.letGo();
         return { done: true, value: undefined };
       },
     };
+    let sink: { send: (text: string) => void; ended: () => void } | null = null;
+    body.relay = (send: (text: string) => void, ended: () => void) => {
+      for (const p of pieces) send(p);
+      sink = { send, ended };
+      events.sinks.push(sink);
+    };
     return { status: 200, headers: { "content-type": "text/event-stream" }, body };
   });
-  const events = { more: () => {}, gone: false, told: 0, letGo: () => {}, wentAway: null as Promise<void> | null };
+  const events = {
+    sinks: [] as { send: (text: string) => void; ended: () => void }[],
+    told: 0,
+    more: () => { const text = `event: x\ndata: ${events.told++}\n\n`; for (const k of events.sinks) k.send(text); },
+    letGo: () => {},
+    wentAway: null as Promise<void> | null,
+  };
   events.wentAway = new Promise<void>((r) => (events.letGo = r));
   t.after(() => served.close());
   const paths = await served.start();
@@ -224,37 +233,44 @@ test("a routed request is answered by the MoonBit program as the admin API answe
     served.viewer(ownConn.handed!, viewer);
     await (await own.openBi()).write(Buffer.from('{"hello":1}\n'));
     void ownConn.acceptBi();
-    const es = await own.openBi();
-    await es.write(Buffer.from(`${JSON.stringify({ ...routedHead, path: "/admin/api/events?shared=1" })}\n`));
-    await es.finish();
-    const z = createZstdDecompress();
-    let seen = "";
-    z.on("data", (b: Buffer) => (seen += b.toString()));
-    let head: any = null;
-    let carry = Buffer.alloc(0);
-    const until = async (want: string) => {
-      while (!seen.includes(want)) {
-        const b = await es.read();
-        assert.ok(b !== null, `the stream ended before ${want}: ${seen}`);
-        if (head === null) {
-          carry = Buffer.concat([carry, b]);
-          const at = carry.indexOf(10);
-          if (at < 0) continue;
-          head = JSON.parse(carry.subarray(0, at).toString());
-          await new Promise<void>((r) => z.write(carry.subarray(at + 1), () => r()));
-        } else await new Promise<void>((r) => z.write(b, () => r()));
-        // (what it decompressed is told before its write's callback; a turn more for its 'data')
-        await new Promise((r) => setImmediate(r));
-      }
+    // two streams of it: what is told both is given the program once (served.ts `#piece`), and arrives on each
+    const open = async () => {
+      const es = await own.openBi();
+      await es.write(Buffer.from(`${JSON.stringify({ ...routedHead, path: "/admin/api/events?shared=1" })}\n`));
+      await es.finish();
+      const z = createZstdDecompress();
+      const got = { seen: "", head: null as any };
+      z.on("data", (b: Buffer) => (got.seen += b.toString()));
+      let carry = Buffer.alloc(0);
+      const until = async (want: string) => {
+        while (!got.seen.includes(want)) {
+          const b = await es.read();
+          assert.ok(b !== null, `the stream ended before ${want}: ${got.seen}`);
+          if (got.head === null) {
+            carry = Buffer.concat([carry, b]);
+            const at = carry.indexOf(10);
+            if (at < 0) continue;
+            got.head = JSON.parse(carry.subarray(0, at).toString());
+            await new Promise<void>((r) => z.write(carry.subarray(at + 1), () => r()));
+          } else await new Promise<void>((r) => z.write(b, () => r()));
+          // (what it decompressed is told before its write's callback; a turn more for its 'data')
+          await new Promise((r) => setImmediate(r));
+        }
+      };
+      return { got, until };
     };
-    await until("event: made");
-    assert.equal(head.status, 200);
-    assert.equal(head.headers["content-encoding"], "zstd");
+    const one = await open();
+    const two = await open();
+    await one.until("event: made");
+    await two.until("event: made");
+    assert.equal(one.got.head.status, 200);
+    assert.equal(one.got.head.headers["content-encoding"], "zstd");
     events.more();
-    await until("data: 0");
-    // gone: the next piece cannot be written, and Node's stream is let go
+    await one.until("data: 0");
+    await two.until("data: 0");
+    // gone: the next piece cannot be written, and Node's streams are let go
     own.close(0, "gone");
-    for (let i = 0; i < 5 && !events.gone; i++) {
+    for (let i = 0; i < 5 && events.sinks.length > 0; i++) {
       events.more();
       await new Promise((r) => setTimeout(r, 50));
     }

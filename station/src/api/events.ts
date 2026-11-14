@@ -473,8 +473,11 @@ export class Events {
     const queue: string[] = [];
     let wakeReader: (() => void) | null = null;
     let closed = false;
+    // Given what carries it (`relay`): each piece handed it at once, no queue between.
+    let carried: { send: (text: string) => void; ended: () => void } | null = null;
     const push = (text: string) => {
       if (closed) return;
+      if (carried !== null) return carried.send(text);
       queue.push(text);
       wakeReader?.();
     };
@@ -558,6 +561,7 @@ export class Events {
       if (closed) return;
       closed = true;
       wakeReader?.();
+      carried?.ended();
       this.clients = this.clients.filter((c) => c !== client);
       if (client.shared && !this.clients.some((c) => c.shared)) this.sharedUntil = this.time.now() + KEPT_MS;
       client.stops.forEach((stop) => stop());
@@ -579,6 +583,14 @@ export class Events {
         remove();
         return { done: true, value: undefined };
       },
+    };
+    // What carries the stream elsewhere (mesh/served.ts: the MoonBit program writes it) takes each piece as it is told,
+    // what is waiting first; told when it ends from this side. The same text told several streams at once is one
+    // string, which it gives the program once.
+    (body as AsyncIterableIterator<Buffer> & { relay?: unknown }).relay = (send: (text: string) => void, ended: () => void) => {
+      for (const text of queue.splice(0)) send(text);
+      carried = { send, ended };
+      if (closed) ended();
     };
     return {
       status: 200,
