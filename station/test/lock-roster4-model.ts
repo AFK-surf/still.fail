@@ -857,7 +857,7 @@ export class World4 extends World3 {
   /// by the key it signs with there; a web page (whoever approved it) whose id their log never said (`web`,
   /// `web.remove`) until its `exp` there, by this keeper's clock. None where their binding is not the chain's, or the
   /// log that binds them is not held (what it said is not known). The model's keys are its devices' signers.
-  carriedDevices(h: Holder, c: { moved: string; s: LockState }, sub: string, lock: string): { apps: string[]; webs: string[]; sayless: Map<string, string> } {
+  carriedDevices(h: Holder, c: { moved: string; s: LockState }, sub: string, lock: string, off: Set<string> = new Set()): { apps: string[]; webs: string[]; sayless: Map<string, string> } {
     const none = { apps: [], webs: [], sayless: new Map<string, string>() };
     const was = c.s.persons.get(sub) ?? "";
     if ((was !== lock && was !== "") || !c.s.members.has(sub)) return none;
@@ -877,8 +877,8 @@ export class World4 extends World3 {
     for (const d of c.s.devices.values()) {
       if (d.sub !== sub) continue;
       if (d.kind === "app" && d.own && d.sign_key !== undefined) {
-        if (!putIds.has(d.id)) apps.push(d.sign_key);
-        else sayless.set(d.id, d.sign_key);
+        if (putIds.has(d.id)) sayless.set(d.id, d.sign_key);
+        else if (!off.has(d.id)) apps.push(d.sign_key);
       } else if (d.kind === "web" && !webIds.has(d.id) && (d.exp ?? 0) > now) webs.push(d.id);
     }
     return { apps, webs, sayless };
@@ -892,7 +892,8 @@ export class World4 extends World3 {
     if ((this.x.o.cancels ?? "h") === "h") for (const x of f.stmts.keys()) byBody.set(this.entry(x).body.h, [...(byBody.get(this.entry(x).body.h) ?? []), x]);
     const c = this.carriedOf(h, ws);
     const rootSub = h.logs.get(root)?.rules.state(root).sub ?? "alice";
-    const carried = c === null ? new Map<string, Entry>() : this.carriedStatements(c, rootSub, this.bindsIn(h, c, rootSub, ws, f));
+    const bi = c === null ? null : this.bindsIn(h, c, rootSub, ws, f);
+    const carried = c === null ? new Map<string, Entry>() : this.carriedStatements(c, rootSub, bi!.binds);
     const named = (cs: string[]) => cs.flatMap((x: string) => (c !== null && x === c.moved ? [...carried.keys()] : byBody.size > 0 ? (byBody.get(x) ?? []) : [x]));
     for (const [g, k] of h.logs) {
       logs.set(g, {
@@ -915,27 +916,62 @@ export class World4 extends World3 {
       });
     }
     const r = roster({ logs } as unknown as Holder, root, this.v.rule ?? "grounded");
-    if (c !== null) for (const [sub, m] of r.members) for (const k of this.carriedDevices(h, c, sub, m.lock).apps) r.letIn.set(k, sub);
+    if (c !== null) for (const [sub, m] of r.members) for (const k of this.carriedDevices(h, c, sub, m.lock, bi!.off.get(sub)).apps) r.letIn.set(k, sub);
     return r;
   }
-  /// D6's bindings in force at `h` (the lead's, 2026-11-14), by member: of each member the chain as it moved bound to no
-  /// log (not the root's person), the log of the smallest entry hash among their logs' `bind` statements in force that
-  /// the signer the chain names for an own, signing app device of theirs proves (`bindValid`).
-  bindsIn(h: Holder, c: { moved: string; s: LockState }, rootSub: string, ws: string, f: { stmts: Map<string, Body> }): Map<string, string> {
-    const best = new Map<string, [string, string]>();
+  /// D6's bindings in force at `h` (the lead's, 2026-11-14), by member, and what their logs took off. The candidates
+  /// of a member the chain as it moved bound to no log (not the root's person): their logs' `bind` statements in force
+  /// that the signer the chain names for an own, signing app device of theirs proves (`bindValid`). Of a candidate `c`
+  /// (its log `g`): `dev`, the chain's own signing app devices of theirs whose signer is `c`'s key; `off`, the chain's
+  /// own app devices of theirs that `g` put on (its genesis, a `device`) and has not on now. One attacks another of
+  /// another log where its `off` meets the other's `dev` (never one of its own log: a log that later takes off the very
+  /// device that proved it stays bound), and the grounded extension decides, as the list does for removals: in, out, or
+  /// neither (a circle). The binding: of those in, the smaller signer key, then the smaller entry hash (a value the
+  /// signer cannot choose before a hash ground at will; the lead's review, 2026-11-14). Taken off (`off`): every device
+  /// a candidate that is not out took off, so a device the member took off never comes back by a log of a signer it
+  /// took off: none in (each took the other's device off), no binding, the member as the chain carries them without
+  /// those devices.
+  bindsIn(h: Holder, c: { moved: string; s: LockState }, rootSub: string, ws: string, f: { stmts: Map<string, Body> }): { binds: Map<string, string>; off: Map<string, Set<string>> } {
+    type Cand = { x: string; g: string; key: string; dev: Set<string>; off: Set<string> };
+    const cands = new Map<string, Cand[]>();
     for (const [g, k] of h.logs) {
       const sub = k.rules.state(g).sub;
       if (sub === rootSub || !c.s.members.has(sub) || c.s.persons.has(sub)) continue;
+      const own = [...c.s.devices.values()].filter((d) => d.sub === sub && d.kind === "app" && d.own && d.sign_key !== undefined);
       for (const x of k.active) {
         const b = f.stmts.get(x);
         if (b?.kind !== "bind") continue;
-        const named = [...c.s.devices.values()].some((d) => d.sub === sub && d.kind === "app" && d.own && d.sign_key === b.key);
-        if (!named || !bindValid(b.key, b.sig, ws, sub, g, c.moved)) continue;
-        const was = best.get(sub);
-        if (was === undefined || x < was[0]) best.set(sub, [x, g]);
+        const dev = new Set(own.filter((d) => d.sign_key === b.key).map((d) => d.id));
+        if (dev.size === 0 || !bindValid(b.key, b.sig, ws, sub, g, c.moved)) continue;
+        const put = new Set<string>();
+        for (const y of k.active) {
+          const e = k.store.get(y)!;
+          if (e.kind === "genesis") put.add(e.body.device.id);
+          else if (e.kind === "device") put.add(e.body.id);
+        }
+        const on = new Set([...k.headState().devices.values()].map((d) => d.id));
+        const off = new Set(own.map((d) => d.id).filter((id) => put.has(id) && !on.has(id)));
+        cands.set(sub, [...(cands.get(sub) ?? []), { x, g, key: b.key, dev, off }]);
       }
     }
-    return new Map([...best].map(([sub, [, g]]) => [sub, g]));
+    const binds = new Map<string, string>(), offs = new Map<string, Set<string>>();
+    for (const [sub, cs] of cands) {
+      const attacks = (j: number, i: number) => j !== i && cs[j].g !== cs[i].g && [...cs[j].off].some((id) => cs[i].dev.has(id));
+      const label: ("in" | "out" | "undec")[] = cs.map(() => "undec");
+      for (let changed = true; changed; ) {
+        changed = false;
+        for (let i = 0; i < cs.length; i++) {
+          if (label[i] !== "undec") continue;
+          const by = cs.map((_, j) => j).filter((j) => attacks(j, i));
+          if (by.some((j) => label[j] === "in")) (label[i] = "out"), (changed = true);
+          else if (by.every((j) => label[j] === "out")) (label[i] = "in"), (changed = true);
+        }
+      }
+      const won = cs.filter((_, i) => label[i] === "in").sort((a, b) => (a.key !== b.key ? (a.key < b.key ? -1 : 1) : a.x < b.x ? -1 : a.x > b.x ? 1 : 0))[0];
+      if (won !== undefined) binds.set(sub, won.g);
+      offs.set(sub, new Set(cs.filter((_, i) => label[i] !== "out").flatMap((x) => [...x.off])));
+    }
+    return { binds, off: offs };
   }
   rosterOf(h: Holder, ws = WS, all = false): Roster {
     const root = this.pinsOf(h).get(ws);
@@ -971,11 +1007,12 @@ export class World4 extends World3 {
     if (oo.newest === "off") return "off";
     const r = this.rosterIn(h, root, ws, f);
     const c = this.carriedOf(h, ws);
+    const off = c === null ? null : this.bindsIn(h, c, h.logs.get(root)?.rules.state(root).sub ?? "alice", ws, f).off;
     // (the root's member: its email is the `open` in force's)
     const members = new Map<string, D4Member>();
     for (const [sub, m] of r.members) {
       const k = h.logs.get(m.lock);
-      const cd = c === null ? null : this.carriedDevices(h, c, sub, m.lock);
+      const cd = c === null ? null : this.carriedDevices(h, c, sub, m.lock, off?.get(sub));
       // (each app by the signer its log says, as the product's state names it: rules/src/lock/state4.mbt; D6: one whose
       // log never said a signer by the one the chain as it moved named it with, as its person's own)
       const said = (d: { id: string; sign_key?: string }) => d.sign_key ?? cd?.sayless.get(d.id);
@@ -1829,9 +1866,10 @@ export type M8Out = {
 /// drawn order (`away`: s2 cut off through them, back at the end). `carry: false`: the same with D6 off.
 /// `self`: (a) binds themselves to their own log (`bind`, proved by their app's signer the chain names), after a
 /// binding no signer of theirs proves (a signature by a key the chain names as nobody's own of theirs), in place of
-/// alice's admit.
-export function m8(seed: number, o: { carry?: boolean; away?: boolean; self?: boolean } = {}): M8Out {
-  const w = new World4(seed, VON, "free", { bare: true, carry: o.carry !== false });
+/// alice's admit. `rival`: in its place, two bindings of (a), whose phone and laptop are on the chain as their own
+/// (`Rival`): the rule between two bindings of one member (the lead's review, 2026-11-14).
+export function m8(seed: number, o: { carry?: boolean; away?: boolean; self?: boolean; rival?: Rival } = {}): M8Out {
+  const w = new World4(seed, VON, "free", { bare: true, carry: o.carry !== false, laptops: o.rival !== undefined });
   const r = new Rng(seed * 15485863 + 3);
   const app = (sub: string) => w.dev(`${sub}'s app`), phone = (sub: string) => w.dev(`${sub}'s phone`);
   const dev = (s: { base: Key; signer: Key; name: string }, sub: string) => ({ id: s.base.hex, sub, kind: "app", label: s.name, sign_key: s.signer.id });
@@ -1878,7 +1916,12 @@ export function m8(seed: number, o: { carry?: boolean; away?: boolean; self?: bo
   }
   if (r.int(2) === 0) web(who("b1"), key(4400), app("alice"));
   // (alice puts in an app device under (a), who has one that signs: not theirs, so left behind)
-  if (r.int(2) === 0) old(app("alice"), "device", () => dev(spec(`${who("a")}'s laptop`), who("a")));
+  if (r.int(2) === 0 && o.rival === undefined) old(app("alice"), "device", () => dev(spec(`${who("a")}'s laptop`), who("a")));
+  // (`rival`: (a)'s phone and laptop on the chain, put in by their app: their own)
+  if (o.rival !== undefined) {
+    const has = (id: string) => [...rules.state(hashOf(head)).devices.values()].some((d) => d.id === id);
+    for (const d of [phone(who("a")), w.dev(`${who("a")}'s laptop`)]) if (!has(d.base.hex)) old(app(who("a")), "device", () => dev(d, who("a")));
+  }
   const upTo = (x: Entry): Entry[] => {
     const out: Entry[] = [];
     for (let y = x; ; y = made.get(y.prev!)!) {
@@ -1970,9 +2013,13 @@ export function m8(seed: number, o: { carry?: boolean; away?: boolean; self?: bo
   w.sign(A, "ws.member.remove", { ws: WS, sub: b1, cancels });
   w.sign(A, "ws.member", { ws: WS, sub: b1, lock: w.home.get(b1), role: newRole, email: `${b1}@x` });
   deliver();
-  // bind: (a) admitted with their own log, or (`self`) bound to it by their own app's proof
+  // bind: (a) admitted with their own log, or (`self`) bound to it by their own app's proof, or (`rival`) two bindings
   const a = who("a");
-  if (o.self) {
+  let rivals: { L1: string; L2: string; want: { lock: string; apps: string[] } } | null = null;
+  if (o.rival !== undefined) {
+    rivals = rival(w, o.rival, a, hashOf(moved), deliver);
+    look4.at?.(w, `m8 seed ${seed}, rival ${o.rival}`);
+  } else if (o.self) {
     const L = app(a).log;
     // (a forger's: the right form, signed by a key the chain names as nobody's of (a)'s own: nothing)
     w.sign(app(a), "ws.bind", { ws: WS, key: spec("alice's app").signer.id, sig: spec("alice's app").signer.sign(bindBytes(WS, a, L, hashOf(moved))) });
@@ -2017,7 +2064,7 @@ export function m8(seed: number, o: { carry?: boolean; away?: boolean; self?: bo
     role: tally((d) => m(d, b1)?.role === newRole),
     // (bound by an admit to their log, their devices as the chain had them: those it put on by their signers there,
     // the others carried)
-    bind: tally((d) => m(d, a)?.lock === app(a).log && m(d, a)!.apps.join() === m(expected, a)!.apps.join()),
+    bind: rivals !== null ? tally((d) => m(d, a)?.lock === rivals!.want.lock && m(d, a)!.apps.join() === rivals!.want.apps.join()) : tally((d) => m(d, a)?.lock === app(a).log && m(d, a)!.apps.join() === m(expected, a)!.apps.join()),
     device: tally((d) => m(d, b1) !== undefined && !m(d, b1)!.apps.includes(ph) && m(d, b1)!.apps.includes(app(b1).signer.id)),
     ...(hadPage ? { web: tally((d) => m(d, b2) === undefined || !m(d, b2)!.webs.includes(page)) } : {}),
     out: tally((d, h) => !d.members.has(wo) && !d.members.has(b2) && !w.rosterOf(h).letIn.has(app(b2).signer.id)),
@@ -2033,6 +2080,47 @@ export function m8(seed: number, o: { carry?: boolean; away?: boolean; self?: bo
   };
 }
 
+/// The rule between two bindings of one member (the lead's review, 2026-11-14), on (a) of M8, whose app A, phone X and
+/// laptop B are on the chain as their own; L1 is their log (A's), L2 a log X begins:
+/// - `removed`: L1 bound by A takes X off (as `removeCarried` does: put on, taken off); L2 bound by X. L1's (X is out).
+/// - `circle`: the same, and L2 takes A off: no binding; neither X nor A, B carried.
+/// - `honest`: L1 bound by A, L2 by X, neither taking anything off: the one of the smaller signer key.
+/// - `self`: L1 bound by A puts B on, and B takes A off there: still L1's, A not in, X carried (a log taking off the
+///   device that proved it is not attacked by itself).
+/// What it signs, delivered between keepers; the logs and what (a) should be at the end (their binding, their apps).
+export type Rival = "removed" | "circle" | "honest" | "self";
+export function rival(w: World4, kind: Rival, a: string, moved: string, deliver: () => void): { L1: string; L2: string; want: { lock: string; apps: string[] } } {
+  const A = w.dev(`${a}'s app`), X = w.dev(`${a}'s phone`), B = w.dev(`${a}'s laptop`);
+  const L1 = A.log;
+  const g2 = w.genesis(spec(`${a}'s phone`));
+  const L2 = hashOf(g2);
+  w.receive(X.h, [g2]);
+  for (const s of w.stations) w.send(X.h, s);
+  const bindBy = (d: Dev3, log: string) => w.sign(d, "ws.bind", { ws: WS, key: d.signer.id, sig: d.signer.sign(bindBytes(WS, a, log, moved)) }, { log });
+  bindBy(A, L1);
+  if (kind === "removed" || kind === "circle") {
+    w.sign(A, "device", personDevice(X), { log: L1 });
+    w.sign(A, "device.remove", { key: X.signer.id }, { log: L1 });
+  }
+  if (kind === "self") {
+    w.sign(A, "device", personDevice(B), { log: L1 });
+    deliver();
+    w.sign(B, "device.remove", { key: A.signer.id }, { log: L1 });
+  }
+  if (kind !== "self") bindBy(X, L2);
+  if (kind === "circle") {
+    w.sign(X, "device", personDevice(A), { log: L2 });
+    w.sign(X, "device.remove", { key: A.signer.id }, { log: L2 });
+  }
+  deliver();
+  const keys = (...ds: Dev3[]) => ds.map((d) => d.signer.id).sort();
+  const want = kind === "removed" ? { lock: L1, apps: keys(A, B) }
+    : kind === "circle" ? { lock: "none", apps: keys(B) }
+    : kind === "honest" ? { lock: A.signer.id < X.signer.id ? L1 : L2, apps: keys(A, X, B) }
+    : { lock: L1, apps: keys(X, B) };
+  return { L1, L2, want };
+}
+
 // ── jobs, in worker threads ─────────────────────────────────────────────────────────────────────────────────────────
 
 export type Job4 =
@@ -2045,7 +2133,7 @@ export type Job4 =
   | { t: "revoked"; kind: "web" | "off"; parent: "same" | "any"; n: number; offFinal: boolean; more?: W4Options }
   | { t: "m6"; n: number; offFinal: boolean }
   | { t: "m7"; n: number; away?: boolean; attack?: "same" | "any"; reading?: "A" | "B" }
-  | { t: "m8"; n: number; carry?: boolean; away?: boolean; self?: boolean }
+  | { t: "m8"; n: number; carry?: boolean; away?: boolean; self?: boolean; rival?: Rival }
   | { t: "again"; steps: number }
   | { t: "lost"; order: Order }
   | { t: "skip"; order: Order }

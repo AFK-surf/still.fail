@@ -388,7 +388,7 @@ export function scriptedWorlds(from: number, to: number): Out {
       for (const kind of ["web", "off"] as const) for (const parent of ["same", "any"] as const) revoked(seed, kind, parent);
       m6(seed);
       for (const m of [{}, { away: true }, { attack: "same" as const }, { attack: "any" as const }]) m7(seed, m);
-      for (const m of [{}, { away: true }, { self: true }]) m8(seed, m);
+      for (const m of [{}, { away: true }, { self: true }, ...(["removed", "circle", "honest", "self"] as const).map((rival) => ({ rival }))]) m8(seed, m);
       misshapen(o, seed, r);
       // (one whose device says no signer: listed, signing nothing, its web page let in)
       const u = unsigned(seed);

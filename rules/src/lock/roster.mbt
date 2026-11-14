@@ -151,9 +151,10 @@ pub fn roster_without(ws : String, root : String, chains : Array[Array[Json]], b
 }
 
 ///|
-/// `roster`, with the logs it took (by their genesis's hash); `without` as `roster_without` has it; `carried`, the chain
-/// as it moved, where one did.
-fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], without : Array[String], carried : Carried?, c : &Crypto) -> (Roster, Map[String, (Person, Array[Json])]) {
+/// `roster`, with the logs it took (by their genesis's hash) and, by member, the chain's devices of theirs their
+/// bindings' logs took off (`binds_of`); `without` as `roster_without` has it; `carried`, the chain as it moved, where
+/// one did.
+fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], without : Array[String], carried : Carried?, c : &Crypto) -> (Roster, Map[String, (Person, Array[Json])], Map[String, Map[String, Unit]]) {
   let refused : Array[(String, String)] = []
   let logs : Map[String, (Person, Array[Json])] = Map([])
   for chain in chains {
@@ -240,7 +241,8 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     rooted: false, members: [], stations: [], pairs: [], undecided: [], cancelled: [], statements: [], labels: [], refused,
     in_force: forced, lacking, newest, settings, carried_keys: [],
   }
-  guard logs.get(root) is Some((root_person, _)) else { return (empty, logs) }
+  let offs : Map[String, Map[String, Unit]] = Map([])
+  guard logs.get(root) is Some((root_person, _)) else { return (empty, logs, offs) }
   let root_sub = root_person.sub
   let root_pair = root_sub + "|" + root
   // The statements of the list, each as round three had it in the clear: its kind `ws.<kind>`, its body with what a
@@ -257,7 +259,10 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
   // (each by its subject, `m/<sub>` or `s/<key>`)
   let carried_ids : Map[String, String] = Map([])
   if carried is Some(cr) {
-    let binds = binds_of(ws, cr, root_sub, in_force, logs, c)
+    let (binds, off) = binds_of(ws, cr, root_sub, in_force, logs, c)
+    for sub, o in off {
+      offs[sub] = o
+    }
     let subs = cr.chain.members.keys().collect()
     subs.sort()
     for sub in subs {
@@ -562,7 +567,7 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
   let carried_keys : Array[(String, String)] = []
   if carried is Some(cr) {
     for m in members {
-      for d in carry_of(cr, m.sub, m.lock, logs, 0.0).apps {
+      for d in carry_of(cr, m.sub, m.lock, logs, 0.0, offs.get(m.sub).unwrap_or(Map([]))).apps {
         carried_keys.push((d.sign_key.unwrap_or(""), m.sub))
       }
     }
@@ -583,6 +588,7 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
       in_force: forced, lacking, newest, settings, carried_keys,
     },
     logs,
+    offs,
   )
 }
 
@@ -607,33 +613,126 @@ pub fn bind_digest(ws : String, sub : String, log : String, moved : String, c : 
 }
 
 ///|
+/// A member's binding, a candidate (`binds_of`): its entry's hash, its log, its signer's key, the chain's own signing app
+/// devices of the member's whose signer that key is (`dev`), and those of the chain's own app devices of the member's
+/// that its log put on (its genesis's device, a `device`) and has not on now (`off`).
+priv struct Bind {
+  x : String
+  g : String
+  key : String
+  dev : Map[String, Unit]
+  off : Map[String, Unit]
+}
+
+///|
 /// The bindings in force of members the chain as it moved bound to no log (the lead's, 2026-11-14: a carried member with
-/// no log of their own does for themselves what they did before the move): by member, the log whose `bind` statement
-/// (its genesis's person the member) is proved by the signer the chain names for an own, signing app device of theirs,
-/// over `bind_form` of this workspace, that member, that log and this move. It counts as the chain's own admit of them
-/// to that log (`~<moved>/m/<sub>`'s `lock`), so whatever takes back the chain's saying of them (a removal of them, which
-/// cancels it named or not) takes it back too, and a real admit of the same role binds before it as before the chain's;
-/// one where the chain bound them to a log, or of the root's person, is nothing. Two of one member: the one of the
-/// smaller entry hash, as of two admits of one role.
-fn binds_of(ws : String, cr : Carried, root_sub : String, in_force : Array[(String, String, Json, String)], logs : Map[String, (Person, Array[Json])], c : &Crypto) -> Map[String, String] {
-  let out : Map[String, (String, String)] = Map([])
+/// no log of their own does for themselves what they did before the move), by member, and the chain's devices of theirs
+/// that their bindings took off. A candidate is a log's `bind` statement (its genesis's person the member) proved by the
+/// signer the chain names for an own, signing app device of theirs, over `bind_form` of this workspace, that member,
+/// that log and this move. It counts as the chain's own admit of them to that log (`~<moved>/m/<sub>`'s `lock`), so
+/// whatever takes back the chain's saying of them (a removal of them, which cancels it named or not) takes it back too,
+/// and a real admit of the same role binds before it as before the chain's; one where the chain bound them to a log, or
+/// of the root's person, is nothing.
+///
+/// Between two of one member (the lead's review, 2026-11-14): one attacks another of another log where its log took off
+/// a device that proves the other (its `off` meets the other's `dev`; never one of its own log, so a log that later
+/// takes off the very device that proved it stays bound), and the grounded extension decides, as the list does for
+/// removals: a candidate nothing attacks is in, one attacked by one in is out, again until nothing changes, a circle
+/// left neither. The binding is the one in of the smaller signer key, then of the smaller entry hash: a key is one of
+/// the few the chain names, an entry hash is ground at will by whoever makes the log. So a device the member took off
+/// never binds them again: before the move a removal the stations took was final. Taken off: every device a candidate
+/// not out took off, which the chain then carries no more (`state4.mbt` `carry_of`): where none is in (each took the
+/// other's device off) the member stands bound to no log, without any of them, until an owner or admin admits them.
+fn binds_of(ws : String, cr : Carried, root_sub : String, in_force : Array[(String, String, Json, String)], logs : Map[String, (Person, Array[Json])], c : &Crypto) -> (Map[String, String], Map[String, Map[String, Unit]]) {
+  let cands : Map[String, Array[Bind]] = Map([])
   for f in in_force {
     let (x, _, b, g) = f
     guard text_of(field(Some(b), "kind")) == Some("bind") else { continue }
-    guard logs.get(g) is Some((p, _)) else { continue }
+    guard logs.get(g) is Some((p, chain)) else { continue }
     let sub = p.sub
     guard sub != root_sub && cr.chain.members.contains(sub) && !cr.chain.persons.contains(sub) else { continue }
     guard text_of(field(Some(b), "key")) is Some(key) && text_of(field(Some(b), "sig")) is Some(sig) else { continue }
-    let named = cr.chain.devices.values().any(fn(d) { d.sub == sub && d.kind == "app" && d.own && d.sign_key == Some(key) })
-    guard named && c.tagged_sig_valid(key, sig, bind_tag, bind_digest(ws, sub, g, cr.moved, c)) else { continue }
-    match out.get(sub) {
-      Some((y, _)) if y <= x => ()
-      _ => out[sub] = (x, g)
+    let own : Map[String, Unit] = Map([])
+    let dev : Map[String, Unit] = Map([])
+    for _, d in cr.chain.devices {
+      if d.sub == sub && d.kind == "app" && d.own && d.sign_key is Some(k) {
+        own[d.id] = ()
+        if k == key {
+          dev[d.id] = ()
+        }
+      }
+    }
+    guard dev.length() > 0 && c.tagged_sig_valid(key, sig, bind_tag, bind_digest(ws, sub, g, cr.moved, c)) else { continue }
+    let off : Map[String, Unit] = Map([])
+    for e in chain {
+      let id = match text_of(field(Some(e), "kind")) {
+        Some("genesis") => text_of(field(Some(e), "body") |> field("device") |> field("id"))
+        Some("device") => text_of(field(Some(e), "body") |> field("id"))
+        _ => None
+      }
+      if id is Some(id) && own.contains(id) && !p.devices.values().any(fn(pd) { pd.id == id }) {
+        off[id] = ()
+      }
+    }
+    match cands.get(sub) {
+      Some(cs) => cs.push({ x, g, key, dev, off })
+      None => cands[sub] = [{ x, g, key, dev, off }]
     }
   }
   let binds : Map[String, String] = Map([])
-  for sub, v in out {
-    binds[sub] = v.1
+  let offs : Map[String, Map[String, Unit]] = Map([])
+  for sub, cs in cands {
+    let n = cs.length()
+    let attacks = fn(j : Int, i : Int) -> Bool {
+      j != i && cs[j].g != cs[i].g && cs[j].off.keys().any(fn(id) { cs[i].dev.contains(id) })
+    }
+    // (0 neither, 1 in, 2 out)
+    let label : Array[Int] = Array::make(n, 0)
+    let mut changed = true
+    while changed {
+      changed = false
+      for i in 0..<n {
+        guard label[i] == 0 else { continue }
+        let mut any_in = false
+        let mut all_out = true
+        for j in 0..<n {
+          if attacks(j, i) {
+            if label[j] == 1 {
+              any_in = true
+            }
+            if label[j] != 2 {
+              all_out = false
+            }
+          }
+        }
+        if any_in {
+          label[i] = 2
+          changed = true
+        } else if all_out {
+          label[i] = 1
+          changed = true
+        }
+      }
+    }
+    let mut won : Bind? = None
+    let off : Map[String, Unit] = Map([])
+    for i in 0..<n {
+      if label[i] == 1 {
+        match won {
+          Some(w) if w.key < cs[i].key || (w.key == cs[i].key && w.x <= cs[i].x) => ()
+          _ => won = Some(cs[i])
+        }
+      }
+      if label[i] != 2 {
+        for id, _ in cs[i].off {
+          off[id] = ()
+        }
+      }
+    }
+    if won is Some(w) {
+      binds[sub] = w.g
+    }
+    offs[sub] = off
   }
-  binds
+  (binds, offs)
 }

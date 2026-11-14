@@ -40,5 +40,15 @@
   device's signer signs has (`Crypto.tagged_sig_valid`: the tag, a NUL, the form's SHA-256; a lock entry's is
   `stillfail-lock/1 sig`, a vault's `stillfail-vault*/1`, a rig's `stillfail-rig-*/1`). It sets the chain's own admit
   of them to that log (`roster.mbt` `binds_of`), so nothing new is labelled: a removal of them takes it back, a real
-  admit of their role binds before it, two of them settle by the smaller entry hash. A station says `bind` in its
-  `serves`.
+  admit of their role binds before it. A station says `bind` in its `serves`.
+- Two bindings of one member (the lead's review, 2026-11-14) settle by what their signer cannot choose, never by an
+  entry hash (ground at will by whoever makes the log): a binding whose log took off a device that proves another
+  attacks it, the grounded extension decides as the list does for removals, and of those in, the smaller signer key
+  wins (then the smaller entry hash). Every device a binding not out took off, the chain carries no more: so a device
+  the member took off never binds them again (a thief's log bound by a lost phone would else seal their vaults to the
+  thief), as a removal the stations took was final before the move. Where each took the other's device off, nobody
+  is in: the member stands bound to no log, without any of those devices, until an owner or admin admits them (a real
+  admit binds before any `bind`), the manual case the owner took for two devices removing each other. Known and
+  taken: a removed signer whose log reaches a reader (by a station or the cloud, the lock's adversary) can so put the
+  member back to unbound with those devices out until then; proofs by several of the member's signers outweighing one
+  is not built.
