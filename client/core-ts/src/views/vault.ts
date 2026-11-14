@@ -1034,7 +1034,9 @@ export function levelVaultsOf(inner: Inner, sub: string, out?: string): Effect.E
 /// hold and this device had not read before the removal, is checked against it (`#rekey`), so it is taken as on a chain
 /// not moved, where the chain as it stood checks it (`waitingAs`'s prefix): the same acceptance, no wider. A signature
 /// carries no time; it is this device's own knowledge that the signer was in until the removal it made (the lead,
-/// 2026-11-14: a moved workspace does for people what an unmoved one does, 迁过之后和之前一样).
+/// 2026-11-14: a moved workspace does for people what an unmoved one does, 迁过之后和之前一样). Never let go for the rest
+/// of the run, on purpose: a chain not moved accepts by any prefix for good, so this side stays as open as that one;
+/// tightening one side alone would make the two differ again (the lead, 2026-11-14).
 const beforeOut = new WeakMap<Inner, Map<string, { lock: Checked; out: Set<string> }>>();
 function keepBefore(inner: Inner, ws: string, out: string): void {
   const lock = lockOf(inner, ws);

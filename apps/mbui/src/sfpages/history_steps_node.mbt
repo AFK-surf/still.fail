@@ -91,6 +91,7 @@ fn steps_list_node(
 ) -> Unit {
   let fk = station + "\u{1}" + key
   // its rows by their keys, in order: its top, each item's by the item's, what is in flight, the phase
+  let rows_epoch = Ref(0)
   let rows = @signals.computed(fn(_) {
     let (_, all) = steps_rows_of_topic(src, params, lkey)
     let keys : Array[String] = []
@@ -109,8 +110,17 @@ fn steps_list_node(
       keys.push(k)
       by[k] = r
     }
-    (keys, by)
+    rows_epoch.val = rows_epoch.val + 1
+    (keys, by, rows_epoch.val)
   })
+  let rows_rev : @signals.Signal[Int] = @signals.signal(0)
+  v.reacts(fn() { rows.get().2 }, at_start=false, fn(rev) {
+    rows_rev.set(rev)
+  })
+  let row_of = fn(k : String) -> StepsRow? {
+    rows_rev.get() |> ignore
+    @signals.untracked(fn() { rows.get().1.get(k) })
+  }
   let scroll = @view.Scroll::list()
   // (the item gone to: brought to the middle, its ground the accent's faint one till steps_marked_ms on)
   let place : @view.ListPlace[String] = @view.ListPlace::new()
@@ -239,10 +249,10 @@ fn steps_list_node(
         near_top=(0.5, wants_older, ask_older),
         reused=fn(k) { steps_row_shape(rows.untracked().1.get(k)) },
         make_reused=fn(slot, row_key) {
-          steps_reused_row_node(slot, src, station, key, rows, row_key, lit, tips, make_row)
+          steps_reused_row_node(slot, src, station, key, row_of, row_key, lit, tips, make_row)
         },
         fn(slot, k) {
-          slot.pick(at_once=true, fn() { StepsPicked::{ row: rows.get().1.get(k) } }, fn(p, picked) {
+          slot.pick(at_once=true, fn() { StepsPicked::{ row: row_of(k) } }, fn(p, picked) {
             guard picked.row is Some(row) else { return }
             make_row(p, row)
           })
@@ -662,6 +672,11 @@ fn steps_reveal_node(parent : @view.View, open : () -> Bool, make : (@view.View)
 }
 
 ///|
+fn steps_opened_contains_fn(key_fn : () -> String) -> Bool {
+  !steps_own.opened.is_empty() && steps_own.opened.contains(key_fn())
+}
+
+///|
 /// A chevron icon in `parent` that rotates smoothly on `@motion.moved()` when `open` changes (`"chevron-right"`
 /// turns +pi/2 to down; `"chevron-down"` turns -pi to up).
 fn steps_chevron_node(
@@ -670,19 +685,16 @@ fn steps_chevron_node(
   size : Double,
   color : @view.Live[Int64],
   open : () -> Bool,
-  key? : () -> String = fn() { "" },
 ) -> Unit {
   let turn_rad = if name == "chevron-right" { 1.5707963267948966 } else { -3.141592653589793 }
   let way = @motion.Way::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
-  let was_key = Ref(@signals.untracked(key))
   let icon = @sf.icon_node(parent, name, size, color)
-  icon.reacts(fn() { (open(), key()) }, at_start=false, fn(now) {
-    let (o, k) = now
-    if k != was_key.val {
-      was_key.val = k
-      way.put(if o { 1.0 } else { 0.0 })
+  icon.reacts(open, at_start=false, fn(o) {
+    let target = if o { 1.0 } else { 0.0 }
+    if @view.answering_now() {
+      way.put(target)
     } else {
-      way.go(if o { 1.0 } else { 0.0 }, @motion.moved(), at=icon.cause_at())
+      way.go(target, @motion.moved(), at=icon.cause_at())
     }
   })
   icon
@@ -758,7 +770,8 @@ fn fold_node(
   body : (@view.View) -> Unit,
   key_fn? : () -> String = fn() { key },
 ) -> Unit {
-  let open = fn() { steps_own.opened.contains(key_fn()) }
+  let open_sig = @signals.computed(fn(_) { steps_opened_contains_fn(key_fn) }, same=fn(a, b) { a == b })
+  let open = fn() { open_sig.get() }
   // (by the room it is given: how tall what it holds comes to whole at that width, measured as it is laid out, what
   // shows by that laid out in that same layout)
   v.by_room(fn(v, given) {
@@ -771,7 +784,8 @@ fn fold_node(
         None => 0.0
       }
     }
-    let long = fn() { tall() > most() + 4.0 }
+    let long_sig = @signals.computed(fn(_) { tall() > most() + 4.0 }, same=fn(a, b) { a == b })
+    let long = fn() { long_sig.get() }
     steps_box_node(v, h_fold, fn(f) {
       steps_box_node(f, h_fold_room, fn(room) {
         steps_box_node(room, h_fold_inner, fn(i) {
@@ -782,15 +796,13 @@ fn fold_node(
         // (opening and closing its way, from the moment it is pressed, a Move as long as what is past the cut is
         // tall: all of it at once was a step of that many lines in one frame, what is under it with it)
         let way = @motion.Way::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
-        let was_key = Ref(@signals.untracked(key_fn))
-        room.reacts(fn() { (open(), key_fn()) }, fn(now) {
-          let (o, k) = now
-          if k != was_key.val {
-            was_key.val = k
-            way.put(if o { 1.0 } else { 0.0 })
+        room.reacts(open, at_start=false, fn(o) {
+          let target = if o { 1.0 } else { 0.0 }
+          if @view.answering_now() {
+            way.put(target)
           } else {
             let past = dmax(0.0, @signals.untracked(tall) - most())
-            way.go(if o { 1.0 } else { 0.0 }, @motion.moved().per_unit(past), at=room.cause_at())
+            way.go(target, @motion.moved().per_unit(past), at=room.cause_at())
           }
         })
         let shown = fn() {
@@ -808,7 +820,11 @@ fn fold_node(
           if k >= 1.0 {
             None
           } else if long() {
-            Some(m + (tall() - m) * dmax(0.0, k))
+            if k <= 0.0 {
+              Some(m)
+            } else {
+              Some(m + (tall() - m) * k)
+            }
           } else {
             Some(m + 4.0)
           }
@@ -816,14 +832,21 @@ fn fold_node(
         |> ignore
       })
       f.show(long, fn(t) {
-        let words = fn() {
-          if open() {
-            @sf.t("web-main.fold")
-          } else {
-            let more = dmax(1.0, ((tall() - most()) / line_h()).round()).to_int()
-            @sf.t("web-main.history.more", args=[("n", more.to_string())])
-          }
-        }
+        let more_sig = @signals.computed(
+          fn(_) { dmax(1.0, ((tall() - most()) / line_h()).round()).to_int() },
+          same=fn(a, b) { a == b },
+        )
+        let words_sig = @signals.computed(
+          fn(_) {
+            if open() {
+              @sf.t("web-main.fold")
+            } else {
+              @sf.t("web-main.history.more", args=[("n", more_sig.get().to_string())])
+            }
+          },
+          same=fn(a, b) { a == b },
+        )
+        let words = fn() { words_sig.get() }
         t.box(fn(b) {
           @sf.style_node(b, fn() { h_fold_toggle })
           steps_pressed(b, fn() { steps_flip(@signals.untracked(key_fn)) }, label=words, folds=true, open~)
@@ -834,7 +857,6 @@ fn fold_node(
             12.0,
             By(fn() { if @sf.lit_node(b) { @sf.theme().p.accent } else { @sf.theme().p.blue } }),
             open,
-            key=key_fn,
           )
         })
         |> ignore
@@ -853,6 +875,28 @@ fn short_plain_words(words : String) -> Bool {
   for c in words {
     w = w + (if c <= '\u{7f}' { 1 } else { 2 })
     if w > 160 {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn medium_plain_words(words : String) -> Bool {
+  if words.length() > 280 {
+    return false
+  }
+  let mut w = 0
+  let mut nl = 0
+  for c in words {
+    if c == '\n' {
+      nl = nl + 1
+      if nl > 3 {
+        return false
+      }
+    }
+    w = w + (if c <= '\u{7f}' { 1 } else { 2 })
+    if w > 280 {
       return false
     }
   }
@@ -941,6 +985,8 @@ fn place_node(v : @view.View, station : String, place : Json?) -> Unit {
 
 ///|
 fn place_live_node(v : @view.View, station : String, place : () -> Json?, link : Bool) -> Unit {
+  let surface_sig = @signals.computed(fn(_) { text(place(), "surface") }, same=fn(a, b) { a == b })
+  let name_sig = @signals.computed(fn(_) { text(place(), "name") }, same=fn(a, b) { a == b })
   let press = if link {
     Some(fn() {
       let p = @signals.untracked(place)
@@ -958,8 +1004,8 @@ fn place_live_node(v : @view.View, station : String, place : () -> Json?, link :
   }
   @sf.place_node(
     v,
-    fn() { text(place(), "surface") },
-    fn() { text(place(), "name") },
+    fn() { surface_sig.get() },
+    fn() { name_sig.get() },
     fn(hot) { if hot { h_place_hot } else { h_place } },
     if link { h_place_link_words } else { h_place_words },
     press~,
@@ -1326,6 +1372,9 @@ fn group_rows_node(
 
 ///|
 fn steps_opened_under(ik : String) -> Bool {
+  if steps_own.opened.is_empty() {
+    return false
+  }
   let prefix = ik + "/"
   for k, _ in steps_own.opened {
     if k.has_prefix(prefix) {
@@ -1339,87 +1388,102 @@ fn steps_opened_under(ik : String) -> Bool {
 /// Pool key for common closed `Item` row shapes so scrolling reuses existing row subtrees in place (`View::scrolls_window`'s
 /// `reused`) instead of tearing down and rebuilding every row that enters or leaves the viewport.
 fn steps_row_shape(row : StepsRow?, ignore_opened? : Bool = false) -> Int? {
-  guard row is Some(Item(item, _)) else { return None }
-  let ik = text(Some(item), "key")
-  if ik == "" || (!ignore_opened && steps_opened_under(ik)) {
-    return None
-  }
-  let has_turn = field(Some(item), "turn") is Some(Object(_))
-  let body = field(Some(item), "body")
-  let content = field(body, "content")
-  let base = match text(body, "kind") {
-    "group" => {
-      let f = number(content, "failures").to_int() > 0
-      let p = number(content, "pending").to_int() > 0
-      match (f, p) {
-        (false, false) => 0
-        (false, true) => 1
-        (true, false) => 2
-        (true, true) => 3
-      }
-    }
-    "text" => {
-      let words = text(content, "text")
-      let line = text(content, "line")
-      let sub = flag(content, "subagent")
-      if !sub && words == line && !words.contains("\n") && words.length() <= 24 {
-        4
-      } else {
+  match row {
+    Some(Live(_, _)) => return Some(44)
+    Some(Item(item, _)) => {
+      let ik = text(Some(item), "key")
+      if ik == "" || (!ignore_opened && steps_opened_under(ik)) {
         return None
       }
-    }
-    "received" => {
-      let note = text(content, "note")
-      let tasks = items(content, "tasks")
-      let messages = items(content, "messages")
-      if note == "" && tasks.length() == 1 && messages.is_empty() {
-        let task = Some(tasks[0])
-        let answer = text(task, "result")
-        let has = field(task, "md") is Some(Array(_)) && answer != ""
-        if !has {
-          if flag(task, "agent") { 5 } else { 6 }
-        } else {
-          return None
-        }
-      } else if note == "" && tasks.is_empty() && messages.length() == 1 {
-        let m = Some(messages[0])
-        let from = field(m, "from")
-        let words = text(m, "text")
-        if text(from, "slackUser") == "" && text(m, "notice") != "job" {
-          let place = field(m, "place")
-          let place_kind = match place {
-            Some(Object(_)) => if text(place, "url") != "" || text(place, "session") != "" { 2 } else { 1 }
-            _ => 0
+      let has_turn = field(Some(item), "turn") is Some(Object(_))
+      let body = field(Some(item), "body")
+      let content = field(body, "content")
+      let base = match text(body, "kind") {
+        "group" => {
+          let f = number(content, "failures").to_int() > 0
+          let p = number(content, "pending").to_int() > 0
+          match (f, p) {
+            (false, false) => 0
+            (false, true) => 1
+            (true, false) => 2
+            (true, true) => 3
           }
-          let msg_kind = if field(m, "md") is Some(Array(_)) {
-            2
-          } else if short_plain_words(words) {
-            0
+        }
+        "text" => {
+          let words = text(content, "text")
+          let line = text(content, "line")
+          let sub = flag(content, "subagent")
+          if !sub && words == line && !words.contains("\n") && words.length() <= 24 {
+            4
           } else {
-            1
+            return None
           }
-          7 + place_kind * 3 + msg_kind
-        } else {
-          return None
         }
-      } else {
-        return None
+        "received" => {
+          let note = text(content, "note")
+          let tasks = items(content, "tasks")
+          let messages = items(content, "messages")
+          if note == "" && tasks.length() == 1 && messages.is_empty() {
+            let task = Some(tasks[0])
+            let answer = text(task, "result")
+            let has = field(task, "md") is Some(Array(_)) && answer != ""
+            if !has {
+              if flag(task, "agent") { 5 } else { 6 }
+            } else {
+              return None
+            }
+          } else if note == "" && tasks.is_empty() && messages.length() == 1 {
+            let m = Some(messages[0])
+            let from = field(m, "from")
+            let words = text(m, "text")
+            if text(from, "slackUser") == "" && text(m, "notice") != "job" {
+              let place = field(m, "place")
+              let place_kind = match place {
+                Some(Object(_)) => if text(place, "url") != "" || text(place, "session") != "" { 2 } else { 1 }
+                _ => 0
+              }
+              let msg_kind = if field(m, "md") is Some(Array(_)) {
+                3
+              } else if short_plain_words(words) {
+                0
+              } else if medium_plain_words(words) {
+                1
+              } else {
+                2
+              }
+              7 + place_kind * 4 + msg_kind
+            } else {
+              return None
+            }
+          } else {
+            return None
+          }
+        }
+        "post" => {
+          let ends = text(content, "ends")
+          let failed = flag(content, "failed")
+          let block = flag(content, "block")
+          let place = field(content, "place")
+          if ends == "" && !failed && !block && place is Some(Object(_)) {
+            if text(place, "url") != "" || text(place, "session") != "" { 19 } else { 20 }
+          } else {
+            return None
+          }
+        }
+        "mark" => {
+          let wait = field(content, "wait")
+          if wait is Some(Object(_)) && field(wait, "until") is Some(Number(_)) {
+            21
+          } else {
+            return None
+          }
+        }
+        _ => return None
       }
+      Some(base * 2 + (if has_turn { 1 } else { 0 }))
     }
-    "post" => {
-      let ends = text(content, "ends")
-      let failed = flag(content, "failed")
-      let block = flag(content, "block")
-      let place = field(content, "place")
-      if ends == "" && !failed && !block && place is Some(Object(_)) {
-        if text(place, "url") != "" || text(place, "session") != "" { 16 } else { 17 }
-      } else {
-        return None
-      }
-    }
-    _ => return None
+    _ => None
   }
-  Some(base * 2 + (if has_turn { 1 } else { 0 }))
 }
 
 ///|
@@ -1455,16 +1519,19 @@ fn steps_reused_row_node(
   src : Source,
   station : String,
   key : String,
-  rows : @signals.Computed[(Array[String], Map[String, StepsRow])],
+  row_of : (String) -> StepsRow?,
   row_key : () -> String,
   lit : @signals.Signal[String],
   tips : @sf.TipLayer,
   make_row : (@view.View, StepsRow) -> Unit,
 ) -> Unit {
-  let picked = @signals.computed(fn(_) { StepsPicked::{ row: rows.get().1.get(row_key()) } })
+  let picked = @signals.computed(fn(_) { StepsPicked::{ row: row_of(row_key()) } })
   let init_shape = @signals.untracked(fn() { steps_row_shape(picked.get().row) })
-  let same_shape = fn() { steps_row_shape(picked.get().row, ignore_opened=true) == init_shape }
-  slot.pick(at_once=true, fn() { if same_shape() { None } else { Some(picked.get()) } }, fn(p, fallback) {
+  let same_shape_sig = @signals.computed(
+    fn(_) { steps_row_shape(picked.get().row, ignore_opened=true) == init_shape },
+    same=fn(a, b) { a == b },
+  )
+  slot.pick(at_once=true, fn() { if same_shape_sig.get() { None } else { Some(picked.get()) } }, fn(p, fallback) {
     match fallback {
       Some(pk) => {
         guard pk.row is Some(row) else { return }
@@ -1473,6 +1540,25 @@ fn steps_reused_row_node(
       None => {
         guard init_shape is Some(shape) else { return }
         let base = shape / 2
+        if base == 22 {
+          let live_words_sig = @signals.computed(
+            fn(_) {
+              match picked.get().row {
+                Some(Live(l, _)) => text(Some(l), "text")
+                _ => ""
+              }
+            },
+            same=fn(a, b) { a == b },
+          )
+          steps_box_node(p, steps_row, fn(r) {
+            steps_main_node(r, fn(m) {
+              ev_node(m, "think", "", "", rail_last=true, fn(b) {
+                steps_words(b, fn() { live_words_sig.get() }, live_words) |> ignore
+              })
+            })
+          })
+          return
+        }
         let has_turn = (shape & 1) != 0
         let item_fn = fn() {
           match picked.get().row {
@@ -1480,29 +1566,39 @@ fn steps_reused_row_node(
             _ => None
           }
         }
-        let has_rail = fn() {
-          match picked.get().row {
-            Some(Item(_, rail)) => rail
-            _ => false
-          }
+        let has_rail_sig = @signals.computed(
+          fn(_) {
+            match picked.get().row {
+              Some(Item(_, rail)) => rail
+              _ => false
+            }
+          },
+          same=fn(a, b) { a == b },
+        )
+        let has_rail = fn() { has_rail_sig.get() }
+        let marked = fn() {
+          let l = lit.get()
+          l != "" && l == row_key()
         }
-        let marked = fn() { lit.get() == row_key() }
         steps_box_node(p, steps_row, fn(r) {
           r.box(fn(b) {
             @sf.style_node(b, fn() { h_item })
             b.ground(By(fn() { if marked() { @ui.tree_theme().color(A(Accent, O10)) } else { 0L } })) |> ignore
             if has_turn {
               steps_box_node(b, h_turn, fn(t) {
-                let said = fn() {
-                  let turn = field(item_fn(), "turn")
-                  match text(turn, "time") {
-                    "" => text(turn, "text")
-                    time => time + " · " + text(turn, "text")
-                  }
-                }
+                let said_sig = @signals.computed(
+                  fn(_) {
+                    let turn = field(item_fn(), "turn")
+                    match text(turn, "time") {
+                      "" => text(turn, "text")
+                      time => time + " · " + text(turn, "text")
+                    }
+                  },
+                  same=fn(a, b) { a == b },
+                )
                 t.box(fn(w) {
                   w
-                  .words(By(said))
+                  .words(By(fn() { said_sig.get() }))
                   .words_look(By(fn() { @ui.style_words(h_turn_words) }))
                   .ink(By(fn() { @ui.style_ink(h_turn_words) }))
                   .cuts(Is(true))
@@ -1520,7 +1616,10 @@ fn steps_reused_row_node(
                   let has_failures = base == 2 || base == 3
                   let has_pending = base == 1 || base == 3
                   let gk = fn() { row_key() + "/group" }
-                  let open = fn() { steps_own.opened.contains(gk()) }
+                  let open_sig = @signals.computed(fn(_) { steps_opened_contains_fn(gk) }, same=fn(a, b) { a == b })
+                  let open = fn() { open_sig.get() }
+                  let summary_sig = @signals.computed(fn(_) { text(content(), "summary") }, same=fn(a, b) { a == b })
+                  let summary = fn() { summary_sig.get() }
                   steps_box_node(m, h_group, fn(gv) {
                     ignore(has_rail)
                     gv.box(fn(h) {
@@ -1528,7 +1627,7 @@ fn steps_reused_row_node(
                       let hot = fn() { @sf.lit_node(h) }
                       h.ground(By(fn() { if @sf.lit_in_node(h) { @ui.tree_theme().color(Hover) } else { 0L } }))
                       |> ignore
-                      steps_pressed(h, fn() { steps_flip(@signals.untracked(gk)) }, label=fn() { text(content(), "summary") }, folds=true, open~)
+                      steps_pressed(h, fn() { steps_flip(@signals.untracked(gk)) }, label=summary, folds=true, open~)
                       h.box(fn(i) {
                         @sf.style_node(i, fn() { h_icon })
                         steps_chevron_node(
@@ -1537,14 +1636,13 @@ fn steps_reused_row_node(
                           14.0,
                           By(fn() { if hot() { @sf.theme().p.text } else { @sf.theme().p.muted } }),
                           open,
-                          key=gk,
                         )
                       })
                       |> ignore
                       steps_box_node(h, h_grow_clip, fn(w) {
                         w.box(fn(rw) {
                           rw
-                          .words_runs(By(fn() { [@ui.span(text(content(), "summary"), mono=false)] }))
+                          .words_runs(By(fn() { [@ui.span(summary(), mono=false)] }))
                           .words_look(By(fn() { @ui.style_words(h_group_words) }))
                           .ink(By(fn() { @ui.style_ink(if hot() { h_group_hot } else { h_group_words }) }))
                           .cuts(Is(true))
@@ -1555,14 +1653,22 @@ fn steps_reused_row_node(
                         |> ignore
                       }, in_row=true)
                       if has_failures {
+                        let failures_sig = @signals.computed(
+                          fn(_) { number(content(), "failures").to_int() },
+                          same=fn(a, b) { a == b },
+                        )
                         @sf.badge_node(h, fn() {
-                          @sf.t("web-main.history.failures", args=[("n", number(content(), "failures").to_int().to_string())])
+                          @sf.t("web-main.history.failures", args=[("n", failures_sig.get().to_string())])
                         }, tone=Red)
                         |> ignore
                       }
                       if has_pending {
+                        let pending_sig = @signals.computed(
+                          fn(_) { number(content(), "pending").to_int() },
+                          same=fn(a, b) { a == b },
+                        )
                         @sf.badge_node(h, fn() {
-                          @sf.t("web-main.history.pending", args=[("n", number(content(), "pending").to_int().to_string())])
+                          @sf.t("web-main.history.pending", args=[("n", pending_sig.get().to_string())])
                         }, tone=Accented)
                         |> ignore
                       }
@@ -1579,17 +1685,21 @@ fn steps_reused_row_node(
                     })
                   })
                 }
-                4 =>
+                4 => {
+                  let line_sig = @signals.computed(fn(_) { text(content(), "line") }, same=fn(a, b) { a == b })
                   ev_live_node(m, "said", fn() { "" }, has_rail, fn(eb) {
-                    steps_box_node(eb, h_one, fn(o) { steps_words(o, fn() { text(content(), "line") }, h_one_words) })
+                    steps_box_node(eb, h_one, fn(o) { steps_words(o, fn() { line_sig.get() }, h_one_words) })
                   })
+                }
                 5 | 6 => {
                   let agent = base == 5
                   let task = fn() { items(content(), "tasks").get(0) }
-                  let failed = fn() { flag(task(), "failed") }
+                  let failed_sig = @signals.computed(fn(_) { flag(task(), "failed") }, same=fn(a, b) { a == b })
+                  let failed = fn() { failed_sig.get() }
+                  let task_words_sig = @signals.computed(fn(_) { text(task(), "text") }, same=fn(a, b) { a == b })
                   ev_live_node(m, if agent { "agent" } else { "command" }, fn() { if failed() { "red" } else { "" } }, has_rail, fn(eb) {
                     steps_box_node(eb, h_one_wrap, fn(o) {
-                      @sf.words_node(o, fn() { text(task(), "text") }, fn() {
+                      @sf.words_node(o, fn() { task_words_sig.get() }, fn() {
                         if failed() {
                           h_one_red_wrap
                         } else {
@@ -1600,23 +1710,27 @@ fn steps_reused_row_node(
                     })
                   })
                 }
-                7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 => {
-                  let place_kind = (base - 7) / 3
-                  let msg_kind = (base - 7) % 3
+                7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 => {
+                  let place_kind = (base - 7) / 4
+                  let msg_kind = (base - 7) % 4
                   let msg = fn() { items(content(), "messages").get(0) }
+                  let from_name_sig = @signals.computed(
+                    fn(_) {
+                      let m0 = msg()
+                      if text(m0, "notice") == "stillfail" {
+                        @sf.product()
+                      } else {
+                        text(field(m0, "from"), "name")
+                      }
+                    },
+                    same=fn(a, b) { a == b },
+                  )
                   steps_box_node(m, h_ev_stack, fn(ev) {
                     ev_live_node(ev, "received", fn() { "" }, has_rail, fn(eb) {
                       steps_box_node(eb, h_label, fn(l) {
                         label_wraps(l)
                         steps_words(l, fn() { @sf.t("web-main.history.message.before") }, h_label_words)
-                        steps_words(l, fn() {
-                          let m0 = msg()
-                          if text(m0, "notice") == "stillfail" {
-                            @sf.product()
-                          } else {
-                            text(field(m0, "from"), "name")
-                          }
-                        }, h_strong)
+                        steps_words(l, fn() { from_name_sig.get() }, h_strong)
                         steps_words(l, fn() { @sf.t("web-main.history.message.after") }, h_label_words)
                         if place_kind > 0 {
                           steps_box_node(l, h_label_place, fn(dp) {
@@ -1627,22 +1741,26 @@ fn steps_reused_row_node(
                         }
                       })
                     })
-                    let words = fn() { text(msg(), "text") }
+                    let words_sig = @signals.computed(fn(_) { text(msg(), "text") }, same=fn(a, b) { a == b })
+                    let words = fn() { words_sig.get() }
                     if msg_kind == 0 {
                       steps_words(ev, words, h_words)
-                    } else if msg_kind == 1 {
+                    } else if msg_kind == 1 || msg_kind == 2 {
                       let fk = fn() { row_key() + "/message/0" }
                       fold_node(ev, "", words_lines, words_line, key_fn=fk, fn(f) { steps_words(f, words, h_words) })
                     } else {
                       let fk = fn() { row_key() + "/message/0" }
+                      let md_sig = @signals.computed(fn(_) { field(msg(), "md") })
                       fold_node(ev, "", words_lines, md_line, key_fn=fk, fn(f) {
-                        md_live_node(f, words, fn() { field(msg(), "md") })
+                        md_live_node(f, words, fn() { md_sig.get() })
                       })
                     }
                   })
                 }
-                16 | 17 => {
-                  let link = base == 16
+                19 | 20 => {
+                  let link = base == 19
+                  let post_words_sig = @signals.computed(fn(_) { text(content(), "text") }, same=fn(a, b) { a == b })
+                  let post_md_sig = @signals.computed(fn(_) { field(content(), "md") })
                   steps_box_node(m, h_ev_stack, fn(ev) {
                     ev_live_node(ev, "send", fn() { "accent" }, has_rail, fn(eb) {
                       steps_box_node(eb, h_label, fn(l) {
@@ -1655,8 +1773,16 @@ fn steps_reused_row_node(
                       card.edge(By(fn() { (1.0, @ui.tree_theme().color(Line)) })) |> ignore
                       let fk = fn() { row_key() + "/post" }
                       fold_node(card, "", post_lines, md_line, key_fn=fk, fn(f) {
-                        md_live_node(f, fn() { text(content(), "text") }, fn() { field(content(), "md") })
+                        md_live_node(f, fn() { post_words_sig.get() }, fn() { post_md_sig.get() })
                       })
+                    })
+                  })
+                }
+                21 => {
+                  let mark_words_sig = @signals.computed(fn(_) { text(content(), "text") }, same=fn(a, b) { a == b })
+                  ev_live_node(m, "wait", fn() { "" }, has_rail, fn(eb) {
+                    steps_box_node(eb, h_state_line, fn(l) {
+                      steps_words(l, fn() { mark_words_sig.get() }, h_state_words)
                     })
                   })
                 }

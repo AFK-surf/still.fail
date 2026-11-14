@@ -47,8 +47,10 @@ test("a workspace's ways come from /v1/me: still.fail's relays named, its own, t
   assert.equal(view.offLabel, "已关闭 2 项");
 });
 
-test("a relay of the workspace's own says who added it, as its stations keep it", async () => {
+test("a relay of the workspace's own says who added it, as its stations keep it; `ours` in `off` turns off all of still.fail's relays", async () => {
   const { waysView } = await import("../src/views/ways.ts");
-  const view = waysView(["https://cf.test"], {}, ["https://own.test", "https://pvg.test:8445"], [], { "https://pvg.test:8445/": "上海中继" });
-  assert.deepEqual(view.ways.filter((w) => w.own).map((w) => [w.id, w.by ?? null]), [["https://own.test", null], ["https://pvg.test:8445", "上海中继"]]);
+  const view = waysView(["https://cf.test", "https://bj.test"], { "https://bj.test": "北京" }, ["https://own.test", "https://pvg.test:8445"], ["ours"], { "https://pvg.test:8445/": "上海中继" });
+  assert.deepEqual(view.ways.filter((w) => w.own).map((w) => [w.id, w.by ?? null, w.on]), [["https://own.test", null, true], ["https://pvg.test:8445", "上海中继", true]]);
+  assert.deepEqual(view.ways.filter((w) => w.kind === "relay" && !w.own).map((w) => [w.id, w.on]), [["https://cf.test", false], ["https://bj.test", false]]);
+  assert.equal(view.off, 2);
 });

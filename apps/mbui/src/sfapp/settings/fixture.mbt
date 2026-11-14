@@ -139,6 +139,10 @@ priv struct SettingsFixture {
   mut drive_kept : Double
   /// the chats' files kept let go (`cache.file.clear`), by name
   kept_cleared : Array[String]
+  /// the workspace's own relays added since the run started (`workspace.setRelays`)
+  relays : Array[String]
+  /// whether still.fail's relays were turned off (`workspace.setWay` with `way: "ours"`)
+  mut ours_off : Bool
 }
 
 ///|
@@ -204,6 +208,8 @@ let fx : SettingsFixture = {
   motion: 0,
   drive_kept: fx_drive_kept,
   kept_cleared: [],
+  relays: [],
+  ours_off: false,
 }
 
 ///|
@@ -309,6 +315,8 @@ fn fixture_reset() -> Unit {
   fx.skills_shared.clear()
   fx.drive_kept = fx_drive_kept
   fx.kept_cleared.clear()
+  fx.relays.clear()
+  fx.ours_off = false
   fx.resets_used = 0
   fx.reset_expiry = false
   fx.reset_kinds = false
@@ -2374,7 +2382,16 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("rigs", rigs_fixture_listed(mode)),
           ("invitations", [obj([("id", str("i1")), ("role", str("member")), ("email", str("qin@example.com")), ("time", obj([("expires_at", stamp_of("", until="6 天后"))]))])]),
           ("added", [obj([("email", str("he@example.com")), ("role", str("member"))])]),
-          ("relays", []),
+          (
+            "relays",
+            Json::array(
+              fx.relays.map(fn(u) {
+                let h = if u.has_prefix("https://") { u.unsafe_substring(start=8, end=u.length()) } else { u }
+                let host = if h.has_suffix("/") { h.unsafe_substring(start=0, end=h.length() - 1) } else { h }
+                obj([("url", str(u)), ("host", str(host)), ("by", str("林"))])
+              }),
+            ),
+          ),
         ]),
       )
     // the workspace's stations that only run tasks (rigs_fixture.mbt)
@@ -2382,23 +2399,30 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
     // the workspace's devices (devices_fixture.mbt)
     "devices" if devices_fixture_mode(mode) => Some(devices_fixture_topic())
     // every way its devices reach its stations (the core's views/ways.ts), the punched path turned off
-    "workspaceWays" =>
+    "workspaceWays" => {
+      let own = fx.relays.map(fn(u) {
+        let h = if u.has_prefix("https://") { u.unsafe_substring(start=8, end=u.length()) } else { u }
+        let host = if h.has_suffix("/") { h.unsafe_substring(start=0, end=h.length() - 1) } else { h }
+        obj([("id", str(u)), ("kind", str("relay")), ("name", str(host)), ("own", Json::boolean(true)), ("by", str("林")), ("on", Json::boolean(true))])
+      })
+      let ways = [
+        obj([("id", str("https://app.still.fail/")), ("kind", str("relay")), ("name", str("Cloudflare")), ("own", Json::boolean(false)), ("on", Json::boolean(!fx.ours_off))]),
+        obj([("id", str("https://39.105.157.122/")), ("kind", str("relay")), ("name", str("北京")), ("own", Json::boolean(false)), ("on", Json::boolean(!fx.ours_off))]),
+      ] +
+      own + [
+        obj([("id", str("lan")), ("kind", str("lan")), ("name", str("")), ("own", Json::boolean(false)), ("on", Json::boolean(true))]),
+        obj([("id", str("tailnet")), ("kind", str("tailnet")), ("name", str("")), ("own", Json::boolean(false)), ("on", Json::boolean(true))]),
+        obj([("id", str("direct")), ("kind", str("direct")), ("name", str("")), ("own", Json::boolean(false)), ("on", Json::boolean(false))]),
+      ]
+      let off = if fx.ours_off { 3 } else { 1 }
       Some(
         obj([
-          (
-            "ways",
-            [
-              obj([("id", str("https://app.still.fail/")), ("kind", str("relay")), ("name", str("Cloudflare")), ("own", Json::boolean(false)), ("on", Json::boolean(true))]),
-              obj([("id", str("https://39.105.157.122/")), ("kind", str("relay")), ("name", str("北京")), ("own", Json::boolean(false)), ("on", Json::boolean(true))]),
-              obj([("id", str("lan")), ("kind", str("lan")), ("name", str("")), ("own", Json::boolean(false)), ("on", Json::boolean(true))]),
-              obj([("id", str("tailnet")), ("kind", str("tailnet")), ("name", str("")), ("own", Json::boolean(false)), ("on", Json::boolean(true))]),
-              obj([("id", str("direct")), ("kind", str("direct")), ("name", str("")), ("own", Json::boolean(false)), ("on", Json::boolean(false))]),
-            ],
-          ),
-          ("off", Json::number(1.0)),
-          ("offLabel", str("已关闭 1 项")),
+          ("ways", Json::array(ways)),
+          ("off", Json::number(off.to_double())),
+          ("offLabel", str("已关闭 \{off} 项")),
         ]),
       )
+    }
     "stations" =>
       if fx.none {
         Some([])
@@ -3336,6 +3360,26 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     // people added: each as one who has not signed in yet
     "workspace.addMembers" =>
       Some(Ok(obj([("joined", []), ("added", field(p, "emails").unwrap_or(Json::array([]))), ("already", [])])))
+    "workspace.setRelays" => {
+      fx.relays.clear()
+      for u in items(p, "relays") {
+        if u is String(s) {
+          fx.relays.push(s)
+        }
+      }
+      if fx.relays.is_empty() {
+        fx.ours_off = false
+      }
+      fx_changed()
+      Some(Ok(obj([])))
+    }
+    "workspace.setWay" => {
+      if text(p, "way") == "ours" {
+        fx.ours_off = !flag(p, "on")
+      }
+      fx_changed()
+      Some(Ok(obj([])))
+    }
     _ => None
   }
 }

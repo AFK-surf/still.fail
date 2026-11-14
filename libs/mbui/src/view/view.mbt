@@ -764,6 +764,10 @@ pub struct Tree {
   /// in them as the list's group is said (Tree::come_group_settle), and how long what a press there set off goes
   /// (press_stays.mbt), none of their subtrees walked
   priv list_inner : Map[Int, (Bool, Array[View])]
+  /// the places of picks said to leave (pick_leave.mbt) whose way, said in the change being made, may wait for what
+  /// fades over them, each with the moment it waits till: left out of their column's one way of that moment
+  /// (Tree::come_group_settle) where it goes to a smaller place from rest; noted only till the pick's change is made
+  priv pick_waits : Map[Int, Double]
   /// the places of the page's lists' feet (View::scrolls_window's `foot`, pinned on the list's own node, not under
   /// its held column), each with the held column whose one way what comes or goes or resizes in it goes in
   /// (Tree::come_group_join), where the list's blocks' insides join it
@@ -1335,6 +1339,7 @@ pub fn Tree::new(
     swaps: [],
     come_groups: {},
     list_inner: {},
+    pick_waits: {},
     list_feet: {},
     shown_bys: {},
     shown_followers: {},
@@ -5515,11 +5520,14 @@ fn Tree::measured_now(self : Tree) -> Unit {
     if self.layout_due && self.measured_gen < 0 {
       let g = @flex.computes() + 1
       self.alone_laid_out()
-      self.work.computes = self.work.computes + 1
-      self.measuring = true
-      self.laids = self.laids + 1
-      @flex.compute(self.nodes[0].flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
-      self.measuring = false
+      let root = self.nodes[0].flex
+      if root.dirty || !root.p_ok || root.p_kw != self.last_w || root.p_kh != self.last_h {
+        self.work.computes = self.work.computes + 1
+        self.measuring = true
+        self.laids = self.laids + 1
+        @flex.compute(root, width=self.last_w, height=self.last_h, round=false, reuse=true)
+        self.measuring = false
+      }
       self.measured_gen = g
       // (placed by once things are placed, whatever is laid out again before that: from the first of what was laid out
       // and not placed yet)
@@ -8149,10 +8157,12 @@ fn View::drop(self : View, v : View) -> Unit {
 /// and what it holds bind is at rest (@signals.rest): what is held while it is read (a core's topic) held for none of
 /// them, and nothing of it worked out again meanwhile; what this gives wakes it as it is held again, each binding that
 /// let go of what it read, or whose reads changed meanwhile, worked out anew.
-fn View::park(self : View, v : View) -> () -> Unit {
+fn View::park(self : View, v : View, rest? : Bool = true) -> () -> Unit {
   guard self.live() is Some(n) && v.live() is Some(m) else { return fn() {  } }
   let wakes : Array[() -> Unit] = []
-  self.tree.rest_in(v.at, wakes)
+  if rest {
+    self.tree.rest_in(v.at, wakes)
+  }
   // (laid out nowhere while held by nothing: no size told, as one just made, till it is laid out where it is held next;
   // so what reads it there reads that one, not the one it had here)
   match m.size_cell {
@@ -9158,6 +9168,19 @@ fn Tree::come_group_settle(
   let live = live.filter(fn(w) {
     w.live() is Some(m) && !(m.flex.style.come_to > 0.0 && m.flex.style.come_goal != m.flex.style.come_goal)
   })
+  // (a pick's place said to leave whose way goes to a smaller place from rest while what it showed fades over it: not
+  // of this way; it holds as big as it was till that is gone, setting out then in the way of what goes then
+  // (pick_leave.mbt))
+  let live = if self.pick_waits.is_empty() {
+    live
+  } else {
+    live.filter(fn(w) {
+      !(self.pick_waits.contains(w.at) &&
+        w.live() is Some(m) &&
+        m.flex.style.come_v == 0.0 &&
+        m.flex.style.come_goal < m.flex.style.come_from)
+    })
+  }
   match self.come_groups.get(col) {
     Some((h, _)) if physical_equal(h, g) => self.come_groups.remove(col)
     _ => ()
@@ -10315,9 +10338,12 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     } else {
       let g = @flex.computes() + 1
       self.alone_laid_out()
-      self.work.computes = self.work.computes + 1
-      self.laids = self.laids + 1
-      @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
+      let root = self.nodes[0].flex
+      if root.dirty || !root.p_ok || root.p_kw != w || root.p_kh != h {
+        self.work.computes = self.work.computes + 1
+        self.laids = self.laids + 1
+        @flex.compute(root, width=w, height=h, round=false, reuse=true)
+      }
       if self.walk_from >= 0 && self.walk_from < g {
         self.walk_from
       } else {
@@ -10326,7 +10352,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
     self.measured_gen = -1
     self.walk_from = -1
-    self.walk(0, gen, true)
+    if self.nodes[0].flex.laid_out_at() >= gen {
+      self.walk(0, gen, true)
+    }
     // (what was laid out alone: placed by from it, where what holds it was not laid out)
     for a in self.alone_laid {
       if self.nodes[a.0].live {

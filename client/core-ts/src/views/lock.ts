@@ -957,6 +957,7 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     yield* hold(inner, ws, sub, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]), head === null ? [] : parted, logsKept || bodiesKept);
     carry(inner, ws, served);
     carryBodies(inner, ws, served);
+    bringMoved(inner, ws, served);
     // A station of the lock answered: what is pending here is brought to them now.
     deliver(inner, ws);
     return true;
@@ -1048,6 +1049,35 @@ function carry(inner: Inner, ws: string, served: readonly { id: string; head: He
     if (p.carried.has(at)) continue;
     p.carried.add(at);
     inner.runner.fork(Effect.ignore(inner.stations.requests.call(new StationAddr(ws, a.id), "POST", "/lock", { entries: kept, keep: true }, { quiet: true }), { log: "Unhandled", message: "lock entries carried to a station" }));
+  }
+}
+
+/// Where the chain held moved: each station just read (or just said, `stationMoved`) that the state in force here names
+/// and that keeps no lock, or one not at the chain held, brought the chain as it moved with the logs and bodies its
+/// state is made of (POST /lock: the door a station keeping no lock pins one by, station/src/mesh/moved-pin.ts
+/// `pinBrought`, which pins only where that state lets this device in as an owner's and names it). As an unmoved
+/// chain's `station` entry reaches its station whenever it is next read (`carry`, `deliver`): a station not reached at
+/// the press, or refusing it then, is protected as it is next read, nothing pressed again (the lead, 2026-11-14). An
+/// owner's device only (the station refuses any other); once for each station and what is brought, this run, unless it
+/// failed; forked, waited on by no one, never tried again on a timer (the next read tries again).
+function bringMoved(inner: Inner, ws: string, served: readonly { id: string; head: Head | null }[]): void {
+  const h = held(inner, ws);
+  const sub = inner.workspaces.owner(ws);
+  if (!h?.head || sub === null || !movedHere(inner, ws)) return;
+  const f = stateOf(inner, ws);
+  if (f.members.get(sub)?.role !== "owner") return;
+  const logs = [...logsOf(inner, ws, false).values()];
+  const bodies = bodiesHeld(inner, ws);
+  const what = `moved/${h.head.hash}/${logs.map((l) => `${l.length}:${l.length > 0 ? hashOf(l[l.length - 1]!) : ""}`).join(",")}/${bodies.length}`;
+  const p = part(inner, ws);
+  for (const a of served) {
+    if (!f.stations.has(a.id) || (a.head !== null && a.head.genesis === h.head.genesis)) continue;
+    const at = `${a.id}/${what}`;
+    if (p.carried.has(at)) continue;
+    p.carried.add(at);
+    // (not reached, or refused: let go of, so that the next read brings it again)
+    const bring = inner.stations.requests.call(new StationAddr(ws, a.id), "POST", "/lock", { entries: h.entries, logs, bodies }, { quiet: true });
+    inner.runner.fork(Effect.ignore(Effect.tapError(bring, () => Effect.sync(() => p.carried.delete(at))), { log: "Unhandled", message: "a moved lock brought to a station its state names" }));
   }
 }
 
@@ -1442,7 +1472,18 @@ export function signsAs(inner: Inner, ws: string): { locked: boolean; as: "lock"
 export function offOwnLock(inner: Inner, ws: string): boolean {
   const sub = inner.workspaces.owner(ws);
   const h = held(inner, ws);
-  if (sub === null || !h?.head || !inner.host.appKeys) return false;
+  if (sub === null || !inner.host.appKeys) return false;
+  // Told so by the refusal just now: its person's own log, which this device is not on (`heardRefused`, kept as the
+  // refusal came; the person's lock takes it in only once it is loaded here, and a refusal that came first named whom
+  // to ask by what it held before, an admin; 2026-11-14, the side run of f6cfdf7af1, N: 「…或请其管理员…」 then
+  // `lock.pair` "this device waits in no workspace" a moment before it knew).
+  // (only until the person's lock here has heard of one: then it says, `standing` below)
+  const told = inner.adb.personal().standing(sub) === "none" ? (refusedChains.get(inner)?.get(sub) ?? []) : [];
+  if (told.length > 0) {
+    const me = inner.adb.personal().keyId();
+    if (!told.some((c) => me !== null && checkChain(c, sub)?.devices.has(me) === true)) return true;
+  }
+  if (!h?.head) return false;
   // Where the chain moved a device not let in is given no state to read whom it names: its person having a log of their
   // own it is not on (`standing`, of their stations' GET /lock/person) is all it knows, and is enough, as only their own
   // app devices put it on that log and so let it in (2026-11-14, the locks' end to end after #6102: its page and refusal
@@ -2794,10 +2835,13 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         // refused (the stations let their app devices in on that lock alone), so it asks to join that one instead, the
         // same code shown on a device on it (2026-11-10: a new phone approved here went on being refused, 「已经批过了啊」).
         // (where the chain moved, its person having a log of their own this device is not on: so too, `waitingIn`)
-        if (offOwnLock(inner, c.workspace)) {
-          const sub = inner.workspaces.owner(c.workspace);
-          if (sub !== null) return yield* inner.adb.run({ kind: "personalJoin", sub });
+        // Asked before this device knows which it is (the lock not held yet, or its person's own lock not heard of):
+        // both read first, within the call's wait, as the page that waits would have them (2026-11-14, the side run
+        // of f6cfdf7af1: asked a moment after the first refusal, "this device waits in no workspace").
+        if (!offOwnLock(inner, c.workspace) && (!held(inner, c.workspace)?.head || inner.adb.personal().standing(sub) === "none")) {
+          yield* within.wait(Effect.ignore(Effect.all([read(inner, c.workspace), inner.adb.personal().refresh(sub)], { concurrency: "unbounded", discard: true }), { log: "Unhandled", message: "lock read before asking" }));
         }
+        if (offOwnLock(inner, c.workspace)) return yield* inner.adb.run({ kind: "personalJoin", sub });
         return yield* pairs.run(inner, c.name, c.workspace, c.params);
       case "pairCode":
       case "pairCancel":
@@ -3539,12 +3583,9 @@ function stationMoved(inner: Inner, sub: string, ws: string, station: string): E
     // keeping no lock pins one by: its owner's device, station/src/mesh/moved-pin.ts `pinBrought`, which pins only
     // where that state names it and lets this device in as an owner's). One that keeps the lock already takes nothing
     // of it; one that refuses it stays as the security page shows it, not protected.
-    return Effect.tap(sayMoved(inner, sub, ws, [{ kind: "station", key: station }], { act: "protectStation", name }, actText({ act: "protectStation", name })), () => Effect.sync(() => {
-      const entries = held(inner, ws)?.entries ?? [];
-      if (!stateOf(inner, ws).stations.has(station) || entries.length === 0) return;
-      const said = { entries, logs: [...logsOf(inner, ws, false).values()], bodies: bodiesHeld(inner, ws) };
-      inner.runner.fork(Effect.ignore(inner.stations.requests.call(new StationAddr(ws, station), "POST", "/lock", said, { quiet: true }), { log: "Unhandled", message: "a moved lock brought to the station protected" }));
-    }));
+    // (not reached now, or refusing it as the statement had not reached the state it checked: brought again as this
+    // device next reads that station and finds it keeps none, `bringMoved`)
+    return Effect.tap(sayMoved(inner, sub, ws, [{ kind: "station", key: station }], { act: "protectStation", name }, actText({ act: "protectStation", name })), () => Effect.sync(() => bringMoved(inner, ws, [{ id: station, head: null }])));
   });
 }
 

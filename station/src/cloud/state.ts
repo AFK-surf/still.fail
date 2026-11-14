@@ -648,6 +648,12 @@ export class Cloud {
     if (li === null || li.state === null || li.waiting === true) return new Set();
     const st = li.state;
     if (st.stations.has(key) || st.devices.has(key) || [...st.devices.values()].some((d) => d.sign_key === key)) return "all";
+    // A rig of the workspace its person signed for: before a move it pinned the whole chain, which says all the
+    // bodies say; after, it is given them as a station the list names is (person-sync.ts brings them). Signed for,
+    // on or off (`rigVouched` itself, never `rigs`, which while off is the control plane's word alone: a key the plane
+    // names a rig would be given every body of a workspace turned off).
+    const wsId = this.idOf(ws);
+    if (this.state?.rig === undefined && this.rigsNamed(wsId).some((r) => r.id === key && this.rigVouched?.(wsId, r) === true)) return "all";
     const l = this.chain(ws) as KeptLock;
     const root = l.state?.moved;
     if (root === undefined) return new Set();
@@ -1224,6 +1230,12 @@ export class Cloud {
     this.reached = false;
     this.peersCurrent = current;
     this.tell();
+  }
+
+  /// A rig of a workspace signed for here (rigs/adds.ts `take`): what follows the rigs `rigs` gives told, as a roster's
+  /// change is (lock-sync.ts and person-sync.ts bring it the chain and, where it moved, the logs and bodies).
+  rigsChanged(): void {
+    if (this.listeners !== undefined) this.tell();
   }
 
   listen(f: (s: CloudState | null) => void): () => void {

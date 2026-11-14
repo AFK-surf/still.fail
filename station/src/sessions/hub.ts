@@ -129,6 +129,8 @@ export type HubOptions = {
   workspaces?: () => string[];
   /// This station's id in its workspaces (null: none yet, outside any).
   station?: () => string | null;
+  /// The name this station knows another station of its workspaces by (its mark's, else its roster's); null: none.
+  stationName?: (id: string) => string | null;
   /// The runners alive on this machine now, by id (default: <data>/run/runners).
   runners?: () => string[];
   /// Another session being taken up: the launcher hears the station gets on with it (ops/launcher.ts `taking`).
@@ -265,7 +267,11 @@ export class Hub {
   /// The station's background jobs (made after the hub, which tells their agents).
   jobs: Jobs | null = null;
   /// Each workspace's presets, in its agent home (presets.ts).
-  readonly presets = new Presets((ws) => workspaceAgentHome(this.config().agentHome, ws, this.workspaces()[0] ?? null), () => this.now());
+  readonly presets = new Presets((ws) => workspaceAgentHome(this.config().agentHome, ws, this.workspaces()[0] ?? null), () => this.now(), {
+    station: () => this.station(),
+    workspace: (ws) => ws ?? this.workspaces()[0] ?? null,
+    stationName: (id) => this.options.stationName?.(id) ?? null,
+  });
   /// The repositories on the machine, offered as a preset's folders (presets.ts).
   readonly repoIndex = new RepoIndex({ roots: () => [homedir()], file: () => join(this.config().dataDir, "repo-index.json"), now: () => this.now(), besides: () => [this.config().dataDir] });
   /// Repositories cloned from git into the repository cache, for presets to name (clones.ts).

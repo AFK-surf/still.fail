@@ -6,8 +6,8 @@
 // everything else, a state only the eye is told among it (at work: headless.mbt, State).
 //
 // The app's buttons that say more than a name are not this one's: on or off is a toggle's (toggle.mbt: a checkbox, a
-// switch), expanded what opens something's (a disclosure, a menu's button: `open` given in), selected an option's of
-// a choice. Each is a component of its own (those after the toggle to come), not a parameter here.
+// switch, a toggle button), expanded what opens something's (disclosure.mbt: a disclosure, a menu's button), selected
+// an option's of a choice (choice.mbt). Each is a component of its own, not a parameter here.
 
 ///|
 /// A button as its look reads it: each a reading, followed where a binding reads it.

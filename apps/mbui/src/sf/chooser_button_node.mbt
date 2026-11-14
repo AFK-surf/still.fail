@@ -30,66 +30,65 @@ pub fn chooser_button_node(
   let open = @signals.signal(false, same=fn(a, b) { a == b })
   // (opened by the keyboard: its first row's the focus as it opens)
   let by_key = Ref(false)
-  let made : Ref[@view.View?] = Ref(None)
   let height = button_height()
-  parent.box(made_for=loc, fn(v) {
-    made.val = Some(v)
-    let lit = fn() { lit_node(v) || open.get() }
-    let hand = EdgeWay::new(if @signals.untracked(lit) { 1.0 } else { 0.0 })
-    v.reacts(lit, fn(on) { hand.go(v, if on { 1.0 } else { 0.0 }, dur_ms) })
-    let opens = fn(down : Bool) {
-      by_key.val = down || v.focus_shown()
-      open.set(down || !open.untracked())
-    }
-    let ink = fn() { if lit() { theme().p.text } else { theme().p.muted } }
-    let padx = if card_words { card_foot_words_in(height) } else { button_padx }
-    v
-    .row(Is(true))
-    .height(Is(Some(height)))
-    .padding(Is((padx, 0.0, padx, 0.0)))
-    .lines_up(Is(Some(Middle)))
-    .radius(Is(height / 2.0))
-    .ground(By(fn() { alpha(theme().p.hover, hand.shown(v)) }))
-    .presses(Is(true))
-    .focusable(Is(true))
-    .says(By(fn() { Some(@view.said(Button, label=words(), expanded=open.get())) }))
-    .on_press(fn() { opens(false) })
-    |> ignore
-    v.on_key(fn(k) {
-      if k.mods == 0 && k.code == @ui.key_code_down && v.focused() && !open.untracked() {
-        opens(true)
-        true
-      } else {
-        false
-      }
-    })
-    |> ignore
-    // (what it holds in its middle, as a button's: the old one's justify=JCenter)
-    v.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
-    let w = v.box(fn(w) {
-      w
-      .words(By(words), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
-      .ink(By(ink))
+  let b = @headless.disclosure(
+    made_for=loc,
+    parent,
+    words,
+    fn() { open.get() },
+    fn(v) {
+      by_key.val = v.focus_shown()
+      open.set(!open.untracked())
+    },
+    fn(v, _) {
+      let lit = fn() { lit_node(v) || open.get() }
+      let hand = EdgeWay::new(if @signals.untracked(lit) { 1.0 } else { 0.0 })
+      v.reacts(lit, fn(on) { hand.go(v, if on { 1.0 } else { 0.0 }, dur_ms) })
+      let ink = fn() { if lit() { theme().p.text } else { theme().p.muted } }
+      let padx = if card_words { card_foot_words_in(height) } else { button_padx }
+      v
+      .row(Is(true))
+      .height(Is(Some(height)))
+      .padding(Is((padx, 0.0, padx, 0.0)))
+      .lines_up(Is(Some(Middle)))
+      .radius(Is(height / 2.0))
+      .ground(By(fn() { alpha(theme().p.hover, hand.shown(v)) }))
       |> ignore
-    })
-    // (its chevron after its words, the gap a button's between them, laid out by its ink: button's end_icon)
-    v.box(fn(g) { g.width(By(fn() { Some(if theme().touch { 8.0 } else { 6.0 }) })) |> ignore }) |> ignore
-    let (ink_l, ink_r) = match icon_numbers("chevron-down") {
-      Some(d) => @ui.shapes_ink_in(icon_shapes(d, button_icon / 24.0, 0x000000FFL), button_icon)
-      None => (0.0, 0.0)
-    }
-    icon_node(v, "chevron-down", button_icon, By(ink)).margin(Is((-ink_l, 0.0, -ink_r, 0.0))) |> ignore
-    v.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
-    // (its words changed: its ground from the shape it had, its words from where they were, together)
-    let m = @motion.moves_for(v, words, spec=button_reshape)
-    m.reshapes(v)
-    m.moves_with(w)
-    // (closed as it starts leaving, and as it is let go)
-    v.on_leaving(fn() { open.set(false) }) |> ignore
-    v.owns(fn() { open.set(false) }) |> ignore
-  })
-  |> ignore
-  let b = made.val.unwrap()
+      v.on_key(fn(k) {
+        if k.mods == 0 && k.code == @ui.key_code_down && v.focused() && !open.untracked() {
+          by_key.val = true
+          open.set(true)
+          true
+        } else {
+          false
+        }
+      })
+      |> ignore
+      // (what it holds in its middle, as a button's: the old one's justify=JCenter)
+      v.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
+      let w = v.box(fn(w) {
+        w
+        .words(By(words), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 })
+        .ink(By(ink))
+        |> ignore
+      })
+      // (its chevron after its words, the gap a button's between them, laid out by its ink: button's end_icon)
+      v.box(fn(g) { g.width(By(fn() { Some(if theme().touch { 8.0 } else { 6.0 }) })) |> ignore }) |> ignore
+      let (ink_l, ink_r) = match icon_numbers("chevron-down") {
+        Some(d) => @ui.shapes_ink_in(icon_shapes(d, button_icon / 24.0, 0x000000FFL), button_icon)
+        None => (0.0, 0.0)
+      }
+      icon_node(v, "chevron-down", button_icon, By(ink)).margin(Is((-ink_l, 0.0, -ink_r, 0.0))) |> ignore
+      v.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
+      // (its words changed: its ground from the shape it had, its words from where they were, together)
+      let m = @motion.moves_for(v, words, spec=button_reshape)
+      m.reshapes(v)
+      m.moves_with(w)
+      // (closed as it starts leaving, and as it is let go)
+      v.on_leaving(fn() { open.set(false) }) |> ignore
+      v.owns(fn() { open.set(false) }) |> ignore
+    },
+  )
   // (its menu made as it opens, in the layer, living as long as the choice does; the focus given back to it as it goes)
   let holder = layer.box(fn(h) { h.over(Is(true)) |> ignore }).lives_with(b)
   holder.show(fn() { open.get() }, at_once=true, fn(m) {

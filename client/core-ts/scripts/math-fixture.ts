@@ -4,6 +4,10 @@ import { markdown } from "../src/markdown.ts";
 
 const text = String.raw`Inline \(E=mc^2\) stays with the words.
 
+$$
+\boxed{\Pr(U\perp V)=0}
+$$
+
 Fraction \(\frac{1}{2}\) and \(a+\text{你好}\) keep the baseline.
 
 $$

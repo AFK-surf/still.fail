@@ -36,6 +36,7 @@ class TexFont extends Base {
 
 type Element = { kind: string; attributes?: Record<string, string>; children?: Element[]; value?: string };
 type Move = [sx: number, sy: number, x: number, y: number];
+type Paint = { fill: string; stroke: string; strokeWidth: string };
 const adaptor = liteAdaptor();
 RegisterHTMLHandler(adaptor);
 let output: SVG<unknown, unknown, unknown> | undefined;
@@ -95,10 +96,15 @@ function typeset(source: string, display: boolean): MathDrawing {
       result.draw.push([id, ...move]);
       if (result.draw.length > 4096) throw new Error("Formula too complex");
     };
-    const walk = (node: Element, parent: Move) => {
+    const walk = (node: Element, parent: Move, inherited: Paint) => {
       if (node.kind === "defs") return;
       const attrs = node.attributes ?? {};
       const move = moved(parent, attrs.transform ?? "");
+      const paint = {
+        fill: attrs.fill ?? inherited.fill,
+        stroke: attrs.stroke ?? inherited.stroke,
+        strokeWidth: attrs["stroke-width"] ?? inherited.strokeWidth,
+      };
       switch (node.kind) {
         case "use": {
           const d = defs.get((attrs["xlink:href"] ?? attrs.href ?? "").slice(1));
@@ -109,8 +115,25 @@ function typeset(source: string, display: boolean): MathDrawing {
         case "rect": {
           const x = finite(attrs.x ?? "0"), y = finite(attrs.y ?? "0");
           const w = finite(attrs.width ?? "0"), h = finite(attrs.height ?? "0");
+          // TeX rules with no positive area draw nothing, but must not hide the rest of the formula.
+          if (w <= 0 || h <= 0) return;
+          const t = finite(paint.strokeWidth.replace(/px$/, ""));
+          if (t < 0 || finite(attrs.rx ?? "0") !== 0 || finite(attrs.ry ?? "0") !== 0) {
+            throw new Error("Unsupported formula rectangle");
+          }
           const [sx, sy, tx, ty] = move;
-          result.rects.push([tx + sx * x + Math.min(0, sx * w), ty + sy * y + Math.min(0, sy * h), Math.abs(sx * w), Math.abs(sy * h)]);
+          const rect = (x: number, y: number, w: number, h: number) => {
+            result.rects.push([tx + sx * x + Math.min(0, sx * w), ty + sy * y + Math.min(0, sy * h), Math.abs(sx * w), Math.abs(sy * h)]);
+          };
+          if (paint.fill !== "none") rect(x, y, w, h);
+          if (paint.stroke !== "none" && t > 0) {
+            // SVG strokes are centered on the rectangle's edges. Preserve the hollow middle with four filled
+            // rectangles so existing clients can draw the frame without a new drawing protocol.
+            rect(x - t / 2, y - t / 2, w + t, t);
+            rect(x - t / 2, y + h - t / 2, w + t, t);
+            rect(x - t / 2, y - t / 2, t, h + t);
+            rect(x + w - t / 2, y - t / 2, t, h + t);
+          }
           return;
         }
         case "text": {
@@ -124,9 +147,9 @@ function typeset(source: string, display: boolean): MathDrawing {
         case "g": case "svg": break;
         default: throw new Error(`Unsupported formula shape: ${node.kind}`);
       }
-      for (const child of node.children ?? []) walk(child, move);
+      for (const child of node.children ?? []) walk(child, move, paint);
     };
-    walk(svg, [1, 1, -x, -y]);
+    walk(svg, [1, 1, -x, -y], { fill: "currentColor", stroke: "none", strokeWidth: "1" });
     return result;
   } finally { doc.clear(); }
 }

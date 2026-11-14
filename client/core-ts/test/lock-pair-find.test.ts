@@ -14,6 +14,9 @@ import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS, per
 import { lockSeen, signerOf } from "../src/views/lock.ts";
 import { ME, elsewhere, genesis, pipe, rig } from "./lock-rig.ts";
 import { stationReplies } from "./station-fixture.ts";
+import { pairSession, pakeKeys, pakeStart } from "../src/pair.ts";
+import { hex } from "../src/util.ts";
+const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
 
 /// The owner's phone and computer, apps that sign: the devices that may approve this one.
 const PHONE_APP = "e1".repeat(32);
@@ -21,7 +24,12 @@ const LAPTOP_APP = "e2".repeat(32);
 
 /// How a trusted device answers when dialled: not there (the dial fails at once), not answering (the dial hangs), a
 /// code shown, that it approves this one nowhere it asks, or nothing (reached, its answer lost).
-type Way = "away" | "silent" | "code" | "code-ends-on-proof" | "code-ends-after-another" | "credential" | "no" | "mute";
+type Way = "away" | "silent" | "code" | "code-ends-on-proof" | "code-ends-after-another" | "credential" | "no" | "mute" | "shows" | "shows-late";
+
+/// The code a trusted device of way `shows` or `shows-late` shows, and the exchange it answers with it (each another).
+const SHOWN: Record<string, string> = { [PHONE_APP]: "135791", [LAPTOP_APP]: "246802" };
+/// Released by the test: a `shows-late` device's answer to the hello (its code shown, its word on the way).
+const lateAnswer = { gate: Deferred.makeUnsafe<void>() };
 
 /// A core waiting in `ws` (its device not in the lock, the owner's two apps in it), its mesh's base key ME, and the
 /// trusted devices' ends as `ways` says now: each dial of each counted.
@@ -55,6 +63,20 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
               const hello = yield* there.next();
               hellos.push(hello);
               if (way === "mute") return;
+              // (shows a code of its own and answers the exchange as a trusted device does: approved where it was its
+              // code, else wrong with a try less)
+              if (way === "shows" || way === "shows-late") {
+                if (way === "shows-late") yield* Deferred.await(lateAnswer.gate);
+                const where = (hello as { personal?: unknown }).personal ? ["person:s1"] : ["ws"];
+                yield* there.send({ t: "code", workspaces: where });
+                const m = (yield* there.next()) as { y: string };
+                const pk = pakeStart(SHOWN[id]!, pairSession(ME, id, where), (b) => b.fill(5));
+                const keys = pakeKeys(pk, unhex(m.y), "trusted")!;
+                yield* there.send({ t: "pake", y: hex(pk.share), mac: hex(keys.mine) });
+                const said = (yield* there.next()) as { t: string };
+                yield* there.send(said.t === "confirm" ? { t: "approved", workspaces: where } : { t: "wrong", left: 2 });
+                return;
+              }
               const hasCredential = way === "credential" && (hello as { workspaces?: { ws: string; credential: string }[] }).workspaces?.some((w) => w.ws === "ws" && w.credential === "signed-member");
               const places = (hello as { personal?: unknown }).personal ? ["person:s1"] : ["ws"];
               yield* there.send(way === "code" || way === "code-ends-on-proof" || way === "code-ends-after-another" || hasCredential ? { t: "code", workspaces: places } : { t: "no", error: "not_here" });
@@ -603,4 +625,24 @@ test("where its person bound a lock of their own that this device is not on, it 
   lockSeen(inner).touch("lock ws");
   const started = (await w.lock()).me;
   assert.deepEqual([started.waiting, started.confirmed], [false, true]);
+});
+
+// 2026-11-14, the locks' end to end on CI (09719be0): D typed the code its second trusted device (B) showed while D had
+// heard only the first's (A's), which said it was wrong, and the code B showed was never tried. A device reached and
+// still to answer with its code is waited for (its dial's own wait) and tried with the same code.
+test("the code a trusted device shows typed before its answer reached this device: tried there once it answers, not taken as wrong", async () => {
+  lateAnswer.gate = Deferred.makeUnsafe<void>();
+  const w = await waiting({ [PHONE_APP]: "shows", [LAPTOP_APP]: "shows-late" });
+  await w.ask("lock.pair", { workspace: "ws" });
+  await w.host.time.pass(1_000);
+  assert.equal((await w.pair()).state, "code", "the phone's code shown");
+  assert.equal((await w.pair()).devices, 1, "the laptop's not heard yet");
+  let out: unknown = null;
+  const typed = w.ask("lock.pairCode", { workspace: "ws", code: SHOWN[LAPTOP_APP]! }).then((x) => (out = { ok: x }), (e) => (out = { error: (e as { code: string }).code }));
+  await w.host.time.pass(500);
+  Deferred.doneUnsafe(lateAnswer.gate, Effect.void);
+  await w.host.time.passUntil(10_000, () => out !== null);
+  await typed;
+  console.log("typed the laptop's code:", JSON.stringify(out));
+  assert.deepEqual(Object.keys(out as object), ["ok"], `approved: ${JSON.stringify(out)}`);
 });
