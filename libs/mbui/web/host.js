@@ -2507,7 +2507,7 @@
   }
 
   // the pointer's shape (@hostapi.set_cursor)
-  const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab', 'grabbing', 'crosshair', 'not-allowed'];
+  const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab', 'grabbing', 'crosshair', 'not-allowed', 'nwse-resize', 'nesw-resize'];
   // (the page's, which all that takes presses inherits)
   H.setCursor = (k) => { document.body.style.cursor = cursors[k] || 'default'; };
   H.clipboardSet = (s) => { navigator.clipboard?.writeText(s).catch(() => {}); };

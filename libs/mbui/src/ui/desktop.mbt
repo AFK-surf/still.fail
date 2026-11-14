@@ -401,11 +401,11 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
 
 ///|
 /// The shape for what is under the pointer, told the host when it changes: the one said for it (Ctx::cursor); else a
-/// field's I-beam; the hand over what takes presses (a button, a row, a link in words: Ctx::takes_presses), unless
-/// said to be the arrow (a ground: a stage, the room round a list's rows); the I-beam over words picked with the
-/// pointer; else the arrow. Held, the shape it was pressed with stays (a slider's thumb dragged off its line, words
-/// picked across a link: what reads its click while it is not held reads none then), a drag area's its own once the
-/// press is its drag, pressed no more.
+/// field's I-beam; the hand over what takes presses (a button, a row, a link in words: Ctx::takes_presses; the arrow
+/// where the window's tree says so, Tree::hand_over_presses), unless said to be the arrow (a ground: a stage, the room
+/// round a list's rows); the I-beam over words picked with the pointer; else the arrow. Held, the shape it was pressed
+/// with stays (a slider's thumb dragged off its line, words picked across a link: what reads its click while it is not
+/// held reads none then), a drag area's its own once the press is its drag, pressed no more.
 fn Ctx::show_cursor(self : Ctx) -> Unit {
   let area = self.down && self.dragging && drags.contains(self.drag_scroll)
   if self.down && !area {
@@ -434,7 +434,11 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
       if target != 0 && self.editors.contains(target) {
         Cursor::IBeam.code()
       } else if said is None && (hit_marks(target) & mark_takes) != 0 {
-        Cursor::Hand.code()
+        // (the window's tree's shape for what is pressed: a hand unless the app said otherwise, Tree::pressed_shape)
+        match view_app.val {
+          Some(tree) => @signals.untracked(fn() { tree.pressed_shape() }).code()
+          None => Cursor::Hand.code()
+        }
       } else if self.sel_at(self.px, self.py) is Some(_) {
         // words that are picked with the pointer
         Cursor::IBeam.code()
