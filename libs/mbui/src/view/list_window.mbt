@@ -2790,6 +2790,21 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                 for k in tree.column_items(held_node.val) {
                   ways.push(tree.handle(k))
                 }
+                // (and whatever else under the list went in those groups, its end said again with theirs: a stale
+                // end of its own would set it at rest before the group's)
+                let below : Array[Int] = [held_node.val]
+                while below.length() > 0 {
+                  let at = below.pop().unwrap()
+                  for kid in tree.nodes[at].kids {
+                    let n = tree.nodes[kid]
+                    if n.live && n.coming && n.flex.style.come_group is Some(o) &&
+                      groups.iter().any(fn(g) { physical_equal(g, o) }) &&
+                      !ways.iter().any(fn(w) { w.at == kid }) {
+                      ways.push(tree.handle(kid))
+                    }
+                    below.push(kid)
+                  }
+                }
                 for g in groups {
                   @flex.come_group_set(g)
                   for w in ways {

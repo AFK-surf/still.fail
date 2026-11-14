@@ -9059,6 +9059,8 @@ fn View::comes(
       guard v.live() is Some(m) && m.coming && st.come_at == at && st.come_to >= 1.0 else { return }
       tree.measured_now()
       let ends = if st.come_ends == st.come_ends { st.come_ends } else { at + @flex.move_most_ms }
+      // (one asked before, by this way said twice in its change or its group: let go, so no end of before is waited for)
+      (m.come_off)()
       m.come_off = v.at_moment(ends, fn() { come_done(tree, v, m) })
       tree.hand_at_end(ends)
     })
@@ -9290,8 +9292,9 @@ fn Tree::come_group_settle(
   if live.length() + under_way.length() < 2 {
     return
   }
-  // (one still on a way its page said, as this sets out (a list key's `comes_way`): the group of this moment goes on
-  // what is left of that way, from where it has it to its end, so nothing of it is set on a Move halfway; scrolls_window)
+  // (one still on a way its page said, as this sets out (a list key's `comes_way`): what is left of that way, read
+  // before what is on its way is set out again from here, below)
+  let said_left : Ref[(Double, (Double) -> Double)?] = Ref(None)
   if g.spec is None {
     for k in under_way {
       let n = self.nodes[k]
@@ -9300,12 +9303,7 @@ fn Tree::come_group_settle(
           let u0 = dmax((at - n.flex.style.come_at) / ms, 0.0)
           let c0 = curve(u0)
           if c0 < 0.999999 {
-            g.spec = Some(
-              (
-                n.flex.style.come_at + ms - at,
-                fn(x) { (curve(u0 + x * (1.0 - u0)) - c0) / (1.0 - c0) },
-              ),
-            )
+            said_left.val = Some((n.flex.style.come_at + ms - at, fn(x) { (curve(u0 + x * (1.0 - u0)) - c0) / (1.0 - c0) }))
           }
           break
         }
@@ -9324,6 +9322,30 @@ fn Tree::come_group_settle(
     ms.come_ends = at + @flex.come_way_ms(h, sp, ms.come_goal)
     ms.come_group = None
     live.push(self.handle(k))
+  }
+  // (and the group of this moment on that way's curve, what is left of it, as long as that is left or as a Move of how
+  // far all of it goes takes, whichever is longer: nothing of it set on a Move halfway, nothing new hurried by its end;
+  // scrolls_window)
+  match said_left.val {
+    Some((left, curve)) => {
+      let mut far = 0.0
+      for w in live {
+        if w.live() is Some(m) {
+          let st = m.flex.style
+          if st.come_goal == st.come_goal {
+            far = dmax(far, (st.come_goal - st.come_from).abs())
+          }
+        }
+      }
+      g.spec = Some((dmax(left, @flex.move_ms(far)), curve))
+      // (and what rode it rides this from here: a later group reads what is left of this one)
+      for w in live {
+        if w.live() is Some(m) && m.list_key_way {
+          m.flex.style.come_spec = g.spec
+        }
+      }
+    }
+    None => ()
   }
   g.members.clear()
   for w in live {

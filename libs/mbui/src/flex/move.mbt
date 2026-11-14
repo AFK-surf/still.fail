@@ -689,6 +689,11 @@ fn come_height(s : Style, natural : Double) -> Double {
 /// goes and never past its rest: closing, put down and no less than `goal`; growing, put up and no more. What a way turned
 /// back sets out from (come_state) is as it is.
 fn come_tall_on(s : Style, goal : Double, t : Double) -> Double {
+  let said = match (s.come_group, s.come_spec) {
+    (Some(g), _) if g.set => g.spec is Some(_)
+    (_, Some(_)) => true
+    _ => false
+  }
   let (tall, _) = match (s.come_group, s.come_spec) {
     (Some(g), _) if g.set => come_group_way(g, s, goal, t)
     (_, Some(spec)) => come_spec_way(s, spec, goal, t)
@@ -700,6 +705,10 @@ fn come_tall_on(s : Style, goal : Double, t : Double) -> Double {
     tall
   } else if goal < s.come_from {
     fmax((tall * g + 0.000001).floor() / g, goal)
+  } else if said {
+    // (on a way said (a length and a curve, which comes to its end exactly): toward its rest as the grid puts it up, so
+    // its last frame is where it rests, no step as it does)
+    fmin((tall * g - 0.000001).ceil() / g, (goal * g - 0.000001).ceil() / g)
   } else {
     fmin((tall * g - 0.000001).ceil() / g, goal)
   }
