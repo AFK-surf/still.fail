@@ -107,6 +107,22 @@ function markBefore(inner: Inner, ws: string, id: string, before: boolean): void
   write(inner, ws, { ...held, before: before ? [...held.before, id] : held.before.filter((x) => x !== id) });
 }
 
+/// Station `id` of `ws` owed a carry of the records (`presets`) or the stars (or not any more): kept beside the records,
+/// where it changed, so that it holds across a restart.
+export function markOwed(inner: Inner, ws: string, id: string, what: "presets" | "stars", owed: boolean): void {
+  const held = heldOf(inner.data, ws);
+  const key = what === "presets" ? "owed" : "owedStars";
+  if (held[key].includes(id) === owed) return;
+  write(inner, ws, { ...held, [key]: owed ? [...held[key], id] : held[key].filter((x) => x !== id) });
+}
+
+/// Whether station `address` is owed a carry of either (views/presets.ts `resumed`).
+export function owedTo(inner: Inner, address: string): { presets: boolean; stars: boolean } {
+  const held = heldOf(inner.data, ofAddress(address));
+  const id = stationId(address);
+  return { presets: held.owed.includes(id), stars: held.owedStars.includes(id) };
+}
+
 /// `given` taken into what is kept of `ws` where newer (read anew: nothing waits between this read and its write).
 function take(inner: Inner, ws: string, given: readonly KeptRecord[], who: Who): boolean {
   const held = heldOf(inner.data, ws);
@@ -124,10 +140,15 @@ export function carry(inner: Inner, address: string): Effect.Effect<void, CoreEr
     const ws = ofAddress(address);
     const who = whoIn(inner, ws);
     if (who === null) return;
+    const id = stationId(address);
     const said = yield* Effect.result(ask(inner, address, "GET", "/presets/kept"));
     if (said._tag === "Failure") {
-      // (its list read as before, as a page shows it: what it lists of theirs is shown)
-      if (fromBeforeRoute(said.failure)) markBefore(inner, ws, stationId(address), true);
+      // (its list read as before, as a page shows it: what it lists of theirs is shown; one from before is owed
+      // nothing, never carried to)
+      if (fromBeforeRoute(said.failure)) {
+        markBefore(inner, ws, id, true);
+        markOwed(inner, ws, id, "presets", false);
+      } else markOwed(inner, ws, id, "presets", true);
       return;
     }
     markBefore(inner, ws, stationId(address), false);
@@ -137,10 +158,11 @@ export function carry(inner: Inner, address: string): Effect.Effect<void, CoreEr
     const byId = new Map(there.map((r) => [r.id, r]));
     for (const part of turns(lacking(heldOf(inner.data, ws).records, byId, who))) {
       const put = yield* Effect.result(ask(inner, address, "PUT", "/presets/kept", { records: part }));
-      // (one not taken now is brought at the next carry)
-      if (put._tag === "Failure") return;
+      // (one not taken now is owed: brought at the next carry, a stream coming back among them)
+      if (put._tag === "Failure") return markOwed(inner, ws, id, "presets", true);
       take(inner, ws, recordsOf(get(put.success, "records")), who);
     }
+    markOwed(inner, ws, id, "presets", false);
   });
 }
 
@@ -150,16 +172,20 @@ export function carryStars(inner: Inner, address: string): Effect.Effect<void, C
     if (!reached(inner, address)) return;
     const ws = ofAddress(address);
     if (whoIn(inner, ws) === null) return;
+    const id = stationId(address);
     const said = yield* Effect.result(ask(inner, address, "GET", "/stars"));
-    if (said._tag === "Failure") return;
+    // (one from before keeps none: owed nothing)
+    if (said._tag === "Failure") return markOwed(inner, ws, id, "stars", !fromBeforeRoute(said.failure));
     const there = starsSaid(get(said.success, "stars"));
     keepStars(inner, ws, there);
     const held = starsHeld(inner.data.record("choice", likedKey(ws)));
-    if (held === null) return;
-    const bring = starsLacking(held, there);
-    if (Object.keys(bring).length === 0) return;
-    const put = yield* Effect.result(ask(inner, address, "PUT", "/stars", { stars: bring }));
-    if (put._tag === "Success") keepStars(inner, ws, starsSaid(get(put.success, "stars")));
+    const bring = held === null ? {} : starsLacking(held, there);
+    if (Object.keys(bring).length > 0) {
+      const put = yield* Effect.result(ask(inner, address, "PUT", "/stars", { stars: bring }));
+      if (put._tag === "Failure") return markOwed(inner, ws, id, "stars", true);
+      keepStars(inner, ws, starsSaid(get(put.success, "stars")));
+    }
+    markOwed(inner, ws, id, "stars", false);
   });
 }
 
@@ -184,7 +210,12 @@ function keepStars(inner: Inner, ws: string, given: Stars): void {
 /// Everything of the person's carried to every station of `ws` reached now (a change made here).
 export function carryAll(inner: Inner, ws: string, what: "presets" | "stars", besides: string | null = null): void {
   for (const s of stationsOf(inner, ws)) {
-    if (s.address === besides || !reached(inner, s.address)) continue;
+    if (s.address === besides) continue;
+    // (one not reached is owed it: brought as its link opens or its stream comes back)
+    if (!reached(inner, s.address)) {
+      if (!heldOf(inner.data, ws).before.includes(s.id)) markOwed(inner, ws, s.id, what, true);
+      continue;
+    }
     inner.scheduler.enqueue(s.address, `${what}/${s.address}`, Priority.background, Effect.ignore(what === "presets" ? carry(inner, s.address) : carryStars(inner, s.address)));
   }
 }
@@ -522,8 +553,13 @@ export function install(inner: Inner): PresetViews {
       }
       if (name === "stars" && get(data, "workspace") === ws) inner.scheduler.enqueue(address, `stars/${address}`, Priority.background, Effect.ignore(carryStars(inner, address)));
     },
-    // (read again after an absence: what it was told meanwhile is not said again)
-    resume: true,
+    // A stream come back resumed is told again what it missed (the station logs `presets` and `stars`, events.ts), so
+    // it is asked only what this device owes it: a change made here while it was not reached, a carry that failed.
+    resumed: (address) =>
+      Effect.suspend(() => {
+        const owed = owedTo(inner, address);
+        return Effect.andThen(owed.presets ? Effect.ignore(carry(inner, address)) : Effect.void, owed.stars ? Effect.ignore(carryStars(inner, address)) : Effect.void);
+      }),
   });
   return views;
 }

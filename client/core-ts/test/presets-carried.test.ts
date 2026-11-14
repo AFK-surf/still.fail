@@ -175,6 +175,15 @@ function device(who: { sub: string; email: string; name: string }, stations: Rig
       await settle();
     },
     away: (s: Rig) => void up.delete(s.address),
+    /// Its stream come back resumed (told all it missed): what the sync asks of a part then (sync.ts `#goesOn`).
+    resumed: async (s: Rig) => {
+      up.add(s.address);
+      for (const part of also() as { read: (a: string) => Effect.Effect<void, CoreError>; resume?: boolean; resumed?: (a: string) => Effect.Effect<void, CoreError> }[]) {
+        if (part.resumed) await Effect.runPromise(Effect.ignore(part.resumed(s.address)));
+        else if (part.resume) await Effect.runPromise(Effect.ignore(part.read(s.address)));
+      }
+      await settle();
+    },
     tell: async (s: Rig, name: string, data: unknown = {}) => {
       for (const part of also()) part.event(s.address, name, data);
       await settle();
@@ -498,4 +507,42 @@ test("others' presets wait for a slow station only so long: the press is let go,
   letGo();
   await d.host.time.pass(10);
   assert.deepEqual([others().reading, others().presets.map((p) => p.name).sort()], [false, ["Bo's on a", "Bo's on b"]], "b's joins the list as it comes");
+});
+
+test("a stream come back resumed is asked only what the device owes its station: a change made with it away, once; nothing owed, nothing asked", async () => {
+  const a = station("a");
+  const b = station("b");
+  const d = device(ME, [a, b]);
+  await d.open(a);
+  await d.open(b);
+  const asks = (s: Rig, from: number) => d.asked.slice(from).filter((x) => x.includes(` ${s.address} `));
+  // Nothing owed: a resumed stream asks neither /presets/kept nor /stars.
+  let at = d.asked.length;
+  await d.resumed(b);
+  assert.deepEqual(asks(b, at), [], "nothing owed, nothing asked");
+  // A preset made with b away: b is owed it, and brought it as its stream comes back, by the carry's requests alone.
+  d.away(b);
+  const made = ok(await d.call("add", a.address, { name: "While away", dirs: [] })) as { id: string };
+  assert.deepEqual(d.held().owed, ["b"], "kept as owed (in the database: it holds across a restart)");
+  at = d.asked.length;
+  await d.resumed(b);
+  assert.deepEqual(asks(b, at), [`GET ${b.address} /presets/kept`, `PUT ${b.address} /presets/kept`]);
+  assert.equal(stationRecords(b).find((r) => r.id === made.id)?.rev, 1, "b brought it");
+  assert.deepEqual(d.held().owed, [], "owed no more");
+  at = d.asked.length;
+  await d.resumed(b);
+  assert.deepEqual(asks(b, at), [], "and asked nothing the next time");
+  // The same for a star.
+  const choose = new Choose({ store: d.inner.store, data: d.inner.data, now: () => clock.now, agent: () => null, starsChanged: (ws) => carryAll(d.inner, ws, "stars") });
+  d.away(b);
+  choose.like(a.address, "gpt-6", true);
+  await d.settle();
+  assert.deepEqual(d.held().owedStars, ["b"]);
+  at = d.asked.length;
+  await d.resumed(b);
+  assert.deepEqual(asks(b, at), [`GET ${b.address} /stars`, `PUT ${b.address} /stars`]);
+  assert.deepEqual(d.held().owedStars, []);
+  at = d.asked.length;
+  await d.resumed(b);
+  assert.deepEqual(asks(b, at), []);
 });

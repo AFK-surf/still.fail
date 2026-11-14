@@ -148,7 +148,10 @@ another; the accounts' list's merge across stations and its refills.
   and `src/views/presets.ts` brings each station what it lacks by the one rule (`src/preset-records.ts`, shared with
   the station; never a second copy of it). A change is made here at once and carried as a link opens, as a station
   tells `presets` or `stars`, and as it is made: never on a timer, and a station is brought only what is strictly newer
-  than what it said; what one station had newer goes on to the others reached then.
+  than what it said; what one station had newer goes on to the others reached then. A stream that comes back resumed
+  is told again the `presets` and `stars` it missed (the station logs them), so it is asked only what the device owes
+  that station (`owed`, `owedStars` beside the records: a station passed by while not reached, a carry that failed),
+  nothing where nothing is (`also`'s `resumed`); a whole read carries as a link opens.
 - Deletions are kept as a station keeps them, so many of each owner's (`preset-records.ts` `goneKept`, `GONE_KEPT`):
   the device trims what it holds by that rule as it keeps, never bringing one a station would drop (with a bound of
   the workspace's that went round for good, 2026-11-14). A deletion of nobody said (an app from before's, of a preset

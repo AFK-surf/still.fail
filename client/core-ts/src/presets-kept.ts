@@ -11,17 +11,21 @@ export const TABLE = "presetRecords";
 
 /// What the device keeps of `ws`: its person's records by id, and the ids of its stations from before (their GET
 /// /presets/kept answered `no route`).
-export type Held = { records: Record<string, KeptRecord>; before: string[] };
+/// `owed`: the ids of its stations owed a carry of the records (one passed by while not reached, one whose read or PUT
+/// failed), `owedStars` the same of the stars: what a stream that comes back resumed is asked for, and only that.
+export type Held = { records: Record<string, KeptRecord>; before: string[]; owed: string[]; owedStars: string[] };
 
-const NONE: Held = Object.freeze({ records: Object.freeze({}) as Record<string, KeptRecord>, before: Object.freeze([]) as unknown as string[] });
+const NOTHING = Object.freeze([]) as unknown as string[];
+const NONE: Held = Object.freeze({ records: Object.freeze({}) as Record<string, KeptRecord>, before: NOTHING, owed: NOTHING, owedStars: NOTHING });
+
+const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
 /// What is kept of `ws` (none kept: nothing). A record that does not read is left out.
 export function heldOf(data: { record(table: string, key: string): unknown }, ws: string): Held {
   const raw = data.record(TABLE, ws);
   if (!isObject(raw)) return NONE;
   const records = isObject(raw.records) ? (raw.records as Record<string, KeptRecord>) : {};
-  const before = Array.isArray(raw.before) ? raw.before.filter((x): x is string => typeof x === "string") : [];
-  return { records, before };
+  return { records, before: ids(raw.before), owed: ids(raw.owed), owedStars: ids(raw.owedStars) };
 }
 
 /// Who the device is in a workspace: its account's `sub` and email.
