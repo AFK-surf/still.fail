@@ -2170,21 +2170,6 @@ function personShownOf(inner: Inner) {
 /// and one at least. A lock of theirs kept only by a station that did not answer would get a second one begun beside
 /// it; one the control plane has not seen for a month is not waited for.
 
-/// The stations of `sub`'s workspaces seen lately that have not answered a read of their own lock this run, by name:
-/// what holds back a lock of theirs begun with nobody asked (`answered` below), said to them while it does
-/// (views/pair.ts `ownLogFor`).
-export function stationsUnanswered(inner: Inner, sub: string): string[] {
-  const heard = answeredOf.get(inner)?.get(sub) ?? new Set<string>();
-  const at = now(inner);
-  const names: string[] = [];
-  for (const [ws, owner] of inner.workspaces.owned()) {
-    if (owner !== sub) continue;
-    for (const s of arr(get(view(inner, ws), "stations"))) {
-      if (typeof s?.id === "string" && typeof s.last_seen === "number" && at - s.last_seen <= SEEN_SECS && !heard.has(s.id)) names.push(str(s.name) || s.id.slice(0, 8));
-    }
-  }
-  return [...new Set(names)];
-}
 
 export function personalStations(inner: Inner): NonNullable<PersonalEnv["stations"]> {
   const heardOf = (sub: string): Set<string> => {
@@ -2834,7 +2819,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         const own = onOwnLock(inner, c.workspace, param("device"));
         if (own !== null) {
           // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
-          yield* levelVaultsOf(inner, own.sub);
+          yield* levelVaultsOf(inner, own.sub, param("device"));
           const off = yield* withBound(inner, own.sub, Effect.tap(inner.adb.personal().removeDevice(own.sub, own.key, t("core-misc.personal.reason.remove")), () => takeOffBound(inner, own.sub, param("device"))));
           // (pending on their own lock, or, taken there by a station of another workspace of theirs, in this one's:
           // said so either way, as this workspace's page shows it)
@@ -2849,7 +2834,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
           const d = carriedOwn(inner, c.workspace, param("device"))!;
           const name = deviceText({ kind: "app", label: d.label });
           // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
-          yield* levelVaultsOf(inner, d.sub);
+          yield* levelVaultsOf(inner, d.sub, param("device"));
           // (the vaults of theirs that held a key for it keyed anew at once, in every moved workspace their log binds, as
           // `takeOffBound` does: `tookOutMoved`)
           result = yield* Effect.tap(inner.adb.personal().removeCarried(d.sub, param("device"), d.label, actText({ act: "removeDevice", name })), () =>
@@ -3486,7 +3471,7 @@ function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effec
     // (what this person noted as they added them goes with them: `unnote`)
     if ("gone" in what) unnote(inner, ws, what.member, m?.email ?? str(get(arr(get(view(inner, ws), "members")).find((x) => x?.sub === what.member), "email")));
     // (the vaults read first, while the member is still in: views/vault.ts `levelVaults`)
-    if ("gone" in what) return m === undefined ? Effect.succeed(null) : Effect.andThen(levelVaults(inner, ws), sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n })));
+    if ("gone" in what) return m === undefined ? Effect.succeed(null) : Effect.andThen(levelVaults(inner, ws, what.member), sayMoved(inner, sub, ws, [{ kind: "member.remove", sub: what.member }], { act: "removeMember", name: n }, actText({ act: "removeMember", name: n })));
     if (m?.role === what.role) return Effect.succeed(null);
     // (someone added whose first device has not come: nothing in the lock to change, the cloud's part alone; the role
     // chosen here now is what their admission here says, `note`, an owner's only by an owner)

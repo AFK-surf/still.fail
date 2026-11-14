@@ -1158,9 +1158,16 @@ export class PersonalLock {
   /// of it this run (`stations.answered`; one begun before they answered could be a second lock for someone who has
   /// one). The key is made now and its seed, in hand, also puts on the devices approved in workspaces' locks
   /// (`#addApproved`). Whether it began.
-  beginQuietly(sub: string): Effect.Effect<boolean, CoreError> {
+  ///
+  /// `acted`: begun on the person's own act (a newcomer's app asking to be let in where the chain moved, views/pair.ts
+  /// `ownLogFor`), its read of their lock just made and found none: not waited for every station's answer. That read
+  /// heard every station it reached keep none and, none keeping it, the cloud say none, which is what `begin` and `open`
+  /// begin a lock on with an ask, and the ask adds nothing known; waiting for a station that did not answer kept them out
+  /// of the workspace on a machine they may not be able to turn on, where before a move they got in (the lead,
+  /// 2026-11-14, after the owner refused a wait said in words). `answered` stays for what nobody asked for (`ownLockFor`).
+  beginQuietly(sub: string, acted = false): Effect.Effect<boolean, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      if (!this.mayBeginQuietly(sub) || this.#env.stations?.answered?.(sub) !== true) return false;
+      if (!this.mayBeginQuietly(sub) || (!acted && this.#env.stations?.answered?.(sub) !== true)) return false;
       const { id: key, seed } = yield* this.#madeKey(null);
       if (seed === null) return false;
       const id = yield* this.#env.device();

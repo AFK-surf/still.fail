@@ -503,13 +503,15 @@ test("a device with no log of its person's where the chain moved: one begun as i
   assert.deepEqual(w.r.host.secureAsked.slice(before), [], "nobody asked");
 });
 
-test("a device with no log of its person's where the chain moved, a station of theirs seen lately not answering: none begun, nobody asked; told to wait for that station by name and ask again", async () => {
+// (before 2026-11-14 it waited for the station, told so in words the owner refused: kept out of the workspace on a
+// machine the person may not be able to turn on, where before a move they got in)
+test("a device with no log of its person's where the chain moved, a station of theirs seen lately not answering: its log begun as it asks, nobody asked, not held out", async () => {
   const w = await setUp({ own: "none", quiet: "C" });
   const before = w.asked();
   const log = await w.run(ownLogFor(w.inner, ["ws"]));
-  assert.equal(log.error?.code, "lock_waits_stations", `waits: ${log.error?.message ?? JSON.stringify(log.ok)?.slice(0, 80)}`);
-  assert.equal(log.error?.message, "等 station studio 2 上线：它上线后，再在这台设备上发送批准请求");
-  assert.equal(w.inner.adb.personal().standing("s1"), "none", "none begun");
+  assert.equal(log.error, undefined, log.error?.message);
+  assert.equal((log.ok as Entry[] | null)?.[0]?.kind, "genesis", "a log begun");
+  assert.equal(w.inner.adb.personal().standing("s1"), "member", "this device on it");
   assert.deepEqual(w.r.host.secureAsked.slice(before), [], "nobody asked");
 });
 

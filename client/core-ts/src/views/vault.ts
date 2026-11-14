@@ -1006,7 +1006,7 @@ const LEVEL_MS = 3_000;
 /// version; after, it could never check it, kept the one before it, and every keying anew it wrote the station refused,
 /// `vault_conflict`). At most LEVEL_MS, asking nothing: a station not read holds the removal back no longer
 /// (`#rekey` writes past what it holds then).
-export function levelVaults(inner: Inner, ws: string): Effect.Effect<void> {
+export function levelVaults(inner: Inner, ws: string, out?: string): Effect.Effect<void> {
   return Effect.suspend(() => {
     if (!able(inner)) return Effect.void;
     const h = held(inner, ws);
@@ -1016,39 +1016,53 @@ export function levelVaults(inner: Inner, ws: string): Effect.Effect<void> {
       const host = hostOf(inner, ws, id);
       if (host !== "") at.add(host);
     }
-    if (at.size === 0) return Effect.void;
     const reads = Effect.all([...at].map((s) => Effect.ignore(readStation(inner, `${ws}/${s}`), { log: "Unhandled", message: "vault station read" })), { concurrency: "unbounded" });
-    return Effect.asVoid(Effect.timeoutOption(reads, LEVEL_MS)); // timer: a deadline on what a call waits for
+    const read = at.size === 0 ? Effect.void : Effect.asVoid(Effect.timeoutOption(reads, LEVEL_MS)); // timer: a deadline on what a call waits for
+    return Effect.andThen(read, Effect.sync(() => {
+      if (out !== undefined && movedHere(inner, ws)) keepBefore(inner, ws, out);
+    }));
   });
 }
 
-/// `levelVaults` of every workspace of person `sub`'s here, as one of their devices is taken off their own lock.
-export function levelVaultsOf(inner: Inner, sub: string): Effect.Effect<void> {
-  return Effect.suspend(() => Effect.asVoid(Effect.all([...inner.workspaces.owned()].filter(([, owner]) => owner === sub).map(([ws]) => levelVaults(inner, ws)), { concurrency: "unbounded" })));
+/// `levelVaults` of every workspace of person `sub`'s here, as one of their devices (`out`) is taken off their own lock.
+export function levelVaultsOf(inner: Inner, sub: string, out?: string): Effect.Effect<void> {
+  return Effect.suspend(() => Effect.asVoid(Effect.all([...inner.workspaces.owned()].filter(([, owner]) => owner === sub).map(([ws]) => levelVaults(inner, ws, out)), { concurrency: "unbounded" })));
 }
 
-/// Where a station holds a later version of vault `v` than this device does and it is not taken here (signed by a device
-/// taken out since that was never taken here while it was in: nothing checks it any more), the seq and epoch to write
-/// past it: the station's, as numbers alone (`later` keeps the version a station said and the lock did not take).
-function pastHead(inner: Inner, ws: string, v: Vault, station: string): { seq: number; epoch: number } | null {
-  const h = held(inner, ws);
-  const theirs = h.later?.[v.id];
-  const seq = Math.max(h.on[v.id]?.[station]?.seq ?? -1, theirs?.seq ?? -1);
-  if (seq <= v.seq) return null;
-  return { seq, epoch: Math.max(v.epoch, typeof theirs?.epoch === "number" ? theirs.epoch : v.epoch) };
+/// Where the chain moved, the state in force just before a removal this device makes (of a device's id or a member's
+/// sub), kept for this run by workspace with whom it takes out: a version of a vault that one wrote, which the stations
+/// hold and this device had not read before the removal, is checked against it (`#rekey`), so it is taken as on a chain
+/// not moved, where the chain as it stood checks it (`waitingAs`'s prefix): the same acceptance, no wider. A signature
+/// carries no time; it is this device's own knowledge that the signer was in until the removal it made (the lead,
+/// 2026-11-14: a moved workspace does for people what an unmoved one does, 迁过之后和之前一样).
+const beforeOut = new WeakMap<Inner, Map<string, { lock: Checked; out: Set<string> }>>();
+function keepBefore(inner: Inner, ws: string, out: string): void {
+  const lock = lockOf(inner, ws);
+  if (lock instanceof CoreError) return;
+  let m = beforeOut.get(inner);
+  if (m === undefined) beforeOut.set(inner, (m = new Map()));
+  const was = m.get(ws);
+  m.set(ws, { lock, out: new Set([...(was?.out ?? []), out]) });
 }
 
-/// How many versions of each vault a station held past this device's that it wrote past unchecked (`#rekey`), by
-/// workspace and vault, this run: what a removal made while no station could be read dropped of what the device taken
-/// out wrote (not on the vault's page yet: a sentence for it is the lead's to take).
-const droppedOf = new WeakMap<Inner, Map<string, number>>();
-function dropped(inner: Inner, ws: string, id: string, n: number): void {
-  let m = droppedOf.get(inner);
-  if (m === undefined) droppedOf.set(inner, (m = new Map()));
-  m.set(`${ws}/${id}`, (m.get(`${ws}/${id}`) ?? 0) + n);
+/// Vault `id` as a station holds it past this device's (`later`), signed by one this device took out (`beforeOut`) and
+/// taken by the state just before that removal: taken here, what of that state took it kept (`vaultTook`), so it is
+/// read and keyed anew as one waiting to be (`waitingAs`). Whether it was.
+function takeBefore(inner: Inner, ws: string, id: string): boolean {
+  const theirs = held(inner, ws).later?.[id];
+  const kept = beforeOut.get(inner)?.get(ws);
+  if (theirs === undefined || kept === undefined || !trusted(kept.lock, theirs)) return false;
+  const key = theirs.sig?.key ?? "";
+  const signer = [...kept.lock.devices.values()].find((d) => d.sign_key === key || (kept.lock.signKeys.get(d.id) ?? []).includes(key));
+  if (signer === undefined || !(kept.out.has(signer.id) || kept.out.has(signer.sub))) return false;
+  change(inner, ws, (h) => {
+    h.vaults[id] = theirs;
+    if (h.later !== undefined) delete h.later[id];
+  });
+  const took = tookHeld(inner, ws);
+  inner.data.put("vaultTook", ws, { took: { ...took, [id]: { ...(took[id] ?? {}), [String(theirs.epoch)]: sliceOf(kept.lock, theirs) } } });
+  return true;
 }
-/// What `dropped` noted of vault `id` of `ws` (the tests').
-export const droppedIn = (inner: Inner, ws: string, id: string): number => droppedOf.get(inner)?.get(`${ws}/${id}`) ?? 0;
 
 /// The keys unsealed here given to the members' devices set up that have none (the vaults of this person's own):
 /// forked, nothing asked of the person (`Vaults.giveKept`).
@@ -1673,20 +1687,17 @@ class Vaults {
         if (first._tag === "Success") nv = first.success;
         else {
           if (first.failure.code !== "vault_conflict") return yield* Effect.fail(first.failure);
-          // Another version there: read again, one that checks taken (then it is keyed anew from that, as the lock comes);
-          // one that does not (signed by a device out since, never taken here while it was in) is not taken, and this
-          // device, the owner's, writes past it from what it holds, of the station's version only its numbers: what
-          // the device taken out wrote that this one never saw while it was trusted is not kept (the lead, 2026-11-14).
+          // Another version there: read again, one that checks is taken (on a chain, by the chain as it stood); where the
+          // chain moved, one the device this one just took out wrote, checked by the state just before that removal
+          // (`takeBefore`), as a chain's prefix checks it. Either is keyed anew from as the lock comes. One that checks
+          // against neither is not taken, and the vault waits, as on a chain not moved.
           yield* Effect.ignore(readStation(inner, `${self.ws}/${host}`), { log: "Unhandled", message: "vault station read" });
           const now = held(inner, self.ws).vaults[id];
-          if (now === undefined || now.seq !== v.seq) {
+          if ((now !== undefined && now.seq !== v.seq) || takeBefore(inner, self.ws, id)) {
             inner.runner.fork(Effect.ignore(self.rekeyGone(), { log: "Unhandled", message: "vaults keyed anew" }));
             return;
           }
-          const past = pastHead(inner, self.ws, v, host);
-          if (past === null) return yield* Effect.fail(first.failure);
-          nv = yield* self.#putVault(made(past.seq, past.epoch + 1), host);
-          dropped(inner, self.ws, v.id, past.seq - v.seq);
+          return yield* Effect.fail(first.failure);
         }
         // The key before kept a while too, not forgotten: an item not written again yet (this device stopped, a write
         // that failed) is carried on with it, nobody asked. The device taken out holds that key anyway: keeping it
@@ -1774,20 +1785,10 @@ class Vaults {
               const plain = yield* Effect.try({ try: () => decrypt(old, i.ct, itemContext(ws, id, i.id, i.version, i.epoch)), catch: asCoreError });
               const nonce = new Uint8Array(12);
               inner.host.randomBytes(nonce);
-              const write = (version: number) => {
-                const ct = encryptWith(key!, plain, itemContext(ws, id, i.id, version, v.epoch), nonce);
-                return sign({ v: 1 as const, ws, vault: id, id: i.id, version, epoch: v.epoch, ct, ...(i.listing ? { listing: i.listing } : {}), at: nowS(inner) }, TAG.item, signer);
-              };
-              const put = yield* Effect.result(self.#putItem(write(i.version + 1), v));
-              if (put._tag === "Failure") {
-                // (a later version there, read again by `#putItem`: taken where it checks against the vault as it is, so
-                // carried on from that next time; else one this device cannot check, written past by its number alone)
-                const now = items(inner, ws, id)[i.id];
-                const there = held(inner, ws).on[id]?.[hostOf(inner, ws, id)]?.items[i.id] ?? -1;
-                if (put.failure.code !== "vault_conflict" || now !== i || there <= i.version) return yield* Effect.fail(put.failure);
-                inner.host.randomBytes(nonce);
-                yield* self.#putItem(write(there + 1), v);
-              }
+              const version = i.version + 1;
+              const ct = encryptWith(key!, plain, itemContext(ws, id, i.id, version, v.epoch), nonce);
+              const item = sign({ v: 1 as const, ws, vault: id, id: i.id, version, epoch: v.epoch, ct, ...(i.listing ? { listing: i.listing } : {}), at: nowS(inner) }, TAG.item, signer);
+              yield* self.#putItem(item, v);
               wrote++;
             }),
             { log: "Unhandled", message: "vault item keyed anew" },

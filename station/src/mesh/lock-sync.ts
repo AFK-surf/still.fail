@@ -13,6 +13,7 @@ import type { Cloud } from "../cloud/state.ts";
 import { asEntry, type Entry, fold } from "../cloud/lock.ts";
 import { type Kept, hashOf } from "../cloud/log-keep.ts";
 import type { PeerCall } from "./bus.ts";
+import { pinMoved } from "./moved-pin.ts";
 import { answerBodies, answerPerson } from "./person-sync.ts";
 import { personChainsOf } from "./serve.ts";
 
@@ -211,6 +212,30 @@ export function followLock(cloud: Cloud, call: PeerCall, after: (ms: number, f: 
       // no station is in the lock's roster for it to ask.
       for (const r of cloud.rigs(m.workspace)) bring(r.id, ws, m.workspace, kept);
     }
+    // A joined workspace this station pins no lock of, whose chain the plane brought moved: pinned once a station of it
+    // gives what makes a state naming this one (mesh/moved-pin.ts), tried again as a failure is, till it does.
+    for (const j of st.joined ?? []) if (cloud.movedOffered.has(j.workspace)) pin(j.workspace, (j.peers ?? []).map((p: any) => p?.id).filter((id: unknown): id is string => typeof id === "string"));
+  };
+  const pin = (workspace: string, peers: string[]) => {
+    const key = `${workspace}|moved`;
+    const retry = retries.get(key);
+    if (going.has(key) || (retry !== undefined && !retry.due) || cloud.leftOut(workspace) !== "unpinned") return;
+    going.add(key);
+    void pinMoved(cloud, call, workspace, peers, cloud.state?.station ?? "").then((done) => {
+      going.delete(key);
+      if (done) {
+        retries.delete(key);
+        return;
+      }
+      if (stopped) return;
+      const wait = retry === undefined ? RETRY_MS : Math.min(retry.wait * 2, RETRY_MOST_MS);
+      const r = { wait, due: false, cancel: () => {} };
+      r.cancel = after(wait, () => { // timer: a retry after a failure, with a backoff (RETRY_MS doubling to RETRY_MOST_MS)
+        r.due = true;
+        look();
+      });
+      retries.set(key, r);
+    });
   };
   look();
   const unlisten = cloud.listen(look);

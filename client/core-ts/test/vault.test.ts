@@ -32,7 +32,7 @@ import {
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
-import { BOX_KEY, BOX_PUB, UNLOCK_MS, droppedIn, levelVaults, tookOut, waitingAs, waitingChecks } from "../src/views/vault.ts";
+import { BOX_KEY, BOX_PUB, UNLOCK_MS, levelVaults, tookOut, waitingAs, waitingChecks } from "../src/views/vault.ts";
 import { handOver, inForceOf, pendingHeld, read as readLock, roster } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
 import { withoutMesh } from "./lock-rig.ts";
@@ -1234,7 +1234,6 @@ test("a chain not moved: the phone's version not read here as the phone is taken
   await takeOut();
   const v = r.st.vaults.get(id)!;
   assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], "keyed anew from the phone's version, without it");
-  assert.equal(droppedIn(r.core.inner, "ws", id), 0, "nothing written past");
   r.core.close();
 });
 
@@ -1246,7 +1245,6 @@ test("a chain not moved: the phone's version not read here as the phone is taken
   await takeOut();
   const v = r.st.vaults.get(id)!;
   assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], `keyed anew from the phone's version (station at seq ${v.seq})`);
-  assert.equal(droppedIn(r.core.inner, "ws", id), 0, "nothing written past");
   assert.equal((await r.ask("vault.open", { item: [...r.st.items.keys()][0] })).plain.fields.value, "ghp_x", "its item opened");
   r.core.close();
 });
@@ -2573,11 +2571,13 @@ test("a moved workspace: a version the phone wrote while in, not read here yet, 
   await r.settle();
   const v = r.st.vaults.get(id)!;
   assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], "keyed anew from the phone's version, without the phone");
-  assert.equal(droppedIn(r.core.inner, "ws", id), 0, "nothing written past");
   r.core.close();
 });
 
-test("a moved workspace: the same with the station not read as the phone is taken off: keyed anew past the station's version (its numbers alone), the phone's version never taken here; one the phone signs after, presented by the station, changes nothing", async () => {
+// (not read before the removal: the station's refusal of the keying anew has it read again, and the phone's version is
+// taken by the state just before the removal this device made, as a chain's prefix takes it; before 2026-11-14 (late)
+// it was written past, what the phone wrote lost, which a chain not moved keeps)
+test("a moved workspace: the same with the station not read as the phone is taken off: read again on the station's refusal, the phone's version taken by the state just before the removal, keyed anew from it; one the phone signs after, presented by the station, changes nothing", async () => {
   const r = await movedRig(true, { phone: true });
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
   const id = vaults().vaults[0].id;
@@ -2593,8 +2593,7 @@ test("a moved workspace: the same with the station not read as the phone is take
   await r.settle();
   await r.settle();
   const v = r.st.vaults.get(id)!;
-  assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], `written past the station's version, without the phone (station at seq ${v.seq}, held ${(r.core.inner.data.record("vault", "ws") as any)?.vaults?.[id]?.seq})`);
-  assert.equal(droppedIn(r.core.inner, "ws", id), 1, "one version of the phone's not kept, counted");
+  assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], `keyed anew from the phone's version, without the phone (station at seq ${v.seq}, held ${(r.core.inner.data.record("vault", "ws") as any)?.vaults?.[id]?.seq})`);
   assert.notEqual(v.sig.key, r.phone.id, "not the phone's");
   // (the phone, out, signs another past it; the station presents it)
   const { sig: _2, ...ours } = v;

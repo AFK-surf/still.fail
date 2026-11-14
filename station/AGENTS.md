@@ -195,6 +195,12 @@
   locked, off or on): a station that pinned the chain goes by the state in force (`leftOut`: never `unpinned`; its home
   off, a joined unlocked one's members taken), and so does `enroll --join` on the machine (`src/cli.ts`
   `joinWorkspace`), which the cloud no longer refuses for a moved home (2026-11-14, `test/lock-moved-joined.test.ts`).
+  A joined station that pins no lock of such a workspace (enrolled by its token alone, `leftOut` "unpinned") is offered
+  the plane's moved chain, never pinning it by that alone (`Cloud.movedOffered`, cloud/presence.ts `takeFromPlane`), and
+  pins it once the state made of the logs and bodies a station of it gives names its own key (`src/mesh/moved-pin.ts`,
+  tried again as a failure is, `lock-sync.ts`): what 「保护」 after a move says is a statement, which the chain never
+  names (2026-11-14, `test/lock-moved-pin.test.ts`). A station gives the bodies only to a station its list names
+  (`bodiesGiven`); the logs heard in the workspace to any station of its roster, as before.
 - What build each device a lock here names last ran is kept by its id in the lock (`src/mesh/device-builds.ts`, in
   stillfail.db, written only as the build rises or the day changes) and given to a device the lock lets in (GET /lock
   `builds`, `serves` `builds`; GET /lock/person for the asker's own log's devices), with since when this station keeps

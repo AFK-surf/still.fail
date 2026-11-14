@@ -335,7 +335,7 @@ export class Core {
           asked: () => asked(inner),
         }),
         // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
-        tookOff: (sub, id, removal) => Effect.andThen(vaultCalls.levelVaultsOf(inner, sub), withBound(inner, sub, Effect.tap(removal, () => takeOffBound(inner, sub, id)))),
+        tookOff: (sub, id, removal) => Effect.andThen(vaultCalls.levelVaultsOf(inner, sub, id), withBound(inner, sub, Effect.tap(removal, () => takeOffBound(inner, sub, id)))),
         subOf: (workspace) => inner.workspaces.owner(workspace),
         subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),
         pair: {

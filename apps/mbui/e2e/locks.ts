@@ -1220,27 +1220,19 @@ try {
     log(`  E1 sees Two's station: ${short(await e1.stationState(two, (s) => s.state !== "online" && s.state !== "connecting", 120_000))}`);
   });
   if (moved) {
-    // (after a move a newcomer's app brings a log of its own as it asks, and begins none while a station of theirs seen
-    // lately has not answered, as before a move: it is told to wait for that station by name and ask again; the lead,
-    // 2026-11-14, views/pair.ts `ownLogFor`)
-    await must("erin's device E1 refused; it asks from its waiting page with Two's station off: told to wait for that station by name, nothing begun, nobody asked", async () => {
+    // (after a move a newcomer's app brings a log of its own as it asks, begun then with nobody asked, a station of hers
+    // that did not answer holding nothing back: views/pair.ts `ownLogFor`; the lead, 2026-11-14)
+    await must("erin's device E1 refused; B approves it face to face from its waiting page with Two's station off: let in, signing, her own log begun and bound (one person more), nobody asked on E1", async () => {
       log(`  E1 sees the first: ${short(await e1.stationState(workspace, (s) => s.cause === "lock", 90_000))}`);
-      await e1.lock(workspace, (l) => l.me?.waiting, 90_000);
-      const r = await e1.call("lock.pair", { workspace }).then(() => null, (x: Error) => x);
-      log(`  E1's lock.pair: ${r?.message.slice(0, 200) ?? "asked"}`);
-      if (r === null || !/lock_waits_stations/.test(r.message) || !r.message.includes("third")) throw new Error("not told to wait for Two's station by name");
-      const said = stationSays("lock-state");
-      if (personsIn(said) !== before15) throw new Error(`persons ${personsIn(said)}, not ${before15}`);
-      await e1.personal((p) => p.standing === "none", 30_000);
-      if (e1.asked() !== 0) throw new Error(`E1's sealer asked the person ${e1.asked()} times: ${e1.askedWhat().join("; ")}`);
-    });
-    stationDo("second-again", "third");
-    await check("Two's station on again: E1 asks again, B approves it face to face: erin's own log begun, she is bound (one person more), let in, nobody asked on E1", async () => {
-      await e1.stationState(two, (s) => s.state === "online" || s.cause === "lock", 120_000);
       await approvedBy(b, e1);
       await e1.personal((p) => p.standing === "member", 90_000);
       let said = "";
       await whenChanged([stationData], () => personsIn((said = stationSays("lock-state"))) === before15 + 1, 90_000, () => `the station's lock: ${said.trim().split("\n").slice(-4).join("; ")}`);
+      if (e1.asked() !== 0) throw new Error(`E1's sealer asked the person ${e1.asked()} times: ${e1.askedWhat().join("; ")}`);
+    });
+    stationDo("second-again", "third");
+    await check("Two's station on again: E1 let in there too, nobody asked", async () => {
+      await e1.stationState(two, (s) => s.state === "online", 120_000);
       if (e1.asked() !== 0) throw new Error(`E1's sealer asked the person ${e1.asked()} times: ${e1.askedWhat().join("; ")}`);
     });
   } else {
@@ -1392,9 +1384,6 @@ try {
   let fourthId = "";
   // (when the fourth was enrolled: what B asks of it is answered after that, as it came online then)
   let enrolledAt = 0;
-  // (a station that keeps no lock, protected after a move: it never comes to keep a moved one yet; to come, then run
-  // moved as well)
-  if (!moved) {
   await must("B holds Dev's lock, signing", async () => {
     const l = await b.lock(workspace, (l) => l.locked && l.signs, 30_000);
     log(`  B's lock: ${(l.stations ?? []).map((s: J) => `${s.id.slice(0, 8)}${s.protected ? " protected" : ""}`).join(", ")}`);
@@ -1474,6 +1463,10 @@ try {
     await bHolds(await b.call("lock.state", { workspace }));
   });
   // ── 设置 › 安全's 「保护」 beside the fourth station, on B (an owner's device signing in the lock) ──
+  // (moved: the station is said in alice's log, which the chain never names; the fourth pins the chain once the state its
+  // logs and bodies make names it, fetched of the first: station/src/mesh/moved-pin.ts)
+  const stationsAt = (said: string) => Number(said.match(/^STATIONS (\d+)$/m)?.[1] ?? NaN);
+  const stationsBefore = stationsAt(stationSays("lock-state"));
   await must("B protects the fourth station (「保护」, lock.joinStation)", async () => {
     const r = await b.call("lock.joinStation", { workspace, station: fourthId });
     log(`  joinStation: ${JSON.stringify(r)?.slice(0, 300)}`);
@@ -1481,6 +1474,7 @@ try {
   await check("the first station's lock names the fourth; the fourth keeps Dev's lock, as far as the first", async () => {
     await whenChanged([stationData, fourthData], () => {
       const ours = keptAt(stationData);
+      if (moved) return stationsAt(stationSays("lock-state")) === stationsBefore + 1 && headOf(keptAt(fourthData)) === headOf(ours) && /^MOVED \S+ on /m.test(stationSays("lock-state", "fourth"));
       return namesStation(ours, fourthId) && headOf(keptAt(fourthData)) === headOf(ours);
     }, 60_000, () => `the first's head ${headOf(keptAt(stationData))} (names the fourth: ${namesStation(keptAt(stationData), fourthId)}), the fourth's ${headOf(keptAt(fourthData))}`);
     log(`  both at ${headOf(keptAt(stationData))?.slice(0, 20)}; the fourth's lock-state: ${stationSays("lock-state", "fourth").trim().split("\n").filter((x) => !x.startsWith("DEVICE")).join("; ")}`);
@@ -1493,7 +1487,7 @@ try {
   // (as round 11 takes the second out, and the rigs' run its rig: out of the workspace, then down)
   await must("B takes the fourth station out of Dev: the first station's lock names it no more; it goes down", async () => {
     await b.call("workspace.removeStation", { account: sub, workspace, station: fourthId });
-    await whenChanged([stationData], () => !namesStation(keptAt(stationData), fourthId), 60_000, () => "the first station's lock still names the fourth");
+    await whenChanged([stationData], () => (moved ? stationsAt(stationSays("lock-state")) === stationsBefore : !namesStation(keptAt(stationData), fourthId)), 60_000, () => "the first station's lock still names the fourth");
     stationDo("second-down", "fourth");
   });
   await check("B goes on in Dev, safe mode on, alice's item opened", async () => {
@@ -1501,7 +1495,6 @@ try {
     await b.lock(workspace, (l) => l.locked && l.signs, 30_000);
     await opens(b);
   });
-  }
 
   // ── round 18: no station up (3b-2). The workspace's one station left frozen (asked, it never answers), the cloud up:
   // B removes A installed anew (its own lock bound here, so off that first and out of the workspace's after it,

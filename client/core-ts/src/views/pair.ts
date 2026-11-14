@@ -51,7 +51,7 @@ import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { ownBuild } from "../station/oldest.ts";
-import { Lock, approvedHere, stationsUnanswered, asked, baseOf, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
+import { Lock, approvedHere, asked, baseOf, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -714,21 +714,12 @@ export function ownLogFor(inner: Inner, workspaces: readonly string[]): Effect.E
     const read = yield* Effect.result(personal.refresh(sub, undefined, personal.asked()));
     if (personal.standing(sub) === "none") {
       if (read._tag === "Failure") return yield* Effect.fail(read.failure);
-      // Begun as a device begins its person's lock before a move: with nobody asked where it may (`mayBeginQuietly`: no
-      // key of its own made before, its stations answered), else the person asked in this device's own words, never
-      // the approver's (2026-11-14, the locks' end to end after #6102: a newcomer's first app was asked 「批准你的新设备」
-      // as it asked to be let in, its key made then).
-      // Where a station of theirs seen lately has not answered a read of their lock, it waits for that station, as before
-      // a move: one begun before it answered could be a second lock for someone who has one. Said, by the station's
-      // name, as what gets them in (the lead, 2026-11-14: it waits exactly where it waited before a move, nobody asked;
-      // the locks' end to end, round 15, asked 「确认这是你的设备」 there).
-      if (personal.mayBeginQuietly(sub)) {
-        if (!(yield* personal.beginQuietly(sub))) {
-          const waits = stationsUnanswered(inner, sub);
-          if (waits.length > 0) return yield* Effect.fail(new CoreError("lock_waits_stations", t("core-misc.lock.waitsStations", { stations: waits.join("、") })));
-          return null;
-        }
-      } else yield* personal.begin(sub, t("core-misc.personal.reason.open"));
+      // Begun on the person's act (they asked to be let in): with nobody asked where this device made no key of its own
+      // before (`beginQuietly`'s `acted`: the read just made found none kept, every station it reached saying so; a
+      // station that did not answer holds nobody out of the workspace, as it did not before a move: the lead,
+      // 2026-11-14, after the owner refused a wait said in words), else the person asked once in this device's own
+      // words, never the approver's (the locks' end to end after #6102: a newcomer's first app was asked 「批准你的新设备」).
+      if (!(personal.mayBeginQuietly(sub) && (yield* personal.beginQuietly(sub, true)))) yield* personal.begin(sub, t("core-misc.personal.reason.open"));
     }
     if (personal.standing(sub) !== "member") return null;
     const log = personal.entries(sub);
