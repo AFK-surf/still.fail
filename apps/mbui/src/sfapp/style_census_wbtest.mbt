@@ -83,10 +83,12 @@ test "styles: how many values of each kind the app's screens use" {
   // A station's dials, wide, are still 36 apart (dials_node's dl_row_wide), but as nodes that is a row's gap across,
   // which the tree's census does not count (Tree::styled: a node's paddings and its gap down only); the old view's
   // dials were its last 36.
+  // The chats' lists keep room under their last row to scroll their tucked search out of view (Scroll::tucks' room,
+  // 39 where the rows are short of a screen), worked out as they are laid out, no token of its own.
   inspect(counts.to_string(), content=(
     #|text 36
     #|weight 4
-    #|space 23
+    #|space 24
     #|radius 21
     #|color 73
     #|
