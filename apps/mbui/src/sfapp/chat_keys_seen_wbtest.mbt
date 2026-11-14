@@ -99,17 +99,11 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: the reply 
 }
 
 ///|
-/// The middle across of what the reply's key draws now (each glyph and each ground drawn within its row, as drawn,
-/// its scale with it); None where the reply draws nothing seen.
-fn ks_reply_middle(t : @ui.Tester) -> Double? {
-  let tree = @ui.view_tree().unwrap()
-  let held = tree.drawn_held()
-  guard held.iter().find_first(fn(e) { e.0.words == cr_reply && e.0.alpha > 0.0 }) is Some((d, _, _)) else {
-    return None
-  }
+/// The row of a page's list that drawn `d` lies in now, by its middle (x, y, w, h); none where none.
+fn ks_row_of(d : @view.Drawn) -> (Double, Double, Double, Double)? {
   let (mx, my) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
   let mut row = None
-  for l in tree.lists_seen() {
+  for l in @ui.view_tree().unwrap().lists_seen() {
     for r in l.rows {
       let (_, _, (rx, ry, rw, rh)) = r
       if mx >= rx && mx <= rx + rw && my >= ry && my <= ry + rh {
@@ -117,39 +111,66 @@ fn ks_reply_middle(t : @ui.Tester) -> Double? {
       }
     }
   }
-  guard row is Some((rx, ry, rw, rh)) else { return None }
-  let inside = fn(x0 : Double, y0 : Double, x1 : Double, y1 : Double) {
-    x0 >= rx - 0.5 && x1 <= rx + rw + 0.5 && y0 >= ry - 0.5 && y1 <= ry + rh + 0.5
-  }
-  let mut x0 = @double.infinity
-  let mut x1 = @double.neg_infinity
-  for gc in t.glyph_clips() {
-    let ((gx0, gy0, gx1, gy1), _) = gc
-    if inside(gx0, gy0, gx1, gy1) {
-      x0 = if gx0 < x0 { gx0 } else { x0 }
-      x1 = if gx1 > x1 { gx1 } else { x1 }
-    }
-  }
-  for e in held {
-    let (c, _, _) = e
-    if c.alpha > 0.0 && (c.ground & 0xFFL) != 0L && inside(c.x, c.y, c.x + c.w, c.y + c.h) {
-      x0 = if c.x < x0 { c.x } else { x0 }
-      x1 = if c.x + c.w > x1 { c.x + c.w } else { x1 }
-    }
-  }
-  guard x1 > x0 else { return None }
-  Some((x0 + x1) / 2.0)
+  row
 }
 
 ///|
-/// How far from where it is at rest the middle of the reply's ink may be as it comes: a point, and what its ink lies
-/// off its lines as laid out moves it at its smallest seen (its key grows about the middle of its lines as laid out,
-/// Pivot's DrawnAcross; on 小屏 its widest line's last glyph inks 8 short of where that line ends, so its ink's
-/// middle lies 4 left of its lines', which at a scale of 0.55, the first look it is seen, is 1.8 off).
-let ks_ink_off : Double = 2.0
+/// Where the reply starts now: its first glyph's left edge (the leftmost of the glyphs drawn in its words' box), the
+/// left edge of what it draws (the leftmost ground drawn in its row: its avatar's) and the share of itself it is drawn
+/// at (its words' scale); None where the reply draws nothing seen.
+fn ks_reply_start(t : @ui.Tester) -> (Double, Double, Double)? {
+  let held = @ui.view_tree().unwrap().drawn_held()
+  guard held.iter().find_first(fn(e) { e.0.words == cr_reply && e.0.alpha > 0.0 }) is Some((d, _, _)) else {
+    return None
+  }
+  guard ks_row_of(d) is Some((rx, ry, rw, rh)) else { return None }
+  let mut glyph = @double.infinity
+  for gc in t.glyph_clips() {
+    let ((gx0, gy0, gx1, gy1), _) = gc
+    let (mx, my) = ((gx0 + gx1) / 2.0, (gy0 + gy1) / 2.0)
+    if mx >= d.x && mx <= d.x + d.w && my >= d.y && my <= d.y + d.h && gx0 < glyph {
+      glyph = gx0
+    }
+  }
+  let mut avatar = @double.infinity
+  for e in held {
+    let (c, _, _) = e
+    if c.alpha > 0.0 &&
+      (c.ground & 0xFFL) != 0L &&
+      c.x >= rx - 0.5 &&
+      c.x + c.w <= rx + rw + 0.5 &&
+      c.y >= ry - 0.5 &&
+      c.y + c.h <= ry + rh + 0.5 &&
+      c.x < avatar {
+      avatar = c.x
+    }
+  }
+  guard glyph < @double.infinity && avatar < @double.infinity else { return None }
+  Some((glyph, if glyph < avatar { glyph } else { avatar }, @ui.view_tree().unwrap().drawn_scale(d.id)))
+}
 
 ///|
-test "a chat's page made with its inside nodes, on 小屏 and 大屏: the reply coming over the agent's line grows about the middle of what it draws: its middle across where it is at rest at every look" {
+/// Where one's own words `w` end now: the right edge of their bubble's ground as drawn; None where they draw nothing
+/// seen.
+fn ks_bubble_end(w : String) -> Double? {
+  let held = @ui.view_tree().unwrap().drawn_held()
+  for i, e in held {
+    let (d, _, _) = e
+    guard d.words == w && d.alpha > 0.0 else { continue }
+    let mut k = i
+    while k >= 0 {
+      let (c, up, _) = held[k]
+      if (c.ground & 0xFFL) != 0L {
+        return Some(c.x + c.w)
+      }
+      k = up
+    }
+  }
+  None
+}
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: the reply coming over the agent's line grows from its start: the left edge of what it draws where it rests in every frame of its way, its first glyph between that edge and where it rests" {
   for screen in cr_screens {
     let t = cr_open(screen, (fix_deliver_ms, 1400.0, 1000.0), on_pixels=true)
     let sent = t.time()
@@ -161,20 +182,53 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: the reply 
     let seen = []
     let from = t.time()
     while t.time() < from + @ui.move_most_ms {
-      seen.push((t.time() - from, ks_reply_middle(t)))
+      seen.push((t.time() - from, ks_reply_start(t)))
       t.run_for(cr_look_ms)
     }
     t.run_for(@ui.move_most_ms)
-    let rest = match ks_reply_middle(t) {
-      Some(m) => m
+    let (glyph, edge, _) = match ks_reply_start(t) {
+      Some(s) => s
       None => fail("\{screen.0}: the reply not drawn at rest")
     }
     let mut ways = 0
     for s in seen {
-      guard s.1 is Some(m) else { continue }
+      guard s.1 is Some((g, e, share)) else { continue }
       ways = ways + 1
-      assert_true((m - rest).abs() <= ks_ink_off, msg="\{screen.0}, +\{s.0} ms: its middle at \{m}, \{rest} at rest")
+      assert_true((e - edge).abs() <= 0.5, msg="\{screen.0}, +\{s.0} ms: the left edge of what it draws at \{e}, \{edge} at rest")
+      // (its first glyph, as far in from that edge as it is at rest times the share it is drawn at: off where it rests
+      // by no more than that distance's rest times 1 less that share; on 小屏, where the two are one, where it rests)
+      let most = (glyph - edge) * (1.0 - share)
+      assert_true(
+        g >= e - 0.5 && g <= glyph + 0.5 && glyph - g <= most + 0.5,
+        msg="\{screen.0}, +\{s.0} ms: its first glyph at \{g}, \{glyph} at rest, the edge at \{e}, drawn at \{share}",
+      )
     }
     assert_true(ways > 0, msg="\{screen.0}: the reply not drawn on its way")
+  }
+}
+
+///|
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: the first message sent grows from its end: its bubble's right edge where it rests in every frame of its way" {
+  for screen in cr_screens {
+    let t = cr_open(screen, (fix_deliver_ms, 1.0e7, 1.0e7), on_pixels=true)
+    cr_send(t, cr_sent)
+    let seen = []
+    let from = t.time()
+    while t.time() < from + @ui.move_most_ms {
+      seen.push((t.time() - from, ks_bubble_end(cr_sent)))
+      t.run_for(cr_look_ms)
+    }
+    t.run_for(@ui.move_most_ms)
+    let rest = match ks_bubble_end(cr_sent) {
+      Some(e) => e
+      None => fail("\{screen.0}: the sent message not drawn at rest")
+    }
+    let mut ways = 0
+    for s in seen {
+      guard s.1 is Some(e) else { continue }
+      ways = ways + 1
+      assert_true((e - rest).abs() <= 0.5, msg="\{screen.0}, +\{s.0} ms: its bubble's right edge at \{e}, \{rest} at rest")
+    }
+    assert_true(ways > 0, msg="\{screen.0}: the sent message not drawn on its way")
   }
 }

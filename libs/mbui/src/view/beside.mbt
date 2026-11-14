@@ -469,24 +469,25 @@ pub fn View::lives_with(self : View, owner : View) -> View {
 /// as a popover grows from what opened it (kit's grown_from). Not beside anything: its middle. `Drawn` the middle of what
 /// it and what it holds draw, as they are laid out (the boxes of those with a ground, words, shapes, lines, a picture or
 /// an old view of their own): what is grown and shrunk where it is, not about a page's width (a room opening on a line
-/// to one side: reveal's, an old view's Ctx::held_look). `DrawnAcross(y)`: across, the middle of what it and what
-/// it holds draw (Drawn's); down, `y` of its height (0: its top): what a block on its way down a column is drawn at as
-/// big as it shows, all of it within what shows of it (a page's list's key, View::scrolls_window), a bubble to its side
-/// grown and shrunk about its own middle.
+/// to one side: reveal's, an old view's Ctx::held_look). `DrawnSide(y)`: across, the side what it and what it holds
+/// draw (Drawn's, words drawn alone as their lines are laid out) is laid from: its start, its end, or its middle where it
+/// is centred (Tree::pivot_of); down, `y` of its height (0: its top): what a block on its way down a column is drawn at
+/// as big as it shows, all of it within what shows of it (a page's list's key, View::scrolls_window), a reply growing
+/// from its start, one's own bubble from its end, never a line moving sideways to its place.
 #derive(Eq, Debug)
 pub(all) enum Pivot {
   At(Double, Double)
   FromBeside
   Drawn
-  DrawnAcross(Double)
+  DrawnSide(Double)
 }
 
 ///|
-/// Whether it is about the middle of what is drawn, across or both ways (Drawn, DrawnAcross): worked out again as that
+/// Whether it is about what is drawn, across or both ways (Drawn, DrawnSide): worked out again as that
 /// changes.
 fn Pivot::drawn(self : Pivot) -> Bool {
   match self {
-    Drawn | DrawnAcross(_) => true
+    Drawn | DrawnSide(_) => true
     _ => false
   }
 }
@@ -498,7 +499,7 @@ fn Node::pivot_at(self : Node, w : Double, h : Double) -> (Double, Double) {
   match self.look.pivot {
     At(x, y) => (x * w, y * h)
     Drawn => (0.5 * w, 0.5 * h)
-    DrawnAcross(y) => (0.5 * w, y * h)
+    DrawnSide(y) => (0.5 * w, y * h)
     FromBeside =>
       match self.beside {
         None => (0.5 * w, 0.5 * h)
