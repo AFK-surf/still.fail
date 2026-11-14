@@ -599,7 +599,8 @@ export const AgentsLive = (control: Control) =>
         agentHome: () => settings().agentHome,
         env: process.env as Record<string, string | undefined>,
         machineEmail: (runtime) => accounts.machineLogins().find((login) => login.runtime === runtime && login.loggedIn)?.email ?? null,
-        claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
+        // (lent: its renewal waited for LEND_BOUND_MS at most, then what it has lent, the renewal going on behind)
+        claudeToken: (p, rejected) => accounts.claudeToken(p, rejected, true),
         // In sandboxes no Codex here holds the refresh token: it is renewed here whenever it runs out.
         codexRenewRunning: async (id) => await codex.renewLogin(id),
         status: async (id) => { const h = await accounts.lentHealth(id); return { check: h.check ?? null, quota: h.quota ?? null }; },

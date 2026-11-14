@@ -11,6 +11,7 @@ import { type Env, readClaudeKeychain } from "../agents/machine-logins.ts";
 import { takeBackMissing } from "../agents/no-keychain.ts";
 import { writePrivateSoon } from "../ops/files.ts";
 import { wall } from "../ops/fibers.ts";
+import { log } from "../ops/log.ts";
 import { type Lang, Said, stationLang, tr } from "../ops/i18n.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
@@ -136,29 +137,112 @@ async function save(env: Env, home: string, c: Credentials, lang: Lang) {
   });
 }
 
+/// How long a lend to another station waits for its login's renewal before the token it has is lent (still lasting the
+/// usual margin), its renewal going on behind: well under the 30 s the station that asked waits (mesh/peer.ts
+/// ANSWER_MS). Claude's here (accounts/index.ts), Codex's in share/index.ts `lend`.
+export const LEND_BOUND_MS = 10_000;
+
+/// How long a lend waits for its login's renewal, on whose clock (`after`: `f` once `ms` from now, called off by what it
+/// returns).
+export type Bound = { ms: number; after: (ms: number, f: () => void) => () => void };
+
 /// A current access token and when it runs out: the one kept, unless it is about to run out or is `rejected` (a 401
 /// said so); then renewed. `home`: a profile's config directory; null: the machine's own login (~/.claude, and on
 /// macOS the keychain first).
 /// `margin`: how long the token given must still last, renewed first when it lasts less (a token handed to a process
-/// that cannot renew it is asked for with longer).
-export async function claudeOAuthToken(env: Env, home: string | null, rejected: string | null, endpoint: string, lang: Lang = stationLang(), margin = MARGIN_MS): Promise<[string, number]> {
+/// that cannot renew it is asked for with longer). `bound` (a token lent to another station): the renewal of one that
+/// still lasts the usual margin is waited for `bound.ms` at most, on its clock (`after`), then the token it has is given
+/// and the renewal goes on behind: the station that asked waits 30 s for its answer (mesh/peer.ts ANSWER_MS), as long as
+/// the renewal's call may take, and a renewal that timed out had its token lent 343 ms after it gave up, the chat's turn
+/// lost (2026-11-14).
+export async function claudeOAuthToken(env: Env, home: string | null, rejected: string | null, endpoint: string, lang: Lang = stationLang(), margin = MARGIN_MS, bound?: Bound): Promise<[string, number]> {
   const machine = home === null;
   const dir = home ?? join(homeOf(env), ".claude");
   const initial = await read(env, dir, machine, lang);
   if (usable(initial, rejected, lang, margin)) return access(initial, lang);
+  if (bound !== undefined && margin > MARGIN_MS && usable(initial, rejected, lang)) {
+    const given = access(initial, lang);
+    const renewed = renewal(dir, given, () => renewLocked(env, dir, machine, rejected, endpoint, lang, margin));
+    return new Promise((resolve) => {
+      const began = wall.now();
+      let over = false;
+      const stop = bound.after(bound.ms, () => {
+        over = true;
+        log.warn("accounts", "a Claude login's renewal outlasted the lend's bound; the token it has was lent, the renewal goes on", {
+          login: dir, ms: wall.now() - began, lastsMin: lastsMin(given[1]),
+        });
+        resolve(given);
+      });
+      void renewed.then((got) => {
+        if (over) return;
+        stop();
+        resolve(got ?? given);
+      });
+    });
+  }
+  const began = wall.now();
+  try {
+    const got = await renewLocked(env, dir, machine, rejected, endpoint, lang, margin);
+    // (its provider refused it for now, the token it has given while it lasts the usual margin: renew's own way)
+    if (margin > MARGIN_MS && !usableFor(got, margin)) notRenewed(dir, began, got[1], new Error("its provider did not renew it"));
+    return got;
+  } catch (error) {
+    // Renewed early and it could not be: the token is still given while it lasts the usual margin.
+    if (margin > MARGIN_MS) {
+      const latest = await read(env, dir, machine, lang);
+      if (usable(latest, rejected, lang)) {
+        const given = access(latest, lang);
+        notRenewed(dir, began, given[1], error);
+        return given;
+      }
+    }
+    throw error;
+  }
+}
+
+/// The renewals of lent logins going on, one a login (what is asked meanwhile waits on the same): what each renewed, or
+/// null where it did not (said: notRenewed).
+const renewing = new Map<string, Promise<[string, number] | null>>();
+
+function renewal(dir: string, given: [string, number], renew: () => Promise<[string, number]>): Promise<[string, number] | null> {
+  const going = renewing.get(dir);
+  if (going !== undefined) return going;
+  const began = wall.now();
+  const done = renew().then(
+    (got) => {
+      if (got[0] !== given[0]) return got;
+      notRenewed(dir, began, given[1], new Error("its provider did not renew it"));
+      return null;
+    },
+    (error) => (notRenewed(dir, began, given[1], error), null),
+  ).finally(() => renewing.delete(dir));
+  renewing.set(dir, done);
+  return done;
+}
+
+/// Whether a token given lasts `margin` more (one that says no end does).
+const usableFor = ([, expiresAt]: [string, number], margin: number) => expiresAt === 0 || expiresAt - wall.now() > margin;
+const lastsMin = (expiresAt: number) => (expiresAt === 0 ? null : Math.round((expiresAt - wall.now()) / 60_000));
+
+/// Once the renewal of a lent login at `dir` going on, if any, is over (tests).
+export function renewedBehind(dir: string): Promise<void> {
+  return (renewing.get(dir) ?? Promise.resolve()).then(() => {});
+}
+
+/// Said, as nothing else says it: which login, how long its renewal took, how long the token given instead still lasts.
+function notRenewed(dir: string, began: number, expiresAt: number, error: unknown) {
+  log.warn("accounts", "a Claude login was not renewed early; the token it has was given meanwhile", {
+    login: dir, ms: wall.now() - began, lastsMin: lastsMin(expiresAt), error: (error as Error).message,
+  });
+}
+
+async function renewLocked(env: Env, dir: string, machine: boolean, rejected: string | null, endpoint: string, lang: Lang, margin: number): Promise<[string, number]> {
   await mkdir(dir, { recursive: true });
   const current = await RefreshLock.acquire(join(dir, ".oauth_refresh.lock"), lang);
   try {
     const legacy = await RefreshLock.acquire(`${await realpath(dir)}.lock`, lang);
     try {
       return await renew(env, dir, machine, rejected, endpoint, lang, margin);
-    } catch (error) {
-      // Renewed early and it could not be: the token is still given while it lasts the usual margin.
-      if (margin > MARGIN_MS) {
-        const latest = await read(env, dir, machine, lang);
-        if (usable(latest, rejected, lang)) return access(latest, lang);
-      }
-      throw error;
     } finally {
       await legacy.release();
     }

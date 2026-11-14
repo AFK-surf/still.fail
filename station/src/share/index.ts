@@ -45,6 +45,7 @@ import { authFile as cursorAuthFile } from "../accounts/cursor.ts";
 import { KIMI_FILE, KIMI_TOKEN_FILE } from "../accounts/kimi.ts";
 import { cursorEmail, devinAccountFile, grokAuthFile, grokEmail } from "../accounts/profiles.ts";
 import { agyAccountFile, agyToken } from "../agents/agy.ts";
+import { LEND_BOUND_MS } from "../accounts/oauth.ts";
 import { devinData } from "../agents/devin.ts";
 import { kimiSignedIn } from "../agents/profiles.ts";
 import type { Cloud } from "../cloud/state.ts";
@@ -1077,13 +1078,18 @@ export class Sharing {
     let auth = JSON.parse(readFileSync(file, "utf8"));
     let expiresAt = jwtExpiry(auth?.tokens?.access_token) ?? 0;
     if (expiresAt - this.time.now() < CODEX_LEND_MS) {
-      try {
-        // One running on it renews it itself, asked to (else it would only when its own token runs out, the station's
-        // borrowers refused till then); none, here.
-        if (!(await this.deps.codexRenewRunning(p.id))) await this.renewCodex(file, auth);
-      } catch (e) {
-        log.warn("share", "renewing a shared Codex login failed", { profile: p.id, error: (e as Error).message });
-      }
+      const renewed = this.renewCodexOnce(p, file, auth, expiresAt);
+      // One that still lasts CODEX_MIN_MS waits for its renewal LEND_BOUND_MS at most, then is lent as it is, the renewal
+      // going on behind: the station that asked waits 30 s for the answer (mesh/peer.ts ANSWER_MS), as long as the
+      // renewal's call may take (Claude's lend, 2026-11-14). One with less waits for it.
+      if (expiresAt - this.time.now() >= CODEX_MIN_MS) {
+        const began = this.time.now();
+        let stop = () => {};
+        const bound = new Promise<boolean>((resolve) => (stop = this.time.after(LEND_BOUND_MS, () => resolve(false))));
+        const inTime = await Promise.race([renewed.then(() => true), bound]);
+        stop();
+        if (!inTime) log.warn("share", "a shared Codex login's renewal outlasted the lend's bound; the login it has was lent, the renewal goes on", { profile: p.id, ms: this.time.now() - began, lastsMin: Math.round((expiresAt - this.time.now()) / 60_000) });
+      } else await renewed;
       // Read again either way: Codex may have renewed it and then failed a step after (it answers with that error).
       auth = JSON.parse(readFileSync(file, "utf8"));
       expiresAt = jwtExpiry(auth?.tokens?.access_token) ?? 0;
@@ -1091,6 +1097,35 @@ export class Sharing {
     if (expiresAt - this.time.now() < CODEX_MIN_MS) throw new Error("the Codex login here runs out soon and cannot be renewed now");
     const tokens = auth.tokens ?? {};
     return { runtime: "codex", tokens: { id_token: tokens.id_token, access_token: tokens.access_token, account_id: tokens.account_id }, expiresAt };
+  }
+
+  /// A shared Codex login renewed: by the Codex running on it, asked to (else it would only when its own token runs out,
+  /// the station's borrowers refused till then), or here where none runs. A failure is said: which login, how long it
+  /// took, how long what it has still lasts (what is lent meanwhile).
+  private async renewCodexNow(p: Json, file: string, auth: Json, expiresAt: number): Promise<void> {
+    const began = this.time.now();
+    try {
+      if (!(await this.deps.codexRenewRunning(p.id))) await this.renewCodex(file, auth);
+    } catch (e) {
+      log.warn("share", "renewing a shared Codex login failed", { profile: p.id, ms: this.time.now() - began, lastsMin: Math.round((expiresAt - this.time.now()) / 60_000), error: (e as Error).message });
+    }
+  }
+
+  /// The renewals of shared Codex logins going on, by profile: one at a time, what is lent meanwhile waiting on it.
+  private codexRenewing = new Map<string, Promise<void>>();
+
+  private renewCodexOnce(p: Json, file: string, auth: Json, expiresAt: number): Promise<void> {
+    const id = String(p.id);
+    const going = this.codexRenewing.get(id);
+    if (going !== undefined) return going;
+    const done = this.renewCodexNow(p, file, auth, expiresAt).finally(() => this.codexRenewing.delete(id));
+    this.codexRenewing.set(id, done);
+    return done;
+  }
+
+  /// Once a renewal of profile `id` going on, if any, is over (tests).
+  renewedBehind(id: string): Promise<void> {
+    return this.codexRenewing.get(id) ?? Promise.resolve();
   }
 
   /// Codex's own renewal of its ChatGPT login, done here while no Codex runs on it (it would hold the old refresh token).
