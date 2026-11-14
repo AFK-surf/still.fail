@@ -909,6 +909,12 @@ fn main {
         { "scope": "search", .. } => Some(@sessions.step(db) && @sessions.audit(db))
         _ => None
       }))
+    (None, _, Some(data)) if flag("--serve") is Some(socket) =>
+      @host.run(shell_dir=data + "/shell", host => {
+        let sep = flag("--sep").unwrap_or("/")
+        let reader = { host, db: data + "/stillfail.db", writer: None, reading: None, data, sep, finder: @locate.Finder::new(host, sep) }
+        serve_reads(host, reader, socket)
+      })
     (None, _, Some(data)) =>
       @host.run(shell_dir=data + "/shell", host => {
         let sep = flag("--sep").unwrap_or("/")

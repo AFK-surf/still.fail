@@ -638,7 +638,7 @@ fn with_parent_it_stops_once_the_parent_is_gone() {
 /// A stand-in for the front (front.rs) in the release: it says where it listens and how it hands streams (this
 /// release's way), appends its pid to <data>/fronts and runs until its stdin (the launcher's) ends.
 fn release_front(station: &Station) {
-    release_front_saying(station, ",\"streams\":2");
+    release_front_saying(station, ",\"streams\":3");
 }
 
 /// One that says `more` after where it listens (nothing: a front from before `streams`).

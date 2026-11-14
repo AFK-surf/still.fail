@@ -19,7 +19,9 @@ import { deviceBuildsOf } from "./device-builds.ts";
 import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
-import { ALPN, serve } from "./serve.ts";
+import { ALPN, type Members, handledGiven, sawBuild, serve } from "./serve.ts";
+import { SERVED_ROUTES, Served } from "./served.ts";
+import { BUILD_HEADER } from "../api/oldest.ts";
 import { accept } from "./accept.ts";
 import { congestionOf } from "./settings.ts";
 import { bindStation, type Endpoint } from "./native.ts";
@@ -156,7 +158,30 @@ export const MeshLive = Layer.effectDiscard(
       stationLog.sendWith((body) => Effect.runPromise(plane.logs(body)));
       // (the devices' builds kept in the store, made before the first request asks for them)
       deviceBuildsOf(cloud.state, store);
-      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), streams: (head: any) => parts.streamOf(head), screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()), tailnet: () => tailnetAddrs(endpoint.sockets()), connected: () => parts.connected() };
+      const members: Members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), streams: (head: any) => parts.streamOf(head), screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()), tailnet: () => tailnetAddrs(endpoint.sockets()), connected: () => parts.connected() };
+      // The reads the MoonBit program answers itself (served.ts), where the front keeps the endpoint and the program is
+      // here: the front hands it their streams, and this process only who each connection's member is.
+      const route = endpoint.route?.bind(endpoint);
+      // (no admin API: a test's mesh alone)
+      const binary = admin?.readers?.mbReader ?? null;
+      if (route !== undefined && binary !== null) {
+        const served = yield* Effect.acquireRelease(
+          Effect.sync(() => new Served(binary, admin.readers.data,
+            (viewer, head, body) => handledGiven(members, viewer, head, body),
+            (viewer, build) => void sawBuild(cloud.state, viewer, build === null ? {} : { [BUILD_HEADER]: String(build) }))),
+          (served) => Effect.promise(() => served.close()),
+        );
+        members.served = served;
+        yield* Effect.forkScoped(Effect.promise(async () => {
+          try {
+            const paths = await served.start();
+            if (!(await route(ALPN, paths, SERVED_ROUTES))) log.info("mesh", "the front routes nothing (one from before); every request is this process's");
+            else log.info("mesh", "requests routed to the MoonBit program", { routes: SERVED_ROUTES });
+          } catch (e) {
+            log.warn("mesh", "the MoonBit program that answers requests did not start", { error: (e as Error).message });
+          }
+        }));
+      }
       // The control plane's gateways: the device tools, as far as the station's own setting lets them.
       const device = yield* Effect.acquireRelease(
         Effect.sync(() =>

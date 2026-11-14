@@ -24,9 +24,10 @@ const PROGRAM_VAR: &str = "STILLFAIL_MB_READER";
 const LISTENS_WITHIN: Duration = Duration::from_secs(10);
 /// How it hands Node the streams a connection's other end opens (its first line's `streams`; none said: 1). 2: each
 /// with its index, so Node takes them in the order they were opened (a device's credential stream first, 2026-11-13).
+/// 3: a route Node gave it (`route`) goes to the program that answers it, Node told the index went (station/mesh/served.ts).
 /// A front kept from before a raise here is replaced once by the launcher that takes it up (`current`): the one thing
 /// that does not come with an update, as it is kept across them.
-pub const STREAMS: u64 = 2;
+pub const STREAMS: u64 = 3;
 
 pub struct Front {
     pub pid: i32,

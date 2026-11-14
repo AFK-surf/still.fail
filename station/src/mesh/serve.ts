@@ -36,7 +36,8 @@ import { Traces, parseParent, route } from "./traces.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
 import { type Admit, door } from "./door.ts";
 import { SLOW_REPLY_BYTES, pathsOf, slowly } from "./reply-watch.ts";
-import { type Asked, HOP, Reader, send, writeLine } from "./wire.ts";
+import { type Answer, type Asked, HOP, Reader, send, writeLine } from "./wire.ts";
+import type { Served } from "./served.ts";
 
 export const ALPN = Buffer.from("stillfail/admin/1");
 // Keep old clients admitted until protocol-2 clients have reached the stable channel.
@@ -684,6 +685,8 @@ export type Members = {
   tailnet?: () => string[];
   /// Told each time a member's device has connected (parts.ts `memberConnected`).
   connected?: () => void;
+  /// The MoonBit program that answers some requests itself (served.ts): told who each connection's member is.
+  served?: Served;
 };
 
 /// One member's connection: the credential first, nothing served before it checks out; then a request a stream. The
@@ -732,6 +735,8 @@ function admission(m: Members, device: string): Admit {
     try {
       ({ admitted: current, named } = check(hello, (sub) => (whose = sub)));
     } catch (e) {
+      // (what answers a route itself waits for no member of this one: none comes)
+      if (m.served !== undefined && conn.handed !== undefined) m.served.viewer(conn.handed, null);
       return { refused: { line: refusalOf(m.cloud, hello, device, e, m.accepted?.(), whose), code: 1, reason: e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused", error: e } };
     }
     // How far its lock goes, when it has one (a device that has more brings it).
@@ -753,6 +758,7 @@ function admission(m: Members, device: string): Admit {
       else {
         try {
           current = stillIn(m.cloud, current, named, device);
+          told();
           return false;
         } catch {
           conn.close(3, "lock_unconfirmed");
@@ -767,6 +773,15 @@ function admission(m: Members, device: string): Admit {
       expiry = wall.after(Math.max(0, current.exp * 1000 - wall.now()) + 50, () => void (gone() || watchExpiry()));
     };
     let unlisten = () => {};
+    // Who the member is, told what answers a route itself (served.ts) as it is now (null: gone).
+    const told = (gone = false) => {
+      if (m.served === undefined || conn.handed === undefined) return;
+      if (gone) return m.served.viewer(conn.handed, null);
+      const viewer = { ...current.viewer, home: m.cloud.home() === current.viewer.workspace };
+      // (who asks is remembered by name as the admin API remembers them: Admin.handle, which its requests skip)
+      if (viewer.name !== "") m.admin.readers.names.set(viewer.email, viewer.name);
+      m.served.viewer(conn.handed, viewer, typeof m.cloud.chain(joinedOf(m.cloud, viewer.workspace))?.state?.moved === "string");
+    };
     return {
       line,
       opened: () => {
@@ -797,11 +812,13 @@ function admission(m: Members, device: string): Admit {
           unlistenCloud();
           unlistenPersons();
         };
+        told();
       },
       // Renewals on the credential stream (one that fails is answered why, by the door, and ends nothing).
       renew: (line) => {
         ({ admitted: current, named } = check(line));
         watchExpiry();
+        told();
         return { ok: true, expires_at: current.exp };
       },
       stream: () => {
@@ -813,6 +830,7 @@ function admission(m: Members, device: string): Admit {
       ended: () => {
         expiry?.();
         unlisten();
+        told(true);
       },
     };
   };
@@ -920,6 +938,33 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     return socket(m, stream, reader, head, path);
   }
   const body = await reader.rest();
+  // A device that stops reading or loses its connection no longer needs its pending reads. Do not cancel writes: their
+  // effects and idempotency answers must be finished even when their caller goes away.
+  const controller = readsOf(method, path) ? new AbortController() : null;
+  let handling = true;
+  if (controller) void stream.stopped().then(() => { if (handling) controller.abort(); }, () => { if (handling) controller.abort(); });
+  const { handled, headers, rest, plain } = await handledOf(m, method, path, head, body, viewer, controller?.signal).finally(() => { handling = false; });
+  if (plain) return answer(handled.status, (handled.body as Buffer).toString());
+  // Compressed, for a client that asks so (compress.ts).
+  const sent = await compressed(handled, headers, rest);
+  const ready = wall.now();
+  await send(stream, sent);
+  await stream.finish();
+  if (Buffer.isBuffer(sent.body) && sent.body.length >= SLOW_REPLY_BYTES) slowly(stream, conn, () => `${method} ${route(rest.split("?")[0] ?? rest)}`, sent.body.length, ready - asked, ready);
+}
+
+/// Whether a request only reads (what is let go when its device stops reading).
+const readsOf = (method: string, path: string) => {
+  const rest = path.slice("/admin/api".length);
+  const at = rest.indexOf("?");
+  return method === "GET" || (method === "POST" && /^\/*(batch|changed\/(chats|threads|sessions))$/.test(at < 0 ? rest : rest.slice(0, at)));
+};
+
+/// A request's answer once its body is in, as the admin API and the station's own routes give it (not compressed), with
+/// the headers it went on with and its path after /admin/api.
+/// `plain`: the station's own answer, said as it is (not compressed, no length said).
+async function handledOf(m: Members, method: string, path: string, head: any, body: Buffer, viewer: Admitted["viewer"], signal?: AbortSignal): Promise<{ handled: Answer; headers: Record<string, string>; rest: string; plain?: true }> {
+  const json = (status: number, said: unknown): Answer => ({ status, headers: { "content-type": "application/json" }, body: Buffer.from(typeof said === "string" ? said : JSON.stringify(said)) });
   // The caller's headers go on, but not those of the hop, nor any of the station's own: who is asking is only what
   // the credential says.
   const headers: Record<string, string> = {};
@@ -928,53 +973,53 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     if (HOP.includes(lower) || lower.startsWith("x-stillfail-") || lower === "traceparent" || lower === "tracestate") continue;
     if (typeof value === "string") headers[name] = value;
   }
-  if (!m.up()) return answer(502, { error: "station unreachable: not started" });
   const rest = path.slice("/admin/api".length);
+  if (!m.up()) return { handled: json(502, { error: "station unreachable: not started" }), headers, rest, plain: true };
   const at = rest.indexOf("?");
+  const route = at < 0 ? rest : rest.slice(0, at);
   // The workspace lock (cloud/lock.ts): the station's, here where the device that brings it is known.
-  if ((at < 0 ? rest : rest.slice(0, at)) === "/lock") {
+  if (route === "/lock") {
     const [status, said] = lockRoute(m.cloud, method, at < 0 ? [] : queryPairs(rest.slice(at + 1)), body, viewer);
-    return answer(status, said);
+    return { handled: json(status, said), headers, rest, plain: true };
   }
   // The workspace's ways (mesh/ways.ts): read by its members' devices, changed from the app's 连接方式.
-  if ((at < 0 ? rest : rest.slice(0, at)) === "/ways") {
+  if (route === "/ways") {
     const [status, said] = waysRoute(m.cloud, method, body, viewer);
-    return answer(status, said);
+    return { handled: json(status, said), headers, rest, plain: true };
   }
   // The stations' names and marks (mesh/station-marks.ts): read by its members' devices, this station's own changed.
-  const marksPath = at < 0 ? rest : rest.slice(0, at);
-  if (marksPath === "/station-marks" || marksPath === "/station-mark") {
-    const [status, said] = stationMarksRoute(m.cloud, method, body, viewer, marksPath === "/station-mark");
-    return answer(status, said);
+  if (route === "/station-marks" || route === "/station-mark") {
+    const [status, said] = stationMarksRoute(m.cloud, method, body, viewer, route === "/station-mark");
+    return { handled: json(status, said), headers, rest, plain: true };
   }
-  const lockPart = /^\/lock\/(person|devices|bodies|logs)$/.exec(at < 0 ? rest : rest.slice(0, at));
+  const lockPart = /^\/lock\/(person|devices|bodies|logs)$/.exec(route);
   if (lockPart) {
     const [status, said] = lockPartRoute(m.cloud, lockPart[1]!, method, body, viewer);
-    return answer(status, said);
+    return { handled: json(status, said), headers, rest, plain: true };
   }
-  // A device that stops reading or loses its connection no longer needs its pending reads. Do not cancel writes: their
-  // effects and idempotency answers must be finished even when their caller goes away.
-  const reads = method === "GET" || (method === "POST" && /^\/*(batch|changed\/(chats|threads|sessions))$/.test(at < 0 ? rest : rest.slice(0, at)));
-  const controller = reads ? new AbortController() : null;
-  let handling = true;
-  if (controller) void stream.stopped().then(() => { if (handling) controller.abort(); }, () => { if (handling) controller.abort(); });
   const handled = await m.admin.handle({
     method,
-    path: at < 0 ? rest : rest.slice(0, at),
+    path: route,
     query: at < 0 ? [] : queryPairs(rest.slice(at + 1)),
     search: at < 0 ? "" : rest.slice(at),
     headers,
     body,
     viewer,
     lang: langOfCore(headers),
-    ...(controller ? { signal: controller.signal } : {}),
-  }).finally(() => { handling = false; });
-  // Compressed, for a client that asks so (compress.ts).
-  const sent = await compressed(handled, headers, rest);
-  const ready = wall.now();
-  await send(stream, sent);
-  await stream.finish();
-  if (Buffer.isBuffer(sent.body) && sent.body.length >= SLOW_REPLY_BYTES) slowly(stream, conn, () => `${method} ${route(rest.split("?")[0] ?? rest)}`, sent.body.length, ready - asked, ready);
+    ...(signal ? { signal } : {}),
+  });
+  return { handled, headers, rest };
+}
+
+/// A request the MoonBit program gave back (served.ts `fallback`), answered as one on a stream is once its body is in.
+export async function handledGiven(m: Members, viewer: Admitted["viewer"], head: any, body: Buffer): Promise<{ status: number; headers: Record<string, string>; body: Buffer }> {
+  const method: string = typeof head?.method === "string" ? head.method.toUpperCase() : "GET";
+  const path: string = typeof head?.path === "string" ? head.path : "";
+  const { handled } = await handledOf(m, method, path, head, body, viewer);
+  const parts: Buffer[] = [];
+  if (Buffer.isBuffer(handled.body)) parts.push(handled.body);
+  else for await (const chunk of handled.body) parts.push(Buffer.from(chunk));
+  return { status: handled.status, headers: handled.headers, body: Buffer.concat(parts) };
 }
 
 /// A WebSocket of a web service on this machine, for a preview's page (preview.ts `openSocket`): answered 101 once the
