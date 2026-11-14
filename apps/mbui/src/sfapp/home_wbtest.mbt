@@ -284,7 +284,7 @@ test "the filter: 我参与的 shows only the chats the viewer is in" {
 }
 
 ///|
-test "a row archived from its menu: what it uncovers stays in its place with 撤销, the rows under it still; its time out, the line closes, the row under coming up whole" {
+test "a row archived from its menu: what it uncovers stays in its place with 撤销, the rows under it still; its time out, the line closes shrinking and fading, the row under coming up whole" {
   // (2026-11-13: the archive's 撤销 where the row was, what its swipe uncovers, not a toast at the window's foot; once
   // that is over its line closes as a row gone does, the rows under it coming up as it closes, mbui's
   // view/list_motion.mbt)
@@ -305,12 +305,21 @@ test "a row archived from its menu: what it uncovers stays in its place with 撤
   assert_eq(app.toast.get().words, "")
   let undo_y = t.words().filter(fn(w) { w.0 == "撤销" }).map(fn(w) { w.2 })
   assert_eq(undo_y.length(), 1)
-  // its time out: on its way up as the line over it closes, all of it, drawn where it is laid out
-  t.run_for(@sf.toast_action_ms - @ui.move_most_ms + @ui.row_size_ms / 2.0)
-  // (the tray a recess the list closes over: where it stood, whole, or cut away; never going up with the room)
-  for y in t.words().filter(fn(w) { w.0 == "撤销" }).map(fn(w) { w.2 }) {
-    assert_true((y - undo_y[0]).abs() < 0.5, msg="撤销 at \{y}, at rest \{undo_y[0]}")
+  // its time out: the tray shrinking and fading as its line closes, as any row gone (the user, 2026-11-14), the row
+  // under on its way up, all of it, drawn where it is laid out
+  t.run_for(@sf.toast_action_ms - @ui.move_most_ms)
+  let mut faint = 1.0
+  let mut between = false
+  for _ in 0..<4 {
+    t.run_for(@ui.row_size_ms / 8.0)
+    for w in t.words().filter(fn(w) { w.0 == "撤销" }) {
+      assert_true(w.5 <= faint + 0.001, msg="撤销 at \{w.5}, before \{faint}")
+      faint = w.5
+      between = between || (w.5 > 0.0 && w.5 < 0.999)
+    }
   }
+  assert_true(between, msg="撤销 seen fading")
+  assert_true(faint < 0.999, msg="撤销 at \{faint} half way")
   let (_, y1, _, _) = t.rect_of(under).unwrap()
   let (_, d1) = t.drawn_of(under).unwrap()
   assert_true(y1 < y_was - 1.0 && y1 > y_gone - 1.0, msg="\{y1}, from \{y_was}")
