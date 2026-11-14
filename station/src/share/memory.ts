@@ -18,7 +18,7 @@
 //   gives one only to the stations of its workspace (the transport says which a request is of).
 import { createHash } from "node:crypto";
 import { type Dirent, watch } from "node:fs";
-import { chmod, lstat, mkdir, readdir, readFile, rename, rmdir, unlink, writeFile } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, readdir, readFile, rename, rmdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Clock } from "effect";
 import type { Cloud } from "../cloud/state.ts";
@@ -488,7 +488,7 @@ export class MemorySync {
       if (mineAside) {
         // Its own moved aside: gone from under the name with no record of it, for the other's to come in as new.
         for (const [path, r] of mine) if (await this.#write(ws, path, { ...r, hash: "" }, null)) delete kept.files[path];
-        await this.#moveRest(ws, name, aside);
+        await this.#copyRest(ws, name, aside);
       } else for (const [path] of their) delete theirs[path];
       log.info("memory", "two skills of one name kept apart", { workspace: ws, skill: name, aside });
       changed = true;
@@ -497,8 +497,9 @@ export class MemorySync {
   }
 
   /// What is left of skill `name` here once its shared files moved aside (a file only its owner reads, which never
-  /// leaves this machine): moved beside them, where the skill says it is.
-  async #moveRest(ws: string, name: string, aside: string): Promise<void> {
+  /// leaves this machine): copied beside them, where the skill says it is, and left where it was too, since what is
+  /// outside the station may read it there (Mini1's release job reads `skills/stillfail/station-update-host`).
+  async #copyRest(ws: string, name: string, aside: string): Promise<void> {
     const from = join(this.#home(ws), "skills", name);
     const to = join(this.#home(ws), "skills", aside);
     const walk = async (rel: string): Promise<void> => {
@@ -517,7 +518,12 @@ export class MemorySync {
             continue;
           } catch {}
           await mkdir(dirname(join(to, sub)), { recursive: true });
-          await rename(join(from, sub), join(to, sub)).catch((err) => log.warn("memory", "a file of a skill kept apart not moved beside it", { skill: name, file: sub, error: (err as Error).message }));
+          try {
+            await copyFile(join(from, sub), join(to, sub));
+            await chmod(join(to, sub), (await lstat(join(from, sub))).mode & 0o777);
+          } catch (err) {
+            log.warn("memory", "a file of a skill kept apart not copied beside it", { skill: name, file: sub, error: (err as Error).message });
+          }
         }
       }
     };
