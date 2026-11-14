@@ -42,6 +42,24 @@ export function portsToTry(named: number | undefined, remembered: number | undef
   return [...new Set([remembered, own ? usual : undefined, 0].filter((p): p is number => p !== undefined))];
 }
 
+/// Whether an argument is one of the command line's flags (`--` and a word of lowercase letters and dashes, short as
+/// they all are), not a value: an enrol token (43 characters of base64url) can begin with `-` or `--`, and taken for a
+/// flag it was dropped, the copied command refused with its usage (2026-11-14).
+const isFlag = (a: string) => /^--[a-z][a-z-]{0,23}$/.test(a);
+
+/// What a command is given besides its flags (each of `valued` with the value after it): in order, the command first.
+/// After a bare `--`, everything is given as it is.
+export function positionals(args: string[], valued: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--") { out.push(...args.slice(i + 1)); break; }
+    if (!isFlag(a)) out.push(a);
+    else if (valued.includes(a)) i++;
+  }
+  return out;
+}
+
 /// The value after `flag` in argv, wherever it is (as the Rust station reads its flags).
 export function flag(args: string[], name: string): string | undefined {
   const at = args.indexOf(name);
