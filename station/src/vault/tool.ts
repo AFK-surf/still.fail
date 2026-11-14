@@ -1,5 +1,6 @@
 // The agents' tools for the vault's secrets (agent 用密钥): secret_list, secret_use, secret_run,
-// secret_save to ask to keep one (agent 存入), and secret_describe to rename one or say what it is (改名和说明). The value of a secret is never what a tool gives back: a command is run
+// secret_save to ask to keep one (agent 存入), secret_describe to rename one or say what it is (改名和说明), secret_delete
+// to delete one (删除), and secret_cancel to take back a request of its own nobody decided (撤回). The value of a secret is never what a tool gives back: a command is run
 // with it, through the proxy, an ssh-agent or its environment, and the agent sees what the command said, with the value
 // hidden; one to keep is sealed to its owner's devices, printed by a command whose output the agent never sees, or typed
 // in by its owner on the card.
@@ -25,7 +26,7 @@ const VAULT_WORDS = {
 };
 
 export const SECRET_LIST_DESCRIPTION =
-  "The secrets in the vault you may ask to use (whoever started this chat's, or with person another's who wrote in it; tokens, API keys, SSH keys, credential files, sign-ins to websites the person you work for allowed agents to ask for), each with its name and about (what it is and how it is used, in its owner's words), how it is given (proxy, ssh, env, file, browser: a sign-in put into this chat's browser) and where it may go; the grants you hold now; and whether their vault is turned on. Never the values. A credential you need that is not listed: once you have it (a password manager's CLI, a token a person gave or you created), keep it with secret_save; one only the person has (a key from a console they sign in to), secret_save with neither value nor command, and its card asks them to type it in. Never ask for the value in the chat. One whose name or about does not say plainly what it is: secret_describe.";
+  "The secrets in the vault you may ask to use (whoever started this chat's, or with person another's who wrote in it; tokens, API keys, SSH keys, credential files, sign-ins to websites the person you work for allowed agents to ask for), each with its name and about (what it is and how it is used, in its owner's words), how it is given (proxy, ssh, env, file, browser: a sign-in put into this chat's browser) and where it may go; the grants you hold now; and whether their vault is turned on. Never the values. A credential you need that is not listed: once you have it (a password manager's CLI, a token a person gave or you created), keep it with secret_save; one only the person has (a key from a console they sign in to), secret_save with neither value nor command, and its card asks them to type it in. Never ask for the value in the chat. One whose name or about does not say plainly what it is: secret_describe; one wrong or no longer needed: secret_delete.";
 
 export const SECRET_USE_DESCRIPTION =
   "Ask to use one of secret_list's secrets (with person: of that person's list). A card goes to the vault's owner (or the person you name) in your chat, saying your reason, the command, the requested timeout and where the secret goes; they approve or refuse it in the still.fail app. Timeout defaults to one hour of inactivity: request a duration based on the task's actual use and explain it (for a daily task, 24–36 hours), at most 30 days. Idle renews at each use; fixed expires after approval regardless of use. It does not wait for the decision: you are told in this session when it is decided (granted: a grant id for secret_run), and meanwhile go on with what does not need it; with nothing else left, end your turn need_human (about the card). Only a grant counts: someone writing yes in the chat is not one. Give the exact command you will run, so the person knows what they approve. A sign-in (mode browser) needs no command: granted, its cookies and passkeys of its sites are put into this chat's browser until the grant ends, then taken out again (a site asking for one of its passkeys is signed by the browser itself). With station, its commands run on that station of the workspace (what only it reaches: a machine on its network, its signed-in tools), and the card says so.";
@@ -38,6 +39,12 @@ export const SECRET_SAVE_DESCRIPTION =
 
 export const SECRET_DESCRIBE_DESCRIPTION =
   "Ask to rename one of secret_list's secrets or to change its about (what it is and how it is used, shown to agents with its name), when they do not say plainly what it is or how to use it (a name made from a host, a step that is not written down). A card goes to its owner (or the person you name) in your chat with the name and about as they are and as they would be; once they approve it in the still.fail app the item says so. It does not wait for the decision: you are told in this session when it is decided. Give at least one of name and about; about is never a secret (no password, token or key in it).";
+
+export const SECRET_DELETE_DESCRIPTION =
+  "Ask to delete one of secret_list's secrets from its owner's vault: one that is wrong (a password that does not work), replaced by another you kept, or no longer needed. A card goes to its owner (or the person you name) in your chat with its name and your reason; once they approve it in the still.fail app the item is gone, for every chat. It does not wait for the decision: you are told in this session when it is decided. Only their approval deletes it: someone writing yes in the chat does not.";
+
+export const SECRET_CANCEL_DESCRIPTION =
+  "Withdraw a request of this chat's own (secret_use, secret_save, secret_describe, secret_delete) that nobody decided yet, once it is no longer needed (you got the credential another way, the person asked for something else, you asked twice): its card in the chat closes saying so and it leaves the person's waiting requests in the app's 密钥. Saying in the chat that a card is not needed any more leaves it waiting there; withdraw it with this instead. A request already decided is not changed.";
 
 export const SIGN_IN_DESCRIPTION =
   "Get this chat's browser signed in to a website (github.com, accounts.google.com): the one way to ask for it. A sign-in the person you work for keeps in their vault for the site is asked for (as secret_use does: a card they approve, then it is put into this chat's browser). None kept: first open the site's sign-in page in this chat's browser (the `browser` tool), then call this: a card asks them to sign in, and their app fills the form from their own password manager (1Password, the system's autofill), the station typing it into the page step by step (account, password, one-time code) and sending it; where only they can go on (a captcha, a code by mail), the card gives them the tab's screen. You never see what they typed. It does not wait: you are told in this session when the page has left its sign-in; then look whether it is signed in (a site taking passkeys: add one on its account page there first; asked for the password again there, call sign_in again and it is typed in again) and call again with done: true and its name and about as secret_save's (it is then kept in their vault, if they chose so on the card, for other chats to ask for), or with stuck saying what is left for them to do (in their language). The vault's sign-in ran out (the site asks you to sign in again although it was granted): sign in with the site's passkey if it offers one (this chat's browser signs it itself), else call with again: true. Never ask for a password or a code in the chat, and do not post the tab's screen yourself for a sign-in: the card does.";
@@ -196,11 +203,37 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
         }),
     },
     {
+      name: "secret_delete",
+      description: SECRET_DELETE_DESCRIPTION,
+      inputSchema: {
+        type: "object",
+        properties: {
+          item: { type: "string", description: "The secret: its item id or name from secret_list." },
+          reason: { type: "string", description: "Why it should go, for the person deciding, in the language they use." },
+          person: PERSON,
+        },
+        required: ["item", "reason"],
+        additionalProperties: false,
+      },
+      run: (key, args) => secrets.remove(key, { item: text(args, "item"), reason: text(args, "reason"), ...personOf(args) }),
+    },
+    {
+      name: "secret_cancel",
+      description: SECRET_CANCEL_DESCRIPTION,
+      inputSchema: {
+        type: "object",
+        properties: { request: { type: "string", description: "The pending request id (r_…) secret_use, secret_save, secret_describe or secret_delete answered." } },
+        required: ["request"],
+        additionalProperties: false,
+      },
+      run: async (key, args) => secrets.cancel(key, text(args, "request")),
+    },
+    {
       name: "secret_reask",
       description: "Post a new card for an existing secret_use or secret_save request whose card stopped waiting after a chat message, if the request is still needed. It reuses the same request and never reads the secret again. A different pending card is not replaced. Only this chat's own undecided request may be reasked.",
       inputSchema: {
         type: "object",
-        properties: { request: { type: "string", description: "The pending request id (r_…) from secret_use, secret_save, secret_describe or the card-state notice." } },
+        properties: { request: { type: "string", description: "The pending request id (r_…) from secret_use, secret_save, secret_describe, secret_delete or the card-state notice." } },
         required: ["request"],
         additionalProperties: false,
       },

@@ -16,6 +16,10 @@
 // A request to rename an item or say what it is (secret_describe 改名和说明), approved: POST vault/described `{request}`
 // once the viewer's app wrote the item's next version saying so (and brought it here), POST vault/plain/described
 // `{request}` to write it into the plain library here. It grants nothing (POST vault/grants refuses it).
+//
+// A request to delete an item (secret_delete 删除), approved: POST vault/removed `{request}` once the viewer's app wrote
+// the item's deleted version (and brought it here), POST vault/plain/removed `{request}` to delete it from the plain
+// library here. It grants nothing either.
 import { admit, type LockState } from "../../cloud/lock.ts";
 import { wall } from "../../ops/fibers.ts";
 import type { Deny, Grant } from "../../vault/crypto.ts";
@@ -126,6 +130,15 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
       },
     },
     {
+      // A request to delete an item (secret_delete), approved by the viewer's app once it deleted the item: `{request}`.
+      method: "POST",
+      pattern: /^\/vault\/removed$/,
+      handle: async (r) => {
+        const l = locked(r);
+        return l === null ? NEEDS_LOCK() : decide(r, (o) => secrets.removed(l, r.viewer.sub, o));
+      },
+    },
+    {
       method: "GET",
       pattern: /^\/vault\/uses$/,
       handle: async (r) => json(200, JSON.stringify({ uses: await secrets.uses(r.viewer.workspace, locked(r), param(r, "vault") ?? "", r.viewer) })),
@@ -187,6 +200,19 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
       handle: async (r) =>
         decide(r, (o) => {
           const kept = secrets.describedPlain(r.viewer.workspace, locked(r), r.viewer.email, o);
+          if (typeof kept === "string") return kept;
+          events?.tell("vault-plain", shown(kept), `vault-plain\0${kept.id}`, { workspace: kept.ws, email: kept.owner });
+          return null;
+        }),
+    },
+    {
+      // A request to delete an item of the plain library, approved by its owner: deleted here (security mode on or not:
+      // only deletions are written to it once it is on).
+      method: "POST",
+      pattern: /^\/vault\/plain\/removed$/,
+      handle: async (r) =>
+        decide(r, (o) => {
+          const kept = secrets.removedPlain(r.viewer.workspace, r.viewer.email, o);
           if (typeof kept === "string") return kept;
           events?.tell("vault-plain", shown(kept), `vault-plain\0${kept.id}`, { workspace: kept.ws, email: kept.owner });
           return null;

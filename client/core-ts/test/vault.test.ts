@@ -188,6 +188,7 @@ function fakeStation() {
   // Secrets agents asked to keep, approved: where they went.
   const saves: unknown[] = [];
   const described: unknown[] = [];
+  const removed: unknown[] = [];
   const plainSaves: unknown[] = [];
   const uses: unknown[] = [];
   const plainLock = { on: false };
@@ -302,10 +303,18 @@ function fakeStation() {
         r.status = "granted";
         return { ok: true };
       }
+      case "POST /vault/removed": {
+        // Taken only once its item here is deleted (its copy brought first).
+        const r = requests.find((q) => q.id === body.request);
+        if (!r || !r.remove || items.get(r.item)?.deleted !== true) return status(409, { error: "not here", code: "vault_refused" });
+        removed.push(body);
+        r.status = "granted";
+        return { ok: true };
+      }
     }
     return status(404, { error: `no route ${key}` });
   };
-  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, described, plainSaves, reply };
+  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, described, removed, plainSaves, reply };
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
@@ -955,6 +964,29 @@ test("vault calls: an agent's request to rename an item: answered as one to keep
   const opened = (await r.ask("vault.open", { item: id })).plain;
   assert.deepEqual([opened.name, opened.notes, opened.fields], ["UniFi 后台", "经 Studio 转发到 127.0.0.1:8443", { value: "t-1" }]);
   assert.deepEqual(r.st.described, [{ request: "r_d" }]);
+  assert.deepEqual(r.st.grants, [], "it grants nothing");
+  r.core.close();
+});
+
+test("vault calls: an agent's request to delete an item: answered as one to keep, the item deleted (its deleted version signed here), then told; nothing granted", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const v = [...r.st.vaults.values()][0]!;
+  const { id } = (await r.ask("vault.putItem", { vault: v.id, plain: { kind: "token", name: "branded", fields: { value: "t-1" }, domains: [], notes: "" }, listing: { name: "branded", kind: "token", modes: ["env"], hosts: [] } })) as { id: string };
+  const ask: Request = { id: "r_x", ws: "ws", vault: v.id, item: id, session: "k1", chat: "7", mode: "env", reason: "登不上", box: "", at: 1, status: "pending", remove: { name: "branded" } };
+  r.st.requests.push(ask);
+  r.push("vault-request", ask);
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  const row = vaults().requests[0];
+  assert.deepEqual([row.itemName, row.remove], ["branded", true]);
+  await r.ask("vault.approve", { request: "r_x", scope: "once" });
+  const written = r.st.items.get(id)!;
+  assert.ok(signedOk(written, TAG.item));
+  assert.deepEqual([written.version, written.deleted], [1, true]);
+  assert.deepEqual(r.st.removed, [{ request: "r_x" }]);
   assert.deepEqual(r.st.grants, [], "it grants nothing");
   r.core.close();
 });

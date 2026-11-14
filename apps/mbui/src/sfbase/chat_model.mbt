@@ -228,6 +228,8 @@ pub(all) struct VaultAsk {
   new_name : String
   new_about : String
   was_about : String
+  /// one to delete the item (secret_delete)
+  remove : Bool
   status : String
   scope : String
   /// another station of the workspace its commands run on, by name (empty: the chat's)
@@ -481,6 +483,7 @@ pub fn message_of(m : Json) -> Message {
                 new_name: text(field(a, "describe"), "name"),
                 new_about: text(field(a, "describe"), "about"),
                 was_about: text(field(a, "describe"), "wasAbout"),
+                remove: flag(a, "remove"),
                 status: text(a, "status"),
                 scope: text(a, "scope"),
                 station: text(a, "station"),

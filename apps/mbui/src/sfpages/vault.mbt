@@ -279,6 +279,7 @@ fn vault_request(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
     new_name: text(field(rv, "describe"), "name"),
     new_about: text(field(rv, "describe"), "about"),
     was_about: text(field(rv, "describe"), "wasAbout"),
+    remove: flag(rv, "remove"),
   }
   let station = text(rv, "station")
   let extra = if station == "" {

@@ -90,6 +90,11 @@ const SCOPE_WORDS: Record<Scope, { label: string; detail: string }> = {
 /// A request no one decided is let go after a day.
 const PENDING_SECS = 86400;
 
+/// The words on the card of a request to delete an item.
+const REMOVE_WORDS = {
+  yes: { label: "删除", detail: "从密钥库删除这条密钥" },
+  no: { label: "保留", detail: "不删除，通知 agent" },
+};
 /// The words on the card of a request to keep a secret.
 const SAVE_WORDS = {
   save: { label: "存入密钥库", detail: "agent 之后每次使用仍需你批准" },
@@ -1008,7 +1013,7 @@ export class Secrets {
     // NUL in a key. Never expose a use whose parsed vault or plain-library owner differs from the authorized scope.
     const email = viewer.email.toLowerCase();
     const requests = bodies.map((body) => JSON.parse(body) as Request)
-      .filter((r) => r.vault === vault && (vault !== PLAIN || r.owner === email) && r.save == null && r.describe == null);
+      .filter((r) => r.vault === vault && (vault !== PLAIN || r.owner === email) && r.save == null && r.describe == null && r.remove == null);
     const names = new Map<string, string | null>();
     const prepare = this.#d.hub.prepareLatestThreads;
     const titleIfReady = this.#d.titleIfReady;
@@ -1204,7 +1209,9 @@ export class Secrets {
       ? await this.#postSave(session, place.thread, r, true, signal)
       : r.describe
         ? await this.#postDescribe(session, place.thread, r, this.#deciderOf(r), true, signal)
-        : await this.#post(session, place.thread, r, listing!, r.owner, true, signal);
+        : r.remove
+          ? await this.#postRemove(session, place.thread, r, this.#deciderOf(r), true, signal)
+          : await this.#post(session, place.thread, r, listing!, r.owner, true, signal);
     const current = this.#kept(ws, id);
     if (current?.request.status === "pending" && !this.#requestLive(current.request, Math.floor(this.#d.now() / 1000))) this.#settle(current.request, "expired");
     // The original request may have been decided while the new message was being posted.
@@ -1354,6 +1361,128 @@ export class Secrets {
       if (!settled) return this.#decisionChanged(k.request);
     } catch (error) { if (error instanceof Refused) return error.message; throw error; }
     return this.#d.plain.item(ws, next.id)!;
+  }
+
+  // ── an item deleted (secret_delete 删除) ──
+
+  /// secret_delete: a request from `session` to delete item `a.item` (its id or listed name), its card posted for the
+  /// item's owner (or the person named). Granted, the item is gone: a vault's deleted by the app that approves it (its
+  /// device signs the deleted version), the plain library's here (`removedPlain`). It grants nothing.
+  async remove(session: string, a: { item: string; reason: string; person?: string }): Promise<string> {
+    const { ws } = this.#placeOf(session);
+    const found = this.#findListing(session, a.item.trim().toLowerCase(), a.person);
+    if (found === undefined) throw new Refused(`No secret named ${JSON.stringify(a.item)} is listed here: secret_list lists those that are.`);
+    if (a.reason.trim() === "") throw new Refused("reason is required: why, for the person deciding");
+    const decider = a.person?.trim() ? this.#personFor(session, a.person) : found.owner;
+    const thread = this.#latestThreadReady(session);
+    if (thread === undefined) {
+      await this.#d.hub.prepareLatestThreads!([session]);
+      const current = this.#d.hub.store.getSession(session);
+      if (current === null || current.archivedAt != null) throw new Refused("This chat is archived or gone.");
+      return this.remove(session, a);
+    }
+    const plain = found.vault === PLAIN;
+    const now = this.#d.now();
+    const id = `r_${ulid(now)}`;
+    const request: Request = {
+      id, ws, vault: found.vault, item: found.item, session, chat: "", mode: found.listing.modes[0]!, reason: a.reason.trim(),
+      box: "", at: Math.floor(now / 1000), status: "pending", ...(plain && found.owner ? { owner: found.owner } : {}),
+      remove: { name: found.listing.name },
+    };
+    const kept: Kept = { request, thread: null, cardTs: null };
+    if (thread !== null) {
+      request.chat = threadAddress(thread.thread.channel, thread.thread.threadTs);
+      kept.cardTs = await this.#postRemove(session, thread, request, decider ?? undefined);
+      kept.thread = thread.thread.id;
+    }
+    this.#save(kept);
+    this.#audit(request, "remove-request", "");
+    this.#told(request);
+    return this.#saidRemove(request) + (decider ? ` It is for ${decider} to decide.` : "");
+  }
+
+  /// The card of a request to delete an item: its name and why.
+  async #postRemove(session: string, thread: SessionThread, r: Request, decider: string | undefined, requireEmpty = false, signal?: AbortSignal): Promise<string | null> {
+    const name = r.remove!.name;
+    const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
+    const text = [
+      `申请删除密钥「${name}」：${r.reason}`,
+      ...(stillfail ? [] : ["请在 still.fail 客户端的「密钥」中批准。"]),
+    ].join("\n\n");
+    const card = stillfail
+      ? {
+          type: "options",
+          options: [{ ...REMOVE_WORDS.yes, recommended: true }, REMOVE_WORDS.no],
+          ...(decider ? { assignee: decider.toLowerCase() } : {}),
+          // The request as the app draws it: `remove` says it is one to delete; its outcome added once decided.
+          vault: { request: r.id, name, reason: r.reason, mode: r.mode, hosts: [], remove: { name } },
+        }
+      : null;
+    return this.#postCard(session, thread, text, card, requireEmpty, r, signal);
+  }
+
+  /// What an agent is told of a request to delete an item, waiting (secret_delete's answer) or decided (a notice).
+  #saidRemove(r: Request): string {
+    const name = r.remove!.name;
+    if (r.status === "granted") return `Deleted: 「${name}」 (${r.item}) is no longer in the vault.`;
+    if (r.status === "denied") return `The person chose to keep 「${name}」 (request ${r.id}): it stays in the vault.`;
+    if (r.status === "expired") return `The request to delete 「${name}」 (${r.id}) was let go.`;
+    if (r.status === "withdrawn") return `You withdrew the request to delete 「${name}」 (${r.id}).`;
+    return `Asked to delete 「${name}」 (request ${r.id}); the card is in your chat, approved in the still.fail app. ${UNDECIDED} Only their approval in the app deletes it: a reply in the chat saying yes does not.`;
+  }
+
+  /// POST vault/removed `{request}`: a request to delete an item of a vault, approved by a member of it whose app wrote
+  /// the item's deleted version (and brought it here): taken once the item here is deleted. Why not, or null.
+  removed(lock: LockState, sub: string, d: { request?: unknown }): string | null {
+    const k = typeof d?.request === "string" ? this.#kept(lock.ws, d.request) : null;
+    if (k === null || !k.request.remove || k.request.vault === PLAIN) return "no such request to delete an item of a vault";
+    if (k.request.status !== "pending") return `the request is ${k.request.status}`;
+    const vault = this.#d.vaults.vault(lock.ws, k.request.vault);
+    if (vault === null || !vault.members.includes(sub)) return "only the vault's members decide its requests";
+    const item = this.#d.vaults.item(lock.ws, vault.id, k.request.item);
+    if (item !== null && !item.deleted) return "the item is not deleted here: bring its copy first";
+    if (!this.#settle(k.request, "granted")) return this.#decisionChanged(k.request);
+    return null;
+  }
+
+  /// POST vault/plain/removed `{request}`: a request to delete an item of the plain library, approved by its owner:
+  /// its deleted version written here. The item as written, or why not.
+  removedPlain(ws: string, email: string, d: { request?: unknown }): PlainItem | string {
+    const k = typeof d?.request === "string" ? this.#kept(ws, d.request) : null;
+    if (k === null || !k.request.remove || k.request.vault !== PLAIN) return "no such request to delete an item of the plain library";
+    if (k.request.owner !== email.toLowerCase()) return "only the item's owner decides its requests";
+    if (k.request.status !== "pending") return `the request is ${k.request.status}`;
+    const snapshot = this.#d.plain.itemSnapshot(ws, k.request.item);
+    const prev = snapshot?.value ?? null;
+    if (prev === null || prev.deleted) return "the item is gone already";
+    const next: PlainItem = { ws, id: prev.id, owner: prev.owner, version: prev.version + 1, kind: prev.kind, name: "", fields: {}, notes: "", at: Math.floor(this.#d.now() / 1000), deleted: true };
+    const why = plainOk(prev, next, prev.owner);
+    if (why !== null) return why;
+    try {
+      const settled = this.#settle(k.request, "granted", undefined, undefined, () => {
+        if (this.#d.db.prepare("SELECT 1 FROM vault_plain WHERE ws=? AND id=? AND body=?").get(ws, prev.id, snapshot!.body) === undefined) throw new Refused("the item changed; try again");
+        this.#d.plain.put(next);
+      });
+      if (!settled) return this.#decisionChanged(k.request);
+    } catch (error) { if (error instanceof Refused) return error.message; throw error; }
+    return this.#d.plain.item(ws, next.id)!;
+  }
+
+  // ── a request taken back by the agent that asked (secret_cancel 撤回) ──
+
+  /// secret_cancel: `session` takes back request `id` of its own (secret_use, secret_save, secret_describe,
+  /// secret_delete) that nobody decided yet: its card closed and saying so, gone from its owner's waiting requests.
+  cancel(session: string, id: string): string {
+    const { ws } = this.#placeOf(session);
+    const kept = this.#kept(ws, id.trim());
+    if (kept === null || kept.request.session !== session) throw new Refused("No such request in this chat: give the id (r_…) secret_use, secret_save, secret_describe or secret_delete answered.");
+    const r = kept.request;
+    if (r.status !== "pending") throw new Refused(`Request ${r.id} is no longer pending (${r.status}): nothing to withdraw.`);
+    if (!this.#settle(r, "withdrawn")) {
+      const now = this.#kept(ws, r.id)?.request.status;
+      throw new Refused(now && now !== "pending" ? `Request ${r.id} was ${now} meanwhile: nothing to withdraw.` : `Request ${r.id} changed while it was withdrawn; try again.`);
+    }
+    return `Withdrew request ${r.id}: its card is closed and its owner no longer sees it waiting.`;
   }
 
   // ── secrets agents ask to keep (secret_save agent 存入) ──
@@ -1831,15 +1960,16 @@ export class Secrets {
     if (status !== "granted") this.keeper.drop(r.id);
     this.#audit(k.request, status, "");
     this.#told(k.request);
-    if (status === "granted" && k.request.mode === "browser" && !k.request.describe) {
+    if (status === "granted" && k.request.mode === "browser" && !k.request.describe && !k.request.remove) {
       this.#renewalGranted(k.request);
       this.#signIn(k.request);
     }
     // The agent is told in its session: no tool call waits for it.
-    if (status !== "expired") {
+    // (one the agent withdrew itself: it knows, from secret_cancel's answer)
+    if (status !== "expired" && status !== "withdrawn") {
       const l = this.#listingOf(r);
       try {
-        this.#d.hub.notify(r.session, k.request.save ? this.#saidSave(k.request) : k.request.describe ? this.#saidDescribe(k.request) : l ? this.#said(k.request, l) : `The request ${r.id} was ${status}.`);
+        this.#d.hub.notify(r.session, k.request.save ? this.#saidSave(k.request) : k.request.describe ? this.#saidDescribe(k.request) : k.request.remove ? this.#saidRemove(k.request) : l ? this.#said(k.request, l) : `The request ${r.id} was ${status}.`);
       } catch {
         // The session is gone: nobody to tell.
       }
@@ -1982,6 +2112,7 @@ export class Secrets {
     if (k === null) return "no such request";
     if (k.request.save) return "a secret to keep is approved by POST vault/saves";
     if (k.request.describe) return "a request to rename an item grants nothing: it is approved by POST vault/described";
+    if (k.request.remove) return "a request to delete an item grants nothing: it is approved by POST vault/removed";
     if (k.request.status !== "pending") return `the request is ${k.request.status}`;
     const vaultSnapshot = this.#d.vaults.vaultSnapshot(lock.ws, k.request.vault);
     const itemSnapshot = this.#d.vaults.itemSnapshot(lock.ws, k.request.vault, k.request.item);
@@ -2008,6 +2139,7 @@ export class Secrets {
     if (k === null || k.request.vault !== PLAIN) return "no such request of the plain library";
     if (k.request.save) return "a secret to keep is approved by POST vault/plain/saves";
     if (k.request.describe) return "a request to rename an item grants nothing: it is approved by POST vault/plain/described";
+    if (k.request.remove) return "a request to delete an item grants nothing: it is approved by POST vault/plain/removed";
     if (k.request.status !== "pending") return `the request is ${k.request.status}`;
     if (k.request.owner !== email.toLowerCase()) return "only the item's owner decides its requests";
     if (lock !== null) return "security mode is on: the plain library's secrets are moved into the vault, not given out";

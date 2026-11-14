@@ -317,6 +317,8 @@ export function told(tool: string, input: string, known: Known = {}): string | n
   if (name === "secret_list") return "查看密钥列表";
   if (name === "secret_describe") return typeof a.item === "string" && a.item ? `更新密钥说明 ${a.item}` : "更新密钥说明";
   if (name === "secret_reask") return "重新请求密钥授权";
+  if (name === "secret_delete") return typeof a.item === "string" && a.item ? `申请删除密钥 ${a.item}` : "申请删除密钥";
+  if (name === "secret_cancel") return "撤回密钥申请";
   if (name === "phone_use") return a.done === true ? "归还手机调试权限" : "请求手机调试权限";
   if (name === "phone_send") return typeof a.path === "string" && a.path ? `发送文件到手机 ${a.path.split("/").pop() ?? a.path}` : "发送文件到手机";
   if (name === "adb_devices") return "查看已连接 Android 设备";

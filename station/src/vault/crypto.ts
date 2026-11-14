@@ -42,7 +42,9 @@ export const allows = (lasts: Scope | null | undefined, scope: Scope): boolean =
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
   timeout?: Timeout;
-  command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
+  command?: string; hosts?: string[]; box: string; at: number;
+  /// `withdrawn`: taken back by the agent that asked (secret_cancel) before anyone decided it.
+  status: "pending" | "granted" | "denied" | "expired" | "withdrawn";
   /// A request for an item of the plain library (`vault` is `plain`, no box): its owner's email, who decides it. A
   /// request to keep a secret (`save`): whose it is to be (whoever started the chat), who decides it.
   owner?: string;
@@ -64,6 +66,10 @@ export type Request = {
   /// are to be, and as they were when asked. Granted, the item's next version says so: written by the app that approves
   /// it (a vault's), or here as its owner approves it (the plain library's). Never a grant of the item.
   describe?: Describe;
+  /// An agent asking to delete an item (secret_delete 删除): its name when asked. Granted, the item is deleted: by the
+  /// app that approves it (a vault's, its device signing the deleted version), or here as its owner approves it (the
+  /// plain library's). Never a grant of the item.
+  remove?: { name: string };
 };
 export type Describe = { name: string; about: string; was: { name: string; about: string } };
 /// What an agent asks to keep: the item's listing, and the fields of it that are not secret (a login's account name, an

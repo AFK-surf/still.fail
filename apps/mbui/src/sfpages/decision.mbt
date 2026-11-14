@@ -233,6 +233,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
     new_name: ask.new_name,
     new_about: ask.new_about,
     was_about: ask.was_about,
+    remove: ask.remove,
   }
   let decided = ask.status != ""
   // (a file the person picks: as wide as it may be from the first, what is picked coming in beside its button with

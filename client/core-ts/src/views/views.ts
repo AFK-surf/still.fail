@@ -806,7 +806,7 @@ function vaultAskOf(card: J): VaultAskOf | null {
   const request = typeof get(card, "vault") === "string" ? (card.vault as string) : null;
   const ask = get(card, "vaultAsk");
   // (a request to rename an item is answered as one to keep: written into the vault, by a device set up)
-  return request === null || request === "" || !isObject(ask) ? null : { request, save: get(ask, "save") !== undefined || get(ask, "describe") !== undefined };
+  return request === null || request === "" || !isObject(ask) ? null : { request, save: get(ask, "save") !== undefined || get(ask, "describe") !== undefined || get(ask, "remove") !== undefined };
 }
 
 /// The views' environment in a core.

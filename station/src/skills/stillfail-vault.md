@@ -77,6 +77,15 @@ An item whose name or about does not say what it is or how it is used (a name ma
 would be; approved in the app, the item says so. Do it as soon as you worked out what an item is, so the next agent
 does not have to.
 
+## Deleting one, and taking back a request
+
+- An item that is wrong (a password that does not work), replaced by one you kept, or no longer needed:
+  `secret_delete {item, reason}`. A card asks its owner; approved in the app, the item is gone for every chat. Do not
+  rename a wrong item instead of asking to delete it.
+- A request of this chat's own that is no longer needed (you got the credential another way, the person chose another
+  account, you asked twice): `secret_cancel {request}`. Its card closes saying so and it leaves the person's waiting
+  requests in 密钥. Telling them in the chat that a card is not needed leaves it waiting there.
+
 ## Using one
 
 - `secret_use {item, reason, command, mode?, hosts?}` puts a card in the chat; the person picks how long the grant

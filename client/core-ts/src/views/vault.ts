@@ -1053,6 +1053,8 @@ export function vaultsView(inner: Inner, ws: string): J {
     ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}), ...(r.save.filename ? { filename: r.save.filename } : {}), ...(r.save.typed ? { typed: true } : {}) } } : {}),
     // An item to rename or say what it is: its name and about as they would be (and its about as it was).
     ...(r.describe ? { describe: { name: r.describe.name, about: r.describe.about, wasAbout: r.describe.was.about } } : {}),
+    // An item to delete.
+    ...(r.remove ? { remove: true } : {}),
   });
   const personal = t("core-misc.vault.personal");
   // No security mode: the plain library, one vault on the station keeping most of its items (or the first keeping one).
@@ -1067,7 +1069,7 @@ export function vaultsView(inner: Inner, ws: string): J {
     const requests = Object.values(h.requests)
       .filter((r) => r.status === "pending" && r.vault === PLAIN)
       .sort((a, b) => a.at - b.at)
-      .map((r) => requestRow(r, r.save?.name ?? r.describe?.was.name ?? h.plain[r.item]?.name ?? null, personal, h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts ?? "chat"));
+      .map((r) => requestRow(r, r.save?.name ?? r.describe?.was.name ?? r.remove?.name ?? h.plain[r.item]?.name ?? null, personal, h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts ?? "chat"));
     return { ...base, plain: true, vaults: row, requests, ...statusWords(row, requests) };
   }
   const self = me(lock, signerOf(inner));
@@ -1100,7 +1102,7 @@ export function vaultsView(inner: Inner, ws: string): J {
     .sort((a, b) => a.at - b.at)
     .map((r) => {
       const listing = items(inner, ws, r.vault)[r.item]?.listing;
-      return { ...requestRow(r, r.save?.name ?? r.describe?.was.name ?? listing?.name ?? null, h.vaults[r.vault]?.name ?? personal, listing?.lasts ?? h.vaults[r.vault]?.lasts ?? "chat"), ...(notHere(r, self?.device ?? null, m.box ?? null) ? { notHere: true } : {}) };
+      return { ...requestRow(r, r.save?.name ?? r.describe?.was.name ?? r.remove?.name ?? listing?.name ?? null, h.vaults[r.vault]?.name ?? personal, listing?.lasts ?? h.vaults[r.vault]?.lasts ?? "chat"), ...(notHere(r, self?.device ?? null, m.box ?? null) ? { notHere: true } : {}) };
     });
   // What is left of the plain library from before security mode, to be moved into the person's vault.
   return { ...base, canSign: self !== null, setUp: mine !== undefined && mine.box === m.box, vaults, requests, ...statusWords(vaults, requests), ...(plainItems.length > 0 ? { plainLeft: plainItems.length } : {}) };
@@ -2081,6 +2083,7 @@ class Vaults {
       const asked = yield* self.#request(id);
       if (asked.r.save) return yield* self.#keepSaved(asked.r, asked.station, typed);
       if (asked.r.describe) return yield* self.#describe(asked.r, asked.station);
+      if (asked.r.remove) return yield* self.#remove(asked.r, asked.station);
       if (asked.r.timeout && scope !== "once" && !timeout) return yield* Effect.fail(CoreError.invalid("this request needs an approval with its timeout; update the app"));
       if (asked.r.vault === PLAIN) {
         const { r, station } = asked;
@@ -2277,6 +2280,29 @@ class Vaults {
       // The station that asked holds its copy before it is told.
       yield* spread(inner, `${self.ws}/${station}`);
       yield* self.#station(station, "POST", "/vault/described", { request: r.id });
+      self.#settled(r.id, { status: "granted" });
+      return { request: r.id, item: r.item };
+    });
+  }
+
+  /// An agent's request to delete an item, approved: the plain library's deleted by its station; a vault's item deleted
+  /// here (its deleted version signed by this device), its copy brought to the station that asked, which is then told.
+  /// It grants nothing.
+  #remove(r: Request, station: string): Effect.Effect<unknown, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const inner = self.#inner;
+      if (r.vault === PLAIN) {
+        yield* self.#station(station, "POST", "/vault/plain/removed", { request: r.id });
+        self.#settled(r.id, { status: "granted" });
+        return { request: r.id, item: r.item };
+      }
+      const item = items(inner, self.ws, r.vault)[r.item];
+      // (gone already, by another device or from its page: what is left is to say so)
+      if (item && !item.deleted) yield* self.deleteItem(r.vault, r.item);
+      // The station that asked holds its copy before it is told.
+      yield* spread(inner, `${self.ws}/${station}`);
+      yield* self.#station(station, "POST", "/vault/removed", { request: r.id });
       self.#settled(r.id, { status: "granted" });
       return { request: r.id, item: r.item };
     });
