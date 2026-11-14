@@ -2,7 +2,8 @@
 // saveZip, DriveFetches, Parts.kt DownloadChip): a drive's file fetched a part at a time through the core
 // (`drive.read`), each part handed to the host as it comes (@ui.keep_begin: a file of its temporary directory, never
 // whole in memory), how far it has come on its row (n% in the accent's filling box), then kept where the system keeps
-// downloads (MediaStore's Downloads on Android, ~/Downloads on macOS, the Files sheet on iOS, Downloads on Windows):
+// downloads (MediaStore's Downloads on Android, ~/Downloads on macOS, the Files sheet on iOS, Downloads on Windows, the
+// browser's download on the web):
 // 正在下载「名字」 as it starts, 已保存到「下载」 or 下载失败 once the host has answered, 无法获取「名字」：… when the
 // station could not give it. A folder is zipped on the station first (`drive.zip`: where the zip is, read as any file
 // of the drive). Several chosen are fetched side by side, each said. The chat's preview keeps its file the same
