@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [ba23979ed](https://github.com/AFK-surf/monoid/commit/ba23979ed094039a10f69bc6723c42777220dd3f) mbui app: the fourth group's pages fewer at the de | 2.01 | 2.77 | 11.91 | 31.83 | 44.34 | 28.45 | 55.68 | 98.45 | 118.41 |
 | [0487f79c6](https://github.com/AFK-surf/monoid/commit/0487f79c6950898c89c26b4ebb869e6d2060b6a9) ci: the stable Mac job's local zip cleanup never f | 2.01 | 2.77 | 11.91 | 31.83 | 44.34 | 28.44 | 55.68 | 98.62 | 118.41 |
 | [46c6d9b18](https://github.com/AFK-surf/monoid/commit/46c6d9b189993ee1f96d734583a5de48f749a17c) station: a device's jobs and a list's changes read | 2.01 | 2.77 | 11.91 | 31.83 | 44.34 | 28.44 | 55.68 | 98.55 | 111.3 |
 | [a0dfc9e45](https://github.com/AFK-surf/monoid/commit/a0dfc9e45228f7bc11109989637120492ff1211a) mbui, app tests: what kept_rows_kinds compares rea | 2.01 | 2.76 | 11.87 | 31.75 | 44.2 | 28.37 | 55.56 | 97.86 | 111.44 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [91143174f](https://github.com/AFK-surf/monoid/commit/91143174f71fcfdd5d0599a6ca374a8cf9948dc2) mbui app: two tests of the chat hold what is seen, | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [baf7f4d5b](https://github.com/AFK-surf/monoid/commit/baf7f4d5b1723338f2f891a15ffdf90f7cb2809a) app: keep quote available for wrapped selections ( | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 | [9ab2e861e](https://github.com/AFK-surf/monoid/commit/9ab2e861e597888b70026718c56019b5abccfde8) app tests: chat_opens_whole's pictures bar falls t | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
-| [dd5abd9f1](https://github.com/AFK-surf/monoid/commit/dd5abd9f1fd5d363c431d8af826f80566777fd08) mbui: the composer's first card moves the chat's e | 2 | 2.74 | 11.79 | 31.59 | 43.62 | 28.2 | 55.28 | 96.67 | 115.89 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [ba23979ed](https://github.com/AFK-surf/monoid/commit/ba23979ed094039a10f69bc6723c42777220dd3f) mbui app: the fourth group's pages fewer at the de | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.26 |
 | [0487f79c6](https://github.com/AFK-surf/monoid/commit/0487f79c6950898c89c26b4ebb869e6d2060b6a9) ci: the stable Mac job's local zip cleanup never f | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.26 |
 | [46c6d9b18](https://github.com/AFK-surf/monoid/commit/46c6d9b189993ee1f96d734583a5de48f749a17c) station: a device's jobs and a list's changes read | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.26 |
 | [a0dfc9e45](https://github.com/AFK-surf/monoid/commit/a0dfc9e45228f7bc11109989637120492ff1211a) mbui, app tests: what kept_rows_kinds compares rea | 0.4 | 0.52 | 1.96 | 3.08 | 4.51 | 1.45 | 3.8 | 57.26 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [91143174f](https://github.com/AFK-surf/monoid/commit/91143174f71fcfdd5d0599a6ca374a8cf9948dc2) mbui app: two tests of the chat hold what is seen, | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.35 |
 | [baf7f4d5b](https://github.com/AFK-surf/monoid/commit/baf7f4d5b1723338f2f891a15ffdf90f7cb2809a) app: keep quote available for wrapped selections ( | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.1 |
 | [9ab2e861e](https://github.com/AFK-surf/monoid/commit/9ab2e861e597888b70026718c56019b5abccfde8) app tests: chat_opens_whole's pictures bar falls t | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.1 |
-| [dd5abd9f1](https://github.com/AFK-surf/monoid/commit/dd5abd9f1fd5d363c431d8af826f80566777fd08) mbui: the composer's first card moves the chat's e | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.31 |
