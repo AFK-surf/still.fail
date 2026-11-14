@@ -167,7 +167,7 @@ export class FarviewScreen implements ScreenSource {
         this.changed();
       }
     }
-    if (m?.size && typeof m.size === "object" && m.size.width > 0 && m.size.height > 0) this.#size = { width: m.size.width, height: m.size.height, scale: m.size.scale > 0 ? m.size.scale : 1 };
+    if (m?.size && typeof m.size === "object" && m.size.width > 0 && m.size.height > 0) this.#size = { width: m.size.width, height: m.size.height, scale: m.size.scale > 0 ? m.size.scale : this.#size.scale };
   }
 
   page(): FramePage {
@@ -240,7 +240,9 @@ class FarviewView implements ScreenView {
     link.heard = (m) => {
       screen.heard(m);
       if (typeof m?.changed === "number" && m.changed > this.#seq) this.#seq = m.changed;
-      if (m?.size && typeof m.size === "object" && m.size.width > 0 && m.size.height > 0) this.#size = { width: m.size.width, height: m.size.height, scale: m.size.scale > 0 ? m.size.scale : 1 };
+      // (the host tells the tab's viewport, never this view's scale: its pictures stay at the scale it asked, and a
+      // person's pointer is of them. Taken as 1, every tap of a 2x view landed at half its place)
+      if (m?.size && typeof m.size === "object" && m.size.width > 0 && m.size.height > 0) this.#size = { width: m.size.width, height: m.size.height, scale: this.#size.scale };
       this.#poke();
     };
     link.ended = () => this.close();
