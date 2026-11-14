@@ -100,6 +100,19 @@ test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
   assert.equal(old[0].agent, true);
 });
 
+test("another_chats_letter_goes_by_that_chats_name_without_its_heading", () => {
+  // station instructions.ts: a letter from a chat of another station is told `from="another agent"`; its heading names
+  // the chat (Slack's form in a Slack thread, Markdown's in a chat), as the chat's page reads it (views.ts `sentFrom`).
+  const link = "https://app.still.fail/o/w/s/chat%3Ac-1";
+  for (const [via, head] of [["slack", `来自 <${link}|废弃 station>：`], ["web", `来自 [废弃 station](${link})：`]]) {
+    const text = `<message via="${via}" thread="C1/1.0" from="another agent" bot ts="1.1">\n${head}\n\n**job** 停了\n</message>`;
+    const h = presentHistory({ timeline: [{ kind: "user", text }], steps: [] }, cx([], [], []));
+    const [letter] = h.items[0].body.content.messages;
+    assert.deepEqual([letter.from.name, letter.text], ["废弃 station", "**job** 停了"]);
+    assert.deepEqual(letter.md, markdown("**job** 停了"));
+  }
+});
+
 test("an_agents_letter_reads_as_markdown_a_persons_words_as_they_wrote_them", () => {
   // station instructions.ts: another agent's message is marked `bot`; a person's name may say "bot" and is not one.
   const [said] = parsePrompt('<message via="web" thread="CHAT/1.0" from="Claude Code" bot ts="1.1">\n**根子**：`moves_in`\n</message>\n<message via="web" thread="CHAT/1.0" from="a bot fan (b@x)" ts="1.2">\n**hi**\n</message>');
