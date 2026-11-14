@@ -39,7 +39,7 @@ import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
 import { Priority } from "../sync/scheduler.ts";
 import type { SpanContext } from "../trace.ts";
-import { get, hex, isObject, sha256, utf8 } from "../util.ts";
+import { equal, get, hex, isObject, sha256, utf8 } from "../util.ts";
 import { type Checked, checkLock, lockChain, signerIn } from "../vault/lock-check.ts";
 import { AGAIN_MOST, againOf, hashOf, keep, links } from "../lock-keep.ts";
 import { levelVaults, levelVaultsOf, tookOut, tookOutMoved, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
@@ -597,13 +597,19 @@ function readStations(inner: Inner, ws: string): Effect.Effect<void> {
     (id) =>
       Effect.map(Effect.result(inner.stations.requests.call(new StationAddr(ws, id), "GET", "/lock?after=999999999", null, { quiet: true })), (r) => {
         if (r._tag !== "Success") return;
-        p.heads.set(id, readHead(get(r.success, "head")));
+        // (told only where it says another head than it did: a read that brought nothing new makes nothing again)
+        const head = readHead(get(r.success, "head"));
+        if (p.heads.has(id) && sameHead(p.heads.get(id)!, head)) return;
+        p.heads.set(id, head);
         touch(inner, ws);
       }),
     { concurrency: 4, discard: true },
   );
 }
 const daysLeft = (secs: number) => Math.max(0, Math.ceil(secs / 86400));
+
+/// Whether two heads a station said are the same (none, or the same entry of the same lock).
+const sameHead = (a: Head | null, b: Head | null): boolean => a === b || (a !== null && b !== null && a.seq === b.seq && a.hash === b.hash && a.genesis === b.genesis);
 
 export function install(inner: Inner): void {
   hooks.enrolled = enrolled;
@@ -812,6 +818,8 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     const was = held(inner, ws);
     const off = was?.head ? fold(was.entries).disabled : true;
     const ask = (id: string, path: string) => Effect.result(inner.stations.requests.call(new StationAddr(ws, id), "GET", path, null, { quiet: true }));
+    // (whether a station said another head than it did before: what its lock shows, `keeps`, told as the lock is held)
+    let headsMoved = false;
     const answers = yield* answersOf(
       inner,
       stations.map((id) =>
@@ -826,6 +834,7 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
           if (r._tag === "Success") keepServes(inner, ws, id, SERVES_MOVED.every((x) => arr(get(r.success, "serves")).includes(x)));
           if (r._tag !== "Success" || !p.serving.has(id)) return null;
           const head = readHead(get(r.success, "head"));
+          if (!p.heads.has(id) || !sameHead(p.heads.get(id)!, head)) headsMoved = true;
           p.heads.set(id, head);
           const more = arr(get(r.success, "entries")) as Entry[];
           let entries: Entry[] | null = null;
@@ -956,7 +965,7 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     // the bodies are taken against (a lock held, its own or none); then told as the lock is.
     const logsKept = head === null ? false : keepLogs(inner, ws, served.flatMap((a) => a.logs));
     const bodiesKept = head === null ? false : keepBodies(inner, ws, served.flatMap((a) => a.bodies));
-    yield* hold(inner, ws, sub, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]), head === null ? [] : parted, logsKept || bodiesKept);
+    yield* hold(inner, ws, sub, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]), head === null ? [] : parted, logsKept || bodiesKept, headsMoved);
     carry(inner, ws, served);
     carryBodies(inner, ws, served);
     bringMoved(inner, ws, served);
@@ -1102,14 +1111,20 @@ function carryBodies(inner: Inner, ws: string, served: readonly { id: string; la
 /// the one held stays. Held as read, it took the entries since back off this device until the lock next moved.
 /// Of the lock held and on, what does not go on from its head (a chain read that parts from it, `parted` the entries of
 /// those that do) is kept with it, and the chain gone by is the rules' choice among all (`chosen`).
-function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries: Entry[], seen: J[] | null, parted: Entry[] = [], made = false): Effect.Effect<void> {
+///
+/// What is held is written, and what shows it told, only where it says otherwise than before (its head, its chain, what
+/// is aside, the devices that came), what it is made of was kept (`made`) or a station said another head (`told`): a
+/// read that brought nothing new (each station's at every reconnect and every event) makes nothing again (2026-11-14:
+/// the owner's phone made its `lock` topic again after every such read, rounds of them a minute).
+function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries: Entry[], seen: J[] | null, parted: Entry[] = [], made = false, told = false): Effect.Effect<void> {
   return Effect.gen(function* () {
     if (said !== null && inner.provider.kind === "stillfail") yield* Effect.ignore(new Lock(inner, ws, sub, null).base());
     // (as held now, not as it was when the read began)
     const was = held(inner, ws);
     const now = chosen(was, said, entries, parted);
     const head = now.head;
-    inner.data.put("lock", ws, { head, entries: now.entries, ...(now.aside.length > 0 ? { aside: now.aside } : {}), ...(seen ? { seen } : {}) });
+    const same = was !== null && (was.head?.hash ?? null) === (head?.hash ?? null) && was.entries === now.entries && equal(was.aside ?? [], now.aside) && equal(was.seen ?? null, seen ?? null);
+    if (!same) inner.data.put("lock", ws, { head, entries: now.entries, ...(now.aside.length > 0 ? { aside: now.aside } : {}), ...(seen ? { seen } : {}) });
     // What was pending and is on the chain now (a station took it, from this device or from another that carried it):
     // pending no more, and the cloud sent it now, as what a station took is (`Lock.append`).
     const pending = pendingHeld(inner, ws);
@@ -1147,6 +1162,7 @@ function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries:
     inner.runner.fork(keepToPerson(inner, ws));
     inner.runner.fork(ownLockFor(inner, ws));
     // The vault's too: whether it is locked, this device confirmed in it, whose vaults are trusted (views/vault.ts).
+    if (same && !made && !told) return;
     lockSeen(inner).touch(`lock ${ws}`, `draft ${ws}`, "prompts");
     inner.views?.vaultChanged(ws);
     // This device not in the lock: it waits, and asks to be approved only by hand (`lock.pair`, its waiting page):
