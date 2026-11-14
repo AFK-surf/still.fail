@@ -21,6 +21,8 @@ export const BrowserLive = Layer.effectDiscard(
       (f) => Effect.sync(() => f.close()),
     );
     browser.useFarview(farview);
+    // (the chats' tabs an earlier station process left running stay among the screens)
+    void farview.resume();
     parts.door(browserDoor(browser));
     parts.sessionEnded((session) => {
       void browser.closeOf(session);

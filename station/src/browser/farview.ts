@@ -14,7 +14,7 @@
 // fills the tab's form (farview-form.ts). Farview has no authenticator: a sign-in's passkeys are not put in.
 // Not yet: the login pages a station opens of its own are Chrome's.
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, rm } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
 import { join } from "node:path";
 import { Clock, Effect } from "effect";
@@ -147,6 +147,8 @@ export class FarviewTabs {
     if (found !== null) return found;
     await mkdir(dir, { recursive: true, mode: 0o700 });
     await rm(join(dir, "host.json"), { force: true });
+    // (whose chat it is, for the next station process to take its host up as it starts: `resume`)
+    await writeFile(join(dir, "session"), session, { mode: 0o600 });
     let url = FIRST_PAGE;
     try {
       url = (await readFile(join(dir, "url"), "utf8")).trim() || FIRST_PAGE;
@@ -188,6 +190,31 @@ export class FarviewTabs {
     this.#hosts.delete(session);
     host.unscreen();
     host.screen.close();
+  }
+
+  /// Takes up the hosts an earlier station process left running, as this one starts: their tabs stay among the
+  /// screens a person has open (an update restarted the station, and a person's view of a tab found it gone until its
+  /// chat's agent asked for its browser again). Each chat's directory says whose it is.
+  async resume(): Promise<void> {
+    if (this.active() === null) return;
+    let dirs: string[];
+    try {
+      dirs = await readdir(this.#o.dir);
+    } catch {
+      return;
+    }
+    for (const name of dirs) {
+      const dir = join(this.#o.dir, name);
+      let session: string;
+      try {
+        session = (await readFile(join(dir, "session"), "utf8")).trim();
+      } catch {
+        continue;
+      }
+      if (session === "" || chatDir(session) !== name || this.#hosts.has(session)) continue;
+      const found = await this.#find(session, dir).catch(() => null);
+      if (found !== null) log.info("browser", "a chat's Farview taken up", { session, pid: found.pid });
+    }
   }
 
   /// Takes up the hosts an earlier station process left running (each chat's, as it asks: `host`).
