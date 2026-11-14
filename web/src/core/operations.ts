@@ -105,6 +105,7 @@ export interface OperationParams {
   "job.stop": { id: string };
   "screen.openBrowser": { url: string; id?: string | null | undefined };
   "screen.close": { screen: string };
+  "terminal.end": { terminal: string };
   "screen.sleep": { screen: string };
   "screen.reload": { screen: string };
   "screen.back": { screen: string };
@@ -296,6 +297,7 @@ export function bindStationOperations(call: Call) {
     jobStop: <T = unknown>(params: OperationParams["job.stop"]) => call("job.stop", params) as Promise<T>,
     screenOpenBrowser: <T = unknown>(params: OperationParams["screen.openBrowser"]) => call("screen.openBrowser", params) as Promise<T>,
     screenClose: <T = unknown>(params: OperationParams["screen.close"]) => call("screen.close", params) as Promise<T>,
+    terminalEnd: <T = unknown>(params: OperationParams["terminal.end"]) => call("terminal.end", params) as Promise<T>,
     screenSleep: <T = unknown>(params: OperationParams["screen.sleep"]) => call("screen.sleep", params) as Promise<T>,
     screenReload: <T = unknown>(params: OperationParams["screen.reload"]) => call("screen.reload", params) as Promise<T>,
     screenBack: <T = unknown>(params: OperationParams["screen.back"]) => call("screen.back", params) as Promise<T>,

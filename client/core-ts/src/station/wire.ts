@@ -79,7 +79,14 @@ export interface StationWire {
   /// A view of one of the station's screens: the head line carries `screen`, and the stream
   /// stays open both ways (the station's answer, then frames each way: screen-frames.ts). Only the mesh carries one.
   screen?(station: StationAddr, head: RequestHead, screen: ScreenAsk): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
+  /// A view of one of the station's terminals: the head line carries `terminal`, and the stream stays open both ways
+  /// (the station's answer, then frames each way: terminals.ts). Only the mesh carries one.
+  terminal?(station: StationAddr, head: RequestHead, terminal: TerminalAsk): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
 }
+
+/// What a terminal view asks, as its head line's `terminal` has it (station/src/terminals/terminals.ts `asked`): its
+/// size in cells, whether it types (`control`) and takes it from whoever does (`taken`, 接管), where a new one opens.
+export type TerminalAsk = { cols: number; rows: number; control: boolean; taken?: boolean; cwd?: string; chat?: string };
 
 /// What a screen view asks for, as its head line's `screen` has it. `client`, `app`: this device's
 /// name and which app it is, for those who look at who is on the screen; `self`: its main id, by which it knows its own

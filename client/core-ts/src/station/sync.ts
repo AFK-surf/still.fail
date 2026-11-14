@@ -170,9 +170,9 @@ export class StationsSync {
   /// What a station holds beyond the records (link, live views, host, logs), as its readers see it change.
   readonly seen = new Seen();
   /// Told when what a station holds beyond the records changed, after its readers (`seen`).
-  onTouched: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
+  onTouched: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "terminals" | "logins" | "loginScreen", key?: string) => void = () => {};
 
-  onChange(address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string): void {
+  onChange(address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "terminals" | "logins" | "loginScreen", key?: string): void {
     this.seen.touch(address, what === "errors" ? "log" : what, key);
     this.onTouched(address, what, key);
     if (what === "link") {
@@ -299,6 +299,8 @@ export class StationsSync {
     // meanwhile): its screens read again whenever the stream was not there to hear them change, both once a run.
     const memory = this.#links.get(address)?.memory;
     if (how.away || how.restored || memory?.fresh("screens") !== true) this.#enqueue(address, "screens", Priority.background, this.#screens(address));
+    // Its terminals: once a run; a stream that comes back is told the list it missed (the station keeps its latest).
+    if (memory?.fresh("terminals") !== true) this.#enqueue(address, "terminals", Priority.background, this.#terminals(address));
     if (memory?.fresh(logins.HELD) !== true) this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address));
     // A part's kept data may have been written by an older core or station. A resumed stream only tells what changed
     // since its cursor; parts that need a fresh whole read ask for one after an absence.
@@ -343,6 +345,7 @@ export class StationsSync {
       ...this.#archivedChanged(address, ctx),
       this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, JOBS)),
       this.#enqueue(address, "screens", Priority.background, this.#screens(address, ctx)),
+      this.#enqueue(address, "terminals", Priority.background, this.#terminals(address, ctx)),
       this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address, ctx)),
       ...this.#usageChanged(address, ctx),
       ...this.#slackConnects(address).map((id) => this.#enqueue(address, `slackApp/${id}`, Priority.background, read({ topic: "slackApp", station: address, connect: id }, `/connects/${encode(id)}/slack-app`))),
@@ -459,6 +462,31 @@ export class StationsSync {
     if (!link) return;
     link.memory.set("screens", held);
     this.onChange(address, "screens");
+  }
+
+  /// The station's terminals as it has them now (GET /terminals), in its link's memory as its screens are. A station
+  /// from before terminals has none (404): held so, and said (`outdated`).
+  #terminals(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/terminals", null, { quiet: true, ctx }));
+      if (answer._tag === "Success") this.#heldTerminals(address, { terminals: Array.isArray(get(answer.success, "terminals")) ? (get(answer.success, "terminals") as unknown[]) : [], outdated: false });
+      else if (answer.failure.status === 404) this.#heldTerminals(address, { terminals: [], outdated: true });
+      else return yield* Effect.fail(answer.failure);
+    });
+  }
+
+  #heldTerminals(address: string, held: { terminals: unknown[]; outdated: boolean }): void {
+    const link = this.#links.get(address);
+    if (!link) return;
+    link.memory.set("terminals", held);
+    this.onChange(address, "terminals");
+  }
+
+  /// What is held of the station's terminals; undefined while it has not said.
+  terminals(address: string): { terminals: unknown[]; outdated: boolean } | undefined {
+    return this.#links.get(address)?.memory.get("terminals") as { terminals: unknown[]; outdated: boolean } | undefined;
   }
 
   /// What is held of the station's screens; undefined while it has not said. A tab this device is opening
@@ -1598,6 +1626,10 @@ export class StationsSync {
       // Its screens came or went, or who is on them changed.
       case "screens":
         this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false, ...(get(data, "browser") === true ? { browser: true } : {}) });
+        return;
+      // Its terminals came, went, or who is on them changed.
+      case "terminals":
+        this.#heldTerminals(address, { terminals: Array.isArray(get(data, "terminals")) ? (get(data, "terminals") as unknown[]) : [], outdated: false });
         return;
       // A login of the station's.
       case "machine-logins": {

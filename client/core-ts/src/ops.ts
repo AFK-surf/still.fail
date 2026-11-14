@@ -170,6 +170,7 @@ export const PARAMS: Record<string, string> = {
   "job.stop": "id:string",
   "screen.openBrowser": "url:string id?:string",
   "screen.close": "screen:string",
+  "terminal.end": "terminal:string",
   "screen.sleep": "screen:string",
   "screen.reload": "screen:string",
   "screen.back": "screen:string",
@@ -643,6 +644,9 @@ function stationOp(name: string, params: unknown): Request | null {
     // the station tells it (`screens` on its stream).
     case "screen.close":
       return op("POST", () => `/screens/${p.at("screen")}/close`, null, NONE);
+    // A terminal ended, its program and what it started (station/src/terminals/): it leaves the list as it goes.
+    case "terminal.end":
+      return op("POST", () => `/terminals/${p.at("terminal")}/end`, null, NONE);
     case "screen.sleep":
       return op("POST", () => `/screens/${p.at("screen")}/sleep`, null, NONE);
     case "screen.reload":

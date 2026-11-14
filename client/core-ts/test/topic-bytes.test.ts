@@ -105,6 +105,7 @@ const NOT_MEASURED: Record<string, string> = {
   adbCard: "four fields, its line a word of the core's or the phone's message (adb.ts card)", releases: "one number (core.ts `told`)",
   fonts: "the fonts of a fixed catalogue, by id (font-files.ts, fonts.ids, SHARE_LOOKS_FILES)", drivePlace: "three fields (DrivePlace)",
   filesTabs: "twelve tabs at most, each of one or two panes (drive-browse.ts MOST_TABS)",
+  terminals: "sixteen terminals a station at most, each a few fields and the names on it (station/src/terminals/terminals.ts MOST)",
   previewLoad: "200 rows at most, past it only while those that load have not finished (preview-load.ts)",
   accounts: UNBOUNDED, workspaces: UNBOUNDED, loginSessions: UNBOUNDED, status: UNBOUNDED, connection: UNBOUNDED, draft: UNBOUNDED, composer: UNBOUNDED,
   notify: UNBOUNDED, prefs: UNBOUNDED, doing: UNBOUNDED, adbShare: UNBOUNDED, rigs: UNBOUNDED, downloads: UNBOUNDED, driveTransfers: UNBOUNDED, lockPrompts: UNBOUNDED,

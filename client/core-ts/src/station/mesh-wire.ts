@@ -19,7 +19,7 @@ import { route } from "../route.ts";
 import { utf8 } from "../util.ts";
 import type { StationAddr } from "./addr.ts";
 import { IDEMPOTENCY_KEY, IDEMPOTENT, READS } from "./requests.ts";
-import type { LinkNet, RequestHead, ScreenAsk, StationWire, WireReply, WireSocket } from "./wire.ts";
+import type { LinkNet, RequestHead, ScreenAsk, StationWire, TerminalAsk, WireReply, WireSocket } from "./wire.ts";
 import { RECHECKING } from "./words.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -245,6 +245,17 @@ export class MeshWire implements StationWire {
       const [reply, send] = yield* link.duplex(head, { screen: { ...screen, ...(screen.audio && mesh.decodesOpus() ? { opus: true } : {}), self: mesh.deviceId() } });
       yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send, tap: reply.tap };
+    });
+  }
+  terminal(station: StationAddr, head: RequestHead, terminal: TerminalAsk): Effect.Effect<WireSocket, CoreError, import("effect").Scope.Scope> {
+    const env = this.#env;
+    return Effect.gen(function* () {
+      const status = env.status(station.workspace);
+      const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
+      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace), env.off?.(station.workspace), "terminal"));
+      const [reply, send] = yield* link.duplex(head, { terminal });
+      yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
+      return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
     });
   }
 }
