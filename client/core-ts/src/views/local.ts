@@ -4,6 +4,8 @@
 // (tables outbox, pending, first, changing: written again on their own if the rest could not be), so it shows at once,
 // survives a restart, and goes on where it was; the views lay it over what the stations hold. Nothing here waits on
 // the network: the calls that change it answer as their station has it, the views show it meanwhile.
+// At most 32 confirmed restores also stay as quiet guards against older removal events arriving late; they have no
+// overlay, are reconciled by their own chat on a tell or reconnect, and are discarded as newer guards take their place.
 import type { Data } from "../data.ts";
 import { join, SEP } from "../data.ts";
 import type { AccountDb } from "../db/account.ts";
@@ -62,6 +64,8 @@ export type Change = {
   archived: boolean | null;
   /// The last listed row, while an undo waits for its station to list it again.
   restore?: J;
+  /// Confirmed present: the overlay is quiet, but a late removal still needs checking against the station.
+  restoreGuard?: boolean;
   /// Done: how often its station's rows had changed when it answered (`undefined`: not answered); shown so until they
   /// change again.
   done?: { rev: number };
@@ -680,7 +684,7 @@ export class Local {
   /// a list's rows made before are then as they would be made again (views.ts keptBetween).
   rowsQuiet(station: string): boolean {
     this.#seen.changing.read(station);
-    return !this.#changing.some((c) => c.station === station);
+    return !this.#changing.some((c) => c.station === station && !c.restoreGuard);
   }
 
   beingArchived(station: string, row: J): boolean {
@@ -723,8 +727,8 @@ export class Local {
     this.#changed({ kind: "changing", station: change.station });
   }
 
-  /// Lets go of what is done that its station's rows have had since (they changed after it answered). A restore's
-  /// saved row stays until the station lists that chat, even if an unrelated row changed in the meantime.
+  /// Lets go of what is done that its station's rows have had since. A restore with a saved row is settled separately
+  /// by a scoped station read, never by an unrelated row's revision.
   settle(station: string, rev: number): void {
     for (let i = this.#lettingGo.length - 1; i >= 0; i--) {
       const l = this.#lettingGo[i];
@@ -736,17 +740,73 @@ export class Local {
       const listed = c.archived === null ? undefined : c.thread === null
         ? this.#data.chatOfSession(station, c.session)
         : this.#data.chatOfThread(station, c.thread);
-      if (c.done.rev !== rev && (c.archived !== false || listed !== undefined)) {
+      if (c.done.rev !== rev && (c.archived !== false || (c.restore === undefined && listed !== undefined))) {
         this.#changing.splice(i, 1);
         this.#data.putLocal(CHANGING, c.station, String(c.id), undefined);
       }
     }
   }
 
+  /// Completed restores still waiting for the station's list, reconciled by their own keys on a tell or reconnect.
+  restores(station: string): readonly Change[] {
+    return this.#changing.filter((c) => c.station === station && c.archived === false && c.done !== undefined && c.restore !== undefined);
+  }
+
+  /// A tell of a confirmed restore may be an older event still in flight: keep its row until the station is read.
+  activateRestoreGuards(station: string, match: { session?: string; thread?: number; row?: string }): void {
+    let changed = false;
+    for (const c of this.#changing) {
+      if (c.station !== station || !c.restoreGuard) continue;
+      if (match.session !== undefined && c.session !== match.session) continue;
+      if (match.thread !== undefined && c.thread !== match.thread) continue;
+      if (match.row !== undefined && get(c.restore, "id") !== match.row) continue;
+      c.restoreGuard = false;
+      this.#data.putLocal(CHANGING, station, String(c.id), c);
+      changed = true;
+    }
+    if (changed) this.#changed({ kind: "changing", station });
+  }
+
+  /// A read confirms this chat is visible. Keep only a quiet, bounded guard for a delayed older removal.
+  guardRestore(station: string, id: number): void {
+    const c = this.#changing.find((x) => x.station === station && x.id === id && x.archived === false && x.done !== undefined);
+    if (!c) return;
+    if (c.restoreGuard) return;
+    this.#dropOlderArchives(c);
+    c.restoreGuard = true;
+    this.#data.putLocal(CHANGING, station, String(id), c);
+    const guards = this.#changing.filter((x) => x.restoreGuard);
+    while (guards.length > 32) {
+      const old = guards.shift()!;
+      this.#changing.splice(this.#changing.indexOf(old), 1);
+      this.#data.putLocal(CHANGING, old.station, String(old.id), undefined);
+    }
+    this.#changed({ kind: "changing", station });
+  }
+
+  #dropOlderArchives(current: Change): void {
+    for (let i = this.#changing.length - 1; i >= 0; i--) {
+      const c = this.#changing[i];
+      if (c.id >= current.id || c.done === undefined || c.archived === null || !Local.#matches(c, current.station, current.thread, current.session)) continue;
+      this.#changing.splice(i, 1);
+      this.#data.putLocal(CHANGING, c.station, String(c.id), undefined);
+    }
+  }
+
+  /// Let one completed restore go once its station confirms it; a later local action stays in place.
+  restoreSettled(station: string, id: number): void {
+    const current = this.#changing.find((c) => c.station === station && c.id === id && c.archived === false && c.done !== undefined);
+    if (!current) return;
+    this.#dropOlderArchives(current);
+    this.#changing.splice(this.#changing.indexOf(current), 1);
+    this.#data.putLocal(CHANGING, station, String(id), undefined);
+    this.#changed({ kind: "changing", station });
+  }
+
   /// Whether any change of a station's is done and waits for its rows to have it.
   settling(station: string): boolean {
     this.#seen.changing.read(station);
-    return this.#changing.some((c) => c.station === station && c.done !== undefined);
+    return this.#changing.some((c) => c.station === station && c.done !== undefined && !c.restoreGuard);
   }
 
   static #matches(c: Change, station: string, thread: number | null, session: string | null): boolean {
@@ -760,7 +820,7 @@ export class Local {
     const session = typeof get(row, "session") === "string" ? row.session : null;
     let out = row;
     for (const c of this.#changing) {
-      if (!Local.#matches(c, station, thread, session)) continue;
+      if (c.restoreGuard || !Local.#matches(c, station, thread, session)) continue;
       if (out === row) out = { ...row };
       Object.assign(out, c.row);
     }
@@ -772,7 +832,7 @@ export class Local {
     this.#seen.changing.read(station);
     for (let i = this.#changing.length - 1; i >= 0; i--) {
       const c = this.#changing[i];
-      if (Local.#matches(c, station, thread, session) && c.archived !== null) return c.archived;
+      if (!c.restoreGuard && Local.#matches(c, station, thread, session) && c.archived !== null) return c.archived;
     }
     return null;
   }
@@ -788,7 +848,7 @@ export class Local {
     this.#seen.changing.read(station);
     const rows = new Map<string, J>();
     for (const c of this.#changing) {
-      if (c.station !== station || c.archived !== false || c.restore === undefined ||
+      if (c.station !== station || c.restoreGuard || c.archived !== false || c.restore === undefined ||
           this.archivedChanging(station, c.thread, c.session) !== false) continue;
       rows.set(c.thread === null ? `s:${c.session}` : `t:${c.thread}`, c.restore);
     }
@@ -808,7 +868,7 @@ export class Local {
       if (thread !== null) threads.push(thread);
       else if (session !== null) sessions.push(session);
     };
-    for (const c of this.#changing) if (c.station === station) add(c.thread, c.session);
+    for (const c of this.#changing) if (c.station === station && !c.restoreGuard) add(c.thread, c.session);
     for (const [key, chat] of this.#pending) {
       if (chat.station !== station || !chat.made) continue;
       sessions.push(chat.made[0], key);

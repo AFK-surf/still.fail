@@ -104,6 +104,7 @@ export class ViewCalls {
       const change = this.#local.changing(station, thread, session, {}, false);
       const result = yield* Effect.result(this.#archiveInOrder(station, thread, session, this.#inner.stations.perform(op, ctx)));
       this.#local.changed(change, result._tag === "Success", this.#inner.data.rowsRev(station));
+      if (result._tag === "Success") this.#inner.stations.checkRestores(station, { change });
       return yield* settle(result);
     });
   }
@@ -409,6 +410,7 @@ export class ViewCalls {
         const change = local.changing(station, c.thread, c.session, {}, c.archived);
         const result = yield* Effect.result(self.#archiveInOrder(station, c.thread, c.session, handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx)));
         local.changed(change, result._tag === "Success", inner.data.rowsRev(station));
+        if (!c.archived && result._tag === "Success") inner.stations.checkRestores(station, { change });
         return yield* settle(result);
       });
     };

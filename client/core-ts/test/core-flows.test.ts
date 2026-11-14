@@ -16,6 +16,7 @@ import { Core } from "../src/core.ts";
 const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { SOCKET_RETRY_MS } from "../src/sync/cloud.ts";
+import { READ_RETRY_MS } from "../src/station/sync.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
 import { base, chatsOf, entry, overview, session, started, stationHost, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
@@ -2624,7 +2625,11 @@ test("undo holds the row while a station's shared-list events catch up", async (
   });
   const rows = [shared("k1", 7, 8), shared("k2", 8, 7)];
   const { host, core, push } = await started({ ...base(), "GET /chats?shared=1": rows }, 0, undefined, (s) => { s.gate.shared = true; });
-  stationReplies(host, (req) => req.url.endsWith("/threads/7/archive") ? { ok: true } : undefined);
+  stationReplies(host, (req) => {
+    if (req.url.endsWith("/threads/7/archive")) return { ok: true };
+    if (req.url.includes("/chats?shared=1&session=k1")) return { rows: [rows[0]], scope: ["k1"] };
+    return undefined;
+  });
   const ui = core.connect();
   const values = new Map();
   subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
@@ -2660,7 +2665,259 @@ test("undo holds the row while a station's shared-list events catch up", async (
   await host.settle();
   answersOf(host, values);
   assert.deepEqual(ids(), ["k1", "k2"]);
+  assert.equal(core.inner.views.local.rowsQuiet("ws/st"), true);
   core.close();
+});
+
+test("a restored chat removed again before it is listed does not remain in the list", async () => {
+  const shared = (id: string, thread: number, at: number) => ({
+    id, session: id, thread, agents: [{ key: id, runtime: "claude" }], lastActiveAt: at, ws: null,
+    named: { thread: { surface: "ember", title: id }, firstText: null, channelName: null }, mineOf: [], said: null,
+  });
+  const rows = [shared("k1", 7, 8), shared("k2", 8, 7)];
+  const { host, core, push } = await started({ ...base(), "GET /chats?shared=1": rows }, 0, undefined, (s) => { s.gate.shared = true; });
+  let visible = true;
+  stationReplies(host, (req) => {
+    if (req.url.endsWith("/threads/7/archive")) return { ok: true };
+    if (req.url.includes("/chats?shared=1&session=k1")) return { rows: visible ? [rows[0]] : [], scope: ["k1"] };
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  answersOf(host, values);
+  const ids = () => v(values, 1).days.flatMap((d: J) => d.items.map((i: J) => i.id));
+  call(core, ui, 2, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: true });
+  await host.settle();
+  push("chat-shared-removed", { id: "k1" });
+  await host.settle();
+  answersOf(host, values);
+  assert.deepEqual(ids(), ["k2"]);
+  call(core, ui, 3, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: false });
+  await host.settle();
+  answersOf(host, values);
+  assert.deepEqual(ids(), ["k1", "k2"]);
+  visible = false;
+  push("chat-shared-removed", { id: "k1" });
+  push("chat-shared", { ...rows[1], named: { ...rows[1].named, thread: { surface: "ember", title: "k2 changed" } } });
+  await host.settle();
+  answersOf(host, values);
+  assert.deepEqual(ids(), ["k2"]);
+  assert.equal(core.inner.views.local.rowsQuiet("ws/st"), true);
+  core.close();
+});
+
+test("a late removal from the original archive does not end a completed undo", async () => {
+  const row = {
+    id: "k1", session: "k1", thread: 7, agents: [{ key: "k1", runtime: "claude" }], lastActiveAt: 8, ws: null,
+    named: { thread: { surface: "ember", title: "k1" }, firstText: null, channelName: null }, mineOf: [], said: null,
+  };
+  const { host, core, push } = await started({ ...base(), "GET /chats?shared=1": [row] }, 0, undefined, (s) => { s.gate.shared = true; });
+  stationReplies(host, (req) => {
+    if (req.url.endsWith("/threads/7/archive")) return { ok: true };
+    if (req.url.includes("/chats?shared=1&session=k1")) return { rows: [row], scope: ["k1"] };
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  answersOf(host, values);
+  const ids = () => v(values, 1).days.flatMap((d: J) => d.items.map((i: J) => i.id));
+  call(core, ui, 2, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: true });
+  await host.settle();
+  call(core, ui, 3, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: false });
+  await host.settle();
+  answersOf(host, values);
+  assert.deepEqual(ids(), ["k1"]);
+  push("chat-shared-removed", { id: "k1" });
+  await host.settle();
+  answersOf(host, values);
+  assert.deepEqual(ids(), ["k1"], "the first, delayed removal is from the archive, not proof the restore was reversed");
+  push("chat-shared", row);
+  await host.settle();
+  answersOf(host, values);
+  assert.deepEqual(ids(), ["k1"]);
+  core.close();
+});
+
+test("a rearchive coalesced before the shared list can tell it settles the restore", async () => {
+  const row = {
+    id: "k1", session: "k1", thread: 7, agents: [{ key: "k1", runtime: "claude" }], lastActiveAt: 8, ws: null,
+    named: { thread: { surface: "ember", title: "k1" }, firstText: null, channelName: null }, mineOf: [], said: null,
+  };
+  const { host, core, push } = await started({ ...base(), "GET /chats?shared=1": [row] }, 0, undefined, (s) => { s.gate.shared = true; });
+  let visible = true;
+  stationReplies(host, (req) => {
+    if (req.url.endsWith("/threads/7/archive")) return { ok: true };
+    if (req.url.includes("/chats?shared=1&session=k1")) return { rows: visible ? [row] : [], scope: ["k1"] };
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  call(core, ui, 2, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: true });
+  await host.settle();
+  push("chat-shared-removed", { id: "k1" });
+  await host.settle();
+  call(core, ui, 3, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: false });
+  await host.settle();
+  answersOf(host, values);
+  assert.equal(v(values, 1).days.flatMap((d: J) => d.items).length, 1);
+  // The station did not tell a shared removal: it coalesced restore and rearchive while the row was already absent.
+  visible = false;
+  push("chat-changed", { thread: 7 });
+  await host.settle();
+  answersOf(host, values);
+  assert.equal(v(values, 1).days.flatMap((d: J) => d.items).length, 0);
+  assert.equal(core.inner.views.local.rowsQuiet("ws/st"), true);
+  core.close();
+});
+
+test("an unrelated row cannot settle an undo before a delayed archive removal", async () => {
+  const shared = (id: string, thread: number) => ({
+    id, session: id, thread, agents: [{ key: id, runtime: "claude" }], lastActiveAt: 8, ws: null,
+    named: { thread: { surface: "ember", title: id }, firstText: null, channelName: null }, mineOf: [], said: null,
+  });
+  const row = shared("k1", 7);
+  const other = shared("k2", 8);
+  const { host, core, push } = await started({ ...base(), "GET /chats?shared=1": [row, other] }, 0, undefined, (s) => { s.gate.shared = true; });
+  stationReplies(host, (req) => {
+    if (req.url.endsWith("/threads/7/archive")) return { ok: true };
+    if (req.url.includes("/chats?shared=1&session=k1")) return { rows: [row], scope: ["k1"] };
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  call(core, ui, 2, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: true });
+  await host.settle();
+  call(core, ui, 3, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: false });
+  await host.settle();
+  answersOf(host, values);
+  assert.equal(core.inner.views.local.rowsQuiet("ws/st"), true, "coalesced archive and restore leave no active overlay");
+  push("chat-shared", { ...other, lastActiveAt: 9 });
+  await host.settle();
+  answersOf(host, values);
+  push("chat-shared-removed", { id: "k1" });
+  await host.settle();
+  answersOf(host, values);
+  assert.ok(v(values, 1).days.flatMap((d: J) => d.items).some((r: J) => r.id === "k1"));
+  push("chat-shared", row);
+  await host.settle();
+  core.close();
+});
+
+test("a newer tell wins over a restore read already on its way", async () => {
+  const row = {
+    id: "k1", session: "k1", thread: 7, agents: [{ key: "k1", runtime: "claude" }], lastActiveAt: 8, ws: null,
+    named: { thread: { surface: "ember", title: "k1" }, firstText: null, channelName: null }, mineOf: [], said: null,
+  };
+  const { host, core, push } = await started({ ...base(), "GET /chats?shared=1": [row] }, 0, undefined, (s) => { s.gate.shared = true; });
+  let visible = true;
+  stationReplies(host, (req) => {
+    if (req.url.endsWith("/threads/7/archive")) return { ok: true };
+    if (req.url.includes("/chats?shared=1&session=k1")) return { rows: visible ? [row] : [], scope: ["k1"] };
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  call(core, ui, 2, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: true });
+  await host.settle();
+  push("chat-shared-removed", { id: "k1" });
+  await host.settle();
+  const release = host.hold("/chats?shared=1&session=k1&thread=7");
+  call(core, ui, 3, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: false });
+  await host.settle();
+  visible = false;
+  push("chat-changed", { thread: 7 });
+  await host.settle();
+  release();
+  await host.settle();
+  answersOf(host, values);
+  assert.equal(v(values, 1).days.flatMap((d: J) => d.items).length, 0);
+  assert.equal(core.inner.views.local.rowsQuiet("ws/st"), true);
+  core.close();
+});
+
+test("a failed restore reconciliation is retried after the station answers with an error", async () => {
+  const row = {
+    id: "k1", session: "k1", thread: 7, agents: [{ key: "k1", runtime: "claude" }], lastActiveAt: 8, ws: null,
+    named: { thread: { surface: "ember", title: "k1" }, firstText: null, channelName: null }, mineOf: [], said: null,
+  };
+  const { host, core, push } = await started({ ...base(), "GET /chats?shared=1": [row] }, 0, undefined, (s) => { s.gate.shared = true; });
+  let visible = true;
+  let fail = false;
+  stationReplies(host, (req) => {
+    if (req.url.endsWith("/threads/7/archive")) return { ok: true };
+    if (req.url.includes("/chats?shared=1&session=k1")) {
+      if (fail) { fail = false; return status(500, { error: "busy" }); }
+      return { rows: visible ? [row] : [], scope: ["k1"] };
+    }
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  call(core, ui, 2, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: true });
+  await host.settle();
+  call(core, ui, 3, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: false });
+  await host.settle();
+  visible = false;
+  fail = true;
+  push("chat-changed", { thread: 7 });
+  await host.settle();
+  answersOf(host, values);
+  assert.equal(v(values, 1).days.flatMap((d: J) => d.items).length, 1);
+  await host.time.pass(READ_RETRY_MS);
+  await host.settle();
+  answersOf(host, values);
+  assert.equal(v(values, 1).days.flatMap((d: J) => d.items).length, 0);
+  assert.equal(core.inner.views.local.rowsQuiet("ws/st"), true);
+  core.close();
+});
+
+test("a confirmed restore is reconciled after restart when it was archived elsewhere", async () => {
+  const row = {
+    id: "k1", session: "k1", thread: 7, agents: [{ key: "k1", runtime: "claude" }], lastActiveAt: 8, ws: null,
+    named: { thread: { surface: "ember", title: "k1" }, firstText: null, channelName: null }, mineOf: [], said: null,
+  };
+  const { host, core } = await started({ ...base(), "GET /chats?shared=1": [row] }, 0, undefined, (s) => { s.gate.shared = true; });
+  let visible = true;
+  stationReplies(host, (req) => {
+    if (req.url.endsWith("/threads/7/archive")) return { ok: true };
+    if (req.url.includes("/chats?") && req.url.includes("session=k1")) return { rows: visible ? [row] : [], scope: ["k1"] };
+    if (req.url.endsWith("/chats?shared=1")) return visible ? [row] : [];
+    return undefined;
+  });
+  let ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  call(core, ui, 2, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: true });
+  await host.settle();
+  call(core, ui, 3, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: false });
+  await host.settle();
+  assert.equal(core.inner.views.local.rowsQuiet("ws/st"), true);
+  await run(core.inner.data.written);
+  core.close();
+  visible = false;
+  host.takeEmitted();
+  const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  await host.time.pass(500);
+  ui = again.connect();
+  const values = new Map();
+  subscribe(again, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  answersOf(host, values);
+  assert.equal(v(values, 1).days.flatMap((d: J) => d.items).length, 0);
+  assert.equal(again.inner.views.local.rowsQuiet("ws/st"), true);
+  again.close();
 });
 
 test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_restored_or_deleted_leaves_it", async () => {

@@ -156,6 +156,8 @@ export class StationsSync {
   readonly #links: Links;
   /// What their streams told while a read was out, to tell again on top of what it brings.
   readonly #retold = new Retold();
+  /// Tells of a row while its post-restore read is out invalidate that answer.
+  readonly #restoreVersions = new Map<string, number>();
   /// The transcripts of the histories shown whose reads failed, how many times in a row.
   readonly #transcriptMisses = new Map<string, number>();
   readonly #transcriptAgain = new Set<string>();
@@ -288,6 +290,7 @@ export class StationsSync {
   /// hang on all of it having been told). Taken up from where a core before this one was, the station's history is
   /// swept as a reading of everything would.
   #goesOn(address: string, how: { away: boolean; restored: boolean }): void {
+    if (how.away || how.restored) this.checkRestores(address);
     if (how.away || how.restored) this.#catchingFrom(address);
     if (how.away) this.#catchUpShown(address);
     // Its screens and its logins are held in its link's memory, not its log of events (what was kept of them shows
@@ -317,6 +320,7 @@ export class StationsSync {
       this.#core.data.forgetRecord("heard", address);
     }
     this.#catchingFrom(address);
+    this.checkRestores(address);
     const unread = () => link?.cursor.unread();
     const read = (topic: Topic, path: string) => this.#read(address, topic, path, undefined, ctx, 0, unread);
     // The chats a UI has open, first: what was said in them after what is held, in the room kept for what is open. The
@@ -1461,6 +1465,27 @@ export class StationsSync {
     if (data === undefined) return;
     const core = this.#core;
     if (SEARCHED.has(name)) this.#searchStale(address);
+    // An archive and restore can be coalesced: there may be no second removal in the shared-row stream.
+    if (name === "session" || name === "session-removed") {
+      const session = str(get(data, "key"));
+      if (session !== null) {
+        const couldRemove = name === "session-removed" || get(data, "archivedAt") != null;
+        if (couldRemove) core.views.local.activateRestoreGuards(address, { session });
+        this.checkRestores(address, { session, waitingOnly: !couldRemove });
+      }
+    } else if (name === "chat-changed" || name === "thread-removed") {
+      const thread = u64(get(data, name === "chat-changed" ? "thread" : "id"));
+      if (thread !== null) {
+        core.views.local.activateRestoreGuards(address, { thread });
+        this.checkRestores(address, { thread });
+      }
+    } else if (name === "chat-shared" || name === "chat-shared-removed") {
+      const row = str(get(data, "id"));
+      if (row !== null) {
+        if (name === "chat-shared-removed") core.views.local.activateRestoreGuards(address, { row });
+        this.checkRestores(address, { row, waitingOnly: name === "chat-shared" });
+      }
+    }
     if (RETOLD.has(name)) {
       this.#retold.told(address, name, data);
       this.#held(address, name, data);
@@ -1814,6 +1839,63 @@ export class StationsSync {
   /// (GET /chats?marks=1).
   #chats(address: string, ctx: SpanContext | null = null, unread?: () => void): Effect.Effect<void, CoreError> {
     return this.#marksWhole(address, ctx, unread);
+  }
+
+  /// Reconcile a completed optimistic restore when it answers, its own chat changes, or the stream reconnects. The
+  /// station's scoped read is bounded to that chat. A tell during the read queues a new one and invalidates its answer.
+  checkRestores(address: string, match: { change?: number; session?: string; thread?: number; row?: string; waitingOnly?: boolean } = {}, attempt = 0): void {
+    const link = this.#links.get(address);
+    if (!link || !this.reachable(address)) return;
+    for (const c of this.#core.views.local.restores(address)) {
+      if (match.change !== undefined && c.id !== match.change) continue;
+      if (match.session !== undefined && c.session !== match.session) continue;
+      if (match.thread !== undefined && c.thread !== match.thread) continue;
+      if (match.row !== undefined && get(c.restore, "id") !== match.row) continue;
+      const key = join([address, String(c.id)]);
+      if (match.waitingOnly && c.restoreGuard && !this.#restoreVersions.has(key)) continue;
+      this.#restoreVersions.set(key, (this.#restoreVersions.get(key) ?? 0) + 1);
+      this.#enqueue(address, `restore/${c.id}`, Priority.shown, Effect.gen({ self: this }, function* () {
+        const current = this.#core.views.local.restores(address).find((r) => r.id === c.id);
+        const l = this.#links.get(address);
+        if (!current || !l || !this.reachable(address)) { this.#restoreVersions.delete(key); return; }
+        const version = this.#restoreVersions.get(key);
+        const query = `session=${encode(current.session)}${current.thread === null ? "" : `&thread=${current.thread}`}`;
+        const answer = yield* Effect.result(this.requests.call(l.addr, "GET", `/chats?${l.shared ? "shared=1&" : ""}${query}`, null, { quiet: true }));
+        if (this.#restoreVersions.get(key) !== version) return;
+        if (this.#links.get(address) !== l) { this.#restoreVersions.delete(key); return; }
+        this.#restoreVersions.delete(key);
+        if (answer._tag === "Failure") {
+          if ((answer.failure.status === undefined || answer.failure.status >= 500) && attempt < READ_RETRIES) {
+            // timer: retry after a failed read, bounded and cancelled with the link.
+            const again = Effect.sleep(READ_RETRY_MS * 2 ** attempt).pipe(
+              Effect.andThen(Effect.sync(() => this.checkRestores(address, { change: c.id }, attempt + 1))),
+            );
+            this.#core.runner.fork(again, l.scoped);
+          }
+          return;
+        }
+        if (!Array.isArray(get(answer.success, "rows"))) return;
+        const rowId = str(get(current.restore, "id"));
+        if (rowId === null) return;
+        if (!this.#core.views.local.restores(address).some((r) => r.id === current.id)) return;
+        const present = arr(get(answer.success, "rows")).some((row) => str(get(row, "id")) === rowId);
+        if (present) {
+          // If the row is not held yet, keep the optimistic copy until its shared-row tell arrives. If it is held,
+          // the station has confirmed it: leave a quiet guard for an older removal still on its way.
+          if (l.shared && !l.sharedRows?.has(rowId)) return;
+          if (l.shared) this.#made(address, { ids: [rowId] });
+          const listed = current.thread === null ? this.#core.data.chatOfSession(address, current.session) : this.#core.data.chatOfThread(address, current.thread);
+          if (listed !== undefined) this.#core.views.local.guardRestore(address, current.id);
+          return;
+        }
+        // A full shared-list read may have started before this scoped answer: replay this removal over its result.
+        if (l.shared) this.#retold.told(address, "chat-shared-removed", { id: rowId });
+        if (l.sharedRows?.has(rowId)) this.#sharedPut(l, rowId, undefined);
+        l.rows.rows.delete(rowId);
+        this.#core.data.dropChat(address, rowId);
+        this.#core.views.local.restoreSettled(address, current.id);
+      }));
+    }
   }
 
   /// The chat list as the station makes it for everyone (GET /chats?shared=1), what the viewer sees of it; the sidebar
