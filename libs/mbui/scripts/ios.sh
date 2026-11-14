@@ -29,7 +29,10 @@
 #     plist the app is signed with), and the functions app_libs (before the link: what APP_LINK names made),
 #     app_bundle (after the link: into $APPDIR, as frameworks in $APPDIR/Frameworks, signed with it) and app_cmd
 #     (commands of its own)
-set -e
+set -eE
+# A step that fails says which (a release's TestFlight build stopped with nothing said after its core's libraries,
+# 0.1.0 (69), 2026-11-15: set -e leaves a failed plutil, link or copy unsaid)
+trap 'echo "ios.sh: line $LINENO: \`$BASH_COMMAND\` failed ($?)" >&2' ERR
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 ROOT=$(cd "$D/.." && pwd)
