@@ -219,10 +219,18 @@ fn notify_block_node(
         fn(sec) {
           @sf.way_tiles_node(sec, fn(r) {
             let permission = fn() { text(notify(), "permission") }
-            // a banner: the system's word asked first, or its settings opened where it refused
+            // a banner: the system's word asked first, or its settings opened where it refused (a browser's, where
+            // to allow it said: a page opens none)
             let action = fn() {
               match permission() {
-                "denied" => @sf.t("web-pages.notifications.enable.open")
+                "denied" =>
+                  @sf.t(
+                    if @ui.platform() == 4 {
+                      "web-pages.notifications.enable.browser"
+                    } else {
+                      "web-pages.notifications.enable.open"
+                    },
+                  )
                 "default" => @sf.t("web-pages.notifications.enable.allow")
                 _ => ""
               }
@@ -239,7 +247,7 @@ fn notify_block_node(
               fn() {
                 if !@signals.untracked(pending) {
                   match @signals.untracked(permission) {
-                    "denied" => @ui.notice_settings() |> ignore
+                    "denied" => notice_settings_or_say(core)
                     "default" => (core.notify_ask)()
                     _ => use_notify(core, !@signals.untracked(on))
                   }

@@ -367,6 +367,72 @@ test "the system told what it allows; asked once when it never was, with notific
 }
 
 ///|
+test "a browser's word, never answered (\"default\"): told as it is though asked; its prompt put away, told so again and no toast; Android's \"ask\" refused, denied" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  sys.permission = "default"
+  let t = notify_core(calls, sys, notify=@signals.signal({ "on": true, "asked": true, "push": true, "show": [] }))
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), 1)
+  assert_eq(told[0].params, { "state": "default" })
+  // (asked already: not asked again as the app starts)
+  assert_eq(sys.asks, 0)
+  // asked from settings' switch, the prompt put away: it can be asked again, no toast of the system's settings
+  let toast = app.toast.get().words
+  notice_state.from_switch = true
+  sys.answer.set(Some(false))
+  t.frame()
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), 2)
+  assert_eq(told[1].params, { "state": "default" })
+  assert_eq(app.toast.get().words, toast)
+  // Android's: "ask" right after a refusal is refused, and a toast says where to allow them
+  sys.permission = "ask"
+  notice_state.from_switch = true
+  sys.answer.set(Some(false))
+  t.frame()
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), 3)
+  assert_eq(told[2].params, { "state": "denied" })
+  assert_eq(app.toast.get().words, "在系统设置里允许 still.fail 发通知")
+}
+
+///|
+test "a browser's word through the host (@ui's): \"default\" told as it is; asked and the prompt put away, still \"default\"; refused on Android, denied" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let t = notify_core(calls, sys, notify=@signals.signal({ "on": true, "asked": true, "push": true, "show": [] }))
+  // (the Tester's own host from here: what the system it plays says, as a device's would)
+  notice_host.val = host_notices()
+  t.set_notice_permission("default")
+  t.set_notice_reply(Some(false))
+  t.app_state(false, false)
+  t.app_state(true, true)
+  let told = named(calls, "notify.permission")
+  assert_eq(told[told.length() - 1].params, { "state": "default" })
+  let toast = app.toast.get().words
+  let n = told.length()
+  notice_state.from_switch = (notice_host.val.ask)()
+  assert_true(notice_state.from_switch)
+  t.frame()
+  t.frame()
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), n + 1)
+  assert_eq(told[n].params, { "state": "default" })
+  assert_eq(app.toast.get().words, toast)
+  assert_eq(@ui.notice_permission(), "default")
+  // Android's never asked, refused: denied, the toast saying where
+  t.set_notice_permission("ask")
+  notice_state.from_switch = (notice_host.val.ask)()
+  t.frame()
+  t.frame()
+  let told = named(calls, "notify.permission")
+  assert_eq(told.length(), n + 2)
+  assert_eq(told[n + 1].params, { "state": "denied" })
+  assert_eq(app.toast.get().words, "在系统设置里允许 still.fail 发通知")
+}
+
+///|
 test "what the system allows told at the moment the core's notify is answered, and as the app is shown again, no frame waited for" {
   let calls : Array[Made] = []
   let sys = fake_system()

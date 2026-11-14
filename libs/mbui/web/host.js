@@ -198,11 +198,13 @@
     } catch (e) { H.log('NOTICE ' + tag + '\t' + title + '\t' + body); }
   };
   H.noticeCancel = (tag) => { notices.get(tag)?.close(); notices.delete(tag); };
-  // 0 what the browser lets the page show (1 granted, 2 denied, 3 not asked); 1 ask (1: asked); 2 the answer (1 yes, 0
-  // no, -1 none yet); 3 its settings (none a page opens); 4 a badge on the app's icon (none)
+  // 0 what the browser lets the page show (1 granted, 2 denied, 4 default: never answered, and its prompt shown each
+  // time it is asked, a prompt put away leaving it so: hostapi's "default", never "ask", which the app must remember
+  // having asked); 1 ask (1: asked); 2 the answer (1 yes, 0 no or put away, -1 none yet); 3 its settings (none a page
+  // opens); 4 a badge on the app's icon (none)
   H.noticeState = (what) => {
     if (!canNotify()) return what === 2 ? -1 : 0;
-    if (what === 0) return Notification.permission === 'granted' ? 1 : Notification.permission === 'denied' ? 2 : 3;
+    if (what === 0) return Notification.permission === 'granted' ? 1 : Notification.permission === 'denied' ? 2 : 4;
     if (what === 1) {
       if (Notification.permission !== 'default') return 0;
       noticeAnswer = -1;

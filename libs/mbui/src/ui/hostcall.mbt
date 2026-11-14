@@ -204,8 +204,9 @@ struct FakeHost {
   mut hold_words : (String, String, String)?
   /// how the app over another app was ended (@ui.over_done), each time: whether on into the app
   overs_done : Array[Bool]
-  /// what the system lets the app show ("granted", "denied", "ask", "unknown": Tester::set_notice_permission), what
-  /// the person answers when asked (None: never), how often the app asked, and the answer due: from the frame after it
+  /// what the system lets the app show ("granted", "denied", "ask", "default", "unknown": Tester::set_notice_permission),
+  /// what the person answers when asked (None: never), how often the app asked, and the answer due: from the frame after
+  /// it
   mut notice_perm : String
   mut notice_reply : Bool?
   mut notice_asks : Int
