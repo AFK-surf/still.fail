@@ -166,10 +166,11 @@ const CONTEXT = ["context window", "context_window", "context length", "context_
 const NETWORK = /stream disconnected|error sending request|connection (?:reset|refused|closed|error|failed)|network error|timed out|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up|fetch failed|dns error|tls handshake/i;
 
 /// The model whose own allowance a limit was, as the runtime named it (Claude Code's "You've reached your Fable limit.
-/// Switch to another model…": Fable has a weekly cap of its own, under the account's), so it is told apart from the
-/// account's limit, whose quota then still shows room (#4365); null for the account's own ("your weekly usage limit").
+/// Switch to another model…", or "You've hit your Fable limit · resets …": Fable has a weekly cap of its own, under the
+/// account's), so it is told apart from the account's limit, whose quota then still shows room (#4365); null for the
+/// account's own ("your weekly usage limit", "You've hit your weekly limit").
 export function modelLimitOf(text: string): string | null {
-  const name = /\breached your ([\w.\- ]+?) limit\b/i.exec(text)?.[1]?.trim();
+  const name = /\b(?:reached|hit) your ([\w.\- ]+?) limit\b/i.exec(text)?.[1]?.trim();
   return name && !ACCOUNT_LIMIT.test(name) ? name : null;
 }
 const ACCOUNT_LIMIT = /\b(?:usage|session|weekly|daily|monthly|spend|rate|\d+[- ]hour)\b/i;
