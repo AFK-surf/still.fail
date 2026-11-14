@@ -168,8 +168,11 @@ jobs:
       - if: env.OWN != 'm-'
         run: |
           mkdir -p "$MBC_STORE" "$RUNNER_TEMP/store-arch"
-          cp -a -n "$RUNNER_TEMP/store-main/." "$MBC_STORE/"
-          cp -a -n "$RUNNER_TEMP/store-arch/." "$MBC_STORE/"
+          # (linked, not copied: a unit's files are never written again once kept, and the three are on one disk. Copied,
+          # main's some 820 units took 28-32 s of every branch's app build, the job 271-346 s of its 5 minutes:
+          # mbui-tester-pending-wake 43599808377, seen-whole 43599853132, composer-stays-cheaper's first, 2026-11-14)
+          cp -a -l -n "$RUNNER_TEMP/store-main/." "$MBC_STORE/"
+          cp -a -l -n "$RUNNER_TEMP/store-arch/." "$MBC_STORE/"
           echo "units: $(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l) (main's $(find "$RUNNER_TEMP/store-main" -mindepth 2 -maxdepth 2 -type d | wc -l), arch/next's $(find "$RUNNER_TEMP/store-arch" -mindepth 2 -maxdepth 2 -type d | wc -l))"
       # Main's run after a merge: the units each pull request merged since the run its store came from compiled on its
       # branch's last push (its pipeline run's artifact, below), beside them. Main's run is one at a time, the newest
