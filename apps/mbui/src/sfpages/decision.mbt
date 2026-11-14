@@ -23,14 +23,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           _ => ()
         }
         // (on the chat's station, or another of its workspace: the card's)
-        let station = if card.station == "" {
-          here.station
-        } else {
-          match here.station.find("/") {
-            Some(i) => here.station.exact_view(end=i).to_owned() + "/" + card.station
-            None => card.station
-          }
-        }
+        let station = @sfbase.card_login_station(here.station, card.station)
         login_card(c, core, station, card.login)
         // (letting it go: under it while it is asked, as under a post with no card)
         ask_dismiss(c, src, here, m.seq, m.asked, false)

@@ -1253,6 +1253,9 @@ fn first_page_node(v : @view.View, src : Source) -> Unit {
       if first_shown.get() {
         return None
       }
+      // (told again as a page declares more of what it reads: a chat's login cards, as its view says them, sfbase's
+      // page_opens_node; read held then)
+      @sfbase.page_declared_now() |> ignore
       // (once answered, the core's status read no more for it, though what the first page shows comes to be another)
       let answered = first_answered.get()
       guard workspace_in_view(src).0 is Some(w) else { return None }

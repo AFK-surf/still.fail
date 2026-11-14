@@ -726,6 +726,11 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         "active": true,
         "statusText": "等你在浏览器里登录",
       })
+    // the station's logins, answered as the core answers them (a chat with a login's card opens once they are:
+    // sfbase's chat_opens): nothing under way through still.fail as the station lists it, the viewer one who may only
+    // see how they stand (the card as it was drawn while none was answered)
+    "machineLogins" =>
+      Some({ "supported": true, "loaded": true, "canLogin": false, "canRelay": false, "logins": [], "tools": [] })
     // chat-working: its agent's step, said in more words than a phone's line has room for
     "live" if f.mode == "chat-working" && text(Some(Json::object(params)), "key") == "s-c1" =>
       Some({ "loaded": true, "activity": { "now": { "key": fix_working_now.val.0, "text": fix_working_now.val.1, "important": fix_working_important.val } } })
