@@ -191,8 +191,8 @@ fn chat_body_nodes(
 
 ///|
 /// A row of the 文件 tab carried over chat `r`'s page made with its inside nodes (`v`; chat_body_nodes), as the old pane
-/// had it (drop_hint, chat_drop): while it is over the page but the composer (`composer`'s node, which marks itself
-/// then), frosted over all of it with 松开以添加到消息 under the row's mark, drawn only; let go on the page, into the
+/// had it (drop_hint, chat_drop): while it is where it would land on the page were it let go (drop_on_page) but on the
+/// composer (`composer`'s node), frosted over all of it with 松开以添加到消息 under the row's mark, drawn only; let go on the page, into the
 /// chat's draft (composer.add), named by its path or sent as a file as the chat takes what is dragged in. Where it was
 /// let go is the page's as a drop from outside is (mbui's Tree::drop_at): the node drawn there, the page's node holding
 /// it (what is drawn over the page there, a panel or another page, keeps it).
@@ -209,11 +209,23 @@ fn chat_drop_node(
     h.show(
       fn() {
         dragged() is Some(_) &&
-        v.pointed_in() &&
-        !(match composer() {
-          Some(n) => n.pointed_in()
-          None => false
-        })
+        // (where the row would land were it let go now, followed as the pointer moves and as what is under it is
+        // placed: the page's anywhere over it, its messages' ground beside and between them too, what takes no press
+        // as what does; not where something drawn over the page is, nor on the composer's own points; nothing looked
+        // for while no row is carried)
+        h.pointer_piece(fn(_, _) {
+          guard dragged() is Some(_) else { return 0 }
+          let (x, y) = v.tree.pointer_said()
+          match drop_on_page(v, x, y) {
+            Some(id) =>
+              match composer() {
+                Some(n) if v.tree.holds(n.id(), id) => 0
+                _ => 1
+              }
+            None => 0
+          }
+        }) ==
+        1
       },
       fn(o) {
         o.grow(Is(1.0)).glass(By(fn() { Some(@sf.glass_floating()) })) |> ignore
@@ -244,16 +256,23 @@ fn chat_drop_node(
     fn() { dragged() is Some(_) },
     fn(carried) {
       guard !carried && shows() && ftab.let_go is Some((item, x, y)) else { return }
-      let on = match v.tree.drop_at(x, y) {
-        Some(OnNode(id)) | Some(OnOld(id)) => v.tree.holds(v.id(), id)
-        _ => false
-      }
-      guard on else { return }
+      guard drop_on_page(v, x, y) is Some(_) else { return }
       ftab.let_go = None
       writing_drop(src, writing(src, draft), r.station, [@sfpages.dropped_of(item)], @sfpages.drops_as_files(src, draft))
     },
     at_start=false,
   )
+}
+
+///|
+/// What a row let go at (x, y) in the window lands on of chat page `v` (mbui's Tree::drop_at: the node drawn there, held
+/// by the page's node), None where it lands on none of it (off the page, or on what is drawn over it there): one rule for
+/// where the row is taken and where the page is frosted as it is held (chat_drop_node).
+fn drop_on_page(v : @view.View, x : Double, y : Double) -> @view.NodeId? {
+  match v.tree.drop_at(x, y) {
+    Some(OnNode(id)) | Some(OnOld(id)) if v.tree.holds(v.id(), id) => Some(id)
+    _ => None
+  }
 }
 
 ///|
