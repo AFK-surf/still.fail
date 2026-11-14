@@ -28,6 +28,9 @@ export const EVENT_STREAM = "text/event-stream";
 /// An events stream's answer when the station told first what came after the `since` it was asked (station/src/api/
 /// events.ts RESUMED): nothing is read again.
 export const RESUMED = "stillfail-resumed";
+/// With RESUMED, where the station's log was as the stream joined (api/events.ts HEAD): what it tells up to it is told
+/// again, what came while the device was not on it; after it, as it happens.
+export const HEAD = "stillfail-head";
 /// A stream's answer when it follows the sessions at work itself (api/events.ts FOLLOWS): `running`.
 export const FOLLOWS = "stillfail-follows";
 /// What every request asks its answer compressed as (`accept-encoding`), but a preview's (its page reads what the service

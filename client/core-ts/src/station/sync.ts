@@ -207,7 +207,7 @@ export class StationsSync {
       wanted: (address) => this.wanted(address),
       afresh: (address, ctx) => this.snapshot(address, ctx),
       goesOn: (address, how) => this.#goesOn(address, how),
-      event: (address, name, raw) => this.onEvent(address, name, raw),
+      event: (address, name, raw, again) => this.onEvent(address, name, raw, again),
       toldMissed: (address) => this.#tally(address),
       changed: (address, what) => this.onChange(address, what),
       gone: (address) => this.channels.forget(address),
@@ -1451,11 +1451,12 @@ export class StationsSync {
 
   // ── events ──
 
-  onEvent(address: string, name: string, raw: string): void {
-    timed(`event.${name}`, () => this.#onEvent(address, name, raw));
+  /// `again`: told again as its stream resumed (link.ts), not as it happened.
+  onEvent(address: string, name: string, raw: string, again = false): void {
+    timed(`event.${name}`, () => this.#onEvent(address, name, raw, again));
   }
 
-  #onEvent(address: string, name: string, raw: string): void {
+  #onEvent(address: string, name: string, raw: string, again: boolean): void {
     const data = parseJson(raw);
     if (data === undefined) return;
     const core = this.#core;
@@ -1475,7 +1476,8 @@ export class StationsSync {
         // Its summary as held before what was said goes into its channel (which takes its `last` on to it).
         const was = this.#core.data.of(address)?.thread(address, id);
         const before = isObject(was) ? { ...was } : undefined;
-        this.onTold(address, id, entries);
+        // As it happened: it comes in with a motion; told again on resuming, it was said before and is caught up on.
+        if (!again) this.onTold(address, id, entries);
         // Its rows, as what was said makes them (told again on top of a read asked before it, as the station's own were).
         this.#retold.told(address, "said", data);
         this.#held(address, "said", data);
