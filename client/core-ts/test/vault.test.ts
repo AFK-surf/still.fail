@@ -13,6 +13,7 @@ import { type Entry as StationEntry } from "../../../station/src/cloud/lock.ts";
 import { Cloud, personChainsOf, writeState } from "../../../station/src/cloud/state.ts";
 import { wall } from "../../../station/src/ops/fibers.ts";
 import { lockPartRoute, lockRoute } from "../../../station/src/mesh/serve.ts";
+import { deviceBuildsOf } from "../../../station/src/mesh/device-builds.ts";
 import { Core } from "../src/core.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { HostError } from "../src/error.ts";
@@ -2547,6 +2548,9 @@ async function handRig() {
   const st = lockStation(r);
   st.keepLog(own);
   st.keepLog(s2log);
+  // (s2's app seen asking the station on an unnumbered build, able: a handover waits for each app device it lets in to
+  // run one that takes a moved workspace, src/lock-handover.ts `devicesWaited`)
+  deviceBuildsOf(st.c).saw(r.other.hex, 0, Math.floor(r.host.nowMs() / 1000));
   const seen: string[] = [];
   stationReplies(r.host, (req) => {
     const path = new URL(req.url).pathname;
