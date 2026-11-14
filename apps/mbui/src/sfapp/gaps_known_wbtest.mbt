@@ -25,7 +25,7 @@
 /// the others' edge, as a request card stood on main, unswept; 2026-11-14, the rules measuring the window's tree's nodes
 /// and the old views it holds: rule 4's 89 more, mostly a wide chat's head (its title 12 in, its faces 6 from its end),
 /// a command's box (12, 8) and the player's bar; rule 8's two, an outline's 8 found 6 in where its rows' words are 15;
-/// rule 9's four, a message's words right on its file's card, #6285's).
+/// rule 9's four, a message's words right on its file's card, none since #6285).
 let gaps_known : Map[String, Int] = {
   "zh rule 1": 0,
   "zh rule 2": 0,
@@ -43,8 +43,8 @@ let gaps_known : Map[String, Int] = {
   "en rule 7": 0,
   "zh rule 8": 2,
   "en rule 8": 2,
-  "zh rule 9": 4,
-  "en rule 9": 4,
+  "zh rule 9": 0,
+  "en rule 9": 0,
 }
 
 ///|
