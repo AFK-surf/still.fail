@@ -7,8 +7,10 @@ import { type Accepted, STILLFAIL } from "../cloud/provider.ts";
 import { wall } from "../ops/fibers.ts";
 
 /// `lockDevice`: the device's base key and its proof for this endpoint, as its hello gave them (cloud/lock.ts).
-/// `home`: whether `workspace` is the station's home one, as of the request; absent is yes.
-export type Viewer = { sub: string; email: string; name: string; role: string; workspace: string; device: string; lockDevice?: { base: string; proof: string }; home?: boolean };
+/// `home`: whether `workspace` is the station's home one, as of the request; absent is yes. `lockId`: the device's id in
+/// the lock that let it in (its workspace's, its person's own log), else its base key as its proof holds: what its build
+/// is kept by (device-builds.ts).
+export type Viewer = { sub: string; email: string; name: string; role: string; workspace: string; device: string; lockDevice?: { base: string; proof: string }; home?: boolean; lockId?: string };
 export type Admitted = { viewer: Viewer; exp: number; iat: number; sid: string };
 export type Revocation = { kind: string; id: string; at: number };
 

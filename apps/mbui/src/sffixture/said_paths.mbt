@@ -658,6 +658,8 @@ pub let said_paths : Map[String, Array[String]] = {
     "me.pair.error",
     "me.pair.untilText",
     "me.pair.approvers.*.nameText",
+    "me.outText",
+    "me.needsAppText",
     "members.*.email",
     "members.*.name",
     "members.*.nameText",
@@ -672,6 +674,8 @@ pub let said_paths : Map[String, Array[String]] = {
     "pending.*.text",
     "pending.*.stations.*",
     "pending.*.why",
+    "upgrade.lines.*",
+    "rootText",
   ],
   "lockDraft": [
     "members.*.email",
@@ -1226,6 +1230,8 @@ pub let said_paths : Map[String, Array[String]] = {
     "uses.*.howText",
   ],
   "vaults": [
+    "stateText",
+    "confirmText",
     "vaults.*.name",
     "vaults.*.ownerName",
     "vaults.*.members.*.name",

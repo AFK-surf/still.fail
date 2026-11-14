@@ -17,7 +17,8 @@ import { key, signed } from "../../../station/test/lock-world-sim.ts";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, type Signer, WEB_DEVICE_SECS, entryHash, next, shortCode } from "../src/lock.ts";
 import { bodyHash, inForce, wsTag } from "../src/lock-moved.ts";
-import { added, enrolled, held, inForceOf, outOf, read, roster } from "../src/views/lock.ts";
+import { added, enrolled, held, inForceOf, lockView, outOf, read, roster } from "../src/views/lock.ts";
+import * as format from "../src/format.ts";
 import { hooks } from "../src/core/execute.ts";
 import { dialer, ownLogFor, serveTrusted, tryOne } from "../src/views/pair.ts";
 import { ME, committed, genesis, grant, pipe, rig } from "./lock-rig.ts";
@@ -326,6 +327,9 @@ test("someone's first device where the chain moved: the code shown by an owner's
   const { phone, answer } = await w.helloApp("r9", NEW, log.chain);
   assert.deepEqual(answer, { t: "code", workspaces: ["ws"] }, "a code shown");
   assert.equal(w.asked(), before, "nobody asked for showing it");
+  const prompt = ((await w.prompts()).pairing as { device: string; roleText?: string; deviceText: string }[]).find((p) => p.device === NEW)!;
+  assert.equal(prompt.roleText, "批准后以管理员身份加入", "the prompt says the role approving lets them in as");
+  assert.doesNotMatch(prompt.deviceText, /身份加入/, "not said as a member besides");
   const done = await w.proveApp(phone, NEW);
   assert.equal(done.error, undefined, done.error?.message);
   assert.deepEqual((done.ok as { approved: { workspaces: string[] } }).approved.workspaces, ["ws"]);
@@ -496,6 +500,26 @@ test("a person's own new app device (the personal exchange) where the chains mov
   assert.equal(w.r.cloud.posted.filter((p) => p.ws === "ws" || p.ws === "w2").length, 0, "nothing sent to the chains' cloud");
 });
 
+// The build the new device says in its hello (views/pair.ts) is noted as seen by the device approving it, beside what
+// the person's stations saw (views/lock.ts `noteBuild`, `personBuilds`): what that same ask writes in their log
+// (`mayWriteNew`) is not held back for a device that said it takes it; one that says none is not noted.
+for (const build of ["0.1.9008", undefined] as const) {
+  test(`a person's own new app device saying ${build ?? "no build"} in its hello: ${build ? "noted as seen on 9008 by the device approving it" : "nothing noted"}`, async () => {
+    const w = await setUp({ w2: "moved" });
+    const k = key(7010);
+    const id = key(7110).hex;
+    const [trusted, phone] = await pipe();
+    w.inner.runner.fork(serveTrusted(w.inner, id, ME, trusted));
+    const first = await w.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel", sign_key: "ed25519:" + "13".repeat(32), ...(build ? { build } : {}), personal: { subs: ["s1"], key: k.id } }), phone.next()));
+    assert.deepEqual(first.ok, { t: "code", workspaces: ["person:s1"] });
+    const code = ((await w.prompts()).pairing as { device: string; code: string }[]).find((p) => p.device === id)!.code;
+    const done = await w.run(tryOne(w.inner, { id: ME, d: phone, workspaces: ["person:s1"] }, id, code));
+    assert.equal(done.error, undefined, done.error?.message);
+    const noted = (w.inner.data.record("personBuilds", "s1") as { devices?: Record<string, { build: number }> } | null)?.devices?.[id];
+    assert.equal(noted?.build, build ? 9008 : undefined);
+  });
+}
+
 test("a device whose person was taken out where the chain moved: the refusal's removal and the log entry that commits to it taken, and who took it out and when said", async () => {
   const w = await setUp({ root: "alice", mine: "member" });
   assert.equal(outOf(w.inner, "ws"), null, "in the list: nobody took it out");
@@ -506,10 +530,14 @@ test("a device whose person was taken out where the chain moved: the refusal's r
   await w.r.host.time.pass(100);
   assert.equal(inForceOf(w.inner, "ws").f.members.has("s1"), false, "the list made here no longer names it");
   assert.deepEqual(outOf(w.inner, "ws"), { by: "r1", at: w.alice.chain.at(-1)!.at }, "taken out by alice, at her entry's time");
+  const ms = w.alice.chain.at(-1)!.at * 1000;
+  const alice = inForceOf(w.inner, "ws").f.members.get("r1")?.email;
+  assert.equal(lockView(w.inner, "ws").me.outText, `${alice} 于 ${format.dateClock(ms, w.r.host.utcOffsetMin(ms))} 将你移出了此 workspace 的安全模式。需要继续使用的话，请联系 ${alice} 或其他管理员重新添加`, "the page says who, when, and whom to ask");
   const other = await setUp({ root: "alice", mine: "member" });
   hooks.lockRefused?.(other.inner, "ws", A, null, { out: { bodies: [removal], logs: [] } });
   assert.equal(inForceOf(other.inner, "ws").f.members.has("s1"), true, "a body no log kept commits to is not taken");
   assert.equal(outOf(other.inner, "ws"), null);
+  assert.equal(lockView(other.inner, "ws").me.outText, undefined);
 });
 
 /// The new device's side: s1's device (ME) waiting in `ws`, whose list (alice's log the root) does not name s1: given

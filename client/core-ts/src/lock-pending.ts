@@ -31,8 +31,9 @@ export const cloudSilent = (): CoreError => new CoreError("cloud_silent", t("cor
 
 /// What a pending entry does, in words (`core-misc.lock.pending.act.*`); null: the core's own, which no one asked for
 /// (a person's lock bound, their devices kept to it, an entry of this device's signed again): kept and brought, not
-/// shown.
-export type Act = "removeDevice" | "renew" | "approve" | "addMember" | "setRole" | "removeMember" | "protectStation" | "removeStation" | "disable";
+/// shown. `handOver`: the statements of a handover and its `moved` (安全模式的升级); `enable`: a moved workspace turned on
+/// again.
+export type Act = "removeDevice" | "renew" | "approve" | "addMember" | "setRole" | "removeMember" | "protectStation" | "removeStation" | "disable" | "handOver" | "enable";
 
 /// One pending entry. `id`: the hash of the entry as first signed, the same while it is signed again (`entry` the one
 /// brought now). `name`: what it is about, as the person knows it then; `role` a role given, in words. `at` when it was

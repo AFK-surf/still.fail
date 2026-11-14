@@ -7,7 +7,9 @@
 // here: who is let in (the credentials still.fail cloud signs, the locks) and what a request is answered (the routes).
 import type { Admin } from "../api/admin.ts";
 import { langOfCore, queryPairs } from "../api/request.ts";
-import { coreTooOld } from "../api/oldest.ts";
+import { BUILD_HEADER, COUNTED_FROM, buildOf, coreTooOld } from "../api/oldest.ts";
+import { MOVED_FROM_BUILD } from "../api/moved-from.ts";
+import { deviceBuildsOf } from "./device-builds.ts";
 import { tr } from "../ops/i18n.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { log } from "../ops/log.ts";
@@ -174,8 +176,12 @@ const APPROVERS_MOST = 16;
 /// dialling them as before a move, the device dialled checking everything itself (client/core-ts/src/views/pair.ts),
 /// so a station that names others only sends it where nobody lets it in. None while the station waits for the root's
 /// log or its `open` (it names nobody, so it cannot tell who is left out), while it is off (nobody is refused for it),
-/// where the chain did not move, or to a device the list names (refused for another reason).
-function leftOf(cloud: Cloud, ws: string | null, device: string, hello: any, sub: string): { approvers: string[] } | null {
+/// where the chain did not move, or to a device the list names (refused for another reason). And `apps`, whether the
+/// list names an app device of its person's: a web page is approved there by its own person's app alone, so one with
+/// none is told to install one rather than ask owners who cannot approve it (client/core-ts/src/views/lock.ts
+/// `needsAppIn`; the owner, 2026-11-13: 「开了安全模式那就需要 app」). It says nothing of the list beyond the asking
+/// device's own person (whom `approvers` names already where they have one); a core from before reads `approvers` alone.
+function leftOf(cloud: Cloud, ws: string | null, device: string, hello: any, sub: string): { approvers: string[]; apps: boolean } | null {
   if (cloud.chain(ws)?.state?.moved === undefined) return null;
   const locked = cloud.locked(ws);
   if (locked === null || locked.waiting === true || locked.state === null) return null;
@@ -188,7 +194,8 @@ function leftOf(cloud: Cloud, ws: string | null, device: string, hello: any, sub
     .filter((d) => d.kind === "app" && (named ? d.sub === sub : ["owner", "admin"].includes(s.members.get(d.sub)?.role ?? "")))
     .map((d) => d.id)
     .slice(0, APPROVERS_MOST);
-  return { approvers };
+  const apps = [...s.devices.values()].some((d) => d.kind === "app" && d.sub === sub);
+  return { approvers, apps };
 }
 
 /// How much of what took a device out a refusal tells at most.
@@ -287,6 +294,49 @@ function claimed(hello: any): string {
   }
 }
 
+/// The build a request's headers say (api/oldest.ts `buildOf`), null for none.
+function buildSaid(headers: Record<string, unknown>): number | null {
+  const said = Object.entries(headers).find(([k]) => k.toLowerCase() === BUILD_HEADER)?.[1];
+  return buildOf(typeof said === "string" ? said : undefined);
+}
+
+/// A request of `viewer` with `headers`: the build it says kept by the device's id in the lock (device-builds.ts),
+/// where it has one. The build said (null: none).
+export function sawBuild(cloud: Cloud, viewer: Admitted["viewer"], headers: Record<string, unknown>): number | null {
+  const build = buildSaid(headers);
+  if (viewer.lockId !== undefined) deviceBuildsOf(cloud).saw(viewer.lockId, build, nowSecs());
+  return build;
+}
+
+/// Whether a core saying `build` is too old for its workspace here: its chain moved (`moved {root}` on the chain this
+/// station keeps) and the build a release's (COUNTED_FROM) under MOVED_FROM_BUILD, whose rules refuse that chain. One that
+/// says none is answered as `coreTooOld` answers it (a web page from before builds were said, or not loaded again since:
+/// told to update, every request of it was refused and nothing on it said why, 2026-11-10), and one under COUNTED_FROM
+/// (a development build's, an iOS app's TestFlight number) cannot be told apart.
+export function movedTooOld(cloud: Cloud, viewer: Admitted["viewer"], build: number | null): boolean {
+  if (build === null || build < COUNTED_FROM || build >= MOVED_FROM_BUILD) return false;
+  return typeof cloud.chain(joinedOf(cloud, viewer.workspace))?.state?.moved === "string";
+}
+
+/// The ids of the devices workspace `ws`'s lock here names (null: the home one): its chain's, and where it moved the
+/// state in force's too.
+function lockDeviceIds(cloud: Cloud, ws: string | null): Set<string> {
+  return new Set([...(cloud.chain(ws)?.state?.devices.keys() ?? []), ...(cloud.locked(ws)?.state?.devices.keys() ?? [])]);
+}
+
+/// The ids of the app devices on `sub`'s own log, as each chain of it kept here says (device-builds.ts).
+function personDeviceIds(cloud: Cloud, sub: string): Set<string> {
+  const out = new Set<string>();
+  for (const [, entries] of personChainsOf(cloud).of(sub)) {
+    try {
+      for (const d of personFold(entries, sub).devices) out.add(d.id);
+    } catch {
+      // (a chain that does not fold names none)
+    }
+  }
+  return out;
+}
+
 /// How far this station's lock goes in `ws` (the home workspace when null), for the device to bring it what it has
 /// more (null: no lock pinned there).
 export function lockHead(cloud: Cloud, ws: string | null = null): { seq: number; hash: string; genesis: string } | null {
@@ -321,7 +371,9 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     const from = Number.isSafeInteger(after) ? after : -1;
     const at = from >= 0 ? cloud.lockAfter(from - 1, ws)[0] : undefined;
     const atHash = at !== undefined && at.seq === from ? { after_hash: hashOf(at) } : {};
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] }];
+    // (`builds`: what build each device its lock names last ran, as seen here, device-builds.ts; given only to a device the
+    // lock let in, as admission let this one, and of a workspace with none, of nobody)
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
@@ -443,7 +495,9 @@ const personHead = (chain: unknown[]) => ({ seq: chain.length - 1, hash: chain.l
 export function lockPartRoute(cloud: Cloud, part: string, method: string, body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
   if (part === "person") {
     const chains = personChainsOf(cloud);
-    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })) }];
+    // (with what this station serves of the person's logs and the builds of the app devices on the asker's own log, as
+    // seen here: what their core reads before it writes a kind an older station or app refuses, device-builds.ts)
+    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
     if (method !== "POST") return [405, { error: "GET or POST" }];
     let said: any;
     try {
@@ -514,7 +568,7 @@ export function inLock(cloud: Cloud, admitted: Admitted, named: string, endpoint
     if (person === null) throw new LockRefusal("this device goes by its person's own lock in this workspace, and it brought none");
     return person;
   }
-  return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
+  return { ...admitted, viewer: { ...v, role: lowerRole(role, named), lockId: device.id } };
 }
 
 /// inLock again for a connection already in (its lock or its person's changed): by its person's own lock where it is
@@ -585,9 +639,9 @@ function onPersonalLock(cloud: Cloud, admitted: Admitted, named: string, endpoin
     }
   }
   if (newest === null) return null;
-  const { role } = admitPerson(state, who, newest);
+  const { role, device } = admitPerson(state, who, newest);
   chains.keep(pin, raw ?? newest, v.workspace);
-  return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
+  return { ...admitted, viewer: { ...v, role: lowerRole(role, named), lockId: device } };
 }
 
 export type Members = {
@@ -646,7 +700,9 @@ function admission(m: Members, device: string): Admit {
       // Its base key only as its proof for this endpoint holds (as the cloud checked it).
       const base = proof && endpointProof(admitted.viewer.workspace, proof.base, device, proof.proof) ? proof.base : null;
       seenDevicesOf(m.cloud).saw(nowSecs(), admitted.viewer, device, base, line?.lock ?? null);
-      return { admitted: inLockBringing(m.cloud, admitted, named, device, line), named };
+      const inIt = inLockBringing(m.cloud, admitted, named, device, line);
+      // (no lock of its workspace here: its base key, its id on its person's own log, as its proof holds)
+      return { admitted: inIt.viewer.lockId === undefined && base !== null ? { ...inIt, viewer: { ...inIt.viewer, lockId: base } } : inIt, named };
     };
     let current: Admitted;
     let named: string;
@@ -823,6 +879,11 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   // A core older than this station answers (api/oldest.ts): told to update, whatever it asks.
   const asking: Record<string, unknown> = head.headers !== null && typeof head.headers === "object" ? head.headers : {};
   if (coreTooOld(asking)) return answer(426, { error: tr(langOfCore(asking as Record<string, string>), "station.admin.updateApp"), update: true });
+  // What build the device ran, kept by its id in the lock (device-builds.ts: written only as it rises or the day changes).
+  const build = sawBuild(m.cloud, viewer, asking);
+  // A core too old for a workspace whose chain moved (api/moved-from.ts): told to update, as one under OLDEST_CORE is,
+  // for that workspace's requests alone.
+  if (movedTooOld(m.cloud, viewer, build)) return answer(426, { error: tr(langOfCore(asking as Record<string, string>), "station.admin.updateApp"), update: true });
   // One a part answers itself (a phone lent to the agents, adb/link.ts): it says what the member may.
   const part = m.streams?.(head);
   if (part !== undefined) return part({ conn, viewer, head, stream, reader });

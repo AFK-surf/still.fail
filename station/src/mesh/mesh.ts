@@ -15,6 +15,7 @@ import { tellLocks } from "./lock-events.ts";
 import { followMarks, stationMarksOf, tellMarks } from "./station-marks.ts";
 import { followWays, tellWays, waysOf } from "./ways.ts";
 import { personChainsOf } from "./serve.ts";
+import { deviceBuildsOf } from "./device-builds.ts";
 import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
@@ -153,6 +154,8 @@ export const MeshLive = Layer.effectDiscard(
       if (traces.enabled) traces.exportTo((spans) => Effect.runPromise(plane.traces(spans)));
       // The station's log, waiting since it started (ops/log-export.ts).
       stationLog.sendWith((body) => Effect.runPromise(plane.logs(body)));
+      // (the devices' builds kept in the store, made before the first request asks for them)
+      deviceBuildsOf(cloud.state, store);
       const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), streams: (head: any) => parts.streamOf(head), screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()), tailnet: () => tailnetAddrs(endpoint.sockets()), connected: () => parts.connected() };
       // The control plane's gateways: the device tools, as far as the station's own setting lets them.
       const device = yield* Effect.acquireRelease(

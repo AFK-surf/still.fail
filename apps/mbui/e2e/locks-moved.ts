@@ -15,10 +15,14 @@
 //     closed meanwhile (one account's requests a minute, the cloud's 120).
 //   21 the cloud frozen and the stations apart: X off at the first, one state at both once the second is back; S
 //     started anew let in by both.
-// With E2E_HANDOVER=auto the devices' host hands chains over by themselves (`handOverAuto`, as HAND_OVER_FROM will) and
-// nothing calls `lock.handOver`: P's joining alice's own lock face to face, the ask for something else that A answers, is
-// moved from round 19's start to where the call was (and P's vault, which needs P let in, after it), and the workspace
-// moves by itself; the rounds after the move are as they are. By default the call, as before.
+// Chains are handed over by themselves on every build from HAND_OVER_FROM (client/core-ts src/lock-handover.ts; the
+// user, 2026-11-14: 无感迁移, no date, no switch), so by default nothing calls `lock.handOver`: P's joining alice's own
+// lock face to face, the ask for something else that A answers, is moved from round 19's start to where the call was
+// (and P's vault, which needs P let in, after it), and the workspace moves by itself once every station and app device
+// of it said a build that takes it; the rounds after the move are as they are. E2E_HANDOVER=call is the round of
+// before, A calling `lock.handOver` after P joined at round 19's start: on these builds the chain moves by itself on one
+// of A's asks before the call (the call then answers it done with nobody asked), so it holds only where the devices'
+// clock is before HAND_OVER_FROM, and is not the side run's.
 // Each check says PASS or FAIL; it goes on after a failure where it can, and exits 1 if any failed. E2E_SF_SRC,
 // E2E_ORIGIN, E2E_PEER_DATA as peer.ts; E2E_WORK, E2E_STATION as e2e-local.sh's.
 import { createPrivateKey, createPublicKey, randomBytes } from "node:crypto";
@@ -26,7 +30,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { check, Device, dir, fail, failures, type J, log, must, stationDo, stationSays, whenChanged, within } from "./device.ts";
 
-const auto = process.env.E2E_HANDOVER === "auto";
+const auto = process.env.E2E_HANDOVER !== "call";
 const short = (s: J) => JSON.stringify({ state: s.state, cause: s.cause, message: s.message });
 
 // alice's two apps and her web page; frank, an admin, and gina, a member, an app each
