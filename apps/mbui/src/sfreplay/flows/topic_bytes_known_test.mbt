@@ -131,6 +131,7 @@ let topic_whole_known : Map[String, Int] = {
       ("lockPrompts", 1),
       ("loginSessions", 2),
       ("longJobs", 1),
+      ("memberships", 1),
       ("newChat", 40),
       ("notices", 1),
       ("notify", 1),

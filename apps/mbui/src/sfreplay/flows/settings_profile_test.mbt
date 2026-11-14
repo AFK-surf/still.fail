@@ -13,8 +13,8 @@ test "83-profile" {
     f.run_to(@ui.nav_rest)
     f.tap("=cc")
     f.run_to(@ui.nav_rest)
-    // its page: its allowance under its head
-    f.see("额度")
+    // its page: its settings card under its head (cc is a custom env profile without quota)
+    f.see("设置")
     // (its name, the higher: the list's row may still be going out under the page)
     f.tap("=cc", top=true)
     f.run_to(@sf.presented_rest)

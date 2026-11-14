@@ -554,41 +554,13 @@ test "a model's own week (Fable's) is a chip and a dial of its own, after the ac
 }
 
 ///|
-test "an account's stations appear once even with several copies" {
+test "an account across stations shows its station controls in settings without per-station status rows" {
   for platform in [0, 2] {
     let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-hosts", platform~)
-    assert_eq(t.words().filter(fn(w) { w.0 == "Cedar" && w.5 > 0.5 }).length(), 1, msg="one station, one row, platform \{platform}")
-    assert_true(t.find("向 Willow 借用") is None)
-    t.tap_text("Cedar")
-    assert_true(app.nav.top() is Setting(@settings.Route::Profile("ws1/st3", "local")), msg="open the station's profile, platform \{platform}")
-  }
-}
-
-///|
-test "an account signed in on one station and borrowed on another shows both stations" {
-  for platform in [0, 2] {
-    let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-hosts-one", platform~)
-    assert_true(t.find("Maple") is Some(_), msg="the other station remains visible, platform \{platform}")
-  }
-}
-
-///|
-test "an account's stations say when a source is unavailable or a station is offline" {
-  for platform in [0, 2] {
-    let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-hosts-away", platform~)
-    assert_true(t.find("无法连接 Willow") is Some(_), msg="the source is named, platform \{platform}")
-    assert_true(t.find("离线") is Some(_), msg="the offline station remains visible, platform \{platform}")
-  }
-}
-
-///|
-test "an allowed station is shown while its profile is waiting to sync" {
-  for platform in [0, 2] {
-    let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-hosts-pending", platform~)
-    assert_true(t.find("Maple") is Some(_))
-    assert_true(t.find("等待同步") is Some(_), msg="the missing copy is explained, platform \{platform}")
-    t.tap_text("Maple")
-    assert_true(app.nav.top() is Setting(@settings.Route::Profile("ws1/st1", "cc")), msg="there is no page to open yet, platform \{platform}")
+    assert_true(t.find("所在 station") is Some(_), msg="station row, platform \{platform}")
+    assert_true(t.find("分享给其他 station") is Some(_), msg="share switch, platform \{platform}")
+    assert_true(t.find("可用的 station") is Some(_), msg="allowed stations row, platform \{platform}")
+    assert_true(t.find("Cedar") is None && t.find("向 Willow 借用") is None, msg="no per-station rows, platform \{platform}")
   }
 }
 
@@ -1179,36 +1151,35 @@ fn profile_whole(page : String) -> @ui.Tester {
 }
 
 ///|
-test "a profile's page: who it is and whether it works, then its allowance, what it spent, who uses it, its models, how it runs, sharing, its account" {
+test "a profile's page: who it is and whether it works, then its allowance and who uses it, its stations and sharing, its settings" {
   let t = profile_whole("profile:ws1/st1#cc")
   let y = fn(words : String) { t.find(words).unwrap().1 }
   // its head is its title: its name, what it is, its last check and when (no title over it)
-  assert_true(y("订阅账号 · Ultra · Willow 可用") > y("Claude 主账号"))
-  assert_true(y("订阅有效") > y("订阅账号 · Ultra · Willow 可用"))
-  assert_true(t.find("5 分钟前检查") is Some(_))
-  // then its parts by what it is come to for: how much is left and what it spent, who uses it, how it runs, whom it is
-  // shared with, the account itself
-  assert_true(y("额度") > y("订阅有效"))
+  assert_true(y("订阅账号 · Ultra") > y("Claude 主账号"))
+  assert_true(y("订阅有效 · 5 分钟前检查") > y("订阅账号 · Ultra"))
+  // then its parts by what it is come to for: how much is left and who uses it, whom it is shared with, and its settings
+  assert_true(y("额度") > y("订阅有效 · 5 分钟前检查"))
   assert_true(y("5 小时") > y("额度") && t.find("本周") is Some(_))
-  assert_true(y("近 7 天") > y("5 小时"))
-  assert_true(y("使用它的连接") > y("近 7 天"))
-  assert_true(y("全部模型") > y("使用它的连接"))
-  assert_true(y("默认 Fast") > y("全部模型"))
-  assert_true(y("分享给其他 station") > y("默认 Fast"))
+  assert_true(y("星火助手") > y("5 小时"))
+  assert_true(t.find("近 7 天") is None)
+  assert_true(y("分享给其他 station") > y("星火助手"))
   // A workspace without its own mark is named once, without a repeated initial beside it.
   let ws = "个人 中的对话可使用此账号运行 agent"
-  assert_true(y(ws) > y("分享给其他 station") && t.find("同时用于 个人") is None)
+  assert_true(y("可用模型") > y("分享给其他 station"))
+  assert_true(y("默认 Fast") > y("可用模型"))
+  assert_true(y(ws) > y("默认 Fast") && t.find("同时用于 个人") is None)
   assert_true(t.boxes().filter(fn(b) { b.text == "个" }).is_empty())
-  assert_true(y("重新登录") > y(ws))
   // its models one row, how many; all of them a press away
   assert_true(t.find("3 个模型") is Some(_) && t.find("Sonnet 5") is None)
 }
 
 ///|
-test "a profile in trouble: what is wrong a pill in its head before what its check said; its key masked on its account's card" {
+test "a profile in trouble: what is wrong a pill in its head before when it was checked; its key masked on its settings card" {
   let t = profile_whole("profile:ws1/st1#k2")
   let (px, py) = t.find("没能使用").unwrap()
-  let (cx, cy) = t.find("订阅有效").unwrap()
+  let (cx, cy) = t.find("5 分钟前检查").unwrap()
+  assert_true(t.find("订阅有效") is None)
+  assert_true(t.find("额度") is None)
   assert_true((py - cy).abs() < 2.0 && cx > px)
   assert_true(t.find("sk-…a41f").unwrap().1 > t.find("API key").unwrap().1)
 }
@@ -1271,20 +1242,23 @@ test "a copy of another station's profile is paused here from its page and used 
 }
 
 ///|
-test "a subscription's page signed in: 重新登录 and the way by hand, rows of its account" {
+test "a subscription's page signed in: 重新登录 and the way by hand in its ⋯ menu" {
   let t = profile_whole("profile:ws1/st1#cc")
+  let log = t.drive("tap icon:more\nuntil 重新登录\n")
+  assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
   let (_, by) = t.find("重新登录").unwrap()
   let (_, my) = t.find("也可以在服务器上手动登录").unwrap()
   assert_true(my > by)
   // the command to run by hand, shown once asked
   assert_true(t.find("claude setup-token") is None)
-  t.tap_text("也可以在服务器上手动登录")
-  t.run_for(@ui.move_most_ms)
+  let manual = t.drive("tap =也可以在服务器上手动登录\nuntil claude setup-token\n")
+  assert_true(manual.contains("EXIT 0"), msg=manual.join("\n"))
   assert_true(t.find("claude setup-token") is Some(_))
   t.key(@ui.key_escape)
   t.run_for(@ui.move_most_ms)
   // 重新登录: begun on the station, its steps on the page
-  t.tap_text("重新登录")
+  let again = t.drive("tap icon:more\nuntil 重新登录\ntap =重新登录\n")
+  assert_true(again.contains("EXIT 0"), msg=again.join("\n"))
   t.draw()
   t.draw()
   t.draw()

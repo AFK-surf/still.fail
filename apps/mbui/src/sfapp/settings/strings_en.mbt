@@ -1430,7 +1430,7 @@ let en : Map[String, String] = {
   "web-pages.profiles.share.moveShared": "The account moves to the station you pick; {station} borrows it after.",
   "web-pages.profiles.share.moveOwn": "The account moves to the station you pick and leaves {station}; chats here that used it go on with another account of this station.",
   "web-pages.profiles.share.stations": "Stations that can use it",
-  "web-pages.profiles.share.switch": "Share with other stations",
+  "web-pages.profiles.share.switch": "Share across stations",
   "web-pages.profiles.share.title": "Sharing",
   "web-pages.profiles.share.unshared": "No longer shared",
   "web-pages.profiles.share.users": "In use on {stations}",

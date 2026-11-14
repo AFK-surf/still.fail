@@ -172,7 +172,7 @@ fn profile_found_node(
     // (every block it may have, in their order, each in a room that opens as profile_keys comes to name it and closes
     // as it stops naming it, on its way, as the old page's `keys` did: none come or gone at once over what is under them)
     fn() {
-      ["sign-in", "trouble", "quota", "usage", "used-by", "stations", "models", "run", "share", "workspaces", "account", "env"]
+      ["sign-in", "trouble", "quota", "station", "settings"]
     },
     fn(b, key) {
       b.show(at_once=true, fn() { profile_keys(core, here, o, p, entry).contains(key) }, fn(r) {
@@ -209,13 +209,20 @@ fn sign_asked(p : Json?) -> Bool {
 }
 
 ///|
+/// Whether its allowance has anything to show: windows, credits, or resets.
+fn has_quota(p : Json?) -> Bool {
+  let q = field(p, "quota")
+  (text(q, "state") == "ok" && items(q, "windows").length() > 0) || text(q, "creditsText") != "" || items(q, "resets").length() > 0
+}
+
+///|
 /// The blocks of the page by what each is, as the profile is now: what to do first (signing it in, else its trouble's
-/// next step), its allowance, what it spent, who uses it, the stations it is on; its models and how it runs, whom it is
-/// shared with, the workspaces it serves, the account itself and its variables (a copy of another station's: none of
-/// those it does not set). One come or gone opens or closes where it is.
+/// next step), its allowance and who uses it, its stations and sharing, and its settings (a copy of another station's:
+/// none of those it does not set). One come or gone opens or closes where it is.
 fn profile_keys(core : Core, here : () -> Here, o : () -> Json?, p : () -> Json?, entry : () -> Json?) -> Array[String] {
   ignore(core)
   ignore(here)
+  ignore(entry)
   let pv = p()
   let access = field(pv, "access")
   let kind = text(access, "kind")
@@ -229,33 +236,15 @@ fn profile_keys(core : Core, here : () -> Here, o : () -> Json?, p : () -> Json?
   } else if field(pv, "trouble") is Some(Object(_)) && text(field(pv, "trouble"), "action") != "login" {
     out.push("trouble")
   }
-  out.push("quota")
-  out.push("usage")
-  if profile_users(o(), pv).length() > 0 {
-    out.push("used-by")
+  if has_quota(pv) || profile_users(o(), pv).length() > 0 {
+    out.push("quota")
   }
-  if entry() is Some(_) && !items(entry(), "places").is_empty() {
-    out.push("stations")
-  }
-  if !copy {
-    out.push("models")
-    // how it runs, in one section (the web's two of the same title: fast mode, and the background on a message)
-    if profile_fast(pv) || profile_background(pv) {
-      out.push("run")
-    }
-  }
-  if has(o(), "sharing") && !(field(o(), "sharing") is Some(Null)) {
-    out.push("share")
+  let has_sharing = has(o(), "sharing") && !(field(o(), "sharing") is Some(Null))
+  if copy && has_sharing {
+    out.push("station")
   }
   if !copy {
-    // (what it reads of the station's workspaces read in its block, as that is made: not asked for before it shows)
-    out.push("workspaces")
-    if account_shows(pv) {
-      out.push("account")
-    }
-    if kind == "env" {
-      out.push("env")
-    }
+    out.push("settings")
   }
   out
 }
@@ -270,17 +259,6 @@ fn profile_fast(p : Json?) -> Bool {
 /// Whether a Claude profile says whether its agents' work goes to the background when a message comes.
 fn profile_background(p : Json?) -> Bool {
   items(p, "runtimes").iter().any(fn(r) { r == "claude" }) && has(p, "backgroundOnMessage")
-}
-
-///|
-/// Whether its account's own section has anything: the machine's own login, a key, or a subscription signed in and well.
-fn account_shows(p : Json?) -> Bool {
-  let access = field(p, "access")
-  let kind = text(access, "kind")
-  let machine = flag(p, "machine")
-  let keyed = ["opencode-go", "anthropic-api", "api-provider"].contains(kind) && !flag(access, "login")
-  let signs = (kind == "subscription" || flag(access, "login")) && !machine
-  machine || keyed || (signs && !sign_asked(p))
 }
 
 ///|
@@ -314,16 +292,9 @@ fn profile_block_node(
   match key {
     "sign-in" => profile_sign_in_node(b, core, address, id, s, p, open)
     "trouble" => profile_trouble_node(b, core, address, id, s, p, open)
-    "quota" => profile_quota_node(b, core, address, id, p, tips)
-    "usage" => profile_usage_node(b, core, here, address, id, s, entry)
-    "used-by" => profile_used_by_node(b, core, address, o, p)
-    "stations" => profile_stations_node(b, core, address, entry)
-    "models" => profile_models_node(b, core, here, address, id, p)
-    "run" => profile_run_node(b, core, address, id, p)
-    "share" => profile_share_node(b, core, address, id, s, p, entry)
-    "workspaces" => profile_workspaces_node(b, core, address, id, p, stint)
-    "account" => profile_account_node(b, core, address, id, s, p)
-    "env" => profile_env_node(b, core, address, id, p, open, tips)
+    "quota" => profile_quota_node(b, core, address, id, o, p, tips)
+    "station" => profile_station_node(b, core, address, id, s, o, p, entry)
+    "settings" => profile_settings_node(b, core, here, address, id, s, o, p, entry, open, stint, tips)
     _ => ()
   }
 }
@@ -348,12 +319,12 @@ fn profile_head_node(
   let facts = fn() {
     let pv = p()
     let email = text(pv, "email")
-    // of an account on several stations, this station's (each's own part is under 各 station), not all of them
+    // of an account on several stations, this station's (each's own part is under Station), not all of them
     let several = items(entry(), "members").filter(fn(m) { text(Some(m), "role") != "user" }).length() > 1
     let place = if several {
       @sf.t("web-pages.profiles.onStation", args=[("station", text(s(), "name"))])
     } else {
-      text(entry(), "where")
+      ""
     }
     join([text(pv, "kindText"), text(pv, "planText"), if email != text(pv, "name") { email } else { "" }, place], " · ")
   }
@@ -394,7 +365,12 @@ fn profile_state_node(st : @view.View, core : Core, address : String, id : Strin
     @sf.words_node(b, fn() {
       let ago = text(field(field(field(p(), "check"), "time"), "checkedAt"), "ago")
       let when = if ago != "" { @sf.t("web-pages.profiles.checkedAt", args=[("time", ago)]) } else { "" }
-      join([text(p(), "checkLine"), when], " · ")
+      let line = if text(p(), "checkTone") == "green" || text(field(p(), "check"), "state") != "ok" {
+        text(p(), "checkLine")
+      } else {
+        ""
+      }
+      join([line, when], " · ")
     }, fn() { pf_check_words })
     |> ignore
     @sf.icon_action_node(
@@ -518,6 +494,32 @@ fn profile_menu(core : Core, here : Here, address : String, p : Json?, from : @s
   let items : Array[@sf.MenuItem?] = []
   if !machine && !copy {
     items.push(Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { profile_rename(core, address, p) })))
+    if !keyed && !sign_asked(p) {
+      items.push(
+        Some(
+          @sf.menu_item_of(
+            @sf.t("web-pages.signIn.again"),
+            icon="log-in",
+            disabled=is_doing(core, ["profile.login"], [("station", address), ("id", id)]),
+            fn() { @settings.act(core, @sf.t("web-pages.profiles.signIn"), "profile.login", obj([("station", str(address)), ("id", str(id))])) },
+          ),
+        ),
+      )
+      let command = text(p, "loginCommand")
+      if command != "" {
+        items.push(
+          Some(
+            @sf.menu_item_of(@sf.t("web-pages.profiles.manual"), icon="terminal", fn() {
+              @sf.panel_nodes(
+                @sf.t("web-pages.profiles.manual"),
+                fn(v, _) { @sf.copy_command_node(v, fn() { command }, copy=@sf.t("common.copy"), copied=@sf.t("common.copied")) },
+                from=Unanchored,
+              )
+            }),
+          ),
+        )
+      }
+    }
   }
   if can_disable {
     let enabled = flag(p, "enabled")
@@ -943,12 +945,20 @@ fn profile_trouble_node(
   })
 }
 
-// ── its allowance and what it spent ─────────────────────────────────────
+// ── its allowance and who uses it ───────────────────────────────────────
 
 ///|
-/// What is left of its allowance (QuotaSection) in node `b`: each window as a dial, when it was read under them, reading
-/// it again at its title's end; its credits and its resets (resetting one asked first), a row each.
-fn profile_quota_node(b : @view.View, core : Core, address : String, id : String, p : () -> Json?, tips : @sf.TipLayer?) -> Unit {
+/// What is left of its allowance and who uses it (QuotaSection + UsedBySection) in node `b`: each window as a dial,
+/// its credits and its resets (resetting one asked first), and the connects bound to it, in one card.
+fn profile_quota_node(
+  b : @view.View,
+  core : Core,
+  address : String,
+  id : String,
+  o : () -> Json?,
+  p : () -> Json?,
+  tips : @sf.TipLayer?,
+) -> Unit {
   let on = [("station", address), ("id", id)]
   let params = fn() { obj([("station", str(address)), ("id", str(id))]) }
   let quota = fn() { field(p(), "quota") }
@@ -956,52 +966,18 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
   let credits = fn() { text(quota(), "creditsText") }
   @sf.section_node(
     b,
-    fn() { @sf.t("web-pages.profiles.quota") },
-    ends=fn(e) {
-      @sf.action_node(
-        e,
-        fn() { @sf.t("web-pages.profiles.refresh") },
-        fn() { @settings.act(core, @sf.t("web-pages.profiles.refresh"), "profile.quota", params()) },
-        icon="refresh",
-        busy=fn() { is_doing(core, ["profile.quota"], on) },
-        disabled=fn() { has(p(), "enabled") && !flag(p(), "enabled") },
-      )
+    fn() {
+      if has_quota(p()) {
+        @sf.t("web-pages.profiles.quota")
+      } else {
+        @sf.t("web-pages.profiles.usedBy")
+      }
     },
     fn(sec) {
       @sf.group_node(sec, fn(g) {
-        // (0 not read yet, 1 what the core could not say, 2 its windows, 3 none of them but its credits)
-        let what = fn() {
-          let q = quota()
-          if q is (None | Some(Null)) {
-            0
-          } else if text(q, "state") != "ok" || windows().length() == 0 {
-            if credits() == "" {
-              1
-            } else {
-              3
-            }
-          } else {
-            2
-          }
-        }
-        g.show(at_once=true, fn() { what() == 0 }, fn(x) { said_row_node(x, fn() { @sf.t("web-main.quota.unchecked") }) })
-        g.show(at_once=true, fn() { what() == 1 }, fn(x) {
-          said_row_node(x, fn() {
-            match opt_text(quota(), "detail") {
-              Some(d) => d
-              None => @sf.t("web-main.quota.unknown")
-            }
-          })
-        })
-        g.show(at_once=true, fn() { what() == 2 }, fn(x) {
+        g.show(at_once=true, fn() { text(quota(), "state") == "ok" && windows().length() > 0 }, fn(x) {
           @sf.block_node(x, fn(bl) {
             @sf.dials_node(bl, fn() { quota_dials_of(windows()) }, lines=2)
-            bl.show(at_once=true, fn() { text(field(field(quota(), "time"), "checkedAt"), "ago") != "" }, fn(w) {
-              @sf.words_node(w, fn() {
-                @sf.t("android-settings.quota.checkedAt", args=[("ago", text(field(field(quota(), "time"), "checkedAt"), "ago"))])
-              }, fn() { @sf.caption })
-              |> ignore
-            })
           })
         })
         g.show(at_once=true, fn() { credits() != "" }, fn(x) {
@@ -1046,8 +1022,32 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
               chevron=false,
               goes~,
               tail=fn(t) { doing_mark_node(t, busy, fn() { failed_of(core, ["profile.resetQuota"], on) }, tips?) },
+              tail_shown=fn() { busy() || failed_of(core, ["profile.resetQuota"], on) is Some(_) },
             )
           })
+        })
+        g.each(fn() { profile_users(o(), p()) }, fn(cn) { text(Some(cn), "id") }, fn(r, cn) {
+          let cv = fn() { Some(cn.get()) }
+          let model = fn() {
+            match opt_text(cv(), "modelName") {
+              Some(m) => m
+              None =>
+                match opt_text(p(), "model") {
+                  Some(m) => match text(field(p(), "names"), m) { "" => m; n => n }
+                  None => @sf.t("web-pages.profiles.defaultModel")
+                }
+            }
+          }
+          let cid = @signals.untracked(fn() { text(cv(), "id") })
+          @sf.link_row_node(
+            r,
+            fn() { text(cv(), "name") },
+            fn() { (core.push)(Connect(address, cid)) },
+            value=model,
+            title_cut=true,
+            value_cut=true,
+            lead=LeadMade(fn(l) { @sf.avatar_node(l, fn() { text(cv(), "id") }, fn() { text(cv(), "name") }, fn() { "" }, pf_user_avatar) }),
+          )
         })
       })
     },
@@ -1060,288 +1060,18 @@ fn reset_note(r : Json?) -> String {
   [opt_text(r, "refills").unwrap_or(""), text(r, "text")].filter(fn(w) { w != "" }).join(" · ")
 }
 
-///|
-/// What it spent in the last 7 days (UsageSection) in node `b`, once the usage view is read: its cost (its share of the
-/// workspace's under it) and tokens (the model it used most under them) as the usage view counts them for it (its calls
-/// not, nor what its tokens are made of: they say nothing a person acts on, the user 2026-10-31), side by side; on
-/// several stations, here's alone. The way to the whole usage at its heading.
-fn profile_usage_node(
-  b : @view.View,
-  core : Core,
-  here : () -> Here,
-  address : String,
-  id : String,
-  s : () -> Json?,
-  entry : () -> Json?,
-) -> Unit {
-  let usage = fn() { (core.topic)("usage", { "scope": str(here().workspace), "days": Json::number(7.0) }).get().value }
-  let item = fn() -> Json? {
-    let u = usage()
-    match items(u, "lists").search_by(fn(l) { text(Some(l), "key") == "profiles" }) {
-      Some(i) => {
-        let list = items(Some(items(u, "lists")[i]), "items")
-        match list.search_by(fn(x) { text(Some(x), "key") == address + "/" + id }) {
-          Some(k) => Some(list[k])
-          None => None
-        }
-      }
-      None => None
-    }
-  }
-  b.show(at_once=true, fn() { usage() is Some(_) }, fn(u) {
-    @sf.section_node(
-      u,
-      fn() {
-        if items(entry(), "members").length() > 1 {
-          @sf.t("web-pages.profiles.usageHere", args=[("station", text(s(), "name"))])
-        } else {
-          @sf.t("web-pages.profiles.usage")
-        }
-      },
-      ends=fn(e) {
-        @sf.action_node(e, fn() { @sf.t("web-pages.profiles.usageAll") }, fn() {
-          @sfbase.history_push()
-          app.nav.push(Setting(Usage))
-        }, icon="chart")
-      },
-      fn(sec) {
-        sec.pick(at_once=true, fn() { item() is Some(_) }, fn(x, has) {
-          if has {
-            @sf.figures_node(x, fn() {
-              let it = item()
-              [
-                (@sf.t("web-pages.profiles.usageCost"), text(it, "costText"), @sf.t("web-pages.profiles.usageShare", args=[("share", text(it, "shareText"))])),
-                ("Tokens", text(it, "tokensText"), text(it, "topModel")),
-              ]
-            })
-          } else {
-            @sf.group_node(x, fn(g) {
-              g.pick(fn() { flag(field(usage(), "wait"), "reading") }, fn(y, reading) {
-                if reading {
-                  @sf.block_node(y, fn(bl) { @sf.wait_line_node(bl, fn() { @sf.t("common.reading") }) |> ignore })
-                } else {
-                  said_row_node(y, fn() { @sf.t("web-pages.profiles.usageNone") })
-                }
-              })
-            })
-          }
-        })
-      },
-    )
-  })
-}
-
-// ── who uses it, where it is ────────────────────────────────────────────
+// ── where it is and whom it is shared with ──────────────────────────────
 
 ///|
-/// Who uses it (the connects bound to it: Slack, Feishu) in node `b`, a row each, the model it runs at its end, to the
-/// connect's page.
-fn profile_used_by_node(b : @view.View, core : Core, address : String, o : () -> Json?, p : () -> Json?) -> Unit {
-  @sf.section_node(b, fn() { @sf.t("web-pages.profiles.usedBy") }, fn(sec) {
-    @sf.group_node(sec, fn(g) {
-      g.each(fn() { profile_users(o(), p()) }, fn(cn) { text(Some(cn), "id") }, fn(r, cn) {
-        let cv = fn() { Some(cn.get()) }
-        let model = fn() {
-          match opt_text(cv(), "modelName") {
-            Some(m) => m
-            None =>
-              match opt_text(p(), "model") {
-                Some(m) => match text(field(p(), "names"), m) { "" => m; n => n }
-                None => @sf.t("web-pages.profiles.defaultModel")
-              }
-          }
-        }
-        let cid = @signals.untracked(fn() { text(cv(), "id") })
-        @sf.link_row_node(
-          r,
-          fn() { text(cv(), "name") },
-          fn() { (core.push)(Connect(address, cid)) },
-          value=model,
-          title_cut=true,
-          value_cut=true,
-          lead=LeadMade(fn(l) { @sf.avatar_node(l, fn() { text(cv(), "id") }, fn() { text(cv(), "name") }, fn() { "" }, pf_user_avatar) }),
-        )
-      })
-    })
-  })
-}
-
-///|
-/// Each station that has the account, once, in node `b`: how it stands there at its end, this one's said, another's
-/// that has a profile of it opening that one.
-fn profile_stations_node(b : @view.View, core : Core, here_station : String, entry : () -> Json?) -> Unit {
-  @sf.section_node(b, fn() { @sf.t("web-pages.profiles.account.each") }, fn(sec) {
-    @sf.group_node(sec, fn(g) {
-      g.each(fn() { items(entry(), "places") }, fn(m) { text(Some(m), "station") }, fn(r, m) {
-        let mv = fn() { Some(m.get()) }
-        let station = @signals.untracked(fn() { text(mv(), "station") })
-        let pid = fn() { text(mv(), "profileId") }
-        let state = fn() { field(mv(), "state") }
-        let current = station == here_station
-        // (how it stands there: offline, not signed in there, its lender away, else what its check says)
-        let pill = fn() -> (String, @sf.PillTone) {
-          if !flag(mv(), "online") {
-            (@sf.t("web-pages.stations.offline"), Neutral)
-          } else if pid() == "" && text(state(), "text") != "" {
-            (text(state(), "text"), pill_tone(text(state(), "tone")))
-          } else if !flag(mv(), "usable") {
-            (@sf.t("web-pages.settings.profiles.hostAway", args=[("station", text(mv(), "sourceName"))]), Red)
-          } else {
-            (text(state(), "text"), pill_tone(text(state(), "tone")))
-          }
-        }
-        r.pick(at_once=true, fn() { !current && pid() != "" }, fn(x, opens) {
-          @sf.link_row_node(
-            x,
-            fn() { text(mv(), "stationName") },
-            fn() {
-              let to = @signals.untracked(pid)
-              place_pick[place_key(workspace_of(station), "profiles")] = Profile(station, to)
-              (core.push)(Profile(station, to))
-            },
-            goes=opens,
-            chevron_room=true,
-            title_after=fn(a) { @sf.pill_node(a, fn() { @sf.t("web-pages.connect.current") }) |> ignore },
-            title_after_shown=fn() { current },
-            tail=fn(t) { t.pick(at_once=true, fn() { pill().1 }, fn(y, tone) { @sf.pill_node(y, fn() { pill().0 }, tone~) |> ignore }) },
-            tail_shown=fn() { pill().0 != "" },
-          )
-        })
-      })
-    })
-  })
-}
-
-// ── how it runs ─────────────────────────────────────────────────────────
-
-///|
-/// Its models in node `b`: how many it runs, one row (2026-11-02 用户「既然这样就不要平铺展示了」), all of them a press away
-/// in a dialog of their own (profile_models_panel). A provider that answers the automatic decisions alone: the models
-/// its probe found.
-fn profile_models_node(b : @view.View, core : Core, here : () -> Here, address : String, id : String, p : () -> Json?) -> Unit {
-  b.pick(at_once=true, fn() { flag(p(), "decisionOnly") }, fn(x, only) {
-    if only {
-      @sf.section_node(x, fn() { @sf.t("web-pages.profiles.decisionModels") }, fn(sec) {
-        @sf.loose_node(sec, fn(l) {
-          l.show(at_once=true, fn() { strings(p(), "decisionModels").length() > 0 }, fn(c) {
-            c.box(fn(chips) {
-              @sf.style_node(chips, fn() { pf_chips })
-              chips.wraps(Is(Some(0.0))) |> ignore
-              chips.each(fn() { strings(p(), "decisionModels") }, fn(m) { m }, fn(chip, m) {
-                @sf.style_node(chip, fn() { pf_chip })
-                @sf.words_node(chip, fn() { m.get() }, fn() { pf_chip_words }) |> ignore
-              })
-            })
-            |> ignore
-          })
-          l.show(at_once=true, fn() { text(p(), "decisionText") != "" }, fn(w) { @sf.words_node(w, fn() { text(p(), "decisionText") }, fn() { pf_muted }) |> ignore })
-        })
-      })
-    } else {
-      let all = fn() { strings(p(), "available") }
-      @sf.section_node(
-        x,
-        fn() { @sf.t("web-pages.profiles.models") },
-        note=fn() { if all().length() > 0 { @sf.t("web-pages.profiles.modelsAbout") } else { @sf.t("web-pages.profiles.modelsAboutNone") } },
-        fn(sec) {
-          @sf.group_node(sec, fn(g) {
-            @sf.link_row_node(
-              g,
-              fn() { @sf.t("web-main.model.allModels") },
-              fn() {
-                let fusion : @signals.Signal[Json?] = @signals.signal(None)
-                let fusion_lead : Ref[String] = Ref("")
-                let p0 = @signals.untracked(p)
-                if text(p0, "runtime") == "devin" && text(field(p0, "share"), "role") != "user" {
-                  (core.call)(
-                    "profile.fusion",
-                    obj([("station", str(address)), ("id", str(id))]),
-                    fn(r) {
-                      if r is Ok(v) && field(Some(v), "fusion") is (Some(Object(_)) as f) {
-                        fusion.set(f)
-                      }
-                    },
-                  )
-                }
-                @sf.panel(
-                  @sf.t("web-pages.profiles.models"),
-                  fn(c, _) {
-                    // (the profile as its station says it now, as its page reads it: a model added or taken off shown)
-                    let listed = items(field(@settings.station_of(core, here(), address), "overview"), "profiles")
-                    let now = match listed.search_by(fn(y) { text(Some(y), "id") == id }) {
-                      Some(i) => Some(listed[i])
-                      None => @signals.untracked(p)
-                    }
-                    profile_models_panel(c, core, address, now, fusion.get(), fusion_lead)
-                  },
-                  // (a dialog of its own, not beside its row: 2026-11-02 用户「用弹窗」)
-                  from=Unanchored,
-                  lists=true,
-                )
-              },
-              value=fn() { if all().length() == 0 { @sf.t("web-pages.profiles.noModels") } else { text(p(), "modelsText") } },
-            )
-          })
-        },
-      )
-    }
-  })
-}
-
-///|
-/// How it runs (FastSection, and a Claude profile's background on a message) in node `b`: fast mode by default, its
-/// agents' work moved to the background when a message comes; each switch saved at once, what went wrong under them.
-fn profile_run_node(b : @view.View, core : Core, address : String, id : String, p : () -> Json?) -> Unit {
-  let on = [("station", address), ("id", id)]
-  let busy = fn() { is_doing(core, ["profile.put"], on) }
-  let put = fn(what : String, key : String, value : Bool, done : String) {
-    @settings.act(core, what, "profile.put", obj([("station", str(address)), ("id", str(id)), ("input", obj([(key, Json::boolean(value))]))]), done~)
-  }
-  @sf.section_node(b, fn() { @sf.t("web-pages.profiles.run") }, fn(sec) {
-    @sf.group_node(sec, fn(g) {
-      g.show(at_once=true, fn() { profile_fast(p()) }, fn(r) {
-        @sf.switch_row_node(
-          r,
-          fn() { @sf.t("web-pages.profiles.fast") },
-          fn() { flag(p(), "fast") },
-          fn(next) {
-            put(@sf.t("web-pages.profiles.fastSave"), "fast", next, if next { @sf.t("web-pages.profiles.fastOn") } else { @sf.t("web-pages.profiles.fastOff") })
-          },
-          note=fn() { @sf.t("web-pages.profiles.fastLead") },
-          busy~,
-        )
-      })
-      g.show(at_once=true, fn() { profile_background(p()) }, fn(r) {
-        @sf.switch_row_node(
-          r,
-          fn() { @sf.t("web-pages.profiles.background") },
-          fn() { flag(p(), "backgroundOnMessage") },
-          fn(next) {
-            put(@sf.t("web-pages.profiles.background"), "backgroundOnMessage", next, if next { @sf.t("web-pages.profiles.turnedOn") } else { @sf.t("web-pages.profiles.turnedOff") })
-          },
-          note=fn() { if flag(p(), "backgroundOnMessage") { @sf.t("web-pages.profiles.backgroundOn") } else { @sf.t("web-pages.profiles.backgroundOff") } },
-          busy~,
-        )
-      })
-    })
-    sec.show(at_once=true, fn() { failed_of(core, ["profile.put"], on) is Some(_) }, fn(n) {
-      @sf.page_note_node(n, fn() { failed_of(core, ["profile.put"], on).unwrap_or("") }, bad=fn() { true })
-    })
-  })
-}
-
-// ── whom it is shared with ──────────────────────────────────────────────
-
-///|
-/// Sharing it with the workspace's other stations (ShareSection) in node `b`: a switch (turned on, asked first what the
-/// others do with it); the station it is on (moved from here to another, shared or not); once on, which stations may
-/// use it. A copy of another station's says whose it is, its page a tap away.
-fn profile_share_node(
-  b : @view.View,
+/// The station rows for an account (`所在 station`, `分享给其他 station`, `可用的 station`; or for a borrowed copy,
+/// whether this station uses it and where its host is), placed in group `g`.
+fn profile_station_rows_node(
+  g : @view.View,
   core : Core,
   address : String,
   id : String,
   s : () -> Json?,
+  o : () -> Json?,
   p : () -> Json?,
   entry : () -> Json?,
 ) -> Unit {
@@ -1360,6 +1090,7 @@ fn profile_share_node(
   let shared = fn() { share() is Some(Object(_)) }
   let sharing = fn() { is_doing(core, ["profile.share"], on) }
   let moving = fn() { is_doing(core, ["profile.move"], on) }
+  let busy_put = fn() { is_doing(core, ["profile.put"], on) }
   let sid = fn() { text(s(), "id") }
   let allowed = fn() -> Array[String]? {
     match field(share(), "allow") {
@@ -1367,136 +1098,195 @@ fn profile_share_node(
       _ => None
     }
   }
-  @sf.section_node(b, fn() { @sf.t("web-pages.profiles.share.title") }, fn(sec) {
-    @sf.group_node(sec, fn(g) {
-      // a copy of another station's: whose it is, its page a tap away
-      g.show(at_once=true, user, fn(x) {
-        let lender = fn() -> Json? {
-          let host = text(share(), "host")
-          let members = items(entry(), "members")
-          match members.search_by(fn(m) { text(Some(m), "stationId") == host && text(Some(m), "role") == "host" }) {
-            Some(i) => Some(members[i])
-            None => None
+  let has_sharing = fn() { has(o(), "sharing") && !(field(o(), "sharing") is Some(Null)) }
+  let lender = fn() -> Json? {
+    let host = text(share(), "host")
+    let members = items(entry(), "members")
+    match members.search_by(fn(m) { text(Some(m), "stationId") == host && text(Some(m), "role") == "host" }) {
+      Some(i) => Some(members[i])
+      None => None
+    }
+  }
+  let copy_note = fn() -> String {
+    let host = name_of(text(share(), "host"))
+    if subscription() && field(share(), "reachable") is Some(False) {
+      @sf.t("web-pages.profiles.share.hostAway", args=[("station", host)])
+    } else {
+      @sf.t("web-pages.profiles.share.copy", args=[("station", host)])
+    }
+  }
+  g.show(at_once=true, fn() { has_sharing() && user() && (!profile_pausable(p()) || lender() is Some(_)) }, fn(x) {
+    x.pick(at_once=true, fn() { lender() is Some(_) }, fn(r, goes) {
+      @sf.link_row_node(
+        r,
+        fn() { @sf.t("web-pages.profiles.share.copy", args=[("station", name_of(text(share(), "host")))]) },
+        fn() {
+          match @signals.untracked(lender) {
+            Some(m) => (core.push)(Profile(text(Some(m), "station"), text(Some(m), "profileId")))
+            None => ()
           }
+        },
+        note=fn() {
+          let host = name_of(text(share(), "host"))
+          if subscription() && field(share(), "reachable") is Some(False) {
+            @sf.t("web-pages.profiles.share.hostAway", args=[("station", host)])
+          } else {
+            ""
+          }
+        },
+        value=fn() {
+          if goes {
+            @sf.t("web-pages.profiles.share.goHost", args=[("station", name_of(text(share(), "host")))])
+          } else {
+            ""
+          }
+        },
+        goes~,
+      )
+    })
+  })
+  g.show(at_once=true, fn() { has_sharing() && profile_pausable(p()) }, fn(x) {
+    @sf.switch_row_node(
+      x,
+      fn() { @sf.t("web-pages.profiles.share.here") },
+      fn() { flag(p(), "enabled") },
+      fn(next) {
+        let label = if next { @sf.t("web-pages.connect.enable") } else { @sf.t("web-pages.profiles.disable") }
+        let change = fn() {
+          @settings.act(
+            core,
+            label,
+            "profile.put",
+            obj([("station", str(address)), ("id", str(id)), ("input", obj([("enabled", Json::boolean(next))]))]),
+            done=if next { @sf.t("web-pages.connect.enabled") } else { @sf.t("web-pages.profiles.disabled") },
+          )
         }
-        x.pick(at_once=true, fn() { lender() is Some(_) }, fn(r, goes) {
-          @sf.link_row_node(
-            r,
-            fn() { @sf.t("web-pages.profiles.share.copy", args=[("station", name_of(text(share(), "host")))]) },
-            fn() {
-              match @signals.untracked(lender) {
-                Some(m) => (core.push)(Profile(text(Some(m), "station"), text(Some(m), "profileId")))
-                None => ()
-              }
-            },
-            note=fn() {
-              let host = name_of(text(share(), "host"))
-              if subscription() && field(share(), "reachable") is Some(False) {
-                @sf.t("web-pages.profiles.share.hostAway", args=[("station", host)])
-              } else {
-                @sf.t("web-pages.profiles.share.changeThere")
-              }
-            },
-            goes~,
+        if !next {
+          confirm(
+            @sf.t("web-pages.profiles.disableConfirm", args=[("name", text(@signals.untracked(p), "name"))]),
+            @sf.t("web-pages.profiles.disableCopyBody"),
+            label,
+            danger=true,
+            change,
           )
-        })
-      })
-      g.show(at_once=true, fn() { !user() }, fn(x) {
-        @sf.switch_row_node(
-          x,
-          fn() { @sf.t("web-pages.profiles.share.switch") },
-          shared,
-          fn(now) {
-            let change = fn() {
-              @settings.act(
-                core,
-                @sf.t("web-pages.profiles.share.switch"),
-                "profile.share",
-                obj([("station", str(address)), ("id", str(id)), ("on", Json::boolean(now))]),
-                done=if now { @sf.t("web-pages.profiles.share.shared") } else { @sf.t("web-pages.profiles.share.unshared") },
-              )
-            }
-            if now {
-              let sub = @signals.untracked(subscription)
-              let claude = sub && text(@signals.untracked(p), "runtime") == "claude"
-              @sf.confirm(
-                if claude { @sf.t("web-pages.profiles.share.confirmClaudeTitle") } else { @sf.t("web-pages.profiles.share.confirmTitle") },
-                if claude {
-                  @sf.t("web-pages.profiles.share.confirmClaudeBody")
-                } else if sub {
-                  @sf.t("web-pages.profiles.share.confirmSubscriptionBody")
-                } else {
-                  @sf.t("web-pages.profiles.share.confirmCopyBody")
-                },
-                if claude { @sf.t("web-pages.profiles.share.confirmUnderstood") } else { @sf.t("web-pages.profiles.share.confirmAction") },
-                change,
-                warning=if claude { @sf.t("web-pages.profiles.share.confirmClaudeWarning") } else { "" },
-              )
+        } else {
+          change()
+        }
+      },
+      note=fn() {
+        if user() && lender() is None {
+          copy_note()
+        } else if user() {
+          @sf.t("web-pages.profiles.share.hereNote")
+        } else {
+          ""
+        }
+      },
+      busy=busy_put,
+    )
+  })
+  let targets = fn() { stations().filter(fn(x) { text(Some(x), "id") != sid() }) }
+  let movable = fn() {
+    has_sharing() && !user() && !flag(p(), "machine") && ((shared() && subscription()) || targets().iter().any(fn(x) { flag(Some(x), "online") }))
+  }
+  g.show(at_once=true, movable, fn(x) {
+    x.pick(at_once=true, fn() { !moving() && targets().length() > 0 }, fn(r, goes) {
+      @sf.link_row_node(
+        r,
+        fn() { @sf.t("web-pages.profiles.share.where") },
+        fn() { move_dialog(core, @signals.untracked(s), @signals.untracked(p), @signals.untracked(targets)) },
+        note=fn() { if goes { @sf.t("web-pages.profiles.share.whereNote") } else { "" } },
+        value=fn() { text(s(), "name") },
+        value_cut=true,
+        goes~,
+        tail=fn(t) { doing_mark_node(t, moving, fn() { failed_of(core, ["profile.move"], on) }) },
+        tail_shown=fn() { moving() || failed_of(core, ["profile.move"], on) is Some(_) },
+      )
+    })
+  })
+  g.show(at_once=true, fn() { has_sharing() && !user() }, fn(x) {
+    @sf.switch_row_node(
+      x,
+      fn() { @sf.t("web-pages.profiles.share.switch") },
+      shared,
+      fn(now) {
+        let change = fn() {
+          @settings.act(
+            core,
+            @sf.t("web-pages.profiles.share.switch"),
+            "profile.share",
+            obj([("station", str(address)), ("id", str(id)), ("on", Json::boolean(now))]),
+            done=if now { @sf.t("web-pages.profiles.share.shared") } else { @sf.t("web-pages.profiles.share.unshared") },
+          )
+        }
+        if now {
+          let sub = @signals.untracked(subscription)
+          let claude = sub && text(@signals.untracked(p), "runtime") == "claude"
+          @sf.confirm(
+            if claude { @sf.t("web-pages.profiles.share.confirmClaudeTitle") } else { @sf.t("web-pages.profiles.share.confirmTitle") },
+            if claude {
+              @sf.t("web-pages.profiles.share.confirmClaudeBody")
+            } else if sub {
+              @sf.t("web-pages.profiles.share.confirmSubscriptionBody")
             } else {
-              change()
+              @sf.t("web-pages.profiles.share.confirmCopyBody")
             }
-          },
-          note=fn() {
-            if !shared() {
-              @sf.t("web-pages.profiles.share.onlyHere", args=[("station", text(s(), "name"))])
-            } else if subscription() {
-              @sf.t("web-pages.profiles.share.lent")
-            } else {
-              @sf.t("web-pages.profiles.share.copied")
-            }
-          },
-          busy=sharing,
-        )
-      })
-      // which station it is on, moved to another: any of the station's own but the machine's login (shared or not, a
-      // subscription or a key). A shared subscription's always says it, as before any could move (the others use it:
-      // where its sign-in is kept is theirs to know); another's only while a station is up to take it
-      let targets = fn() { stations().filter(fn(x) { text(Some(x), "id") != sid() }) }
-      let movable = fn() {
-        !user() && !flag(p(), "machine") && ((shared() && subscription()) || targets().iter().any(fn(x) { flag(Some(x), "online") }))
-      }
-      g.show(at_once=true, movable, fn(x) {
-        x.pick(at_once=true, fn() { !moving() && targets().length() > 0 }, fn(r, goes) {
-          @sf.link_row_node(
-            r,
-            fn() { @sf.t("web-pages.profiles.share.where") },
-            fn() { move_dialog(core, @signals.untracked(s), @signals.untracked(p), @signals.untracked(targets)) },
-            value=fn() { text(s(), "name") },
-            goes~,
-            tail=fn(t) { doing_mark_node(t, moving, fn() { failed_of(core, ["profile.move"], on) }) },
+            ,
+            if claude { @sf.t("web-pages.profiles.share.confirmUnderstood") } else { @sf.t("web-pages.profiles.share.confirmAction") },
+            change,
+            warning=if claude { @sf.t("web-pages.profiles.share.confirmClaudeWarning") } else { "" },
           )
-        })
-      })
-      // which stations may use it
-      g.show(at_once=true, fn() { !user() && shared() }, fn(x) {
-        x.pick(at_once=true, fn() { !sharing() }, fn(r, goes) {
-          @sf.link_row_node(
-            r,
-            fn() { @sf.t("web-pages.profiles.share.stations") },
-            fn() {
-              pick_stations(core, address, id, @signals.untracked(stations), @signals.untracked(sid), @signals.untracked(allowed))
-            },
-            note=fn() {
-              let users = strings(share(), "users").map(name_of)
-              if users.length() > 0 {
-                @sf.t("web-pages.profiles.share.users", args=[("stations", users.join(@sf.t("web-main.list.separator")))])
-              } else {
-                ""
-              }
-            },
-            value=fn() {
-              match allowed() {
-                None => @sf.t("web-pages.profiles.share.everyStation")
-                Some(a) =>
-                  stations()
-                  .filter(fn(x) { a.contains(text(Some(x), "id")) || text(Some(x), "id") == sid() })
-                  .map(fn(x) { text(Some(x), "name") })
-                  .join(@sf.t("web-main.list.separator"))
-              }
-            },
-            goes~,
-          )
-        })
+        } else {
+          change()
+        }
+      },
+      note=fn() { @sf.t("web-pages.profiles.share.switchNote") },
+      busy=sharing,
+    )
+  })
+  g.show(at_once=true, fn() { has_sharing() && !user() && shared() }, fn(x) {
+    x.pick(at_once=true, fn() { !sharing() }, fn(r, goes) {
+      @sf.link_row_node(
+        r,
+        fn() { @sf.t("web-pages.profiles.share.stations") },
+        fn() {
+          pick_stations(core, address, id, @signals.untracked(stations), @signals.untracked(sid), @signals.untracked(allowed))
+        },
+        note=fn() { @sf.t("web-pages.profiles.share.stationsNote") },
+        value=fn() {
+          match allowed() {
+            None => @sf.t("web-pages.profiles.share.everyStation")
+            Some(a) =>
+              stations()
+              .filter(fn(x) { a.contains(text(Some(x), "id")) || text(Some(x), "id") == sid() })
+              .map(fn(x) { text(Some(x), "name") })
+              .join(@sf.t("web-main.list.separator"))
+          }
+        },
+        value_cut=true,
+        goes~,
+      )
+    })
+  })
+}
+
+///|
+/// The Station section in node `b`, when shown as its own section (or for a borrowed copy).
+fn profile_station_node(
+  b : @view.View,
+  core : Core,
+  address : String,
+  id : String,
+  s : () -> Json?,
+  o : () -> Json?,
+  p : () -> Json?,
+  entry : () -> Json?,
+) -> Unit {
+  let has_sharing = fn() { has(o(), "sharing") && !(field(o(), "sharing") is Some(Null)) }
+  b.show(at_once=true, has_sharing, fn(s_view) {
+    @sf.section_node(s_view, fn() { @sf.t("android-misc.bar.place.stations") }, fn(sec) {
+      @sf.group_node(sec, fn(g) {
+        profile_station_rows_node(g, core, address, id, s, o, p, entry)
       })
     })
   })
@@ -1607,176 +1397,265 @@ fn pick_stations(core : Core, address : String, id : String, stations : Array[Js
   )
 }
 
-///|
-/// Which of the workspaces the station joined may run their chats on it (WorkspacesSection), in node `b`, a switch
-/// each (a workspace's mark before its name where it has one), for its home's managers once the station is in more
-/// than one; read as its block is made.
-fn profile_workspaces_node(b : @view.View, core : Core, address : String, id : String, p : () -> Json?, stint : () -> Int) -> Unit {
-  let joined = fn() {
-    let m = (core.topic)("memberships", { "station": str(address) }).get().value
-    if flag(m, "manages") {
-      items(m, "workspaces").filter(fn(w) { !flag(Some(w), "home") })
-    } else {
-      []
-    }
-  }
-  let busy = fn() { is_doing(core, ["profile.put"], [("station", address), ("id", id)]) }
-  b.show(at_once=true, fn() { joined().length() > 0 }, fn(x) {
-    @sf.section_node(x, fn() { @sf.t("web-pages.profiles.workspaces.title") }, note=fn() { @sf.t("web-pages.profiles.workspaces.lead") }, fn(sec) {
-      @sf.group_node(sec, fn(g) {
-        g.each(joined, fn(w) { text(Some(w), "workspace") }, fn(r, w) {
-          let wv = fn() { Some(w.get()) }
-          let ws = @signals.untracked(fn() { text(wv(), "workspace") })
-          let name = fn() { text(wv(), "name") }
-          let emoji = fn() { text(wv(), "emoji") }
-          let icon = fn() { text(wv(), "icon") }
-          let on = fn() { strings(p(), "workspaces").contains(ws) }
-          // With no mark of its own, the name is enough (a bare initial reads as another word: 「个 个人」).
-          r.pick(at_once=true, fn() { @sf.has_station_mark(emoji(), icon()) }, fn(y, marked) {
-            @sf.switch_row_node(
-              y,
-              name,
-              on,
-              fn(next) {
-                let now = strings(@signals.untracked(p), "workspaces")
-                let list = if next { now.copy() } else { now.filter(fn(x) { x != ws }) }
-                if next {
-                  list.push(ws)
-                }
-                let named = @signals.untracked(name)
-                @settings.act(
-                  core,
-                  @sf.t("web-pages.profiles.workspaces.title"),
-                  "profile.put",
-                  obj([("station", str(address)), ("id", str(id)), ("input", obj([("workspaces", Json::array(list.map(str)))]))]),
-                  done=@sf.t(if next { "web-pages.profiles.workspaces.turnedOn" } else { "web-pages.profiles.workspaces.turnedOff" }, args=[("name", named)]),
-                )
-              },
-              note=fn() { @sf.t(if on() { "web-pages.profiles.workspaces.on" } else { "web-pages.profiles.workspaces.off" }, args=[("name", name())]) },
-              busy~,
-              lead?=if marked {
-                Some(fn(l) { @sf.station_mark_node(l, emoji, icon, profile_ws_mark, fn() { @sf.theme().p.text }, stint) })
-              } else {
-                None
-              },
-            )
-          })
-        })
-      })
-    })
-  })
-}
-
-// ── the account ─────────────────────────────────────────────────────────
+// ── settings (models, how it runs, key, variables) ──────────────────────
 
 ///|
-/// The account itself (AccountSection) in node `b`, a row each: its key masked and where its provider is (each changed
-/// from its row: asked for), a subscription signed in again or by hand on the machine, or whose login the machine's own
-/// is.
-fn profile_account_node(b : @view.View, core : Core, address : String, id : String, s : () -> Json?, p : () -> Json?) -> Unit {
+/// Its settings in node `b`: its models, its key or machine login, how it runs (fast mode, background on message), the
+/// other workspaces the station serves, and its environment variables, in one Settings card.
+fn profile_settings_node(
+  b : @view.View,
+  core : Core,
+  here : () -> Here,
+  address : String,
+  id : String,
+  s : () -> Json?,
+  o : () -> Json?,
+  p : () -> Json?,
+  entry : () -> Json?,
+  open : ProfileOpen,
+  stint : () -> Int,
+  tips : @sf.TipLayer?,
+) -> Unit {
   let on = [("station", address), ("id", id)]
   let access = fn() { field(p(), "access") }
   let kind = fn() { text(access(), "kind") }
   let machine = fn() { flag(p(), "machine") }
   let keyed = fn() { ["opencode-go", "anthropic-api", "api-provider"].contains(kind()) && !flag(access(), "login") }
-  let saving = fn() { is_doing(core, ["profile.put"], on) }
-  let starting = fn() { is_doing(core, ["profile.login"], on) }
-  let command = fn() { text(p(), "loginCommand") }
-  @sf.section_node(b, fn() { @sf.t("web-pages.profiles.account") }, fn(sec) {
-    @sf.group_node(sec, fn(g) {
-      g.show(at_once=true, machine, fn(x) {
-        let runtime = fn() { @settings.runtime_label(text(p(), "runtime")) }
-        said_row_node(
-          x,
-          fn() {
-            if text(s(), "name") != "" {
-              @sf.t("web-pages.profiles.machineLoginOn", args=[("station", text(s(), "name")), ("runtime", runtime())])
-            } else {
-              @sf.t("web-pages.profiles.machineLoginHere", args=[("runtime", runtime())])
-            }
-          },
-          note=fn() { @sf.t("web-pages.profiles.machineLoginAbout", args=[("runtime", runtime())]) },
-        )
-      })
-      g.show(at_once=true, fn() { !machine() && keyed() }, fn(x) {
-        x.pick(at_once=true, fn() { !saving() }, fn(r, goes) {
-          @sf.link_row_node(
-            r,
-            fn() {
-              if kind() == "opencode-go" {
-                "OpenCode Go key"
-              } else if text(p(), "providerName") != "" {
-                text(p(), "providerName") + " key"
-              } else {
-                "API key"
-              }
-            },
-            fn() { ask_key(core, address, @signals.untracked(p)) },
-            note=fn() { if text(access(), "key") != "" { text(access(), "key") } else { @sf.t("web-pages.profiles.notSaved") } },
-            value=fn() { @sf.t("web-pages.profiles.replace") },
-            value_lit=true,
-            chevron=false,
-            goes~,
-            tail=fn(t) { doing_mark_node(t, saving, fn() { failed_of(core, ["profile.put"], on) }) },
-          )
+  let busy = fn() { is_doing(core, ["profile.put"], on) }
+  let joined = fn() {
+    if profile_copy(p()) {
+      []
+    } else {
+      let m = (core.topic)("memberships", { "station": str(address) }).get().value
+      if flag(m, "manages") {
+        items(m, "workspaces").filter(fn(w) { !flag(Some(w), "home") })
+      } else {
+        []
+      }
+    }
+  }
+  let put = fn(what : String, key : String, value : Bool, done : String) {
+    @settings.act(core, what, "profile.put", obj([("station", str(address)), ("id", str(id)), ("input", obj([(key, Json::boolean(value))]))]), done~)
+  }
+  b.pick(at_once=true, fn() { flag(p(), "decisionOnly") }, fn(x, only) {
+    if only {
+      @sf.section_node(x, fn() { @sf.t("web-pages.profiles.decisionModels") }, fn(sec) {
+        @sf.loose_node(sec, fn(l) {
+          l.show(at_once=true, fn() { strings(p(), "decisionModels").length() > 0 }, fn(c) {
+            c.box(fn(chips) {
+              @sf.style_node(chips, fn() { pf_chips })
+              chips.wraps(Is(Some(0.0))) |> ignore
+              chips.each(fn() { strings(p(), "decisionModels") }, fn(m) { m }, fn(chip, m) {
+                @sf.style_node(chip, fn() { pf_chip })
+                @sf.words_node(chip, fn() { m.get() }, fn() { pf_chip_words }) |> ignore
+              })
+            })
+            |> ignore
+          })
+          l.show(at_once=true, fn() { text(p(), "decisionText") != "" }, fn(w) { @sf.words_node(w, fn() { text(p(), "decisionText") }, fn() { pf_muted }) |> ignore })
         })
       })
-      g.show(at_once=true, fn() { !machine() && keyed() && has(access(), "endpoint") }, fn(x) {
-        x.pick(at_once=true, fn() { !saving() }, fn(r, goes) {
-          @sf.link_row_node(
-            r,
-            fn() { @sf.t("common.provider.endpoint") },
-            fn() {
-              let endpoint = text(@signals.untracked(access), "endpoint")
-              let kind = @signals.untracked(kind)
-              ask(@sf.t("common.provider.endpoint"), endpoint, "https://", @sf.t("common.save"), fn(value) {
-                @settings.act(
-                  core,
-                  @sf.t("web-pages.profiles.replace"),
-                  "profile.put",
-                  obj([("station", str(address)), ("id", str(id)), ("input", obj([("access", obj([("kind", str(kind)), ("endpoint", str(value.trim(chars=" \t\n").to_owned()))]))]))]),
-                  done=@sf.t("web-pages.profiles.savedChecking"),
+    } else {
+      let all = fn() { strings(p(), "available") }
+      @sf.section_node(
+        x,
+        fn() { @sf.t("android-misc.settings") },
+        fn(sec) {
+          @sf.group_node(sec, fn(g) {
+            profile_station_rows_node(g, core, address, id, s, o, p, entry)
+            @sf.link_row_node(
+              g,
+              fn() { @sf.t("web-pages.profiles.availableModels") },
+              fn() {
+                let fusion : @signals.Signal[Json?] = @signals.signal(None)
+                let fusion_lead : Ref[String] = Ref("")
+                let p0 = @signals.untracked(p)
+                if text(p0, "runtime") == "devin" && text(field(p0, "share"), "role") != "user" {
+                  (core.call)(
+                    "profile.fusion",
+                    obj([("station", str(address)), ("id", str(id))]),
+                    fn(r) {
+                      if r is Ok(v) && field(Some(v), "fusion") is (Some(Object(_)) as f) {
+                        fusion.set(f)
+                      }
+                    },
+                  )
+                }
+                @sf.panel(
+                  @sf.t("web-pages.profiles.availableModels"),
+                  fn(c, _) {
+                    let listed = items(field(@settings.station_of(core, here(), address), "overview"), "profiles")
+                    let now = match listed.search_by(fn(y) { text(Some(y), "id") == id }) {
+                      Some(i) => Some(listed[i])
+                      None => @signals.untracked(p)
+                    }
+                    profile_models_panel(c, core, address, now, fusion.get(), fusion_lead)
+                  },
+                  from=Unanchored,
+                  lists=true,
+                )
+              },
+              note=fn() {
+                if flag(p(), "canAddModel") {
+                  @sf.t("web-pages.profiles.modelsNoteAdd")
+                } else if text(p(), "runtime") == "devin" && text(field(p(), "share"), "role") != "user" {
+                  @sf.t("web-pages.profiles.modelsNoteFusion")
+                } else {
+                  @sf.t("web-pages.profiles.modelsNote")
+                }
+              },
+              value=fn() { if all().length() == 0 { @sf.t("web-pages.profiles.noModels") } else { text(p(), "modelsText") } },
+            )
+            g.show(at_once=true, machine, fn(m_row) {
+              let runtime = fn() { @settings.runtime_label(text(p(), "runtime")) }
+              said_row_node(
+                m_row,
+                fn() {
+                  if text(s(), "name") != "" {
+                    @sf.t("web-pages.profiles.machineLoginOn", args=[("station", text(s(), "name")), ("runtime", runtime())])
+                  } else {
+                    @sf.t("web-pages.profiles.machineLoginHere", args=[("runtime", runtime())])
+                  }
+                },
+                note=fn() { @sf.t("web-pages.profiles.machineLoginAbout", args=[("runtime", runtime())]) },
+              )
+            })
+            g.show(at_once=true, fn() { !machine() && keyed() }, fn(k_row) {
+              k_row.pick(at_once=true, fn() { !busy() }, fn(r, goes) {
+                @sf.link_row_node(
+                  r,
+                  fn() {
+                    if kind() == "opencode-go" {
+                      "OpenCode Go key"
+                    } else if text(p(), "providerName") != "" {
+                      text(p(), "providerName") + " key"
+                    } else {
+                      "API key"
+                    }
+                  },
+                  fn() { ask_key(core, address, @signals.untracked(p)) },
+                  note=fn() { if text(access(), "key") != "" { text(access(), "key") } else { @sf.t("web-pages.profiles.notSaved") } },
+                  value=fn() { @sf.t("web-pages.profiles.replace") },
+                  value_lit=true,
+                  chevron=false,
+                  goes~,
+                  tail=fn(t) { doing_mark_node(t, busy, fn() { failed_of(core, ["profile.put"], on) }) },
+                  tail_shown=fn() { busy() || failed_of(core, ["profile.put"], on) is Some(_) },
                 )
               })
-            },
-            note=fn() { text(access(), "endpoint") },
-            value=fn() { @sf.t("web-pages.profiles.replace") },
-            value_lit=true,
-            chevron=false,
-            goes~,
-          )
-        })
-      })
-      // signed in and well: signing in again, or by hand on the machine (OpenCode's has no command to run)
-      g.show(at_once=true, fn() { !machine() && !keyed() }, fn(x) {
-        x.pick(at_once=true, fn() { !starting() }, fn(r, goes) {
-          @sf.link_row_node(
-            r,
-            fn() { @sf.t("web-pages.signIn.again") },
-            fn() { @settings.act(core, @sf.t("web-pages.profiles.signIn"), "profile.login", obj([("station", str(address)), ("id", str(id))])) },
-            note=fn() { @sf.t("web-pages.profiles.subscriptionSignIn", args=[("provider", text(p(), "signInProvider"))]) },
-            chevron=false,
-            goes~,
-            tail=fn(t) { doing_mark_node(t, starting, fn() { failed_of(core, ["profile.login"], on) }) },
-          )
-        })
-      })
-      g.show(at_once=true, fn() { !machine() && !keyed() && command() != "" }, fn(x) {
-        @sf.link_row_node(
-          x,
-          fn() { @sf.t("web-pages.profiles.manual") },
-          fn() {
-            let words = @signals.untracked(command)
-            @sf.panel(
-              @sf.t("web-pages.profiles.manual"),
-              fn(c, _) { @sf.copy_command(c, "profile-command/" + address + "/" + id, words, copy=@sf.t("common.copy"), copied=@sf.t("common.copied")) },
-              from=Unanchored,
-            )
-          },
-          chevron=false,
-        )
-      })
-    })
+            })
+            g.show(at_once=true, fn() { !machine() && keyed() && has(access(), "endpoint") }, fn(ep_row) {
+              ep_row.pick(at_once=true, fn() { !busy() }, fn(r, goes) {
+                @sf.link_row_node(
+                  r,
+                  fn() { @sf.t("common.provider.endpoint") },
+                  fn() {
+                    let endpoint = text(@signals.untracked(access), "endpoint")
+                    let kind = @signals.untracked(kind)
+                    ask(@sf.t("common.provider.endpoint"), endpoint, "https://", @sf.t("common.save"), fn(value) {
+                      @settings.act(
+                        core,
+                        @sf.t("web-pages.profiles.replace"),
+                        "profile.put",
+                        obj([("station", str(address)), ("id", str(id)), ("input", obj([("access", obj([("kind", str(kind)), ("endpoint", str(value.trim(chars=" \t\n").to_owned()))]))]))]),
+                        done=@sf.t("web-pages.profiles.savedChecking"),
+                      )
+                    })
+                  },
+                  note=fn() { text(access(), "endpoint") },
+                  value=fn() { @sf.t("web-pages.profiles.replace") },
+                  value_lit=true,
+                  chevron=false,
+                  goes~,
+                )
+              })
+            })
+            g.show(at_once=true, fn() { profile_fast(p()) }, fn(r) {
+              @sf.switch_row_node(
+                r,
+                fn() { @sf.t("web-pages.profiles.fast") },
+                fn() { flag(p(), "fast") },
+                fn(next) {
+                  put(@sf.t("web-pages.profiles.fastSave"), "fast", next, if next { @sf.t("web-pages.profiles.fastOn") } else { @sf.t("web-pages.profiles.fastOff") })
+                },
+                note=fn() { @sf.t("web-pages.profiles.fastLead") },
+                busy~,
+              )
+            })
+            g.show(at_once=true, fn() { profile_background(p()) }, fn(r) {
+              @sf.switch_row_node(
+                r,
+                fn() { @sf.t("web-pages.profiles.background") },
+                fn() { flag(p(), "backgroundOnMessage") },
+                fn(next) {
+                  put(@sf.t("web-pages.profiles.background"), "backgroundOnMessage", next, if next { @sf.t("web-pages.profiles.turnedOn") } else { @sf.t("web-pages.profiles.turnedOff") })
+                },
+                note=fn() { if flag(p(), "backgroundOnMessage") { @sf.t("android-settings.profile.backgroundOn") } else { @sf.t("android-settings.profile.backgroundOff") } },
+                busy~,
+              )
+            })
+            g.show(at_once=true, fn() { joined().length() > 0 }, fn(ws_box) {
+              ws_box.each(joined, fn(w) { text(Some(w), "workspace") }, fn(r, w) {
+                let wv = fn() { Some(w.get()) }
+                let ws = @signals.untracked(fn() { text(wv(), "workspace") })
+                let name = fn() { text(wv(), "name") }
+                let emoji = fn() { text(wv(), "emoji") }
+                let icon = fn() { text(wv(), "icon") }
+                let on_ws = fn() { strings(p(), "workspaces").contains(ws) }
+                r.pick(at_once=true, fn() { @sf.has_station_mark(emoji(), icon()) }, fn(y, marked) {
+                  @sf.switch_row_node(
+                    y,
+                    name,
+                    on_ws,
+                    fn(next) {
+                      let now = strings(@signals.untracked(p), "workspaces")
+                      let list = if next { now.copy() } else { now.filter(fn(x) { x != ws }) }
+                      if next {
+                        list.push(ws)
+                      }
+                      let named = @signals.untracked(name)
+                      @settings.act(
+                        core,
+                        @sf.t("web-pages.profiles.workspaces.title"),
+                        "profile.put",
+                        obj([("station", str(address)), ("id", str(id)), ("input", obj([("workspaces", Json::array(list.map(str)))]))]),
+                        done=@sf.t(if next { "web-pages.profiles.workspaces.turnedOn" } else { "web-pages.profiles.workspaces.turnedOff" }, args=[("name", named)]),
+                      )
+                    },
+                    note=fn() { @sf.t(if on_ws() { "web-pages.profiles.workspaces.on" } else { "web-pages.profiles.workspaces.off" }, args=[("name", name())]) },
+                    busy~,
+                    lead?=if marked {
+                      Some(fn(l) { @sf.station_mark_node(l, emoji, icon, profile_ws_mark, fn() { @sf.theme().p.text }, stint) })
+                    } else {
+                      None
+                    },
+                  )
+                })
+              })
+            })
+            g.show(at_once=true, fn() { kind() == "env" }, fn(env_box) {
+              env_box.each(fn() { items(p(), "env") }, fn(e) { text(Some(e), "key") }, fn(r, e) {
+                @sf.link_row_node(r, fn() { text(Some(e.get()), "key") }, fn() {  }, note=fn() { text(Some(e.get()), "value") }, goes=false)
+              })
+              @sf.link_row_node(
+                env_box,
+                fn() { if open.env.get() { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.env.edit") } },
+                fn() { open.env.set(!open.env.untracked()) },
+                chevron=false,
+                tail=fn(t) { doing_mark_node(t, busy, fn() { failed_of(core, ["profile.put"], on) }, tips?) },
+                tail_shown=fn() { busy() || failed_of(core, ["profile.put"], on) is Some(_) },
+              )
+            })
+          })
+          sec.show(fn() { kind() == "env" && open.env.get() }, fn(c) {
+            @sf.page_card_node(c, footed=true, fn(k) { env_editor_node(k, core, address, id, p, busy) })
+          })
+          sec.show(at_once=true, fn() { failed_of(core, ["profile.put"], on) is Some(_) }, fn(n) {
+            @sf.page_note_node(n, fn() { failed_of(core, ["profile.put"], on).unwrap_or("") }, bad=fn() { true })
+          })
+        },
+      )
+    }
   })
 }
 
@@ -1820,29 +1699,6 @@ fn profile_rename(core : Core, address : String, p : Json?) -> Unit {
         done=@sf.t("web-pages.settings.workspace.renamed"),
       )
     }
-  })
-}
-
-///|
-/// The variables a custom profile runs with (EnvSection) in node `b`: a row each, its name and its value (a secret's
-/// masked); the last row opens them to be written on a card under them (env_editor_node), as it says.
-fn profile_env_node(b : @view.View, core : Core, address : String, id : String, p : () -> Json?, open : ProfileOpen, tips : @sf.TipLayer?) -> Unit {
-  let on = [("station", address), ("id", id)]
-  let busy = fn() { is_doing(core, ["profile.put"], on) }
-  @sf.section_node(b, fn() { @sf.t("web-pages.profiles.env") }, note=fn() { @sf.t("web-pages.profiles.envLead", args=[("route", "{route}")]) }, fn(sec) {
-    @sf.group_node(sec, fn(g) {
-      g.each(fn() { items(p(), "env") }, fn(e) { text(Some(e), "key") }, fn(r, e) {
-        @sf.link_row_node(r, fn() { text(Some(e.get()), "key") }, fn() {  }, note=fn() { text(Some(e.get()), "value") }, goes=false)
-      })
-      @sf.link_row_node(
-        g,
-        fn() { if open.env.get() { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.env.edit") } },
-        fn() { open.env.set(!open.env.untracked()) },
-        chevron=false,
-        tail=fn(t) { doing_mark_node(t, busy, fn() { failed_of(core, ["profile.put"], on) }, tips?) },
-      )
-    })
-    sec.show(fn() { open.env.get() }, fn(x) { @sf.page_card_node(x, footed=true, fn(k) { env_editor_node(k, core, address, id, p, busy) }) })
   })
 }
 

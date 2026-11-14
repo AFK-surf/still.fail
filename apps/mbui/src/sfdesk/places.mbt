@@ -335,7 +335,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             picked == Some(route),
             fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), nav_mark_side, text(p, "providerMark")) },
             // (a subscription by its account, a key by its name: the core's)
-            fn() { nav_title(c, if text(e, "title") == "" { text(p, "name") } else { text(e, "title") }, away=!usable) },
+            fn() { nav_title(c, if text(p, "name") != "" { text(p, "name") } else { text(e, "title") }, away=!usable) },
             lines=fn() {
               if trouble != "" {
                 @sf.list_row_line(c, fn() { c.text(trouble, style=nav_meta().then(trouble_ink(tone)).then(place_fill)) |> ignore })

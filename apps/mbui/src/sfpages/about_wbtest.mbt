@@ -100,11 +100,7 @@ test "关于's version rows, at each width and with either hand: this build alon
       let (_, ny, _, _) = t.rect_of(told.1).unwrap()
       let (_, uy, _, uh) = t.rect_of("正在下载 0.1.1").unwrap()
       assert_true(ny >= uy + uh, msg=at)
-      // (真问题，待修, the squeeze holding the window tree's nodes, 2026-11-11: at 390 on a phone the auto-update switch's
-      // note, 「自动下载新版本，在你不用 still.fail 时安装」, goes on in two lines beside the switch, one line alone: made at
-      // sf/page_node.mbt:1254, asked for at about.mbt:145. Its bar, to come down as it is mended.)
-      let known = if at == "390 platform 2" { 1 } else { 0 }
-      assert_true(t.beside_faults().length() == known, msg="\{at}: \{Repr(t.beside_faults())}")
+      assert_true(t.beside_faults().is_empty(), msg="\{at}: \{Repr(t.beside_faults())}")
       let (_, y, _, _) = t.rect_of("更新日志").unwrap()
       if under < 0.0 {
         under = y

@@ -243,8 +243,8 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
                   })
                   |> ignore
                   // (a subscription by its account, a key by its name: the core's)
-                  let title = match text(ev, "title") {
-                    "" => text(p, "name")
+                  let title = match text(p, "name") {
+                    "" => text(ev, "title")
                     x => x
                   }
                   c.text(title, size=t.t.ui, color=t.p.text, wrap=false, w=Cut, line=21.0, allow_ellipsis=true) |> ignore
@@ -283,8 +283,7 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
               })
               |> ignore
             }, on_press=fn() {
-              // an account on several stations: its own page, each station's part under it
-              (core.push)(if flag(ev, "several") { ProfileAccount(text(ev, "key")) } else { Profile(text(ev, "station"), text(p, "id")) })
+              (core.push)(Profile(text(ev, "station"), text(p, "id")))
             })
           }
         })

@@ -2764,4 +2764,12 @@ let en : Map[String, String] = {
   "web-pages.screen.debug.paneShow": "Show the side panel",
   "desktop.update.update": "Update",
   "web-pages.stationUpdates.app": "This app",
+  "web-pages.profiles.availableModels": "Available models",
+  "web-pages.profiles.modelsNote": "Tick models to show them first in the model picker",
+  "web-pages.profiles.modelsNoteAdd": "Tick models to show first, or add custom models by name",
+  "web-pages.profiles.modelsNoteFusion": "Tick models to show first, or configure Fusion pairings",
+  "web-pages.profiles.share.hereNote": "Let chats on this station use this shared account",
+  "web-pages.profiles.share.whereNote": "Move this account to another station",
+  "web-pages.profiles.share.switchNote": "Let chats on other stations use this account",
+  "web-pages.profiles.share.stationsNote": "Choose which stations can use this account",
 }

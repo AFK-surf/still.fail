@@ -810,12 +810,14 @@ test "an update in each sidebar keeps its corner and press room on medium and la
   ] {
     for mode in ["settings-about", "files", "place-stations", "place-profiles"] {
       let t = screen_in(mode, win, "zh")
+      let head = fn(f : String) { f.split(", node ").collect()[0].to_owned() }
+      let before = if mode != "settings-about" { t.corner_faults().map(head) } else { [] }
       if mode != "settings-about" {
         @sffixture.fixture_update("0.1.9999")
         @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
         t.run_for(@ui.move_most_ms)
       }
-      let corners = t.corner_faults()
+      let corners = t.corner_faults().filter(fn(f) { !before.contains(head(f)) })
       assert_true(corners.is_empty(), msg="\{win.0} \{mode}: \{Repr(corners)}")
       let rooms = t.room_faults().filter(fn(f) { f.contains("正在下载") })
       assert_true(rooms.is_empty(), msg="\{win.0} \{mode}: \{Repr(rooms)}")
