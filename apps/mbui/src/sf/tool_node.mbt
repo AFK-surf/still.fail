@@ -233,16 +233,13 @@ pub fn tool_ring_node(
   corner : @view.Live[Double],
   loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(made_for=loc, fn(v) {
+  @headless.button(made_for=loc, parent, label, fn(_) {  }, disabled=fn() { true }, fn(v, _) {
     v
     .width(Is(Some(tool_side)))
     .height(Is(Some(tool_side)))
     .padding(Is((tool_icon_in, tool_icon_in, tool_icon_in, tool_icon_in)))
     .radius(corner)
     .alpha(Is(tool_faint))
-    // (read out disabled: taking no press)
-    .presses(Is(false))
-    .says(By(fn() { Some(@view.said(Button, label=label())) }))
     |> ignore
     v.box(fn(i) {
       i

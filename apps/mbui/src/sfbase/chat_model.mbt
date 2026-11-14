@@ -1001,10 +1001,61 @@ pub fn job_chat(job : Json?) -> ChatRef? {
 
 ///|
 /// What chat `r`'s page opens on, asked of `ask` (opens_answered's): its view, answered once it is, or why it has none,
-/// or that its messages wait on a station (none of them on the device: Source.waits), its page showing them to come.
+/// or that its messages wait on a station (none of them on the device: Source.waits), its page showing them to come;
+/// and, its view read, what its posts are laid out by besides it: each login's card under a post (its login, and while
+/// that is under way its station's logins, which the card's head and steps follow), asked as the view says them, all
+/// at once. A card laid out as it came, a lateness after the rows, put every row over it up by its height in one frame
+/// (the owner's, 2026-11-14: data arriving late is no cause of motion; src/sfapp/chat_opens_whole_wbtest.mbt).
 pub fn chat_opens(r : ChatRef, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
   let t = ask("chat", chat_params(r))
-  opens_answered(t) || t.waiting
+  if !opens_answered(t) {
+    return t.waiting
+  }
+  let mut all = true
+  for m in items(t.value, "messages") {
+    let card = field(Some(m), "card")
+    let id = text(card, "login")
+    if text(card, "type") != "login" || id == "" {
+      continue
+    }
+    let station = card_login_station(r.station, text(card, "station"))
+    let (name, params) = machine_login_ask(station, id)
+    let l = ask(name, params)
+    if !opens_answered(l) {
+      all = false
+    } else if flag(l.value, "active") {
+      let (name, params) = machine_logins_ask(station)
+      all = opens_answered(ask(name, params)) && all
+    }
+  }
+  all
+}
+
+///|
+/// The station a login's card under a post of a chat on `chat_station` is of: the chat's, or `other` of its workspace
+/// where the card names one.
+pub fn card_login_station(chat_station : String, other : String) -> String {
+  if other == "" {
+    return chat_station
+  }
+  match chat_station.find("/") {
+    Some(i) => chat_station.exact_view(end=i).to_owned() + "/" + other
+    None => other
+  }
+}
+
+///|
+/// What the core is asked for login `id` of `station` (its card's, and its chat's as it opens: chat_opens): its
+/// `machineLogin`.
+pub fn machine_login_ask(station : String, id : String) -> (String, Map[String, Json]) {
+  ("machineLogin", { "station": Json::string(station), "id": Json::string(id) })
+}
+
+///|
+/// What the core is asked for station `station`'s logins (what may be done of them: a login's card's, its page's
+/// 登录's): its `machineLogins`.
+pub fn machine_logins_ask(station : String) -> (String, Map[String, Json]) {
+  ("machineLogins", { "station": Json::string(station) })
 }
 
 ///|

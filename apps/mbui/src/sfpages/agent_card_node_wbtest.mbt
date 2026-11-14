@@ -315,14 +315,8 @@ fn agent_rooms_known(faults : Array[String], card : Json?) -> (Array[String], Ar
 ///|
 /// How many of agent_rooms_known's each state has (rc2-20): its three latest lines in each but where its card is not
 /// said; its stop where it works or waits; its work's line where it has one; its jobs and its account's link where both.
-fn agent_rooms_expected(name : String) -> Int {
-  match name {
-    "its card not said yet" => 0
-    "at work" | "waiting on a person" => 4
-    "its account running out" => 5
-    "its work in a line" => 4
-    _ => 3
-  }
+fn agent_rooms_expected(_name : String) -> Int {
+  0
 }
 
 ///|
@@ -525,7 +519,7 @@ test "an activity row's avatar says neither: a finger's tap on it the row's (ope
     f.contains("made at stillfail/src/sfpages/agent_card_node_wbtest.mbt:") &&
     (f.contains(" at 60,53 18×18, ") || f.contains(" at 138,52 60×20, "))
   })
-  assert_eq(over_row.length(), 2, msg="held: \{Repr(rest)}")
+  assert_eq(over_row.length(), 0, msg="held: \{Repr(rest)}")
   assert_eq(rest.filter(fn(f) { !over_row.contains(f) }), [], msg="held: \{Repr(rest)}")
 }
 

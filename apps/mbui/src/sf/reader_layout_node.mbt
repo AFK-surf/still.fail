@@ -277,10 +277,8 @@ fn layout_swatch(
   let paper = paper_by_key(key)
   let glyph = fn() { t("web-pages.drive.reader.paperGlyph") }
   let name = fn() { t("web-pages.drive.reader.paper." + key) }
-  row.box(made_for=loc, fn(s) {
+  @headless.button(made_for=loc, row, fn() { glyph() + " " + name() }, fn(_) { press() }, fn(s, _) {
     style_node(s, fn() { desk_swatch_box.then(@ui.style(w=Fixed(w()))) }, in_row=true)
-    presses_node(s, press)
-    s.says(By(fn() { Some(@view.said(Button, label=glyph() + " " + name())) })) |> ignore
     s.box(fn(g) {
       // (its ring desk_swatch_on's B2 in the accent where it is on, desk_swatch_off's B1 in the page's ink, faint)
       style_node(g, fn() {
@@ -316,15 +314,13 @@ fn layout_size_key(
   press : () -> Unit,
   loc~ : SourceLoc,
 ) -> Unit {
-  row.box(made_for=loc, fn(k) {
+  @headless.button(made_for=loc, row, said, fn(_) { press() }, disabled=fn() { !on() }, fn(k, _) {
     style_node(k, fn() { desk_size_key_box })
     k
     .alpha(By(fn() { if on() { desk_whole } else { desk_size_key_off } }))
     .radius(By(desk_size_key_corner))
     .ground(By(fn() { if on() && lit_node(k) { @ui.tree_theme().color(Tint) } else { no_ground } }))
-    .says(By(fn() { Some(@view.said(Button, label=said())) }))
     |> ignore
-    presses_node(k, on~, press)
     words_node(k, fn() { words }, fn() { desk_size_key_words.then(@ui.text_style(color=Data(p().ink))) }) |> ignore
   })
   |> ignore

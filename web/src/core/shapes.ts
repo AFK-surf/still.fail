@@ -1889,8 +1889,8 @@ export interface NoticeShown {
 	/** The session waiting to retry at capacity, while this exact notice can cancel its retry. */
 	retrySession?: string;
 	/**
-	 * The session whose turn failed for the provider or the connection, while this exact notice can try it again
-	 * (重试: `session.retry`).
+	 * The session whose turn failed for the provider or the connection, or that the station stopped asking for a state,
+	 * while this exact notice can try it again (重试: `session.retry`).
 	 */
 	againSession?: string;
 	/**

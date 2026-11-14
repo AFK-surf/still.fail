@@ -14,6 +14,19 @@
 //                                          None: the stream ends instead. `{"ok":true}` to every line unless said.
 //   far.serves = (head, body) => …        what a request is answered: the pieces written back, its head line first
 //                                          (`replied(200, b"…")`).
+//   far.opens = head => …                 what a request is answered as its head line comes, its stream then open
+//                                          both ways (a duplex: `Some(replied(200, b""))`); None, as unless said:
+//                                          answered once finished, by `serves`.
+//   far.sends(4, b"…"), far.finish(4)       the peer sends on stream 4, ends its sending there;
+//   far.reset(4, 7)                       stops it both ways with that code: the device's read and write there fail.
+//   far.got(4)                            what the device wrote on stream 4 since it was open both ways, taken.
+//   far.cut_as_end = true                 a read that waits as its connection ends is answered the stream's end,
+//                                          not a failure: as the Rust shell can answer one it wakes then.
+//
+// A stream's handle is let go of as the shells let go of one: once reset, or once both read to its end and
+// finished. Asked of after (a read, a write, a finish, `istream.stopped`), it is "no handle"; and a stream is
+// finished once.
+//   let stream = far.open(2)              the peer opens a stream on connection 2 (what `Link::accept` gives next).
 //   far.quiet = true                      control lines are taken and not answered: its pings are lost.
 //   far.takes = 4_000                     each answer comes that many ms later, on the test's clock.
 //   far.holds = true … far.release()      answers are kept back until the test gives them.
@@ -25,11 +38,17 @@
 //   stood.rx[2] = 100.0                   what the transport says came on connection 2 so far (`conn.stats`).
 //   stood.on_relay = false                the endpoint is on no relay yet (`iroh.relayStatus`): an opening's time
 //                                          is not counted until it is.
+//   stood.holding = "iroh.bind" … stood.bound()        an endpoint bound again is the test's to answer: the next
+//                                          handle. Unheld, a bind is answered at once. An endpoint closed
+//                                          (`stood.unbound`) takes no dial, and one under way on it fails. Its
+//                                          connections do not end with it here, as a shell's would: the mesh
+//                                          closes an endpoint only with none on it, or after closing each.
 //   let link = stood.opened(mesh, source.gives())      a link (`scope=`: in that scope), its hello answered by the
 //                                          script; `Source` gives "c1", "c2"… and keeps how each was asked
 //   stood.rt.advance(tick_ms)             time goes on: what is due meanwhile happens at its own time
 //   far.heard, far.asked, far.dials, far.closes        what it saw: each control line (`<ms> <connection> <line>`),
 //                                          each request, when each dial came, what the device closed with.
+//   far.wrote                             each write on a stream that is no control stream: `<stream> <bytes>`.
 //
 // The handles are numbered as they are given out, as by hand: the endpoint 1, the first connection 2, its control
 // stream 3, then each request's stream or the next connection as it comes. An op may still be held back for the
@@ -64,6 +83,8 @@ priv struct Stood {
   /// The bytes that came on each connection so far, as the transport counts them (`conn.stats`): the test's to say
   /// (`stood.rx[2] = 100`); 0 of one it said nothing of.
   rx : Map[Int, Double]
+  /// The endpoints closed (`iroh.close`).
+  unbound : Map[Int, Unit]
   /// Whether the endpoint is on a relay (`iroh.relayStatus`: no relay at all while true, as a mesh made with none;
   /// one not connected while false).
   mut on_relay : Bool
@@ -93,6 +114,7 @@ fn Stood::new() -> Stood {
     cancels: true,
     peer: None,
     rx: Map([]),
+    unbound: Map([]),
     on_relay: true,
   }
   let answer = (id : Int64, json : Json) => stood.shell.val.unwrap().answer(id, json)
@@ -116,7 +138,21 @@ fn Stood::new() -> Stood {
             stood.last += 1
             answer(id, { "id": Json::number(stood.last.to_double()) })
           }
-        "istream.write" | "istream.finish" | "istream.reset" | "iroh.close" => answer(id, {})
+        "istream.write" | "istream.finish" | "istream.reset" | "iroh.networkChange" => answer(id, {})
+        "iroh.close" => {
+          stood.unbound[handle] = ()
+          // (a dial under way on it fails with it)
+          let held = stood.held.copy()
+          stood.held.clear()
+          for call in held {
+            if call.1 == "iroh.connect" && call.2 == handle {
+              stood.shell.val.unwrap().refuse(call.0, "the endpoint is closed")
+            } else {
+              stood.held.push(call)
+            }
+          }
+          answer(id, {})
+        }
         "conn.close" => {
           if !stood.ended.contains(handle) {
             stood.ended[handle] = { "kind": "local", "reason": "closed" }
@@ -126,7 +162,13 @@ fn Stood::new() -> Stood {
           }
           answer(id, {})
         }
-        "iroh.connect" | "istream.read" | "conn.closed" => stood.held.push((id, op, handle))
+        "iroh.connect" =>
+          if stood.unbound.contains(handle) {
+            stood.shell.val.unwrap().refuse(id, "the endpoint is closed")
+          } else {
+            stood.held.push((id, op, handle))
+          }
+        "istream.read" | "conn.closed" => stood.held.push((id, op, handle))
         _ => stood.shell.val.unwrap().refuse(id, "the stood-in shell has no \{op}")
       }
     },
@@ -214,6 +256,13 @@ fn Stood::refuse(self : Stood, op : String, why : String) -> Unit raise {
   let (id, _) = self.taken(op)
   self.shell.val.unwrap().refuse(id, why)
   ignore(self.rt.run_ready())
+}
+
+///|
+/// The bind held back is answered: an endpoint, the next handle; and the fibers it woke run.
+fn Stood::bound(self : Stood) -> Unit raise {
+  self.last += 1
+  self.give("iroh.bind", { "id": Json::number(self.last.to_double()) })
 }
 
 ///|
@@ -305,6 +354,21 @@ priv struct Flow {
   mut reader : Int64?
   /// Reset by the device: nothing more is sent on it.
   mut reset : Bool
+  /// A request's head line, once it came.
+  mut head : String?
+  /// Open both ways: a request the peer answered at its head (`opens`), or a stream the peer opened. Its finish asks
+  /// nothing.
+  mut open : Bool
+  /// Finished by the device.
+  mut finished : Bool
+  /// Stopped by the peer, with this code (`Peer::reset`).
+  mut stopped : Int?
+  /// The device's wait to be told its writes were taken, or the stream stopped (`istream.stopped`): the call's id.
+  mut stopper : Int64?
+  /// Read to its end by the device; and let go of, as a shell lets go of a handle (reset, or read to its end and
+  /// finished): nothing is answered of it after.
+  mut read : Bool
+  mut dropped : Bool
 }
 
 ///|
@@ -314,10 +378,12 @@ priv struct Peer {
   stood : Stood
   mut answers : (String, Bool) -> String?
   mut serves : (String, Bytes) -> Array[Bytes]
+  mut opens : (String) -> Array[Bytes]?
   mut quiet : Bool
   mut takes : Int
   mut holds : Bool
   mut away : Bool
+  mut cut_as_end : Bool
   /// The connections it is gone from under (`lose`): nothing more comes on them.
   lost : Map[Int, Unit]
   /// Every control line it took, in order: `<ms on the test's clock> <connection> <the line as written>`.
@@ -328,6 +394,12 @@ priv struct Peer {
   dials : Array[Int64]
   /// What the device closed each connection with, the first time: `<connection> <reason>`.
   closes : Array[String]
+  /// Every write on a stream that is no control stream: `<stream> <its bytes' length>`.
+  wrote : Array[String]
+  /// The streams the peer opened that the device has not been given yet, by connection, and the device's wait for
+  /// the next (`conn.acceptBi`): the call's id.
+  offered : Map[Int, Array[Int]]
+  accepts : Map[Int, Int64]
   /// Its connections' streams, in the order opened, and its streams.
   conns : Map[Int, Array[Int]]
   flows : Map[Int, Flow]
@@ -346,15 +418,20 @@ fn Stood::with_peer() -> (Stood, Peer) {
     stood,
     answers: (_, _) => Some("{\"ok\":true}"),
     serves: (_, _) => replied(200, b""),
+    opens: _ => None,
     quiet: false,
     takes: 0,
     holds: false,
     away: false,
+    cut_as_end: false,
     lost: Map([]),
     heard: [],
     asked: [],
     dials: [],
     closes: [],
+    wrote: [],
+    offered: Map([]),
+    accepts: Map([]),
     conns: Map([]),
     flows: Map([]),
     waits: Map([]),
@@ -380,6 +457,7 @@ fn Peer::took(self : Peer, id : Int64, op : String, handle : Int, args : Json, b
   let gone = "connection closed"
   match op {
     "iroh.connect" => {
+      guard !stood.unbound.contains(handle) else { return false }
       self.dials.push(stood.rt.now())
       if self.away {
         // (held as a dial by hand is: given up by `fetch.cancel`, or answered by the test)
@@ -398,16 +476,18 @@ fn Peer::took(self : Peer, id : Int64, op : String, handle : Int, args : Json, b
       }
       stood.last += 1
       streams.push(stood.last)
-      self.flows[stood.last] = {
-        conn: handle,
-        control: streams.length() == 1,
-        wrote: @wire.Carry::new(),
-        lines: 0,
-        sent: [],
-        reader: None,
-        reset: false,
-      }
+      self.flows[stood.last] = Flow::new(handle, streams.length() == 1)
       shell.answer(id, { "id": Json::number(stood.last.to_double()) })
+    }
+    "conn.acceptBi" => {
+      guard self.conns.contains(handle) else { return false }
+      if stood.ended.contains(handle) {
+        shell.answer(id, { "end": true })
+      } else if self.offered.get(handle) is Some(streams) && streams.length() > 0 {
+        shell.answer(id, { "id": Json::number(streams.remove(0).to_double()) })
+      } else {
+        self.accepts[handle] = id
+      }
     }
     "conn.closed" => {
       guard self.conns.contains(handle) else { return false }
@@ -434,6 +514,14 @@ fn Peer::took(self : Peer, id : Int64, op : String, handle : Int, args : Json, b
         shell.refuse(id, gone)
         return true
       }
+      guard flow.stopped is None else {
+        shell.refuse(id, "stopped by peer: code \{flow.stopped.unwrap()}")
+        return true
+      }
+      guard !flow.dropped else {
+        shell.refuse(id, "no handle \{handle}")
+        return true
+      }
       flow.wrote.push(bytes.unwrap_or(b""))
       shell.answer(id, {})
       while flow.control && flow.wrote.line() is Some(line) {
@@ -443,12 +531,39 @@ fn Peer::took(self : Peer, id : Int64, op : String, handle : Int, args : Json, b
           self.send(handle, [(self.answers)(line, flow.lines == 1).map(answer => @utf8.encode(answer + "\n"))])
         }
       }
+      if !flow.control {
+        self.wrote.push("\{handle} \{bytes.unwrap_or(b"").length()}")
+        // A request's head line, as it comes: answered now where the script says its stream is open both ways.
+        if flow.head is None && !flow.open && flow.wrote.line() is Some(head) {
+          flow.head = Some(head)
+          if (self.opens)(head) is Some(pieces) {
+            flow.open = true
+            self.asked.push("\{stood.rt.now()} \{flow.conn} \{head} open")
+            self.send(handle, pieces.map(piece => Some(piece)))
+          }
+        }
+      }
     }
     "istream.finish" => {
       guard self.flows.get(handle) is Some(flow) else { return false }
+      guard !flow.dropped else {
+        shell.refuse(id, "no handle \{handle}")
+        return true
+      }
+      guard !flow.finished else {
+        shell.refuse(id, "closed stream")
+        return true
+      }
       shell.answer(id, {})
-      if !flow.control {
-        let head = flow.wrote.line().unwrap_or("")
+      flow.finished = true
+      flow.dropped = flow.read
+      if flow.open {
+        if flow.stopper is Some(waiting) {
+          flow.stopper = None
+          shell.answer(waiting, { "code": Json::null() })
+        }
+      } else if !flow.control {
+        let head = flow.head.unwrap_or("")
         let body = flow.wrote.take()
         self.asked.push("\{stood.rt.now()} \{flow.conn} \{head} \{body.length()}")
         let pieces : Array[Bytes?] = (self.serves)(head, body).map(piece => Some(piece))
@@ -456,12 +571,29 @@ fn Peer::took(self : Peer, id : Int64, op : String, handle : Int, args : Json, b
         self.send(handle, pieces)
       }
     }
+    "istream.stopped" => {
+      guard self.flows.get(handle) is Some(flow) else { return false }
+      if flow.dropped {
+        shell.refuse(id, "no handle \{handle}")
+      } else if flow.stopped is Some(code) {
+        shell.answer(id, { "code": Json::number(code.to_double()) })
+      } else if stood.ended.contains(flow.conn) {
+        shell.refuse(id, gone)
+      } else if flow.finished {
+        // (taken by the peer as it is finished: there is no network between to wait on)
+        shell.answer(id, { "code": Json::null() })
+      } else {
+        flow.stopper = Some(id)
+      }
+    }
     "istream.read" => {
       guard self.flows.get(handle) is Some(flow) else { return false }
-      if flow.sent.length() > 0 {
-        self.hand(id, flow.sent.remove(0))
-      } else if flow.reset {
-        self.hand(id, None)
+      if flow.dropped {
+        shell.refuse(id, "no handle \{handle}")
+      } else if flow.sent.length() > 0 {
+        self.hand(id, flow, flow.sent.remove(0))
+      } else if flow.stopped is Some(code) {
+        shell.refuse(id, "reset by peer: code \{code}")
       } else if stood.ended.contains(flow.conn) {
         shell.refuse(id, gone)
       } else {
@@ -471,10 +603,13 @@ fn Peer::took(self : Peer, id : Int64, op : String, handle : Int, args : Json, b
     "istream.reset" => {
       guard self.flows.get(handle) is Some(flow) else { return false }
       flow.reset = true
+      flow.dropped = true
       flow.sent.clear()
+      // (a read that waits is woken with the stream's end, as the shells wake one of a stream reset here; a wait
+      // on what was written is not: the transport answers it only as the connection ends)
       if flow.reader is Some(reader) {
         flow.reader = None
-        self.hand(reader, None)
+        shell.answer(reader, { "end": true })
       }
       shell.answer(id, {})
     }
@@ -484,12 +619,16 @@ fn Peer::took(self : Peer, id : Int64, op : String, handle : Int, args : Json, b
 }
 
 ///|
-/// A read is answered: a piece, or the stream's end.
-fn Peer::hand(self : Peer, id : Int64, piece : Bytes?) -> Unit {
+/// A read of `flow` is answered: a piece, or the stream's end, with which a stream finished already is let go of.
+fn Peer::hand(self : Peer, id : Int64, flow : Flow, piece : Bytes?) -> Unit {
   let shell = self.stood.shell.val.unwrap()
   match piece {
     Some(bytes) => shell.answer(id, {}, bytes~)
-    None => shell.answer(id, { "end": true })
+    None => {
+      flow.read = true
+      flow.dropped = flow.finished
+      shell.answer(id, { "end": true })
+    }
   }
 }
 
@@ -516,7 +655,7 @@ fn Peer::put(self : Peer, stream : Int, pieces : Array[Bytes?]) -> Unit {
     match flow.reader {
       Some(reader) => {
         flow.reader = None
-        self.hand(reader, piece)
+        self.hand(reader, flow, piece)
       }
       None => flow.sent.push(piece)
     }
@@ -544,12 +683,116 @@ fn Peer::over(self : Peer, conn : Int, why : Json) -> Unit {
     self.waits.remove(conn)
     shell.answer(waiting, why)
   }
+  if self.accepts.get(conn) is Some(waiting) {
+    self.accepts.remove(conn)
+    shell.answer(waiting, { "end": true })
+  }
   for stream in self.conns.get(conn).unwrap_or([]) {
-    if self.flows.get(stream) is Some(flow) && flow.reader is Some(reader) {
+    guard self.flows.get(stream) is Some(flow) else { continue }
+    if flow.reader is Some(reader) {
       flow.reader = None
-      shell.refuse(reader, "connection closed")
+      if self.cut_as_end {
+        shell.answer(reader, { "end": true })
+      } else {
+        shell.refuse(reader, "connection closed")
+      }
+    }
+    if flow.stopper is Some(waiting) {
+      flow.stopper = None
+      shell.refuse(waiting, "connection closed")
     }
   }
+}
+
+///|
+fn Flow::new(conn : Int, control : Bool) -> Flow {
+  {
+    conn,
+    control,
+    wrote: @wire.Carry::new(),
+    lines: 0,
+    sent: [],
+    reader: None,
+    reset: false,
+    head: None,
+    open: false,
+    finished: false,
+    stopped: None,
+    stopper: None,
+    read: false,
+    dropped: false,
+  }
+}
+
+///|
+/// The peer sends `bytes` on `stream`, and the fibers that woke run.
+fn Peer::sends(self : Peer, stream : Int, bytes : Bytes) -> Unit {
+  self.put(stream, [Some(bytes)])
+  self.stood.run()
+}
+
+///|
+/// The peer ends its sending on `stream`, and the fibers that woke run.
+fn Peer::finish(self : Peer, stream : Int) -> Unit {
+  self.put(stream, [None])
+  self.stood.run()
+}
+
+///|
+/// The peer stops `stream` both ways with `code`: what it had sent and the device has not read is gone, the
+/// device's read there fails, its writes after too, and its wait on what it wrote is told the code.
+fn Peer::reset(self : Peer, stream : Int, code : Int) -> Unit {
+  guard self.flows.get(stream) is Some(flow) else { return }
+  let shell = self.stood.shell.val.unwrap()
+  flow.stopped = Some(code)
+  flow.sent.clear()
+  if flow.reader is Some(reader) {
+    flow.reader = None
+    shell.refuse(reader, "reset by peer: code \{code}")
+  }
+  if flow.stopper is Some(waiting) {
+    flow.stopper = None
+    shell.answer(waiting, { "code": Json::number(code.to_double()) })
+  }
+  self.stood.run()
+}
+
+///|
+/// What the device wrote on `stream` since it was open both ways (after a request's head line), taken.
+fn Peer::got(self : Peer, stream : Int) -> Bytes {
+  match self.flows.get(stream) {
+    Some(flow) => flow.wrote.take()
+    None => b""
+  }
+}
+
+///|
+/// The peer opens a stream on connection `conn`: its handle. The device is given it as it next asks for one
+/// (`conn.acceptBi`), now if it waits; and the fibers that woke run.
+fn Peer::open(self : Peer, conn : Int) -> Int {
+  let stood = self.stood
+  stood.last += 1
+  let stream = stood.last
+  if self.conns.get(conn) is Some(streams) {
+    streams.push(stream)
+  }
+  let flow = Flow::new(conn, false)
+  flow.open = true
+  self.flows[stream] = flow
+  match self.accepts.get(conn) {
+    Some(waiting) => {
+      self.accepts.remove(conn)
+      stood.shell.val.unwrap().answer(waiting, { "id": Json::number(stream.to_double()) })
+    }
+    None => {
+      if !self.offered.contains(conn) {
+        self.offered[conn] = []
+      }
+      self.offered[conn].push(stream)
+    }
+  }
+  stood.run()
+  stream
 }
 
 ///|

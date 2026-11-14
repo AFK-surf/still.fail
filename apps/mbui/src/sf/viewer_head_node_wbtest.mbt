@@ -248,7 +248,7 @@ fn glyph_clips_right(t : @ui.Tester, top : Double, bottom : Double) -> Array[(Do
 fn narrow_head(old : Bool) -> (Array[((Double, Double, Double, Double), Array[String])], Bool, Array[(Double, Double)], Double) raise {
   let name = "a-very-long-name-of-a-picture.png"
   let tools = ["edit", "copy", "download"]
-  let tt = head_tester(HeadState::new(name, tools), old, w=196.0)
+  let tt = head_tester(HeadState::new(name, tools), old, w=190.0)
   let rects = []
   for icon in tools + ["close"] {
     let label = if icon == "close" { t("web-main.preview.closeKey") } else { head_label(icon) }

@@ -61,9 +61,10 @@ pub fn way_line_node(
           row.box(fn(p) {
             style_node(p, fn() { way_part }, in_row=true)
             p.drops(Is(-1)) |> ignore
-            p.box(fn(s) {
-              style_node(s, fn() { look().step }, in_row=true)
-              presses_node(s, fn() {
+            @headless.button(
+              p,
+              fn() { t("common.more") },
+              fn(s) {
                 let gone : Array[MenuItem?] = []
                 for k in 0..<(n - 1) {
                   if parts[k].left_out() {
@@ -73,10 +74,12 @@ pub fn way_line_node(
                 // (opened by the … itself: beside it wherever it is laid out while open, the focus given back to it
                 // as the menu goes)
                 present(Menu(gone, "", Start), Node(s))
-              })
-              s.says(Is(Some(@view.said(Button, label=t("common.more"))))) |> ignore
-              words_node(s, fn() { way_more }, fn() { look().words }) |> ignore
-            })
+              },
+              fn(s, _) {
+                style_node(s, fn() { look().step }, in_row=true)
+                words_node(s, fn() { way_more }, fn() { look().words }) |> ignore
+              },
+            )
             |> ignore
             chevron(p)
           })

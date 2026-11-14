@@ -41,7 +41,7 @@ pub fn band_row_node(
   body : (@view.View) -> Unit,
   loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(made_for=loc, fn(r) {
+  @headless.button(made_for=loc, parent, label, fn(_) { press() }, fn(r, _) {
     r
     .row(Is(true))
     .grow(Is(1.0))
@@ -55,9 +55,6 @@ pub fn band_row_node(
     }))
     |> ignore
     nav_ground_node(r, on)
-    presses_node(r, press)
-    // (an action, not a place: a button, as the old band's box with an id is)
-    r.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
     body(r)
   })
   |> ignore
@@ -102,7 +99,7 @@ pub fn update_key_node(
 ) -> Unit {
   // (its tip on what holds it: said while busy too, the key taking no press then, as the pointer rests on it)
   parent.box(made_for=loc, fn(o) {
-    o.box(fn(k) {
+    @headless.button(o, label, fn(_) { press() }, disabled=busy, fn(k, b) {
       let progress = EdgeWay::new(if @signals.untracked(coming) is Some(_) { 1.0 } else { 0.0 })
       k.reacts(fn() { coming() is Some(_) }, fn(on) { progress.go(k, if on { 1.0 } else { 0.0 }, dur_ms) })
       k
@@ -110,28 +107,25 @@ pub fn update_key_node(
       .height(Is(Some(side)))
       // (round as its ground is while there is one, as an old view's key's hovered{} look: at rest none, nothing
       // standing in a corner)
-      .radius(By(fn() { if lit_node(k) && !busy() { side / 2.0 } else { 0.0 } }))
+      .radius(By(fn() { if lit_node(k) && !b.disabled() { side / 2.0 } else { 0.0 } }))
       // (its mark in its middle both ways, as update_key_box's: a box lays what it holds down from its top)
       .lines_up(Is(Some(Middle)))
       .lies_along(Is(Middle))
-      .ground(By(fn() { if lit_node(k) && !busy() { @ui.tree_theme().color(Hover) } else { 0L } }))
-      .says(By(fn() { Some(@view.said(Button, label=label())) }))
+      .ground(By(fn() { if lit_node(k) && !b.disabled() { @ui.tree_theme().color(Hover) } else { 0L } }))
       |> ignore
       // (pressed while it is not busy: a press's ripple on it, its press then; read out unable to be pressed while busy)
-      let able = fn() { !busy() }
-      k.presses(By(able)).focusable(By(able)).on_press(fn() { if able() { press() } }) |> ignore
       let rippled = press_look(k, Is(side / 2.0), fn() { false })
       let on_it = fn(d : @view.Drag) { k.finger_target(d.wx, d.wy) }
       k.gesture(
         @ui.touch_slop(),
-        press=fn(d) { if able() { (rippled.down)(d) } },
+        press=fn(d) { if !b.disabled() { (rippled.down)(d) } },
         tap=fn(d) {
           (rippled.tapped)(d)
-          if on_it(d) && able() {
-            press()
+          if on_it(d) {
+            b.press()
           }
         },
-        drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && able() { press() } },
+        drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { b.press() } },
       )
       |> ignore
       k.box(fn(m) {

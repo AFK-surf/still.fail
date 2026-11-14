@@ -4,7 +4,9 @@
 // and from 1.04 its size to its own (reveal_ms, the ease out), what it waited on fading out behind it (from 800 ms, over
 // 300). All of that is laid over the picture only while it goes: at its declared end (that moment on the timeline) it
 // is let go, and a picture brushed in is the same nodes and bindings as one shown as it is (decoded as it was first
-// made, or `held`: the device had it).
+// made, or `held`: the device had it). Only a picture that comes (`comes`: of a message new while it is watched) is
+// brushed in; any other waits as it does and is there whole from the moment it is decoded, what it waited on let go
+// then: what was said before it was shown is simply there (motion.mbt's head).
 
 ///|
 /// How a picture is in its reveal: waiting (not decoded), going (brushed in), or there (as it is).
@@ -19,8 +21,9 @@ priv enum RevealPhase {
 /// A picture `key` (as it changes) `w` by `h` in `parent`, covering it (`cover`, else contained in it), brushed in from
 /// the moment its host says it is decoded; `likeness` what it waits on ("" the neutral ground; a field of a few colours,
 /// a ThumbHash's, decoded once at the least size: reveal_likeness_px); `held` one the device
-/// had (a decode away): as it is, no brushing. `top_crop`: covering it from its top, not its middle (a tall one at the
-/// chat's least width: an old view's FitCoverAt(0), View::image_covers_at). The node.
+/// had (a decode away): as it is, no brushing; `comes`, read the moment it is decoded: whether it is brushed in then
+/// (else there whole at once). `top_crop`: covering it from its top, not its middle (a tall one at the chat's least
+/// width: an old view's FitCoverAt(0), View::image_covers_at). The node.
 #callsite(autofill(loc))
 pub fn image_reveal_node(
   parent : @view.View,
@@ -30,6 +33,7 @@ pub fn image_reveal_node(
   h : Double,
   cover? : Bool = true,
   held? : () -> Bool = fn() { false },
+  comes? : () -> Bool = fn() { true },
   top_crop? : Bool = false,
   loc~ : SourceLoc,
 ) -> @view.View {
@@ -73,9 +77,13 @@ pub fn image_reveal_node(
       }
     })
     // decoded, as its host says it: brushed in from that moment, over reveal_ms; what is laid over it let go of at
-    // that way's declared end (a moment on the timeline), never by reading whether it still goes
+    // that way's declared end (a moment on the timeline), never by reading whether it still goes. One that does not
+    // come there whole at that moment.
     b.reacts(ready, fn(r) {
-      if r && @signals.untracked(fn() { phase.get() }) == Waiting {
+      if r && @signals.untracked(fn() { phase.get() }) == Waiting && !@signals.untracked(comes) {
+        way.put(1.0)
+        phase.set(There)
+      } else if r && @signals.untracked(fn() { phase.get() }) == Waiting {
         let from = b.cause_at()
         way.go(b, 1.0, reveal_ms, ease=Linear)
         phase.set(Going)

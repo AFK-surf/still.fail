@@ -172,6 +172,21 @@ fn chat_body_rows(kept : ChatBodyKept, v : ChatView, all : Array[Entry], sending
 }
 
 ///|
+/// Whether a row of entry `e` come among a chat's list's keys comes in (sfbase's row_keys' `comes`; the list says where
+/// it is seen): a message the core says was said while the chat shows (Message's `said`), an outbox entry (one from
+/// another device of the viewer's; what was sent from here on its own way, as the send's), an agent's line at work
+/// (`started`); anything else (a message caught up on or read in, what was said elsewhere, where the chat stands, the
+/// unread line) is simply there.
+fn chat_body_comes(e : Entry) -> Bool {
+  match e {
+    Said(m) => m.said
+    Out(_) => true
+    Working(a) => a.started
+    _ => false
+  }
+}
+
+///|
 /// Whether row `b` is what row `a` was: the same room over it and the same entry, an entry the same as the chat's list
 /// keeps it (its message, what was said elsewhere, what was sent from here or an agent's line the same one, read again
 /// only as it changed: sfbase's chat_read; the rest by what they say). What a row reads of its key (chat_body_row's)
@@ -409,6 +424,15 @@ fn chat_body_node(
         }
       },
       follows=fn() { true },
+      // (what comes with a way, as row_keys' `comes`: a message the core says was said while the chat shows, an outbox
+      // entry, an agent at work; the rest, caught up on, read in or there as the chat opened, simply there: what was
+      // said before it was shown moves not, sf/motion.mbt's head)
+      comes=fn(k) {
+        match rows.get().rows.get(k) {
+          Some(r) => chat_body_comes(r.entry)
+          None => false
+        }
+      },
       // (an agent's line gone at its foot leaves its room under the last row, fading where it is: a turn that ends with
       // no reply carries nothing up to let it fall back; what comes next takes that room first. The owner, 2026-11-12;
       // the coordinator of the migration, 2026-11-13: mbui's View::scrolls_window `leaves_room`)

@@ -461,12 +461,7 @@ test "its panel on each screen, at the default size of words and at 1.3: what ru
       let at = "platform \{platform} wide \{wide} at \{scale}"
       let t = aw_tester(aw_card(), platform~, wide~, scale~)
       let before = t.audit()
-      // (on a wide window at 1.3, 「Profile 详情」 108×34 and 「后台 4 · 2/6」 110×34 stay under 36; at 1, they clear; known, see aw_crowded)
-      if wide && at.has_suffix("at 1.3") {
-        aw_crowded(before, at, 1, 1)
-      } else {
-        aw_crowded(before, at, 0, 0)
-      }
+      aw_crowded(before, at, 0, 0)
       let mark = aw_mark(t, at)
       aw_opened(t, at)
       let one = fn(s : String) raise {

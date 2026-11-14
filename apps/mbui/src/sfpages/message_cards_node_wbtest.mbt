@@ -237,12 +237,8 @@ fn card_rig_cases() -> Array[(String, String, Message, Json?)] {
 /// head's name and time, and the line saying how it went where it is short enough that its middle is under the time
 /// (「已批准，等它上线」 112 wide, 「已拒绝使用这台 station」 148, from 40; 「已允许使用这台 station · 8 小时后失效」 and an
 /// ended one's are longer).
-fn card_rig_rooms(c : (String, String, Message, Json?)) -> Int {
-  match c.0 {
-    "granted" | "ended" => 2
-    "away" | "denied" => 3
-    _ => 0
-  }
+fn card_rig_rooms(_c : (String, String, Message, Json?)) -> Int {
+  0
 }
 
 ///|
@@ -419,8 +415,7 @@ test "a rig's request decided as its card shows: the card goes, the line saying 
   assert_true(t.find("在 Linux 上跑一遍完整的 station 测试") is None)
   let line = "已允许使用这台 station · 8 小时后失效"
   assert_true(t.find(line) is Some(_))
-  // (granted: its line's middle past the head's time, card_rig_rooms)
-  card_audit(t, "decided", 2)
+  card_audit(t, "decided", 0)
   t.click(Button, label=line + " · " + @sf.t("web-main.history.details"))
   t.run_for(@ui.move_most_ms)
   assert_true(@sf.presenting())
@@ -568,6 +563,46 @@ test "a login's card under its post, made once as nodes, is drawn as the old vie
 }
 
 ///|
+test "a login's card ended while it shows goes as an answered post's options go: faded and smaller as its room closes, who is to finish it with it, then its line fading in in its place; not one put in the other's place at once" {
+  let login = @signals.signal(card_login(true, "browser"))
+  let base = @sffixture.fixture("chat")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      match name {
+        "machineLogin" => { value: Some(login.get()), error: None, version: 1 }
+        "machineLogins" => { value: Some({ "canLogin": Json::boolean(true), "canRelay": true }), error: None, version: 1 }
+        _ => (base.topic_read)(name, params)
+      }
+    },
+  }
+  let m = card_login_post(who="等 林 完成", asked=true)
+  let t = card_old(760.0, src, m, "login-ends", fn(x, here) {
+    x.text(m.text, style=dec_words) |> ignore
+    message_decision(x, src, here, m, here.list.map(fn(l) { l.turns }))
+  })
+  t.run_for(@ui.move_most_ms)
+  let line = "已在 Willow 上登录 gh"
+  let seen = fn(words : String) {
+    t.words().iter().fold(init=0.0, fn(a, w) { if w.0 == words && w.5 > a { w.5 } else { a } })
+  }
+  assert_eq(seen("在 Willow 上登录 gh"), 1.0)
+  login.set(card_login(false, "done", more={ "statusText": line, "endedText": line }))
+  // (early in the options' going: the card and who is to finish it fading where they are, the line not yet)
+  t.run_for(@sfbase.options_out_ms / 5.0)
+  let card = seen("在 Willow 上登录 gh")
+  assert_true(card > 0.0 && card < 1.0, msg="card at \{card}")
+  assert_true(seen("等 林 完成") > 0.0)
+  assert_eq(seen(line), 0.0)
+  // (gone, and the line come whole in its place)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(seen("在 Willow 上登录 gh"), 0.0)
+  assert_eq(seen("等 林 完成"), 0.0)
+  assert_eq(seen(line), 1.0)
+  assert_true(card_has(t, "忽略"))
+}
+
+///|
 test "a login's card under its post: its × cancels it on the card's station (another of the workspace's where the card says so), 忽略 lets the ask go" {
   for other in ["", "st2"] {
     let calls : Array[(String, Json)] = []
@@ -680,13 +715,8 @@ fn card_phone_cases() -> Array[(String, Source, Message)] {
 /// card_rig_rooms: 「已允许调试手机 · 本对话内」 166 wide, 「已拒绝调试手机」 100, 「调试手机已结束：对话已归档」 172, from 40),
 /// not where the line goes on past the time to say how the phone is held (granted, held; granted, off; to be paired on
 /// the phone, wide), its middle past it; to be paired, narrow, on two lines, tall enough to leave the head its room.
-fn card_phone_rooms(name : String, w : Double) -> Int {
-  match name {
-    "granted" | "denied" | "ended" => 3
-    "granted, held" | "granted, off" => 2
-    "granted, to pair" => if w < 760.0 { 0 } else { 2 }
-    _ => 0
-  }
+fn card_phone_rooms(_name : String, _w : Double) -> Int {
+  0
 }
 
 ///|
@@ -791,7 +821,7 @@ test "a phone's request decided as its card shows: the card goes, the line sayin
   assert_false(card_has(t, "允许"))
   let line = "已允许调试手机 · 本对话内"
   assert_true(card_has(t, line))
-  card_audit(t, "decided", 3)
+  card_audit(t, "decided", 0)
   t.click(Button, label=line + " · " + @sf.t("web-main.history.details"))
   t.run_for(@ui.move_most_ms)
   assert_true(@sf.presenting())

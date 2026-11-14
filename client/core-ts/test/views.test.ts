@@ -2798,7 +2798,8 @@ test("only the notice of a failed turn still where its agent stands offers 重�
   for (const [session, lastTurn] of [
     [{ process: "running" }, failed],
     [{ pending: 1 }, failed],
-    [{}, { ...failed, outcome: "completed", detail: null }],
+    [{}, { ...failed, outcome: "completed", detail: null, declared: "final" }],
+    [{}, { ...failed, outcome: "aborted", detail: null }],
     [{}, { ...failed, detail: "auth: signed out" }],
     [{}, { ...failed, about: { ...failed.about, thread: 8 } }],
   ] as const) {
@@ -2806,6 +2807,15 @@ test("only the notice of a failed turn still where its agent stands offers 重�
     await t.read(u, 1);
     assert.equal(u.value.messages[1].notice.againSession, undefined, JSON.stringify([session, lastTurn]));
   }
+  // A turn the station stopped asking for a state (回复即可继续) offers it too, while it stands there.
+  const givenUp = { kind: "nudge", outcome: "completed", declared: null, detail: null, about: failed.about, startedAt: 10, endedAt: 11 };
+  t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { lastTurn: givenUp }), threads: [chat], turns: [] });
+  await t.read(u, 1);
+  assert.equal(u.value.messages[1].notice.againSession, "k");
+  assert.equal(u.value.messages[0].notice.againSession, undefined);
+  t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { pending: 1, lastTurn: givenUp }), threads: [chat], turns: [] });
+  await t.read(u, 1);
+  assert.equal(u.value.messages[1].notice.againSession, undefined);
 });
 
 test("chat_is_a_thread_its_messages_and_its_agents", async () => {

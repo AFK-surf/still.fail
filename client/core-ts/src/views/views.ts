@@ -3363,11 +3363,15 @@ export class Views implements Owner {
       const about = get(turn, "about");
       const key = str(get(session, "key"));
       const detail = str(get(turn, "detail")) ?? "";
-      if (key === undefined || get(turn, "outcome") !== "failed" || get(about, "thread") !== id) continue;
-      // Waiting to retry at capacity: 取消; else one that failed for the provider or the connection and is still where
-      // the session stands (nothing ran or was sent since): 重试, as a reply would (station actor.ts `retryable`).
-      const mark = detail.startsWith("overloaded:") && present.waiting(session) !== null ? "retrySession"
-        : present.sessionStatus(session) === "failed" && AGAIN.some((reason) => detail.startsWith(`${reason}:`)) ? "againSession" : null;
+      const outcome = get(turn, "outcome");
+      if (key === undefined || (outcome !== "failed" && outcome !== "completed") || get(about, "thread") !== id) continue;
+      // Waiting to retry at capacity: 取消; else one that failed for the provider or the connection, or one the station
+      // stopped asking for a state (回复即可继续), and is still where the session stands (nothing ran or was sent
+      // since): 重试, as a reply would (station actor.ts `retryable`).
+      const status = present.sessionStatus(session);
+      const mark = outcome === "failed" && detail.startsWith("overloaded:") && present.waiting(session) !== null ? "retrySession"
+        : outcome === "failed" && status === "failed" && AGAIN.some((reason) => detail.startsWith(`${reason}:`)) ? "againSession"
+        : outcome === "completed" && status === "unexpected" ? "againSession" : null;
       if (mark === null) continue;
       const at = messages.findIndex((m) => m.system === true && m.seq === get(about, "seq") && m.ts === get(about, "ts"));
       const notice = messages[at];

@@ -21,8 +21,6 @@ let window_still_known : Array[String] = [
   "小屏 home upright",
   // (chat-askfade, motion/layer.mbt:1325)
   "小屏 chat turned", "小屏 chat upright",
-  // (an Anim of a file's card, sfpages/message_files.mbt:848)
-  "中屏 chat keyboard up",
 ]
 
 ///|

@@ -437,10 +437,27 @@ let page_declared : Ref[Array[(Source, String, Map[String, Json])]] = Ref([])
 /// page runs, and taken over by the page's reader as it reads, the same subscription all along. One no reader comes
 /// to is let go of as another page comes on top (page_declared_let_go), or another workspace comes in view.
 pub fn declare_page_topic(src : Source, name : String, params : Map[String, Json]) -> Unit {
+  let key = name + "\u{1}" + Json::object(params).stringify()
+  if page_declared.val.iter().any(fn(d) { physical_equal(d.0, src) && d.1 + "\u{1}" + Json::object(d.2).stringify() == key }) {
+    return
+  }
   page_declared.val.push((src, name, params.copy()))
   let owner = @signals.set_owner(None)
   @signals.untracked(fn() { followed_topic(src, name, params).get() }) |> ignore
   @signals.set_owner(owner) |> ignore
+  page_declared_told.set(page_declared_told.get() + 1)
+}
+
+///|
+/// How many topics pages have declared as they came on top, or as what they read said more (declare_page_topic):
+/// read by what waits for a page's reads held (sfapp's first_page_node, page_opens_node's chat), told again as one is.
+// kept across runs: a count, read only for its changes
+let page_declared_told : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// page_declared_told, read where it is followed.
+pub fn page_declared_now() -> Int {
+  page_declared_told.get()
 }
 
 ///|

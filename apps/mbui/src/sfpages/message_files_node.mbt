@@ -12,6 +12,8 @@ priv struct MessageFilesAt {
   station : () -> String
   session : () -> String
   view : () -> ChatView
+  /// its message's `said` as it changes: said while the chat shows (its pictures brushed in only then)
+  said : () -> Bool
 }
 
 ///|

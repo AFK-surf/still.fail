@@ -211,31 +211,6 @@ fn rooms_parted(
       let gy = dmax(by0 - ay1, ay0 - by1)
       if gx < -gap_slack && gy < -gap_slack {
         over(j, k, -gx, -gy)
-        continue
-      }
-      let (rax0, ray0, rax1, ray1) = rooms[j]
-      let (rbx0, rby0, rbx1, rby1) = rooms[k]
-      if dmin(rax1, rbx1) - dmax(rax0, rbx0) <= 0.0 || dmin(ray1, rby1) - dmax(ray0, rby0) <= 0.0 {
-        continue
-      }
-      if gx >= gy {
-        if ax0 + ax1 <= bx0 + bx1 {
-          let m = (ax1 + bx0) / 2.0
-          rooms[j] = (rax0, ray0, dmin(rax1, m), ray1)
-          rooms[k] = (dmax(rbx0, m), rby0, rbx1, rby1)
-        } else {
-          let m = (bx1 + ax0) / 2.0
-          rooms[j] = (dmax(rax0, m), ray0, rax1, ray1)
-          rooms[k] = (rbx0, rby0, dmin(rbx1, m), rby1)
-        }
-      } else if ay0 + ay1 <= by0 + by1 {
-        let m = (ay1 + by0) / 2.0
-        rooms[j] = (rax0, ray0, rax1, dmin(ray1, m))
-        rooms[k] = (rbx0, dmax(rby0, m), rbx1, rby1)
-      } else {
-        let m = (by1 + ay0) / 2.0
-        rooms[j] = (rax0, dmax(ray0, m), rax1, ray1)
-        rooms[k] = (rbx0, rby0, rbx1, dmin(rby1, m))
       }
     }
   }
@@ -261,6 +236,7 @@ fn rooms_parted(
 pub fn Tester::tree_room_faults(self : Tester) -> Array[String] {
   self.reads_own()
   ignore(self)
+  let c = g()
   guard view_tree() is Some(tree) else { return [] }
   let targets = tree.press_boxes()
   let drawn = tree.drawn()
@@ -316,7 +292,27 @@ pub fn Tester::tree_room_faults(self : Tester) -> Array[String] {
     if tree.pressed_as_drawn(t.0) {
       continue
     }
-    let r = tree.press_room_found(t.0, t.1)
+    let (x0, y0, x1, y1) = t.1
+    let (bx0, by0, bx1, by1) = tree.input_bounds(t.0)
+    let edge = (dmax(0.0, bx0), dmax(0.0, by0), dmin(c.width, bx1), dmin(c.height, by1))
+    let mut cx0 = edge.0
+    let mut cy0 = edge.1
+    let mut cx1 = edge.2
+    let mut cy1 = edge.3
+    let mut h = t.2
+    while h >= 0 {
+      let (hx0, hy0, hx1, hy1) = targets[h].1
+      if hx1 - hx0 < least {
+        cx0 = dmax(cx0, hx0)
+        cx1 = dmin(cx1, hx1)
+      }
+      if hy1 - hy0 < least {
+        cy0 = dmax(cy0, hy0)
+        cy1 = dmin(cy1, hy1)
+      }
+      h = targets[h].2
+    }
+    let r = @view.press_room(x0, y0, x1, y1, (cx0, cy0, cx1, cy1), edge, least)
     let (w, h) = (r.2 - r.0, r.3 - r.1)
     if w < least - gap_slack || h < least - gap_slack {
       out.push("room: \{named(j)} has \{w.round()}×\{h.round()} to be pressed in, under \{least}")
