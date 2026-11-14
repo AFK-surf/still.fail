@@ -677,6 +677,40 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       i = self.tree.nodes[i].parent
     }
   }
+  // (what each block holds of what a go-to brings, as its page marks it (View::sought): each node saying so and its
+  // piece, in the order they were made, by the block's own node, each let go with its node)
+  let sought : Map[Int, Array[(View, () -> ((Double, Double) -> (Double, Double, Double, Double)?)?)]] = Map([])
+  s.sought_said = fn(v, piece) {
+    let mut i = v.at
+    while i >= 0 && i != self.at {
+      for b in blocks {
+        if b.0.at == i && b.0.alive() {
+          let block_at = i
+          let mark_at = v.at
+          match sought.get(block_at) {
+            Some(xs) => xs.push((v, piece))
+            None => sought[block_at] = [(v, piece)]
+          }
+          v.owns(fn() {
+            match sought.get(block_at) {
+              Some(xs) => {
+                let left = xs.filter(fn(x) { x.0.at != mark_at })
+                if left.is_empty() {
+                  sought.remove(block_at)
+                } else {
+                  sought[block_at] = left
+                }
+              }
+              None => ()
+            }
+          })
+          |> ignore
+          return
+        }
+      }
+      i = self.tree.nodes[i].parent
+    }
+  }
   // (how wide what it holds is given to be, as it is laid out: View::scrolls' fill)
   let room_w : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
   self.reacts(fn() { (room_w.get(), self.words_redone()) }, fn(_) {
@@ -1126,6 +1160,32 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             self.tree.start_in(m.at, b.0.at, w, self.tree.rooming == self.at, self.tree.logic_said())
           _ => None
         }
+      }
+    }
+    None
+  }
+  // (where what a go-to brings lies under the top of the block of the `i`th key, as the list is laid out now at the
+  // width it is laid out at, the first of the block's nodes that holds some of it: its top and foot, Tree::sought_in)
+  let sought_of = fn(all : Places[K], i : Int) -> (Double, Double)? {
+    guard !sought.is_empty() && i >= 0 && i < all.length() else { return None }
+    guard room_w.untracked() is Some(w) else { return None }
+    let k = all.key(i)
+    for b in blocks {
+      if b.0.alive() && @signals.untracked(b.1) == k {
+        guard sought.get(b.0.at) is Some(xs) else { return None }
+        for x in xs {
+          guard x.0.alive() else { continue }
+          match @signals.untracked(x.1) {
+            Some(piece) =>
+              match
+                self.tree.sought_in(x.0.at, b.0.at, w, self.tree.rooming == self.at, self.tree.logic_said(), piece) {
+                Some(at) => return Some(at)
+                None => ()
+              }
+            None => ()
+          }
+        }
+        return None
       }
     }
     None
@@ -1613,7 +1673,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         let most = dmax(0.0, whole_now() - vh)
         let to = match ask {
           // (its offset from under what covers its top, as the fill's)
-          Bring(k, off) =>
+          Bring(k, off, _) =>
             match laid_at.get(k) {
               Some(i) if i < all.length() => Some(all.top(i) + off - @signals.untracked(fn() { s.top_covered() }))
               _ => None
@@ -2246,6 +2306,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (a block asked to be brought to the middle or its top (ListPlace), once, as soon as it is among its keys: its
     // middle there as tall as it is counted; off its foot then)
     let mut centring = false
+    // (asked to bring what a block holds of a go-to's before the eyes too (ListPlace::bring's `sought`): how much further
+    // down than its top's place it is put so far in this fill, worked out anew in each pass as the block is measured)
+    let mut seeking = false
+    let mut sought_by = 0.0
     let mut to_end = false
     // (asked: put there, what it was on by itself stopped; else moved by as much as the anchor says)
     let mut asked = false
@@ -2267,7 +2331,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           }
           Some(ask) => {
             let (k, off) = match ask {
-              Bring(k, off) => (k, Some(off))
+              Bring(k, off, seek) => {
+                seeking = seek
+                (k, Some(off))
+              }
               Centre(k) => (k, None)
               ToEnd => panic()
             }
@@ -2423,6 +2490,24 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         // (its middle at the middle of what shows between what covers its top and its pinned foot's top)
         let (cover, under) = @signals.untracked(fn() { (s.top_covered(), s.foot_covered_now()) })
         aoff = counted(laid.untracked()).h(ai) / 2.0 - (cover + vh - under) / 2.0
+      }
+      if seeking {
+        // (what it holds of a go-to's, low in what shows with its top where it is brought (its middle past 80% of what
+        // shows between what covers its top and its pinned foot's top): its middle at the middle of that instead;
+        // the block's top shows `-aoff` under the list's top: list_sought.mbt)
+        aoff = aoff - sought_by
+        sought_by = 0.0
+        match sought_of(all, ai) {
+          Some((y0, y1)) => {
+            let (cover, under) = @signals.untracked(fn() { (s.top_covered(), s.foot_covered_now()) })
+            let mid = (y0 + y1) / 2.0
+            if -aoff + mid > cover + 0.8 * (vh - under - cover) {
+              sought_by = mid - (cover + vh - under) / 2.0 - aoff
+              aoff = aoff + sought_by
+            }
+          }
+          None => ()
+        }
       }
       let most = dmax(0.0, whole_now() - vh)
       // (what is read in it where it starts now, held there: what came or went over that start in it moves none of it)
@@ -3464,9 +3549,10 @@ let glide_most : Double = 2.0
 
 ///|
 /// What a page's list is asked to show at a cause (ListPlace), done as its column is next laid out: a block brought to
-/// its top (`off` under it) or to the middle.
+/// its top (`off` under it; what it marks sought in it before the eyes too where the third says so: View::sought) or to
+/// the middle.
 priv enum ListAsk[K] {
-  Bring(K, Double)
+  Bring(K, Double, Bool)
   Centre(K)
   ToEnd
 }
@@ -3503,14 +3589,23 @@ pub fn[K] ListPlace::new() -> ListPlace[K] {
 /// Block `key` brought to the top of where the list shows, under what covers its top (Scroll::top_covered: the bar it
 /// runs under; none, its own top), `offset` above that edge (its top that far over it, under it where less than 0: what
 /// is in sight told as `first` and `into`, `first` brought with `into` is where it was), as far as the list goes
-/// (Ctx::list_scroll_to's): gliding there where `glide` and it is near.
-pub fn[K] ListPlace::bring(self : ListPlace[K], key : K, offset? : Double = 0.0, glide? : Bool = false) -> Unit {
+/// (Ctx::list_scroll_to's): gliding there where `glide` and it is near. `sought`: and what the block holds of what a
+/// go-to brings (View::sought) before the eyes, in the same fill: where it would lie low (its middle past 80% of the
+/// room between what covers the list's top and its pinned foot's top), its middle at the middle of that room instead
+/// (list_sought.mbt), as far as the list goes; not gliding.
+pub fn[K] ListPlace::bring(
+  self : ListPlace[K],
+  key : K,
+  offset? : Double = 0.0,
+  glide? : Bool = false,
+  sought? : Bool = false,
+) -> Unit {
   self.from = None
-  if glide && (self.glide)(Bring(key, offset)) {
+  if glide && !sought && (self.glide)(Bring(key, offset, false)) {
     self.asked = None
     return
   }
-  self.asked = Some(Bring(key, offset))
+  self.asked = Some(Bring(key, offset, sought))
   (self.laid_again)()
 }
 

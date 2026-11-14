@@ -648,15 +648,16 @@ fn md_words_node(
     w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
     // (what a find marks of them, as what it found and where it is change: found_marks, the one it is at counted
     // through all the words; a search's, every one; and a passage lit where these words have it: passage_marks)
-    w.runs_marks(By(fn() {
-      let found = match (md.found_at)() {
+    let found = fn() {
+      match (md.found_at)() {
         Some(at) =>
           found_marks(runs(), (md.found)(), if at == found_all { at } else if at < 0 { -1 } else { at - (md.before)() })
         None => []
       }
-      found + passage_marks(runs(), (md.lit)())
-    }))
-    |> ignore
+    }
+    w.runs_marks(By(fn() { found() + passage_marks(runs(), (md.lit)()) })) |> ignore
+    // (what a go-to brings before the eyes in them, where they have it: sought_part)
+    w.sought(fn() { sought_part(runs(), found(), (md.lit)().0).map(fn(r) { @ui.runs_piece(w, r.0, r.1) }) }) |> ignore
     // (on one line as wide as they are, cut short with an ellipsis where the column is narrower: one_line's)
     if cut {
       w.cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore

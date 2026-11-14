@@ -28,19 +28,21 @@ fn person_words_node(
     @sf.found_weight(@sfbase.person_runs(now.text, now.words, @sf.theme().p.accent, chat_title=chat_title_of(now)), found())
   }
   // (what a find marks of them: found_marks; and the passage lit where they have it: passage_marks)
-  let marks = fn() {
-    let found = match found_at() {
+  let found_now = fn() {
+    match found_at() {
       Some(at) => @sf.found_marks(runs(), found(), at)
       None => []
     }
-    found + @sf.passage_marks(runs(), lit())
   }
+  let marks = fn() { found_now() + @sf.passage_marks(runs(), lit()) }
   let shown : @signals.Signal[Array[(String, String, Int)]] = @signals.signal([])
   let links : Ref[@ui.RunsLinks?] = Ref(None)
   let words = v.box(fn(w) {
     w
     .words_runs(By(runs))
     .runs_marks(By(marks))
+    // (what a go-to brings before the eyes in them, where they have it: sought_part)
+    .sought(fn() { @sf.sought_part(runs(), found_now(), lit().0).map(fn(r) { @ui.runs_piece(w, r.0, r.1) }) })
     .words_look(By(fn() { @ui.style_words(@sf.theme().t.words) }))
     .runs_look(By(fn() { { ..@view.runs_plain, link: @sf.theme().p.blue, words: true } }))
     .ink(By(fn() { @ui.style_ink(@sf.theme().t.words) }))
