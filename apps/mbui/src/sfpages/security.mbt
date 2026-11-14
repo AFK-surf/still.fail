@@ -45,7 +45,10 @@ pub fn security_node(
           if flag(me, "waiting") || flag(me, "unsigned") {
             out.push("pair")
           }
-          // (what was just done and is not in effect: first after the state)
+          // (what the upgrade of safe mode waits for, on the owner's device that is to finish it: first after the state,
+          // where one looking for 安全模式 looks first)
+          upgrade_keys(l, out)
+          // (what was just done and is not in effect: after the state and the upgrade)
           pending_keys(l, out)
           out.push("people")
           out.push("stations")
@@ -87,6 +90,10 @@ pub fn security_node(
         "signing" => signing_node(b)
         "on" => lock_on_node(b, lock)
         "pair" => pair_node(b, core, ws, lock)
+        "upgrade" => @sf.section_heading_node(b, fn() { text(field(lock(), "upgrade"), "titleText") })
+        k if k.has_prefix(upgrade_key) =>
+          upgrade_line_node(b, core, lock, @string.parse_int(k[upgrade_key.length():]) catch { _ => 0 })
+        "upgrade-ask" => upgrade_ask_node(b, core, ws, lock)
         "pending" => @sf.section_heading_node(b, fn() { text(lock(), "pendingText") })
         k if k.has_prefix(pending_key) => pending_node(b, core, ws, lock, k.unsafe_substring(start=pending_key.length(), end=k.length()))
         "people" => people_node(b, core, ws, lock)
@@ -275,6 +282,156 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
     .margin(Is((-pad, 0.0, -pad, -pad)))
     |> ignore
   })
+}
+
+///|
+/// 安全模式有一项升级尚未完成 (the core's `upgrade`, on the owner's device that is to finish it), as the page's list's
+/// blocks (`out`, after what is there): its title a heading, then each line it waits for a block of its own by where it
+/// stands (the core's lines have no ids: six at most and how many more), a row a piece of the section's card, and its
+/// button where only the person's ask is lacking, the card's last piece; none while there is none.
+fn upgrade_keys(l : Json?, out : Array[String]) -> Unit {
+  let u = field(l, "upgrade")
+  guard u is Some(Object(_)) else { return }
+  out.push("upgrade")
+  for i, _ in items(u, "lines") {
+    out.push(upgrade_key + i.to_string())
+  }
+  if text(u, "askText") != "" {
+    out.push("upgrade-ask")
+  }
+}
+
+///|
+/// An upgrade's line's block's key: this, then where it stands among the lines.
+let upgrade_key : String = "upgrade/"
+
+///|
+/// How many pieces the upgrade's card is made of: its lines, and its button where it has one.
+fn upgrade_pieces(u : Json?) -> Int {
+  items(u, "lines").length() + (if text(u, "askText") != "" { 1 } else { 0 })
+}
+
+///|
+/// The upgrade's line `i` as `lock` says it now, a piece of the section's card (which by where it stands among the card's
+/// pieces now), as a change not in effect is (pending_node).
+fn upgrade_line_node(parent : @view.View, core : Core, lock : () -> Json?, i : Int) -> Unit {
+  // (where it stands and what it says, as the core says them; gone, as they last were, while its block makes its way
+  // out)
+  let last : Ref[(@sf.CardPiece, Json?)] = Ref((@sf.CardPiece::CardWhole, None))
+  let now = fn() {
+    let u = field(lock(), "upgrade")
+    let lines = items(u, "lines")
+    if i < lines.length() {
+      last.val = (@sf.card_piece_of(i, upgrade_pieces(u)), Some(lines[i]))
+    }
+    last.val
+  }
+  parent.grow(Is(1.0)) |> ignore
+  @sf.card_piece_node(parent, fn() { now().0 }, wide_card=true, wide_gap=sec_rows_gap, fn(k) {
+    sec_upgrade_line_node(k, core, fn() { now().1 })
+  })
+}
+
+///|
+/// What the upgrade waits for, `lv` as it is now: the waiting mark, its sentence whole on as many lines as it takes;
+/// a station's, under it, 更新 where the core says this person may update it from here (as the station's own page offers
+/// its update: `software.update` of its own software, `upgrade_update`), a ring while that is asked, and, once its
+/// update is under way, how much of it is in as its own page draws it (station_node's `software_end_node`).
+fn sec_upgrade_line_node(parent : @view.View, core : Core, lv : () -> Json?) -> Unit {
+  let station = fn() { text(lv(), "station") }
+  let sending : @signals.Signal[Bool] = @signals.signal(false)
+  let updating = fn() { flag(lv(), "updating") }
+  let busy = fn() {
+    sending.get() || updating() || is_doing(core, ["software.update"], [("station", station()), ("id", "station")])
+  }
+  let percent = fn() -> Double? {
+    match field(lv(), "percent") {
+      Some(Number(p, ..)) => Some(p / 100.0)
+      _ => None
+    }
+  }
+  sec_line_node(
+    parent,
+    fn() { text(lv(), "text") },
+    wraps=true,
+    mark=fn(m) {
+      m.box(fn(b) {
+        @sf.style_node(b, fn() { sec_pending_mark }, in_row=true)
+        @sf.icon_node(b, "wait", sec_device_glyph, By(fn() { @sf.theme().p.muted })) |> ignore
+      })
+      |> ignore
+    },
+    // (its update under way with how much of it is in: the bar its own page draws; else 更新, a ring while it is asked)
+    acts=fn(a) {
+      a.pick(fn() { updating() && percent() is Some(_) }, fn(p, drawn) {
+        if drawn {
+          p.box(fn(bar) {
+            bar.width(Is(Some(sw_progress_w))) |> ignore
+            @sf.progress_node(bar, percent, fn() { @ui.tree_theme().line }, fn() { @sf.theme().p.accent }) |> ignore
+          })
+          |> ignore
+        } else {
+          sec_tap_do_node(
+            p,
+            fn() { @sf.t("web-main.versions.update") },
+            fn() { upgrade_update(core, @signals.untracked(station), sending) },
+            busy,
+          )
+        }
+      })
+    },
+    acts_shown=fn() { text(lv(), "of") == "station" && (flag(lv(), "canUpdate") || busy()) },
+  )
+}
+
+///|
+/// 更新 pressed on the upgrade's line of `station`: its own software updated (`software.update`, as the station's own
+/// page does), once: nothing more is sent while that is asked (`sending`), nor while the core says it is under way
+/// (the line's ring in its place); what went wrong said as any act's is.
+fn upgrade_update(core : Core, station : String, sending : @signals.Signal[Bool]) -> Unit {
+  if station == "" || @signals.untracked(fn() { sending.get() }) {
+    return
+  }
+  sending.set(true)
+  (core.call)("software.update", obj([("station", str(station)), ("id", str("station"))]), fn(r) {
+    sending.set(false)
+    match r {
+      Ok(_) => ()
+      Err(e) => {
+        @ui.haptic(Reject)
+        (core.say)(
+          @sf.t("android-misc.act.failed", args=[("what", @sf.t("web-main.stationUpdate.updateAction")), ("error", error_text(e))]),
+        )
+      }
+    }
+  })
+}
+
+///|
+/// The upgrade's button where only the person's ask is lacking (`askText`: `lock.handOver`, which asks them once and
+/// finishes it), the card's last piece; a ring on it while that goes.
+fn upgrade_ask_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> Json?) -> Unit {
+  let u = fn() { field(lock(), "upgrade") }
+  let label = fn() { text(u(), "askText") }
+  let asking = fn() { is_doing(core, ["lock.handOver"], [("workspace", ws())]) }
+  parent.grow(Is(1.0)) |> ignore
+  @sf.card_piece_node(
+    parent,
+    fn() {
+      let n = upgrade_pieces(u())
+      @sf.card_piece_of(n - 1, n)
+    },
+    wide_card=true,
+    wide_gap=sec_rows_gap,
+    fn(k) {
+      k.box(fn(a) {
+        @sf.style_node(a, fn() { sec_actions })
+        @sf.button_node(a, label, fn() { lock_call(core, @signals.untracked(ws), "handOver", @signals.untracked(label), []) }, tone=Primary, busy=asking)
+        |> ignore
+      })
+      |> ignore
+    },
+  )
 }
 
 ///|
