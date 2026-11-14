@@ -88,8 +88,16 @@ jobs:
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
+        run: sh .github/release-desktop.sh --stable
+      # Only frees the runner's disk of the zip already put: it fetches the zip back from R2 to compare, which from mini1
+      # took past the job's 10 minutes after the release was out (0.1.8947, two attempts, 2026-11-15), so it never fails
+      # or holds back the release.
+      - name: Remove the uploaded Mac zip's local copy
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          sh .github/release-desktop.sh --stable
           build=$(git rev-list --count HEAD)
           cache=${MBUI_MAC_CACHE:-"$HOME/stillfail-ci/mbui-mac-stable"}
           # (where scripts/beta.sh of the release's checkout builds: beside libs/mbui once mbui is there)
