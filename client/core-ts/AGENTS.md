@@ -192,7 +192,9 @@ another; the accounts' list's merge across stations and its refills.
   device); without an `open` there, the chain's settings stand. It is made once and kept in memory while what it is made of stands (`inForceOf`).
   A station that says `heads` is read by them (views/lock.ts `givenOf`: GET /lock/heads, then POST /lock/given for the
   logs whose head is no entry held here and the bodies of hashes none held is of), so a read with nothing changed asks
-  no log and no body; one from before is read whole. Known and taken (the lead, 2026-11-15): a workspace already moved
+  no log and no body (and hashes none held again: `bodyHash` is kept by the body's object); one from before is read
+  whole. What such a read still carries, known: the heads, about 136 B a log a station (41 KB at 300 members), and GET
+  /lock's `builds` whole (29 KB a station at 300). Known and taken (the lead, 2026-11-15): a workspace already moved
   that grows past `LOGS_BEFORE` logs while one of its stations is from before this is read wrong at that station by a
   core from before (no floor there); nothing is built for it, no workspace of that size having moved. Nothing is
   signed on a moved chain itself: `Lock.append` answers `lock_moved`, the background writers do nothing, and what was

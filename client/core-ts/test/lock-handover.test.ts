@@ -33,6 +33,7 @@ import { key, signed as simSigned } from "../../../station/test/lock-world-sim.t
 import type { CoreError } from "../src/error.ts";
 import { type Entry, type Signer, canonical, entryHash, next } from "../src/lock.ts";
 import { bodyHash } from "../src/lock-moved.ts";
+import { crypto } from "../src/personal-lock.ts";
 import { Core } from "../src/core.ts";
 import { httpError } from "../src/station/requests.ts";
 import { HostWire } from "../src/station/wire.ts";
@@ -826,6 +827,25 @@ for (const n of [50, 300]) {
     weighed(w, from, n, "one statement");
     check(readsOf(w, from), ["A GET /lock/heads", `A POST /lock/given ${asks([w.bob.genesis], [said.h])}`, "B GET /lock/heads", `B POST /lock/given ${asks([w.bob.genesis], [said.h])}`], "its body and its signer's log");
     check(inForceOf(w.inner, "ws").f.members.has("r3"), false, "xena out here");
+    // nothing changed again, a body held: no body hashed again (the rules' body_hash_js hashes a body's canonical text
+    // by the crypto it is given, `sha256Hex`: counted by what it hashes, a statement's body)
+    const hashed = { bodies: 0 };
+    const sha = mock.method(crypto, "sha256Hex", function (this: unknown, text: string) {
+      try {
+        const v = JSON.parse(text);
+        if (v !== null && typeof v === "object" && "salt" in v && "kind" in v && !("sig" in v)) hashed.bodies++;
+      } catch {
+        // (not JSON: not a body)
+      }
+      return sha.mock.original.call(this, text);
+    });
+    from = w.st.asked.length;
+    await w.run(read(w.inner, "ws"));
+    sha.mock.restore();
+    weighed(w, from, n, "nothing changed, a body held");
+    check(readsOf(w, from), ["A GET /lock/heads", "B GET /lock/heads"], "nothing changed again: the heads alone");
+    console.log(`READ N=${n} bodies hashed in a read with nothing changed: ${hashed.bodies}`);
+    check(hashed.bodies, 0, "no body hashed again");
     // B from before: read whole there
     w.st.noHeads.add("B");
     from = w.st.asked.length;
