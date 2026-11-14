@@ -34,7 +34,7 @@ fn rs_rows_grow(s : (String, Double, Double, Int)) -> Array[String] {
         k.carded[n - 1] = false
         k.carded[n + 1] = false
       })
-      rs_run(t, long_rest_ms * 2.0)
+      rs_rest(t, long_rest_ms * 2.0)
       match rs_read(t, k, s) {
         Some((m, _)) => {
           let over = n - 1
@@ -83,7 +83,7 @@ fn rs_rows_grow_end(s : (String, Double, Double, Int)) -> Array[String] {
     rs_end_held(t, k, "\{s.0}: the last row (第\{last}条) told longer", fn() { rs_told(k, fn() { k.grown.push(last) }) }),
   )
   rs_told(k, fn() { k.carded[last - 1] = false })
-  rs_run(t, long_rest_ms * 2.0)
+  rs_rest(t, long_rest_ms * 2.0)
   if t.rect_of("一起换") is None {
     broken.push("\{s.0}: no card drawn on 第\{last - 1}条 at the end (the cause not made)")
   }

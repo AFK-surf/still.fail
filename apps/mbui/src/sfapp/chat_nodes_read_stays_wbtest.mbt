@@ -5,12 +5,13 @@
 // list's end, the end: the last row over the composer. Whatever else happens (the page before comes, a reply comes, a
 // row over or under it grows or goes, the window's width, the side panel), it stays where it is on the screen in every
 // frame from the cause to rest, not only at rest. The list's own causes are here and in chat_nodes_read_stays_before_wbtest,
-// _before_wide_wbtest, _before_wide_120_wbtest, _before_wide_400_wbtest (the page before) and _rows_wbtest (a row's
+// _before_wide_wbtest (the page before, 小屏's and 大屏's) and _rows_wbtest (a row's
 // height), each within a CI job's five minutes; the composer's and the keyboard's
 // are chat_nodes_read_stays_composer_wbtest's; the helpers both use are chat_nodes_read_stays_help_wbtest's. A test a cause, each on 小屏 (390 by 844, a
 // finger) and 大屏 (1280 by 800, a mouse), over the long chat (chat_window_wbtest's LongChat) whose every call to the
 // core is answered as late as the run says (0, 120 or 400 ms where the cause goes through the core), between frames.
-// Every frame drawn is looked at, at any rate of frames (each frame's look: Tester::each_frame), and a row is held
+// Every frame a device draws is looked at (the display's while the app asks for frames, one as each of the core's
+// answers comes, one at the watch's end: rs_watch), at any rate of frames (each frame's look: Tester::each_frame), and a row is held
 // within half a device pixel (the Tester's 2 a point), its rows laid on the device's pixels as every host lays them
 // (Tester::set_rows_on_pixels: what is held is where things are drawn).
 // Not made here: a picture decoded late and a visualisation telling its height (the long chat's messages carry no
