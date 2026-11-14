@@ -10,7 +10,7 @@ import * as rules from "../../../rules/js/rules.js";
 import { type Entry, canonical, entryHash } from "./lock.ts";
 import { fold, movedRoot } from "./lock-moved.ts";
 import { checkChain, crypto } from "./personal-lock.ts";
-import { checkLock, signerIn } from "./vault/lock-check.ts";
+import { type Checked, checkLock, signerIn } from "./vault/lock-check.ts";
 import { COUNTED_FROM } from "./station/oldest.ts";
 import { MOVED_FROM_BUILD } from "../../../station/src/api/moved-from.ts";
 
@@ -106,12 +106,14 @@ export function mayHandOver(entries: readonly Entry[], sub: string, from: number
 /// that `moved` after it, is the chain's list at its head (`differs`): nobody dropped or added by the move. A bound
 /// member's log not held carries nothing of theirs (rules: what it said is not known), so it would differ: the logs
 /// the chain binds are read first (views/lock.ts `readBound`).
-export function handOverPlan(ws: string, entries: readonly Entry[], who: Who, chains: ReadonlyMap<string, readonly Entry[]>, bodies: readonly unknown[], now: number): HandOverPlan {
+/// `check`: the chain checked by the rules at `now` (`checkLock`, by default; the caller's where it keeps what it checked:
+/// views/lock.ts `checkedChain`).
+export function handOverPlan(ws: string, entries: readonly Entry[], who: Who, chains: ReadonlyMap<string, readonly Entry[]>, bodies: readonly unknown[], now: number, check: (entries: readonly Entry[], now: number) => Checked = (es, at) => checkLock([...es], at)): HandOverPlan {
   if (entries.length === 0) return { refused: "the workspace has no lock" };
   if (movedRoot(entries) !== null) return { refused: "the chain moved already" };
-  let checked: ReturnType<typeof checkLock>;
+  let checked: Checked;
   try {
-    checked = checkLock([...entries], now);
+    checked = check(entries, now);
   } catch (e) {
     return { refused: `the chain held does not check: ${(e as Error).message}` };
   }

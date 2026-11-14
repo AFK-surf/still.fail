@@ -198,6 +198,10 @@ type Part = {
   /// chain held, the `lockLogs` and `lockBodies` records, the person's own pinned chain, the stations the workspace's
   /// view lists; and from when until when by this device's clock it stands (src/lock-moved.ts `goodFor`).
   force: { entries: readonly Entry[]; logs: unknown; bodies: unknown; own: readonly Entry[] | null; listed: unknown; from: number; until: number; made: InForce } | null;
+  /// The handover's plan as made last (`planHere`), with what it was made of, as `force` is: the chain, the `lockLogs`
+  /// and `lockBodies` records, the person's own log, who would hand over; and the span of this device's clock it
+  /// stands for (`spanOf`).
+  plan: { entries: readonly Entry[]; logs: unknown; bodies: unknown; log: readonly Entry[]; own: readonly Entry[]; who: string; from: number; until: number; made: HandOverPlan } | null;
   /// Stations that refused this device for the lock, and the lock's head then.
   refused: Map<string, string | null>;
   /// Where the chain moved: the stations whose refusal said this device is left out of the state in force there
@@ -349,7 +353,7 @@ export function live<D extends { exp?: unknown }>(d: D | undefined, at: number):
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ force: null, refused: new Map(), left: new Map(), leftApps: new Map(), approved: false, behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null, turn: Semaphore.makeUnsafe(1), forks: new Set(), shown: new Set(), carried: new Set(), handled: new Set(), tries: new Map(), again: new Map(), delivering: { running: false, again: false } }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ force: null, plan: null, refused: new Map(), left: new Map(), leftApps: new Map(), approved: false, behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null, turn: Semaphore.makeUnsafe(1), forks: new Set(), shown: new Set(), carried: new Set(), handled: new Set(), tries: new Map(), again: new Map(), delivering: { running: false, again: false } }));
 
 /// This device's base key known: kept for every workspace.
 const knowBase = (inner: Inner, ws: string, base: string) => {
@@ -1740,7 +1744,7 @@ function signKeysElsewhere(inner: Inner, ws: string, sub: string): Map<string, {
     if (other === ws || owner !== sub || !h?.head || movedHere(inner, other) || !stateOf(inner, other, h.entries).persons.has(sub)) continue;
     let lock: Checked;
     try {
-      lock = checkLock(h.entries, at);
+      lock = checkedChain(h.entries, at);
     } catch {
       continue;
     }
@@ -1783,7 +1787,7 @@ function standingsAt(entries: readonly Entry[], sub: string, at: number): OwnSta
   const devices = new Map<string, OwnDevice>();
   let lock: Checked;
   try {
-    lock = checkLock([...entries], at);
+    lock = checkedChain(entries, at);
   } catch {
     return { devices };
   }
@@ -3044,7 +3048,7 @@ function signerRole(inner: Inner, sub: string, entries: Entry[]): string | null 
   const key = signerOf(inner);
   if (key === null || !inner.host.appKeys) return null;
   try {
-    const by = signerIn(checkLock(entries, now(inner)), key, now(inner));
+    const by = signerIn(checkedChain(entries, now(inner)), key, now(inner));
     return by !== null && by.sub === sub && by.own ? by.role : null;
   } catch {
     return null;
@@ -3295,7 +3299,7 @@ function heldBack(inner: Inner, ws: string, _sub: string, entries: readonly Entr
   if (entries.length === 0) return [];
   const at = now(inner);
   try {
-    checkLock([...entries], at);
+    checkedChain(entries, at);
   } catch {
     return ["chain"];
   }
@@ -3472,10 +3476,63 @@ function whoHere(inner: Inner, sub: string): Who | null {
 }
 
 /// The handover's plan of `ws` by `who`, of the chain `entries` and this person's log `log` (`handOver`'s `planOf`).
+///
+/// It checks the chain and makes the rules' state of every log held as if moved, and it is asked at every make of the
+/// owner's `lock` topic while the chain waits (`upgradeOf`) and at every read (`movedBySelf`): so it is made once and
+/// kept in memory while what it is made of is the objects it was made of and this device's clock is in the span it
+/// stands for, as `inForceOf` keeps the state in force (2026-11-14: made again at every make, 236–279 ms each in Hermes
+/// on an owner's phone whose chain was held back, rounds of them a minute).
 function planHere(inner: Inner, ws: string, who: Who, entries: readonly Entry[], log: readonly Entry[]): HandOverPlan {
+  const logs = inner.data.record("lockLogs", ws);
+  const bodies = inner.data.record("lockBodies", ws);
+  const sub = inner.workspaces.owner(ws);
+  const own = sub === null ? [] : inner.adb.personal().pinnedOf(sub);
+  const by = `${who.sub} ${who.genesis} ${who.key} ${who.base} ${who.signer}`;
+  const at = now(inner);
+  const p = part(inner, ws);
+  const was = p.plan;
+  if (was !== null && was.entries === entries && was.logs === logs && was.bodies === bodies && was.log === log && was.own === own && was.who === by && at >= was.from && at < was.until) return was.made;
   const chains = new Map(logsOf(inner, ws, false));
   chains.set(who.genesis, log);
-  return handOverPlan(ws, entries, who, chains, bodiesHeld(inner, ws), now(inner));
+  const made = handOverPlan(ws, entries, who, chains, bodiesHeld(inner, ws), at, checkedChain);
+  p.plan = { entries, logs, bodies, log, own, who: by, ...spanOf(entries, chains.values(), at), made };
+  return made;
+}
+
+/// From when until when (unix seconds, `[from, until)`) what the rules make of the chain `entries` and the logs `chains`
+/// at `at` stands by the clock alone: the logs' web devices and the chain's as it ends (`goodFor`), and every `exp` of
+/// a device the chain ever named (the rules ask whether each entry's signer is live at the clock, not at the entry).
+function spanOf(entries: readonly Entry[], chains: Iterable<readonly Entry[]>, at: number): { from: number; until: number } {
+  let { from, until } = goodFor(chains, at, entries);
+  for (const e of entries) {
+    const b = e.body as J;
+    for (const d of e.kind === "genesis" ? arr(b?.devices) : e.kind === "device" ? [b] : []) {
+      const x = Number(d?.exp);
+      if (!Number.isFinite(x)) continue;
+      if (x <= at) from = Math.max(from, x);
+      else until = Math.min(until, x);
+    }
+  }
+  return { from, until };
+}
+
+/// The chain `entries` checked by the rules at `at` (vault/lock-check.ts `checkLock`; throws as it does), kept in
+/// memory by the chain's array (a chain held is replaced whole, never changed in place) while `at` is in the span it
+/// stands for: the handover's plan and what holds it back (`heldBack`) check the chain held at every make otherwise.
+const chainChecks = new WeakMap<readonly Entry[], { from: number; until: number; out: { ok: Checked } | { error: unknown } }>();
+function checkedChain(entries: readonly Entry[], at: number): Checked {
+  let c = chainChecks.get(entries);
+  if (c === undefined || at < c.from || at >= c.until) {
+    let out: { ok: Checked } | { error: unknown };
+    try {
+      out = { ok: checkLock([...entries], at) };
+    } catch (error) {
+      out = { error };
+    }
+    chainChecks.set(entries, (c = { ...spanOf(entries, [], at), out }));
+  }
+  if ("error" in c.out) throw c.out.error;
+  return c.out.ok;
 }
 
 /// The workspaces whose `moved` is being signed here by itself (`movedBySelf`): one at a time a workspace.
