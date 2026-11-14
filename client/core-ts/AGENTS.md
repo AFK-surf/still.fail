@@ -205,7 +205,10 @@ another; the accounts' list's merge across stations and its refills.
   `heardLeft`, `leftIn`; station/src/mesh/serve.ts `leftOf`; 2026-11-14): its page is as before a move, not
   confirmed and able to ask, its try dialling those (views/pair.ts `waitingIn`), a hint that lets nobody in; once let
   in it is tried again as the read after its approval finds it refused (`refusedAgain`). Only waiting (no refusal
-  says so), it waits as before. `test/lock-left-out.test.ts` runs it on the station's own code. One that lost its
+  says so), it waits as before. A web page whose stations said the list names no app of its person's (their `left.apps`)
+  is one nobody can approve there: it asks nobody and says to install an app first (`needsAppIn`, `me.needsAppText`,
+  and `lock.pair`'s refusal `lock_needs_app`); one told by a station from before (no `apps`) asks as before.
+  `test/lock-left-out.test.ts` runs it on the station's own code. One that lost its
   place is signed again as the model's `resign` does (`again=batch`), only with the seed in hand, never asking for it:
   judged with the others lost with it in the order made by what its body is about (`src/personal-lock.ts` `#how`), the
   same body where its `prev` still stands before it, else one made anew (`src/views/lock.ts` `restated`); meanwhile, and after a restart (what each was for is kept beside the person's lock,

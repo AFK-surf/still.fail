@@ -174,8 +174,12 @@ const APPROVERS_MOST = 16;
 /// dialling them as before a move, the device dialled checking everything itself (client/core-ts/src/views/pair.ts),
 /// so a station that names others only sends it where nobody lets it in. None while the station waits for the root's
 /// log or its `open` (it names nobody, so it cannot tell who is left out), while it is off (nobody is refused for it),
-/// where the chain did not move, or to a device the list names (refused for another reason).
-function leftOf(cloud: Cloud, ws: string | null, device: string, hello: any, sub: string): { approvers: string[] } | null {
+/// where the chain did not move, or to a device the list names (refused for another reason). And `apps`, whether the
+/// list names an app device of its person's: a web page is approved there by its own person's app alone, so one with
+/// none is told to install one rather than ask owners who cannot approve it (client/core-ts/src/views/lock.ts
+/// `needsAppIn`; the owner, 2026-11-13: 「开了安全模式那就需要 app」). It says nothing of the list beyond the asking
+/// device's own person (whom `approvers` names already where they have one); a core from before reads `approvers` alone.
+function leftOf(cloud: Cloud, ws: string | null, device: string, hello: any, sub: string): { approvers: string[]; apps: boolean } | null {
   if (cloud.chain(ws)?.state?.moved === undefined) return null;
   const locked = cloud.locked(ws);
   if (locked === null || locked.waiting === true || locked.state === null) return null;
@@ -188,7 +192,8 @@ function leftOf(cloud: Cloud, ws: string | null, device: string, hello: any, sub
     .filter((d) => d.kind === "app" && (named ? d.sub === sub : ["owner", "admin"].includes(s.members.get(d.sub)?.role ?? "")))
     .map((d) => d.id)
     .slice(0, APPROVERS_MOST);
-  return { approvers };
+  const apps = [...s.devices.values()].some((d) => d.kind === "app" && d.sub === sub);
+  return { approvers, apps };
 }
 
 /// How much of what took a device out a refusal tells at most.

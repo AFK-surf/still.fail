@@ -1971,6 +1971,7 @@ export const SHAPES: Record<string, Shape> = {
     ["ownLock", opt("bool"), { doc: "Its person bound a lock of their own here that this app is not on: the stations let it in on that lock\nalone, so it waits however the workspace's names it, and `lock.pair` asks to join that one (`pair` its try)." }],
     ["pair", opt("LockPair"), { doc: "Its try to be approved face to face (or made one that signs), once it began (`lock.pair`)." }],
     ["outText", opt("String"), { said: true, doc: "Its person taken out of an upgraded workspace: by whom and when, and whom to ask to be added again\n(views/lock.ts `outOf`)." }],
+    ["needsAppText", opt("String"), { said: true, doc: "A web page left out of an upgraded workspace whose person has no app in it: nobody can approve it there, so\nit says to install an app first, and it is not offered to ask (`waiting` false, no `pair`; views/lock.ts `needsAppIn`)." }],
   ], { doc: "This device in the workspace's lock." }),
   LockPending: struct([
     ["id", "String", { doc: "Which one (`lock.pendingDismiss`, `adb.personalPendingDismiss`); in a workspace's `lock`, one of the person's own lock begins `own:`." }],

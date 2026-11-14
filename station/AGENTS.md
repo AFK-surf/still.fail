@@ -181,7 +181,8 @@
   it of that log (the refusal's `person`, as before). A device the state in force does not name is told so by that
   refusal's `left` (`leftOf`, 2026-11-14: given no logs, a newcomer's app or a member's new web page read the
   workspace as waiting for good) with whom to ask, the app devices that may let it in: its person's own where the list
-  names them, else the owners' and admins', 16 at most. Not the list: only who can let it in, a hint it dials as
+  names them, else the owners' and admins', 16 at most, and `apps`, whether the list names an app device of its own
+  person's (a web page with none can be approved by nobody there, and is told to install an app). Not the list: only who can let it in, a hint it dials as
   before a move, each device dialled checking all itself. Never while waiting (the state names nobody) nor off.
   Before a chain moves, `GET /lock/logs` gives a device it lets in the logs it binds its members by, as kept here
   (`Cloud.logsOf`): what an owner's device reads before handing it over, so a member's device is not dropped.
