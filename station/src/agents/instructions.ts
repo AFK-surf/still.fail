@@ -9,9 +9,10 @@ import { STATION_AUTHOR } from "../store/rows.ts";
 
 /// `project`: the directory the runtime runs in, for a session begun outside still.fail (in a terminal) and continued here.
 /// `memory`: the workspace's memory as it is now (`readMemory`). `site`: what the deployment adds (`readSiteInstructions`).
-export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string, memory: string, site = ""): string {
+/// `station`: this station's name ("" where it has none).
+export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string, memory: string, site = "", station = ""): string {
   const projectLine = project === null ? "" : `- Project directory: ${project}. This session began outside still.fail (in a terminal on this machine) and goes on here: you run in that directory and keep working on it as before. The session workspace below is for scratch files only.\n`;
-  return instructions(projectLine, workspace, repos_dir, memory_path) + (site === "" ? "" : `\n\n${site}`) + (memory === "" ? "" : `\n\n<memory path="${memory_path}">\n${memory}\n</memory>`);
+  return instructions(projectLine, workspace, repos_dir, memory_path, station) + (site === "" ? "" : `\n\n${site}`) + (memory === "" ? "" : `\n\n<memory path="${memory_path}">\n${memory}\n</memory>`);
 }
 
 /// The most of the deployment's text an agent is told: a few lines that point at its skills, not a manual.
@@ -34,7 +35,7 @@ export async function readMemory(path: string): Promise<string> {
   return (await readFile(path, "utf8").catch(() => "")).trim();
 }
 
-const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine for people who write to you from still.fail chats, Slack threads, Feishu chats and Comma Tasks.
+const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string, station: string) => `You work on this machine for people who write to you from still.fail chats, Slack threads, Feishu chats and Comma Tasks.
 
 Messages:
 - Each message comes as <message via="web|slack|feishu|comma" thread="…" from="…" ts="…">: thread is the conversation to answer in. via="station" is a notice (a job ended): act on it and tell whoever asked for the work.
@@ -74,8 +75,10 @@ ${project}- Session workspace: ${workspace}: scratch files, clones and worktrees
 - A repository's AGENTS.md files, its root's and each directory's down to where you change code, are its rules: read them first (you may be told them as you reach a directory) and keep them true in what you change.
 
 Memory:
+- The memory and skills are the same on every station of this workspace: the stations keep them level, an edit here reaching the others within seconds.${station === "" ? "" : ` You are on station ${station}.`} What is true of one machine alone (its disk, paths, accounts, network) says which station it is of: \`- ${station || "Studio"}：…\`. A line or skill marked [<station>] came from that station before the memory was shared.
 - Global memory ${memory_path} (told below): only what would break things if forgotten, one line each.
 - Project memory goes in skills/<project>/SKILL.md beside it, description starting "项目记忆：". Before working out a project's build or workflow from source, search kinds=["skill"].
+- A file named *.conflict-<station>.* beside a skill's is that station's version made at the same time and not merged: merge what it adds into the skill and delete it.
 - Keep memory short and consistent: when you add a rule, remove any it contradicts. No credentials.`;
 
 export const NUDGE = `Your turn ended without a state, so nobody knows where the chat stands. Only a real unresolved need requires need_human. A factual answer alone does not need a follow-up question; do not invent one. If you still need something after answering a clarification, visibly ask for it; need alone is only a status summary. If you ask a person to choose or confirm, post the question with a card. Do not reopen a decision the user already made. Decide whether anything in it is still unfinished, then end the turn with exactly one:

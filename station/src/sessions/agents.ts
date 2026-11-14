@@ -56,6 +56,7 @@ import { relayTools } from "../tools/relays.ts";
 import { waysOf } from "../mesh/ways.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
+import { MemorySync } from "../share/memory.ts";
 import { ChatShares } from "../xshare/index.ts";
 import { ChatShareIndexBuilder } from "../xshare/index-builder.ts";
 import { overview } from "../api/overview.ts";
@@ -610,6 +611,15 @@ export const AgentsLive = (control: Control) =>
       });
       remote.setShares((peer, request, workspace) => sharing!.handle(peer, request, workspace));
       sharing.start();
+      // The agents' memory, the same on every station of a workspace (share/memory.ts).
+      const memorySync = new MemorySync({
+        data, cloud,
+        ask: (station, workspace, request) => remote.ask(station, { workspace, ...request }),
+        agentHome: () => settings().agentHome,
+      });
+      remote.setMemory((peer, request, workspace) => memorySync.handle(peer, request, workspace));
+      memorySync.start();
+      yield* Effect.addFinalizer(() => Effect.promise(() => memorySync.stop()));
       xshare.start();
       const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, connectKinds, rootView: (p) => rootViewThrough(p, helperFiles), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
       // And the fields the station's parts add (parts.ts).
