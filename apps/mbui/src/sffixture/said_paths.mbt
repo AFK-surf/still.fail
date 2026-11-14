@@ -675,7 +675,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "pending.*.text",
     "pending.*.stations.*",
     "pending.*.why",
-    "upgrade.lines.*",
+    "upgrade.lines.*.text",
     "rootText",
   ],
   "lockDraft": [

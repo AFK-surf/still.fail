@@ -223,6 +223,7 @@
   "core-misc.lock.upgrade.device": "Waiting for {name}'s device “{device}”: ask them to open Settings › Security on another trusted device and verify once; if that device is no longer used, ask them to remove it",
   "core-misc.lock.upgrade.deviceUnnamed": "Waiting for a device of {name}'s: ask them to open Settings › Security on another trusted device and verify once; if that device is no longer used, ask them to remove it",
   "core-misc.lock.upgrade.station": "Waiting for station {name}: update it to the latest version and keep it online; if it is no longer used, choose “Remove” on its page",
+  "core-misc.lock.upgrade.stationOther": "Waiting for station {name} of “{workspace}”: update it to the latest version and keep it online; if it is no longer used, choose “Remove” on its page",
   "core-misc.lock.upgrade.more": "and {n} more",
   "core-misc.lock.upgrade.ask": "Verify and finish the upgrade",
   "core-misc.lock.rootOnlyPage": "Security mode was turned on by {name}, and only they can turn it off or on again. If they cannot, run stillfail lock reset on the computer a station runs on",

@@ -223,6 +223,7 @@
   "core-misc.lock.upgrade.device": "等待 {name} 的设备「{device}」：请其在另一台受信任设备上打开「设置 › 安全」并完成一次验证；该设备已不再使用的话，请其将它移除",
   "core-misc.lock.upgrade.deviceUnnamed": "等待 {name} 的一台设备：请其在另一台受信任设备上打开「设置 › 安全」并完成一次验证；该设备已不再使用的话，请其将它移除",
   "core-misc.lock.upgrade.station": "等待 station {name}：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」",
+  "core-misc.lock.upgrade.stationOther": "等待「{workspace}」的 station {name}：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」",
   "core-misc.lock.upgrade.more": "以及另外 {n} 项",
   "core-misc.lock.upgrade.ask": "验证并完成升级",
   "core-misc.lock.rootOnlyPage": "安全模式由 {name} 开启，只有其本人可以关闭或重新开启。其本人无法操作时，可在 station 所在的电脑上运行 stillfail lock reset",

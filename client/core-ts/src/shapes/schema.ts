@@ -2006,9 +2006,17 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts)." }),
   LockUpgrade: struct([
     ["titleText", "String"],
-    ["lines", vec("String"), { said: true, doc: "Whom and what it waits for, a sentence each saying what to do (six at most, then how many more)." }],
+    ["lines", vec("LockUpgradeLine"), { doc: "Whom and what it waits for, a line each saying what to do (six at most, then how many more)." }],
     ["askText", opt("String"), { doc: "Where only the person's ask is lacking: the button that asks once and finishes it (`lock.handOver`)." }],
   ], { doc: "The upgrade of safe mode on the owner's device that is to finish it (the `lock` topic's `upgrade`)." }),
+  LockUpgradeLine: struct([
+    ["text", "String", { said: true, doc: "The sentence: whom or what it waits for and what to do." }],
+    ["of", "String", { doc: "What it is of: `member`, `device`, `station`, or `more` (how many more there are)." }],
+    ["station", opt("String"), { doc: "A station's: its address as calls take it (`software.update`'s `station`), the workspace it is asked in\nand its id." }],
+    ["canUpdate", "bool", { default: true, doc: "A station's: this person may update it from here, as its own page offers its update (an owner or admin of\nthat workspace, it online, its software updatable and newer or its update failed): its press calls\n`software.update`." }],
+    ["updating", "bool", { default: true, doc: "A station's: its update is under way, as its overview says." }],
+    ["percent", opt("i64"), { client: opt("I54"), doc: "While it updates, how much of its download is in, 0–100, when known (drawn as its own page draws it)." }],
+  ], { doc: "A line of the upgrade of safe mode (`LockUpgrade.lines`; views/lock.ts `waitedLines`, `writerLines`)." }),
   LockPromptWorkspace: struct([
     ["id", "String"],
     ["name", "String", { said: true }],

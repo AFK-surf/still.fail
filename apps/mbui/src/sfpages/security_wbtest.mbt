@@ -517,3 +517,152 @@ test "people added, answered with a change of the lock no station took yet: its 
   // (not the done words: 「1 人首次登录 still.fail 时自动加入。」)
   assert_true(t.find("1 人首次登录") is None, msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
+
+///|
+/// The upgrade of safe mode as the fixture's `settings-security-upgrade-…` say it (the core's sentences).
+let upgrade_title : String = "安全模式有一项升级尚未完成"
+
+///|
+let upgrade_maple : String = "等待 station Maple：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」"
+
+///|
+let upgrade_ana : String = "等待 Ana：请其在自己的受信任设备上将 still.fail 更新到最新版本并打开一次"
+
+///|
+let upgrade_device : String = "等待 Ana 的设备「Pixel 8 · still.fail Android」：请其在另一台受信任设备上打开「设置 › 安全」并完成一次验证；该设备已不再使用的话，请其将它移除"
+
+///|
+let upgrade_mini : String = "等待「个人」的 station 家里的 mini：请将它更新到最新版本并保持在线；已不再使用的话，请在它的页面上选择「从 workspace 移除」"
+
+///|
+/// Each state of the upgrade the fixture has: its mode's end, the first line it shows (its button's words where it has
+/// only that), and how many 更新 are drawn.
+let upgrade_states : Array[(String, String, Int)] = [
+  ("station", upgrade_maple, 1),
+  ("station-not", upgrade_maple, 0),
+  ("member", upgrade_ana, 0),
+  ("device", upgrade_device, 0),
+  ("many", upgrade_maple, 1),
+  ("ask", "验证并完成升级", 0),
+  ("other", upgrade_mini, 1),
+  ("updating", upgrade_maple, 0),
+]
+
+///|
+/// What `t.audit()` says of the upgrade's section: its faults that name its words.
+fn upgrade_faults(t : @ui.Tester) -> Array[String] {
+  let marks = ["安全模式有一项升级", "等待", "以及另外", "验证并完成升级"]
+  t.audit().filter(fn(f) { marks.iter().any(fn(m) { f.contains(m) }) })
+}
+
+///|
+/// The 更新 drawn whole and shown.
+fn updates_drawn(t : @ui.Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  t.words().filter(fn(x) { x.0 == "更新" && x.5 > 0.5 }).map(fn(x) { (x.0, x.1, x.2, x.3, x.4, x.5) })
+}
+
+///|
+test "安全, at each width and with either hand: no upgrade waited for, no section of it" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Security, w, platform~)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("安全模式已开启") is Some(_), msg=at)
+    assert_true(t.find(upgrade_title) is None, msg=at)
+  }
+}
+
+///|
+test "安全, at each width and with either hand: the upgrade's title and what it waits for under the state, above its people, each sentence whole, 更新 beside a station this person may update" {
+  for state in upgrade_states {
+    let (mode, first, updates) = state
+    for (w, platform) in page_cases {
+      let t = setting_tester(Security, w, platform~, mode="settings-security-upgrade-" + mode)
+      t.run_for(@ui.move_most_ms)
+      let at = "\{mode} \{w} platform \{platform}"
+      guard t.find("安全模式已开启") is Some((_, state_y)) else { fail("\{at}: no state") }
+      guard t.find(upgrade_title) is Some((_, title_y)) else { fail("\{at}: no title") }
+      guard t.find(first) is Some((_, first_y)) else { fail("\{at}: no \{first}") }
+      // (first after the state, before its people)
+      assert_true(state_y < title_y && title_y < first_y, msg=at)
+      assert_eq(updates_drawn(t).length(), updates, msg=at)
+      if mode == "many" {
+        scrolled_to(t, w, "以及另外 3 项")
+        assert_true(t.find("等待 周宁 的设备「周宁的 MacBook Air · still.fail 桌面版」：请其在另一台受信任设备上打开「设置 › 安全」并完成一次验证；该设备已不再使用的话，请其将它移除") is Some(_), msg=at)
+      }
+      let last = if mode == "many" { "以及另外 3 项" } else { first }
+      scrolled_to(t, w, "Pixel 9")
+      let (_, last_y) = t.find(last).unwrap()
+      let (_, people_y) = t.find("Pixel 9").unwrap()
+      assert_true(last_y < people_y, msg=at)
+      let faults = upgrade_faults(t)
+      assert_eq(faults.length(), 0, msg="\{at}: \{Repr(faults)}")
+    }
+  }
+}
+
+///|
+test "安全, at each width and with either hand: 更新 sends software.update for that station once, and nothing while it is asked" {
+  for case in [("station", "ws1/st2"), ("other", "ws2/st9")] {
+    let (mode, station) = case
+    for (w, platform) in page_cases {
+      let asked : Array[Json] = []
+      let answers : Array[(Result[Json, Json]) -> Unit] = []
+      let t = setting_tester(Security, w, platform~, mode="settings-security-upgrade-" + mode, over=fn(base) {
+        {
+          ..base,
+          call: fn(name, params, done) {
+            if name == "software.update" {
+              asked.push(params)
+              answers.push(done)
+            } else {
+              (base.call)(name, params, done)
+            }
+          },
+        }
+      })
+      t.run_for(@ui.move_most_ms)
+      let at = "\{mode} \{w} platform \{platform}"
+      let shown = updates_drawn(t)
+      guard shown.length() == 1 else { fail("\{at}: \{shown.length()} 更新 drawn") }
+      let (_, x, y, bw, bh, _) = shown[0]
+      t.tap(x + bw / 2.0, y + bh / 2.0)
+      t.frame()
+      assert_eq(asked.length(), 1, msg=at)
+      assert_eq(asked[0], { "station": Json::string(station), "id": "station" }, msg=at)
+      // (pressed again where it was while asked: nothing more sent, a ring in its place)
+      t.tap(x + bw / 2.0, y + bh / 2.0)
+      t.frame()
+      t.run_for(@ui.move_most_ms)
+      assert_eq(asked.length(), 1, msg=at)
+      assert_eq(updates_drawn(t).length(), 0, msg=at)
+      // (answered: 更新 again, as the core says it may be)
+      answers[0](Ok(Json::object({})))
+      t.run_for(@ui.move_most_ms)
+      assert_eq(updates_drawn(t).length(), 1, msg=at)
+    }
+  }
+}
+
+///|
+test "安全, at each width and with either hand: only the ask lacking, its button asks lock.handOver of this workspace" {
+  for (w, platform) in page_cases {
+    let asked : Array[(String, Json)] = []
+    let t = setting_tester(Security, w, platform~, mode="settings-security-upgrade-ask", over=fn(base) {
+      {
+        ..base,
+        call: fn(name, params, done) {
+          asked.push((name, params))
+          (base.call)(name, params, done)
+        },
+      }
+    })
+    t.run_for(@ui.move_most_ms)
+    let at = "\{w} platform \{platform}"
+    t.click(Button, label="验证并完成升级")
+    t.run_for(@ui.move_most_ms)
+    let handed = asked.filter(fn(c) { c.0 == "lock.handOver" })
+    assert_eq(handed.length(), 1, msg=at)
+    assert_eq(handed[0].1, { "workspace": "ws1" }, msg=at)
+    assert_true(t.find(upgrade_title) is None, msg=at)
+  }
+}
