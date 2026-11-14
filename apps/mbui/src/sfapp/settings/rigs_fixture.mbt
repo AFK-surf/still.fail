@@ -25,7 +25,7 @@ let fx_rigs : RigsFixture = { open: false, revoked: false, answered: false, vouc
 ///|
 /// Whether the fixture's `mode` is one with the made-up rigs in it.
 fn rigs_fixture_mode(mode : String) -> Bool {
-  mode.has_prefix("settings-stations-tasks") || mode.has_prefix("settings-station-tasks") || mode == "place-stations-tasks"
+  mode.has_prefix("settings-stations-tasks") || mode.has_prefix("settings-station-tasks") || mode == "place-stations-tasks" || mode.contains("updates-messy") || mode.contains("stations-messy")
 }
 
 ///|

@@ -1933,3 +1933,8 @@ core-views.copies.andLast
 core-views.copies.taking.gits
 core-views.copies.taking.failed
 core-views.copies.why.error
+web-pages.updates.title
+web-pages.updates.channel
+web-pages.updates.channel.stable
+web-pages.updates.channel.beta
+web-pages.updates.repair

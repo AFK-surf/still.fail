@@ -1529,3 +1529,66 @@ test "the station's page's parts pressed: the page as it was till the part press
   }
   assert_eq(failed, [], msg="presses not as at the press till the part came, then whole")
 }
+
+///|
+test "settings: Station's unified 软件与更新 card shows every software across stations and dispatches update actions without overlap" {
+  for w in [390.0, 1280.0] {
+    new_run()
+    @settings.fixture_page("settings-stations-updates-messy") |> ignore
+    let calls : Array[Made] = []
+    let base = fixture("settings-stations-updates-messy")
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        calls.push({ name, params, bytes: None, done })
+        (base.call)(name, params, done)
+      },
+    }
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=3200.0, platform=0)
+    open_setting("stations")
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    for words in [
+      "软件与更新",
+      "Claude Code",
+      "Codex",
+      "Antigravity CLI",
+      "DeepSeek Harness",
+      "Hermes Agent",
+      "测试版",
+      "自动更新",
+      "重试",
+      "修复并更新",
+      "检查更新",
+      "正在更新 62%",
+      "更新失败",
+      "Codex 需修复",
+    ] {
+      assert_true(t.find(words) is Some(_), msg="\{words} at \{w}")
+    }
+    assert_eq(t.squeeze_faults(), [], msg="squeeze at \{w}")
+    assert_eq(t.words_over_now(), [], msg="overlap at \{w}")
+    t.tap_text("重试")
+    t.draw()
+    assert_true(
+      named(calls, "updates.retry").iter().any(fn(c) {
+        text(Some(c.params), "id") == "station" && text(Some(c.params), "workspace") == "ws1"
+      }),
+      msg="重试 dispatches updates.retry for station on ws1 at \{w}",
+    )
+    t.tap_text("修复并更新")
+    t.draw()
+    assert_true(
+      named(calls, "updates.repair").iter().any(fn(c) {
+        text(Some(c.params), "id") == "codex" && text(Some(c.params), "workspace") == "ws1"
+      }),
+      msg="修复并更新 dispatches updates.repair for codex on ws1 at \{w}",
+    )
+    t.tap_text("检查更新")
+    t.draw()
+    assert_true(
+      named(calls, "updates.check").iter().any(fn(c) { text(Some(c.params), "workspace") == "ws1" }),
+      msg="检查更新 dispatches updates.check at \{w}",
+    )
+  }
+}

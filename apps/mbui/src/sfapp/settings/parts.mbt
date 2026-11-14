@@ -172,6 +172,7 @@ fn scroll_page(
       }
     }) }, sized?)
     |> ignore
+    fixture_scroll(c, "settings/" + key, rows=blocks.length() + 1)
     return
   }
   // what it shows ends over the navigation bar (SettingParts.kt pages: windowInsetsPadding(navigationBars)), and at a
@@ -192,7 +193,7 @@ fn scroll_page(
     }
   }) }, sized?)
   |> ignore
-  fixture_scroll(c, "settings/" + key)
+  fixture_scroll(c, "settings/" + key, rows=n)
 }
 
 ///|

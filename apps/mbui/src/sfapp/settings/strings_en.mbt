@@ -1981,4 +1981,9 @@ let en : Map[String, String] = {
   "core-views.copies.taking.gits": "Making the working directories again",
   "core-views.copies.taking.failed": "Not taken in: {why}",
   "core-views.copies.why.error": "an error, told in the station's log",
+  "web-pages.updates.title": "Automatic updates",
+  "web-pages.updates.channel": "Update channel",
+  "web-pages.updates.channel.stable": "Stable",
+  "web-pages.updates.channel.beta": "Beta",
+  "web-pages.updates.repair": "Repair & update",
 }

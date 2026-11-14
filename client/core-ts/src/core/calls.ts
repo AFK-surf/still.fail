@@ -22,6 +22,7 @@ import { LINK_PICTURES, type LinkPicture } from "../peek-pictures.ts";
 import { StationAddr } from "../station/addr.ts";
 import type { FindAt, FindHit } from "../chat-find.ts";
 import { readConnects, readPeople, type RelayConnect, type RelayPerson } from "../relay-pick.ts";
+import { parseUpdatesCall } from "../views/updates.ts";
 import { fromBase64, get, isObject } from "../util.ts";
 import { orEmpty, read } from "./params.ts";
 
@@ -182,6 +183,8 @@ export type Call =
   | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> }
   /// A workspace's ways changed from the app (views/ways-stations.ts): on its stations, else on still.fail cloud.
   | { kind: "ways"; name: "setRelays" | "setWay"; workspace: string; params: Record<string, unknown> }
+  /// Unified software and agent runtime updates across a workspace's stations (views/updates.ts).
+  | { kind: "updates"; name: "check" | "update" | "retry" | "repair" | "channel" | "auto"; workspace: string; params: Record<string, unknown> }
   /// A station's name and mark changed from the app (views/station-marks.ts): on the station, else on still.fail cloud.
   | { kind: "stationMark"; workspace: string; station: string; params: Record<string, unknown> }
   | { kind: "driveTransfer"; action: "start" | "cancel" | "retry"; params: Record<string, unknown> }
@@ -300,6 +303,7 @@ export function counts(call: Call, name: string): boolean {
     case "vault":
       return call.name !== "state" && call.name !== "lock" && call.name !== "open";
     case "ways":
+    case "updates":
     case "stationMark":
       return true;
     default:
@@ -1273,6 +1277,10 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
     };
   }
   const p = orEmpty(params);
+  if (name.startsWith("updates.")) {
+    const u = parseUpdatesCall(name, p);
+    if (u) return u;
+  }
   const adb = parseAdb(name, p);
   if (adb) return { kind: "adb", call: adb };
   const rig = parseRig(name, p);

@@ -53,6 +53,7 @@ import { chatsCard, usageCard } from "./rail-cards.ts";
 import { resourcesView } from "./resources.ts";
 import { stationProfileSummary, workspaceProfiles } from "./profiles.ts";
 import { settingsView } from "./settings.ts";
+import { stationUpdatesView } from "./updates.ts";
 import { waysView, type WaysView } from "./ways.ts";
 import { keptWays } from "./ways-stations.ts";
 import { admin, sources as adminSources } from "./admin.ts";
@@ -89,7 +90,7 @@ export const WINDOW_UNTOLD = 50;
 /// (`stationsWhole` is the core's own: a scope's stations, each its page with the models it can run, as `stations` was
 /// before its items were rows. choose.ts reads it for a model's choice and its borrowing; no UI asks it, and protocol.ts
 /// does not offer it.)
-const VIEW_TOPICS = new Set(["chats", "chatRow", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "profilesWhole", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEW_TOPICS = new Set(["chats", "chatRow", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "stationUpdates", "profiles", "profilesWhole", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, what its agents are doing as its list's row says it.
@@ -1176,7 +1177,8 @@ export class Views implements Owner {
         perStation = (s) => (s === view.station ? [{ topic: "overview", station: s }] : []);
         break;
       case "settings":
-        scope = view.scope as string;
+      case "stationUpdates":
+        scope = (view.scope ?? view.workspace) as string;
         perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }];
         break;
       case "profiles":
@@ -1723,6 +1725,30 @@ export class Views implements Owner {
         const stations = this.#stationsOr(view.scope as string);
         if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
         return { ok: settingsView(stations.map((s) => ({ name: s.name, online: s.online, overview: this.#stationShownOf(s.address).full.get() }))) };
+      }
+      case "stationUpdates": {
+        const ws = (view.workspace ?? view.scope) as string;
+        const stations = this.#stationsOr(ws);
+        if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+        const role = get(this.ok({ topic: "workspace", workspace: ws }), "role");
+        const canEdit = role === "owner" || role === "admin";
+        return {
+          ok: stationUpdatesView(
+            stations.map((s) => ({
+              id: s.id,
+              address: s.address,
+              name: s.name,
+              online: s.online,
+              version: s.version,
+              joined: s.joined === true,
+              home: s.joined ? (this.#core.homeName?.(ws, s.id) ?? null) : null,
+              updates: this.#core.data.overviewUpdates(s.address),
+              updating: !s.online && get(this.link(s.address), "cause") === "updating",
+            })),
+            canEdit,
+            this.#clock(),
+          ),
+        };
       }
       case "connects":
         return this.#connects(view.scope as string, view.mine === true);

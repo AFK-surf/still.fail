@@ -301,6 +301,7 @@ fn fixture_reset() -> Unit {
   fx_station_many_profiles.val = false
   fx_station_update_failed.val = false
   fx_station_updated.val = false
+  fx_updates_one.val = false
   fx.restored.clear()
   fx.skills_shared.clear()
   fx.drive_kept = fx_drive_kept
@@ -533,6 +534,8 @@ pub fn fixture_page(mode : String) -> String {
       },
     ))
   }
+  // the stations updating as one (settings-stations-updates-*, settings-station-updates): no switch of a station's own
+  fx_updates_one.val = m.contains("updates")
   match m {
     // The grants list with long reasons is itself in view for the spacing and corner sweeps.
     "settings-adb-chats-long" => up("", "settings/adb/", 4)
@@ -620,12 +623,14 @@ pub fn fixture_page(mode : String) -> String {
       station_parts["ws1/st1"] = "settings"
       up("", "settings/station/ws1/st1", 0)
     }
-    "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" => {
+    "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" | "settings-station-updates" => {
       station_parts["ws1/st1"] = "machine"
       fx_station_update_failed.val = m == "settings-station-update-failed"
       fx_station_updated.val = m == "settings-station-updated"
       up("", "settings/station/ws1/st1", 0)
     }
+    "settings-stations-updates-messy-bottom" => up("", "settings/stations", 10)
+    "settings-stations-updates-messy-end" => up("", "settings/stations", -1)
     "settings-stations-add" => up("add", "", 0)
     // Profile's ＋ with more than one station online: which to add it on (pressed by the film's step)
     "settings-profiles-pick" => fx.mba_online = true
@@ -811,6 +816,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-usage-details-pending" => "usage"
     "settings-profiles-pick" | "settings-profiles-monthly" | "settings-profiles-fable" | "settings-profiles-own3" | "settings-profiles-week-fable" | "settings-profiles-several" | "settings-profiles-offer" => "profiles"
     "settings-connect" | "settings-connect-borrow" => "connect:ws1/st1#k1"
+    "settings-stations-updates-behind" | "settings-stations-updates-updating" | "settings-stations-updates-beta" | "settings-stations-updates-messy" | "settings-stations-updates-messy-bottom" | "settings-stations-updates-messy-end" | "settings-stations-updates" => "stations"
+    "settings-station-updates" => "station:ws1/st1"
     _ =>
       if m.has_prefix("settings-") {
         m.unsafe_substring(start=9, end=m.length())
@@ -1720,7 +1727,7 @@ fn fx_station(address : String) -> Json {
           ("drive", obj([("roots", [{ "path": "~/项目", "name": "项目", "state": "ok" }, { "path": "~/文档", "name": "文档", "state": "ok" }]), ("all", Json::boolean(false))])),
           (
             "updates",
-            [
+            fx_updates_one_way([
               obj([
                 ("id", str("station")),
                 ("name", str("Station")),
@@ -1764,7 +1771,7 @@ fn fx_station(address : String) -> Json {
                 ("shownText", str("未安装")),
                 ("tipText", str("")),
               ]),
-            ],
+            ]),
           ),
           (
             "permissions",
@@ -2262,6 +2269,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
   }
   let me : Json = obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner"))])
   match name {
+    // 更新 (src/sfpages updates.mbt): every station current (settings-updates), or some behind: one offline, one whose
+    // update failed, one updating (settings-updates-behind); on the beta (settings-updates-beta)
+    "stationUpdates" if mode.has_prefix("settings") => Some(fx_station_updates(mode))
     // Willow's logins (station_logins.mbt): codex's under way, gh's done yesterday
     // (the settings' own pages only: a chat's login cards are the chats' fixture's)
     "machineLogins" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" => {
@@ -2364,6 +2374,94 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       } else {
         // (settings-stations-motion: 3 comes, then Maple goes)
         let all = [fx_station("ws1/st1"), fx_station("ws1/st2")]
+        // how each one's update stands where it did not follow (stations-updates-behind: Willow's failed, Maple offline
+        // behind; stations-updates-updating: Willow on its way)
+        let told = fn(i : Int, words : String, bad : Bool) {
+          match all[i] {
+            Object(m) => {
+              let m = m.copy()
+              m["updateText"] = str(words)
+              m["updateBad"] = Json::boolean(bad)
+              all[i] = Json::object(m)
+            }
+            _ => ()
+          }
+        }
+        if mode.contains("updates-messy") || mode.contains("stations-messy") {
+          let extra = fn(
+            id : String,
+            name : String,
+            icon : String,
+            summary : String,
+            cpu : Int,
+            mem : String,
+            disk_left : Int,
+            disk_level : String,
+            disk_text : String,
+            disk_big : String,
+            disk_unit : String,
+            update : String,
+            bad : Bool,
+            joined : Bool,
+            home : String,
+          ) -> Json {
+            match fx_station("ws1/st1") {
+              Object(base) => {
+                let m = base.copy()
+                m["station"] = str("ws1/" + id)
+                m["id"] = str(id)
+                m["name"] = str(name)
+                m["icon"] = str(icon)
+                m["summary"] = str(summary)
+                m["updateText"] = str(update)
+                m["updateBad"] = Json::boolean(bad)
+                m["joined"] = Json::boolean(joined)
+                if home != "" {
+                  m["home"] = str(home)
+                }
+                m["host"] = obj([
+                  ("identity", str(summary)),
+                  ("gpus", []),
+                  ("meters", [
+                    meter("CPU", cpu, "ok", "空闲 \{cpu}%", cpu.to_string(), "%", "CPU 空闲率", "负载 1.2", title_short="CPU 空闲"),
+                    meter("内存", 64, "ok", "剩 " + mem, mem, "GB", "可用内存", "总内存 64 GB", total_short="总 64 GB"),
+                    meter("磁盘", disk_left, disk_level, disk_text, disk_big, disk_unit, "可用磁盘", "总磁盘 1 TB", total_short="总 1 TB"),
+                  ]),
+                ])
+                Json::object(m)
+              }
+              v => v
+            }
+          }
+          match all[0] {
+            Object(m) => {
+              let m = m.copy()
+              m["name"] = str("Office-VM-1")
+              m["summary"] = str("Apple M4 Max · 3 个 agent 在工作 · 0.1.9111")
+              all[0] = Json::object(m)
+            }
+            _ => ()
+          }
+          let maple = match all.remove(1) {
+            Object(m) => {
+              let m = m.copy()
+              m["name"] = str("旧测试机")
+              m["summary"] = str("离线 · 12 天前 · 0.1.6074")
+              Json::object(m)
+            }
+            v => v
+          }
+          all.push(extra("st3", "tokyo-mac-studio-0", "glyph:desktop:indigo", "Apple M5 Max · 2 个 agent 在工作 · 0.1.9099", 78, "48 G", 62, "ok", "剩 620 G", "620", "GB", "正在更新 62%", false, false, ""))
+          all.push(extra("st4", "Office-Host-2", "glyph:desktop:amber", "Apple M4 · 1 个 agent 在工作 · 0.1.9088", 64, "22 G", 1, "red", "剩 410 MB", "410", "MB", "更新失败", true, false, ""))
+          all.push(extra("st5", "L-Sun", "glyph:desktop:teal", "AMD Ryzen 9 9950X · Linux · 0.1.9111", 85, "96 G", 74, "ok", "剩 1.4 T", "1.4", "TB", "Codex 需修复", true, false, ""))
+          all.push(extra("st6", "左子健的 MacBook Air", "glyph:laptop:blue", "Apple M3 · 桌面端内置 · 0.1.9111", 91, "14 G", 48, "ok", "剩 240 G", "240", "GB", "随桌面端更新", false, false, ""))
+          all.push(extra("st7", "家里的 Mac mini", "glyph:mini:green", "Apple M2 Pro · 空闲 · 0.1.9049", 96, "26 G", 55, "ok", "剩 280 G", "280", "GB", "来自「个人」· 正式版", false, true, "个人"))
+          all.push(maple)
+        } else if mode.contains("updates-behind") {
+          told(0, "更新失败", true)
+        } else if mode.contains("updates-updating") {
+          told(0, "正在更新 62%", false)
+        }
         if fx.motion >= 1 || fx.retire_others >= 2 {
           all.push(fx_station("ws1/st3"))
         }
@@ -3174,7 +3272,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           ]),
         ),
       )
-    "software.auto" => {
+    "software.auto" | "updates.auto" => {
       fx.auto = flag(p, "on")
       fx_changed()
       Some(Ok(obj([])))
@@ -3216,7 +3314,8 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       fx_changed()
       Some(Ok(obj([])))
     }
-    "software.check" | "software.update" | "software.channel" | "search.setPersonal" | "permissions.request" =>
+    "software.check" | "software.update" | "software.channel" | "updates.check" | "updates.update" | "updates.retry"
+    | "updates.repair" | "updates.channel" | "search.setPersonal" | "permissions.request" =>
       Some(Ok(obj([])))
     "agentEnv.form.open" | "agentEnv.form.edit" | "agentEnv.form.drop" | "agentEnv.form.save" => Some(Ok(obj([])))
     // ChatGPT 团队's models named by hand, one taken off
@@ -4329,4 +4428,147 @@ pub fn fixture_pending_set(ids : Array[String]) -> Unit {
   fx.pending.clear()
   fx.pending.append(ids)
   fx_changed()
+}
+
+///|
+/// What the core says of the workspace's updates (`stationUpdates`) in fixture mode `mode`: settings-updates-behind
+/// some stations behind, settings-updates-beta every one current on the beta, else every one current.
+fn fx_station_updates(mode : String) -> Json {
+  let messy = mode.contains("updates-messy") || mode.contains("stations-messy")
+  let behind = mode.contains("updates-behind")
+  let updating = mode.contains("updates-updating")
+  let beta = mode.contains("updates-beta") || messy
+  let latest = if messy { "0.1.9111" } else if beta { "0.1.9055" } else { "0.1.9049" }
+  let channel = if beta { "beta" } else { "stable" }
+  if messy {
+    let station_item = obj([
+      ("id", str("station")),
+      ("name", str("Station")),
+      ("state", str("failed")),
+      ("failedText", str("1 台失败")),
+      ("versionText", str("测试版最新 0.1.9111 · 4 台已最新 · tokyo-mac-studio-0 正在更新 62%（等 2 个 agent 结束本轮） · 1 台随桌面端 · 1 台来自「个人」 · 1 台离线")),
+      (
+        "notes",
+        [str("Office-Host-2（0.1.9088）：磁盘空间不足，更新需至少 500 MB 可用空间（当前剩余 410 MB）")],
+      ),
+      ("channel", str("beta")),
+      ("auto", Json::boolean(true)),
+    ])
+    let claude_item = obj([
+      ("id", str("claude")),
+      ("name", str("Claude Code")),
+      ("state", str("failed")),
+      ("failedText", str("1 台失败")),
+      ("versionText", str("最新 2.1.4 · 4 台已最新 · tokyo-mac-studio-0 等 Station 更新后执行")),
+      (
+        "notes",
+        [str("Office-Host-2（2.1.1）：全局 npm 目录不可写，点重试自动迁移到用户目录")],
+      ),
+    ])
+    let codex_item = obj([
+      ("id", str("codex")),
+      ("name", str("Codex")),
+      ("state", str("failed")),
+      ("failedText", str("1 台需修复")),
+      ("buttonText", str("修复并更新")),
+      ("primaryButton", Json::boolean(true)),
+      ("versionText", str("最新 0.169.0 · 2 台已最新 · Office-Host-2 待更新（0.167.0） · 左子健的 MacBook Air 需手动更新（brew）")),
+      (
+        "notes",
+        [str("L-Sun（0.165.0）：缺少执行组件 codex-code-mode-host，工具无法使用")],
+      ),
+    ])
+    let agy_item = obj([
+      ("id", str("agy")),
+      ("name", str("Antigravity CLI")),
+      ("state", str("idle")),
+      ("statusText", str("已是最新")),
+      ("versionText", str("最新 1.4.2 · 2 台已安装，均已最新")),
+    ])
+    let ds_item = obj([
+      ("id", str("dsh")),
+      ("name", str("DeepSeek Harness")),
+      ("state", str("updating")),
+      ("percent", Json::number(45.0)),
+      ("statusText", str("45%")),
+      ("versionText", str("最新 0.4.2 · 1 台已最新 · L-Sun（0.4.0）正在更新")),
+    ])
+    let hermes_item = obj([
+      ("id", str("hermes")),
+      ("name", str("Hermes Agent")),
+      ("state", str("idle")),
+      ("statusText", str("自行管理")),
+      ("versionText", str("0.22.1 · 1 台已安装，由 Hermes 自行管理")),
+    ])
+    return obj([
+      ("canEdit", Json::boolean(true)),
+      ("channel", str("beta")),
+      ("auto", Json::boolean(true)),
+      ("checkedText", str("上次检查：今天 08:12")),
+      ("items", [station_item, claude_item, codex_item, agy_item, ds_item, hermes_item]),
+    ])
+  }
+  let station_item = obj([
+    ("id", str("station")),
+    ("name", str("Station")),
+    ("state", str(if behind { "failed" } else if updating { "updating" } else { "idle" })),
+    ("percent", Json::number(if updating { 62.0 } else { 0.0 })),
+    ("statusText", str(if updating { "正在更新 62%" } else if !behind { "已是最新" } else { "" })),
+    ("failedText", str(if behind { "更新失败" } else { "" })),
+    (
+      "versionText",
+      str(
+        if behind {
+          latest
+        } else if updating {
+          latest + " · Willow 正在下载并更新"
+        } else {
+          latest + " · Agent 运行时随 Station 自动更新"
+        },
+      ),
+    ),
+    (
+      "notes",
+      if behind {
+        [str("Willow：无法读取 C:\\Users\\Willow\\.stillfail\\mesh\\cloud.json，文件可能被加密软件拦截")]
+      } else {
+        []
+      },
+    ),
+    ("channel", str(channel)),
+    ("auto", Json::boolean(true)),
+  ])
+  obj([
+    ("canEdit", Json::boolean(true)),
+    ("channel", str(channel)),
+    ("auto", Json::boolean(true)),
+    ("checkedText", str("上次检查：今天 08:12")),
+    ("items", [station_item]),
+  ])
+}
+
+///|
+/// Whether the stations update as one (fixture modes with `updates`): a station's own 自动更新 and channel not said.
+let fx_updates_one : Ref[Bool] = Ref(false)
+
+///|
+/// A station's updates `a` as its overview says them: without the station's own `auto` and `channel` where the
+/// stations update as one (fx_updates_one).
+fn fx_updates_one_way(a : Array[Json]) -> Json {
+  if !fx_updates_one.val {
+    return Json::array(a)
+  }
+  Json::array(
+    a.map(fn(v) {
+      match v {
+        Object(m) => {
+          let m = m.copy()
+          m.remove("auto")
+          m.remove("channel")
+          Json::object(m)
+        }
+        v => v
+      }
+    }),
+  )
 }

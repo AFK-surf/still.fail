@@ -797,5 +797,57 @@
   "core-views.copies.taking.gits": "Making the working directories again",
   "core-views.copies.taking.copy": "Putting in the working directories' files",
   "core-views.copies.taking.restart": "The chats are ready; they go on once this station restarts",
-  "core-views.copies.taking.failed": "Not taken in: {why}"
+  "core-views.copies.taking.failed": "Not taken in: {why}",
+  "core-views.updates.checked": "Last checked: {when}",
+  "core-views.updates.latest_beta": "Latest beta {version}",
+  "core-views.updates.latest_stable": "Latest stable {version}",
+  "core-views.updates.latest": "Latest {version}",
+  "core-views.updates.up_to_date": {
+    "one": "1 up to date",
+    "other": "{n} up to date"
+  },
+  "core-views.updates.station_updating": "{name} updating",
+  "core-views.updates.station_updating_percent": "{name} updating {percent}%",
+  "core-views.updates.station_updating_detail": "{name} updating ({progress})",
+  "core-views.updates.station_updating_percent_detail": "{name} updating {percent}% ({progress})",
+  "core-views.updates.station_version": "{name} {version}",
+  "core-views.updates.with_desktop": {
+    "one": "1 updates with desktop app",
+    "other": "{n} update with desktop app"
+  },
+  "core-views.updates.self_managed_n": {
+    "one": "1 managed outside",
+    "other": "{n} managed outside"
+  },
+  "core-views.updates.self_managed_station": "{name} {version} (installed manually, not updated here)",
+  "core-views.updates.from_workspace": {
+    "one": "1 from “{workspace}”",
+    "other": "{n} from “{workspace}”"
+  },
+  "core-views.updates.offline": {
+    "one": "1 offline",
+    "other": "{n} offline"
+  },
+  "core-views.updates.not_installed": {
+    "one": "1 not installed",
+    "other": "{n} not installed"
+  },
+  "core-views.updates.failed_n": {
+    "one": "1 failed",
+    "other": "{n} failed"
+  },
+  "core-views.updates.repair_n": {
+    "one": "1 needs repair",
+    "other": "{n} need repair"
+  },
+  "core-views.updates.outdated_n": {
+    "one": "1 update available",
+    "other": "{n} updates available"
+  },
+  "core-views.updates.self_managed": "Managed outside",
+  "core-views.updates.badge.updating": "Updating",
+  "core-views.updates.badge.updating_percent": "Updating {percent}%",
+  "core-views.updates.badge.failed": "Update failed",
+  "core-views.updates.badge.software_failed": "{name} update failed",
+  "core-views.updates.badge.repair": "{name} needs repair"
 }

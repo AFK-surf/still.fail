@@ -1947,4 +1947,9 @@ let zh : Map[String, String] = {
   "core-views.copies.taking.gits": "正在重建工作目录",
   "core-views.copies.taking.failed": "没接收成：{why}",
   "core-views.copies.why.error": "出错了，详情在 station 日志里",
+  "web-pages.updates.title": "自动更新",
+  "web-pages.updates.channel": "更新渠道",
+  "web-pages.updates.channel.stable": "正式版",
+  "web-pages.updates.channel.beta": "测试版",
+  "web-pages.updates.repair": "修复并更新",
 }

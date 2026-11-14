@@ -746,6 +746,25 @@ export class AccountDb {
     return this.#overviewColumn(station, "profiled");
   }
 
+  /// A station's `updates` array from its overview, undefined while no overview is held: read out of `station_part.chat`
+  /// by SQLite (which keeps `updates` beside `viewer` and `disk`), not the whole overview.
+  overviewUpdates(station: string): J {
+    const key = K("updates", station);
+    if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
+    const kept = this.#columns.has("chat") ? this.sql.all("SELECT chat IS NOT NULL, chat -> '$.updates' FROM station_part WHERE address = ?", [station])[0] : undefined;
+    const r = kept !== undefined && kept[0] === 1
+      ? kept[1]
+      : this.sql.all("SELECT st.json -> '$.updates' FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)", [station])[0]?.[0];
+    const text = typeof r === "string" ? r : undefined;
+    if (text !== undefined) {
+      work.overviewParts++;
+      work.overviewPartChars += text.length;
+    }
+    const v = text === undefined ? undefined : frozen(JSON.parse(text));
+    this.#cache.set(key, v ?? null);
+    return v;
+  }
+
   /// The profile `id` of a station's overview, whole, undefined where it has none such (schema.ts overviewProfilesOf):
   /// that one alone read out of the column of its profiles by SQLite, not the overview, nor its other profiles.
   overviewProfile(station: string, id: string): J {
@@ -831,6 +850,7 @@ export class AccountDb {
         // (its profiles read one by one, not parsed whole: each read again of them)
         if (column === "profiles") for (const id of this.#profilesRead.get(station) ?? []) this.#cache.delete(K("profile", station, id));
         else this.#cache.delete(K(column, station));
+        if (column === "chat") this.#cache.delete(K("updates", station));
         if (column === "profiled") this.kept.wrote(profiled, () => this.#overviewColumn(station, column));
         this.#tell({ topic: `$overview-${column}`, station });
       }

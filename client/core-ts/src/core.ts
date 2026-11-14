@@ -77,6 +77,7 @@ import * as lockCalls from "./views/lock.ts";
 import * as pairing from "./views/pair.ts";
 import * as vaultCalls from "./views/vault.ts";
 import * as waysCalls from "./views/ways-stations.ts";
+import * as updatesCalls from "./views/updates.ts";
 import * as stationMarkCalls from "./views/station-marks.ts";
 import * as transferCalls from "./views/transfers.ts";
 import * as browseCalls from "./views/browse.ts";
@@ -270,6 +271,7 @@ export class Core {
       pairing.install(inner);
       vaultCalls.install(inner);
       waysCalls.install(inner);
+      updatesCalls.install(inner);
       stationMarkCalls.install(inner);
       transferCalls.install(inner);
       browseCalls.install(inner);

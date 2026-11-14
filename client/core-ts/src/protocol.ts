@@ -112,6 +112,7 @@ export const TOPICS: Record<string, Spec> = {
   stations: { scope: S },
   station: { scope: S, station: S },
   stationPart: { scope: S, station: S, part: S },
+  stationUpdates: { workspace: S },
   // A list's accounts, each its row (ProfileRow); one account's pages ask that account (WorkspaceProfile): by its key,
   // or by a profile of it on a station (`station`, `id`), as a profile's page is opened.
   profiles: { scope: S },
@@ -248,7 +249,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
 }
 
 const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "linkPreview", "filePeek", "messagePeek"]);
-const VIEWS = new Set(["chats", "chatRow", "stations", "station", "stationPart", "profiles", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEWS = new Set(["chats", "chatRow", "stations", "station", "stationPart", "stationUpdates", "profiles", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.
 export function topicStation(topic: Topic): string | null {

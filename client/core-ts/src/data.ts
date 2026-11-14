@@ -1300,6 +1300,15 @@ export class Data {
     return frozen(out);
   }
 
+  /// A station's `updates` array from its overview (account.ts overviewUpdates): read in a computed, it is made again
+  /// only as `chat` changes, without parsing the whole overview.
+  overviewUpdates(station: string): unknown {
+    this.#readQuery({ topic: "$overview-chat", station });
+    if (!this.#overlaid(station)) return this.of(station)?.overviewUpdates(station);
+    const shown = this.shown({ topic: "overview", station });
+    return isObject(shown) && Array.isArray(shown.updates) ? frozen(shown.updates) : undefined;
+  }
+
   /// Profile `id` of a station's overview (account.ts overviewProfile), alone: read in a computed, it is made again as
   /// the station's profiles change. Where the overview is shown with what is being done to it here (overlaid), that
   /// one of what is shown.

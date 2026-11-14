@@ -112,6 +112,7 @@ const NOT_MEASURED: Record<string, string> = {
   adminOverview: "still.fail's operators' console, not the app's", adminRelays: "still.fail's operators' console, not the app's",
   screenCard: "eight fields of one screen (screens.ts screenCard)", imageNear: "the two pictures beside one, at most (placed.ts near)",
   shareIn: "30 chats (share-in.ts LISTED) and the workspace's stations, 64 at most (client/limits.ts STATIONS_PER_WORKSPACE)",
+  stationUpdates: "nine software rows (views/updates.ts) and the workspace's stations, 64 at most (client/limits.ts STATIONS_PER_WORKSPACE)",
   chatFeedback: UNBOUNDED,
 };
 
