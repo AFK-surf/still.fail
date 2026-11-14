@@ -302,6 +302,20 @@ test("an act that would have no effect (a member taking an admin out) is refused
   assert.equal(w.members(), "r1 owner, r2 admin, r3 member, s1 member");
 });
 
+// Taking off or renewing someone else's app device where the chain moved: theirs alone, on their own log (the root
+// AGENTS.md: owners and admins take a member out, never one device of someone else's), refused in words that say so
+// and what to do instead (2026-11-14: `lock_moved`'s English named what people are never told).
+test("an owner taking another member's app device off: refused in words that say it is theirs alone and to take the member out; nobody asked, nothing signed", async () => {
+  const w = await setUp();
+  const theirs = [...inForceOf(w.inner, "ws").f.devices.values()].find((d) => d.kind === "app" && d.sub !== "s1");
+  assert.ok(theirs !== undefined, "another member's app in the state");
+  const before = w.asked();
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.removeDevice", { workspace: "ws", device: theirs.id }), catch: (e) => e as CoreError }));
+  assert.equal(out.error?.message, "此设备属于其他成员，只能由其本人移除；要让此成员不能再访问，请将其移出 workspace");
+  assert.equal(w.asked(), before, "nobody asked");
+  assert.deepEqual(w.said(), [], "nothing signed");
+});
+
 test("no station of the workspace answering: pending, its stations named, in effect once one answers, nothing lost", async () => {
   const w = await setUp();
   w.st.silent = true;

@@ -459,6 +459,11 @@ export const movedHere = (inner: Inner, ws: string): boolean => movedRoot(held(i
 /// What a writer onto a workspace's chain answers once it moved: nothing signed, nothing pending. Its words are the
 /// core's own until statements in the person's own log replace it (no person meets it until a chain moves).
 export const lockMoved = (): CoreError => new CoreError("lock_moved", "this workspace's lock is kept in its people's own logs now: nothing is signed on its chain", 409);
+/// What a change a person asks for where the chain moved answers when this device is on no lock of its person's own here
+/// (`saysHere` false: their log not pinned, or this device not on it): it is not one of their trusted devices, in the
+/// words that say so before a move (2026-11-14: `lockMoved`'s English named what people are never told). Its code is
+/// `lock_moved` still, as callers and the older pages go by.
+const notTrustedHere = (): CoreError => new CoreError("lock_moved", t("core-misc.lock.notSigner"), 409);
 
 /// What is in force in `ws` by the chain held: folded where it moved nowhere (no other record read), else the rules'
 /// state of the person logs and bodies held here, by this device's clock (src/lock-moved.ts `inForce`). A station's
@@ -2992,7 +2997,7 @@ function sayMoved(inner: Inner, sub: string, ws: string, meant: Said[], shown: {
     const own = personal.root(sub), key = personal.keyId();
     const root = inForceOf(inner, ws).root;
     const notAllowed = () => new CoreError("forbidden", t("core-misc.lock.notAllowed"));
-    if (own === null || key === null || root === null || personal.standing(sub) !== "member") return yield* Effect.fail(lockMoved());
+    if (own === null || key === null || root === null || personal.standing(sub) !== "member") return yield* Effect.fail(notTrustedHere());
     // (on and off are said in the root's log alone: the rules count them nowhere else)
     if (meant.some((m) => m.kind === "open" || m.kind === "off") && own !== root) return yield* Effect.fail(rootOnly(inner, ws));
     const worked = (after: readonly Entry[]) => {
@@ -3356,7 +3361,7 @@ function rootOf(inner: Inner, ws: string): { sub: string; name: string } | null 
 /// device on its person's own lock, that person the root's.
 function offAllowed(inner: Inner, sub: string, ws: string): Effect.Effect<void, CoreError> {
   return Effect.suspend(() => {
-    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    if (!saysHere(inner, sub)) return Effect.fail(notTrustedHere());
     const own = inner.adb.personal().root(sub);
     return own !== null && own === inForceOf(inner, ws).root ? Effect.void : Effect.fail(rootOnly(inner, ws));
   });
@@ -3375,7 +3380,7 @@ function saysHere(inner: Inner, sub: string): boolean {
 /// their first device not let in yet) has nothing said: the role chosen is noted here for that admission (`note`).
 function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effect.Effect<unknown, CoreError> {
   return Effect.suspend(() => {
-    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    if (!saysHere(inner, sub)) return Effect.fail(notTrustedHere());
     const f = stateOf(inner, ws);
     const name = (e: Entry) => whatOf(inner, ws, e);
     const as = (kind: string, body: unknown) => name({ v: 1, ws, seq: 0, prev: null, at: 0, kind, body, sig: { key: "", alg: "Ed25519", sig: "" } });
@@ -3411,11 +3416,12 @@ function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effec
 /// taken off its person's own log (`onOwnLock`), else `lock_moved` as before.
 function webMoved(inner: Inner, sub: string, ws: string, id: string, kind: "web" | "web.remove"): Effect.Effect<unknown, CoreError> {
   return Effect.suspend(() => {
-    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    if (!saysHere(inner, sub)) return Effect.fail(notTrustedHere());
     const f = stateOf(inner, ws);
     const d = f.devices.get(id);
     if (d === undefined) return Effect.fail(CoreError.invalid("no such device in the lock"));
-    if (d.kind !== "web") return Effect.fail(lockMoved());
+    // (another's app device: theirs alone to take off or renew, on their own log; an owner takes the person out)
+    if (d.kind !== "web") return Effect.fail(new CoreError("lock_moved", t("core-misc.lock.othersDevice"), 409));
     if (d.sub !== sub || f.persons.get(sub) !== inner.adb.personal().root(sub)) return Effect.fail(new CoreError("forbidden", t("core-misc.lock.notAllowed")));
     const name = deviceText({ kind: "web", label: str(d.label) ?? "" });
     const reason = actText({ act: kind === "web" ? "renew" : "removeDevice", name });
@@ -3428,7 +3434,7 @@ function webMoved(inner: Inner, sub: string, ws: string, id: string, kind: "web"
 /// by the root's person alone.
 function onOffMoved(inner: Inner, sub: string, ws: string, on: boolean): Effect.Effect<unknown, CoreError> {
   return Effect.suspend(() => {
-    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    if (!saysHere(inner, sub)) return Effect.fail(notTrustedHere());
     const force = inForceOf(inner, ws);
     const name = nameOf(inner, ws);
     if (!on) return sayMoved(inner, sub, ws, [{ kind: "off" }], { act: "disable", name }, t("core-misc.lock.reason.disable"));
@@ -3443,7 +3449,7 @@ function onOffMoved(inner: Inner, sub: string, ws: string, on: boolean): Effect.
 /// list in force does not.
 function stationMoved(inner: Inner, sub: string, ws: string, station: string): Effect.Effect<unknown, CoreError> {
   return Effect.suspend(() => {
-    if (!saysHere(inner, sub)) return Effect.fail(lockMoved());
+    if (!saysHere(inner, sub)) return Effect.fail(notTrustedHere());
     if (stateOf(inner, ws).stations.has(station)) return Effect.succeed(null);
     const s = arr(get(view(inner, ws), "stations")).find((x) => x?.id === station);
     if (!s) return Effect.fail(CoreError.invalid("not a station of this workspace"));

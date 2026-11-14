@@ -200,13 +200,16 @@ test("each writer on a moved chain answers lock_moved: nothing signed, nothing p
   await w.run(read(w.inner, "ws"));
   const before = held(w.inner, "ws")!.entries.length;
   for (const [name, params] of [["lock.disable", { workspace: "ws" }], ["lock.joinStation", { workspace: "ws", station: A }]] as const) {
-    let code: string | undefined;
+    let code: string | undefined, message: string | undefined;
     try {
       await w.r.ask(name, params);
     } catch (e) {
       code = (e as { code?: string }).code;
+      message = (e as Error).message;
     }
     assert.equal(code, "lock_moved", `${name} answers lock_moved`);
+    // (this device is on no log of its person's here: not one of their trusted devices, in the words said before a move)
+    assert.equal(message, "此设备不是受信任设备，无法更改安全模式：请先在「设置 › 安全」中将此设备设为受信任设备", `${name}'s words`);
   }
   assert.equal(held(w.inner, "ws")!.entries.length, before, "nothing signed on the chain");
   assert.equal(pendingHeld(w.inner, "ws").length, 0, "nothing pending");

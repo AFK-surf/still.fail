@@ -236,6 +236,7 @@
   "core-misc.lock.offOwnLock": "This device isn't approved for “{name}” yet: send an approval request on this device, and enter the code your trusted device shows",
   "core-misc.lock.behind": "The station hasn't received this device's approval yet; retrying shortly",
   "core-misc.lock.notSigner": "This device isn't trusted, so it can't change security mode: make it a trusted device in Settings › Security first",
+  "core-misc.lock.othersDevice": "This device is another member's: only they can remove it. To stop this member reaching the workspace, remove them from it",
   "core-misc.lock.notOwn": "This device was put in security mode under your name by someone else, so it signs nothing: remove it in Settings › Security and approve it again from a device of your own",
   "core-misc.lock.notAllowed": "Your role in this workspace can't make this change",
   "core-misc.lock.chainInvalid": "The security mode record on the server doesn't verify, so stations won't accept this change",
