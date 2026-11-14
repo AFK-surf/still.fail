@@ -472,11 +472,20 @@ fn new_station_control(
 ///|
 /// A control of the page's (where it runs, the way to models): over the composer a capsule of its glass (mChooser,
 /// NewChat.kt Chooser), in its row as the composer's other controls; what it holds
-/// `body`. True on the frame after it was pressed.
-fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body : () -> Unit, on_press? : () -> Unit) -> Unit {
+/// `body`. True on the frame after it was pressed. `marked`: it starts with a mark of a corner of its own (a folder's
+/// tile), stood as far in from the glass's start as from its top and foot, so the two are concentric.
+fn new_capsule(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  floating : Bool,
+  body : () -> Unit,
+  on_press? : () -> Unit,
+  marked? : Bool = false,
+) -> Unit {
   let id = c.id(key)
   let b = if floating {
-    c.box(style=glass_chooser_box, glass=@sf.glass_floating(), id~, fn() {
+    c.box(style=if marked { glass_chooser_marked_box } else { glass_chooser_box }, glass=@sf.glass_floating(), id~, fn() {
       body()
       @sf.press_ripple(c, id, glass_chooser_corner)
     })
@@ -1151,6 +1160,21 @@ let new_choosers_row : @ui.Style = @ui.css("row w=Full px=S0_5 pb=S1_5 gap=S1_5 
 /// itself).
 // kept across runs: a value (no field of it changes)
 let glass_chooser_box : @ui.Style = @ui.style(row=true, h=@sf.glass_chooser_h, px=S3, gap=S1_5, align=ACenter, radius=Full)
+
+///|
+/// The glass capsule starting with a mark of a corner of its own (new_capsule's `marked`): in from its start by what
+/// it is in from the top (the capsule's 15 less the mark's small corner, 7: 8), as the corner rule holds; 12 till
+/// 2026-11-14, found on 中屏's Home after a workspace switch with a preset picked.
+// kept across runs: a value (no field of it changes)
+let glass_chooser_marked_box : @ui.Style = @ui.style(
+  row=true,
+  h=@sf.glass_chooser_h,
+  pl=S2,
+  pr=S3,
+  gap=S1_5,
+  align=ACenter,
+  radius=Full,
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
