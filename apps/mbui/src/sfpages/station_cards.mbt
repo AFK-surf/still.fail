@@ -94,7 +94,10 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
             let parts = words.split("\u{0}").map(fn(p) { p.to_owned() }).collect()
             c.text(parts.get(0).unwrap_or(""), style=nt_words) |> ignore
             figure(c, f)
-            c.text(parts.get(1).unwrap_or(""), style=nt_words_cut) |> ignore
+            let tail = parts.get(1).unwrap_or("")
+            if tail != "" {
+              c.text(tail, style=nt_words_cut) |> ignore
+            }
           })
           |> ignore
         _ => ()
@@ -131,19 +134,18 @@ fn station_net_node(p : @view.View, net : () -> Json?) -> Unit {
         l.show(fn() { has("loss") }, fn(f) { figure_node(f, fn() { field(net(), "loss") }) })
       })
       |> ignore
-      part.show(fn() { has("rtt") }, fn(x) {
-        x.box(fn(l) {
-          @sf.style_node(l, fn() { nt_line }, in_row=true)
-          @sf.words_node(l, fn() { "·" }, fn() { nt_words }) |> ignore
-          let parts = fn() {
-            let words = @sf.t("web-pages.stations.latency", args=[("latency", "\u{0}")])
-            words.split("\u{0}").map(fn(p) { p.to_owned() }).collect()
-          }
-          @sf.words_node(l, fn() { parts().get(0).unwrap_or("") }, fn() { nt_words }) |> ignore
-          figure_node(l, fn() { field(net(), "rtt") })
-          @sf.words_node(l, fn() { parts().get(1).unwrap_or("") }, fn() { nt_words_cut }) |> ignore
+      part.show(fn() { has("rtt") }, fn(l) {
+        @sf.style_node(l, fn() { nt_line }, in_row=true)
+        @sf.words_node(l, fn() { "·" }, fn() { nt_words }) |> ignore
+        let parts = fn() {
+          let words = @sf.t("web-pages.stations.latency", args=[("latency", "\u{0}")])
+          words.split("\u{0}").map(fn(p) { p.to_owned() }).collect()
+        }
+        @sf.words_node(l, fn() { parts().get(0).unwrap_or("") }, fn() { nt_words }) |> ignore
+        figure_node(l, fn() { field(net(), "rtt") })
+        l.show(fn() { parts().get(1).unwrap_or("") != "" }, fn(tail) {
+          @sf.words_node(tail, fn() { parts().get(1).unwrap_or("") }, fn() { nt_words_cut }) |> ignore
         })
-        |> ignore
       })
     })
     |> ignore
@@ -429,21 +431,21 @@ let st_logins_open : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 // ── styles ──────────────────────────────────────────────────────────────
 
 ///|
-/// The connection (net: 14 apart, 8 between its lines where the speeds go under, the ui's 13 muted, its figures bold
+/// The connection (net: 8 apart, 8 between its lines where the speeds go under, the ui's 13 muted, its figures bold
 /// in the words' ink).
 // kept across runs: a value (no field of it changes)
-let nt_row : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter justify=JBetween")
+let nt_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justify=JBetween")
 
 ///|
 let nt_lines : Double = 8.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nt_part : @ui.Style = @ui.css("row w=Cut gap=S2 align=ACenter")
+let nt_part : @ui.Style = @ui.css("row w=Cut gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nt_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
+let nt_line : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -461,7 +463,7 @@ let nt_figure : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Mediu
 ///|
 /// ↑ and ↓ side by side.
 // kept across runs: a value (no field of it changes)
-let nt_rates : @ui.Style = @ui.css("row gap=S3_5 align=ACenter")
+let nt_rates : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
