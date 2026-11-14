@@ -638,10 +638,11 @@ let outline_entries : Map[String, (Int, Bool, Bool)] = Map([])
 
 ///|
 /// What people said in chat `r` (its view `v`), oldest first, as a key's handler finds it: its outline where its rail
-/// holds it, else what its window holds.
-fn said_now(src : Source, r : ChatRef, v : ChatView) -> Array[Double] {
-  match (outline_entries.get(chat_key(r)), v.thread) {
-    (Some((_, true, _)), Some(th)) =>
+/// holds it (an old view's, as it said; a page made as nodes: `railed`, its rail showing), else what its window holds.
+fn said_now(src : Source, r : ChatRef, v : ChatView, railed? : Bool = false) -> Array[Double] {
+  let held = railed || (outline_entries.get(chat_key(r)) is Some((_, true, _)))
+  match (held, v.thread) {
+    (true, Some(th)) =>
       match src.topic("chatOutline", outline_params(r, th)).get().value {
         Some(_) as o => outline_seqs(o)
         None => said_in_view(v)
@@ -652,8 +653,8 @@ fn said_now(src : Source, r : ChatRef, v : ChatView) -> Array[Double] {
 
 ///|
 /// The outline of chat `r` (its view `v`) opened from the keys or ⌘K: beside its round button or its rail where one
-/// shows (a page made as nodes: its round button's node `button`, while it shows), else as the presenters put what
-/// nothing opened (a dialog; a sheet on Small); its field taking the keys.
+/// shows (a page made as nodes: its round button's node `button`, while it shows, else its rail's `rail`, beside its
+/// middle), else as the presenters put what nothing opened (a dialog; a sheet on Small); its field taking the keys.
 pub fn outline_open_keys(
   src : Source,
   r : ChatRef,
@@ -661,13 +662,21 @@ pub fn outline_open_keys(
   stint? : Int = 0,
   typed? : String = "",
   button? : @view.View,
+  rail? : @view.View,
 ) -> Bool {
   guard v.thread is Some(th) else { return false }
   let rd = reading_of(chat_key(r))
-  let current = outline_current(said_now(src, r, v), reader_top(rd, v, rd.top_seq), rd.at_end)
-  if button is Some(b) {
-    open_outline(src, r, th, current, from=Node(b), side=Left, keys=true, stint~, typed~)
-    return true
+  let current = outline_current(said_now(src, r, v, railed=rail is Some(_)), reader_top(rd, v, rd.top_seq), rd.at_end)
+  match (button, rail) {
+    (Some(b), _) => {
+      open_outline(src, r, th, current, from=Node(b), side=Left, keys=true, stint~, typed~)
+      return true
+    }
+    (None, Some(b)) => {
+      open_outline(src, r, th, current, from=Node(b), side=Left, along=Middle, keys=true, stint~, typed~)
+      return true
+    }
+    _ => ()
   }
   match outline_entries.get(chat_key(r)) {
     Some((id, _, true)) => open_outline(src, r, th, current, from=Of(id), side=Left, along=Middle, keys=true, stint~, typed~)
@@ -691,11 +700,11 @@ pub fn outline_preset(key : String, words : String) -> Unit {
 
 ///|
 /// ⌥⇧↑ (`by` -1) and ⌥⇧↓ (1): chat `r` (its view `v`) to the message a person said before or after the one the reader
-/// is at, flashing (said_now's). Whether there was one.
-pub fn said_go(src : Source, r : ChatRef, v : ChatView, by : Int) -> Bool {
+/// is at, flashing (said_now's; `railed`: a page made as nodes whose rail shows). Whether there was one.
+pub fn said_go(src : Source, r : ChatRef, v : ChatView, by : Int, railed? : Bool = false) -> Bool {
   guard v.thread is Some(_) else { return false }
   let rd = reading_of(chat_key(r))
-  match said_step(said_now(src, r, v), reader_top(rd, v, rd.top_seq), rd.at_end, by) {
+  match said_step(said_now(src, r, v, railed~), reader_top(rd, v, rd.top_seq), rd.at_end, by) {
     Some(seq) => {
       @sfbase.go_to(r, seq)
       true
