@@ -16,6 +16,8 @@ function idOf(secret: Buffer): string {
 /// write waits for it to read (QUIC's flow control); 0: no limit.
 class End implements Stream {
   peer!: End;
+  /// The connection it is on: what is written to this end is counted as received there.
+  conn?: Conn;
   readonly window: number;
   #queue: (Buffer | null)[] = [];
   /// Bytes in the queue, unread; and the writes waiting for them to be read.
@@ -75,6 +77,7 @@ class End implements Stream {
       await new Promise<void>((r) => this.peer.#room.push(r));
       if (this.#error) throw this.#error;
     }
+    if (this.peer.conn) this.peer.conn.received += bytes.length;
     this.peer.push(Buffer.from(bytes));
   }
   async finish(): Promise<void> {
@@ -96,6 +99,11 @@ class Conn implements Connection {
   peer!: Conn;
   /// Its process is gone without a word (killed): it answers nothing, and nothing tells its peer.
   silent = false;
+  /// The bytes it received (its `stats`), which a test may raise as a packet heard.
+  received = 0;
+  /// How `answers` is answered where a test says (a slow relay: true once it lets it); the times it was asked.
+  answering: ((withinMs: number) => Promise<boolean>) | null = null;
+  asked = 0;
   #incoming: End[] = [];
   #accepting: ((s: End | null) => void) | null = null;
   #ends: End[] = [];
@@ -136,6 +144,8 @@ class Conn implements Connection {
     const [mine, theirs] = [new End(this.#window), new End(this.#window)];
     mine.peer = theirs;
     theirs.peer = mine;
+    mine.conn = this;
+    theirs.conn = this.peer;
     this.#ends.push(mine);
     this.peer.#ends.push(theirs);
     this.peer.#offer(theirs);
@@ -155,8 +165,13 @@ class Conn implements Connection {
     if (!this.silent) this.peer.gone(reason);
   }
   /// The addon's: whether the other end is still there, at once (nothing here takes time).
-  async answers(_withinMs: number): Promise<boolean> {
+  async answers(withinMs: number): Promise<boolean> {
+    this.asked++;
+    if (this.answering !== null && this.#reason === null && !this.peer.silent) return this.answering(withinMs);
     return this.#reason === null && !this.peer.silent;
+  }
+  stats() {
+    return { rxBytes: this.received, txBytes: 0 };
   }
   isClosed(): boolean {
     return this.#reason !== null;
