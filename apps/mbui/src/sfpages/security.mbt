@@ -289,11 +289,11 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
 }
 
 ///|
-/// A web page left out that nobody can approve here (the core's `me.needsAppText`): in the pair's place, its title and
-/// the core's words, with no button that asks (nobody could answer it).
+/// A web page left out that nobody can approve here (the core's `me.needsAppText`): in the pair's place, 请先安装客户端
+/// and the core's words, with no button that asks (nobody could answer it).
 fn needs_app_node(parent : @view.View, lock : () -> Json?) -> Unit {
   sec_lead_node(parent, fn(k) {
-    @sf.words_node(k, fn() { @sf.t("web-pages.security.waitingTitle") }, fn() { sec_state_lines }) |> ignore
+    @sf.words_node(k, fn() { @sf.t("web-pages.security.needsAppTitle") }, fn() { sec_state_lines }) |> ignore
     @sf.words_node(k, fn() { text(field(lock(), "me"), "needsAppText") }, fn() { sec_said }) |> ignore
   })
 }

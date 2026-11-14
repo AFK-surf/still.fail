@@ -1437,6 +1437,7 @@ let zh : Map[String, String] = {
   "web-pages.security.joined": "{name} 已受保护",
   "web-pages.security.lead": "谁可以访问此 workspace 的 station 并在其上执行命令",
   "web-pages.security.members": "成员",
+  "web-pages.security.needsAppTitle": "请先安装客户端",
   "web-pages.security.newDeviceOf": "{name}的新设备",
   "web-pages.security.newDevices": "新设备登录后需经批准",
   "web-pages.security.newDevicesHow": "由本人的其他受信任设备或管理员验证安全码后批准",

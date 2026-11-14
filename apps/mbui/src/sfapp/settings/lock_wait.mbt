@@ -11,6 +11,13 @@ pub fn lock_waiting(core : Core, ws : String) -> Bool {
 }
 
 ///|
+/// What a web page nobody can approve in the workspace's lock says, the core's words (the lock's `me.needsAppText`):
+/// "" where it is not one.
+pub fn lock_needs_app(core : Core, ws : String) -> String {
+  text(field((core.topic)("lock", { "workspace": str(ws) }).get().value, "me"), "needsAppText")
+}
+
+///|
 /// `lock.<name>` on this workspace, let go on by itself and said how it ended (AppState.lockCall).
 pub fn lock_call(
   core : Core,

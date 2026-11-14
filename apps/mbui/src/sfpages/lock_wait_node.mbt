@@ -5,7 +5,9 @@
 
 ///|
 /// The page in `parent` (lock_wait_page's): the shield, 等待批准, what it waits for, then the steps
-/// (pair_steps_node); `clear()` of its top is under a bar (@sf.waiting_page_node). The node.
+/// (pair_steps_node); `clear()` of its top is under a bar (@sf.waiting_page_node). A web page nobody can approve here
+/// (@settings.lock_needs_app): 请先安装客户端 and the core's words alone, nothing waited for and no trusted device to
+/// name. The node.
 pub fn lock_wait_node(
   parent : @view.View,
   core : Core,
@@ -15,8 +17,21 @@ pub fn lock_wait_node(
   @sf.waiting_page_node(
     parent,
     "shield-check",
-    fn() { @sf.t("web-pages.security.waitingTitle") },
-    fn() { @sf.t("web-pages.security.waitingLead", args=[("name", here.name)]) },
+    fn() {
+      @sf.t(
+        if @settings.lock_needs_app(core, here.workspace) != "" {
+          "web-pages.security.needsAppTitle"
+        } else {
+          "web-pages.security.waitingTitle"
+        },
+      )
+    },
+    fn() {
+      match @settings.lock_needs_app(core, here.workspace) {
+        "" => @sf.t("web-pages.security.waitingLead", args=[("name", here.name)])
+        words => words
+      }
+    },
     fn(col) { pair_steps_node(col, core, here.workspace) },
     clear~,
   )
@@ -25,7 +40,7 @@ pub fn lock_wait_node(
 ///|
 /// Which of the steps shows (pair_steps' branches): the code typed, one being found, or what is so and the request;
 /// or, the code approved but no station of the lock having taken it yet, what it waits for (`Waits`); or, a web page
-/// nobody can approve here (the core's `me.needsAppText`), only that, with nothing to ask (`NeedsApp`).
+/// nobody can approve here (the core's `me.needsAppText`, said as the page's lead), nothing to ask (`NeedsApp`).
 #derive(Eq)
 priv enum PairShows {
   Typing
@@ -49,7 +64,7 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
   let checking = fn() { @settings.is_doing(core, ["lock.pairCode"], on) || state() == "checking" }
   // (the code approved, no station having taken it yet: the call's pending sentence, "" none)
   let waits : @signals.Signal[String] = @signals.signal("")
-  let needs_app = fn() { text(me(), "needsAppText") }
+  let needs_app = fn() { @settings.lock_needs_app(core, ws) }
   let shows = fn() {
     match state() {
       _ if needs_app() != "" => NeedsApp
@@ -137,9 +152,9 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
         lock_devices_node(v, dialled)
       }
       Waits => lock_note_node(v, fn() { waits.get() })
-      // (nobody could answer an ask: no button that asks, the core's words in its place; the owner, 2026-11-13: 「开了安全
-      // 模式那就需要 app」)
-      NeedsApp => lock_note_node(v, needs_app)
+      // (nobody could answer an ask: no button that asks, the core's words the page's lead; the owner, 2026-11-13: 「开了
+      // 安全模式那就需要 app」)
+      NeedsApp => ()
       Asked => {
         v.show(fn() { state() == "failed" }, fn(n) {
           @sf.words_node(n, fn() { text(pair(), "error") }, fn() { lock_failed }).words_centered(Is(true)) |> ignore
