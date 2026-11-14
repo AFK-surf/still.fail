@@ -78,7 +78,7 @@ pub let chat_page_nodes : @signals.Signal[Bool] = @signals.signal(chat_page_node
 ///|
 /// What chat_page_nodes is as a run begins.
 // kept across runs: a value
-let chat_page_nodes_at_start : Bool = false
+let chat_page_nodes_at_start : Bool = true
 
 ///|
 /// How a chat's column is laid out as the shell has it at a node's moment (chat_page_made's `narrower`): how much narrower
