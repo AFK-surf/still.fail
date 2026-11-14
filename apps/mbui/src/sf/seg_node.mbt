@@ -235,7 +235,8 @@ pub fn seg_node(
         })
         // not side by side: the chosen one's words as its option has them (cut short where they must be), a chevron at its
         // end; pressed, a pick of them all beside it, the chosen one marked (search none: a few short words)
-        inner.show(menu, fn(m) {
+        inner.show(menu, fn(room) {
+          room.row(Is(true)).grow(Is(1.0)) |> ignore
           let words = fn() { labels().get(chosen()).unwrap_or("") }
           // (the pick it opened, as presented: 0, none yet; open while it is drawn, presented_drawn_of)
           let opened : @signals.Signal[Int] = @signals.signal(0)
@@ -243,53 +244,56 @@ pub fn seg_node(
             let s = opened.get()
             s != 0 && presented_drawn_of(s)
           }
-          m
-          .row(Is(true))
-          .grow(Is(1.0))
-          .height(Is(Some(segmented_h)))
-          .lines_up(Is(Some(Middle)))
-          .padding(Is((segmented_least, 0.0, segmented_least, 0.0)))
-          .gap(Is(segmented_least))
-          .presses(Is(true))
-          .focusable(Is(true))
-          .says(By(fn() {
-            Some(@view.said(Button, label=if said == "" { words() } else { said + " " + words() }, expanded=open()))
-          }))
-          .on_press(fn() {
-            let (x, y, w, h) = m.rect()
-            let all = @signals.untracked(labels)
-            let now = @signals.untracked(chosen)
-            pick(
-              "",
-              all.mapi(fn(i, l) { choice(i.to_string(), l) }),
-              now.to_string(),
-              fn(k) {
-                let i = labels_at(all, k, now)
-                if i != now {
-                  choose(i)
-                }
-              },
-              from=At(x, y, w, h),
-              search=false,
-            )
-            opened.set(last_presented())
-          })
+          @headless.disclosure(
+            room,
+            fn() { if said == "" { words() } else { said + " " + words() } },
+            open,
+            fn(m) {
+              let (x, y, w, h) = m.rect()
+              let all = @signals.untracked(labels)
+              let now = @signals.untracked(chosen)
+              pick(
+                "",
+                all.mapi(fn(i, l) { choice(i.to_string(), l) }),
+                now.to_string(),
+                fn(k) {
+                  let i = labels_at(all, k, now)
+                  if i != now {
+                    choose(i)
+                  }
+                },
+                from=At(x, y, w, h),
+                search=false,
+              )
+              opened.set(last_presented())
+            },
+            fn(m, _) {
+              m
+              .row(Is(true))
+              .grow(Is(1.0))
+              .height(Is(Some(segmented_h)))
+              .lines_up(Is(Some(Middle)))
+              .padding(Is((segmented_least, 0.0, segmented_least, 0.0)))
+              .gap(Is(segmented_least))
+              |> ignore
+              m.box(fn(w) {
+                w
+                .grow(Is(1.0))
+                .shrink(Is(1.0))
+                .min_width(Is(Some(0.0)))
+                .words(By(words))
+                .words_look(By(fn() {
+                  let size = theme().t.ui
+                  { size, weight: 500, line: @ui.tree_theme().text_line * size, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
+                }))
+                .ink(By(ink))
+                |> ignore
+              })
+              |> ignore
+              icon_node(m, "chevron-down", segmented_chevron, By(fn() { theme().p.muted })) |> ignore
+            },
+          )
           |> ignore
-          m.box(fn(w) {
-            w
-            .grow(Is(1.0))
-            .shrink(Is(1.0))
-            .min_width(Is(Some(0.0)))
-            .words(By(words))
-            .words_look(By(fn() {
-              let size = theme().t.ui
-              { size, weight: 500, line: @ui.tree_theme().text_line * size, wrap: false, tracking: @view.letters_own, balance: false, max_lines: 0 }
-            }))
-            .ink(By(ink))
-            |> ignore
-          })
-          |> ignore
-          icon_node(m, "chevron-down", segmented_chevron, By(fn() { theme().p.muted })) |> ignore
         })
       })
       .grow(Is(1.0))
@@ -612,49 +616,53 @@ pub fn seg_fill_node(
       })
       // not side by side: the chosen one's words (cut short where they must be), a chevron at its end; pressed, a pick of
       // them all beside it, the chosen one marked
-      inner.show(menu, fn(m) {
+      inner.show(menu, fn(room) {
+        room.row(Is(true)).grow(Is(1.0)) |> ignore
         let words = fn() { labels().get(chosen()).unwrap_or("") }
         let opened : @signals.Signal[Int] = @signals.signal(0)
         let open = fn() {
           let s = opened.get()
           s != 0 && presented_drawn_of(s)
         }
-        m
-        .row(Is(true))
-        .grow(Is(1.0))
-        .lines_up(Is(Some(Middle)))
-        .padding(Is((seg_menu_in, 0.0, seg_menu_in, 0.0)))
-        .gap(Is(seg_menu_gap))
-        .presses(Is(true))
-        .focusable(Is(true))
-        .says(By(fn() {
-          Some(@view.said(Button, label=if said == "" { words() } else { said + " " + words() }, expanded=open()))
-        }))
-        .on_press(fn() {
-          let (x, y, w, h) = m.rect()
-          let all = @signals.untracked(labels)
-          let now = @signals.untracked(chosen)
-          pick(
-            "",
-            all.mapi(fn(i, l) { choice(i.to_string(), l) }),
-            now.to_string(),
-            fn(k) {
-              let i = labels_at(all, k, now)
-              if i != now {
-                choose(i)
-              }
-            },
-            from=At(x, y, w, h),
-            search=false,
-          )
-          opened.set(last_presented())
-        })
+        @headless.disclosure(
+          room,
+          fn() { if said == "" { words() } else { said + " " + words() } },
+          open,
+          fn(m) {
+            let (x, y, w, h) = m.rect()
+            let all = @signals.untracked(labels)
+            let now = @signals.untracked(chosen)
+            pick(
+              "",
+              all.mapi(fn(i, l) { choice(i.to_string(), l) }),
+              now.to_string(),
+              fn(k) {
+                let i = labels_at(all, k, now)
+                if i != now {
+                  choose(i)
+                }
+              },
+              from=At(x, y, w, h),
+              search=false,
+            )
+            opened.set(last_presented())
+          },
+          fn(m, _) {
+            m
+            .row(Is(true))
+            .grow(Is(1.0))
+            .lines_up(Is(Some(Middle)))
+            .padding(Is((seg_menu_in, 0.0, seg_menu_in, 0.0)))
+            .gap(Is(seg_menu_gap))
+            |> ignore
+            // (where even its ellipsis has not the room, that drawn past its words' box into the gap before the chevron, as
+            // seg_menu_words' `w=Cut` words are drawn)
+            m.box(fn(w) { styled_words(w.grow(Is(1.0)), words, fn() { seg_menu_words }).ellipsis_past(Is(true)) |> ignore })
+            |> ignore
+            icon_node(m, "chevron-down", seg_chevron, By(fn() { theme().p.muted })) |> ignore
+          },
+        )
         |> ignore
-        // (where even its ellipsis has not the room, that drawn past its words' box into the gap before the chevron, as
-        // seg_menu_words' `w=Cut` words are drawn)
-        m.box(fn(w) { styled_words(w.grow(Is(1.0)), words, fn() { seg_menu_words }).ellipsis_past(Is(true)) |> ignore })
-        |> ignore
-        icon_node(m, "chevron-down", seg_chevron, By(fn() { theme().p.muted })) |> ignore
       })
     })
     .grow(Is(1.0))

@@ -10,11 +10,13 @@
 // writes it, `on` following. Nothing of on or off is kept here.
 
 ///|
-/// What a toggle is to a screen reader: a checkbox (ticked or not) or a switch (on or off).
+/// What a toggle is to a screen reader: a checkbox (ticked or not), a switch (on or off), or a toggle button
+/// (pressed or not).
 #derive(Eq, Debug)
 pub(all) enum ToggleKind {
   Checkbox
   Switch
+  Button
 }
 
 ///|
@@ -85,14 +87,19 @@ pub fn toggle(
     let able = fn() { !disabled() }
     look(v, { node: v, now: on, off: disabled })
     // (its own words of the node, said after its look, as the button's)
-    let role : @view.Role = match kind {
-      Checkbox => Checkbox
-      Switch => Switch
-    }
     v
     .presses(By(able))
     .focusable(By(able))
-    .says(By(fn() { Some(@view.said(role, label=label(), check=if on() { On } else { Off })) }))
+    .says(By(fn() {
+      let now = on()
+      Some(
+        match kind {
+          Checkbox => @view.said(Checkbox, label=label(), check=if now { On } else { Off })
+          Switch => @view.said(Switch, label=label(), check=if now { On } else { Off })
+          Button => @view.said(Button, label=label(), pressed=now)
+        },
+      )
+    }))
     // (what it is to be read as it is pressed, not as it was drawn: a press on its way as `on` changed, as one change;
     // never while disabled, the tree not yet told)
     .on_press(fn() {

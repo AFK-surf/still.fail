@@ -113,6 +113,15 @@ test "a switch is read out a switch, on or off as its caller says, and no checkb
 }
 
 ///|
+test "a toggle button is read out a button, pressed or not as its caller says, and turned by a press" {
+  let k = toggle_case(kind=Button)
+  let off = k.t.get(Button, label="提醒").pressed
+  k.t.click(Button, label="提醒")
+  let on = k.t.get(Button, label="提醒").pressed
+  assert_eq((off, on, k.told), (Some(false), Some(true), [true]))
+}
+
+///|
 test "Tab goes to a toggle; Enter turns it, Space turns it back, a screen reader's ask turns it again: each told the other of what it is then" {
   let k = toggle_case()
   k.t.act(Button, Focus, label="别处")

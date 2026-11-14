@@ -31,7 +31,7 @@ pub fn accent_pick_node(
   let ink_of = fn(a : AccentTone) { if theme().dark { a.dark } else { a.light } }
   // a dot: in `ink` (an outline round a ＋ where none), with a check where `on`; `press` done as it is pressed
   let a_dot = fn(row : @view.View, ink : () -> Int64?, on : () -> Bool, name : () -> String, press : () -> Unit) {
-    row.box(fn(d) {
+    @headless.choice(row, Radio, name, on, fn(_) { press() }, fn(d, _) {
       let side = dot_side(theme())
       let mark = side * accent_check_part
       let ring = fn() {
@@ -52,9 +52,7 @@ pub fn accent_pick_node(
       .lies_along(Is(Middle))
       .ground(By(fn() { ink().unwrap_or(accent_no_ring) }))
       .edge(By(fn() { (2.0, ring()) }))
-      .says(By(fn() { Some(@view.said(Radio, label=name(), selected=on())) }))
       |> ignore
-      presses_node(d, press)
       d.show(on, fn(c) { icon_node(c, "check", mark, Is(0xFFFFFFFFL)) |> ignore })
       d.show(fn() { !on() && ink() is None }, fn(c) { icon_node(c, "plus", mark, By(fn() { theme().p.muted })) |> ignore })
     })
@@ -114,96 +112,53 @@ fn hue_slider_node(
     let side = dot_side(theme())
     n * side + (n - 1.0) * 8.0
   }
-  let at = fn() { hue_clamp(now().to_double() / custom_hue_most, 0.0, 1.0) }
-  let to_hue = fn(h : Double) {
-    let k = (hue_clamp(h, 0.0, custom_hue_most) / custom_hue_step).round()
-    (k * custom_hue_step).to_int()
-  }
-  let go = fn(h : Int) {
-    if h != @signals.untracked(now) {
-      step_to(h)
-    }
-  }
-  parent.box(made_for=loc, fn(s) {
-    s
-    .width(By(fn() { Some(wide()) }))
-    .height(Is(Some(hue_slider_h)))
-    .lies_along(Is(Middle))
-    .focusable(Is(true))
-    .presses(Is(true))
-    .says(By(fn() {
-      let h = now().to_double()
-      Some(
-        @view.said(Slider, label=label(), value=now().to_string(), range=(0.0, h, custom_hue_most), actions=[
-          Increment, Decrement,
-        ]),
-      )
-    }))
-    .on_step(fn(by) { go(to_hue(@signals.untracked(now).to_double() + by.to_double() * custom_hue_step)) })
-    // (held and dragged along: the hue where the hand is, its knob's middle from half its room in to as far from the
-    // end)
-    .on_drag(fn(d) {
-      match d.kind {
-        Down | Moved if d.w > hue_thumb_room =>
-          go(to_hue(hue_clamp((d.x - hue_thumb_room / 2.0) / (d.w - hue_thumb_room), 0.0, 1.0) * custom_hue_most))
-        _ => ()
-      }
-    })
-    // (with the keyboard's focus on it: ← and ↓ a step down, → and ↑ a step up, Home and End its ends)
-    .on_key(fn(k) {
-      if !s.focused() || k.mods != 0 {
-        return false
-      }
-      let h = @signals.untracked(now).to_double()
-      let to = if k.code == @ui.key_code_left || k.code == @ui.key_code_down {
-        Some(h - custom_hue_step)
-      } else if k.code == @ui.key_code_right || k.code == @ui.key_code_up {
-        Some(h + custom_hue_step)
-      } else if k.code == @ui.key_code_home {
-        Some(0.0)
-      } else if k.code == @ui.key_code_end {
-        Some(custom_hue_most)
-      } else {
-        None
-      }
-      match to {
-        Some(t) => {
-          go(to_hue(t))
-          true
-        }
-        None => false
-      }
-    })
-    |> ignore
-    // its track, every hue's accent
-    s.box(fn(t) {
-      t
-      .height(Is(Some(hue_track_h)))
-      .margin(Is((hue_track_in, 0.0, hue_track_in, 0.0)))
-      .radius(Is(hue_track_h / 2.0))
-      .clips(Is(true))
-      .image(By(fn() { Some((hue_strip(theme().dark), "", hue_strip_most)) }))
+  @headless.slider(
+    made_for=loc,
+    parent,
+    label,
+    fn() { now().to_double() },
+    min=0.0,
+    max=custom_hue_most,
+    step=custom_hue_step,
+    thumb_room=hue_thumb_room,
+    fn(h) { step_to(h.round().to_int()) },
+    fn(s, sl) {
+      let at = fn() { sl.part() }
+      s
+      .width(By(fn() { Some(wide()) }))
+      .height(Is(Some(hue_slider_h)))
+      .lies_along(Is(Middle))
       |> ignore
-    })
-    |> ignore
-    // its knob, over the track where the hue is along it
-    s.box(fn(o) {
-      o.over(Is(true)).row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
-      o.box(fn(b) { b.grow(By(at)) |> ignore }) |> ignore
-      o.box(fn(k) {
-        k
-        .width(Is(Some(hue_knob_d)))
-        .height(Is(Some(hue_knob_d)))
-        .radius(Is(hue_knob_d / 2.0))
-        .ground(By(fn() { ink_of_hue(now()) }))
-        .edge(By(fn() { (2.0, theme().p.canvas) }))
+      // its track, every hue's accent
+      s.box(fn(t) {
+        t
+        .height(Is(Some(hue_track_h)))
+        .margin(Is((hue_track_in, 0.0, hue_track_in, 0.0)))
+        .radius(Is(hue_track_h / 2.0))
+        .clips(Is(true))
+        .image(By(fn() { Some((hue_strip(theme().dark), "", hue_strip_most)) }))
         |> ignore
       })
       |> ignore
-      o.box(fn(b) { b.grow(By(fn() { 1.0 - at() })) |> ignore }) |> ignore
-    })
-    |> ignore
-  })
+      // its knob, over the track where the hue is along it
+      s.box(fn(o) {
+        o.over(Is(true)).row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+        o.box(fn(b) { b.grow(By(at)) |> ignore }) |> ignore
+        o.box(fn(k) {
+          k
+          .width(Is(Some(hue_knob_d)))
+          .height(Is(Some(hue_knob_d)))
+          .radius(Is(hue_knob_d / 2.0))
+          .ground(By(fn() { ink_of_hue(now()) }))
+          .edge(By(fn() { (2.0, theme().p.canvas) }))
+          |> ignore
+        })
+        |> ignore
+        o.box(fn(b) { b.grow(By(fn() { 1.0 - at() })) |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+  )
   |> ignore
 }
 
@@ -307,14 +262,3 @@ let accent_no_ring : Int64 = 0L
 ///|
 /// The most pixels the hues' picture is asked at (mark_node's pictures').
 let hue_strip_most : Int = 8192
-
-///|
-fn hue_clamp(x : Double, lo : Double, hi : Double) -> Double {
-  if x < lo {
-    lo
-  } else if x > hi {
-    hi
-  } else {
-    x
-  }
-}

@@ -242,34 +242,39 @@ pub fn offers_node(
                 }
               }
               let on = fn() { current.get() == at() }
-              cell.box(fn(r) {
-                style_node(r, fn() { (if on() { offers_row_on } else { offers_row }).then(pick_high()) }, in_row=false)
-                r
-                .presses(Is(true))
-                .says(By(fn() { Some(@view.said(Button, label=name(key), selected=on())) }))
-                .on_press(fn() {
+              @headless.choice(
+                cell,
+                Button,
+                fn() { name(key) },
+                on,
+                focusable=false,
+                fn(_) {
                   let i = @signals.untracked(at)
                   if live.val && i >= 0 {
                     current.set(i)
                     take(i)
                   }
-                })
-                // (the pointer moving onto it: the one chosen)
-                .on_pointer_moved(fn() {
-                  let i = @signals.untracked(at)
-                  if i >= 0 && current.untracked() != i {
-                    current.set(i)
-                  }
-                })
-                |> ignore
-                // (chosen by ↓ or ↑: in sight where it scrolls)
-                r.reacts(fn() { keyed.get() }, at_start=false, fn(_) {
-                  if @signals.untracked(on) {
-                    r.tree.show_in_sight(r.id())
-                  }
-                })
-                row(r, key, on)
-              })
+                },
+                fn(r, _) {
+                  style_node(r, fn() { (if on() { offers_row_on } else { offers_row }).then(pick_high()) }, in_row=false)
+                  // (the pointer moving onto it: the one chosen)
+                  r
+                  .on_pointer_moved(fn() {
+                    let i = @signals.untracked(at)
+                    if i >= 0 && current.untracked() != i {
+                      current.set(i)
+                    }
+                  })
+                  |> ignore
+                  // (chosen by ↓ or ↑: in sight where it scrolls)
+                  r.reacts(fn() { keyed.get() }, at_start=false, fn(_) {
+                    if @signals.untracked(on) {
+                      r.tree.show_in_sight(r.id())
+                    }
+                  })
+                  row(r, key, on)
+                },
+              )
               |> ignore
             })
           })

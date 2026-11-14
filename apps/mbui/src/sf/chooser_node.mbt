@@ -51,58 +51,55 @@ fn chooser_by(
   let open = @signals.signal(false, same=fn(a, b) { a == b })
   // (opened by the keyboard: its first row's the focus as it opens)
   let by_key = Ref(false)
-  let made : Ref[@view.View?] = Ref(None)
-  parent.box(made_for=loc, fn(b) {
-    made.val = Some(b)
-    let live = fn() { !disabled() }
-    let lit = fn() { live() && (lit_node(b) || open.get() || b.focus_shown()) }
-    // (pressed: its menu opened, or what it does in its place)
-    let opens = fn(down : Bool) {
-      if !@signals.untracked(live) {
-        return
-      }
-      match press {
-        Some(f) => f()
-        None => {
-          by_key.val = down || b.focus_shown()
-          open.set(down || !open.untracked())
-        }
+  let opens = fn(b : @view.View, down : Bool) {
+    match press {
+      Some(f) => f()
+      None => {
+        by_key.val = down || b.focus_shown()
+        open.set(down || !open.untracked())
       }
     }
-    presses_node(b, fn() { opens(false) }, on=live)
-    b.on_key(fn(k) {
-      if k.mods == 0 && k.code == @ui.key_code_down && b.focused() && !open.untracked() && @signals.untracked(live) {
-        opens(true)
-        true
-      } else {
-        false
-      }
-    })
-    |> ignore
-    // (disabled while its menu is open: closed, as the old one's)
-    b.reacts(disabled, fn(off) { if off { open.set(false) } })
-    b
-    .row(Is(true))
-    .height(Is(Some(chooser_h)))
-    .padding(By(fn() {
-      let x = if capsule { card_foot_words_in(chooser_h) } else { chooser_x }
-      (x, 0.0, x, 0.0)
-    }))
-    .gap(Is(chooser_gap_in))
-    .radius(By(fn() { if capsule { chooser_h / 2.0 } else { @ui.tree_theme().corner(Lg) } }))
-    .lines_up(Is(Some(Middle)))
-    .ground(By(fn() { if lit() { @ui.tree_theme().color(Hover) } else { 0L } }))
-    .says(By(fn() { Some(@view.said(Button, label=words(), expanded=open.get())) }))
-    |> ignore
-    words_node(b, words, fn() { if lit() { chooser_words_lit } else { chooser_words } }) |> ignore
-    icon_node(b, "chevron-down", chooser_chevron, By(fn() { if lit() { theme().p.text } else { theme().p.muted } }))
-    |> ignore
-    // (closed as it starts leaving, and as it is let go)
-    b.on_leaving(fn() { open.set(false) }) |> ignore
-    b.owns(fn() { open.set(false) }) |> ignore
-  })
-  |> ignore
-  let b = made.val.unwrap()
+  }
+  let b = @headless.disclosure(
+    made_for=loc,
+    parent,
+    words,
+    fn() { open.get() },
+    fn(b) { opens(b, false) },
+    disabled~,
+    fn(b, d) {
+      let lit = fn() { !d.disabled() && (lit_node(b) || d.open() || d.focus_shown()) }
+      b.on_key(fn(k) {
+        if k.mods == 0 && k.code == @ui.key_code_down && b.focused() && !open.untracked() && !@signals.untracked(disabled) {
+          opens(b, true)
+          true
+        } else {
+          false
+        }
+      })
+      |> ignore
+      // (disabled while its menu is open: closed, as the old one's)
+      b.reacts(disabled, fn(off) { if off { open.set(false) } })
+      b
+      .row(Is(true))
+      .height(Is(Some(chooser_h)))
+      .padding(By(fn() {
+        let x = if capsule { card_foot_words_in(chooser_h) } else { chooser_x }
+        (x, 0.0, x, 0.0)
+      }))
+      .gap(Is(chooser_gap_in))
+      .radius(By(fn() { if capsule { chooser_h / 2.0 } else { @ui.tree_theme().corner(Lg) } }))
+      .lines_up(Is(Some(Middle)))
+      .ground(By(fn() { if lit() { @ui.tree_theme().color(Hover) } else { 0L } }))
+      |> ignore
+      words_node(b, words, fn() { if lit() { chooser_words_lit } else { chooser_words } }) |> ignore
+      icon_node(b, "chevron-down", chooser_chevron, By(fn() { if lit() { theme().p.text } else { theme().p.muted } }))
+      |> ignore
+      // (closed as it starts leaving, and as it is let go)
+      b.on_leaving(fn() { open.set(false) }) |> ignore
+      b.owns(fn() { open.set(false) }) |> ignore
+    },
+  )
   // (its menu made as it opens, in the layer, living as long as the chooser does; the focus given back to it as it goes)
   let holder = layer.box(fn(h) { h.over(Is(true)) |> ignore }).lives_with(b)
   holder.show(fn() { open.get() }, at_once=true, fn(m) {
