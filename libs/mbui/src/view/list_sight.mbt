@@ -18,7 +18,8 @@
 /// shows under it: as much as the head shows, a table of contents telling that from its first key at the top), `last`
 /// the last that shows, `whole` the last wholly in what shows (its top no higher than the edge under what covers its
 /// top, its foot over the foot's top, where it has them; none where none is), `from_foot` how far it is scrolled from
-/// its foot, `shows` how tall what shows is, `at_foot` whether it is at its foot.
+/// its foot, `shows` how tall what shows is, `at_foot` whether it is at its foot, `foot_whole` whether it is at its foot
+/// with all of it there drawn whole.
 #derive(Eq, Debug)
 pub(all) struct Sight[K] {
   first : K
@@ -28,6 +29,7 @@ pub(all) struct Sight[K] {
   from_foot : Double
   shows : Double
   at_foot : Bool
+  foot_whole : Bool
 }
 
 ///|
@@ -100,5 +102,6 @@ fn[K] sight_counted(all : Places[K], s : Scroll, t : Double, foot : Double, room
     from_foot: most - x,
     shows: vh,
     at_foot: most - x <= 1.0e-6,
+    foot_whole: most - x <= 1.0e-6,
   })
 }
