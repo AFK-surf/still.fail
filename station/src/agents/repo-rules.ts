@@ -18,8 +18,9 @@ const quoted = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 /// gone, and its hooks failed unseen (`|| true`) from then on. A checkout and the tests have no Node beside them and
 /// run the hook on their own.
 export function hookNode(file: string, has: (path: string) => boolean = existsSync): string {
-  const own = join(dirname(dirname(file)), "node", process.platform === "win32" ? "node.exe" : join("bin", "node"));
-  return has(own) ? own : process.execPath; // sync: one stat as the module loads, before the station serves
+  // Where each installer puts it: bin/node, and on Windows node.exe; whichever is there.
+  const node = join(dirname(dirname(file)), "node");
+  return [join(node, "bin", "node"), join(node, "node.exe")].find((own) => has(own)) ?? process.execPath; // sync: two stats at most as the module loads, before the station serves
 }
 
 /// A hook's file as a command, run by the station's Node (`hookNode`) with `args` (failing quietly where the station's

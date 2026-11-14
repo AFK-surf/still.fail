@@ -292,10 +292,10 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     for (const file of ["src/agents/subagent-hook.mjs", "src/agents/repo-rules-hook.mjs"]) assert.ok(copied.includes(file), `${file} is not copied to dist/ by the build: ${copied.join(" ")}`);
     // In a release (<app>/station/<hook>, <app>/node the release's Node) the command names that Node, which the next
     // release's takes the place of; the Node the station runs on is a version's own directory, pruned after an update.
-    const own = join("/app", "node", process.platform === "win32" ? "node.exe" : join("bin", "node"));
-    const seen: string[] = [];
-    assert.equal(hookNode(join("/app", "station", "subagent-hook.mjs"), (path) => (seen.push(path), true)), own);
-    assert.deepEqual(seen, [own]);
+    // Where either installer puts it (bin/node; node.exe on Windows), whichever is there.
+    for (const own of [join("/app", "node", "bin", "node"), join("/app", "node", "node.exe")]) {
+      assert.equal(hookNode(join("/app", "station", "subagent-hook.mjs"), (path) => path === own), own);
+    }
     // A checkout, these tests: no Node beside it, its own.
     assert.equal(hookNode(join("/app", "station", "subagent-hook.mjs"), () => false), process.execPath);
     assert.equal(hookNode(SUBAGENT_HOOK), process.execPath);
