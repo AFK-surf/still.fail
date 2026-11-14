@@ -281,8 +281,12 @@ another; the accounts' list's merge across stations and its refills.
   on, is bound to it by `bind` (rules/AGENTS.md) riding the next thing they do on their own lock with its one ask
   (views/lock.ts `bindsFor`, personal-lock.ts `#addBinds`; the lead, 2026-11-14: what they did for themselves before the
   move, with nothing more asked and nobody else involved): approving their own device or web page, taking one off, a
-  change of the list (`sayMoved` works it out with it, `plan` reading the chain as it moved). Known, not here: one with
-  no log at all (apps from before own logs) is still approved by owners and admins. A member the chain named, first
+  change of the list (`sayMoved` works it out with it, `plan` reading the chain as it moved). One with no log at all
+  (apps from before own logs, the common case at a move) has it begun on such an act of theirs on such a device, as
+  views/pair.ts `ownLogFor` begins a newcomer's, the `bind` riding it, in that act's one ask (personal-lock.ts
+  `seedFor`, views/lock.ts `beginsHere`): approving their own web page, their own new app (which asks them, never
+  owners and admins, and brings the key it joins their log with: views/pair.ts `carriedUnbound`), taking a device of
+  theirs off. A member the chain named, first
   app device after the move, is admitted face to face as a newcomer is, in the role the state gives them (views/pair.ts
   `admitOf`), what the chain carried of theirs staying.
 - Known, not built for (the lead, 2026-11-14): a station of another workspace from before build 8799 keeps a stale copy

@@ -1433,9 +1433,12 @@ export function onBoundPerson(inner: Inner, ws: string): boolean {
 function carriedOwn(inner: Inner, ws: string, id: string): { sub: string; label: string } | null {
   const sub = inner.workspaces.owner(ws);
   const personal = inner.adb.personal();
-  if (sub === null || personal.standing(sub) !== "member") return null;
+  if (sub === null) return null;
+  // (or one with no log yet, which taking it off begins: `beginsHere`)
+  const begins = beginsHere(inner, ws, sub);
+  if (personal.standing(sub) !== "member" && !begins) return null;
   const f = stateOf(inner, ws);
-  if (f.persons.get(sub) !== personal.root(sub) && bindNeeded(inner, ws, sub) === null) return null;
+  if (!begins && f.persons.get(sub) !== personal.root(sub) && bindNeeded(inner, ws, sub) === null) return null;
   const d = f.devices.get(id);
   if (d === undefined || d.sub !== sub || d.kind !== "app" || d.by !== "chain") return null;
   return { sub, label: str(d.label) ?? "" };
@@ -1866,9 +1869,10 @@ const asMoved = (entries: readonly Entry[], at: number): readonly Entry[] => {
 /// What a person's own lock reads of the workspaces' locks (personal-lock.ts `approved`, `vouchers`): the devices to
 /// put on it as it stands (`approvedIn`), this device's own id and signing key telling which is this one; the keys said
 /// up this device's lineages (`vouchersIn`).
-export function ownLockEnv(inner: Inner): Pick<PersonalEnv, "approved" | "vouchers" | "binds"> {
+export function ownLockEnv(inner: Inner): Pick<PersonalEnv, "approved" | "vouchers" | "binds" | "begins"> {
   return {
     binds: (sub) => bindsFor(inner, sub),
+    begins: (sub) => beginsFor(inner, sub),
     approved: (sub, chain) => approvedIn(ownLocks(inner, sub).map((l) => l.own), sub, { id: bases.get(inner) ?? null, signKey: signerOf(inner) }, chain),
     vouchers: (sub) => {
       const base = bases.get(inner) ?? null;
@@ -3156,17 +3160,25 @@ export function movedWorks(inner: Inner, ws: string, sub: string, meant: Said[])
 
 /// Where this device binds `sub` to their own log in moved workspace `ws` with a `bind` (rules/src/lock/roster.mbt
 /// `binds_of`; the lead, 2026-11-14: a carried member with no log of their own does for themselves what they did before
-/// the move): the state in force names them and binds them to no log, the chain as it moved bound them to none, and this
-/// device is one the chain names as an own app device of theirs by the signer it keeps, on their log pinned here (not the
-/// root's). None where its body is kept here already (said, pending or taken). What it proves: the `moved` entry's hash
-/// and the signer.
+/// the move): as `bindable` says, this device on their log pinned here (not the root's). None where its body is kept
+/// here already (said, pending or taken). What it proves: the `moved` entry's hash, the signer and the log.
 function bindNeeded(inner: Inner, ws: string, sub: string): { moved: string; key: string; log: string } | null {
+  const b = bindable(inner, ws, sub);
+  if (b === null) return null;
+  const personal = inner.adb.personal();
+  const log = personal.root(sub);
+  if (log === null || log === inForceOf(inner, ws).root || personal.standing(sub) !== "member") return null;
+  if (bodiesHeld(inner, ws).some((x) => isObject(x) && x.kind === "bind" && x.key === b.key && x.ws === ws)) return null;
+  return { ...b, log };
+}
+
+/// Where a `bind` of `sub`'s by this device would count in moved workspace `ws`, their log aside: the state in force
+/// names them and binds them to no log, the chain as it moved bound them to none, and this device is one it names as
+/// an own app device of theirs by the signer it keeps. What it proves: the `moved` entry's hash and the signer.
+function bindable(inner: Inner, ws: string, sub: string): { moved: string; key: string } | null {
   if (inner.host.appKeys !== true || !movedHere(inner, ws)) return null;
   const force = inForceOf(inner, ws);
   if ((force.said !== "on" && force.said !== "off") || force.root === null) return null;
-  const personal = inner.adb.personal();
-  const log = personal.root(sub);
-  if (log === null || log === force.root || personal.standing(sub) !== "member") return null;
   if (!force.f.members.has(sub) || force.f.persons.has(sub)) return null;
   const entries = held(inner, ws)?.entries ?? [];
   const chain = fold(entries);
@@ -3174,10 +3186,19 @@ function bindNeeded(inner: Inner, ws: string, sub: string): { moved: string; key
   const signer = signerOf(inner);
   const d = base === null ? undefined : chain.devices.get(base);
   if (chain.persons.has(sub) || signer === null || d === undefined || d.sub !== sub || d.kind !== "app" || d.sign_key !== signer) return null;
-  if (bodiesHeld(inner, ws).some((b) => isObject(b) && b.kind === "bind" && b.key === signer && b.ws === ws)) return null;
   const last = entries[entries.length - 1];
-  return last === undefined || last.kind !== "moved" ? null : { moved: entryHash(last), key: signer, log };
+  return last === undefined || last.kind !== "moved" ? null : { moved: entryHash(last), key: signer };
 }
+
+/// Where `sub` has no log of their own yet (none kept anywhere this device read) and this device would bind them in
+/// moved workspace `ws` once they have one (`bindable`): what they do there on their own devices (approving a device or
+/// a web page of theirs, taking one off) begins it, as views/pair.ts `ownLogFor` begins a newcomer's on their act, with
+/// that act's one ask, the `bind` riding it (personal-lock.ts `seedFor`; the lead, 2026-11-14: the common case at a
+/// move, members whose apps are from before own logs, who did these for themselves before it).
+export const beginsHere = (inner: Inner, ws: string, sub: string): boolean => inner.adb.personal().standing(sub) === "none" && bindable(inner, ws, sub) !== null;
+
+/// `beginsHere` in any moved workspace of `sub`'s (personal-lock.ts's `begins`).
+export const beginsFor = (inner: Inner, sub: string): boolean => [...inner.workspaces.owned()].some(([ws, owner]) => owner === sub && beginsHere(inner, ws, sub));
 
 /// Whether this device binds `sub` in `ws` as their next ask comes (`bindNeeded`): views/pair.ts approves their own
 /// web page so.
@@ -3607,7 +3628,9 @@ function rosterMoved(inner: Inner, sub: string, ws: string, what: Roster): Effec
 /// taken off its person's own log (`onOwnLock`), else `lock_moved` as before.
 function webMoved(inner: Inner, sub: string, ws: string, id: string, kind: "web" | "web.remove"): Effect.Effect<unknown, CoreError> {
   return Effect.suspend(() => {
-    if (!saysHere(inner, sub)) return Effect.fail(notTrustedHere());
+    // (or one with no log yet, which renewing or taking off their page begins: `beginsHere`)
+    const begins = beginsHere(inner, ws, sub);
+    if (!saysHere(inner, sub) && !begins) return Effect.fail(notTrustedHere());
     const f = stateOf(inner, ws);
     const d = f.devices.get(id);
     if (d === undefined) return Effect.fail(CoreError.invalid("no such device in the lock"));
@@ -3617,7 +3640,7 @@ function webMoved(inner: Inner, sub: string, ws: string, id: string, kind: "web"
     // (another's app device: theirs alone to take off or renew, on their own log; an owner takes the person out)
     if (d.kind !== "web") return Effect.fail(new CoreError("lock_moved", t("core-misc.lock.othersDevice"), 409));
     // (theirs, by the log that binds them, or by the one this device binds them to as it asks: `bindNeeded`)
-    if (d.sub !== sub || (f.persons.get(sub) !== inner.adb.personal().root(sub) && bindNeeded(inner, ws, sub) === null)) return Effect.fail(new CoreError("forbidden", t("core-misc.lock.notAllowed")));
+    if (d.sub !== sub || (!begins && f.persons.get(sub) !== inner.adb.personal().root(sub) && bindNeeded(inner, ws, sub) === null)) return Effect.fail(new CoreError("forbidden", t("core-misc.lock.notAllowed")));
     const name = deviceText({ kind: "web", label: str(d.label) ?? "" });
     const reason = actText({ act: kind === "web" ? "renew" : "removeDevice", name });
     const body = kind === "web" ? { id, label: str(d.label) ?? "", exp: now(inner) + WEB_DEVICE_SECS } : { id };

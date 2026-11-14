@@ -51,7 +51,7 @@ import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { ownBuild } from "../station/oldest.ts";
-import { Lock, approvedHere, asked, baseOf, bindsHere, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
+import { Lock, approvedHere, asked, baseOf, beginsFor, beginsHere, bindsHere, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -165,7 +165,9 @@ function personalAsked(inner: Inner, hello: J): { key: string; subs: string[]; w
   const one = str(get(asked, "sub"));
   if (one !== null && !subs.includes(one)) subs.push(one);
   if (key === null || !key.startsWith("ed25519:") || !inner.host.appKeys) return null;
-  const mine = subs.filter((sub) => inner.adb.personal().standing(sub) === "member" && inner.accounts.list().some((a) => a.sub === sub));
+  // (or one with no lock of their own yet that approving it begins, a member a moved workspace carries bound to no log:
+  // views/lock.ts `beginsFor`)
+  const mine = subs.filter((sub) => (inner.adb.personal().standing(sub) === "member" || beginsFor(inner, sub)) && inner.accounts.list().some((a) => a.sub === sub));
   const account = inner.accounts.list().find((a) => a.sub === mine[0]);
   return account === undefined ? null : { key, subs: mine, who: { sub: account.sub, email: account.email, name: account.name ?? "" } };
 }
@@ -231,12 +233,14 @@ function movedPlace(inner: Inner, w: J, ws: string, account: string, hello: J, p
   const root = personal.root(account);
   const mine = force.f.devices.get(me);
   // (or a member the chain as it moved bound to no log, this device an own app of theirs it names: the approval binds
-  // them to this log first, in its one ask, views/lock.ts `bindNeeded`)
-  if (root === null || personal.standing(account) !== "member" || (force.f.persons.get(account) !== root && !bindsHere(inner, ws, account))) return null;
+  // them to this log first, in its one ask, views/lock.ts `bindNeeded`; with no log yet, one begun in that ask,
+  // `beginsHere`, their own web page alone so)
+  const begins = root === null && get(hello, "kind") === "web" && beginsHere(inner, ws, account);
+  if (!begins && (root === null || personal.standing(account) !== "member" || (force.f.persons.get(account) !== root && !bindsHere(inner, ws, account)))) return null;
   // (this device on the log that binds them by its own key there, which signs what it approves: the state names a device
   // by the key it signs the workspace's things with, never by that one, rules/src/lock/state4.mbt)
   const key = personal.keyId();
-  if (mine === undefined || mine.kind !== "app" || mine.sub !== account || key === null || personal.chain(account)?.devices.get(key)?.id !== me) return null;
+  if (mine === undefined || mine.kind !== "app" || mine.sub !== account || (!begins && (key === null || personal.chain(account)?.devices.get(key)?.id !== me))) return null;
   // (one let in there already, not run out: nothing to sign; renewed on the security page, `Lock.renew`)
   if (live(force.f.devices.get(peer), now) !== undefined) return null;
   const c = credentialOf(str(get(w, "credential")) ?? "", force.settings?.cloud_keys, ws, peer, now);
@@ -392,7 +396,8 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
       device: peer, name: who.name, email: who.email, kind, label: (str(get(hello.value, "label")) ?? "").slice(0, 120),
       signKey: kind === "app" ? str(get(hello.value, "sign_key")) : null, code: pairCode((b) => inner.host.randomBytes(b)),
       at: Math.floor(inner.host.nowMs() / 1000), until: inner.host.nowMs() + PAIR_WAIT_MS, places, hidden: false, away: Deferred.makeUnsafe<void>(),
-      ...(personal !== null ? { personal: { subs: personal.subs, key: personal.key, seed: yield* Effect.orElseSucceed(inner.adb.personal().unseal(t("core-misc.personal.reason.add")), () => null) } } : {}),
+      // (their lock begun in this ask where they have none, personal-lock.ts `seedFor`)
+      ...(personal !== null ? { personal: { subs: personal.subs, key: personal.key, seed: yield* Effect.orElseSucceed(inner.adb.personal().seedFor(personal.subs[0]!, t("core-misc.personal.reason.add")), () => null) } } : {}),
     };
     all.set(peer, asking);
     told(inner);
@@ -676,7 +681,9 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
         continue;
       }
       const known = force.said === "on" ? f : fold(h.entries);
-      const first = inner.host.appKeys === true && (!known.members.has(sub) || (force.said === "on" && known.persons.get(sub) !== personal.root(sub)));
+      // (not someone's first device where the chain names them with an app of their own and binds them to no log: their
+      // own devices approve it, `carriedUnbound`)
+      const first = inner.host.appKeys === true && (!known.members.has(sub) || (force.said === "on" && known.persons.get(sub) !== personal.root(sub))) && !carriedUnbound(inner, ws, sub);
       const here = [...known.devices.values()].filter((d) => d.id !== base && d.kind === "app" && typeof d.sign_key === "string" && (d.sub === sub || (first && ["owner", "admin"].includes(known.members.get(d.sub)?.role ?? ""))));
       const ids = new Set([...here.map((d) => d.id as string), ...(inner.host.appKeys === true ? [] : personal.approvers(sub).map((d) => d.id))]);
       ids.delete(base);
@@ -716,6 +723,9 @@ export function ownLogFor(inner: Inner, workspaces: readonly string[]): Effect.E
     const read = yield* Effect.result(personal.refresh(sub, undefined, personal.asked()));
     if (personal.standing(sub) === "none") {
       if (read._tag === "Failure") return yield* Effect.fail(read.failure);
+      // (none begun for one the chain as it moved names with an app of their own and binds to no log: their own device
+      // puts this one on the log it begins as it approves it, `carriedUnbound`, never an owner or admin)
+      if (moved.every((ws) => carriedUnbound(inner, ws, sub))) return null;
       // Begun on the person's act (they asked to be let in): with nobody asked where this device made no key of its own
       // before (`beginQuietly`'s `acted`: the read just made found none kept, every station it reached saying so; a
       // station that did not answer holds nobody out of the workspace, as it did not before a move: the lead,
@@ -727,6 +737,18 @@ export function ownLogFor(inner: Inner, workspaces: readonly string[]): Effect.E
     const log = personal.entries(sub);
     return JSON.stringify(log).length <= CARRY_BYTES ? log : null;
   });
+}
+
+/// Whether the chain held of moved workspace `ws` names `sub` a member with an own app device that signs, bound to no
+/// log, this device not one of theirs it names, and this device knows no lock of theirs: a new device of a member whose
+/// devices are from before own logs, approved by one of those, which begins their log in that ask (personal-lock.ts
+/// `seedFor`), as before the move; not by an owner's or admin's (`waitingIn`'s `first`, `ownLogFor`).
+export function carriedUnbound(inner: Inner, ws: string, sub: string): boolean {
+  const h = held(inner, ws);
+  if (!h?.head || !movedHere(inner, ws) || inner.adb.personal().standing(sub) !== "none") return false;
+  const chain = fold(h.entries);
+  const base = baseOf(inner);
+  return chain.members.has(sub) && !chain.persons.has(sub) && (base === null || chain.devices.get(base)?.sub !== sub) && [...chain.devices.values()].some((d) => d.sub === sub && d.kind === "app" && d.own !== false && typeof d.sign_key === "string");
 }
 
 /// Where the new device reaches a trusted one: its mesh's endpoint, dialling the trusted device's id on PAIR_ALPN
@@ -784,6 +806,12 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
     ) : null;
     if (signer) signerKnown(inner, signer.id);
     const log = inner.host.appKeys ? yield* ownLogFor(inner, workspaces) : null;
+    // (a member the chain names with an app of their own and binds to no log, `carriedUnbound`: the device of theirs
+    // that approves this one puts it on the log it begins in that ask, by the key this device has on it, as the personal
+    // exchange does, `personalAsked`)
+    const owner = workspaces.length === 0 ? null : inner.workspaces.owner(workspaces[0]!);
+    const joins = inner.host.appKeys === true && log === null && owner !== null && workspaces.some((ws) => carriedUnbound(inner, ws, owner));
+    const personalKey = joins ? yield* inner.adb.personal().makeKey() : null;
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
     inner.runner.fork(
       Effect.gen(function* () {
@@ -825,7 +853,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
         }
         changed(inner, y);
         // (its build, as its requests say it: read by approving cores from before 2026-11-14, which noted it)
-        const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null, build: ownBuild() || "0.1.0", ...(log !== null ? { log } : {}) };
+        const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null, build: ownBuild() || "0.1.0", ...(log !== null ? { log } : {}), ...(personalKey !== null ? { personal: { subs: [owner], key: personalKey } } : {}) };
         // A lock can move while credentials or devices are being sought. Follow it for this try, asking newly named
         // approvers too, but never dial one a second time after its seek ended: it may already be showing a code.
         const asked = new Set<string>();
