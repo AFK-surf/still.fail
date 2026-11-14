@@ -533,7 +533,10 @@ for t in $targets; do
       # default rate on the second, whose pages are on two programs beside its sweeps: on the fourth beside
       # send_steady's three, real_size's half and its pages, ten processes on its four cores, app 4/4 was 238-249 s
       # of its 5 minutes on 2026-11-13's pushes after #5906, the second's 158)
-      "src/sfapp/chat_page_nodes_wbtest.mbt "*) [ -z "${MBUI_TEST_FPS:-}" ] && echo 2 || echo 4 ;;
+      # (at 120 a second on the third since, whose two parts had the room, 112-189 s: on the fourth's three parts, its
+      # tests 14-28 beside preview_tree's 0-54 on the first, app 4/4 at 120 fps part 1/3 was 272-295 s of its 5
+      # minutes on main's runs after #6096 and cut at them on 8b149318 43562087371)
+      "src/sfapp/chat_page_nodes_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "") echo 2 ;; 120) echo 3 ;; *) echo 4 ;; esac ;;
       # (answers_still's three where each rate's jobs had the most room on main 0d56014c 43468965521 without it: the
       # first at the default rate (162 s) and at 120 (122 s), the third at 60 (150 s), the fourth at 24 and at 7, a
       # runner each; reckoned in specs below: 31, 256, 91 and some 120 s of its cores)
@@ -581,7 +584,9 @@ for t in $targets; do
           # 275-283 of its 5 minutes on main c52e9bd2 43530192044, b4992a65 43546414824, cb22a840 43548862078, the
           # first's 172-198, the second's 136-199. Reckoned as they run: by the table the third's pages 893 s to 817, the
           # second's 714 to 817, the first's 743 to 716)
-          [ "${APP_GROUP:-}" = 4/4 ] && [ "${MBUI_TEST_FPS:-}" = 120 ] && [ "${APP_PART#*/}" = 3 ] && specs="4,4,200,1 4,4,150,1 4,4,150,1"
+          # (chat_page_nodes' two on the third at 120 since (app_group_of): the first's other runs preview_tree's 0-54, the
+          # second's its 54-121, the third's none but send_steady's moment)
+          [ "${APP_GROUP:-}" = 4/4 ] && [ "${MBUI_TEST_FPS:-}" = 120 ] && [ "${APP_PART#*/}" = 3 ] && specs="4,4,140,1 4,4,180,1 4,4,0,1"
           while read -r g f; do [ "$g" = "${APP_PART%/*}" ] && kept+=("$f"); done < <(page_deal "$specs" "${words[@]:3}")
           [ ${#kept[@]} = 0 ] || mine+=("${words[0]} ${words[1]} ${words[2]} ${kept[*]}")
         else
