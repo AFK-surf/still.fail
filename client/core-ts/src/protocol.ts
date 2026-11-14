@@ -187,6 +187,7 @@ export const TOPICS: Record<string, Spec> = {
   joinable: { workspace: S },
   memberships: { station: S },
   screens: { station: S },
+  terminals: { station: S },
   screenCard: { station: S, screen: S },
   lockDraft: { workspace: S },
   lockPrompts: {},
