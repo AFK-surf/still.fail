@@ -1287,7 +1287,9 @@ jobs:
     steps:
       - name: Update the configured test station
         run: |
-          target=$(cat "$HOME/.stillfail/agent/skills/stillfail/station-update-host")
+          # (the machine's own, beside its CI's other state: a skill's directory is the workspace's now, one for every
+          # station, and Mini1's own skill was kept apart as stillfail-Mini1, so the old path was gone, 88fced1a 43592776585)
+          target=$(cat "$HOME/stillfail-ci/station-update-host")
           test -n "$target"
           printf '::add-mask::%s\n' "$target"
           ssh -o BatchMode=yes "$target" 'env -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update --beta > /tmp/stillfail-station-update.log 2>&1 && tail -2 /tmp/stillfail-station-update.log'
