@@ -240,6 +240,15 @@ plutil -insert LSEnvironment -dictionary "$PLIST"
 put LSEnvironment.MBUI_UPDATE_FEED -string "$FEED"
 [ -z "$OWN" ] || put LSEnvironment.MBUI_OWN -string 1
 [ -z "$BETA" ] || put LSEnvironment.MBUI_BETA -string 1
+# PostHog's project its window thread's hangs and the errors it got past go to (src/host/apple_reports.m), as iOS's
+# (ios-core.sh) and Android's: the file STILLFAIL_POSTHOG names ({host, key}: .github/release-desktop.sh writes it from
+# POSTHOG_JSON); still.fail's own app alone. Without it the app sends nothing and shows no switch for it.
+if [ -n "${STILLFAIL_POSTHOG:-}" ] && [ -n "$OWN" ]; then
+  ph_host=$(plutil -extract host raw -o - "$STILLFAIL_POSTHOG") && ph_key=$(plutil -extract key raw -o - "$STILLFAIL_POSTHOG") \
+    && [ -n "$ph_key" ] || { echo "mac-app.sh: no PostHog key in $STILLFAIL_POSTHOG" >&2; exit 1; }
+  put StillfailPosthogHost -string "$ph_host"
+  put StillfailPosthogKey -string "$ph_key"
+fi
 # monoid's: its cloud, its name before the core says it, its station's own directory and service (~/.monoid,
 # build.monoid.station: cloud/src/install.ts)
 case $VARIANT in
