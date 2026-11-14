@@ -42,7 +42,7 @@ type Approver = { where: (hello: J) => string[]; approve: (hello: J) => J };
 
 /// `named`: s1 a member by X's log (`noApp`: a log no station was given, so naming no app of s1's). `web`: this core a
 /// web page. `waiting`: the station given no root's log. `older`: a station from before its refusal said `apps`.
-async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean } = {}) {
+async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean; personHeld?: boolean } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const alice = new Log("r1"), bob = new Log("r2"), x = new Log("s1");
@@ -80,7 +80,7 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   for (const l of o.waiting ? [bob] : o.named && !o.noApp ? [alice, bob, x] : [alice, bob]) bring(l);
   const viewer = viewerOf("s1", { base }, "member", "ws");
   /// What the station does to each of its asks: `lie`, a device its refusals name to ask in place of those it would.
-  const st = { lie: null as string | null, refusals: [] as J[], admitted: 0 };
+  const st = { lie: null as string | null, refusals: [] as J[], admitted: 0, personHeld: o.personHeld === true, personUntold: o.personHeld === true };
   /// The link's hello to A, as the station answers it: null where it lets this device in; else its refusal, told the
   /// core as the mesh wire tells it (station/mesh-wire.ts `refusedFor`).
   const hello = (): CoreError | null => {
@@ -93,6 +93,8 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
       const refusal = refusalOf(c, said, viewer.device, e, undefined, "s1") as J;
       if (st.lie !== null && refusal.left !== undefined) refusal.left = { approvers: [st.lie] };
       if (o.older && refusal.left !== undefined) delete refusal.left.apps;
+      // (its own lock not heard of here yet: the refusals before the test's own say nothing of it)
+      if (st.personUntold) delete refusal.person;
       st.refusals.push(refusal);
       return hooks.lockRefused?.(inner, "ws", A, refusal.lock, refusal) ?? new CoreError("lock_unconfirmed", e.message);
     }
@@ -111,6 +113,8 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
     const [ws, id] = addr.toString().split("/");
     if (id !== A || !path.startsWith("/lock")) return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
     if (ws !== "ws") return Effect.fail(httpError(404, { error: "no route" }));
+    // (its person's own lock not read yet: not answered, until the test lets it be)
+    if (st.personHeld && method === "GET" && path === "/lock/person") return Effect.fail(new CoreError("station_offline", "not reached"));
     // (its link's hello first: a station that refused this device is not dialled again until told to, as the mesh does)
     const waits = hooks.lockWaiting?.(inner, ws, A) ?? null;
     if (waits !== null) return Effect.fail(waits);
@@ -310,6 +314,34 @@ test("a member's own second app: the personal exchange with their app on the log
   const after = await w.page();
   assert.equal(after.me.confirmed, true, `in (${w.why()})`);
   assert.equal(subs(after), "r1,r2,s1");
+});
+
+// 2026-11-14, the side run of f6cfdf7af1 (N, alice's new app after one was taken off): the stations' refusal came
+// before its own lock was read, which named an admin (「…或请其管理员…」), and `lock.pair` then answered "this device
+// waits in no workspace". The refusal's own word on the person's log says it (`offOwnLock`), whichever comes first.
+test("a member's own second app refused before its own lock was read, and after: its refusal names no admin, and asking joins their log", async () => {
+  for (const first of ["refusal", "own lock"] as const) {
+    const w = await setUp({ named: true, personHeld: first === "refusal" });
+    const personal = w.inner.adb.personal();
+    if (first === "refusal") assert.equal(personal.standing("s1"), "none", "its own lock not read yet");
+    else await w.run(personal.refresh("s1"));
+    // (the refusal that tells it, before its own lock was loaded here: what it tells is not taken then, as
+    // personal-lock.ts `heardFrom` takes nothing for a person whose lock it has not loaded yet; a newly signed-in app)
+    w.st.personUntold = false;
+    const heardFrom = personal.heardFrom.bind(personal);
+    if (first === "refusal") personal.heardFrom = () => Effect.void;
+    const said = w.hello();
+    personal.heardFrom = heardFrom;
+    console.log(`${first} first: standing ${personal.standing("s1")}; refused: ${said?.message}`);
+    assert.ok(said !== null, "refused");
+    assert.doesNotMatch(said!.message, /管理员|admin/i, `${first} first`);
+    w.approvers.set(w.x.app.base.hex, { where: () => ["person:s1"], approve: () => ({ t: "no", error: "not_here" }) });
+    w.st.personHeld = false;
+    const asked = await w.ask("lock.pair", { workspace: "ws" });
+    console.log(`${first} first: lock.pair ${asked.error?.code ?? "ok"}; dialled ${w.dialled.map((d) => d.slice(0, 8)).join(" ")}`);
+    assert.equal(asked.error, undefined, `${first} first: ${asked.error?.message}`);
+    assert.deepEqual(w.dialled, [w.x.app.base.hex], `${first} first: X alone dialled, its own log's`);
+  }
 });
 
 test("a station that names a wrong device to ask: nothing let in, the page still able to ask", async () => {
