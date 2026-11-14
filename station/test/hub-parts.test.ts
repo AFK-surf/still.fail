@@ -15,6 +15,7 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
+import { LiveFromClaude } from "../src/agents/live.ts";
 import { HELD_AFTER_MS, type History, type LiveMessage, LiveHub, briefInput, inBrief, tokensOf } from "../src/sessions/live.ts";
 import type { SessionUsage } from "../src/read/usage.ts";
 import { chainOf, entriesOf, lengthOf, stateOf } from "../src/read/transcripts.ts";
@@ -781,6 +782,45 @@ test("how fast the model writes is told once half a second of it has come", asyn
   hub.event("s", { kind: "end", id: "x" });
   assert.equal(rates().at(-1), 0);
   assert.ok(!got.some((m) => m.type === "step" && m.event.kind === "delta"), "no delta is told");
+  hub.close();
+  await settle(1);
+});
+
+test("thinking left out of the stream has a rate too, by the tokens its empty deltas say, over the time each covers", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  // As Claude Code 2.1 streams an Opus 5.5 turn: a thinking block whose deltas say no words, only `estimated_tokens`.
+  const claude = new LiveFromClaude();
+  const frame = (event: object) => ({ type: "stream_event", event, parent_tool_use_id: null });
+  claude.feed(frame({ type: "message_start", message: { id: "m" } }));
+  const [started] = claude.feed(frame({ type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "", signature: "" } }));
+  const delta = (estimated_tokens: number | null) => claude.feed(frame({ type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "", estimated_tokens } }));
+  assert.deepEqual(delta(null), [], "a delta that says nothing counts nothing");
+  const hub = new LiveHub(() => null);
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 0, null, (m) => void got.push(m));
+  const rates = () => got.flatMap((m) => (m.type === "rate" ? [m.tokensPerSecond] : []));
+  hub.event("s", started!);
+  t.mock.timers.tick(1000);
+  const [first] = delta(50);
+  assert.deepEqual(first, { kind: "delta", id: "m:0", field: "text", text: "", tokens: 50 });
+  hub.event("s", first!);
+  assert.deepEqual(rates(), [50], "50 tokens in the second since the block began");
+  // A pause of four seconds, then 100 tokens: 25 a second, not 100 in a quarter.
+  t.mock.timers.tick(4000);
+  for (const e of delta(100)) hub.event("s", e);
+  assert.equal(rates().at(-1), 25);
+  // Each count over the time it covers, the window's two: 200 tokens in the five seconds since the first began.
+  t.mock.timers.tick(1000);
+  for (const e of delta(100)) hub.event("s", e);
+  assert.equal(rates().at(-1), 40);
+  // The pause out of the window, 100 a second.
+  for (let i = 0; i < 2; i++) {
+    t.mock.timers.tick(1000);
+    for (const e of delta(100)) hub.event("s", e);
+  }
+  assert.equal(rates().at(-1), 100);
+  for (const e of claude.feed(frame({ type: "content_block_stop", index: 0 }))) hub.event("s", e);
+  assert.equal(rates().at(-1), 0);
   hub.close();
   await settle(1);
 });

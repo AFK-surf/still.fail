@@ -24,7 +24,9 @@ export type TurnOutcome = { kind: "completed" } | { kind: "aborted" } | { kind: 
 /// A turn's steps as they happen (runtime/mod.rs `LiveEvent`, the same JSON).
 export type LiveEvent =
   | { kind: "start"; id: string; step: "text" | "thinking" | "tool"; tool?: string; input?: string; subagent?: boolean; parent?: string }
-  | { kind: "delta"; id: string; field: "text" | "input" | "output"; text: string }
+  /// `tokens`: how many tokens the model wrote by it, where the runtime says so instead of the words (Claude's thinking
+  /// left out of the stream, its `estimated_tokens`): the rate counts these in place of guessing them of `text`.
+  | { kind: "delta"; id: string; field: "text" | "input" | "output"; text: string; tokens?: number }
   | { kind: "end"; id: string }
   | { kind: "phase"; phase: "starting" | "requesting" | "responding" | "working" }
   /// What it has going in the background now, all of it (said again whenever it changes; none once its process ends).

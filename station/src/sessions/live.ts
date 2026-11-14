@@ -118,8 +118,10 @@ export function briefInput(input: string): string {
 }
 
 /// What the model wrote in each quarter second of the window, by the step it wrote it in: a step that ends takes its
-/// own out, and steps written at once (subagents side by side) add up.
-type Rate = { buckets: { at: number; id: string; tokens: number }[]; toldAt: number; told: number };
+/// own out, and steps written at once (subagents side by side) add up. A count the runtime gave (`since`: thinking left
+/// out of the stream, a delta a second or more saying how many tokens since its step's last) was written over the time
+/// since then, not in its quarter; `last` is when each step was last told so.
+type Rate = { buckets: { at: number; id: string; tokens: number; since?: number }[]; toldAt: number; told: number; last: Map<string, number> };
 
 /**
  * About how many tokens a piece of output is, without the model's tokenizer: about four characters of ASCII to a
@@ -378,7 +380,7 @@ export class LiveHub {
       // What a step writes as it goes is not told: its words come with its transcript entry. How fast it writes is.
       // Only what the model writes, its words and a call's input: a call's output (a command's, as it runs) is not.
       case "delta":
-        if (event.field !== "output") this.counted(key, event.id, tokensOf(event.text));
+        if (event.field !== "output") this.counted(key, event.id, event.tokens ?? tokensOf(event.text), event.tokens !== undefined);
         break;
       case "start": {
         const input = briefInput(event.input ?? "");
@@ -415,6 +417,7 @@ export class LiveHub {
         if (rate) {
           const now = this.time.now();
           rate.buckets = rate.buckets.filter((b) => b.id !== event.id && b.at > now - RATE_WINDOW_MS);
+          rate.last.delete(event.id);
           if (rate.buckets.length === 0) {
             this.rates.delete(key);
             if (rate.told > 0) this.emit(key, { type: "rate", tokensPerSecond: 0 });
@@ -828,21 +831,34 @@ export class LiveHub {
   }
 
   /// Output written: its rate is told once half a second of it has come (a first few bytes say nothing of the pace),
-  /// then when a second has passed since it last was.
-  private counted(key: string, id: string, tokens: number) {
+  /// then when a second has passed since it last was. `counted`: tokens the runtime counted over the time since the
+  /// step's last such delta (or its start), not written now.
+  private counted(key: string, id: string, tokens: number, counted = false) {
     const now = this.time.now();
     let rate = this.rates.get(key);
-    if (!rate) this.rates.set(key, (rate = { buckets: [], toldAt: 0, told: 0 }));
+    if (!rate) this.rates.set(key, (rate = { buckets: [], toldAt: 0, told: 0, last: new Map() }));
     const at = Math.floor(now / 250) * 250;
-    const same = rate.buckets.find((b) => b.at === at && b.id === id);
-    if (same) same.tokens += tokens;
-    else rate.buckets.push({ at, id, tokens });
+    if (counted) {
+      const since = rate.last.get(id) ?? this.steps.get(key)?.find((s) => s.id === id)?.startedAt ?? now;
+      rate.last.set(id, now);
+      rate.buckets.push({ at, id, tokens, since: Math.min(since, now) });
+    } else {
+      const same = rate.buckets.find((b) => b.at === at && b.id === id && b.since === undefined);
+      if (same) same.tokens += tokens;
+      else rate.buckets.push({ at, id, tokens });
+    }
     rate.buckets = rate.buckets.filter((b) => b.at > now - RATE_WINDOW_MS);
     if (now - rate.toldAt < RATE_EVERY_MS) return;
-    const first = Math.min(...rate.buckets.map((b) => b.at));
+    const first = Math.min(...rate.buckets.map((b) => b.since ?? b.at));
     if (rate.toldAt === 0 && now - first < RATE_FIRST_MS) return;
-    // Over the quarters it holds, this one's whole (the window was a quarter more than its length, a rate an eighth high).
-    const span = Math.min(RATE_WINDOW_MS, now - first + 250);
+    // Over the quarters it holds, this one's whole (the window was a quarter more than its length, a rate an eighth high);
+    // over all the time a count covers, where one does (a count after a pause of seconds is not that many in a quarter).
+    const written = rate.buckets.flatMap((b) => (b.since === undefined ? [b.at] : []));
+    const counts = rate.buckets.flatMap((b) => (b.since !== undefined ? [b.since] : []));
+    const span = Math.max(
+      written.length > 0 ? Math.min(RATE_WINDOW_MS, now - Math.min(...written) + 250) : 0,
+      counts.length > 0 ? now - Math.min(...counts) : 0,
+    );
     const total = rate.buckets.reduce((sum, b) => sum + b.tokens, 0);
     const tokensPerSecond = Math.max(1, Math.round((total * 1000) / span));
     rate.toldAt = now;
