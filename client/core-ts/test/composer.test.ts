@@ -1180,3 +1180,23 @@ test("a_file_ended_part_way_up_is_kept_whole_and_its_message_sent_from_it", asyn
     Requests.prototype.uploadName = naming;
   }
 });
+
+test("carrying_a_taken_new_chat_draft_keeps_it_empty_and_preserves_taken_for_restore", async () => {
+  const t = await setup();
+  await t.watch(1, "new:ws");
+  await t.ask("text", { key: "new:ws", text: "立即发出去" });
+  call(t.core, t.ui, 701, "composer.take", { key: "new:ws" });
+  await t.settle();
+  await t.ask("carry", { key: "new:ws", to: "ws/st:pending" });
+  await t.watch(2, "ws/st:pending");
+  assert.equal(v(t.values, 1).text, "");
+  await t.ask("restore", { key: "new:ws", error: "连接失败" });
+  assert.equal(v(t.values, 1).text, "立即发出去");
+  assert.equal(v(t.values, 1).error, "连接失败");
+  // newChat.create works even before station overview is in the store
+  call(t.core, t.ui, 702, "newChat.create", { station: "ws/unloaded" });
+  await t.host.settle();
+  const created = answers(t.host.takeEmitted(), 702)?.ok as J;
+  assert.equal(typeof created?.runtime, "string");
+  t.core.close();
+});
