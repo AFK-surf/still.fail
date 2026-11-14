@@ -7,7 +7,7 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Shape, Ty } from "../src/shapes/dsl.ts";
+import type { Field, Shape, Ty } from "../src/shapes/dsl.ts";
 import { SHAPES, TOPIC_SHAPES } from "../src/shapes/schema.ts";
 
 const repo = (path: string) => fileURLToPath(new URL(`../../../${path}`, import.meta.url));
@@ -103,21 +103,22 @@ function typescript(): string {
 
 // ── Where outside words are, for mbui ──
 
-/// The paths in a value of type `ty` to its words marked `said`: its fields by name, `*` each item of a list or a map,
-/// `<tag>=<word>` a union's variant (where its tag says that word), then its content by its field; a shape already on
-/// the way down not entered again.
-function saidPaths(ty: Ty, at: string[], within: string[], out: string[]) {
+/// The paths in a value of type `ty` to its words a field's `pick` takes (marked `said`, or with a `widest`): its fields
+/// by name, `*` each item of a list or a map, `<tag>=<word>` a union's variant (where its tag says that word), then its
+/// content by its field; a shape already on the way down not entered again. Each with what `pick` gave of its field.
+function pathsTo<T>(pick: (f: Field) => T | undefined, ty: Ty, at: string[], within: string[], out: [string, T][]) {
   if (typeof ty !== "string") {
-    if ("opt" in ty) saidPaths(ty.opt, at, within, out);
-    else if ("vec" in ty) saidPaths(ty.vec, [...at, "*"], within, out);
-    else if ("map" in ty) saidPaths(ty.map, [...at, "*"], within, out);
+    if ("opt" in ty) pathsTo(pick, ty.opt, at, within, out);
+    else if ("vec" in ty) pathsTo(pick, ty.vec, [...at, "*"], within, out);
+    else if ("map" in ty) pathsTo(pick, ty.map, [...at, "*"], within, out);
     return;
   }
   const shape = SHAPES[ty];
   if (shape === undefined || within.includes(ty)) return;
   if (shape.kind === "struct") {
     for (const f of shape.fields) {
-      if (f.said) {
+      const got = pick(f);
+      if (got !== undefined) {
         let words: Ty = f.ty;
         const path = [...at, f.name];
         while (typeof words === "object") {
@@ -126,28 +127,38 @@ function saidPaths(ty: Ty, at: string[], within: string[], out: string[]) {
           else if ("map" in words) { words = words.map; path.push("*"); }
           else break;
         }
-        if (words !== "String") throw new Error(`${ty}.${f.name}: said, but not words`);
-        out.push(path.join("."));
-      } else saidPaths(f.ty, [...at, f.name], [...within, ty], out);
+        if (words !== "String") throw new Error(`${ty}.${f.name}: said or widest, but not words`);
+        out.push([path.join("."), got]);
+      } else pathsTo(pick, f.ty, [...at, f.name], [...within, ty], out);
     }
   } else if (shape.kind === "tagged") {
     for (const [word, v] of Object.entries(shape.variants)) {
-      saidPaths(v, [...at, `${shape.tag}=${word}`, shape.content], [...within, ty], out);
+      pathsTo(pick, v, [...at, `${shape.tag}=${word}`, shape.content], [...within, ty], out);
     }
   }
 }
 
 function mbuiSaid(): string {
   let out = `// ${SAID}\n// Where each topic the core shapes holds words someone outside the app wrote (a field marked \`said\`), a path each:\n`;
-  out += "// its fields by name, `*` each item of a list or a map, `<tag>=<word>` a union's variant. The fixtures make them\n";
-  out += "// their longest for the squeeze sweep's stretched pass and sffix's MBUI_SAID (fixture_said.mbt).\n\n";
+  out += "// its fields by name, `*` each item of a list or a map, `<tag>=<word>` a union's variant; and where it holds a figure\n";
+  out += "// the core writes (a field with a `widest`), a path each with that. The fixtures make them their longest and widest\n";
+  out += "// for the squeeze sweep's stretched pass and sffix's MBUI_SAID (fixture_said.mbt).\n\n";
   out += "///|\n// kept across runs: a value (never changed)\npub let said_paths : Map[String, Array[String]] = {\n";
   for (const topic of Object.keys(TOPIC_SHAPES).sort()) {
-    const paths: string[] = [];
-    saidPaths(TOPIC_SHAPES[topic]!, [], [], paths);
-    const unique = [...new Set(paths)];
+    const paths: [string, true][] = [];
+    pathsTo((f) => f.said ? true : undefined, TOPIC_SHAPES[topic]!, [], [], paths);
+    const unique = [...new Set(paths.map(([p]) => p))];
     if (unique.length === 0) continue;
     out += `  ${JSON.stringify(topic)}: [\n${unique.map((p) => `    ${JSON.stringify(p)},\n`).join("")}  ],\n`;
+  }
+  out += "}\n\n///|\n// kept across runs: a value (never changed)\npub let widest_paths : Map[String, Array[(String, String)]] = {\n";
+  for (const topic of Object.keys(TOPIC_SHAPES).sort()) {
+    const paths: [string, string][] = [];
+    pathsTo((f) => f.widest, TOPIC_SHAPES[topic]!, [], [], paths);
+    const seen = new Set<string>();
+    const unique = paths.filter(([p]) => !seen.has(p) && seen.add(p) !== undefined);
+    if (unique.length === 0) continue;
+    out += `  ${JSON.stringify(topic)}: [\n${unique.map(([p, w]) => `    (${JSON.stringify(p)}, ${JSON.stringify(w)}),\n`).join("")}  ],\n`;
   }
   return out + "}\n";
 }

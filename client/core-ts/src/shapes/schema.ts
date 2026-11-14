@@ -3199,7 +3199,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A chat's agent's profile as its page reads it where it has no `account`: its name and what is left of it." }),
   AgentCardView: struct([
     ["work", opt("String"), { doc: "How long the finished turns took: 共工作 1 小时 12 分." }],
-    ["cost", opt("String"), { doc: "What its calls would cost at API prices ($4.20, ≥$4.20 with some unpriced)." }],
+    ["cost", opt("String"), { widest: "$8,888", doc: "What its calls would cost at API prices ($4.20, ≥$4.20 with some unpriced)." }],
     ["tokens", opt("String"), { doc: "Its tokens in and out: 输入 1.2M · 输出 34K." }],
     ["cache", opt("AgentCardMeter"), { doc: "How much of what it sent was read from the cache." }],
     ["context", opt("AgentCardMeter"), { doc: "The context it carries on with, against its model's window (amber from 80%, red from 95%)." }],

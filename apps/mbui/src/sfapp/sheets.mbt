@@ -805,7 +805,7 @@ fn agent_title_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit
       plain=true,
     )
     c.box(w=Fill(1.0), gap=1.0, fn() {
-      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
+      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false, allow_ellipsis=true) |> ignore
       agent_status(c, src, a)
     })
     |> ignore
@@ -955,6 +955,8 @@ fn agent_lines(c : @ui.Ctx, card : Json?) -> Unit {
         color=if flag(Some(l), "now") { t.p.text } else { t.p.muted },
         wrap=false,
         line=18.0,
+        // (one line each, an agent's own words: cut short where they run past it)
+        allow_ellipsis=true,
       )
       |> ignore
     }
@@ -1143,7 +1145,7 @@ fn job_meta(c : @ui.Ctx, job : Json?, size : Double) -> Unit {
       _ => @ui.span(text(pv, "text"))
     }
   })
-  c.rich(runs, size~, color=t.p.muted, wrap=false) |> ignore
+  c.rich(runs, size~, color=t.p.muted, wrap=false, allow_ellipsis=true) |> ignore
 }
 
 ///|
@@ -1158,7 +1160,7 @@ fn job_row(c : @ui.Ctx, key : String, job : Json?, on_press~ : () -> Unit) -> Un
     fn() {
       c.box(pt=job_dot_over, fn() { job_dot(c, text(job, "tone")) }) |> ignore
       c.box(w=Fill(1.0), gap=1.0, fn() {
-        c.text(text(job, "name"), size=t.t.ui, weight=500, color=if off { t.p.muted } else { t.p.text }, wrap=false)
+        c.text(text(job, "name"), size=t.t.ui, weight=500, color=if off { t.p.muted } else { t.p.text }, wrap=false, allow_ellipsis=true)
         |> ignore
         job_meta(c, job, 12.5)
       })
@@ -1320,10 +1322,10 @@ fn job_words_node(parent : @view.View, words : () -> String, look : () -> @view.
 
 ///|
 /// Pieces of words in node `parent` (an old view's rich words), `runs` as they are now, set `look` in `ink` where a
-/// piece says no ink of its own.
+/// piece says no ink of its own; on one line, cut short where they run past it (a job's words are its agent's).
 fn job_runs_node(parent : @view.View, runs : () -> Array[@ui.Run], look : () -> @view.WordsLook, ink : () -> Int64) -> Unit {
   parent.box(fn(w) {
-    w.words_runs(By(runs), look=@signals.untracked(look)).words_look(By(look)).ink(By(ink)) |> ignore
+    w.words_runs(By(runs), look=@signals.untracked(look)).words_look(By(look)).ink(By(ink)).allow_ellipsis(By(fn() { !look().wrap })) |> ignore
   })
   |> ignore
 }
