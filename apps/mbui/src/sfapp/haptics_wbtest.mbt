@@ -117,3 +117,50 @@ test "what comes to be is felt as it comes: not as it is first seen, nor while i
   t.draw()
   assert_eq(t.haptics(), [@ui.Confirm, @ui.Confirm])
 }
+
+///|
+/// The fixture's chat on its page made as nodes (小屏), its view told only once `told` is, waiting for the viewer (its
+/// cards asked) while `asks` is.
+fn needed_open(told : @signals.Signal[Bool], asks : @signals.Signal[Bool]) -> @ui.Tester {
+  new_run()
+  @sfbase.chat_page_nodes.set(true)
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      let tp = base.topic(name, params).get().snapshot()
+      guard name == "chat" else { return tp }
+      guard told.get() else { return { value: None, error: None, version: -1 } }
+      guard !asks.get() && tp.value is Some(Object(m)) else { return tp }
+      let o = m.copy()
+      o["asks"] = []
+      { ..tp, value: Some(Json::object(o)), version: tp.version + 1 }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+test "a chat opened while it waits for the viewer, on its page made as nodes: its view read after it opens is not felt; coming to wait while open is" {
+  // opened before its view is read, the view then waiting for the viewer: nothing felt
+  let told = @signals.signal(false)
+  let asks = @signals.signal(true)
+  let t = needed_open(told, asks)
+  assert_eq(t.haptics(), [])
+  told.set(true)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.haptics(), [])
+  // read waiting for nothing, then coming to wait while it shows: felt once
+  let told = @signals.signal(false)
+  let asks = @signals.signal(false)
+  let t = needed_open(told, asks)
+  told.set(true)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.haptics(), [])
+  asks.set(true)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.haptics(), [@ui.Confirm])
+}

@@ -45,9 +45,18 @@ pub fn feel_needed(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Unit {
 
 ///|
 /// feel_needed's where chat `r`'s page is made as nodes (chat_page_made's, chat_page_nodes on), in node `n`: its view
-/// as source `src` reads it.
+/// as source `src` reads it. Till the view is read nothing is seen of it: what it first comes to is seen, not felt, as
+/// feel_needed sees the view first read (a chat opened while it needs its viewer is no change; felt as it came on
+/// opening it till 2026-11-15).
 fn feel_needed_node(n : @view.View, src : Source, r : ChatRef) -> Unit {
-  felt_change_node(n, fn() { view_of_chat(src, r).0.map(chat_needs).unwrap_or(false) }, Confirm)
+  let seen : Ref[Bool?] = Ref(None)
+  n.reacts(fn() { view_of_chat(src, r).0.map(chat_needs) }, fn(now) {
+    guard now is Some(needs) else { return }
+    if needs && seen.val is Some(false) && app_in_front() {
+      @ui.haptic(Confirm)
+    }
+    seen.val = now
+  })
 }
 
 ///|
