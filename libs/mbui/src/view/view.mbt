@@ -11859,8 +11859,9 @@ fn Tree::presses_said(self : Tree, at : Int) -> Bool {
 ///|
 /// The scene unfolded as Tree::drawn has it, its corners as big as it is drawn too, each with what holds it as drawn (its index in the same array, -1: none
 /// drawn round it) and whether it is a press target (Tree::presses_said: not one that says it takes none): for a check of
-/// where things stand in what holds them (ui's corner rule).
-pub fn Tree::drawn_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
+/// where things stand in what holds them (ui's corner rule). `scales`, where given: how big each is drawn pushed to it in
+/// the same order, as the walk composes it (Tree::drawn_scale's, worked out once for all).
+pub fn Tree::drawn_held(self : Tree, scales? : Array[Double]) -> Array[(Drawn, Int, Bool)] {
   let out : Array[(Drawn, Int, Bool)] = []
   // (each in the order's place, where it is in what is drawn: -1 where it draws nothing)
   let at_out : Array[Int] = Array::make(self.order.length(), -1)
@@ -11877,6 +11878,10 @@ pub fn Tree::drawn_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
       corners: c.corners.map(fn(k) { (k.0 * s, k.1 * s, k.2 * s, k.3 * s) }),
     }
     out.push((d, if h >= 0 { at_out[h] } else { -1 }, self.presses_said(c.id.at)))
+    match scales {
+      Some(sc) => sc.push(s)
+      None => ()
+    }
     false
   })
   out
