@@ -380,6 +380,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
   constructor(options: ClaudeDriverOptions) {
     super(options.data);
     this.agents = options.agents === undefined ? AgentsHost.where(options.data) : options.agents;
+    this.agents?.use(this);
     this.command = options.command ?? "claude";
     this.env = options.env ?? process.env;
     this.machineToken = options.machineToken ?? machineClaudeToken;
@@ -420,23 +421,28 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
       log.info("agents::claude", "taking up a claude process after a crash", { session: session.id(), pgid: info.pgid, busy: session.busy(), from: at });
       if (session.busy()) events({ type: "turnStarted" });
     }
-    session.attach(await HostedProcess.adopt(this.agents, info, session.hostedOptions(this.label(options, session)), session.turnNow(), session.liveNow()));
+    session.attach(HostedProcess.adopt(this.agents, info, session.hostedOptions(this.label(options, session)), session.turnNow(), session.liveNow()));
     this.live.add(session);
     return session;
   }
 
   /// Its processes' lines held while the station hands over (hub.ts `handOver`), and read on where it does not.
   async freeze() {
-    await this.agents?.freeze();
+    await this.agents?.freeze(this.hostedProcs());
   }
 
   thaw() {
-    this.agents?.thaw();
+    this.agents?.thaw(this.hostedProcs());
+  }
+
+  /// Its sessions' processes the program reads.
+  private hostedProcs(): HostedProcess[] {
+    return [...this.live].flatMap((s) => s.hostedProc() ?? []);
   }
 
   async shutdown() {
     await super.shutdown();
-    await this.agents?.close();
+    await this.agents?.close(this);
   }
 
   async open(options: OpenOptions, events: Events): Promise<ClaudeSession> {
@@ -700,6 +706,10 @@ export class ClaudeSession extends OwnProcessSession<Turn> {
     this.turn.renewed = false;
     this.turn.busy = true;
     this.hosted()?.tell("begin");
+  }
+
+  hostedProc(): HostedProcess | null {
+    return this.hosted();
   }
 
   /// Its process as the program reads it, if it is.
