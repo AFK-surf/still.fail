@@ -111,6 +111,9 @@ struct FakeHost {
   // what a face given by its number (face_add, a face's preview) adds to a cluster's advance in what is set in it, in
   // ems (none by default: each measures as the system's)
   faces_wider : Map[Int, Double]
+  // each printable ASCII letter's advance in ems, regular and bold (weight 600 and more), as a real face measures it
+  // (Tester::latin_advances; none by default: half an em each, 0.6 in the code face)
+  mut latin : (FixedArray[Double], FixedArray[Double])?
   // native views: what was asked of them, a line each ("open 1 video/mp4", "place 1 0 0 390 220 shown"…)
   views : Array[String]
   mut view_ids : Int

@@ -2647,6 +2647,7 @@ pub fn Tester::key_catching(Self) -> Bool
 pub fn Tester::key_named(Self, String) -> Bool
 pub fn Tester::key_told(Self, Int32, Int32, Double) -> Unit
 pub fn Tester::keyboard_gone(Self) -> Unit
+pub fn Tester::latin_advances(Self, FixedArray[Double], FixedArray[Double]) -> Unit
 pub fn Tester::leave(Self) -> Unit
 pub fn Tester::lines_of(Self, String) -> Array[String]
 pub fn Tester::list_moving(Self) -> Bool

@@ -29,7 +29,7 @@ fn test_window_corner(platform : Int) -> Double {
 /// `mode` in window `win` (its name, size, platform and the size class its host says, "" none) in `lang`, a moment
 /// after it opens (what it opens with over), drawn: the corner and squeeze tests' (corners_wbtest.mbt); with `said`, what
 /// people, agents and stations wrote in it at its longest (squeeze_said_wbtest.mbt); with `font_scale`, the system's
-/// size of words (words_large_wbtest.mbt); with `changing`, on the workspace of real size (real_size_wbtest.mbt).
+/// size of words (words_large_wbtest.mbt); with `latin`, ASCII measured as a real face does; with `changing`, on the workspace of real size (real_size_wbtest.mbt).
 fn screen_in(
   mode : String,
   win : (String, Double, Double, Int, String),
@@ -40,6 +40,7 @@ fn screen_in(
   font_scale? : Double = 1.0,
   moves_held? : Bool = true,
   motion_judged? : Bool = true,
+  latin? : (FixedArray[Double], FixedArray[Double])? = None,
 ) -> @ui.Tester {
   let (_, w, h, platform, width) = win
   let src : Ref[Source?] = Ref(None)
@@ -100,6 +101,11 @@ fn screen_in(
   }
   if font_scale != 1.0 {
     t.set_font_scale(font_scale)
+  }
+  // (`latin`: each ASCII letter as a real face measures it, not the fake host's half an em: squeeze_said_wbtest.mbt's
+  // figures)
+  if latin is Some((regular, bold)) {
+    t.latin_advances(regular, bold)
   }
   if width != "" {
     t.drive("system {\"size_class\":{\"width\":\"\{width}\",\"height\":\"medium\"}}\n") |> ignore
