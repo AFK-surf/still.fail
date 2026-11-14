@@ -1,6 +1,7 @@
 // The agents' memory kept level between the stations of a workspace (src/share/memory.ts, memory-merge.ts): stations
 // as directories of their own, a cloud that only lists who is in the workspace, the station transport a direct call.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -296,4 +297,15 @@ test("a station from before 0.1.9133, answering as it answers what it does not k
   } finally {
     await w.done();
   }
+});
+
+test("decide: two versions of one history whose common version is not kept here keep every line of both", () => {
+  const h = (t: string) => createHash("sha256").update(t).digest("hex");
+  const [base, mine, theirs] = ["- a\n", "- a\n- mine\n", "- theirs\n"];
+  const r = (t: string, by: string, at: number): Rec => ({ hash: h(t), at, by, prev: [h(base)], size: t.length, mode: 0o644 });
+  const contents = new Map([[h(mine), Buffer.from(mine)], [h(theirs), Buffer.from(theirs)]]);
+  const out = decide("MEMORY.md", r(mine, A, 2), r(theirs, B, 3), (x) => contents.get(x) ?? null, () => "");
+  assert.equal(out.kind, "merge");
+  const text = out.kind === "merge" ? out.content!.toString() : "";
+  for (const line of ["- a", "- mine", "- theirs"]) assert.ok(text.split("\n").includes(line), `${line} in ${text}`);
 });

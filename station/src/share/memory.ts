@@ -126,9 +126,13 @@ export function decide(path: string, mine: Rec | undefined, theirs: Rec, content
   let text: string | null = null;
   if (isText(wc) && isText(lc)) {
     if (base !== null && isText(base)) text = merge3(base.toString("utf8"), wc.toString("utf8"), lc.toString("utf8"));
-    else if (common === undefined && path === "MEMORY.md") {
+    else if (common !== undefined) {
+      // Of one history but the version both came from not here (neither station kept it, or it was not brought):
+      // their lines together, each once, so that nothing either had is lost.
+      text = unionLines(wc.toString("utf8"), lc.toString("utf8"), null, null);
+    } else if (path === "MEMORY.md") {
       text = unionLines(wc.toString("utf8"), lc.toString("utf8"), w.origin ? nameOf(w.by) : null, l.origin ? nameOf(l.by) : null);
-    } else if (common === undefined && alike(wc.toString("utf8"), lc.toString("utf8"))) {
+    } else if (alike(wc.toString("utf8"), lc.toString("utf8"))) {
       // One file each kept on apart (a skill copied once, edited on both since): their lines together, each once.
       text = unionLines(wc.toString("utf8"), lc.toString("utf8"), null, null);
     }
@@ -357,7 +361,74 @@ export class MemorySync {
       kept.files[path] = { hash: "", at: this.#tick(ws), by: me, prev: after(rec, []), size: 0, mode: rec.mode };
       changed = true;
     }
+    if (await this.#mend(ws)) changed = true;
     if (changed || state.fresh) this.#save(ws);
+    return changed;
+  }
+
+  /// What stations of 0.1.9133 to 0.1.9168 left of skills kept apart, mended as each looks, each station alike: two or
+  /// more kept apart from one skill with one body (a station had taken another's copy first and named it for itself,
+  /// `stillfail-MBA` beside `stillfail-Mini1`) come to one, the one named for the station whose record it is (else the
+  /// first by name), the others deleted as an agent would delete them; and a file only its owner reads that was moved
+  /// into one kept apart is put back beside the skill it came from as well (where what is outside the station reads it).
+  async #mend(ws: string): Promise<boolean> {
+    const kept = this.#kept.get(ws)!;
+    const body = (t: string) => t.replace(/^---\n[\s\S]*?\n---\n?/, "");
+    // Skills kept apart: `<base>-<tag>` whose front matter names it so and says `[<station>]` of that tag.
+    const aside: { skill: string; base: string; tag: string; author: string; body: string }[] = [];
+    for (const [path, rec] of Object.entries(kept.files)) {
+      const m = /^skills\/([^/]+)\/SKILL\.md$/.exec(path);
+      if (m === null || rec.hash === "") continue;
+      const content = await this.#content(rec.hash);
+      if (content === null) continue;
+      const text = content.toString("utf8");
+      const front = /^---\n([\s\S]*?)\n---/.exec(text)?.[1];
+      const said = front === undefined ? null : /^description: \[([^\]\n]{1,80})\] /m.exec(front);
+      if (front === undefined || said === null || !front.split("\n").includes(`name: ${m[1]}`)) continue;
+      const tag = stationTag(said[1]!);
+      if (!m[1]!.endsWith(`-${tag}`) || m[1]!.length === tag.length + 1) continue;
+      aside.push({ skill: m[1]!, base: m[1]!.slice(0, -tag.length - 1), tag, author: stationTag(this.#nameOf(ws, rec.by)), body: body(text) });
+    }
+    let changed = false;
+    const gone = new Set<string>();
+    const groups = new Map<string, typeof aside>();
+    for (const a of aside) groups.set(`${a.base}\0${a.body}`, [...(groups.get(`${a.base}\0${a.body}`) ?? []), a]);
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+      group.sort((x, y) => Number(y.tag === y.author) - Number(x.tag === x.author) || (x.skill < y.skill ? -1 : 1));
+      for (const extra of group.slice(1)) {
+        for (const [path, r] of Object.entries(kept.files)) {
+          if (!path.startsWith(`skills/${extra.skill}/`) || r.hash === "") continue;
+          if (await this.#write(ws, path, { hash: "", at: this.#tick(ws), by: this.#me, prev: after(r, []), size: 0, mode: r.mode }, null)) changed = true;
+        }
+        gone.add(extra.skill);
+        log.info("memory", "a skill kept apart twice made one", { workspace: ws, kept: group[0]!.skill, gone: extra.skill });
+      }
+    }
+    for (const a of aside) {
+      if (gone.has(a.skill)) continue;
+      const from = join(this.#home(ws), "skills", a.skill);
+      const to = join(this.#home(ws), "skills", a.base);
+      try {
+        if (!(await lstat(to)).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      let entries: Dirent[] = [];
+      try {
+        entries = await readdir(from, { withFileTypes: true });
+      } catch {}
+      for (const e of entries) {
+        if (!e.isFile()) continue;
+        const st = await lstat(join(from, e.name));
+        if (!own(st.mode)) continue;
+        try {
+          await lstat(join(to, e.name));
+          continue;
+        } catch {}
+        await copyFile(join(from, e.name), join(to, e.name)).then(() => chmod(join(to, e.name), st.mode & 0o777)).catch((err) => log.warn("memory", "a file of a skill kept apart not put back", { skill: a.skill, file: e.name, error: (err as Error).message }));
+      }
+    }
     return changed;
   }
 
@@ -547,7 +618,7 @@ export class MemorySync {
         for (const h of Array.isArray(request.hashes) ? request.hashes : []) {
           if (typeof h !== "string" || !HEX64.test(h) || bytes > BATCH_BYTES) continue;
           // Only what a record of this workspace names: nothing of another's.
-          if (!Object.values(this.#kept.get(ws)?.files ?? {}).some((r) => r.hash === h)) continue;
+          if (!Object.values(this.#kept.get(ws)?.files ?? {}).some((r) => r.hash === h || r.prev.includes(h))) continue;
           const c = await this.#content(h);
           if (c !== null) (out[h] = c.toString("base64")), (bytes += c.length);
         }
@@ -593,6 +664,12 @@ export class MemorySync {
         const mine = kept.files[path];
         if (rec.hash === "" || mine?.hash === rec.hash || mine?.prev.includes(rec.hash)) continue;
         if ((await this.#content(rec.hash)) === null) wanted.push(rec);
+        // Made beside this station's: the version both came from too, where this station keeps it not (what a merge
+        // reads to take only what each changed).
+        if (mine !== undefined && mine.hash !== "" && !rec.prev.includes(mine.hash)) {
+          const common = history(mine).find((h) => history(rec).includes(h));
+          if (common !== undefined && (await this.#content(common)) === null) wanted.push({ ...rec, hash: common });
+        }
       }
       const given = new Map<string, Buffer>();
       for (let i = 0; i < wanted.length;) {
