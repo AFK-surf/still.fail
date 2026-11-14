@@ -486,6 +486,9 @@ fn settings_search_children(row : SettingsRow, core : Core) -> Array[SettingsRow
       if (core.reporting)() is Some(_) {
         a.push(("telemetry", @sf.t("common.telemetry.title"), About))
       }
+      if @ui.platform() != 4 {
+        a.push(("dht", @sf.t("web-pages.about.dht.title"), About))
+      }
       a
     }
     _ => []

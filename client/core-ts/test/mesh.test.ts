@@ -470,6 +470,25 @@ sim("a_mesh_to_stations_is_given_what_the_mesh_said_itself", async (s) => {
   await close(s, station, mesh);
 });
 
+/// The DHT as its user says (`MeshEnv.dht`, the `dht` pref): none said looks there; said off, the main endpoint is bound
+/// looking on the LAN alone; told it changed (`relook`), bound anew as it now says.
+sim("the_main_endpoint_looks_in_the_dht_as_its_user_says_and_is_bound_anew_as_that_changes", async (s) => {
+  const binds: BindOptions[] = [];
+  const relay = s.relay("https://a.relay.test/");
+  let dht = false;
+  const mesh = await s.run(Mesh.make({ ...env(s), iroh: noting(s, binds), dht: () => dht }, [relay]));
+  assert.deepEqual(binds.map((o) => [o.lookup, o.dht]), [[true, false]]);
+  dht = true;
+  mesh.relook();
+  await s.until(() => binds.length === 2);
+  assert.deepEqual(binds.map((o) => [o.lookup, o.dht]), [[true, false], [true, undefined]]);
+  await s.run(mesh.close());
+  const plain: BindOptions[] = [];
+  const other = await s.run(Mesh.make({ ...env(s), iroh: noting(s, plain) }, [relay]));
+  assert.deepEqual(plain.map((o) => [o.lookup, o.dht]), [[true, undefined]]);
+  await s.run(other.close());
+});
+
 /// Another program's mesh, no station's: the protocol it names is dialled; a line of the control stream says its
 /// credential and what the program says in each (nothing: the credential alone); no peer is looked up; what its peers
 /// say of their addresses is kept under the mesh's own key. Its peer's answer to the hello is on the link whole,

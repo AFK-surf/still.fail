@@ -1120,6 +1120,9 @@ web-mobile.settings.securityOn
 web-mobile.settings.securityWaiting
 web-pages.about.legal
 web-pages.about.diagnostics
+web-pages.about.dht.note
+web-pages.about.dht.title
+web-pages.about.network
 web-pages.about.perf.note
 web-pages.about.perf.noteFolder
 web-pages.about.perf.open

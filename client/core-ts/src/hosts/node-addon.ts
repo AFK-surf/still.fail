@@ -31,7 +31,7 @@ type NEndpoint = {
   relayStatus(): { url: string; connected: boolean }[];
   close(): Promise<void>;
 };
-export type Addon = { bind(options: { secretKey: Buffer; alpns: Buffer[]; relayUrls: string[]; relayEntries?: { entry: string; relay: string }[]; discovery?: boolean; lookup?: boolean; relayOnly?: boolean }): Promise<NEndpoint> };
+export type Addon = { bind(options: { secretKey: Buffer; alpns: Buffer[]; relayUrls: string[]; relayEntries?: { entry: string; relay: string }[]; discovery?: boolean; lookup?: boolean; dht?: boolean; relayOnly?: boolean }): Promise<NEndpoint> };
 
 /// The addon at the first of `paths` that is there (undefined: a place there is none to say); null where none is.
 export function addonAt(paths: readonly (string | undefined)[]): Addon | null {
@@ -46,7 +46,7 @@ export function addonAt(paths: readonly (string | undefined)[]): Addon | null {
 export function addonIroh(addon: Addon): Iroh {
   return wrapIroh(
     (o: BindOptions) =>
-      addon.bind({ secretKey: Buffer.from(o.secretKey), alpns: (o.alpns ?? []).map((a) => Buffer.from(a)), relayUrls: o.relayUrls, ...(o.relayEntries ? { relayEntries: o.relayEntries } : {}), discovery: false, lookup: o.lookup, relayOnly: o.relayOnly }) as Promise<BoundEndpoint>,
+      addon.bind({ secretKey: Buffer.from(o.secretKey), alpns: (o.alpns ?? []).map((a) => Buffer.from(a)), relayUrls: o.relayUrls, ...(o.relayEntries ? { relayEntries: o.relayEntries } : {}), discovery: false, lookup: o.lookup, ...(o.dht === false ? { dht: false } : {}), relayOnly: o.relayOnly }) as Promise<BoundEndpoint>,
     (bytes) => Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
   );
 }

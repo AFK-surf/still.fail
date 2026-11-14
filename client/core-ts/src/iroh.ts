@@ -92,6 +92,8 @@ export type BindOptions = {
   relayEntries?: { entry: string; relay: string }[];
   /// Look stations up on the LAN and in the DHT (a client's: not announced itself).
   lookup: boolean;
+  /// With `lookup`, in the DHT too (true when not said): false looks on the LAN alone.
+  dht?: boolean;
   /// Relays alone, no IP transports (what measures a relay's way must not go direct).
   relayOnly: boolean;
   /// The ALPNs it takes connections on (`accept`): none, it takes none.

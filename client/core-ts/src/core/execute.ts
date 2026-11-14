@@ -197,6 +197,8 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
             // (what is brought after everything else goes by these two, fill.ts `bounds`: looked at again only for
             // them, not for every pref set: the workspace switched to waited on it, the chats' list behind it)
             if (isObject(call.patch) && ("fillOff" in call.patch || "fillMax" in call.patch)) inner.fill?.poke();
+            // (the DHT turned on or off: the mesh's endpoint bound anew as it now says, mesh-wire.ts `meshEnv`)
+            if (isObject(call.patch) && "dht" in call.patch) inner.meshNow()?.relook();
             return null;
           },
           catch: asCoreError,

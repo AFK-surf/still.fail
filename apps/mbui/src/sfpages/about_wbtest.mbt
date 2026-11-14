@@ -287,7 +287,8 @@ test "关于's 本机 Station where the core has none of its software up: its ve
   // (none here: nothing of it)
   let t = setting_tester(About, 1280.0, host=fn(h) { h.set_app_said("local_station", "") })
   assert_true(t.find("本机 Station") is None)
-  assert_true(t.find("Station") is None)
+  // (its version line neither; 网络's switch, which finds stations through the DHT, says the word)
+  assert_true(t.find("Station 0.") is None)
   // (one added while the page is open: its block once its host is read again, a few seconds on, as 本机 Station's page
   // reads it)
   t.set_app_said("local_station", about_local)

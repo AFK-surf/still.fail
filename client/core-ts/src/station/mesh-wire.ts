@@ -14,6 +14,7 @@ import type { Iroh } from "../iroh.ts";
 import { claimBy } from "../lock.ts";
 import { type CredentialSource, type Link, Mesh, type MeshEnv, type Presented, type Reply, relayHost } from "../mesh.ts";
 import { PAIR_ALPN } from "../pair.ts";
+import * as prefs from "../prefs.ts";
 import { RELAY, type Place, type Status } from "../status.ts";
 import { route } from "../route.ts";
 import { utf8 } from "../util.ts";
@@ -342,7 +343,7 @@ function takes(inner: Inner): Pick<MeshEnv, "takes" | "incoming"> {
 /// an app's endpoint takes, and what a station refuses a link for besides its credential (a workspace's lock: without
 /// it a device waiting to be confirmed is told its credential was refused, and asks the cloud for another at each try).
 export function meshEnv(inner: Inner, iroh: Iroh): MeshEnv {
-  return { host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes, ...STATION_MESH, ...takes(inner), refusal: refusedForLock };
+  return { host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes, ...STATION_MESH, dht: () => prefs.dhtOn(inner.data), ...takes(inner), refusal: refusedForLock };
 }
 
 /// The core's mesh: brought up on first use with the relays any account's `/v1/me` names, the credentials from

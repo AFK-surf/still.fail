@@ -35,7 +35,7 @@
 //   reset {} — the connections kept for requests are taken for gone
 //   zstd.open {} → {id}; zstd.push {id} + bytes → {whole} + what they make; zstd.close {id} — a station's reply taken
 //     apart in the shell (libzstd), not in JS (Host.unzstd)
-//   iroh.bind {relayUrls, lookup, relayOnly, alpns: [hex]} + key → {id}; iroh.connect {id, addr, additional: [hex]} +
+//   iroh.bind {relayUrls, lookup, dht?, relayOnly, alpns: [hex]} + key → {id}; iroh.connect {id, addr, additional: [hex]} +
 //     alpn → {id}; iroh.accept {id} → {id, alpn: hex} (the next connection coming, its handshake done; {end} once the
 //     endpoint is gone); iroh.networkChange {id}; iroh.close {id}
 //   conn.openBi / conn.acceptBi / conn.openUni {id} → {id} (acceptBi: {end} once gone); conn.closed {id} → reason;
@@ -522,7 +522,7 @@ export function bridgeIroh(bridge: Bridge): Iroh {
     close: () => Effect.ignore(bridge.call("iroh.close", { id }), { log: "Unhandled", message: "endpoint closed" }),
   });
   return {
-    bind: (o) => Effect.map(bridge.call("iroh.bind", { relayUrls: o.relayUrls, ...(o.relayEntries ? { relayEntries: o.relayEntries } : {}), lookup: o.lookup, relayOnly: o.relayOnly, alpns: (o.alpns ?? []).map(hex) }, o.secretKey), (a) => endpoint(handle(a))),
+    bind: (o) => Effect.map(bridge.call("iroh.bind", { relayUrls: o.relayUrls, ...(o.relayEntries ? { relayEntries: o.relayEntries } : {}), lookup: o.lookup, ...(o.dht === false ? { dht: false } : {}), relayOnly: o.relayOnly, alpns: (o.alpns ?? []).map(hex) }, o.secretKey), (a) => endpoint(handle(a))),
   };
 }
 
