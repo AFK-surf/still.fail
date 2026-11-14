@@ -11,7 +11,8 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   a call that answers later as a fiber's wait, one that answers at once, a clock, random bytes. `shell.mbt` is the
   surface, the same over two shells, one a target (`moon.pkg`'s `targets`): `shell_native.mbt` with `shell.c`
   natively, `shell_js.mbt` in a page, which answers the same ops by their names with the same JSON from
-  `client/iroh-wasm` and what a browser has.
+  `client/iroh-wasm` and what a browser has. And one that is no target's, a test's (`Shell::stood_in`): its calls are
+  given to the test, which answers them.
 - `src/wire`: what goes on a stream and how it is read, with no stream: lines, a request's head and a reply's, an
   event stream's text. Pure, with its tests.
 - `src/mesh`: the device side of the mesh on those two: the endpoint and its key, a link to a peer (hello, pings,
@@ -50,16 +51,24 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   what that reader gives for the script's streams.
 - In CI and a full check only, for a change here or to what it is built with of mbui (`effect`, and `halt`, which
   `effect` imports: `mb-base.ts` holds that list to `effect`'s `moon.pkg`): every package under `src/` type-checked
-  for native and for js, and every package's tests run on both. Today only `src/wire` has tests.
-- No Rust shell is linked there. A native test that reaches the shell's C (`shell.c`, through `src/shell` or
-  `src/mesh`) fails to link, naming `sf_shell_start`: it is not skipped. Until the check has a shell to link, such a
-  test is js's alone (`moon.pkg`'s `targets`) or stays out of what calls the shell; one that only reads constants
-  or pure functions of `src/mesh` runs on both.
-- So nothing here tests the mesh or either shell: no test in this repository opens a link, `shell.c` is compiled by
-  no check, and the JavaScript in `shell_js.mbt` (`extern "js"`, written out in MoonBit) is read by no compiler at
-  all. What holds them is outside: the messenger's end-to-end suites, a real server and relay, a page in a browser.
-  A mesh's test on a simulated network, as the TypeScript one has, is not written yet. After a change to
-  `src/mesh` or `src/shell`, say what ran it; a green check here says only that it still types.
+  for native and for js, and every package's tests run on both: `src/wire`'s, `src/mesh`'s, and on js `src/shell`'s.
+- No Rust shell is linked there. A native test that reaches the shell's C (`shell.c`: through `Shell::start`, or
+  the package's `random` and `now`) fails to link, naming `sf_shell_start`: it is not skipped. So a test of what
+  stands on the shell is given a stood-in one (`Shell::stood_in`), which reaches none of it and runs on both
+  targets: the mesh's are (`src/mesh/stood_wbtest.mbt` is the peer they share: it answers what the mesh asks of iroh
+  by the shells' names and JSON, and holds back a dial, a read and a connection's end for the test to answer), on a
+  runtime of the test's own clock. What depends on which of two fibers comes first in one turn is set up without
+  running and then run at once (its `start`, `answered`, `run`): a test that runs to rest after every step never
+  sees a fiber cut before its first. A test of the page's shell itself is js's alone (`moon.pkg`'s `targets`:
+  `shell_js_wbtest.mbt`, the page's timers in its hands).
+- That is all that is tested here of the mesh and the shells: what the mesh asks of a shell and does with its
+  answers, and how the page's shell turns its runtime. No test in this repository opens a link to a peer; `shell.c`
+  is compiled by the native step (moon makes a package's stub with its tests, into an archive nothing there calls)
+  and run by none; and the rest of the JavaScript in `shell_js.mbt` (`extern "js"`, written out in MoonBit:
+  what it does with iroh and its handles) is read by no compiler and run by no test here. What holds those is
+  outside: the messenger's end-to-end suites, a real server and relay, a page in a browser (which reads the page's
+  handles from outside). Two meshes on a simulated network, as the TypeScript one has, are not written yet. After a
+  change to `src/shell`, or to what `src/mesh` asks of a shell, say what ran it there.
 - `src/mesh/words_made.mbt` is made, and committed: `node scripts/mb-base-words.ts` writes it from the device
   base's own words (`client/core-ts/src/lang.zh.json`, `lang.en.json`: the keys `core-logic.mesh.*`), so a word is
   changed there, never here.
@@ -71,34 +80,36 @@ of its workspace (`moon.work`); `effect` stays in mbui.
 
 ## What a program on it gets with it
 
-- Natively, starting the shell sets the process's umask to 077 for good (`shell.c` `bsh_start`): every file the
-  program makes after it is its user's alone, its own too. It is there because the Rust shell writes a value it
-  keeps (the device's key) as the umask leaves it (`client/shell/src/lib.rs`, `storage.set`); the mend is the
-  shell's, and this goes then.
+- Natively, what the shell keeps (the device's key) is a file of its user's alone whatever the process's umask: the
+  Rust shell makes it so as it writes one (`client/shell/src/lib.rs`, `create_private`), for every program linked
+  to it. The umask is the program's and is not touched; the directory the shell is started with is its user's
+  alone where it was not there (`shell.c` `bsh_start`). A value kept before that stays as it was made until it is
+  written again: nothing goes through what is there. And it is the shell's doing alone: a program linked to a
+  shell from before it keeps its key as its umask has it, and nothing at run time says which shell is linked (its
+  build's key does: `scripts/native.ts`).
+- A peer's bytes are kept up to a bound, the caller's to say: a reply read whole (`Reply::rest`, `max_body`) and
+  one block of an event stream (`Sse::new`, `max_event`), 16 MiB each unless said, past which each fails
+  (`too_long`, `TooLong`) and is let go of. What is longer is read as it comes (`Reply::take`).
 - `shell.c` is POSIX's (pthread, `arc4random_buf`): no MSVC, and on Linux glibc 2.36 or later. It has been compiled
   and run on macOS on arm64 alone.
 
-## Known, to be mended next
+## Known, and left
 
-Moved as they were written (2026-11-14), with these in them; each is mended here with the messenger's suites run on
-it, and its line goes then. Read from the code, none of them run:
+What was known as the library was moved here (2026-11-14) is mended, each with a test that failed before; what is
+left is another part's:
 
-- A fiber waiting in `Mesh::link` (`mesh.mbt:185,231`), `Link::admitted` (`link.mbt:179`) or `Link::closed`
-  (`link.mbt:322`) as another calls `Mesh::close` can wait for good: what it waits on is completed only by fibers
-  of the mesh's scope (`mesh.mbt:211-229,349-371`), which the close interrupts (`mesh.mbt:483`).
-- In a page a stream's handle goes only once it is reset, or read to its end and finished
-  (`shell_js.mbt:107,116,120`): a link's control stream (`mesh.mbt:305-307`; `Link::close`, `link.mbt:327-329`,
-  closes the connection alone) and a reply's stream after a read of it failed (`link.mbt:229-234`) stay for the
-  page's life, with one entry a connection that ended and one an endpoint closed (`shell_js.mbt:82,92`). Natively
-  the Rust shell lets a connection's streams go as it closes and keeps one entry a connection.
-- A peer's bytes are kept without a bound: an event stream's text with no blank line (`src/wire/sse.mbt`,
-  `Sse::append`, as the TypeScript reader; past 1 GiB held its doubling, `room * 2`, wraps, where that reader's
-  does not), and `Reply::rest`, which also copies all it has for each piece that comes (`link.mbt:244-250`).
-- An event's `data:` lines are joined by MoonBit's `join` (`src/wire/sse.mbt`, `event_of`), which on js makes the
-  string again at each line: in an engine that copies it each time, an event of very many lines costs their number
-  squared (Hermes, run in the review of #6100, 2026-11-14; no program runs this reader there).
-- In a page a timer of the runtime's more than 2^31-1 ms away (24.8 days) is given to `setTimeout` as it is, which
-  fires at once, and again (`shell_js.mbt:176-179,230-235`).
+- Natively the Rust shell keeps one entry for every connection that ended and every endpoint closed, for its
+  process's life (`client/shell/src/lib.rs`: `Handle::Gone`, `Handle::Unbound`), and has no op that lets one go. The
+  mesh says when it is done with a connection (`conn.close` with `forget`, `Mesh::open`), which a page's shell goes
+  by; the Rust shell reads no such field. Letting them go there is that shell's to do, for the device base in
+  TypeScript too, which holds them the same.
+- On js under Hermes, MoonBit's own `Array` costs the square of its length as it grows: a full one is copied into a
+  `new Array(n)` from its last place down, which that engine takes badly (40,000 pushes 0.6 s, 80,000 2.7 s, where
+  the engine's own `push` takes 3 and 6 ms; the hermes of React Native 0.81.4, 2026-11-14), and its `StringBuilder`
+  and `join` make their string again at each piece. The reader of an event stream keeps one event's lines out of
+  both (`sse_js.mbt`); what `Sse::feed` gives is still an `Array`, so a chunk that ends tens of thousands of events
+  at once pays it there, as does anything else here that grows one. MoonBit's core's to mend; no program runs
+  this library under Hermes.
 
 ## Working here
 
@@ -108,8 +119,10 @@ it, and its line goes then. Read from the code, none of them run:
   as mbui's are, and are native's (on js `shell` starts with the address of iroh and has no `pump` or `run`): a check
   by package of a changed surface writes its own again, to commit; the check passes `--no-mbti` and writes none.
 - `wire` and `mesh` are one source for both targets, but for one thing: what an event stream's reader does to many
-  bytes at once is a file a target (`src/wire/moon.pkg`'s `targets`: `sse_js.mbt`, `sse_native.mbt`; `sse.mbt`'s
-  head says why), each small enough to read against the other, and the package's tests run both. Nothing else in
+  bytes at once, and to an event's many lines, is a file a target (`src/wire/moon.pkg`'s `targets`: `sse_js.mbt`,
+  `sse_native.mbt`; `sse.mbt`'s head says why), each small enough to read against the other, and the package's
+  tests run both. On js a timing in Node says nothing of it: what is slow there is slow under Hermes, and was
+  found by running the built reader under its command line. Nothing else in
   them asks which it is built for: what differs is under `shell.mbt`'s surface, and an op the mesh comes to ask is
   answered by both shells, under the Rust shell's name and with its JSON.
 - A fiber's wait on the shell given up is not the shell's call given up: of its calls only a dial is
@@ -117,7 +130,20 @@ it, and its line goes then. Read from the code, none of them run:
   takes is lost to the next read. So a stream is never read again after a read of it was interrupted: it is reset
   (`Reply::cancel`, `Link::ask`); and what must not be interrupted half way (an exchange on the control stream) is a
   fiber of the mesh's own scope that the others wait for with a `Deferred` (`Mesh::ping`).
-- `catch` does not catch a fiber's interruption: what must be undone then is in a `defer`.
+- `catch` does not catch a fiber's interruption: what must be undone then is in a `defer`. And a fiber interrupted
+  before its first step runs nothing, no `defer` either. So what others wait for from a fiber of the mesh's scope
+  (an opening's end, a link's answer, its end) is not left to that fiber as the mesh closes: `Mesh::close` cuts them
+  all and then says it itself, of every opening in `links` and every link in `live`, or whoever waits on one cut
+  before it began waits for good. That holds only while an opening not ended is in `links`: one is taken out, or
+  put over, only once it ended, and what waited on anything before it takes one out looks again whether it is still
+  the one there (`Mesh::steer`, after its ping: the peer may have been asked for again meanwhile). A `Deferred` a
+  new fiber of the scope is to complete for others is kept where the close finds it. And the close is whole once
+  begun: what it waits on at the shell is where an interruption of its caller waits too
+  (`@effect.uninterruptible`), after the telling.
+- What the mesh takes at a shell it lets go of there, for a page lives long: a stream by resetting it or reading it
+  to its end (one whose read failed is reset: `Reply::take`), a connection by closing it with `forget`, once its end
+  is kept (`Link::ended` answers from that, and nothing is asked of it after) or at once where an opening gave it
+  up, an endpoint by closing it. A new op that takes a handle says when it goes, in both shells.
 - The times and the bytes are the TypeScript mesh's (`mesh.mbt`'s constants; `src/wire/wire_test.mbt`, line for
   line), since the peer is the same door: a change to one is a change to what that peer is sent.
 - A compiler warning is an error or off (`moon.mod`'s `warnings`, mbui's line).

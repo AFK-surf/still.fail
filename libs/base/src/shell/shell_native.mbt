@@ -37,12 +37,12 @@ fn cstr(s : String) -> Bytes {
 
 ///|
 /// Starts the shell for the fibers of `rt`, keeping what it keeps (`storage.*`) in the directory `dir`, made if it is
-/// not there, its user's alone.
+/// not there, its user's alone, as each file kept in it is. The process's umask is left as it is.
 pub fn Shell::start(rt : @effect.Runtime, dir : String) -> Shell raise ShellError {
   if start_ffi(cstr(dir)) == 0 {
     raise ShellError("the shell did not start in \{dir}")
   }
-  { rt, waiting: Map([]), next: 0L }
+  Shell::of_target(rt)
 }
 
 ///|

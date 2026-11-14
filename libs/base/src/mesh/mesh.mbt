@@ -109,8 +109,11 @@ pub struct Mesh {
   priv id : String
   /// Its fibers: the dials, each link's answer, pings and renewal.
   priv scope : @effect.Scope
-  /// The links, by peer.
+  /// The links, by peer. An opening not yet ended is always here, which `close` goes by: one is taken out or put
+  /// over only once it ended, and by what waited meanwhile only if it is still the one here (`Mesh::steer`).
   priv links : Map[String, Opening]
+  /// The links handed out whose answer or whose end is not said yet: what `close` says them of.
+  priv live : Array[Link]
   priv mut closed : Bool
 }
 
@@ -129,7 +132,7 @@ pub async fn Mesh::make(shell : @shell.Shell, store : Store, options : Options) 
   let secret = match kept {
     Some(secret) if secret.length() == 32 => secret
     _ => {
-      let secret = @shell.random(32)
+      let secret = shell.random(32)
       (store.set)(device_key, secret) catch {
         e => raise MeshError(code="host", message=text_of(e), cause="")
       }
@@ -149,7 +152,7 @@ pub async fn Mesh::make(shell : @shell.Shell, store : Store, options : Options) 
     String(id) => id
     _ => raise failed("bind_failed")
   }
-  { shell, options, endpoint, id, scope: shell.rt.scope(), links: Map([]), closed: false }
+  { shell, options, endpoint, id, scope: shell.rt.scope(), links: Map([]), live: [], closed: false }
 }
 
 ///|
@@ -208,6 +211,7 @@ pub async fn Mesh::link(self : Mesh, peer : String, credentials : async (String,
   let opening : Opening = { done: @effect.Deferred::new(), result: None }
   self.links[peer] = opening
   ignore(
+    // (cut as the mesh closes, it says nothing: `Mesh::close` tells those who wait for this opening)
     self.scope.fork(name="mesh open", () => {
       let opened = attempt(() => self.open(peer, credentials, fresh))
       match opened {
@@ -276,7 +280,7 @@ async fn Mesh::open(self : Mesh, peer : String, credentials : async (String, Boo
       match made {
         Did({ json: { "id": conn, .. }, .. }) =>
           if abandoned.val {
-            shell.tell("conn.close", { "id": conn, "code": 0, "reason": "opening ended" })
+            shell.tell("conn.close", { "id": conn, "code": 0, "reason": "opening ended", "forget": true })
           } else {
             connection.val = Some(conn)
             ignore(dialled.succeed(conn))
@@ -293,8 +297,9 @@ async fn Mesh::open(self : Mesh, peer : String, credentials : async (String, Boo
       if call.val is Some(id) {
         shell.give_up(id)
       }
+      // (closed to be forgotten: no link came of it, and nothing waits for its end to let go of it then)
       if connection.val is Some(conn) {
-        shell.tell("conn.close", { "id": conn, "code": 0, "reason": "opening ended" })
+        shell.tell("conn.close", { "id": conn, "code": 0, "reason": "opening ended", "forget": true })
       }
     }
   }
@@ -344,6 +349,9 @@ async fn Mesh::open(self : Mesh, peer : String, credentials : async (String, Boo
     },
   )
   opened.val = true
+  // Its answer and its end are said by the two fibers below, or, the mesh closed before they did, by `Mesh::close`:
+  // the link is kept for that from here, before either is forked, until both are said.
+  self.live.push(link)
   // Its end, waited for once: why it ended.
   ignore(
     self.scope.fork(name="mesh closed", () => {
@@ -353,6 +361,11 @@ async fn Mesh::open(self : Mesh, peer : String, credentials : async (String, Boo
         Fell(e) => { kind: "other", reason: text_of(e) }
       }
       ignore(link.gone.succeed(closed))
+      // Its end is kept now, and the link answers from that (`Link::ended`): nothing is asked of the connection at
+      // the shell again. Closed once more to be forgotten: what a page's shell lets go of it by; the Rust shell reads
+      // no `forget`, does nothing to one that ended, and keeps what it keeps of it (its end, for the asking).
+      shell.tell("conn.close", { "id": link.conn, "code": 0, "reason": "closed", "forget": true })
+      self.said(link)
     }),
   )
   // The peer's answer to the first credential, while requests already go: a refusal closes the link.
@@ -368,10 +381,19 @@ async fn Mesh::open(self : Mesh, peer : String, credentials : async (String, Boo
         }
       }
       ignore(link.answered.succeed(()))
+      self.said(link)
     }),
   )
   ignore(self.scope.fork(name="mesh renew", () => self.renew(link)))
   link
+}
+
+///|
+/// A link whose answer and whose end are both said is no more `close`'s to say them of.
+fn Mesh::said(self : Mesh, link : Link) -> Unit {
+  if link.answered.is_done() && link.gone.is_done() {
+    self.live.retain(one => !physical_equal(one, link))
+  }
 }
 
 ///|
@@ -417,7 +439,9 @@ fn Mesh::adopt(self : Mesh, peer : String, opening : Opening, link : Link) -> Un
 
 ///|
 /// The link's pings, every `tick_ms` while it is its peer's and usable: how a peer gone from under it is found. One
-/// that missed `dead_pings` in a row is let go and its peer dialled anew.
+/// that missed `dead_pings` in a row is let go and its peer dialled anew, if it is its peer's still: a ping is
+/// waited for, and the link may have ended at the shell meanwhile and its peer been asked for again, whose opening
+/// is then the one in `links`. That one is the peer's, not this fiber's to take out, and no dial is made beside it.
 async fn Mesh::steer(self : Mesh, peer : String, opening : Opening, link : Link) -> Unit {
   while true {
     @effect.sleep(tick_ms, later=true)
@@ -426,9 +450,11 @@ async fn Mesh::steer(self : Mesh, peer : String, opening : Opening, link : Link)
     }
     self.ping(link)
     if link.missed >= dead_pings {
-      self.links.remove(peer)
       link.close()
-      ignore(self.scope.fork(name="mesh again", () => ignore(attempt(() => self.link(peer, link.credentials)))))
+      if self.links.get(peer) is Some(current) && physical_equal(current, opening) {
+        self.links.remove(peer)
+        ignore(self.scope.fork(name="mesh again", () => ignore(attempt(() => self.link(peer, link.credentials)))))
+      }
       return
     }
   }
@@ -471,17 +497,49 @@ async fn Mesh::ping(self : Mesh, link : Link) -> Unit {
 }
 
 ///|
-/// Closes the links, then the endpoint: nothing is asked of it after.
+/// Closes the links, then the endpoint: nothing is asked of it after. Whoever waits on it then is told: a `link`
+/// being opened fails as closed, as does `Link::admitted` of one the peer had not answered, and `Link::closed` gives
+/// that it was closed here.
+///
+/// It says so itself, once its fibers are gone. They would have said (an opening's fiber its end, a link's two its
+/// answer and its end), but the close cuts them, and a fiber cut before its first step runs nothing at all, no
+/// `defer` either: one forked in the turn the mesh is closed, as a link is asked for or handed out.
+///
+/// And it is done whole once begun, its caller asked to stop meanwhile too. The fibers' end and the telling come
+/// first, with nothing waited for but those ends, which an interruption does not cut short (`Scope::close`); then
+/// the shell is asked, each connection's close before the endpoint's so that a peer is given the reason, where an
+/// interruption waits as well (`@effect.uninterruptible`): its caller stops as the close ends, not half way with a
+/// mesh that says it is closed, its fibers going and its endpoint open.
 pub async fn Mesh::close(self : Mesh) -> Unit {
   self.closed = true
-  for _, opening in self.links {
-    if opening.result is Some(Open(link)) {
-      ignore(attempt(() => self.shell.call("conn.close", { "id": link.conn, "code": 0, "reason": "closed" })))
-    }
-  }
+  // (the openings as they are now: none is made from here)
+  let openings = self.links.values().to_array()
   self.links.clear()
   self.scope.close()
-  ignore(attempt(() => self.shell.call("iroh.close", { "id": self.endpoint })))
+  for opening in openings {
+    if opening.result is None {
+      let e = failed("closed")
+      opening.result = Some(Failed(e, false))
+      ignore(opening.done.fail(e))
+    }
+  }
+  for link in self.live {
+    if !link.answered.is_done() {
+      link.renewal_failed = true
+      link.refused = Some(failed("closed"))
+      ignore(link.answered.succeed(()))
+    }
+    ignore(link.gone.succeed({ kind: "local", reason: "closed" }))
+  }
+  self.live.clear()
+  @effect.uninterruptible(() => {
+    for opening in openings {
+      if opening.result is Some(Open(link)) {
+        ignore(attempt(() => self.shell.call("conn.close", { "id": link.conn, "code": 0, "reason": "closed" })))
+      }
+    }
+    ignore(attempt(() => self.shell.call("iroh.close", { "id": self.endpoint })))
+  })
 }
 
 ///|

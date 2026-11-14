@@ -723,6 +723,31 @@ fn storage_path(dir: &std::path::Path, key: &str) -> PathBuf {
     dir.join(name)
 }
 
+/// A file to write a kept value in (`storage.set`: the partial one, renamed over the value once written). On Unix
+/// its user's alone whatever the process's umask (0600, less what the umask takes of that): a value kept is a
+/// device's key among others, and was readable by whomever the umask let (0644 under most), unless the program had
+/// set the whole process's umask for it. What a crash left there is taken away first and the file made only if none
+/// is there, so its mode is the one it is made with (none is set after: a filesystem may refuse that, where writing
+/// did not fail before) and nothing is written through a link left in its place. One shell writes its values one
+/// at a time (the disk thread). Two processes writing one key at once, which no program does, each write a file of
+/// their own, and one of them fails (here, or at its rename), where their bytes went into one file before.
+fn create_private(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    #[cfg(unix)]
+    {
+        match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+            _ => {}
+        }
+        let mut options = std::fs::OpenOptions::new();
+        std::os::unix::fs::OpenOptionsExt::mode(options.write(true).create_new(true), 0o600);
+        options.open(path)
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::File::create(path)
+    }
+}
+
 fn headers_of(response: &reqwest::Response) -> Value {
     Value::Array(response.headers().iter().map(|(k, v)| json!([k.as_str(), String::from_utf8_lossy(v.as_bytes())])).collect())
 }
@@ -1212,7 +1237,7 @@ impl Inner {
                     // Synced through the handle it was written with: Windows syncs only a handle that may write (one
                     // opened again to read, as this did, failed every storage.set there).
                     let partial = path.with_extension("partial");
-                    let mut file = std::fs::File::create(&partial).map_err(err)?;
+                    let mut file = create_private(&partial).map_err(err)?;
                     std::io::Write::write_all(&mut file, &value).and_then(|()| file.sync_all()).map_err(err)?;
                     drop(file);
                     std::fs::rename(&partial, &path).map_err(err)?;
@@ -2995,6 +3020,33 @@ mod tests {
         shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![1, 2, 3]));
         assert_eq!(answer(1).1, "");
         assert!(dir.path().join("device").exists());
+        // A value kept is its user's alone, whatever the process's umask (0644 by the umask of most, before): made
+        // so, and one written over a file from before, or over a partial one a crash left, is made so too.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = |name: &str| std::fs::metadata(dir.path().join(name)).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode("device"), 0o600);
+            std::fs::set_permissions(dir.path().join("device"), std::fs::Permissions::from_mode(0o644)).unwrap();
+            std::fs::write(dir.path().join("device.partial"), b"left").unwrap();
+            std::fs::set_permissions(dir.path().join("device.partial"), std::fs::Permissions::from_mode(0o644)).unwrap();
+            shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![1, 2, 3]));
+            assert_eq!(answer(1).1, "");
+            assert_eq!(mode("device"), 0o600);
+            assert!(!dir.path().join("device.partial").exists());
+            // A partial one left that is a link to somewhere is taken away, never written through: what it led to
+            // is as it was, and the value is a file of its own.
+            std::fs::write(dir.path().join("elsewhere"), b"another's").unwrap();
+            std::os::unix::fs::symlink(dir.path().join("elsewhere"), dir.path().join("device.partial")).unwrap();
+            shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![4, 5]));
+            assert_eq!(answer(1).1, "");
+            assert_eq!(std::fs::read(dir.path().join("elsewhere")).unwrap(), b"another's");
+            assert_eq!(std::fs::read(dir.path().join("device")).unwrap(), vec![4, 5]);
+            assert!(std::fs::symlink_metadata(dir.path().join("device")).unwrap().file_type().is_file());
+            assert_eq!(mode("device"), 0o600);
+            shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![1, 2, 3]));
+            assert_eq!(answer(1).1, "");
+        }
         shell.call(2, "storage.get".into(), br#"{"key":"device"}"#, None);
         assert_eq!(answer(2).2, Some(vec![1, 2, 3]));
         shell.call(3, "storage.get".into(), br#"{"key":"a/b"}"#, None);

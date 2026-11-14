@@ -10,9 +10,14 @@ pub fn head_line(String, String, Array[(String, String)], more? : Map[String, @j
 
 pub fn hello_line(String, says? : Map[String, @json.Json], also? : Map[String, @json.Json], traceparent? : String) -> String
 
+pub let max_event : Int32
+
 pub fn reply_head(String) -> Head
 
 // Errors
+pub(all) suberror TooLong {
+  TooLong(most~ : Int32)
+}
 
 // Types and methods
 pub struct Carry {
@@ -40,8 +45,8 @@ pub(all) enum Head {
 pub struct Sse {
   // private fields
 }
-pub fn Sse::feed(Self, Bytes) -> Array[Event]
-pub fn Sse::new() -> Self
+pub fn Sse::feed(Self, Bytes) -> Array[Event] raise TooLong
+pub fn Sse::new(most? : Int32) -> Self
 
 // Type aliases
 

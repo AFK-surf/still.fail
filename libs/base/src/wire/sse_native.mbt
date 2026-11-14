@@ -1,5 +1,5 @@
-// What the reader of an event stream (sse.mbt) does to many bytes at once, where MoonBit is compiled (native): its
-// own loops and its copy.
+// What the reader of an event stream (sse.mbt) does to many bytes at once, and to many lines, where MoonBit is
+// compiled (native): its own loops, its copy, its array and its join.
 
 ///|
 /// `chunk` put in `to` from `at` on, without its CRs: where it then ends.
@@ -29,4 +29,32 @@ fn newline(held : FixedArray[Byte], from : Int, end : Int) -> Int {
     }
   }
   -1
+}
+
+///|
+/// An event's `data:` lines as they are read.
+priv struct Lines {
+  kept : Array[String]
+}
+
+///|
+fn lines() -> Lines {
+  { kept: [] }
+}
+
+///|
+fn line_kept(lines : Lines, line : String) -> Unit {
+  lines.kept.push(line)
+}
+
+///|
+/// How many are kept.
+fn lines_kept(lines : Lines) -> Int {
+  lines.kept.length()
+}
+
+///|
+/// Them as one text, a newline between two.
+fn lines_joined(lines : Lines) -> String {
+  lines.kept.join("\n")
 }

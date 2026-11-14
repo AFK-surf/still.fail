@@ -75,7 +75,7 @@ test "events come as their blocks end, whatever the chunks" {
 
 ///|
 /// The events of `stream` fed in the chunks `cuts` (byte offsets, ascending) cut it into.
-fn fed(stream : Bytes, cuts : Array[Int]) -> Array[@wire.Event] {
+fn fed(stream : Bytes, cuts : Array[Int]) -> Array[@wire.Event] raise {
   let sse = @wire.Sse::new()
   let out : Array[@wire.Event] = []
   let mut at = 0
@@ -193,4 +193,117 @@ test "a CR is dropped wherever it is, and a field no line begins with is no fiel
     sse.feed(b"da\rta: a\rb\r\n\r\nretry: 3\ndata\n data: x\nevent\n\n\n\ndata:\n\n") ==
     [{ name: "message", data: "ab", id: None }, { name: "message", data: "", id: None }],
   )
+}
+
+///|
+/// The events a reader keeping `most` bytes of a block gives for `stream` fed in the chunks `cuts` cut it into, and
+/// whether it then failed as a block too long: asked once more with nothing at the end, since a feed that gave
+/// events fails only at the next.
+fn bounded(stream : Bytes, cuts : Array[Int], most : Int) -> (Array[@wire.Event], Bool) {
+  let sse = @wire.Sse::new(most~)
+  let out : Array[@wire.Event] = []
+  let mut at = 0
+  for cut in [..cuts, stream.length(), stream.length()] {
+    out.append(sse.feed(stream[at:cut].to_owned())) catch {
+      @wire.TooLong(most=said) => {
+        guard said == most else { return (out, false) }
+        return (out, true)
+      }
+    }
+    at = cut
+  }
+  (out, false)
+}
+
+///|
+/// The bound `sse` fails by as it is fed `chunk`; None where it reads it.
+fn refused(sse : @wire.Sse, chunk : Bytes) -> Int? {
+  ignore(sse.feed(chunk)) catch {
+    @wire.TooLong(most~) => return Some(most)
+  }
+  None
+}
+
+///|
+/// `stream` cut every way the made cases are: whole, a byte at a time, and in two at each place.
+fn cuttings(stream : Bytes) -> Array[Array[Int]] {
+  let ways : Array[Array[Int]] = [[], Array::makei(stream.length() - 1, i => i + 1)]
+  for at in 1..<stream.length() {
+    ways.push([at])
+  }
+  ways
+}
+
+///|
+test "a block is kept up to its reader's bound, and one a byte longer ends the reading, whatever the chunks" {
+  let a : @wire.Event = { name: "message", data: "a", id: None }
+  let b : @wire.Event = { name: "message", data: "b", id: None }
+  // "data: xxx" is 9 bytes: kept, with the events round it. Its CRs are not counted.
+  for text in ["data: a\n\ndata: xxx\n\ndata: b\n\n", "data: a\r\n\r\ndata: xxx\r\n\r\ndata: b\r\n\r\n"] {
+    let stream = @utf8.encode(text)
+    for cuts in cuttings(stream) {
+      let (events, over) = bounded(stream, cuts, 9)
+      assert_true(events == [a, { name: "message", data: "xxx", id: None }, b])
+      assert_false(over)
+    }
+  }
+  // "data: xxxx" is 10: what came before it is given, nothing of it or after it, and the reader has failed.
+  let stream = b"data: a\n\ndata: xxxx\n\ndata: b\n\n"
+  for cuts in cuttings(stream) {
+    let (events, over) = bounded(stream, cuts, 9)
+    assert_true(events == [a])
+    assert_true(over)
+  }
+}
+
+///|
+test "what has no blank line is held up to the bound and no further; a reader that failed stays failed" {
+  // 4 bytes and a newline may still be a block of 4: waited for.
+  let sse = @wire.Sse::new(most=4)
+  assert_true(sse.feed(b"abcd\n") == [])
+  assert_true(sse.feed(b"\n") == [])
+  // A byte more with no blank line is a block too long, whatever comes after.
+  assert_true(sse.feed(b"abcd") == [])
+  assert_true(sse.feed(b"e") == [])
+  assert_eq(refused(sse, b"f"), Some(4))
+  assert_eq(refused(sse, b"\n\ndata: late\n\n"), Some(4))
+}
+
+///|
+test "a stream with no blank line passes the bound a device keeps by default: refused, not held" {
+  let sse = @wire.Sse::new()
+  // 16 MiB of a line with no end, a MiB a chunk: held. Two bytes more: refused.
+  let chunk = Bytes::make(1024 * 1024, b'x')
+  for _ in 0..<16 {
+    assert_true(sse.feed(chunk) == [])
+  }
+  assert_true(sse.feed(b"x") == [])
+  assert_eq(refused(sse, b"x"), Some(16777216))
+  assert_eq(@wire.max_event, 16777216)
+}
+
+///|
+test "an event of very many data lines is its lines, a newline between two" {
+  let lines = 5000
+  let block = StringBuilder()
+  let expected = StringBuilder()
+  for i in 0..<lines {
+    block.write_string("data: line \{i}\n")
+    if i > 0 {
+      expected.write_char('\n')
+    }
+    expected.write_string("line \{i}")
+  }
+  block.write_char('\n')
+  let events = @wire.Sse::new().feed(@utf8.encode(block.to_string()))
+  assert_true(events == [{ name: "message", data: expected.to_string(), id: None }])
+}
+
+///|
+test "a reader told to keep the most an Int says reads as one with no bound in reach: no sum of it wraps" {
+  let sse = @wire.Sse::new(most=0x7FFF_FFFF)
+  assert_true(sse.feed(b"data: a\n\ndata: b") == [{ name: "message", data: "a", id: None }])
+  assert_true(sse.feed(b"\n") == [])
+  assert_true(sse.feed(b"\n") == [{ name: "message", data: "b", id: None }])
+  assert_true(sse.feed(b"") == [])
 }

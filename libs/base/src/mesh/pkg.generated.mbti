@@ -13,6 +13,8 @@ pub let connect_timeout_ms : Int32
 
 pub let device_key : String
 
+pub let max_body : Int32
+
 pub let onto_max_ms : Int32
 
 pub let ping_timeout_ms : Int32
@@ -93,7 +95,7 @@ pub struct Reply {
 }
 pub fn Reply::cancel(Self) -> Unit
 pub fn Reply::header(Self, String) -> String?
-pub async fn Reply::rest(Self) -> Bytes
+pub async fn Reply::rest(Self, most? : Int32) -> Bytes
 pub async fn Reply::take(Self) -> Bytes?
 
 pub(all) struct Store {
