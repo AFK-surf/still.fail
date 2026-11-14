@@ -8,7 +8,8 @@
 //
 // Node says on stdin, a line of JSON each: `set` (the words of each language, the floors, the station's build, the
 // runtimes there are), `viewer` (a connection's who as its credential and the lock let them in, `null` once it is
-// gone; `moved`: its workspace's chain moved), `names` (people's names as their credentials say them), `answered`
+// gone; `moved`: its workspace's chain moved; `floor`: the build under which a core is too old in its workspace, null
+// for none, absent from a Node before it), `names` (people's names as their credentials say them), `answered`
 // (Node's answer to a request this program gave it). It says on stdout `listening`, `build` (the build a connection's
 // device said, once and as it changes) and `fallback` (a request it gives Node to answer: a read refused for what
 // Node prepares, a core that does not take every runtime): Node's answer comes back as `answered`.
@@ -18,6 +19,10 @@
 priv struct Member {
   viewer : Json
   moved : Bool
+  /// The build under which a core is too old in its workspace (serve.ts `movedFloor`): None where Node said none, or
+  /// nothing of it (a Node from before it), which goes by `moved` and `movedFromBuild` as before (a Node that says it
+  /// says none only where the chain did not move).
+  floor : Int?
 }
 
 ///|
@@ -124,7 +129,11 @@ fn Serving::told(self : Serving, line : String) -> Unit {
           ignore(w.succeed(false))
         }
       } else {
-        self.members[key] = { viewer, moved: m.value("moved") is Some(True) }
+        let floor = match m.value("floor") {
+          Some(Number(n, ..)) => Some(n.to_int())
+          _ => None
+        }
+        self.members[key] = { viewer, moved: m.value("moved") is Some(True), floor }
         for w in waiting {
           ignore(w.succeed(true))
         }
@@ -356,13 +365,20 @@ async fn Serving::answer(self : Serving, id : Json, conn : Json, who : Member, a
     ({ "status": Json::number(status.to_double()), "headers": { "content-type": "application/json" } } : Json),
     @utf8.encode(text),
   )
-  // A core older than this station answers, and one too old for a workspace whose chain moved (serve.ts).
+  // A core older than this station answers, and one too old for its connection's workspace (serve.ts `movedTooOld`):
+  // under the floor Node said of it, or where it said none (a Node from before), under movedFromBuild where it moved.
   let build = build_of(header(headers, "stillfail-build"))
   let counted = int_of(self.set.value("countedFrom"))
   let too_old = match build {
     Some(b) =>
       (b >= counted && b < int_of(self.set.value("oldestCore"))) ||
-      (who.moved && b >= counted && b < int_of(self.set.value("movedFromBuild")))
+      (
+        b >= counted &&
+        (match who.floor {
+          Some(f) => b < f
+          None => who.moved && b < int_of(self.set.value("movedFromBuild"))
+        })
+      )
     None => false
   }
   if too_old {

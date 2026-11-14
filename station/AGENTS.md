@@ -12,7 +12,7 @@
   with its addon (`native/mesh`), which keeps the image codecs and the rest as before. A device's requests of the
   routes in `src/mesh/served.ts` (the reads a device makes, `/batch`, `/changed`, its marks, names and a message in
   words and quotes) the front hands the MoonBit program that answers them itself (station/mb's reader `--serve`), not
-  Node, which only tells it who each connection's member is, takes what it wrote (`changes`, `said`: Node's store
+  Node, which only tells it who each connection's member is and the floor a core is too old under there, takes what it wrote (`changes`, `said`: Node's store
   tells, the hub delivers) and keeps a message's idempotency slot and timestamp (`claim`); and `GET /events`, which
   Node's events make and give it a piece at a time, each told several streams given once (`relay`), and which it
   compresses and writes. The native
@@ -262,7 +262,9 @@
   station says `rootout` in its GET /lock `serves`, so a core says a removal of them naming the root's log only where
   every station reads it so, and a core under `ROOT_OUT_FROM_BUILD` (`src/api/moved-from.ts`) is told to update
   (`movedTooOld`) only where the state in force has them out of `~root` (`Cloud.rootOut`, the rules' `root_in`):
-  nowhere else is anyone told anything. Which of their logs is theirs is the state's to say (`src/mesh/serve.ts`
+  nowhere else is anyone told anything. The MoonBit program answers its routes by the same floor (`movedFloor`, the
+  build under which a core is too old in a connection's workspace, told it with each connection's member and again as
+  the state in force changes; a program from before it goes by whether the chain moved). Which of their logs is theirs is the state's to say (`src/mesh/serve.ts`
   `ownChainsOf`): GET /lock/person and a refusal's `person` give the root's log as theirs no more once an admit binds
   them by another, so their new app never reads its lock replaced and a device of the root's log hears that it was;
   the root's log stays among the workspace's logs and is never let go as a person's oldest (`CHAINS_A_PERSON`,
