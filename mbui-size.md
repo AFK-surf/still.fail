@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [65d5916fc](https://github.com/AFK-surf/monoid/commit/65d5916fc200358be03efb7245cfea4926eb7177) mbui: converge 6-platform build/size/idlemem scrip | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.42 | 112.94 |
 | [9ac50f734](https://github.com/AFK-surf/monoid/commit/9ac50f7340c057144d1f5e66bb27ebde471677b5) mbui: a CJK face's marks of ambiguous width are na | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.72 | 110.43 |
 | [1f334fe33](https://github.com/AFK-surf/monoid/commit/1f334fe33c9f4d61f764622d000753469ba76889) mbui: at a chat's end on the page made as nodes, t | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.72 | 110.43 |
 | [2f8293e39](https://github.com/AFK-surf/monoid/commit/2f8293e39835f8a614e2dd732bb0d1f7ec272697) mbui: the pointer's corner shapes (Cursor::ResizeN | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.72 | 110.43 |
@@ -45,11 +46,11 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [49a1b3e8a](https://github.com/AFK-surf/monoid/commit/49a1b3e8a66ca5ad2e529586dc666f8cb43f4884) app tests: the third's other runs at 60 reckoned a | 1.98 | 2.7 | 11.52 | 31.12 | 41.45 | 27.74 | 53.19 | 97.44 | 112.7 |
 | [8c6ec8f5d](https://github.com/AFK-surf/monoid/commit/8c6ec8f5d9d27621f82f9676b2aa39e1c4c42074) station: the mesh's base takes the connections, ca | 1.98 | 2.7 | 11.52 | 31.12 | 41.44 | 27.74 | 53.19 | 97.16 | 108.57 |
 | [dd8703938](https://github.com/AFK-surf/monoid/commit/dd87039384c912b79eced0ecf04443f593e28be6) test(mbui app): 添加账号 with three stations, and a ke | 1.98 | 2.7 | 11.52 | 31.12 | 41.44 | 27.73 | 53.19 | 97.4 | 110 |
-| [8e65df79d](https://github.com/AFK-surf/monoid/commit/8e65df79d68957c9231b4a2b1f99361a7aff570b) core: the base's words, host and traces its own: n | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.74 | 53.19 | 97.26 | 111.09 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [65d5916fc](https://github.com/AFK-surf/monoid/commit/65d5916fc200358be03efb7245cfea4926eb7177) mbui: converge 6-platform build/size/idlemem scrip | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 56.74 |
 | [9ac50f734](https://github.com/AFK-surf/monoid/commit/9ac50f7340c057144d1f5e66bb27ebde471677b5) mbui: a CJK face's marks of ambiguous width are na | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 56.74 |
 | [1f334fe33](https://github.com/AFK-surf/monoid/commit/1f334fe33c9f4d61f764622d000753469ba76889) mbui: at a chat's end on the page made as nodes, t | 0.4 | 0.52 | 1.94 | 3.07 | 4.43 | 1.44 | 3.76 | 56.98 |
