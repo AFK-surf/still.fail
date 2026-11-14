@@ -41,6 +41,11 @@ priv struct Hosted {
   /// lines that came while frozen, each with where it ends
   held : Array[(Bytes, Int64)]
   mut frozen : Bool
+  /// What a step writes as it goes (the model's words, its thinking, a call's input), held a while and told Node as
+  /// one (`DELTAS_MS`): up to where of stdout it was read, and whether its telling is under way
+  mut pending : Array[@jsjson.JValue]
+  mut pending_to : Int64
+  mut later : Bool
   mut left : Bool
   mut exited : Bool
   stderr : Array[String]
@@ -120,6 +125,8 @@ fn Agents::told(self : Agents, line : String) -> Unit {
         if !only.contains(k) {
           continue
         }
+        // (what it holds told first: the state said next is of all it read)
+        self.flush(h)
         h.frozen = true
         states[k.to_string()] = Json::object({
           "turn": turn_json(h.turn),
@@ -232,6 +239,9 @@ fn hosted(n : Int, turn : @claude.Turn, live : @claude.Live, lines_only~ : Bool)
     told: 0L,
     held: [],
     frozen: false,
+    pending: [],
+    pending_to: 0L,
+    later: false,
     left: false,
     exited: false,
     stderr: [],
@@ -345,6 +355,7 @@ fn Agents::message(self : Agents, h : Hosted, message : Json) -> Unit {
       }
     }
     { "op": "exit", .. } => {
+      self.flush(h)
       h.exited = true
       self.host.say(
         ({
@@ -408,16 +419,121 @@ fn Agents::heard(self : Agents, h : Hosted, lines : Array[(Bytes, Int64)]) -> Un
   }
   let end = lines[lines.length() - 1].1
   let turn = turn_json_js(h.turn)
-  if events.length() == 0 && @jsjson.stringify(turn) == before && h.told <= h.acked_out {
-    h.acked_out = end
+  let same = @jsjson.stringify(turn) == before
+  // (only what steps wrote: held, told with what comes next or once DELTAS_MS is over)
+  if same && events.length() > 0 && events.iter().all(is_delta) {
+    merge_into(h.pending, events)
+    h.pending_to = end
     h.told = end
-    self.ack(h)
+    self.soon(h)
     return
   }
+  if same && events.length() == 0 {
+    if h.pending.length() > 0 {
+      h.pending_to = end
+      h.told = end
+      return
+    }
+    if h.told <= h.acked_out {
+      h.acked_out = end
+      h.told = end
+      self.ack(h)
+      return
+    }
+  }
+  let all = h.pending
+  h.pending = []
+  merge_into(all, events)
   h.told = end
+  self.tell(h, end, turn, all)
+}
+
+///|
+/// How long what steps write is held before Node is told it (it only counts how fast the model writes: sessions/live.ts
+/// `counted`, the agent's last words: actor.ts `heard`).
+const DELTAS_MS : Int = 200
+
+///|
+fn Agents::tell(self : Agents, h : Hosted, to : Int64, turn : @jsjson.JValue, events : Array[@jsjson.JValue]) -> Unit {
   self.host.say(
-    "{\"lines\":\{h.n},\"to\":\{end},\"turn\":\{@jsjson.stringify(turn)},\"events\":\{@jsjson.stringify(Arr(events))}}",
+    "{\"lines\":\{h.n},\"to\":\{to},\"turn\":\{@jsjson.stringify(turn)},\"events\":\{@jsjson.stringify(Arr(events))}}",
   )
+}
+
+///|
+/// What is held told Node now.
+fn Agents::flush(self : Agents, h : Hosted) -> Unit {
+  if h.pending.length() == 0 || h.left {
+    return
+  }
+  let all = h.pending
+  h.pending = []
+  self.tell(h, h.pending_to, turn_json_js(h.turn), all)
+}
+
+///|
+fn Agents::soon(self : Agents, h : Hosted) -> Unit {
+  if h.later {
+    return
+  }
+  h.later = true
+  ignore(
+    self.host.rt.fork(name="agent deltas", () => {
+      @effect.sleep(DELTAS_MS)
+      h.later = false
+      self.flush(h)
+    }),
+  )
+}
+
+///|
+fn is_delta(e : @jsjson.JValue) -> Bool {
+  guard e.get("type") is Some(Str(t)) && t == @jsjson.units("live") else { return false }
+  guard e.get("event") is Some(Obj(_) as ev) else { return false }
+  ev.get("kind") is Some(Str(k)) && k == @jsjson.units("delta")
+}
+
+///|
+/// `events` after `out`, a step's deltas one after another of the same field told as one: their words joined, or the
+/// tokens a runtime counted for them added up.
+fn merge_into(out : Array[@jsjson.JValue], events : Array[@jsjson.JValue]) -> Unit {
+  let u = @jsjson.units
+  for e in events {
+    if is_delta(e) && out.last() is Some(last) && is_delta(last) {
+      let a = last.get("event").unwrap()
+      let b = e.get("event").unwrap()
+      let tokens = (v : @jsjson.JValue) => match v.get("tokens") {
+        Some(Num(n)) => Some(n)
+        _ => None
+      }
+      let text = (v : @jsjson.JValue) => match v.get("text") {
+        Some(Str(t)) => t
+        _ => []
+      }
+      let same_step = a.get("id") is Some(Str(x)) && b.get("id") is Some(Str(y)) && x == y &&
+        a.get("field") is Some(Str(f)) && b.get("field") is Some(Str(g)) && f == g
+      if same_step {
+        match (tokens(a), tokens(b)) {
+          (None, None) => {
+            out[out.length() - 1] = Obj([
+              (u("type"), Str(u("live"))),
+              (u("event"), Obj([(u("kind"), Str(u("delta"))), (u("id"), a.get("id").unwrap()), (u("field"), a.get("field").unwrap()), (u("text"), Str(text(a) + text(b)))])),
+            ])
+            continue
+          }
+          (Some(x), Some(y)) if text(a).length() == 0 && text(b).length() == 0 => {
+            out[out.length() - 1] = Obj([
+              (u("type"), Str(u("live"))),
+              (u("event"), Obj([(u("kind"), Str(u("delta"))), (u("id"), a.get("id").unwrap()), (u("field"), a.get("field").unwrap()), (u("text"), Str([])), (u("tokens"), Num(x + y))])),
+            ])
+            continue
+          }
+          _ => ()
+        }
+      }
+    }
+    out.push(e)
+  }
 }
 
 ///|
