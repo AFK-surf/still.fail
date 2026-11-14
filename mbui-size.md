@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1f33147ef](https://github.com/AFK-surf/monoid/commit/1f33147efeddf2449c6e82496cf30bb60037eb9b) station: a Codex item's deltas told Node a while a | 2.03 | 2.79 | 12.03 | 31.92 | 44.66 | 28.53 | 55.91 | 98.58 | 109.52 |
 | [ab5e69b41](https://github.com/AFK-surf/monoid/commit/ab5e69b4101ec5b27aca72296c45aa8d328b129a) lock: a workspace of any size is upgraded, and a d | 2.03 | 2.79 | 12.03 | 31.92 | 44.66 | 28.53 | 55.91 | 98.67 | 114.15 |
 | [b34eff235](https://github.com/AFK-surf/monoid/commit/b34eff2353bc321f3b1a92fbfe9e3f7854a9cf42) rules: a chain is read in time that grows with its | 2.03 | 2.79 | 12.03 | 31.92 | 44.66 | 28.53 | 55.91 | 98.62 | 112.56 |
 | [cede4b07d](https://github.com/AFK-surf/monoid/commit/cede4b07d46fbfd9cb730d9ead1c4700dd58aa8e) core, cloud: a change of a workspace is told with  | 2.03 | 2.79 | 12.03 | 31.92 | 44.66 | 28.53 | 55.91 | 98.45 | 117.59 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [2469b9c44](https://github.com/AFK-surf/monoid/commit/2469b9c445a2873522332356370cb25cc2152129) native: libghostty-vt prebuilt for every target (t | 2.01 | 2.76 | 11.84 | 31.68 | 43.76 | 28.3 | 55.43 | 96.8 | 110.94 |
 | [2fdea19c0](https://github.com/AFK-surf/monoid/commit/2fdea19c0b22a19aa4e1464fa941570e7dc57458) mesh: a request on a connection to a station's end | 2.01 | 2.75 | 11.83 | 31.68 | 43.75 | 28.3 | 55.43 | 96.86 | 117.74 |
 | [590bf6907](https://github.com/AFK-surf/monoid/commit/590bf69073a62fa834b7f772a052e4105fc0f4ee) station: a person's taps on a Farview tab land whe | 2.01 | 2.75 | 11.83 | 31.68 | 43.75 | 28.3 | 55.43 | 96.86 | 117.74 |
-| [9af154ee0](https://github.com/AFK-surf/monoid/commit/9af154ee08cfe09244330dbf9dd1775716609a46) fix(mbui,core): send new chat immediately on Enter | 2.01 | 2.75 | 11.83 | 31.68 | 43.75 | 28.3 | 55.43 | 97.03 | 108.8 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1f33147ef](https://github.com/AFK-surf/monoid/commit/1f33147efeddf2449c6e82496cf30bb60037eb9b) station: a Codex item's deltas told Node a while a | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
 | [ab5e69b41](https://github.com/AFK-surf/monoid/commit/ab5e69b4101ec5b27aca72296c45aa8d328b129a) lock: a workspace of any size is upgraded, and a d | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
 | [b34eff235](https://github.com/AFK-surf/monoid/commit/b34eff2353bc321f3b1a92fbfe9e3f7854a9cf42) rules: a chain is read in time that grows with its | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
 | [cede4b07d](https://github.com/AFK-surf/monoid/commit/cede4b07d46fbfd9cb730d9ead1c4700dd58aa8e) core, cloud: a change of a workspace is told with  | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [2469b9c44](https://github.com/AFK-surf/monoid/commit/2469b9c445a2873522332356370cb25cc2152129) native: libghostty-vt prebuilt for every target (t | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.21 |
 | [2fdea19c0](https://github.com/AFK-surf/monoid/commit/2fdea19c0b22a19aa4e1464fa941570e7dc57458) mesh: a request on a connection to a station's end | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.21 |
 | [590bf6907](https://github.com/AFK-surf/monoid/commit/590bf69073a62fa834b7f772a052e4105fc0f4ee) station: a person's taps on a Farview tab land whe | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.25 |
-| [9af154ee0](https://github.com/AFK-surf/monoid/commit/9af154ee08cfe09244330dbf9dd1775716609a46) fix(mbui,core): send new chat immediately on Enter | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.25 |
