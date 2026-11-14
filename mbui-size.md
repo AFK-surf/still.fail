@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [6b92c390c](https://github.com/AFK-surf/monoid/commit/6b92c390cbdac8dce1576111917d5c7b3328e2cb) station: a chat's entries and letters read by the  | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.88 | 112.98 |
 | [d64201f31](https://github.com/AFK-surf/monoid/commit/d64201f311356a3b2a8fad873a5cdb82149c52ae) mbui: a height declared to go its way keeps what i | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.58 | 111.75 |
 | [d64201f31](https://github.com/AFK-surf/monoid/commit/d64201f311356a3b2a8fad873a5cdb82149c52ae) mbui: a height declared to go its way keeps what i | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.58 | 111.75 |
 | [4ef52f094](https://github.com/AFK-surf/monoid/commit/4ef52f094ff4238961172ac22e3d97282acc3dff) mbui: reuse execution history row views and keep l | 1.99 | 2.72 | 11.61 | 31.24 | 41.75 | 27.85 | 53.46 | 96.57 | 114.87 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c3fbd4046](https://github.com/AFK-surf/monoid/commit/c3fbd40467787b57b6c344ebfb048560c0e04074) mbui: what an answer changed at once is no jolt of | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.73 | 53.18 | 95.83 | 110.48 |
 | [e86dddefe](https://github.com/AFK-surf/monoid/commit/e86dddefe9778505415fad3df944112b47c9de95) mbui: a key of a page's list on its way draws what | 1.98 | 2.7 | 11.51 | 31.11 | 41.43 | 27.73 | 53.18 | 95.86 | 98.77 |
 | [db745eb1c](https://github.com/AFK-surf/monoid/commit/db745eb1c246f7127cd098e990b115989b07e22f) fix(station): a renewal refused leaves the connect | 1.98 | 2.7 | 11.5 | 31.1 | 41.38 | 27.72 | 53.13 | 95.91 | 109.69 |
-| [7b3ed8a90](https://github.com/AFK-surf/monoid/commit/7b3ed8a905df5a97bc7e3a7a073bd35d578d72a1) core: a member's web page a chain names is said on | 1.98 | 2.7 | 11.5 | 31.1 | 41.37 | 27.72 | 53.13 | 95.98 | 106.97 |
