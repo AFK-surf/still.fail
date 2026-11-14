@@ -733,7 +733,7 @@ fn narrow_made_top(v : @view.View, has_top~ : Bool) -> Unit {
     v.box(fn(o) {
       o.over(Is(true)) |> ignore
       o.show(fn() { status_top_now(v.window().0) > 0.0 }, fn(paper) {
-        paper.height(By(fn() { Some(status_top_now(v.window().0)) })).ground(By(fn() { @sf.theme().p.bg })) |> ignore
+        paper.height(By(fn() { Some(status_top_now(v.window().0)) })).ground(By(fn() { @sf.theme().p.bg })) |> @sf.ground_node |> ignore
       })
     })
     |> ignore

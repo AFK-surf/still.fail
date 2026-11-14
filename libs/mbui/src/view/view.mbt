@@ -4291,14 +4291,24 @@ pub fn Tree::claimers_at(
         order.val = o + 1
         let n = self.nodes[c.id.at]
         if self.finger_on(c, cx, cy, s, x, y, at, tracked=false) {
-          if n.on_drag is Some(_) ||
-            n.on_press is Some(_) ||
+          let takes_own = !(n.points || n.hold_only is Some(_))
+          if (takes_own && (n.on_drag is Some(_) || n.on_press is Some(_))) ||
             n.top_row ||
             n.claims is Some(_) ||
             (n.hosted && @signals.untracked(fn() { there(c.id) })) {
             found.val = Some((c.id, o, (cx, cy, cx + c.w * s, cy + c.h * s)))
-          } else if n.covers(a) {
+          } else if takes_own && n.covers(a) {
             covered.val = o
+            match found.val {
+              Some((prev, _, _)) if !self.nodes[prev.at].hosted && self.covers_over(prev, c.id) => found.val = None
+              _ => ()
+            }
+            near.retain(fn(k) {
+              match k.target {
+                Pressed(id) | Dragged(id) => !self.covers_over(id, c.id)
+                _ => false
+              }
+            })
           }
         } else {
           self.near_said(n, c, cx, cy, s, x, y, least, o, near)
@@ -12319,7 +12329,7 @@ fn Tree::inputs_count(self : Tree, at : Int, d : Int) -> Unit {
 /// answer of what a point is for: a press down, its let go landing on what it went down on, the pointer lighting what
 /// it is over (Tree::follow_point), View::finger_target.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
-  self.target_in(x, y, tracked=false)
+  self.target_in(x, y, tracked=false).0
 }
 
 ///|
@@ -12357,8 +12367,8 @@ fn Tree::finger_on(
 
 ///|
 /// The same, what decides where a node takes it (View::takes) read `tracked` (followed by what asks it: Tree::point_at)
-/// or not.
-fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Target {
+/// or not, and whether what it found was reached from round it (`near`, Tree::reached).
+fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> (Target, Bool) {
   // (the logic's moment, what is where taken as of then: View::takes)
   let at = self.logic_said()
   let least = self.least_now()
@@ -12376,8 +12386,9 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
     order.val = o + 1
     self.work.found_walked = self.work.found_walked + 1
     let n = self.nodes[c.id.at]
-    // (a gesture answering a hold alone takes no press nor drag: what is under it does, as were it not there)
-    if n.hold_only is Some(_) {
+    // (a gesture answering a hold alone, or one only pointed at, takes no press nor drag: what is under it does, as
+    // were it not there)
+    if n.hold_only is Some(_) || n.points {
       return
     }
     if self.finger_on(c, cx, cy, s, x, y, at, tracked~) {
@@ -12393,6 +12404,29 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
       } else {
         if n.covers(a) {
           covered.val = o
+          let mut w = 0
+          for i in 0..<found.length() {
+            let keep = match found[i] {
+              Pressed(id) | Dragged(id) | TopRow(id) => !self.covers_over(id, c.id)
+              Hosted(_) => true
+              Nothing => false
+            }
+            if keep {
+              found[w] = found[i]
+              orders[w] = orders[i]
+              boxes[w] = boxes[i]
+              w = w + 1
+            }
+          }
+          found.truncate(w)
+          orders.truncate(w)
+          boxes.truncate(w)
+          near.retain(fn(k) {
+            match k.target {
+              Pressed(id) | Dragged(id) => !self.covers_over(id, c.id)
+              _ => false
+            }
+          })
         }
         return
       }
@@ -12408,7 +12442,8 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
     Some(i) => (orders[i], boxes[i])
     None => (-1, (0.0, 0.0, 0.0, 0.0))
   }
-  self.reached(top, top_order, top_box, near, x, y, least, covered=covered.val)
+  let res = self.reached(top, top_order, top_box, near, x, y, least, covered=covered.val)
+  (res, res != top)
 }
 
 ///|
@@ -12440,13 +12475,21 @@ pub fn Tree::points_now(self : Tree) -> NodeId? {
 fn Tree::points_over(self : Tree, x : Double, y : Double) -> NodeId? {
   let at = self.logic_said()
   let found : Ref[NodeId?] = Ref(None)
-  self.each_drawn_scaled(fn(c, cx, cy, _, s) {
+  self.each_drawn_scaled(fn(c, cx, cy, a, s) {
     if self.finger_on(c, cx, cy, s, x, y, at, tracked=true) {
       let n = self.nodes[c.id.at]
       if n.points {
         found.val = Some(c.id)
-      } else if (n.on_drag is Some(_) && n.claims is None) || n.on_press is Some(_) || n.hosted || n.top_row {
+      } else if (n.on_drag is Some(_) && n.claims is None && n.hold_only is None) ||
+        n.on_press is Some(_) ||
+        n.hosted ||
+        n.top_row {
         found.val = None
+      } else if n.covers(a) {
+        match found.val {
+          Some(prev) if self.covers_over(prev, c.id) => found.val = None
+          _ => ()
+        }
       }
     }
   }, inputs_only=true)
@@ -13030,10 +13073,25 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   // (this one the one followed from now: what it is first told may let it go (another point, none, the tree let go),
   // which this one's number then no longer is)
   let mine = self.point_said
-  let stop = self.queued(fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) }, fn(found) {
-    self.points_hover = found.1
-    then(found.0)
-  })
+  let stop = self.queued(
+    fn() {
+      let (t, from_near) = self.target_in(x, y, tracked=true)
+      let p = match (from_near, t, self.points_over(x, y)) {
+        (true, Pressed(tid) | Dragged(tid), Some(pid)) =>
+          if self.over_all_of(pid) > self.over_all_of(tid) {
+            Some(pid)
+          } else {
+            None
+          }
+        (_, _, p) => p
+      }
+      (t, p)
+    },
+    fn(found) {
+      self.points_hover = found.1
+      then(found.0)
+    },
+  )
   if self.gone || self.point_said != mine {
     stop()
   } else {

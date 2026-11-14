@@ -55,6 +55,9 @@ pub fn tip_node(
   repeats? : Bool = false,
   shortcut? : String = "",
 ) -> TipHand {
+  if within {
+    anchor.points(Is(true)) |> ignore
+  }
   let open : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
   // (a finger held on its control: Held while it is down, Lifted a while once it is let go, till then or the next
   // press, wherever it lands; Free otherwise)
@@ -125,7 +128,7 @@ pub fn tip_node(
   // whether it takes input at all, whether there is anything to say)
   let state = fn() {
     (
-      @ui.pointing() is Mouse && (if within { anchor.pointer_within() } else { anchor.pointed() }),
+      @ui.pointing() is Mouse && (if within { anchor.pointed_in() } else { anchor.pointed() }),
       anchor.pressed(),
       anchor.focus_shown(),
       anchor.takes_input(),
