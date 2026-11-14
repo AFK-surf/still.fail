@@ -24,6 +24,9 @@ pub struct Tester {
   /// whether the frame being drawn is one of those (or what it left owed): how a motion goes frame to frame is not
   /// judged on it (Tester::judges_motion), so a run at a rate judges the frames the default run does, no more
   mut on_way : Bool
+  /// whether run_for draws the display's frames on its way while the app asks for them, whatever the rate
+  /// (Tester::run_shown, for as long as it runs)
+  mut shown : Bool
   /// whether how what moves goes is judged on those frames too (MBUI_TEST_MOTION: test_motion_judged)
   mut motion : MotionJudged
   /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
@@ -614,7 +617,7 @@ pub fn Tester::new(
   let between = test_frames_between()
   tester_rested.clear()
   frames_at_one.val = (-1.0, 0)
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, inputs_next: @double.infinity, each: None, before }
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, shown: false, motion: test_motion_judged(loc.to_string()), host_frames: false, inputs_next: @double.infinity, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {

@@ -423,7 +423,11 @@ for t in $targets; do
           # last; the third's pages on its one program 249 s at 354; the first's 146 s at 800 and the second's 184 s at
           # 717 on their four and two (#6134, 43568641653, 43569987964). So the third reckoned 1400 and the fourth 900:
           # by the table the first's pages some 1060 s, the second's 830, the third's 260, the fourth's 760)
-          *) specs="4,4,600,1 2,4,430,1 1,4,1400,1 4,4,900,1" ;;
+          # (read stays' files made cheap, 433 s of the table to some 50 (#6178): the same reckoning then dealt the
+          # first 1190 s of pages by the table and app 1/4 was cut at its 5 minutes, the others 179-204 s
+          # (43577616575); main's own app 1/4 cut at 317 s the same hour (43577920185). The first reckoned 950: by the
+          # table its pages 970 s, the second's 960, the third's 480, the fourth's 1020)
+          *) specs="4,4,950,1 2,4,430,1 1,4,1400,1 4,4,900,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do

@@ -1,5 +1,6 @@
 // chat_nodes_read_stays_wbtest's (what the reader has before their eyes does not move: its head says the rule and how
-// it is held): the page before, on 小屏 (and rs_pages_before, which 大屏's files use too).
+// it is held): the page before, on 小屏, each lateness a walk of all its arrivals (大屏's one walk is
+// chat_nodes_read_stays_before_wide_wbtest's).
 // A file of its own: the rule's eighteen blocks in one process did not end in a CI job's five minutes at 120 a second.
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -20,7 +21,7 @@ fn rs_pages_before(s : (String, Double, Double, Int), late : Double) -> Array[St
     k.gate.val = true
     rs_up(t, s, s.2 * 0.4)
     strokes += 1
-    rs_run(t, long_rest_ms * 2.0)
+    rs_rest(t, long_rest_ms * 2.0)
     if k.held.is_empty() {
       k.gate.val = false
       continue

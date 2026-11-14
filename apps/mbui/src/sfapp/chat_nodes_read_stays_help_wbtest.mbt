@@ -15,8 +15,8 @@ let rs_watch_ms : Double = @ui.move_most_ms * 4.0
 /// The long chat's made-up core under a run, and what the run changes of what it says: its calls held as late as
 /// `late` (all of them while `gate` is shut, set off `late` after it opens), answered between frames; its agent at
 /// work; messages told longer (`grown`, their seqs) and given a card (`carded`, by seq: whether answered); `told` bumped
-/// as any of them changes, the chat's version with it. What each frame looks at (`look`), and the test's clock as the
-/// last frame drew (`now`).
+/// as any of them changes, the chat's version with it. What each frame looks at (`look`), the test's clock as the
+/// last frame drew (`now`), and how many times the page before was asked of it (`older`).
 priv struct RsCore {
   l : LongChat
   mut now : Double
@@ -28,6 +28,7 @@ priv struct RsCore {
   grown : Array[Int]
   carded : Map[Int, Bool]
   mut look : (() -> Unit)?
+  mut older : Int
 }
 
 ///|
@@ -98,6 +99,9 @@ fn rs_source(k : RsCore) -> Source {
     },
     call: fn(name, params, done) {
       let go = fn() { (base.call)(name, params, done) }
+      if name == "chat.older" {
+        k.older += 1
+      }
       if k.gate.val || k.late > 0.0 {
         k.held.push((k.now + k.late, go))
       } else {
@@ -153,6 +157,7 @@ fn rs_open(s : (String, Double, Double, Int), on_pixels? : Bool = true) -> (@ui.
     grown: [],
     carded: Map([]),
     look: None,
+    older: 0,
   }
   let src = rs_source(k)
   open_chat(long_ref)
@@ -176,17 +181,45 @@ fn rs_open(s : (String, Double, Double, Int), on_pixels? : Bool = true) -> (@ui.
       rs_answer(k)
     }),
   )
-  rs_run(t, long_opened_ms)
+  // (and a frame at each moment a held answer of the core's comes due, however the clock is run on: rs_due)
+  t.between_frames(fn() {  }, due=fn() { rs_due(k) })
+  rs_rest(t, long_opened_ms)
   (t, src, k)
 }
 
 ///|
-/// `ms` of the display's frames (and at a rate those between).
-fn rs_run(t : @ui.Tester, ms : Double) -> Unit {
-  let from = t.time()
-  while t.time() - from < ms - 1.0e-6 {
-    t.run_for(@ui.frame_period_default)
+/// When the core's next held answer comes due (+inf: none, or its gate shut): its moment; one already due as the last
+/// frame was drawn, a display's frame after that one, as an answer come between two frames of a device's is told
+/// before the next.
+fn rs_due(k : RsCore) -> Double {
+  if k.gate.val {
+    return @double.infinity
   }
+  let mut at = @double.infinity
+  for h in k.held {
+    let due = if h.0 > k.now + 1.0e-6 { h.0 } else { k.now + @ui.frame_period_default }
+    if due < at {
+      at = due
+    }
+  }
+  at
+}
+
+///|
+/// `ms` looked at after a cause: the frames a device draws (Tester::run_shown), each of the display's while the app
+/// asks for frames, one at each moment a held answer of the core's comes due (rs_due), one at its end; none while the
+/// app is at rest, a frame nobody draws showing nothing (the coordinator of the migration, 2026-11-14: the rule is
+/// about what is drawn; and every display frame of a rest drawn was most of what these files cost a CI job).
+fn rs_watch(t : @ui.Tester, ms : Double) -> Unit {
+  t.run_shown(ms)
+}
+
+///|
+/// `ms` gone by with nothing looked at on the way (a rest between two causes): in one step, a frame only at what is
+/// due (the app's own, a held answer's moment) and at its end. Where the app is at its end is the same however many
+/// frames were drawn on the way.
+fn rs_rest(t : @ui.Tester, ms : Double) -> Unit {
+  t.run_for(ms)
 }
 
 ///|
@@ -205,9 +238,9 @@ fn rs_up(t : @ui.Tester, s : (String, Double, Double, Int), d : Double) -> Unit 
 /// Read up about a screen from the end and come to rest, what that asks of the core answered at once.
 fn rs_read_up(t : @ui.Tester, s : (String, Double, Double, Int)) -> Unit {
   rs_up(t, s, s.2 * 0.4)
-  rs_run(t, long_rest_ms)
+  rs_rest(t, long_rest_ms)
   rs_up(t, s, s.2 * 0.4)
-  rs_run(t, long_rest_ms * 2.0)
+  rs_rest(t, long_rest_ms * 2.0)
 }
 
 ///|
@@ -332,8 +365,8 @@ fn rs_n(x : Double) -> String {
 }
 
 ///|
-/// What `read` gives held over every frame from `cause` (done between frames, before the first looked at) to
-/// `rs_watch_ms` past the core's lateness: None where it held within half a device pixel of what it gave before, else
+/// What `read` gives held over every frame drawn (rs_watch) from `cause` (done between frames, before the first looked
+/// at) to `rs_watch_ms` past the core's lateness: None where it held within half a device pixel of what it gave before, else
 /// what moved, how far at most and when (ms after the cause), and where it is at rest.
 fn rs_held(
   t : @ui.Tester,
@@ -347,7 +380,7 @@ fn rs_held(
   let start = t.time()
   k.look = Some(fn() { seen.push((t.time() - start, read())) })
   cause()
-  rs_run(t, k.late + rs_watch_ms)
+  rs_watch(t, k.late + rs_watch_ms)
   k.look = None
   let mut most = 0.0
   let mut most_at = 0.0
