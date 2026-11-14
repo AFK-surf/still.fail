@@ -1306,15 +1306,45 @@ fn Ctx::gap_meet_faults(
     }
     q == o
   }
+  // (laid over the one before on purpose: it, or what holds it under where the two part, pulled back by a margin below
+  // 0, a face in a stack and the face in its ring)
+  let pulled = fn(i : Int, other : Int) {
+    let mut q = i
+    while q >= 0 && !within(other, q) {
+      let n = self.nodes[q]
+      if n.mar_l < 0.0 || n.mar_t < 0.0 {
+        return true
+      }
+      q = n.parent
+    }
+    false
+  }
+  // (read as one: two of one ground and no edge, edge to edge, as wide or as tall (a card's pieces, a row a block each);
+  // or panes, each as tall as the window, side by side)
+  let one = fn(a : Int, b : Int) {
+    let (na, nb) = (self.nodes[a], self.nodes[b])
+    let pane = na.fh >= self.height * 0.9 && nb.fh >= self.height * 0.9
+    let alike = na.bg == nb.bg &&
+      na.border_w <= 0.0 &&
+      nb.border_w <= 0.0 &&
+      (((na.x - nb.x).abs() <= gap_slack && (na.fw - nb.fw).abs() <= gap_slack) ||
+      ((na.y - nb.y).abs() <= gap_slack && (na.fh - nb.fh).abs() <= gap_slack))
+    pane || alike
+  }
   for x in 0..<blocks.length() {
     for y in (x + 1)..<blocks.length() {
       let (a, b) = (blocks[x], blocks[y])
       let (na, nb) = (self.nodes[a], self.nodes[b])
-      if layer[a] != layer[b] || na.parent == nb.parent || within(a, b) || within(b, a) {
+      if layer[a] != layer[b] ||
+        na.parent == nb.parent ||
+        within(a, b) ||
+        within(b, a) ||
+        pulled(a, b) ||
+        pulled(b, a) {
         continue
       }
       match gap_between((na.x, na.y, na.x + na.fw, na.y + na.fh), (nb.x, nb.y, nb.x + nb.fw, nb.y + nb.fh)) {
-        Some((d, _)) if d < gap_slack => {
+        Some((d, _)) if d < gap_slack && !(d >= -gap_slack && one(a, b)) => {
           let how = if d < -gap_slack { "run \{-d} over each other" } else { "meet" }
           out.push("rule 9: \{self.named(a)} and \{self.named(b)} \{how}")
         }
@@ -1334,6 +1364,8 @@ fn Ctx::gap_meet_faults(
         (nk.kind == kind_box && nk.grounded()) ||
         !nk.gap_content() ||
         within(k, a) ||
+        pulled(k, a) ||
+        pulled(a, k) ||
         self.in_picture(k, pictures) {
         continue
       }

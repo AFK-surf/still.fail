@@ -386,6 +386,12 @@ fn[T] Ctx::with_tree_nodes(
           }
           n.tx = f.off.0
           n.ty = f.off.1
+          // (its margins: one below 0 lays it over the one before on purpose, a stack of faces, which the spacing
+          // rules leave as it is, gaps.mbt)
+          n.mar_l = f.margin.0
+          n.mar_t = f.margin.1
+          n.mar_r = f.margin.2
+          n.mar_b = f.margin.3
         }
         None => ()
       }
