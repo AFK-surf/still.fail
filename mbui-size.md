@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d86610867](https://github.com/AFK-surf/monoid/commit/d86610867679cb0172c5b5e535abcac3822fbb33) app: an old message's picture there at once, and a | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
 | [24aeb0158](https://github.com/AFK-surf/monoid/commit/24aeb01587e8c5c5f924fafb903c53a7e7b24cc9) mbui: move remaining 22 plain buttons in src/sf ov | 2 | 2.73 | 11.65 | 31.29 | 41.89 | 27.9 | 53.58 | 96.7 | 101.12 |
 | [d09a449d5](https://github.com/AFK-surf/monoid/commit/d09a449d525be999873a4f1776d31f04004ad158) mbui: decouple touch hit-area from visual layout s | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.6 | 112.55 |
 | [a6a55e699](https://github.com/AFK-surf/monoid/commit/a6a55e6998f1a6c834830956ac055b6e232d8816) app: a chat opens on its login cards' answers too, | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.6 | 112.55 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [90eae7989](https://github.com/AFK-surf/monoid/commit/90eae798919e13ce9ea8b8586b4f26a109ea58f9) core: the base says words of its own, of no progra | 1.99 | 2.71 | 11.58 | 31.19 | 41.64 | 27.8 | 53.36 | 96.55 | 111.28 |
 | [49206681f](https://github.com/AFK-surf/monoid/commit/49206681fd5da4fb4db2afee4dd45c325658b6b4) station, core, app: retire a station (its chats, f | 1.99 | 2.71 | 11.58 | 31.19 | 41.64 | 27.8 | 53.36 | 96.96 | 112.67 |
 | [c52e9bd2e](https://github.com/AFK-surf/monoid/commit/c52e9bd2edee63163cd6774f9e516fb81604716e) app: a chat archived from its row says so where th | 1.98 | 2.71 | 11.55 | 31.15 | 41.53 | 27.77 | 53.26 | 96.86 | 114.75 |
-| [d05b8c0ed](https://github.com/AFK-surf/monoid/commit/d05b8c0ed97c5188433bf1a66ff476f6f8f690e8) refactor(core): the event stream's reader is base, | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.76 | 53.23 | 96.72 | 116.22 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d86610867](https://github.com/AFK-surf/monoid/commit/d86610867679cb0172c5b5e535abcac3822fbb33) app: an old message's picture there at once, and a | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
 | [24aeb0158](https://github.com/AFK-surf/monoid/commit/24aeb01587e8c5c5f924fafb903c53a7e7b24cc9) mbui: move remaining 22 plain buttons in src/sf ov | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
 | [d09a449d5](https://github.com/AFK-surf/monoid/commit/d09a449d525be999873a4f1776d31f04004ad158) mbui: decouple touch hit-area from visual layout s | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
 | [a6a55e699](https://github.com/AFK-surf/monoid/commit/a6a55e6998f1a6c834830956ac055b6e232d8816) app: a chat opens on its login cards' answers too, | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
