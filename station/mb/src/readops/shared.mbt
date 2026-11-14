@@ -100,15 +100,17 @@ priv struct Listed {
 }
 
 ///|
-fn listed_threads(db : @sql.Db, ids : Array[Json]) -> Array[Listed] raise {
-  if ids.length() == 0 {
-    return []
+fn listed_threads(db : @sql.Db, of : Array[Json]?) -> Array[Listed] raise {
+  let base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1"
+  let rows = match of {
+    // (every thread: the archive's whole list, for a device from before)
+    None => db.all(base, [Json::string("")])
+    Some([]) => return []
+    Some(ids) => {
+      let marks = ids.mapi((i, _) => "?\{i + 2}")
+      db.all("\{base} WHERE t.id IN (\{marks.join(", ")})", [Json::string("")] + ids)
+    }
   }
-  let marks = ids.mapi((i, _) => "?\{i + 2}")
-  let rows = db.all(
-    "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1 WHERE t.id IN (\{marks.join(", ")})",
-    [Json::string("")] + ids,
-  )
   let out : Array[Listed] = []
   for r in rows {
     let id = field(r, "id")
@@ -239,11 +241,16 @@ fn need_view(db : @sql.Db, thread : Json, agents : Array[Json], names : Names, d
 
 ///|
 /// views.ts `sharedChats(station, false, scope)`: the rows shown (of `scope`, its rows alone).
-fn shared_rows(db : @sql.Db, known : Known, scope : Scope?) -> Array[Json] raise {
+fn shared_rows(db : @sql.Db, known : Known, scope : Scope?, archived? : Bool = false) -> Array[Json] raise {
   let (_, reviews) = known.config()
   // The sessions the rows are made of: those shown, else those of the scope, the latest active first.
   let sessions = match scope {
-    None => db.all(shown_sessions_sql, [])
+    None =>
+      if archived {
+        db.all("SELECT * FROM sessions ORDER BY last_active_at DESC", [])
+      } else {
+        db.all(shown_sessions_sql, [])
+      }
     Some(sc) => {
       let found : Array[Map[String, Json]] = []
       for k in sc.sessions {
@@ -269,28 +276,34 @@ fn shared_rows(db : @sql.Db, known : Known, scope : Scope?) -> Array[Json] raise
   for x in sessions {
     let key = js_text(field(x, "key"))
     all[key] = x
-    if field(x, "archived_at") is Null {
+    if !(field(x, "archived_at") is Null) == archived {
       shown[key] = x
       if scope is None || in_rows.contains(key) {
         order.push(key)
       }
     }
   }
-  let in_chat = (t : Listed) => t.sessions.filter(m => shown.contains(js_text(field(m, "session")))).map(m => js_text(field(m, "session")))
+  // (in the archive, a chat of its own shows its agents whatever they are doing elsewhere)
+  let in_chat = (t : Listed) => {
+    let alone = archived && field(t.thread, "home") is Null
+    t.sessions.filter(m => (if alone { all } else { shown }).contains(js_text(field(m, "session")))).map(m => js_text(field(m, "session")))
+  }
+  let listed = (t : Listed) => !(field(t.thread, "hidden_at") is Null) == archived
   let watches = watching(db, scope.map(sc => sc.sessions))
   let of = match scope {
-    Some(sc) => sc.threads
+    Some(sc) => Some(sc.threads)
+    None if archived => None
     None =>
-      db
+      Some(db
       .all("SELECT DISTINCT thread FROM thread_sessions WHERE session IN (SELECT session FROM thread_sessions WHERE thread IN (\n       SELECT ts.thread FROM thread_sessions ts JOIN sessions x ON x.key = ts.session WHERE x.archived_at IS NULL))", [])
-      .map(r => field(r, "thread"))
+      .map(r => field(r, "thread")))
   }
   let threads = listed_threads(db, of).filter(t => t.sessions.iter().any(m => all.contains(js_text(field(m, "session")))))
   let stat_keys = unique_keys([
     match scope { Some(sc) => sc.sessions; None => shown.keys().collect() },
     threads.map(t => t.sessions.map(m => js_text(field(m, "session")))).fold(init=[], (a, b) => a + b),
   ])
-  let stats = session_activity(db, stat_keys)
+  let stats = if of is None { session_activity_all(db) } else { session_activity(db, stat_keys) }
   let agent = (key : String) => {
     let x = all.get(key).unwrap()
     let v : Map[String, Json] = {
@@ -318,7 +331,7 @@ fn shared_rows(db : @sql.Db, known : Known, scope : Scope?) -> Array[Json] raise
     for m in t.sessions {
       let s = js_text(field(m, "session"))
       if own {
-        if field(t.thread, "hidden_at") is Null {
+        if listed(t) {
           chatted.add(s)
         }
       } else {
@@ -331,8 +344,8 @@ fn shared_rows(db : @sql.Db, known : Known, scope : Scope?) -> Array[Json] raise
       }
     }
   }
-  let item_threads = threads.filter(t => field(t.thread, "surface") == Json::string("ember") && field(t.thread, "hidden_at") is Null && in_chat(t).length() > 0)
-  let carded = threads_with_cards(db, item_threads.map(t => field(t.thread, "id")))
+  let item_threads = threads.filter(t => field(t.thread, "surface") == Json::string("ember") && listed(t) && in_chat(t).length() > 0)
+  let carded = if archived { [] } else { threads_with_cards(db, item_threads.map(t => field(t.thread, "id"))) }
   let carded_set : Set[String] = Set::new()
   for c in carded {
     carded_set.add(c.stringify())
@@ -446,10 +459,10 @@ fn shared_rows(db : @sql.Db, known : Known, scope : Scope?) -> Array[Json] raise
     row["mineOf"] = Json::array(mine_of.filter(p => !(p is Null)))
     row["said"] = said_by.get(id.stringify()).unwrap_or(Json::null())
     row["archiveReminderDismissed"] = false
-    row["archiveRecommended"] = Json::boolean(archive_suggested(db, id))
+    row["archiveRecommended"] = Json::boolean(!archived && archive_suggested(db, id))
     if reviews {
       row["archiveReviewed"] = true
-      let verdict = archive_verdict(db, id)
+      let verdict = if archived { Json::null() } else { archive_verdict(db, id) }
       if !(verdict is Null) {
         row["archiveCheck"] = verdict
       }
@@ -457,7 +470,7 @@ fn shared_rows(db : @sql.Db, known : Known, scope : Scope?) -> Array[Json] raise
     if known.client_keys.get(key) is Some(k) {
       row["clientKey"] = Json::string(k)
     }
-    let card = if carded_set.contains(id.stringify()) { card_view(db, id, names) } else { Json::null() }
+    let card = if !archived && carded_set.contains(id.stringify()) { card_view(db, id, names) } else { Json::null() }
     if card is Object(_) {
       let c = card.value("card").unwrap_or(Json::null())
       if c.value("type") == Some(Json::string("options")) {
@@ -470,7 +483,7 @@ fn shared_rows(db : @sql.Db, known : Known, scope : Scope?) -> Array[Json] raise
         }
       }
       row["card"] = card
-    } else {
+    } else if !archived {
       let need = need_view(db, id, agents, names)
       if !(need is Null) {
         row["need"] = need
@@ -479,6 +492,17 @@ fn shared_rows(db : @sql.Db, known : Known, scope : Scope?) -> Array[Json] raise
     if answered.get(id.stringify()) is Some(list) {
       answered.remove(id.stringify())
       row["answeredBy"] = Json::array(list)
+    }
+    if archived {
+      row["archived"] = match field(t.thread, "home") {
+        String(h) if all.get(h) is Some(home) => archived_of(home)
+        _ =>
+          {
+            "at": match field(t.thread, "hidden_at") { Null => Json::number(0.0); a => a },
+            "by": match field(t.thread, "hidden_by") { Null => Json::string("manual"); b => b },
+            "alone": true,
+          }
+      }
     }
     rows.push(Json::object(row))
     ids.push(key)
@@ -519,6 +543,9 @@ fn shared_rows(db : @sql.Db, known : Known, scope : Scope?) -> Array[Json] raise
     row["ws"] = field(x, "ws")
     row["named"] = named
     row["mineOf"] = Json::array(([starter] + spoke.get(key).unwrap_or([])).filter(p => !(p is Null)))
+    if archived {
+      row["archived"] = archived_of(x)
+    }
     rows.push(Json::object(row))
     ids.push(key)
   }
@@ -556,6 +583,16 @@ fn keys_arg(v : Json?) -> Array[String]? {
   match v {
     Some(Array(xs)) => Some(xs.map(js_text))
     _ => None
+  }
+}
+
+///|
+/// views.ts `archivedOf`: when a session was archived, by whom, not alone.
+fn archived_of(x : Map[String, Json]) -> Json {
+  {
+    "at": match field(x, "archived_at") { Null => Json::number(0.0); a => a },
+    "by": match field(x, "archived_by") { Null => Json::string("manual"); b => b },
+    "alone": false,
   }
 }
 
