@@ -17,6 +17,7 @@
 # core's tests run where it is built (REPLAY_BUILD_OUT), after it is put there. PKGS_BUILD_OUT (APP_GROUP=pkgs): the
 # small packages' test programs and their tests' lists put there as they are built, then run here at the default rate;
 # PKGS_EXE: that directory, its programs run beside sfapp's pages (@pkgs, check-mbui's app 1/4 at each rate).
+# APP_FILES: of sfapp's test files only these (with APP_EXE and APP_GROUP=1/1: a branch's changed files at a rate).
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 # (the whole suite is CI's, a PR's: on Studio or a laptop it is half an hour of wasm-gc in a row where CI's native runs
@@ -200,6 +201,9 @@ for t in $targets; do
   runs=("$pkgs")
   if [[ " $pkgs " = *" -p stillfail/sfapp "* ]]; then
     files=(src/sfapp/*_wbtest.mbt)
+    # (APP_FILES: those of sfapp's test files alone, sweeps among them as ever: a branch's run of the files it changed at
+    # the rates, mbui-check.yml's rates-changed)
+    [ -z "${APP_FILES:-}" ] || read -r -a files <<< "$APP_FILES"
     n=${SFAPP_SHARDS:-5}
     # (the day's run, SFAPP_SHARDS=1: its pages a process for each group's share, every file after the ones before it
     # there, at the default rate alone; at a rate as a push runs them. All the pages in one process at a rate were more
@@ -243,7 +247,7 @@ for t in $targets; do
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
       f=${w%:*} k=${w##*:}
-      [ -f "$f" ] || continue
+      [ -f "$f" ] && [[ " ${files[*]} " = *" $f "* ]] || continue
       # (at a rate, MBUI_TEST_FPS, no run of the screens', squeeze_said's and words_large's: each checks a screen at
       # rest, as the corners and contrast sweeps do, which run at the default rate alone (their groups are only
       # there). Screens' draws its frames at the Mac's recorded moments, so a rate changes nothing in it (wasm-gc on one
