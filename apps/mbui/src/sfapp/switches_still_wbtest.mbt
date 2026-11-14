@@ -35,16 +35,7 @@ let switches_screens : Array[Screen] = [daily_small, daily_medium, daily_large]
 /// The presses left out of the check by name (screen size, screen: switch), each with why: a press whose Tester stops
 /// on a fault of its own cannot be counted. Each goes with the change that mends its fault (the coordinator of the
 /// migration, 2026-11-14), never one for what it is counted.
-let switches_left_out : Map[String, String] = Map([
-  (
-    "大屏 settings-station-processes: radio 「平铺」",
-    // (the processes' table flat on 大屏: its View::by_room measured AtMost 760 and Exactly 760, then laid out by
-    // what it holds at 586, its rows side by side at one and stacked at the other, frame after frame, 36 nodes drawn
-    // never placed (the Tester's tester_placed stops); the framework's room path is mended in its own PR, which takes
-    // this line out)
-    "its table laid out at two widths in turn, nodes drawn never placed: View::by_room's own PR",
-  ),
-])
+let switches_left_out : Map[String, String] = Map([])
 
 ///|
 /// The ids (a subscription's, a call's) of what the made-up core told the client since this was last emptied, in the

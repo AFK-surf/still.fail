@@ -777,14 +777,18 @@ fn size_uncached(
     // height
     let now = s.come_now
     s.come_now = undef
-    let fw = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false)
+    size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false) |> ignore
     s.come_now = now
     let natural = out_h.val
     let tall = come_height(s, natural)
     if known(tall) {
       // (what it holds laid out whole, in as much room as it comes to, not in the part of it its way has got: what
-      // is measured in it by the room it is given comes out the same all the way; it, as tall as its way has got)
-      let w = size_uncached(node, if known(kw) { kw } else { fw }, natural, aw, ah, cb_w, cb_h, perform)
+      // is measured in it by the room it is given comes out the same all the way; it, as tall as its way has got.
+      // Across, given what it was given (`kw`, else the room `aw` offers), never the width it came to measured so: a
+      // node told its room (View::by_room) measured in a room offered comes to what it holds there, and laid out again
+      // at that width it is told another room and lays it out otherwise, a table's rows beside each other at 760 and
+      // 586 wide stacked, frame after frame: settings-station-processes' 平铺, the switches' sweep, 2026-11-14)
+      let w = size_uncached(node, kw, natural, aw, ah, cb_w, cb_h, perform)
       out_h.val = tall
       return w
     }
