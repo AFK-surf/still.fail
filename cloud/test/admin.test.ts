@@ -24,6 +24,9 @@ test("the console answers only the admin, and only on its host; everyone else ge
     }
     assert.deepEqual(await (await aliceAdmin("GET", "/v1/admin/me")).json(), { email: "alice@example.test" });
     assert.equal((await aliceAdmin("GET", "/v1/admin/nothing")).status, 404);
+    // Its `/v1/me` says whether `/v1/admin/me` answers the same request: on the console's host, alice only.
+    const operator = async (who: typeof alice) => ((await (await who("GET", "/v1/me")).json()) as { operator?: boolean }).operator;
+    assert.deepEqual([await operator(aliceAdmin), await operator(bob), await operator(alice)], [true, false, false]);
     // The scripts' token is no way in, and their routes (on the main host only) still take it.
     assert.equal((await h.fetch("/v1/admin/users", { headers: { authorization: `Bearer ${h.adminToken}` } })).status, 404);
     assert.equal((await h.fetch("/v1/admin/relay/restart", { method: "POST", headers: { authorization: `Bearer ${h.adminToken}` } })).status, 200);

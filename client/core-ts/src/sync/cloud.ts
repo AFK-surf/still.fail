@@ -5,7 +5,7 @@
 // say what changed. A write to still.fail cloud answers once what it changed is read again.
 import { SignalMap } from "../reactive.ts";
 import { record, said } from "../record.ts";
-import { Effect, Exit, Fiber, Scope } from "effect";
+import { Deferred, Effect, Exit, Fiber, Scope } from "effect";
 import type { AccountView } from "../accounts.ts";
 import { NOT_BETA, notBetaText, readCredential, type Credential } from "../cloud.ts";
 import { CREDENTIAL_FOR_S, CREDENTIAL_KEY, CREDENTIAL_OTHERS, CREDENTIAL_OTHERS_KEPT, entriesOf, entryTargetsOf, PUSH_KEY, relaysOf, type Inner } from "../core.ts";
@@ -67,8 +67,9 @@ export class CloudSync {
   readonly #adminRetry = new Map<string, { ms: number; fiber: Fiber.Fiber<unknown, unknown> | null }>();
   /// A workspace's view to read again, the cloud having turned it away for too many asks.
   readonly #workspaceRetry = new Map<string, Fiber.Fiber<unknown, unknown>>();
-  /// The kept credentials being renewed beside their use (`#credential`), by device and key.
-  readonly #renewing = new Set<string>();
+  /// A credential asked of the cloud and not answered yet, by device and key (`#credential`): what every dial of the
+  /// device that wants it meanwhile waits on, renewed or not.
+  readonly #asking = new Map<string, Deferred.Deferred<Credential, CoreError>>();
 
   constructor(core: Inner) {
     this.#core = core;
@@ -155,7 +156,9 @@ export class CloudSync {
       if (this.#core.provider.supports("feedback")) for (const id of ids) if (this.#core.workspaces.owner(id) === sub) this.feedbackChanged(id);
       // What only some providers have: login sessions, an operator's lists.
       if (this.#core.provider.supports("loginSessions")) scheduler.enqueue("cloud", `sessions/${sub}`, Priority.background, this.#loginSessions(sub));
-      if (this.#core.provider.supports("admin")) scheduler.enqueue("cloud", `admin/${sub}`, Priority.background, this.#admin(sub));
+      // (an operator's lists only where its `/v1/me` does not say it is none: a cloud from before says nothing)
+      if (this.#core.provider.supports("admin") && pointer(me, "/operator") !== false) scheduler.enqueue("cloud", `admin/${sub}`, Priority.background, this.#admin(sub));
+      else this.#admins.delete(sub);
     });
   }
 
@@ -211,7 +214,8 @@ export class CloudSync {
         || (method === "DELETE" && ws !== null && (ws[2] === undefined || (ws[2] === "members" && ws[3] !== undefined && decodeURIComponent(ws[3]) === sub)));
       // (first: a workspace made, or joined, is the account's once its `/v1/me` lists it, and its view is then held as answered)
       if (reaches) yield* Effect.ignore(scheduler.ask("cloud", `me/${sub}`, Priority.asked, this.#listed(sub)), { log: "Unhandled", message: "me read" });
-      const view = isObject(answer) && typeof answer.id === "string" && Array.isArray(answer.members) ? answer : null;
+      // (the view as the write answered it: the answer itself, or its `view`, people added)
+      const view = viewIn(answer) ?? (isObject(answer) ? viewIn(answer.view) : null);
       const viewOf = view === null ? null : made || joined ? (view.id as string) : id;
       if (viewOf !== null && view!.id === viewOf && core.workspaces.owner(viewOf) === sub) this.#took(viewOf, view);
       const reads: Effect.Effect<void>[] = [];
@@ -601,17 +605,29 @@ export class CloudSync {
         } else yield* Effect.ignore(core.host.storageSet(key, toJsonBytes(k)), { log: "Unhandled", message: "credentials kept" });
         return c;
       });
+      // One ask out at a time for a device's credential, which every dial wanting it meanwhile waits on: a device
+      // dialling its workspace's stations at once asked once a station (the locks' end to end, 2026-11-15: 23 of an
+      // account's 187 requests in a minute, in pairs of the same millisecond). It runs apart from those waiting, so one
+      // of them interrupted ends nobody else's.
+      const k = `${device}/${key}`;
+      const once = Effect.suspend(() => {
+        const out = this.#asking.get(k);
+        if (out) return Deferred.await(out);
+        const answered = Deferred.makeUnsafe<Credential, CoreError>();
+        this.#asking.set(k, answered);
+        core.runner.fork(Effect.flatMap(Effect.exit(ask), (exit) => Effect.sync(() => {
+          this.#asking.delete(k);
+          Deferred.doneUnsafe(answered, exit);
+        })));
+        return Deferred.await(answered);
+      });
       // A day old and still good: it serves now, and the new one is asked for beside it, for the next. Asked first, every
       // dial waited on still.fail cloud once a day, far from a phone in China (2026-10-30).
       if (kept) {
-        const k = `${device}/${key}`;
-        if (!this.#renewing.has(k)) {
-          this.#renewing.add(k);
-          core.runner.fork(Effect.ensuring(Effect.ignore(ask, { log: "Unhandled", message: "credential renewed" }), Effect.sync(() => this.#renewing.delete(k))));
-        }
+        if (!this.#asking.has(k)) core.runner.fork(Effect.ignore(once, { log: "Unhandled", message: "credential renewed" }));
         return kept;
       }
-      return yield* ask;
+      return yield* once;
     });
   }
 
@@ -691,7 +707,11 @@ export class CloudSync {
     const core = this.#core;
     const event = parseJson(text);
     if (!isObject(event)) return;
-    if (event.type === "workspaces") core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, this.#listed(sub));
+    if (event.type === "workspaces") {
+      // The account's own entry of a workspace it stays in, told: in place, no request (every device of every member
+      // read its `/v1/me` whole at each change of a workspace's people or stations, the locks' end to end, 2026-11-15).
+      if (!this.#entered(sub, event.entry)) core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, this.#listed(sub));
+    }
     else if (event.type === "release") this.onRelease();
     else if (event.type === "relays") this.onRelayLoad(sub);
     else if (event.type === "feedback" && typeof event.workspace === "string") this.feedbackChanged(event.workspace);
@@ -713,7 +733,7 @@ export class CloudSync {
         // Only its requests to be let in moved (the cloud's, which apps from before ask and drop): nothing this core
         // shows of the workspace says them (its view's `lock_requests` is held as the cloud last gave it, read by none),
         // so nothing is asked; every device of every member read the whole workspace for each.
-      } else core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
+      } else if (!this.#changedIn(event.id, event)) core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
     } else if (event.type === "station" && typeof event.workspace === "string" && typeof event.id === "string" && typeof event.online === "boolean") {
       // A station came online or went: in place, no request.
       const online = event.online;
@@ -730,6 +750,33 @@ export class CloudSync {
       if (online) core.stations?.cameOnline(`${event.workspace}/${id}`);
       this.onReach?.();
     }
+  }
+
+  /// The account's entry of a workspace in its list, as the cloud told it (`workspaces` with `entry`, of one it stays in),
+  /// put in place of the one held; false where the list held does not name that workspace (read whole then).
+  #entered(sub: string, entry: unknown): boolean {
+    const core = this.#core;
+    const me = core.data.record("me", sub);
+    if (!isObject(entry) || typeof entry.id !== "string" || !isObject(me) || !Array.isArray(me.workspaces)) return false;
+    const at = me.workspaces.findIndex((w) => isObject(w) && w.id === entry.id);
+    if (at < 0) return false;
+    const workspaces = [...me.workspaces];
+    workspaces[at] = { ...(workspaces[at] as Record<string, unknown>), ...entry } as (typeof workspaces)[number];
+    core.data.put("me", sub, { ...me, workspaces });
+    return true;
+  }
+
+  /// What a `workspace` event says changed of the view (cloud directory.ts `#told`), taken in place: nothing to do where
+  /// the view held is that version or later (this device's own write answered with it), patched where it is the version
+  /// before; false otherwise (none held, none said, a change missed: read whole then).
+  #changedIn(id: string, event: Record<string, unknown>): boolean {
+    const held = this.#core.data.shared({ topic: "workspace", workspace: id });
+    const [before, after] = Array.isArray(event.rev) ? event.rev : [];
+    if (!isObject(held) || typeof before !== "number" || typeof after !== "number") return false;
+    if (typeof held.rev === "number" && held.rev >= after) return true;
+    if (held.rev !== before) return false;
+    this.#took(id, patched(held, event, after));
+    return true;
   }
 
   /// Holds an account's `/v1/events` socket open, reconnecting with backoff, until the account signs out (the fiber
@@ -855,6 +902,40 @@ export class CloudSync {
 }
 
 type KeptCredential = Credential & { device: string };
+
+/// A workspace's view, as a write answered with it or its event read whole.
+function viewIn(v: unknown): Record<string, unknown> | null {
+  return isObject(v) && typeof v.id === "string" && Array.isArray(v.members) ? v : null;
+}
+
+/// A view's lists, each by the key of its entries.
+const KEYED: Record<string, string> = { members: "sub", stations: "id", rigs: "id", invitations: "id", added: "email" };
+
+/// A view held made the version `after` by what its event said: `set` its fields put, `unset` those gone, `put` its
+/// lists' entries put (over the one held of the same key, what the device knows of it besides staying: a station's
+/// `online`), `gone` their keys taken out. A new object; the view held is shared, never written.
+function patched(held: Record<string, unknown>, event: Record<string, unknown>, after: number): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...held, ...(isObject(event.set) ? event.set : {}), rev: after };
+  for (const k of Array.isArray(event.unset) ? event.unset : []) if (typeof k === "string") delete next[k];
+  for (const [list, key] of Object.entries(KEYED)) {
+    const put = isObject(event.put) && Array.isArray(event.put[list]) ? event.put[list].filter(isObject) : [];
+    const gone = new Set(isObject(event.gone) && Array.isArray(event.gone[list]) ? event.gone[list] : []);
+    if (put.length === 0 && gone.size === 0) continue;
+    const fresh = new Map(put.map((e) => [e[key], e]));
+    const items = (Array.isArray(held[list]) ? held[list] : []).flatMap((e) => {
+      if (!isObject(e)) return [e];
+      if (gone.has(e[key])) return [];
+      const p = fresh.get(e[key]);
+      if (p === undefined) return [e];
+      fresh.delete(e[key]);
+      return [{ ...e, ...p }];
+    });
+    items.push(...fresh.values());
+    if (list === "rigs" && items.length === 0) delete next.rigs;
+    else next[list] = items;
+  }
+  return next;
+}
 
 function readKept(v: unknown): KeptCredential | null {
   if (!isObject(v) || typeof v.device !== "string") return null;
