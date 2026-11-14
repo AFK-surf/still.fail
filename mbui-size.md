@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0b847198b](https://github.com/AFK-surf/monoid/commit/0b847198b1655bd4c22ca1b1ad3986f623fd274d) Simplify station pages, open login links as a shee | 2.01 | 2.76 | 11.86 | 31.71 | 43.84 | 28.32 | 55.5 | 97.04 | 107.48 |
 | [2ed703dec](https://github.com/AFK-surf/monoid/commit/2ed703decf832c39d59034998e89eaa46fc95027) mbui: a Tester's run at a rate draws no frame for  | 2.01 | 2.76 | 11.86 | 31.71 | 43.84 | 28.32 | 55.5 | 97.04 | 107.48 |
 | [5ea9f29a9](https://github.com/AFK-surf/monoid/commit/5ea9f29a9aa670a4e2e36daae34fb7af71c78466) mbui app: a go-to on the chat's page made as nodes | 2.01 | 2.76 | 11.86 | 31.71 | 43.84 | 28.32 | 55.5 | 97.04 | 107.48 |
 | [35915222d](https://github.com/AFK-surf/monoid/commit/35915222d2fcb3a11508fd4ae5f86253d9f1c970) mbui app tests: an options card's answer comes as  | 2.01 | 2.76 | 11.84 | 31.68 | 43.76 | 28.3 | 55.43 | 96.8 | 110.94 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f5ac0ecd1](https://github.com/AFK-surf/monoid/commit/f5ac0ecd163b57f1f293fbd83220ce40a748084e) station: the usage page and a Comma connect's usag | 2 | 2.74 | 11.66 | 31.29 | 41.91 | 27.9 | 53.59 | 96.6 | 107.15 |
 | [6ba59787a](https://github.com/AFK-surf/monoid/commit/6ba59787a53d4163654d8657c57ab730f1eef1e7) fix(mbui): the web's notifications, never answered | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.58 | 118.11 |
 | [afe35b6d3](https://github.com/AFK-surf/monoid/commit/afe35b6d34e7fdaf1df11e75f0deddbc184821d1) Offer 重试 on a turn given up on for want of a state | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.58 | 118.11 |
-| [1fa2fedb3](https://github.com/AFK-surf/monoid/commit/1fa2fedb3d3957539191d63faa17128cb223d84b) app tests: read stays looks at the frames a device | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0b847198b](https://github.com/AFK-surf/monoid/commit/0b847198b1655bd4c22ca1b1ad3986f623fd274d) Simplify station pages, open login links as a shee | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.39 |
 | [2ed703dec](https://github.com/AFK-surf/monoid/commit/2ed703decf832c39d59034998e89eaa46fc95027) mbui: a Tester's run at a rate draws no frame for  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.51 |
 | [5ea9f29a9](https://github.com/AFK-surf/monoid/commit/5ea9f29a9aa670a4e2e36daae34fb7af71c78466) mbui app: a go-to on the chat's page made as nodes | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.35 |
 | [35915222d](https://github.com/AFK-surf/monoid/commit/35915222d2fcb3a11508fd4ae5f86253d9f1c970) mbui app tests: an options card's answer comes as  | 0.4 | 0.52 | 1.96 | 3.08 | 4.46 | 1.45 | 3.8 | 57.35 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f5ac0ecd1](https://github.com/AFK-surf/monoid/commit/f5ac0ecd163b57f1f293fbd83220ce40a748084e) station: the usage page and a Comma connect's usag | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.39 |
 | [6ba59787a](https://github.com/AFK-surf/monoid/commit/6ba59787a53d4163654d8657c57ab730f1eef1e7) fix(mbui): the web's notifications, never answered | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.39 |
 | [afe35b6d3](https://github.com/AFK-surf/monoid/commit/afe35b6d34e7fdaf1df11e75f0deddbc184821d1) Offer 重试 on a turn given up on for want of a state | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
-| [1fa2fedb3](https://github.com/AFK-surf/monoid/commit/1fa2fedb3d3957539191d63faa17128cb223d84b) app tests: read stays looks at the frames a device | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
