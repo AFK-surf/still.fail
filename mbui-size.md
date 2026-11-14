@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [754cfc5d0](https://github.com/AFK-surf/monoid/commit/754cfc5d0997511b1703a2ac0d9a055667b972ed) mbui: words on a halo (View::words_halo), blurred  | 2.03 | 2.79 | 12.03 | 31.92 | 44.65 | 28.52 | 55.91 | 98.55 | 114.74 |
 | [37844aadc](https://github.com/AFK-surf/monoid/commit/37844aadcfab0680ab733f3b370088a1fbb0128b) station: names given by hand and a card let go wri | 2.03 | 2.79 | 11.99 | 31.89 | 44.56 | 28.5 | 55.85 | 98.44 | 114.08 |
 | [976d6ce9e](https://github.com/AFK-surf/monoid/commit/976d6ce9edb988762fcdbf80ac23576cc4d07c11) mbui: the iOS build says which step failed (#6338) | 2.03 | 2.79 | 11.99 | 31.89 | 44.56 | 28.5 | 55.85 | 98.44 | 114.08 |
 | [0b107ce1f](https://github.com/AFK-surf/monoid/commit/0b107ce1fbefd762befd5ca2a9a71d2a492af9f5) mbui: View::flies_in; the chat's page made as node | 2.03 | 2.79 | 11.99 | 31.89 | 44.56 | 28.5 | 55.85 | 98.44 | 114.08 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0c831587d](https://github.com/AFK-surf/monoid/commit/0c831587d9eaca5e7e89a65cc52d0b94a0fab48d) mbui app: the chat's page made as nodes reads whet | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.27 | 55.38 | 97.04 | 115.29 |
 | [bfba44a09](https://github.com/AFK-surf/monoid/commit/bfba44a09ea918bee595e5912c61c6c0586d3a14) mbui app: a quote's card pressed on the chat's pag | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.26 | 55.38 | 96.7 | 115.89 |
 | [88fced1a0](https://github.com/AFK-surf/monoid/commit/88fced1a02ad45abaac9227ab8e3902a2e1fef3c) mbui app: words picked in a message on the chat's  | 2.01 | 2.75 | 11.82 | 31.64 | 43.7 | 28.26 | 55.38 | 96.7 | 115.89 |
-| [a57d609c8](https://github.com/AFK-surf/monoid/commit/a57d609c877c82f40a2793b1c2cd67d034a77809) ci: the Mac's media renderers built for macOS 12.0 | 2.01 | 2.74 | 11.8 | 31.62 | 43.66 | 28.25 | 55.35 | 96.7 | 115.89 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [754cfc5d0](https://github.com/AFK-surf/monoid/commit/754cfc5d0997511b1703a2ac0d9a055667b972ed) mbui: words on a halo (View::words_halo), blurred  | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
 | [37844aadc](https://github.com/AFK-surf/monoid/commit/37844aadcfab0680ab733f3b370088a1fbb0128b) station: names given by hand and a card let go wri | 0.41 | 0.53 | 1.98 | 3.09 | 4.54 | 1.46 | 3.81 | 57.2 |
 | [976d6ce9e](https://github.com/AFK-surf/monoid/commit/976d6ce9edb988762fcdbf80ac23576cc4d07c11) mbui: the iOS build says which step failed (#6338) | 0.4 | 0.52 | 1.96 | 3.08 | 4.52 | 1.45 | 3.8 | 57.33 |
 | [0b107ce1f](https://github.com/AFK-surf/monoid/commit/0b107ce1fbefd762befd5ca2a9a71d2a492af9f5) mbui: View::flies_in; the chat's page made as node | 0.4 | 0.52 | 1.96 | 3.08 | 4.52 | 1.45 | 3.8 | 57.48 |
@@ -90,4 +91,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0c831587d](https://github.com/AFK-surf/monoid/commit/0c831587d9eaca5e7e89a65cc52d0b94a0fab48d) mbui app: the chat's page made as nodes reads whet | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.38 |
 | [bfba44a09](https://github.com/AFK-surf/monoid/commit/bfba44a09ea918bee595e5912c61c6c0586d3a14) mbui app: a quote's card pressed on the chat's pag | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.38 |
 | [88fced1a0](https://github.com/AFK-surf/monoid/commit/88fced1a02ad45abaac9227ab8e3902a2e1fef3c) mbui app: words picked in a message on the chat's  | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.36 |
-| [a57d609c8](https://github.com/AFK-surf/monoid/commit/a57d609c877c82f40a2793b1c2cd67d034a77809) ci: the Mac's media renderers built for macOS 12.0 | 0.4 | 0.52 | 1.96 | 3.08 | 4.45 | 1.45 | 3.8 | 57.36 |
