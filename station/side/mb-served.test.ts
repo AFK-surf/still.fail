@@ -307,6 +307,52 @@ test("a routed request is answered by the MoonBit program as the admin API answe
     assert.deepEqual(told.map((c) => c.type), ["read", "read", "hidden", "muted", "dismissed", "dismissed", "pins", "pins"]);
     assert.deepEqual(told[3], { type: "muted", viewer: "p@x", thread, muted: true });
   }
+  // a person's message in words alone (routes/hub.ts, sessions/lifecycle.ts `say`): claimed of Node, written there as
+  // store.ts writes one, told Node; a keyed one asked again given its first answer; one with more, Node's
+  {
+    const said: any[] = [];
+    const kept = new Map<string, any>();
+    let ts = 1_700_000_000_000_000;
+    served.says = {
+      claim: async (_v, path, key) => {
+        if (key !== null && kept.has(`${path}|${key}`)) return { kept: kept.get(`${path}|${key}`) };
+        const t = ++ts;
+        return { ts: `${Math.floor(t / 1e6)}.${String(t % 1e6).padStart(6, "0")}`, settle: (a) => { if (key !== null && a !== null) kept.set(`${path}|${key}`, a); } };
+      },
+      said: (thread, n, text, row) => said.push({ thread, n, text, row }),
+    };
+    const post = async (body: unknown, key?: string) => {
+      const ms = await theirs.openBi();
+      const h = { ...routedHead, method: "POST", path: `/admin/api/threads/${thread}/messages`, headers: { ...routedHead.headers, ...(key ? { "idempotency-key": key } : {}) } };
+      await ms.write(Buffer.from(`${JSON.stringify(h)}\n${JSON.stringify(body)}`));
+      await ms.finish();
+      const got = await readAll(ms);
+      const at4 = got.indexOf(10);
+      return { status: JSON.parse(got.subarray(0, at4).toString()).status, body: JSON.parse(got.subarray(at4 + 1).toString()) };
+    };
+    const before = given.length;
+    const first = await post({ text: "  hello there  ", client: "android 0.1.9300\u0007" }, "k1");
+    assert.equal(first.status, 200);
+    assert.equal(typeof first.body.n, "number");
+    // (told Node on the program's own line, which may come after the answer reached the device)
+    for (let i = 0; i < 100 && said.length === 0; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(said.length, 1);
+    // the row as the store wrote a message of the same words: every column but where and when
+    const row = said[0].row;
+    const [n2] = store.insertMessage({ ...newMessage(thread, "x.1", "person", "p@x", "hello there"), client: "android 0.1.9300", at: row.at } as ReturnType<typeof newMessage>);
+    const theirsRow = (store as any).db.prepare("SELECT thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter, change FROM entries WHERE thread = ? AND n = ?").get(thread, n2);
+    assert.deepEqual({ ...row, n: 0, ts: "" }, { ...theirsRow, n: 0, ts: "" });
+    assert.equal(row.n, first.body.n);
+    // asked again with its key: its first answer, nothing written
+    assert.deepEqual(await post({ text: "hello there" }, "k1"), first);
+    assert.equal(said.length, 1);
+    assert.deepEqual(await post({ text: "   " }), { status: 400, body: { error: tr("en", "station.admin.emptyMessage") } });
+    assert.equal(given.length, before);
+    // with files: Node's
+    await post({ text: "a file", attachments: [{ path: "x" }] });
+    assert.equal(given.length, before + 1);
+    assert.equal(given.pop()!.head.path, `/admin/api/threads/${thread}/messages`);
+  }
   // a list read again as what changed of it (routes/changed.ts): what the device holds of it, by digest
   for (const [list, args, id] of [
     ["sessions", { connect: null, archived: false, lang: "en", viewer }, "key"],

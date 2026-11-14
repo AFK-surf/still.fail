@@ -15,6 +15,7 @@ import { COUNTED_FROM, OLDEST_CORE, stationBuild } from "../api/oldest.ts";
 import { MOVED_FROM_BUILD } from "../api/moved-from.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { READS_PENDING } from "../read/pool.ts";
+import { LAST_KNOWN } from "../store/store.ts";
 
 /// The routes answered there (api/routes/chats.ts, sessions.ts), every one a read moved to MoonBit; `*` a segment.
 export const SERVED_ROUTES = [
@@ -31,6 +32,8 @@ export const SERVED_ROUTES = [
   // (a member's own marks, written there: api/routes/marks.ts; what changed told the store's followers)
   "PUT /admin/api/threads/*/read", "PUT /admin/api/threads/*/hidden", "PUT /admin/api/threads/*/muted",
   "PUT /admin/api/threads/*/keep", "DELETE /admin/api/threads/*/keep", "PUT /admin/api/sessions/*/pin", "DELETE /admin/api/sessions/*/pin",
+  // (a person's message in words alone: written there, delivered by Node; any other kind Node's: `say`)
+  "POST /admin/api/threads/*/messages",
 ];
 /// How many of the program answer at once (each one read at a time, as a reader of the pool's).
 const SERVERS = 2;
@@ -53,6 +56,14 @@ export class Served {
   readonly #told = new Map<number, string>();
   readonly #names = new Map<string, string>();
   #closed = false;
+  /// A person's message the program writes: claimed before (the key's first answer, the timestamp), told once written
+  /// (admin.ts `claimSay`, `saidElsewhere`).
+  says: {
+    claim(viewer: any, path: string, key: string | null, lang: "zh" | "en"): Promise<{ kept: Handled } | { refused: Handled } | { ts: string; settle: (answer: Handled | null) => void }>;
+    said(thread: number, n: number, text: string, row: Record<string, unknown>): void;
+  } | undefined;
+  /// What settles each claim's key once its answer is here, by the claim's number.
+  readonly #claims = new Map<number, (answer: Handled | null) => void>();
   /// What the program wrote (a device's marks), told the store's followers (store.ts `told`).
   changed: ((changes: any[]) => void) | undefined;
 
@@ -94,6 +105,8 @@ export class Served {
       }
       else if (typeof said?.fallback === "number") void (said.stream === true ? this.#relay(server, said) : this.#fallback(server, said));
       else if (Array.isArray(said?.changes)) this.changed?.(said.changes);
+      else if (typeof said?.claim === "number") void this.#claim(server, said);
+      else if (said?.said !== undefined) this.#said(said);
       else if (typeof said?.stop === "number") this.#streaming.get(child)?.get(said.stop)?.();
     });
     child.on("error", (error: Error) => log.warn("served", "a serving program failed", { error: error.message }));
@@ -116,11 +129,12 @@ export class Served {
       localPage: tr(lang, "station.creator.localPage"), admin: tr(lang, "station.author.admin"),
       untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage"),
       quotedOnly: tr(lang, "station.chat.quotedOnly"), updateApp: tr(lang, "station.admin.updateApp"), badN: tr(lang, "station.admin.badN"),
+      postOnlyStillfail: tr(lang, "station.admin.postOnlyStillfail"), emptyMessage: tr(lang, "station.admin.emptyMessage"),
       notInteger: Object.fromEntries(["after", "before", "from", "to"].map((name) => [name, tr(lang, "station.admin.notInteger", { name })])),
       fromAndTo: tr(lang, "station.admin.fromAndTo"), inScriptOutput: tr(lang, "station.transcript.inScriptOutput"),
     }]));
     server.process.postMessage({
-      set: { words, oldestCore: OLDEST_CORE, countedFrom: COUNTED_FROM, movedFromBuild: MOVED_FROM_BUILD, build: stationBuild(), runtimes: RUNTIME_KINDS, pending: READS_PENDING },
+      set: { lastKnown: LAST_KNOWN, words, oldestCore: OLDEST_CORE, countedFrom: COUNTED_FROM, movedFromBuild: MOVED_FROM_BUILD, build: stationBuild(), runtimes: RUNTIME_KINDS, pending: READS_PENDING },
       wall: wall.now(),
     });
     if (this.#names.size > 0) server.process.postMessage({ names: [...this.#names] });
@@ -239,6 +253,30 @@ export class Served {
     const last = pending.at(-1);
     if (last !== undefined && last.text === text && text !== null) last.to.push(n);
     else pending.push({ text, to: [n] });
+  }
+
+  async #claim(server: Server, said: { claim: number; conn: number; path: string; key?: string | null; lang?: string }) {
+    const n = said.claim;
+    const viewer = this.#viewerOf(Number(said.conn));
+    const give = (m: Record<string, unknown>) => server.process.postMessage({ claimed: n, ...m });
+    const text = (h: Handled) => ({ status: h.status, headers: h.headers, text: h.body.toString() });
+    if (viewer === null || this.says === undefined) return give({ refused: { status: 503, headers: { "content-type": "application/json" }, text: '{"error":"station starting"}' } });
+    try {
+      const got = await this.says.claim(viewer, said.path, said.key ?? null, said.lang === "en" ? "en" : "zh");
+      if ("kept" in got) return give({ kept: text(got.kept) });
+      if ("refused" in got) return give({ refused: text(got.refused) });
+      this.#claims.set(n, got.settle);
+      give({ ts: got.ts });
+    } catch (e) {
+      give({ refused: { status: 500, headers: { "content-type": "application/json" }, text: JSON.stringify({ error: (e as Error).message }) } });
+    }
+  }
+
+  #said(said: { said: { thread: number; n: number; text: string; row: Record<string, unknown> } | null; of: number; answer?: { status: number; headers: Record<string, string>; text: string } }) {
+    if (said.said !== null) this.says?.said(said.said.thread, said.said.n, said.said.text, said.said.row);
+    const settle = this.#claims.get(said.of);
+    this.#claims.delete(said.of);
+    settle?.(said.answer === undefined ? null : { status: said.answer.status, headers: said.answer.headers, body: Buffer.from(said.answer.text) });
   }
 
   async close() {
