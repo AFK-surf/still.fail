@@ -216,10 +216,10 @@ const via = (surface: string) => (surface === STILLFAIL_SURFACE ? "web" : surfac
 /// The still.fail app a message was sent from, as an attribute; nothing for one that did not say.
 const clientAttr = (m: MessageRow) => (m.client !== null && m.client !== undefined ? ` client="${escapeAttr(m.client)}"` : "");
 
-/// Numeric message IDs from Slack and the app are seconds since the epoch. Feishu IDs, for example, are opaque:
-/// for those only the time the station recorded the message is known (which can be later than it was sent).
-function timeAttr(m: MessageRow): string {
-  const numeric = /^\d{10}(?:\.\d+)?$/.test(m.ts) ? Number(m.ts) * 1000 : NaN;
+/// Slack and app message IDs are seconds since the epoch; Comma's are sequence numbers, and Feishu's are opaque.
+/// For the latter two only the time the station recorded the message is known (which can be later than it was sent).
+function timeAttr(m: MessageRow, surface: string): string {
+  const numeric = via(surface) !== "comma" && via(surface) !== "feishu" && /^\d{10}(?:\.\d+)?$/.test(m.ts) ? Number(m.ts) * 1000 : NaN;
   const sent = Number.isFinite(numeric) && numeric <= 8.64e15 ? numeric : null;
   const recorded = Number.isFinite(m.createdAt) && m.createdAt > 0 && m.createdAt <= 8.64e15 ? m.createdAt : null;
   const at = sent ?? recorded;
@@ -228,9 +228,8 @@ function timeAttr(m: MessageRow): string {
 
 /// Messages handed to a session, each with its source and sender, and a hint where a thread is new to it.
 /// `posts`: the agent's first post in a message's thread made after it (by ts), said as its `before`.
-export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map(), cards: Map<PendingMessage, { ended: Pick<MessageRow, "author" | "ts">; current: Pick<MessageRow, "ts"> | null; special: string | null }> = new Map(), selfKey = "", now?: number): string {
+export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map(), cards: Map<PendingMessage, { ended: Pick<MessageRow, "author" | "ts">; current: Pick<MessageRow, "ts"> | null; special: string | null }> = new Map(), selfKey = ""): string {
   const lines: string[] = [];
-  if (messages.length > 0 && now !== undefined) lines.push(`[Messages delivered at ${new Date(now).toISOString()} (UTC)]`);
   const hinted = new Set<number>();
   for (const p of messages) {
     const m = p.message;
@@ -248,7 +247,7 @@ export function formatInbound(messages: PendingMessage[], newThreads: Set<number
     const from = agent ? (name ?? "another agent") : name !== undefined ? `${name} (${m.author})` : m.author;
     const post = posts.get(p);
     const sentBefore = post !== undefined ? ` before="${escapeAttr(post)}"` : "";
-    lines.push(`<message via="${via(p.surface)}" connect="${escapeAttr(p.connect)}"${you} thread="${address}"${timeAttr(m)} from="${escapeAttr(from)}"${agent ? " bot" : ""}${clientAttr(m)} ts="${m.ts}"${sentBefore}>\n${messageForAgent(m)}\n</message>`);
+    lines.push(`<message via="${via(p.surface)}" connect="${escapeAttr(p.connect)}"${you} thread="${address}"${timeAttr(m, p.surface)} from="${escapeAttr(from)}"${agent ? " bot" : ""}${clientAttr(m)} ts="${m.ts}"${sentBefore}>\n${messageForAgent(m)}\n</message>`);
     const change = cards.get(p);
     if (change !== undefined) {
       const whose = change.ended.author === selfKey ? "Your card" : "A card";
@@ -322,7 +321,7 @@ export function formatHistory(messages: MessageRow[], surface: string, address: 
         const chose = found.chose === undefined ? "" : `; ${found.chose.by} chose ${JSON.stringify(found.chose.option)}, which closed it without a message`;
         card = `\n[Answer card: ${found.pending ? "pending" : "no longer pending"}${chose}; ${JSON.stringify(facts)}]`;
       }
-      return `<message via="${via(surface)}" thread="${address}"${timeAttr(m)} from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}${card}\n</message>`;
+      return `<message via="${via(surface)}" thread="${address}"${timeAttr(m, surface)} from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}${card}\n</message>`;
     })
     .join("\n");
 }

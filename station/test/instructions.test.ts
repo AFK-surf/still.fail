@@ -79,14 +79,15 @@ test("thread addresses as the agent writes them", () => {
 test("delivered messages and history say their time without changing their identifiers", () => {
   const m = { thread: 1, n: 1, ts: "1794667432.279000", author: "a", authorKind: "person", text: "最近的 chat", client: null, attachments: [], quotes: [], createdAt: 1794667434000 };
   const p = { message: m, surface: "ember", channel: "CHAT", threadTs: m.ts, connect: "ember" };
-  const delivered = ts.formatInbound([p] as never, new Set(), new Map(), new Map(), new Map(), new Map(), "", 1794667440000);
-  assert.ok(delivered.includes("[Messages delivered at 2026-11-14T14:44:00.000Z (UTC)]"), delivered);
+  const delivered = ts.formatInbound([p] as never, new Set(), new Map(), new Map(), new Map(), new Map(), "");
   assert.ok(delivered.includes('sent_at="2026-11-14T14:43:52.279Z" from="a" ts="1794667432.279000"'), delivered);
   const history = ts.formatHistory([m] as never, "web", `CHAT/${m.ts}`, "", new Map());
   assert.ok(history.includes('sent_at="2026-11-14T14:43:52.279Z" from="a" ts="1794667432.279000"'), history);
   const feishu = { ...m, ts: "om_123", createdAt: 1794667434000 };
   const opaque = ts.formatHistory([feishu] as never, "feishu:test", "oc_1/om_123", "", new Map());
   assert.ok(opaque.includes('recorded_at="2026-11-14T14:43:54.000Z" from="a" ts="om_123"'), opaque);
+  const comma = ts.formatHistory([m] as never, "comma:test", `TASK/${m.ts}`, "", new Map());
+  assert.ok(comma.includes('recorded_at="2026-11-14T14:43:54.000Z" from="a" ts="1794667432.279000"'), comma);
 });
 
 test("earlier choices on cards say when they were made and that what follows is not about them", () => {
