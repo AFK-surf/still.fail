@@ -283,8 +283,8 @@ function pairsOf(root: string, admits: Stmt[]): Map<string, Role3> {
 /// (d) Stations: admitted by an owner or admin in the list, cancelled by a step-1 owner or admin, no roles among them.
 ///
 /// `rootAdmit` (round four's, the lead's, 2026-11-14): the hash of an admit in force on the root's log of the root's
-/// person to it as owner, said by the root's pair (`~root`): whom the list binds them by while it is in, before any
-/// other admit of theirs; once a cancellation that counts took it out, they are bound by their real admits as anyone
+/// person to it as owner, said by the root's pair (`~root`): whom the list binds them by while it is not out (in, or left
+/// undecided by a circle of removals), before any other admit of theirs; once a cancellation that counts took it out, they are bound by their real admits as anyone
 /// is, or not in the list. Without it, round three's reading: the root always bound by the root.
 export function roster(h: Holder, root: string, rule: "steps" | "grounded" = "grounded", rootAdmit?: string): Roster {
   const stmts: Stmt[] = [];
@@ -420,8 +420,9 @@ function grounded(h: Holder, root: string, stmts: Stmt[], out: Roster, rootAdmit
   }
   out.pairs.set(rootPair, "owner");
   for (const k of out.pairs.keys()) out.undecided.delete(k);
-  // (round four's `~root`: while it is in, it binds the root's person before anything; once out, their admits as anyone's)
-  const rootIn = rootAdmit === undefined || label.get(`a:${rootAdmit}`) === "in";
+  // (round four's `~root`: while it is not out (in, or undecided: a removal by one standing in a circle of removals drops
+  // nobody, the lead's, 2026-11-14), it binds the root's person before anything; once out, their admits as anyone's)
+  const rootIn = rootAdmit === undefined || label.get(`a:${rootAdmit}`) !== "out";
   const best = new Map<string, Member>(rootIn ? [["alice", { lock: root, role: "owner", admit: "" }]] : []);
   for (const a of admits) {
     if (label.get(`a:${a.h}`) !== "in" || (rootIn && a.body.sub === "alice") || a.h === rootAdmit) continue;

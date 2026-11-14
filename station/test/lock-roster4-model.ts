@@ -311,7 +311,7 @@ export type W4Options = World3Options & {
   /// D7 (the lead's, 2026-11-14; on by default): that the root's person is in the list, bound by the root's log, is an
   /// admit like any other, implicit (`~root`: by the root's pair, of them, to the root, as owner; in force, never
   /// lacking), which an owner's removal of them cancels where its `cancels` names the root's genesis hash; while it is
-  /// in it binds them before any other admit of theirs, once out their real admits bind them as anyone's. Off: round
+  /// not out (in, or undecided: never on the word of one in a circle of removals) it binds them before any other admit of theirs, once out their real admits bind them as anyone's. Off: round
   /// three's reading, the root's person bound by the root for good (what a reader from before this rule reads).
   rootOut?: boolean;
 };
@@ -828,6 +828,16 @@ export class World4 extends World3 {
     }
     return { newest, settings };
   }
+  /// D7 (step 4, the lead's, 2026-11-14): `open` and `off` follow the root's person: bound by a real admit to a log of
+  /// theirs (`r`'s binding of them is no `~root`), that log's newest in force where it says any (its newest `open`'s
+  /// settings where it said one), else the root's.
+  openOffOf(h: Holder, root: string, f: { stmts: Map<string, Body> }, r: Roster): { newest: "open" | "off" | null; settings: Body | null } {
+    const base = this.openOff(h, root, f);
+    const m = r.members.get(h.logs.get(root)?.rules.state(root).sub ?? "alice");
+    if (this.x.o.rootOut === false || m === undefined || m.admit === "" || m.lock === root) return base;
+    const own = this.openOff(h, m.lock, f);
+    return own.newest === null ? base : { newest: own.newest, settings: own.settings ?? base.settings };
+  }
   /// D6: the chain as it moved at `h`, for `ws`: the `moved` on its active old chain that names the root `h` goes by,
   /// and the chain's state at it (frozen: nothing follows a `moved`). Null where no chain moved there, or `carry` is off.
   /// A world with no old chain (D5's drawn worlds, M1-M6) stands for one that moved from the bare chain `bareChain`
@@ -1017,9 +1027,9 @@ export class World4 extends World3 {
     if (root === null) return "not rooted";
     if (!h.logs.has(root)) return "no root";
     const f = this.inForce(h, ws, all);
-    const oo = this.openOff(h, root, f);
-    if (oo.newest === "off") return "off";
     const r = this.rosterIn(h, root, ws, f);
+    const oo = this.openOffOf(h, root, f, r);
+    if (oo.newest === "off") return "off";
     const c = this.carriedOf(h, ws);
     const off = c === null ? null : this.bindsIn(h, c, h.logs.get(root)?.rules.state(root).sub ?? "alice", ws, f).off;
     // (the root's member: its email is the `open` in force's)
@@ -2160,7 +2170,7 @@ export type M9Case = {
   label: string;
   /// At every keeper the workspace has, alice as the state says her (`out`, or her role, the log by its first hex, her
   /// email, her apps), bob's role; whether the keepers agree; the same read as before D7 (`rootOut` off).
-  alice: string; bob: string; agree: boolean; before: string; beforeAgree: boolean;
+  alice: string; bob: string; dan: string; agree: boolean; before: string; beforeAgree: boolean;
 };
 /// alice the root's person (log R), bob an owner by her, carol an admin, xena a member (all admitted by R's app), alice's
 /// laptop and phone each a log begun anew (R2, R3): each case of the lead's design, fresh, on a world of `seed`.
@@ -2187,11 +2197,11 @@ export function m9(seed: number): M9Case[] {
     const one = (h: Holder) => {
       const d = w.d4(h);
       if (typeof d === "string") return [d, d];
-      const m = d.members.get("alice"), b = d.members.get("bob");
-      return [m === undefined ? "out" : `${m.role} #${m.lock.slice(0, 6)} ${m.email} {${m.apps.map(nameOfKey).join(",")}}`, b === undefined ? "out" : b.role];
+      const m = d.members.get("alice"), b = d.members.get("bob"), e = d.members.get("dan");
+      return [m === undefined ? "out" : `${m.role} #${m.lock.slice(0, 6)} ${m.email} {${m.apps.map(nameOfKey).join(",")}}`, b === undefined ? "out" : b.role, e === undefined ? "out" : e.role];
     };
     const now = keepers.map(one), was = w.asBefore(() => keepers.map(one));
-    return { alice: now[0]?.[0] ?? "-", bob: now[0]?.[1] ?? "-", agree: new Set(now.map((x) => x.join())).size === 1, before: was[0]?.[0] ?? "-", beforeAgree: new Set(was.map((x) => x.join())).size === 1 };
+    return { alice: now[0]?.[0] ?? "-", bob: now[0]?.[1] ?? "-", dan: now[0]?.[2] ?? "-", agree: new Set(now.map((x) => x.join())).size === 1, before: was[0]?.[0] ?? "-", beforeAgree: new Set(was.map((x) => x.join())).size === 1 };
   };
   const out: M9Case[] = [];
   const row = (label: string, f: (x: ReturnType<typeof make>) => void) => {
@@ -2217,6 +2227,43 @@ export function m9(seed: number): M9Case[] {
     const ii = admit(x, x.R2);
     rm(x, x.B, [hashOf(ii)]);
     admit(x, x.R3);
+  });
+  // (xi: the lead's, 2026-11-14: `~root` goes out only where a cancellation of it counts)
+  const circle = (x: ReturnType<typeof make>) => {
+    const E = x.w.dev("dan's app");
+    x.w.sign(x.A, "ws.member", { ws: WS, sub: "dan", lock: x.w.home.get("dan"), role: "owner" });
+    x.w.level();
+    x.w.sign(x.B, "ws.member.remove", { ws: WS, sub: "dan", cancels: x.w.seen(x.B.h, "dan") });
+    x.w.sign(E, "ws.member.remove", { ws: WS, sub: "bob", cancels: x.w.seen(E.h, "bob") });
+    x.w.level();
+    rm(x, x.B, [x.R]);
+  };
+  row("xi. bob and dan owners each removing the other, bob's removal of alice naming R", (x) => circle(x));
+  row("xi. then alice's removal of bob on R", (x) => {
+    circle(x);
+    x.w.level();
+    x.w.sign(x.A, "ws.member.remove", { ws: WS, sub: "bob", cancels: x.w.seen(x.A.h, "bob") });
+  });
+  // (x, step 4: on and off follow her)
+  const rebound = (x: ReturnType<typeof make>) => {
+    rm(x, x.B, [x.R]);
+    const ii = admit(x, x.R2);
+    x.w.level();
+    x.w.sign(x.w.dev("alice's laptop"), "ws.off", { ws: WS });
+    return ii;
+  };
+  row("x. after ii, R2 says off", (x) => void rebound(x));
+  row("x. then R says open (a device of the lost log)", (x) => {
+    rebound(x);
+    x.w.level();
+    x.w.sign(x.A, "ws.open", { ws: WS, ...OPEN });
+  });
+  row("x. then bob's removal of ii's admit", (x) => {
+    const ii = rebound(x);
+    x.w.level();
+    x.w.sign(x.A, "ws.open", { ws: WS, ...OPEN });
+    x.w.level();
+    rm(x, x.B, [hashOf(ii)]);
   });
   row("viii. bob's removal naming R and, on R, alice's removal of bob", (x) => {
     rm(x, x.B, [x.R]);

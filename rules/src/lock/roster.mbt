@@ -100,7 +100,8 @@ pub(all) struct Roster {
   /// D6: the keys of the app devices the chain as it moved still says (`carry_of`'s `apps`, by the key each signs
   /// with), and whose they are; none where no chain is carried.
   carried_keys : Array[(String, String)]
-  /// The newest of `open` and `off` in force on the root's active chain (its kind), and the newest `open`'s body.
+  /// The newest of `open` and `off` in force on the root's active chain (its kind), and the newest `open`'s body; once
+  /// the root's person is bound by a real admit, those of the log that binds them where it says any.
   newest : String?
   settings : Json?
 }
@@ -229,21 +230,26 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
   let in_force = if without.length() == 0 { in_force } else { in_force.filter(fn(f) { !without.contains(f.1) }) }
   let forced = in_force.map(fn(f) { (f.0, f.1) })
   forced.sort_by(fn(a, b) { a.compare(b) })
-  // On or off, and the settings: the root's alone.
-  let mut newest : String? = None
-  let mut settings : Json? = None
-  for f in in_force {
-    if f.3 == root {
-      match text_of(field(Some(f.2), "kind")) {
-        Some("open") => {
-          newest = Some("open")
-          settings = Some(f.2)
+  // On or off, and the settings: the root's (and, once the list binds the root's person by a real admit, the log that
+  // binds them where it says any: below).
+  let open_off = fn(g : String) -> (String?, Json?) {
+    let mut newest : String? = None
+    let mut settings : Json? = None
+    for f in in_force {
+      if f.3 == g {
+        match text_of(field(Some(f.2), "kind")) {
+          Some("open") => {
+            newest = Some("open")
+            settings = Some(f.2)
+          }
+          Some("off") => newest = Some("off")
+          _ => ()
         }
-        Some("off") => newest = Some("off")
-        _ => ()
       }
     }
+    (newest, settings)
   }
+  let (newest, settings) = open_off(root)
   let empty : Roster = {
     rooted: false, members: [], stations: [], pairs: [], undecided: [], cancelled: [], statements: [], labels: [], refused,
     in_force: forced, lacking, newest, settings, carried_keys: [],
@@ -454,7 +460,7 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     undecided.remove(k)
   }
   let role_of_pair = fn(s : Stmt) { pairs.get(pair_of(s)).map(fn(p) { p.2 }) }
-  // Whom the list binds by which log: the root's person by the root while `~root` is in, before any other admit of
+  // Whom the list binds by which log: the root's person by the root while `~root` is not out, before any other admit of
   // theirs; anyone else, and they once it is out, by the admit in force of the highest role, then one said in a log
   // before the chain's (`Carried`: `~<moved>/m/<sub>`), then the smallest hash. No admit of theirs in, not in the list.
   let before = fn(a : String, b : String) {
@@ -464,7 +470,10 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
       _ => a < b
     }
   }
-  let root_in = label.get("a:" + root_admit) == Some("in")
+  // (out only where a cancellation of it counts, never where one is undecided, the lead's, 2026-11-14: a removal by an
+  // owner standing in a circle of removals would else drop the root's person on the word of one whose standing nobody
+  // can tell, and theirs is the one word that settles that circle)
+  let root_in = label.get("a:" + root_admit) != Some("out")
   let best : Map[String, (String, String, String?)] = if root_in { Map([(root_sub, ("owner", root, None))]) } else { Map([]) }
   for a in admits {
     if label.get("a:" + a.hash) != Some("in") || a.hash == root_admit || (root_in && txt(a, "sub") == root_sub) {
@@ -484,6 +493,18 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     if takes {
       best[txt(a, "sub")] = (role, txt(a, "lock"), Some(a.hash))
     }
+  }
+  // `open` and `off` follow the root's person (the lead, 2026-11-14): bound by a real admit (`~root` out) to a log of
+  // theirs, the newest of them in force there counts where it says any, and its newest `open`'s settings where it said
+  // one; else the root's. So they turn safe mode off and on again from the devices that are theirs now, nobody else.
+  let (newest, settings) = match best.get(root_sub) {
+    Some((_, lock, Some(_))) if lock != root =>
+      match open_off(lock) {
+        (None, _) => (newest, settings)
+        (n, None) => (n, settings)
+        said => said
+      }
+    _ => (newest, settings)
   }
   // Stations: admitted by a pair that stands as owner or admin, unless one such cancelled them.
   let st_cancelled : Map[String, String] = Map([])

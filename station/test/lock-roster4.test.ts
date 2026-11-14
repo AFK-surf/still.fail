@@ -231,7 +231,7 @@ test("M9: the root's person taken out and let in again (D7)", async () => {
   for (const [i, c] of seeds[0]!.entries()) {
     const same = seeds.every((cs) => cs[i]!.alice.replace(/#\w+/g, "#") === c.alice.replace(/#\w+/g, "#") && cs[i]!.bob === c.bob);
     const agree = seeds.filter((cs) => cs[i]!.agree).length;
-    print(`${c.label}: alice ${c.alice}; bob ${c.bob}; keepers agree in ${agree}/${seeds.length} seeds; the same in every seed ${same}; read as before D7: alice ${c.before}`);
+    print(`${c.label}: alice ${c.alice}; bob ${c.bob}; dan ${c.dan}; keepers agree in ${agree}/${seeds.length} seeds; the same in every seed ${same}; read as before D7: alice ${c.before}`);
   }
   print(`(M9 printed, ${since()})`);
 });
