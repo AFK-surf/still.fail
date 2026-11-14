@@ -44,9 +44,10 @@ fn login_of(core : Core, station : String, id : String) -> Json? {
 }
 
 ///|
-/// What the core is asked for login `id` of `station` (login_of's, its card's): its `machineLogin`.
+/// What the core is asked for login `id` of `station` (login_of's, its card's; its chat's as it opens, sfbase's
+/// chat_opens): its `machineLogin`.
 fn login_ask(station : String, id : String) -> (String, Map[String, Json]) {
-  ("machineLogin", { "station": Json::string(station), "id": Json::string(id) })
+  @sfbase.machine_login_ask(station, id)
 }
 
 ///|
@@ -59,7 +60,7 @@ fn logins_of(core : Core, station : String) -> Json? {
 ///|
 /// What the core is asked for station `station`'s logins (logins_of's, its page's 登录's): its `machineLogins`.
 fn logins_ask(station : String) -> (String, Map[String, Json]) {
-  ("machineLogins", { "station": Json::string(station) })
+  @sfbase.machine_logins_ask(station)
 }
 
 ///|

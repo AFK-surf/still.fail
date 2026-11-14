@@ -122,15 +122,7 @@ fn decision_login_node(
     let card = m().card
     let id = card.map(fn(c) { c.login }).unwrap_or("")
     let other = card.map(fn(c) { c.station }).unwrap_or("")
-    let station = if other == "" {
-      here.station
-    } else {
-      match here.station.find("/") {
-        Some(i) => here.station.exact_view(end=i).to_owned() + "/" + other
-        None => other
-      }
-    }
-    (station, id)
+    (@sfbase.card_login_station(here.station, other), id)
   }
   v.box(fn(b) {
     @sf.style_node(b, fn() { decision_box })
