@@ -234,6 +234,9 @@ export interface ScreenSource {
   readonly reveal?: boolean;
   /// It can be previewed (`ViewOptions.peek`): a tab of the browser, not the desktop (whose view wakes its display).
   readonly peek?: boolean;
+  /// A chat's Farview tab (browser/farview.ts): an app that draws Farview's protocol itself reads it over a stream of
+  /// its own (`{"farview": {"screen": id}}`, the host's bytes as they are) instead of a view's pictures.
+  readonly farview?: boolean;
   /// The session that opened it (a tab of the browser an agent opened), when known.
   openedBy?(): string | undefined;
   /// A browser tab a person opened on this station (kept in Chrome's persistent profile, hidden from agents).

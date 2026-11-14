@@ -106,6 +106,8 @@ test("a view sends its size, a picture first and then only once the host says th
   const port = await framePort(picture);
   const screen = new FarviewScreen({ session: "chat:c-1", port: port.port });
   assert.match(screen.id, /^browser:fv_[0-9a-f]{24}$/);
+  // (an app that draws Farview itself reads it by a stream of its own: the list says it can)
+  assert.equal(screen.farview, true);
   assert.equal(screen.openedBy(), "chat:c-1");
   const view = await screen.open({ maxWidth: 4000, maxHeight: 4000, codecs: ["jpeg"], fit: { width: 400, height: 800, scale: 2 } });
   assert.equal(screen.viewing(), 1);

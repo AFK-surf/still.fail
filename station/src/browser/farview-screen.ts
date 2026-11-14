@@ -135,6 +135,7 @@ export class FarviewScreen implements ScreenSource {
   readonly id: string;
   readonly kind = "browser" as const;
   readonly peek = true;
+  readonly farview = true;
   readonly #session: string;
   readonly #port: number;
   #page: FramePage = { url: "", title: "" };
