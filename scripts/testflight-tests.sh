@@ -10,9 +10,11 @@ fail() { echo "testflight: $*" >&2; exit 1; }
 while :; do
   jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/${GITHUB_RUN_ATTEMPT:-1}/jobs?per_page=100" \
     -q '[.jobs[] | select(.name | startswith("tests / ")) | {name, status, conclusion}]')
-  # (rates-said runs only after one failed, to say whose it is: skipped is its pass)
-  bad=$(jq -r '.[] | select(.status == "completed" and .conclusion != "success")
-    | select(.name != "tests / rates-said" or .conclusion != "skipped") | "\(.name): \(.conclusion)"' <<< "$jobs")
+  # (skipped is a pass: a job skipped by its own `if` is not this run's to run (rates-said, only after one failed; the
+  # branch's changed test files and their rates, a branch push's alone, which refused the first TestFlight of main after
+  # #6101, 43622360127), and one skipped because a job it needs failed is said by that job)
+  bad=$(jq -r '.[] | select(.status == "completed" and .conclusion != "success" and .conclusion != "skipped")
+    | "\(.name): \(.conclusion)"' <<< "$jobs")
   [ -z "$bad" ] || fail "tests did not pass: $bad"
   open=$(jq '[.[] | select(.status != "completed")] | length' <<< "$jobs")
   groups=$(jq '[.[] | select(.name | test("^tests / native \\(app [0-9]+/[0-9]+\\)$"))] | length' <<< "$jobs")
