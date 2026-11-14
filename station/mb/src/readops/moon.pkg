@@ -3,6 +3,7 @@ import {
   "station/wire",
   "station/sql",
   "station/cards",
+  "station/cc",
   "station/legacy",
   "station/letters",
   "station/jsjson",
