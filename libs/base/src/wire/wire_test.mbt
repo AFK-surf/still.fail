@@ -24,6 +24,56 @@ test "a request's head line" {
 }
 
 ///|
+test "a request's head line with what each kind of request says after its headers, as the device mesh in TypeScript writes each" {
+  // Each expectation is what Node printed for that mesh's own expression of the head (client/core-ts/src/mesh.ts:
+  // `Link.request` 576, `ask` 622, `socket` 585, `duplex` 591, each written by `#open` as JSON.stringify and a
+  // newline, 514), run on these heads 2026-11-14.
+  // A request: a header said twice keeps its first place and takes the later value (Object.fromEntries).
+  inspect(
+    @wire.head_line("PUT", "/files/a b?x=1&y=é", [("content-type", "text/plain"), ("x-n", "1"), ("content-type", "application/json")]),
+    content="{\"method\":\"PUT\",\"path\":\"/files/a b?x=1&y=é\",\"headers\":{\"content-type\":\"application/json\",\"x-n\":\"1\"}}\n",
+  )
+  // An ask: no body, its further fields after the headers.
+  let adb : Map[String, Json] = {
+    "adb": { "offer": { "connect": 5555, "pair": null, "name": "Pixel \"8\"" }, "phone": "abababab" },
+  }
+  inspect(
+    @wire.head_line("POST", "/adb", [], more=adb),
+    content="{\"method\":\"POST\",\"path\":\"/adb\",\"headers\":{},\"adb\":{\"offer\":{\"connect\":5555,\"pair\":null,\"name\":\"Pixel \\\"8\\\"\"},\"phone\":\"abababab\"}}\n",
+  )
+  // A socket: `socket` true.
+  inspect(
+    @wire.head_line("GET", "/preview/3000/ws", [("sec-websocket-protocol", "vite-hmr")], more={ "socket": true }),
+    content="{\"method\":\"GET\",\"path\":\"/preview/3000/ws\",\"headers\":{\"sec-websocket-protocol\":\"vite-hmr\"},\"socket\":true}\n",
+  )
+  // A duplex: what it is of, with a number that is no whole one.
+  let screen : Map[String, Json] = {
+    "screen": { "id": "main", "width": 1280.5, "fps": 30, "audio": true, "opus": true, "self": "cdcdcdcd" },
+  }
+  inspect(
+    @wire.head_line("GET", "/screens/view", [("idempotency-key", "k1")], more=screen),
+    content="{\"method\":\"GET\",\"path\":\"/screens/view\",\"headers\":{\"idempotency-key\":\"k1\"},\"screen\":{\"id\":\"main\",\"width\":1280.5,\"fps\":30,\"audio\":true,\"opus\":true,\"self\":\"cdcdcdcd\"}}\n",
+  )
+  // Several fields, in the order given, their own fields in theirs; numbers as JavaScript writes them.
+  let several : Map[String, Json] = { "a": 1, "b": [1.5, 0, 1.0e21, 1.0e-7, "</script>😀"], "a2": { "z": 1, "a": 2 } }
+  inspect(
+    @wire.head_line("GET", "/x", [], more=several),
+    content="{\"method\":\"GET\",\"path\":\"/x\",\"headers\":{},\"a\":1,\"b\":[1.5,0,1e+21,1e-7,\"</script>😀\"],\"a2\":{\"z\":1,\"a\":2}}\n",
+  )
+  // A number that is none is null, wherever it is, in a head's line and in a control line.
+  let zero = 0.0
+  let none : Map[String, Json] = {
+    "a": Json::number(zero / zero),
+    "b": [Json::number(1.0 / zero), { "c": Json::number(-1.0 / zero) }, 2],
+  }
+  inspect(
+    @wire.head_line("GET", "/x", [], more=none),
+    content="{\"method\":\"GET\",\"path\":\"/x\",\"headers\":{},\"a\":null,\"b\":[null,{\"c\":null},2]}\n",
+  )
+  inspect(@wire.hello_line("x", says=none), content="{\"credential\":\"x\",\"a\":null,\"b\":[null,{\"c\":null},2]}\n")
+}
+
+///|
 test "lines come off what is carried, the rest stays" {
   let carry = @wire.Carry::new()
   carry.push(b"{\"status\":20")

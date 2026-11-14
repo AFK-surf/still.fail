@@ -16,7 +16,13 @@
 //                      path a relay's: no `ip`), `stats` (`{rxBytes, txBytes}` alone of what the Rust shell says,
 //                      and of a connection not ended alone: one that ended is "not its handle", which the mesh
 //                      takes as nothing more having come)
+//   conn.acceptBi      the connection's `acceptBi`: the next stream its peer opens, a handle as one opened here; of
+//                      a connection that ended, or ends meanwhile, `{end: true}`, never a failure
 //   istream.read/write/finish/reset                    the stream's own; a read answers its end as `{end: true}`
+//   istream.stopped    the stream's `stopped`: `{code}`, what its peer stopped it with, else null: once what was
+//                      written is taken, and of a stream reset here. iroh-wasm says null of a failure too, so
+//                      where it does and the stream's connection has ended this fails, as the Rust shell does;
+//                      a failure with its connection up cannot be told from null
 //
 // A handle is a number, as the Rust shell's (`{"id": n}`), and a page lives long: each is let go of, none kept for
 // the page's life.
@@ -131,6 +137,13 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|        if (handles.get(a.id) !== h) throw new Error("connection closed");
   #|        return [{ id: keep({ stream: opened, on: a.id, finished: false, ended: false }) }];
   #|      }
+  #|      case "conn.acceptBi": {
+  #|        if (h?.gone !== undefined) return [{ end: true }];
+  #|        const accepted = await connection(h).acceptBi();
+  #|        // (ended, or let go of, meanwhile: its streams went then, and this one would stay)
+  #|        if (accepted === null || accepted === undefined || handles.get(a.id) !== h) return [{ end: true }];
+  #|        return [{ id: keep({ stream: accepted, on: a.id, finished: false, ended: false }) }];
+  #|      }
   #|      case "conn.closed":
   #|        if (h?.gone !== undefined) return [h.gone];
   #|        connection(h);
@@ -159,6 +172,15 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|        h.finished = true;
   #|        if (h.ended) handles.delete(a.id);
   #|        return [{}];
+  #|      case "istream.stopped": {
+  #|        const code = (await stream(h).stopped()) ?? null;
+  #|        if (code === null) {
+  #|          // (null is a failure's answer too: its connection ended, or let go of, that is what it was)
+  #|          const on = handles.get(h.on);
+  #|          if (on?.conn === undefined || (on.conn.closeReason() ?? null) !== null) throw new Error("connection closed");
+  #|        }
+  #|        return [{ code }];
+  #|      }
   #|      case "istream.reset":
   #|        if (h?.stream !== undefined) {
   #|          handles.delete(a.id);

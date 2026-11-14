@@ -3,7 +3,9 @@
 // device key (kept under `device`, 32 bytes), a link dialled on the protocol its user names and let in by the
 // credential its user gives, said in the control stream's first line with what its user says in every one; the
 // credential presented again every `tick_ms` as the link's ping and every `renew_ms` as its renewal; a request a
-// stream (link.mbt). A link that ended, or whose renewal was refused, is opened again by the next `link`.
+// stream, its body whole or a step at a time, its reply whole or as it comes, or the stream open both ways after
+// its head; and the streams its peer opens (link.mbt). A link that ended, or whose renewal was refused, is opened
+// again by the next `link`.
 //
 // A link is its program's by two things: the peer, and a scope, a string of the program's own that the mesh never
 // reads (one program is let in to one peer under several credentials at once, a link each: `Mesh::link`'s `scope`;
@@ -502,6 +504,9 @@ async fn Mesh::open(self : Mesh, place : Place, credentials : async (String, Boo
         dev: 0.0,
         answered_ms: None,
         warm: false,
+        fibers: self.scope,
+        accepts: @effect.Semaphore::new(1),
+        coming: None,
       }
       link
     },
