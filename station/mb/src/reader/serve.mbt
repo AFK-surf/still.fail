@@ -141,6 +141,13 @@ fn Serving::told(self : Serving, line : String) -> Unit {
         Some(q) => ignore(q.try_offer(Some(t)))
         None => ()
       }
+    // (one piece told several of its streams at once, given once: served.ts `#piece`)
+    { "pieces": String(t), "to": Array(to), .. } =>
+      for k in to {
+        if k is Number(k, ..) && self.streams.get(k.to_int()) is Some(q) {
+          ignore(q.try_offer(Some(t)))
+        }
+      }
     { "done": Number(n, ..), .. } =>
       match self.streams.get(n.to_int()) {
         Some(q) => ignore(q.try_offer(None))

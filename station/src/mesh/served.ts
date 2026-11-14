@@ -175,6 +175,24 @@ export class Served {
       if (answer.body.length > 0) post({ chunk: n, text: answer.body.toString() });
       return post({ done: n });
     }
+    // A body that is told as it is made (api/events.ts `relay`): each piece given here at once, one told several streams
+    // of this program at once given it once (`#tell`).
+    const relay = (answer.body as { relay?: (send: (text: string) => void, ended: () => void) => void }).relay;
+    if (relay !== undefined) {
+      let streams = this.#streaming.get(server.process);
+      if (streams === undefined) this.#streaming.set(server.process, (streams = new Map()));
+      const body = answer.body as AsyncIterableIterator<Buffer>;
+      let over = false;
+      streams.set(n, () => {
+        over = true;
+        void body.return?.();
+      });
+      relay.call(answer.body, (text) => this.#piece(server, n, text), () => {
+        streams!.delete(n);
+        if (!over) this.#piece(server, n, null);
+      });
+      return;
+    }
     const pieces = answer.body[Symbol.asyncIterator]();
     let streams = this.#streaming.get(server.process);
     if (streams === undefined) this.#streaming.set(server.process, (streams = new Map()));
@@ -193,6 +211,28 @@ export class Served {
       streams.delete(n);
       if (!stopped) post({ done: n });
     }
+  }
+
+  /// What is to be told each program, in order, till the turn ends: a piece told several of its streams in a row is
+  /// the one text, given once with them all (`pieces`); `null`, a stream's end.
+  readonly #queued = new Map<Server, { text: string | null; to: number[] }[]>();
+
+  #piece(server: Server, n: number, text: string | null) {
+    let pending = this.#queued.get(server);
+    if (pending === undefined) {
+      this.#queued.set(server, (pending = []));
+      queueMicrotask(() => {
+        this.#queued.delete(server);
+        for (const p of pending!) {
+          if (p.text === null) for (const k of p.to) server.process.postMessage({ done: k });
+          else if (p.to.length === 1) server.process.postMessage({ chunk: p.to[0], text: p.text });
+          else server.process.postMessage({ pieces: p.text, to: p.to });
+        }
+      });
+    }
+    const last = pending.at(-1);
+    if (last !== undefined && last.text === text && text !== null) last.to.push(n);
+    else pending.push({ text, to: [n] });
   }
 
   async close() {
