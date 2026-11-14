@@ -215,6 +215,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // whether the frame left nothing that ends to come (Ctx::at_rest): said of a run, asserted (Tester::at_rest), never
   // waited on
   c.frame_rest = c.at_rest()
+  c.frame_unasked = c.asks_no_frame()
   let held = bench.held
   bench.held = false
   looks_left(c, held)
