@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [c52e9bd2e](https://github.com/AFK-surf/monoid/commit/c52e9bd2edee63163cd6774f9e516fb81604716e) app: a chat archived from its row says so where th | 1.98 | 2.71 | 11.55 | 31.15 | 41.53 | 27.77 | 53.26 | 96.86 | 114.75 |
 | [d05b8c0ed](https://github.com/AFK-surf/monoid/commit/d05b8c0ed97c5188433bf1a66ff476f6f8f690e8) refactor(core): the event stream's reader is base, | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.76 | 53.23 | 96.72 | 116.22 |
 | [9e98b2805](https://github.com/AFK-surf/monoid/commit/9e98b28053e67b8599b637dc99dd0540034f1bf2) app: 小屏's chat bar names its key to the chat's ser | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.76 | 53.23 | 96.93 | 116.85 |
 | [ab6f4880d](https://github.com/AFK-surf/monoid/commit/ab6f4880dd477b8290a50b1b392e3a3984426186) fix(mbui): a station's 设置 whole as it comes; what  | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.75 | 53.23 | 96.78 | 108.75 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [6311979f9](https://github.com/AFK-surf/monoid/commit/6311979f9e1985bcf38250026136912de3ee9c73) cloud: a self-hosted cloud on workerd, its names,  | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 109.79 |
 | [9084bcb13](https://github.com/AFK-surf/monoid/commit/9084bcb13b397c98270d3b79612c6e4c53a90091) app tests: a chat's picture flying into its viewer | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 108.95 |
 | [ac936000a](https://github.com/AFK-surf/monoid/commit/ac936000aa4759c093e22d31daa3811a3e03f3c4) fix(mbui): jump to the clicked tick's message on t | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.18 | 110.82 |
-| [a2045f270](https://github.com/AFK-surf/monoid/commit/a2045f270895fefe9f6726aee7854c989e72d62c) Keep the Windows renderer's compiled shaders on di | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.91 | 109.63 |
