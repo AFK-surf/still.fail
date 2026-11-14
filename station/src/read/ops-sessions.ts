@@ -8,6 +8,8 @@ import { recentChatPage } from "./recent-chat.ts";
 import { workspaceSessionsToMeasure } from "../jobs/workspace-size.ts";
 import { policyChecksRead } from "./policy-checks.ts";
 import { archiveLookOf, recentConnectPeople } from "../store/store.ts";
+import { TranscriptTail, type TailState } from "./tail.ts";
+import type { RuntimeKind } from "../agents/runtime.ts";
 import { session, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
 
 /// `?turns=`: how many of a session's latest turns; none (or not a count): all of them, as a device from before reads.
@@ -76,6 +78,8 @@ export const sessionOps: Record<string, ReadOp> = {
   session: (s, a) => session(s, a.key, a.viewer, a.lang, latest(a.turns), a.jobs === "now"),
   timeline: (s, a) => timeline(s, a.key, a.before, a.limit, a.lang, a.from, a.to, a.brief, a.after),
   transcriptState: (s, a) => transcriptState(s, a.key),
+  /// A transcript read on from where it stood (the live view's, sessions/live.ts `ReadTail`): what it gained.
+  tailRead: (_s, a) => tailRead(a.runtime, a.state),
   transcriptFile: (s, a) => transcriptFile(s, a.key, a.lang),
   widgetState: (s, a) => widgetState(s, a.key, a.path, a.lang),
   sessionPlace: (s, a) => sessionPlace(s, a.key, a.path ?? "", a.lang),
@@ -85,3 +89,11 @@ export const sessionOps: Record<string, ReadOp> = {
   job: (s, a) => job(s, a.id),
   jobLog: (s, a) => jobLog(s, a.id, a.lines),
 };
+
+/// tail.ts `TranscriptTail.from(…).read()`: what a transcript gained since `state` (one not read yet: its path and runtime
+/// alone), with where its reading stands after.
+function tailRead(runtime: RuntimeKind, state: TailState | { path: string; runtime?: RuntimeKind }) {
+  const tail = "offset" in state ? TranscriptTail.from(runtime, state) : new TranscriptTail(state.runtime ?? runtime, state.path, null, false);
+  const [start, entries] = tail.read();
+  return { start, entries, state: tail.snapshot() };
+}

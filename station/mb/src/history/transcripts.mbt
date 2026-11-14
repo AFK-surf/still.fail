@@ -276,11 +276,27 @@ priv struct Tail {
   mut count : Int
   mut marks : Array[Mark]
   mut anew : Bool
+  /// What it reads given back, not only counted (`tail_read`: the live view's), and where the last read began
+  mut collect : Array[Entry]?
+  mut began : Int?
 }
 
 ///|
 fn Tail::new(runtime : String, path : String) -> Tail {
-  { runtime, path, offset: 0L, packed_stamp: None, parts: [], held: 0, state: ReadState::new(), count: 0, marks: [], anew: false }
+  {
+    runtime,
+    path,
+    offset: 0L,
+    packed_stamp: None,
+    parts: [],
+    held: 0,
+    state: ReadState::new(),
+    count: 0,
+    marks: [],
+    anew: false,
+    collect: None,
+    began: None,
+  }
 }
 
 ///|
@@ -353,6 +369,9 @@ fn Run::take(self : Run, piece : BytesView) -> Unit raise {
     for r in records {
       timeline_of(tail.runtime, r, tail.state, entries)
     }
+    if tail.collect is Some(out) {
+      out.append(entries)
+    }
     self.read += entries.length()
     let index = self.had + self.read
     let (last_offset, last_index) = match tail.marks.last() {
@@ -385,6 +404,7 @@ fn Tail::begin(self : Tail, stamp : String?, size : Int64) -> Run? {
   if size == self.offset {
     return None
   }
+  self.began = Some(self.count)
   Some({ tail: self, had: self.count, read: 0 })
 }
 
@@ -750,4 +770,38 @@ fn read_between(host : @host.Host, runtime : String, m : Marked, from : Double, 
     _ => ()
   }
   out
+}
+
+///|
+/// read/tail.ts `TranscriptTail.from(…).readSoon()` (the live view's, sessions/live.ts): what a transcript gained since
+/// where its reading stood (`state`: a TailState as JSON, or only `path` and `runtime` for one not read yet), as
+/// `{start, entries, state}`, the entries whole as the timeline gives them.
+pub fn tail_read(host : @host.Host, runtime : String, state : Json) -> Json raise {
+  let st = match state {
+    { "offset": Number(_), .. } => state_of_json(state)
+    { "path": String(path), .. } =>
+      {
+        path,
+        runtime: match state.value("runtime") { Some(String(r)) => Some(r); _ => None },
+        offset: 0L,
+        partial: Bytes::default(),
+        count: 0,
+        inner: [],
+        packed_stamp: None,
+      }
+    _ => fail("no state")
+  }
+  let tail = Tail::from(runtime, st, [])
+  let out = []
+  tail.collect = Some(out)
+  tail.read(host)
+  let start = match tail.began {
+    Some(at) => at
+    None => tail.count
+  }
+  {
+    "start": Json::number(start.to_double()),
+    "entries": Json::array(out.map(e => entry_json(e, false))),
+    "state": state_json(tail.snapshot()),
+  }
 }
