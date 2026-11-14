@@ -1,5 +1,5 @@
 // The rules' JS run in Hermes, as the core is (bundled by esbuild into one script): the vector's text as Node gets it.
-import { body_hash_js, body_refusal_js, canonical_of, entry_text_of, lower_role, person_chain_js, roster_js, state4_js, tie_of_js, ws_tag_js } from "./js/rules.js";
+import { body_hash_js, body_refusal_js, canonical_of, entry_text_of, lower_role, person_chain_js, roster_js, roster_moved_js, state4_js, state4_moved_js, tie_of_js, ws_tag_js } from "./js/rules.js";
 const vector = { v: 1, ws: "01HZZZZZZZZZZZZZZZZZZZZZZZ", seq: 3, prev: "ab".repeat(32), at: 1700000000, kind: "device", body: { sub: "s", id: "cd".repeat(32), kind: "web", label: "Chrome · 名字 😀 \u0000", exp: 1702592000 } };
 print(entry_text_of(vector));
 print(canonical_of(JSON.parse('{"b":[1,2,{"z":null,"a":"\\ud800x"}],"a":1.5}')));
@@ -30,3 +30,11 @@ print(JSON.stringify(roster_js("W", gh, [chain.entries], [stationBody, open, adm
 print(JSON.stringify(roster_js("W", gh, [chain.entries], [stationBody, open, admitBody], [body_hash_js(admitBody, crypto)], crypto)));
 print(JSON.stringify(state4_js("W", gh, [chain.entries], [stationBody, open, admitBody], 100, crypto).state));
 print(tie_of_js(gh, key, crypto));
+// A workspace's own chain moved to alice's log (D6, src/lock/roster.mbt `Carried`): bob, whom only the chain names,
+// in force by it with his device and its signer.
+const bobKey = "ed25519:" + "ab".repeat(32);
+const wg = { v: 1, ws: "W", seq: 0, prev: null, at: 1, kind: "genesis", body: { owner: "alice", origins: ["https://app.still.fail"], rp_id: "app.still.fail", cloud_keys: { keys: [] }, members: [{ sub: "alice", email: "a@x", role: "owner" }, { sub: "bob", email: "bob@x", role: "member" }], devices: [{ id: "bb".repeat(32), sub: "alice", kind: "app", label: "app", sign_key: key }, { id: "bc".repeat(32), sub: "bob", kind: "app", label: "bob's app", sign_key: bobKey }], passkeys: [], stations: [{ key: "dd".repeat(32), name: "s0" }], gateways: [] }, sig };
+const bound = { v: 1, ws: "W", seq: 1, prev: hash(wg), at: 2, kind: "person", body: { sub: "alice", person: gh }, sig };
+const moved = { v: 1, ws: "W", seq: 2, prev: hash(bound), at: 3, kind: "moved", body: { root: gh }, sig };
+print(JSON.stringify(roster_moved_js("W", [wg, bound, moved], [[g]], [], [], crypto)));
+print(JSON.stringify(state4_moved_js("W", [wg, bound, moved], [[g]], [], 100, crypto).state));

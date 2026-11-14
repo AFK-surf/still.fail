@@ -419,7 +419,9 @@ function grounded(h: Holder, root: string, stmts: Stmt[], out: Roster): Roster {
   for (const a of admits) {
     if (label.get(`a:${a.h}`) !== "in" || a.body.sub === "alice") continue;
     const was = best.get(a.body.sub);
-    if (!was || rank(a.body.role) > rank(was.role) || (a.body.role === was.role && a.h < was.admit)) best.set(a.body.sub, { lock: a.body.lock, role: a.body.role, admit: a.h });
+    // (round four's D6: an admit said in a log binds before the chain's as it moved, `~<moved>/m/<sub>`, of the same role)
+    const before = (x: string, y: string) => (x.startsWith("~") === y.startsWith("~") ? x < y : !x.startsWith("~"));
+    if (!was || rank(a.body.role) > rank(was.role) || (a.body.role === was.role && before(a.h, was.admit))) best.set(a.body.sub, { lock: a.body.lock, role: a.body.role, admit: a.h });
   }
   out.members = best;
   const stCancelled = new Set<string>();

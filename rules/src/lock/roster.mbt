@@ -60,6 +60,21 @@ pub(all) struct Said {
 }
 
 ///|
+/// The chain as it moved (station/test/lock-roster4-model.ts D6, the lead's, 2026-11-14): its `moved` entry's hash and
+/// the chain's state at it, frozen (nothing follows a `moved`). What the logs have not said yet of someone it named, it
+/// still says: one admit by the root's person of each member it names but the root's person (`~<moved>/m/<sub>`: their
+/// role and email there, the log it bound them to, "" where none) and one statement of each of its stations
+/// (`~<moved>/s/<key>`), all in force, never lacking; a removal (`member.remove`, `station.remove`) cancels the one of
+/// its subject as if its `cancels` named it, named or not (it may name them all by the `moved` entry's hash): so one
+/// said before the chain was read so (build 9040's move), naming the admits of its time alone, takes out whom it did. So taking someone out, a role
+/// changed (removed and admitted again), whom a removal takes out besides and a circle of removals are as for any
+/// statement. Their devices are `state4.mbt`'s (`carry_of`).
+pub(all) struct Carried {
+  moved : String
+  chain : LockState
+}
+
+///|
 pub(all) struct Roster {
   /// Whether the root's log was given (else nothing is told).
   rooted : Bool
@@ -79,6 +94,9 @@ pub(all) struct Roster {
   /// chain whose body is not kept, each in the order of their hashes.
   in_force : Array[(String, String)]
   lacking : Array[String]
+  /// D6: the keys of the app devices the chain as it moved still says (`carry_of`'s `apps`, by the key each signs
+  /// with), and whose they are; none where no chain is carried.
+  carried_keys : Array[(String, String)]
   /// The newest of `open` and `off` in force on the root's active chain (its kind), and the newest `open`'s body.
   newest : String?
   settings : Json?
@@ -101,7 +119,27 @@ fn mgr(role : String?) -> Bool {
 /// longer, then the one of the lower head hash. Whatever the order of `chains` and `bodies`, the same list, each part
 /// of it in MoonBit's `String` order (a shorter text first).
 pub fn roster(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], c : &Crypto) -> Roster {
-  roster_of(ws, root, chains, bodies, [], c).0
+  roster_of(ws, root, chains, bodies, [], None, c).0
+}
+
+///|
+/// `roster_without` of a workspace whose chain moved (`chain`, its active chain, the `moved` last): rooted in the log
+/// that `moved` names, with what the chain as it moved still says (`Carried`). A chain that does not fold, or does not
+/// end in a `moved`, roots it in nothing ("no root": nothing is told).
+pub fn roster_moved(ws : String, chain : Array[Json], chains : Array[Array[Json]], bodies : Array[Json], without : Array[String], c : &Crypto) -> Roster {
+  let (root, carried) = carried_of(chain, c)
+  roster_of(ws, root, chains, bodies, without, carried, c).0
+}
+
+///|
+/// The root a moved chain names and the chain as it moved, of its active chain (`moved` last): ("", none) where it does
+/// not fold or did not move.
+pub fn carried_of(chain : Array[Json], c : &Crypto) -> (String, Carried?) {
+  let s = fold(chain, None, c) catch { _ => return ("", None) }
+  match s.moved {
+    Some(root) => (root, Some({ moved: s.head, chain: s }))
+    None => ("", None)
+  }
 }
 
 ///|
@@ -109,12 +147,13 @@ pub fn roster(ws : String, root : String, chains : Array[Array[Json]], bodies : 
 /// decided (a later statement whose `prev` chain goes through one left out still counts): the list as it would be
 /// without them, which says whom a removal took out (station/test/lock-roster4-model.ts `admitsBefore`, its `left`).
 pub fn roster_without(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], without : Array[String], c : &Crypto) -> Roster {
-  roster_of(ws, root, chains, bodies, without, c).0
+  roster_of(ws, root, chains, bodies, without, None, c).0
 }
 
 ///|
-/// `roster`, with the logs it took (by their genesis's hash); `without` as `roster_without` has it.
-fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], without : Array[String], c : &Crypto) -> (Roster, Map[String, (Person, Array[Json])]) {
+/// `roster`, with the logs it took (by their genesis's hash); `without` as `roster_without` has it; `carried`, the chain
+/// as it moved, where one did.
+fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : Array[Json], without : Array[String], carried : Carried?, c : &Crypto) -> (Roster, Map[String, (Person, Array[Json])]) {
   let refused : Array[(String, String)] = []
   let logs : Map[String, (Person, Array[Json])] = Map([])
   for chain in chains {
@@ -199,7 +238,7 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
   }
   let empty : Roster = {
     rooted: false, members: [], stations: [], pairs: [], undecided: [], cancelled: [], statements: [], labels: [], refused,
-    in_force: forced, lacking, newest, settings,
+    in_force: forced, lacking, newest, settings, carried_keys: [],
   }
   guard logs.get(root) is Some((root_person, _)) else { return (empty, logs) }
   let root_sub = root_person.sub
@@ -213,6 +252,32 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
       None => by_body[f.1] = [f.0]
     }
   }
+  // D6: the chain's statements, as the root's (`Carried`), named together by the `moved` entry's hash.
+  let carried_stmts : Array[Stmt] = []
+  // (each by its subject, `m/<sub>` or `s/<key>`)
+  let carried_ids : Map[String, String] = Map([])
+  if carried is Some(cr) {
+    let subs = cr.chain.members.keys().collect()
+    subs.sort()
+    for sub in subs {
+      let m = cr.chain.members.get(sub).unwrap()
+      guard sub != root_sub && is_role(Some(Json::string(m.role))) else { continue }
+      let body : Map[String, Json] = Map([
+        ("sub", Json::string(sub)), ("email", Json::string(m.email)), ("role", Json::string(m.role)),
+        ("lock", Json::string(cr.chain.persons.get(sub).unwrap_or(""))),
+      ])
+      carried_ids["m/" + sub] = "~" + cr.moved + "/m/" + sub
+      carried_stmts.push({ hash: "~" + cr.moved + "/m/" + sub, kind: "ws.member", body: Some(Json::object(body)), log: root, by: root_sub })
+    }
+    let keys = cr.chain.stations.keys().collect()
+    keys.sort()
+    for k in keys {
+      carried_ids["s/" + k] = "~" + cr.moved + "/s/" + k
+      carried_stmts.push({ hash: "~" + cr.moved + "/s/" + k, kind: "ws.station", body: Some(Json::object(Map([("key", Json::string(k))]))), log: root, by: root_sub })
+    }
+    by_body[cr.moved] = carried_stmts.map(fn(s) { s.hash })
+  }
+
   let stmts : Array[Stmt] = []
   for f in in_force {
     let (x, _, b, g) = f
@@ -225,13 +290,25 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
           out[k] = v
         }
         if m.get("cancels") is Some(Array(cs)) {
-          let named : Array[Json] = []
+          let named : Array[String] = []
           for y in cs {
             for z in by_body.get(text_of(Some(y)).unwrap_or("")).unwrap_or([]) {
-              named.push(Json::string(z))
+              if !named.contains(z) {
+                named.push(z)
+              }
             }
           }
-          out["cancels"] = Json::array(named)
+          // (D6: a removal takes back the chain's statement of its subject too, named or not: so one said before
+          // the chain was read so, naming the admits of its time alone, still takes out whom it took out)
+          let chains_own = match (kind, text_of(field(Some(b), "sub")), text_of(field(Some(b), "key"))) {
+            ("member.remove", Some(sub), _) => carried_ids.get("m/" + sub)
+            ("station.remove", _, Some(key)) => carried_ids.get("s/" + key)
+            _ => None
+          }
+          if chains_own is Some(z) && !named.contains(z) {
+            named.push(z)
+          }
+          out["cancels"] = Json::array(named.map(fn(x) { Json::string(x) }))
         }
         Json::object(out)
       }
@@ -239,6 +316,7 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     }
     stmts.push({ hash: x, kind: "ws." + kind, body: Some(body), log: g, by: logs.get(g).unwrap().0.sub })
   }
+  stmts.append(carried_stmts)
   let txt = fn(s : Stmt, k : String) { text_of(field(s.body, k)).unwrap_or("") }
   let pair_of = fn(s : Stmt) { s.by + "|" + s.log }
   let admits = stmts.filter(fn(s) { s.kind == "ws.member" })
@@ -345,7 +423,14 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
   }
   let role_of_pair = fn(s : Stmt) { pairs.get(pair_of(s)).map(fn(p) { p.2 }) }
   // Whom the list binds by which log: the root by its own; anyone else by the admit in force of the highest role,
-  // then the smallest hash.
+  // then one said in a log before the chain's (`Carried`: `~<moved>/m/<sub>`), then the smallest hash.
+  let before = fn(a : String, b : String) {
+    match (a.has_prefix("~"), b.has_prefix("~")) {
+      (false, true) => true
+      (true, false) => false
+      _ => a < b
+    }
+  }
   let best : Map[String, (String, String, String?)] = Map([(root_sub, ("owner", root, None))])
   for a in admits {
     if label.get("a:" + a.hash) != Some("in") || txt(a, "sub") == root_sub {
@@ -358,7 +443,7 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
         rank_of(role) > rank_of(was) ||
         (role == was &&
         (match admit {
-          Some(x) => a.hash < x
+          Some(x) => before(a.hash, x)
           None => false
         }))
     }
@@ -394,6 +479,10 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
   }
   let said : Array[Said] = []
   for s in stmts {
+    // (the chain's are no statement of a log: told by `carried_keys` and the members they bind)
+    if s.hash.has_prefix("~") {
+      continue
+    }
     let mut l = "in"
     let mut why : String? = None
     let mut decided : String? = None
@@ -463,6 +552,15 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
     }
     members.push({ sub, role, lock, admit, keys })
   }
+  let carried_keys : Array[(String, String)] = []
+  if carried is Some(cr) {
+    for m in members {
+      for d in carry_of(cr, m.sub, m.lock, logs, 0.0).apps {
+        carried_keys.push((d.sign_key.unwrap_or(""), m.sub))
+      }
+    }
+  }
+  carried_keys.sort_by(fn(a, b) { a.compare(b) })
   let sts = stations.keys().collect()
   sts.sort()
   let ps = pairs.values().collect()
@@ -475,7 +573,7 @@ fn roster_of(ws : String, root : String, chains : Array[Array[Json]], bodies : A
   (
     {
       rooted: true, members, stations: sts, pairs: ps, undecided: us, cancelled, statements: said, labels: ls, refused,
-      in_force: forced, lacking, newest, settings,
+      in_force: forced, lacking, newest, settings, carried_keys,
     },
     logs,
   )

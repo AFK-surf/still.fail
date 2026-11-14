@@ -5,9 +5,10 @@
 // workspace, its test station (the first) and a second taken into its lock by its code:
 //   19 alice, its owner, with two apps (A, P) and a web page (X); frank an admin and gina a member, each with an app
 //     approved face to face and bound to a lock of their own; a vault of alice's and one of gina's. A hands the chain
-//     over (`lock.handOver`, offered by this driver's host only, device.ts): asked once; both stations hold it moved
-//     and on with the chain's list (lock-state: `MOVED <root> <on>`); every device started anew let in by both, nobody
-//     else asked; the vaults used with the asks of before.
+//     over (`lock.handOver`, offered by this driver's host only, device.ts): asked nothing (the chain as it moved still
+//     says what the logs have not, 2026-11-14: `moved` alone); both stations hold it moved and on with the chain's list
+//     (lock-state: `MOVED <root> <on>`), gina's web page in too; every device started anew let in by both, nobody else
+//     asked; the vaults used with the asks of before.
 //   20 the acts of the moved workspace, each a statement in its actor's own log: frank made an owner by A; hank's
 //     first app (S) approved by frank's Q with the role frank gave; frank's web page (Y) approved by his own app,
 //     renewed, taken off; a station added by frank by its code and taken out; P off alice's own lock, her vault
@@ -187,16 +188,13 @@ try {
   const askedAt = new Map(threeDevices.filter((x) => !auto || x !== pDev).map((x) => [x, x.asked()]));
   const rootOf = (said: string) => said.match(/^MOVED (\S+) (\S+)/m);
   const devicesIn = (s: string) => s.split("\n").filter((x) => x.startsWith("DEVICE ")).map((x) => x.split(" ").slice(1, 4).join(" ")).sort().join("; ");
-  // (the chain's devices but G: a member's web page is not said by the move, only by their own app as it next holds
-  // the seed for something they do, below)
-  const notG = (s: string) => s.split("\n").filter((x) => !x.startsWith(`DEVICE ${gId.slice(0, 12)} `)).join("\n");
   const personsIn3 = (s: string) => s.split("\n").filter((x) => x.startsWith("PERSON ")).sort().join("; ");
   // (the list as the chain has it at the first, before the move: what the state in force is held to after it)
   const onChain = threeSays("fifth");
   // (by itself: P, joining alice's own lock, is on her log and so in the state the move makes, though the chain never
   // named it; its line is held apart)
   let pLine = (_s: string) => false;
-  if (auto) await must("A hands the workspace's chain over by itself as it approves P on alice's own lock face to face: nothing calls lock.handOver, A asked once", async () => {
+  if (auto) await must("A hands the workspace's chain over by itself, nothing calls lock.handOver, as it approves P on alice's own lock face to face: A asked once, for P", async () => {
     const t1 = Date.now();
     await pDev.signIn();
     const asked = await asksOf(vDev, () => joinVia(vDev, pDev));
@@ -207,16 +205,16 @@ try {
     await atBoth("moved", (s) => rootOf(s)?.[2] === "on", 90_000);
     log(`  moved at both ${Date.now() - t1} ms after P began to join`);
   });
-  else await must("A hands the workspace's chain over to its people's own logs: answered done, A asked once", async () => {
+  else await must("A hands the workspace's chain over to its people's own logs: answered done, A asked nothing", async () => {
     const t1 = Date.now();
     const r = await vDev.call("lock.handOver", { workspace: three });
     log(`  lock.handOver answered ${JSON.stringify(r)?.slice(0, 200)} after ${Date.now() - t1} ms`);
     if (r !== null) throw new Error(`not handed over: ${JSON.stringify(r)?.slice(0, 300)}`);
     const asked = vDev.askedWhat(askedAt.get(vDev));
-    log(`  A asked: ${asked.join("; ")}`);
-    if (asked.length !== 1) throw new Error(`A asked ${asked.length} times`);
+    log(`  A asked: ${asked.join("; ") || "nothing"}`);
+    if (asked.length !== 0) throw new Error(`A asked ${asked.length} times`);
   });
-  await check("both stations hold the workspace's chain moved to alice's own log and on, the list as the chain had it: two stations, three persons, the same devices", async () => {
+  await check("both stations hold the workspace's chain moved to alice's own log and on, the list as the chain had it: two stations, three persons, the same devices, gina's web page too", async () => {
     const said = await whenChanged([fifthData, sixthData], () => {
       const s = [threeSays("fifth"), threeSays("sixth")];
       return s.every((x) => rootOf(x)?.[2] === "on" && /^LOCK on /m.test(x)) ? s : null;
@@ -229,8 +227,8 @@ try {
       if (personsIn3(s) !== personsIn3(onChain)) throw new Error(`persons on the chain ${personsIn3(onChain)}; moved ${personsIn3(s)}`);
       if (auto && !pLine(s)) throw new Error("P not in the state the move made");
       const notP = (x: string) => x.split("\n").filter((l) => !pLine(l)).join("\n");
-      if (devicesIn(notP(s)) !== devicesIn(notP(notG(onChain)))) throw new Error(`devices on the chain but G ${devicesIn(notG(onChain))}; moved ${devicesIn(s)}`);
-      if (!gLine(onChain) || gLine(s)) throw new Error(`G on the chain ${gLine(onChain)}, moved ${gLine(s)}`);
+      if (devicesIn(notP(s)) !== devicesIn(notP(onChain))) throw new Error(`devices on the chain ${devicesIn(onChain)}; moved ${devicesIn(s)}`);
+      if (!gLine(onChain) || !gLine(s)) throw new Error(`G on the chain ${gLine(onChain)}, moved ${gLine(s)}`);
     }
     log(`  ${devicesIn(onChain).split("; ").length} devices, as on the chain: ${devicesIn(onChain).split("; ").map((x) => x.split(" ").slice(1).join(" ")).join(", ")}`);
   });
@@ -259,25 +257,15 @@ try {
       if (now.join("; ") !== usedBefore.get(x)!.join("; ")) throw new Error(`${x.name} asked ${now.join("; ")}, on the chain ${usedBefore.get(x)!.join("; ")}`);
     }
   });
-  await check("G, gina's web page on the chain, not said before the move: out at both stations after it; said on gina's own log as R next holds its seed (her second app T approved face to face, one ask on R); then at both and let in by both, no code", async () => {
-    for (const id of both()) log(`  G sees ${id === fifthId ? "the first" : "the second"}: ${short(await inThree(gDev, id, (s) => s.state !== "online" && s.state !== "connecting"))}`);
-    const out = await gDev.lock(three, (l) => l.me?.waiting === true && !l.me?.confirmed, 60_000);
-    log(`  G's page: confirmed ${out.me?.confirmed}, able to ask ${out.me?.waiting}`);
+  await check("G, gina's web page on the chain: let in by both stations after the move, nobody asked; gina's second app T approved face to face by R, one ask on R, G still in", async () => {
+    for (const id of both()) await inThree(gDev, id, (s) => s.state === "online");
+    await gDev.lock(three, (l) => l.locked && l.me?.confirmed, 60_000);
     await tDev.signIn();
     const asked = await asksOf(rDev, () => joinVia(rDev, tDev));
     log(`  R asked: ${asked.join("; ") || "nothing"}`);
     if (asked.length !== 1) throw new Error(`R asked ${asked.length} times`);
     await atBoth("G at both", gLine);
-    // (whether the page, only waiting, comes back by itself; else as its person presses to ask there: its stations
-    // tried again first, nobody asked where one lets it in, views/pair.ts `begin`)
-    const back = await inThree(gDev, fifthId, (s) => s.state === "online", 20_000).then(() => true, () => false);
-    log(`  G let in by the first without being opened again within 20 s: ${back}`);
-    if (!back) {
-      const asked = await gDev.call("lock.pair", { workspace: three });
-      log(`  G pressed to ask: ${JSON.stringify(asked)}`);
-    }
     for (const id of both()) await inThree(gDev, id, (s) => s.state === "online");
-    await gDev.lock(three, (l) => l.locked && l.me?.confirmed, 60_000);
   });
   // ── round 20: the acts of a moved workspace, each end to end on the workspace after round 19's move (views/lock.ts: each a
   // statement in the actor's own log, `sayMoved`, which asks its person each time; client/core-ts/AGENTS.md, A lock

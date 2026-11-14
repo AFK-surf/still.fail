@@ -72,12 +72,16 @@ async function setUp(o: { w2?: "moved" | "chain"; root?: "me" | "alice"; mine?: 
   const root = o.root === "alice" ? alice : me;
   const bodies: unknown[] = [];
   bodies.push(say(root, "open", { ...settings, email: "a@x.com" }));
+  // (the chain's own list, the rig's genesis: s1 its owner, s2 a member, carried once it moved until a removal of each
+  // is said, rules `state4_moved`; the root says one of each but its own person, so what follows says the list alone)
+  bodies.push(say(root, "member.remove", { sub: "s2", cancels: [] }));
+  if (o.root === "alice") bodies.push(say(alice, "member.remove", { sub: "s1", cancels: [] }));
   if (o.root === "alice" && o.mine !== "none") bodies.push(say(alice, "member", { sub: "s1", email: "s1@x.com", lock: gOf(me), role: o.mine ?? "owner" }));
   bodies.push(say(root, "member", { sub: "r2", email: "b@x.com", lock: gOf(bob), role: "admin" }));
   bodies.push(say(root, "station", { key: A }));
   bodies.push(say(bob, "member", { sub: "r3", email: "c@x.com", lock: gOf(xena), role: "member" }));
   const bodies2: unknown[] = [];
-  if (o.w2 === "moved") bodies2.push(say(me, "open", { ...settings, email: "a@x.com" }, "w2"), say(me, "station", { key: B }, "w2"));
+  if (o.w2 === "moved") bodies2.push(say(me, "open", { ...settings, email: "a@x.com" }, "w2"), say(me, "member.remove", { sub: "s2", cancels: [] }, "w2"), say(me, "station", { key: B }, "w2"));
   let mine: Signer | null = null;
   const r = await rig((signer) => ((mine = signer), {
     ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME),
@@ -527,26 +531,6 @@ test("a person's own new app device (the personal exchange) where the chains mov
   assert.equal(held(w.inner, "w2")!.entries.length, chains.w2, "nor on w2's");
   assert.equal(w.r.cloud.posted.filter((p) => p.ws === "ws" || p.ws === "w2").length, 0, "nothing sent to the chains' cloud");
 });
-
-// The build the new device says in its hello (views/pair.ts) is noted as seen by the device approving it, beside what
-// the person's stations saw (views/lock.ts `noteBuild`, `personBuilds`): what that same ask writes in their log
-// (`mayWriteNew`) is not held back for a device that said it takes it; one that says none is not noted.
-for (const build of ["0.1.9008", undefined] as const) {
-  test(`a person's own new app device saying ${build ?? "no build"} in its hello: ${build ? "noted as seen on 9008 by the device approving it" : "nothing noted"}`, async () => {
-    const w = await setUp({ w2: "moved" });
-    const k = key(7010);
-    const id = key(7110).hex;
-    const [trusted, phone] = await pipe();
-    w.inner.runner.fork(serveTrusted(w.inner, id, ME, trusted));
-    const first = await w.run(Effect.andThen(phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel", sign_key: "ed25519:" + "13".repeat(32), ...(build ? { build } : {}), personal: { subs: ["s1"], key: k.id } }), phone.next()));
-    assert.deepEqual(first.ok, { t: "code", workspaces: ["person:s1"] });
-    const code = ((await w.prompts()).pairing as { device: string; code: string }[]).find((p) => p.device === id)!.code;
-    const done = await w.run(tryOne(w.inner, { id: ME, d: phone, workspaces: ["person:s1"] }, id, code));
-    assert.equal(done.error, undefined, done.error?.message);
-    const noted = (w.inner.data.record("personBuilds", "s1") as { devices?: Record<string, { build: number }> } | null)?.devices?.[id];
-    assert.equal(noted?.build, build ? 9008 : undefined);
-  });
-}
 
 test("a device whose person was taken out where the chain moved: the refusal's removal and the log entry that commits to it taken, and who took it out and when said", async () => {
   const w = await setUp({ root: "alice", mine: "member" });

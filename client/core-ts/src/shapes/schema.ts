@@ -2016,7 +2016,7 @@ export const SHAPES: Record<string, Shape> = {
     ["canUpdate", "bool", { default: true, doc: "A station's: this person may update it from here, as its own page offers its update (an owner or admin of\nthat workspace, it online, its software updatable and newer or its update failed): its press calls\n`software.update`." }],
     ["updating", "bool", { default: true, doc: "A station's: its update is under way, as its overview says." }],
     ["percent", opt("i64"), { client: opt("I54"), doc: "While it updates, how much of its download is in, 0–100, when known (drawn as its own page draws it)." }],
-  ], { doc: "A line of the upgrade of safe mode (`LockUpgrade.lines`; views/lock.ts `waitedLines`, `writerLines`)." }),
+  ], { doc: "A line of the upgrade of safe mode (`LockUpgrade.lines`; views/lock.ts `waitedLines`)." }),
   LockPromptWorkspace: struct([
     ["id", "String"],
     ["name", "String", { said: true }],
