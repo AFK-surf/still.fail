@@ -13,14 +13,9 @@ pub fn about_mark_node(
   tips : TipLayer,
   loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(made_for=loc, fn(v) {
-    let lit = fn() {
-      v.focus_shown() ||
-      (match @ui.pointing() {
-        Mouse => v.pointed() || v.pressed()
-        Finger => v.pressed()
-      })
-    }
+  let press_ref : Ref[(Bool) -> Unit] = Ref(fn(_) {  })
+  @headless.button(made_for=loc, parent, label, fn(_) { (press_ref.val)(false) }, fn(v, b) {
+    let lit = fn() { b.focus_shown() || b.hovered() || b.pressed() }
     let side = @ui.Space::px(S5)
     let pad = (side - about_icon) / 2.0
     v
@@ -28,14 +23,11 @@ pub fn about_mark_node(
     .height(Is(Some(side)))
     .padding(Is((pad, pad, pad, pad)))
     .radius(Is(side / 2.0))
-    .presses(Is(true))
-    .focusable(Is(true))
-    .says(By(fn() { Some(@view.said(Button, label=label())) }))
     |> ignore
     icon_node(v, "info", about_icon, By(fn() { if lit() { theme().p.text } else { theme().p.subtle } })) |> ignore
     let tip = tip_node(tips, v, words, side=Bottom)
     // (a finger's tap shows what it says till the next tap, wherever it lands; that one on it shuts it and no more: as
-    // about's, about_open and tapped_anywhere)
+    // about's, about_open and tapped_anywhere; pressed by a key or a screen reader, the button's press: the same)
     let toggle = fn(tapped : Bool) {
       if (tip.opened)() {
         (tip.cancel)()
@@ -43,13 +35,12 @@ pub fn about_mark_node(
         (tip.open)(tapped)
       }
     }
+    press_ref.val = toggle
     v.gesture(@ui.touch_slop(), tap=fn(d) {
       if @ui.pointing() is Finger && v.finger_target(d.wx, d.wy) {
         toggle(true)
       }
     })
     |> ignore
-    // (pressed by a key or a screen reader (its press, View::on_press: what a tap of its gesture is not): the same)
-    v.on_press(fn() { toggle(false) }) |> ignore
   })
 }
