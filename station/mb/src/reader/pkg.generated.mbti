@@ -1,7 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "station/reader"
 
+import {
+  "station/host",
+}
+
 // Values
+pub async fn serve_reads(@host.Host, Reader, String) -> Unit
 
 // Errors
 

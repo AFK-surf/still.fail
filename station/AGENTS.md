@@ -9,7 +9,9 @@
   front (`mb/src/front/mesh.mbt`), which the launcher starts and keeps across Node's handovers
   (`native/launcher/src/front.rs`), for each Node in turn (`src/mesh/front.ts`, its streams carried by the shell and
   none of their bytes by the program); where none runs (Windows, a checkout without the program) Node binds it itself
-  with its addon (`native/mesh`), which keeps the image codecs and the rest as before. The native
+  with its addon (`native/mesh`), which keeps the image codecs and the rest as before. A device's requests of the
+  routes in `src/mesh/served.ts` (`GET /chats` so far) the front hands the MoonBit program that answers them itself
+  (station/mb's reader `--serve`), not Node, which only tells it who each connection's member is. The native
   parts are prebuilt by their sources (`scripts/native.ts`): even a comment changed in one makes every machine and
   CI build it again, so touch them only for what they do.
 - What still.fail draws outside the app (the Helper's windows, `native/helper`) is in still.fail's design (the

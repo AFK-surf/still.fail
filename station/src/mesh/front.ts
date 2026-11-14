@@ -148,12 +148,18 @@ export class Front {
     const first = (data: Buffer) => {
       head = Buffer.concat([head, data]);
       // The connection's id and the stream's, then 1 (one this process opened), 0 (the other end's, from a front
-      // before the order) or 2 (the other end's, with its index on the connection: 8 more bytes).
-      if (head.length < 17 || (head[16] === 2 && head.length < 25)) return;
+      // before the order) or 2 (the other end's, with its index on the connection: 8 more bytes); or 3 and an index: that
+      // one the front answers itself (client/shell `conn.hand`'s `routes`), told so it is not waited for.
+      if (head.length < 17 || ((head[16] === 2 || head[16] === 3) && head.length < 25)) return;
       socket.off("data", first);
       socket.pause();
       const conn = Number(head.readBigUInt64BE(0));
       const id = Number(head.readBigUInt64BE(8));
+      if (head[16] === 3) {
+        socket.destroy();
+        if (!this.#forgotten.has(conn)) this.incomingOf(conn).skip(Number(head.readBigUInt64BE(17)));
+        return;
+      }
       if (this.#forgotten.has(conn)) {
         socket.destroy();
         return;
@@ -212,7 +218,7 @@ type Came = { socket: Socket; carry: Buffer; id: number };
 export class Incoming {
   readonly #came: Came[] = [];
   /// Those that came before one opened ahead of them, by index; the index the next to be taken has.
-  readonly #early = new Map<number, Came>();
+  readonly #early = new Map<number, Came | null>();
   #nextIndex = 0;
   #taker: ((s: Came | null) => void) | null = null;
   #ended = false;
@@ -222,9 +228,22 @@ export class Incoming {
     if (s.index === undefined) return this.#put(s);
     if (s.index !== this.#nextIndex) return void this.#early.set(s.index, s);
     this.#put(s);
-    for (let next = this.#early.get(++this.#nextIndex); next; next = this.#early.get(++this.#nextIndex)) {
+    this.#onFrom(this.#nextIndex + 1);
+  }
+
+  /// The stream of index `index` is not coming here (the front answers it): those after it are not held for it.
+  skip(index: number) {
+    if (this.#ended) return;
+    if (index !== this.#nextIndex) return void this.#early.set(index, null);
+    this.#onFrom(index + 1);
+  }
+
+  /// Those that came early given in turn from index `from`, till one has not come yet.
+  #onFrom(from: number) {
+    this.#nextIndex = from;
+    for (let next = this.#early.get(from); next !== undefined; next = this.#early.get(++this.#nextIndex)) {
       this.#early.delete(this.#nextIndex);
-      this.#put(next);
+      if (next !== null) this.#put(next);
     }
   }
 
@@ -246,7 +265,7 @@ export class Incoming {
   end() {
     this.#ended = true;
     for (const s of this.#came.splice(0)) s.socket.destroy();
-    for (const s of this.#early.values()) s.socket.destroy();
+    for (const s of this.#early.values()) s?.socket.destroy();
     this.#early.clear();
     const taker = this.#taker;
     this.#taker = null;
@@ -402,10 +421,14 @@ class FrontConnection implements Connection {
   /// The streams its other end opens.
   readonly #incoming: Incoming;
 
+  /// The front's id of it, which the streams it hands a route's program name (`Endpoint.route`).
+  readonly handed: number;
+
   constructor(front: Front, seen: Seen) {
     this.#front = front;
     this.#incoming = front.incomingOf(seen.conn);
     this.#id = seen.conn;
+    this.handed = seen.conn;
     this.#remote = seen.remote;
     this.#alpn = Buffer.from(seen.alpn, "hex");
     this.#seen = seen;
@@ -484,6 +507,8 @@ class FrontEndpoint implements Endpoint {
   #closed = false;
   /// The link made again, once it is.
   #again: Promise<void> | null = null;
+  /// What `route` gave the front, given again on a link made again.
+  #routed: { alpn: string; front: string[]; routes: string[] } | null = null;
 
   private constructor(socket: string, bind: Record<string, unknown>, front: Front, said: { id: string; sockets: string[] }) {
     this.#socket = socket;
@@ -537,6 +562,7 @@ class FrontEndpoint implements Endpoint {
             this.#front = next;
             this.#said = said;
             this.#watch(next);
+            if (this.#routed) await next.ask("route", this.#routed).catch(() => {});
             log.info("mesh", "linked to the front again", { station: said.id });
             return;
           } catch (e) {
@@ -576,6 +602,12 @@ class FrontEndpoint implements Endpoint {
   addAddr(addr: Addr) { void this.#ask("addAddr", { addr }).catch(() => {}); }
   setRelayEntries(entries: { entry: string; relay: string }[]) { return this.#ask("setRelayEntries", { args: { entries } }).then(() => {}); }
   networkChange() { return this.#ask("networkChange").then(() => {}); }
+
+  async route(alpn: Buffer, to: string[], routes: string[]): Promise<boolean> {
+    this.#routed = { alpn: hex(alpn), front: to, routes };
+    // (a front from before routes answers no such operation: it hands Node every stream, as before)
+    return this.#ask("route", this.#routed).then(() => true, () => false);
+  }
 
   async accept(): Promise<Connection | null> {
     for (;;) {

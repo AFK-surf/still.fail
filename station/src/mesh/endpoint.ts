@@ -46,6 +46,9 @@ export type Connection = {
   close(code: number, reason: string): void;
   isClosed(): boolean;
   closed(): Promise<string>;
+  /// Where the endpoint is kept by a program of its own (front.ts): its id of this connection, which the streams it
+  /// hands what answers a route (`Endpoint.route`) name it by.
+  handed?: number;
 };
 export type Endpoint = {
   id(): string;
@@ -64,6 +67,11 @@ export type Endpoint = {
   /// once it resolves, the handshake is given up (lib.rs `dial`); an addon from before goes on with it.
   connect(addr: Addr, alpn: Buffer, additional?: Buffer[], givenUp?: Promise<void>): Promise<Connection>;
   close(): Promise<void>;
+  /// The requests asked on a stream after a connection's first, on a connection of protocol `alpn`, whose route (`"GET /path"`, the head line's method and
+  /// path without its query) is among `routes` go to the Unix sockets at `to` in turn instead of `accept`'s connections,
+  /// on the connections taken from now on (a stream's, not this process's: its acceptBi does not give them). Where the
+  /// endpoint is kept by a program of its own (front.ts), and only one that does it.
+  route?(alpn: Buffer, to: string[], routes: string[]): Promise<boolean>;
 };
 /// What an endpoint is bound with. `relayOnly`: through the relays alone, no IP transports (what measures the way
 /// through a relay).

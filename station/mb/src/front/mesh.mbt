@@ -18,6 +18,12 @@ priv struct Client {
   mut bound : Int
   /// Where its streams go (its Unix socket).
   mut streams : String
+  /// The requests of `routes` ("GET /admin/api/chats") go to `front`'s sockets instead (`route`: answered there,
+  /// station/src/mesh/served.ts), on the connections given it from then on.
+  mut front : Json
+  mut routes : Json
+  /// Of the connections of this protocol only (its hex).
+  mut alpn : Json
   /// What came for it and it has not taken yet.
   coming : @effect.Queue[Json]
   /// The connections it has, by their ids at the shell.
@@ -51,8 +57,9 @@ pub async fn mesh(host : @host.Host, path : String) -> Unit {
   let (said, _) = host.shell("unix.listen", { "path": Json::string(path) })
   guard said is { "id": listening, .. } else { fail("the shell gave no listening socket") }
   let mesh : Mesh = { host, endpoint: None, options: "", said: Json::null(), waiting: [], clients: [], binds: 0 }
-  // `streams`: how it hands Node the streams the other end opens (front.rs `STREAMS`): 2, each with its index.
-  host.say(({ "listening": Json::string(path), "streams": 2 } : Json).stringify())
+  // `streams`: how it hands Node the streams the other end opens (front.rs `STREAMS`): 3, each with its index, a route
+  // Node gave it (`route`) to what answers it.
+  host.say(({ "listening": Json::string(path), "streams": 3 } : Json).stringify())
   // Its stdin is the launcher's: ended (the launcher gone, or stopping the station), the endpoint goes with it.
   ignore(
     host.rt.fork(name="mesh parent", () => {
@@ -75,6 +82,9 @@ pub async fn mesh(host : @host.Host, path : String) -> Unit {
       conn: { host, id },
       bound: 0,
       streams: "",
+      front: Json::array([]),
+      routes: Json::array([]),
+      alpn: Json::null(),
       coming: @effect.Queue::unbounded(),
       conns: Map([]),
       calls: Map([]),
@@ -143,7 +153,7 @@ fn Mesh::give(self : Mesh, conn : Json) -> Unit {
     Some(c) => {
       if conn is { "conn": id, .. } {
         c.conns[id.stringify()] = id
-        self.taking(c, id)
+        self.taking(c, id, conn.value("alpn").unwrap_or(Json::null()))
       }
       ignore(c.coming.try_offer(conn))
     }
@@ -217,10 +227,17 @@ async fn Mesh::bind(self : Mesh, options : Json, key : Bytes) -> Json {
 ///|
 /// The streams the other end of connection `conn` opens, each given to `client` as it comes by the shell itself
 /// (`conn.hand`: its head the ids, a 2 and the stream's index), till the connection is gone.
-fn Mesh::taking(self : Mesh, client : Client, conn : Json) -> Unit {
+fn Mesh::taking(self : Mesh, client : Client, conn : Json, alpn : Json) -> Unit {
   ignore(
     self.host.rt.fork(name="mesh streams", () => {
-      ignore(self.host.shell("conn.hand", { "id": conn, "path": Json::string(client.streams) })) catch {
+      let routed = alpn == client.alpn
+      let asked : Json = {
+        "id": conn,
+        "path": Json::string(client.streams),
+        "front": if routed { client.front } else { Json::array([]) },
+        "routes": if routed { client.routes } else { Json::array([]) },
+      }
+      ignore(self.host.shell("conn.hand", asked)) catch {
         _ => ()
       }
       client.conns.remove(conn.stringify())
@@ -309,6 +326,12 @@ async fn Mesh::act(self : Mesh, client : Client, ask : Json, op : String, arg : 
       }
       said
     }
+    "route" => {
+      client.front = arg("front")
+      client.routes = arg("routes")
+      client.alpn = arg("alpn")
+      Json::null()
+    }
     "accept" => {
       let next = try { Ok(client.coming.take()) } catch { e => Err(e) }
       match next {
@@ -335,8 +358,9 @@ async fn Mesh::act(self : Mesh, client : Client, ask : Json, op : String, arg : 
         fail("the endpoint is closed")
       }
       client.conns[id.stringify()] = id
-      self.taking(client, id)
-      self.seen(id)
+      let seen = self.seen(id)
+      self.taking(client, id, seen.value("alpn").unwrap_or(Json::null()))
+      seen
     }
     "giveUp" => {
       match client.calls.get(arg("of").stringify()) {

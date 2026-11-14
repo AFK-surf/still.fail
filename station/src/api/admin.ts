@@ -124,7 +124,7 @@ export class Admin {
   private routes: Route[];
   /// What the routes are given; the station's parts' too (parts.ts).
   private tools: Tools;
-  private readers: Readers;
+  readonly readers: Readers;
 
   readonly host: Host;
 
