@@ -79,7 +79,7 @@ test("compacted with no turn to tell it in (by hand, or a steer refused): its ne
   assert.equal(r.claude.last(), agent);
   const after = agent.prompts.slice(before);
   assert.ok(after.length > 0);
-  assert.ok(after[0]!.startsWith("This chat is long"), after[0]);
+  assert.ok(after[0]!.replace(/^\[Delivered at [^\n]+\]\n/, "").startsWith("This chat is long"), after[0]);
   assert.equal(after.filter((p) => p.includes(READ_BACK)).length, 1, JSON.stringify(after));
   await r.close();
 });

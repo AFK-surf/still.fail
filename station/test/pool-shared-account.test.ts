@@ -31,7 +31,7 @@ test("redeeming a reset through Accounts resumes a session waiting in the real h
     assert.equal(agent.prompts.length, 1);
     assert.deepEqual(await accounts.resetQuota("cx", "reset-1"), { outcome: "reset" });
     await settle();
-    assert.equal(agent.prompts[1], GO_ON_AFTER_REFILL);
+    assert.ok(agent.prompts[1]!.endsWith(GO_ON_AFTER_REFILL));
     assert.equal(r.hub.accounts.healthOf("cx").spent, undefined);
   } finally {
     await accounts.close();

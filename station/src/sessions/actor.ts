@@ -41,6 +41,9 @@ export function parseDeclared(kind: string, wait: number): DeclaredState | null 
 /// The turn ended as the agent's to take up again only when a person (or nothing) brings it back: not waiting.
 const settled = (d: DeclaredState) => d.kind !== "waiting";
 
+/// The runtime may keep a session open across long waits: say the time with every turn and every steer.
+const timed = (text: string, now: number) => `[Delivered at ${new Date(now).toISOString()} (UTC)]\n${text}`;
+
 /// What a turn ends in, as recorded and as acted on: the state it declared, but a wait only when the turn completed. One
 /// that failed or was stopped after it said it would wait is asked again by nothing (what it went on doing after saying
 /// so is cut off, its process may be gone): recorded waiting, its chat would show it waiting on, unseen, instead of how
@@ -1140,7 +1143,7 @@ export class SessionActor {
       if (text === null) return;
       const [handed, told] = await this.withChoices(text);
       // Not now: after the running turn.
-      if (await this.agent.session.steer(handed)) told();
+      if (await this.agent.session.steer(timed(handed, this.now()))) told();
       else this.notices.unshift(text);
       return;
     }
@@ -1165,7 +1168,7 @@ export class SessionActor {
       // So it is read now, not when a long command ends; what it waited on goes on.
       if (this.deps.backgroundOnMessage(this.key)) await agent.backgroundTools();
       const [handed, told] = await this.withChoices(text);
-      if (await agent.steer(handed)) {
+      if (await agent.steer(timed(handed, this.now()))) {
         told();
         this.workFor(pending);
         this.delivered(pending, widgets);
@@ -1413,6 +1416,7 @@ export class SessionActor {
         store.setToldNotes(this.key, latestNote());
         prompt = `${untold(told, full)}\n\n${prompt}`;
       }
+      prompt = timed(prompt, this.now());
       // The runtime may have started a turn on its own (late input became a turn); join it.
       if (agent.busy() && (await agent.steer(prompt))) return toldChoices();
       this.steered = [];
@@ -1673,7 +1677,7 @@ export class SessionActor {
     if (!this.compacting && agent?.busy()) {
       const long = this.deps.longChat?.(this.key) ?? null;
       // As a notice is (takeNotices): a message from the station, not from the people of the chat.
-      if (long === null || (await agent.steer(`<message via="station" from="station" ts="${this.deps.nextTs()}">\n${long}\n</message>`))) return;
+      if (long === null || (await agent.steer(timed(`<message via="station" from="station" ts="${this.deps.nextTs()}">\n${long}\n</message>`, this.now())))) return;
     }
     this.compactedUntold = true;
   }
