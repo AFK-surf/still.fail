@@ -203,7 +203,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                   Some(d) => d.chosen
                   None => None
                 }
-                c.box(style=settled_room, fn() {
+                c.box(style=outcome_room, fn() {
                   let line = c.sp(c.theme().leading(settled_leading).unwrap_or(c.text_size(settled_size).1))
                   let id = @sf.ask_history_trigger(c, "options/" + key, [@ui.span(w)], settled_line, line)
                   card_history(c, id, padded=false, fn(p) {
@@ -219,7 +219,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                   })
                 }) |> ignore
               }
-              _ => c.text(w, style=settled_line) |> ignore
+              _ => c.box(style=outcome_room, fn() { c.text(w, style=settled_line) |> ignore }) |> ignore
             }
           }
           None => ()
@@ -700,6 +700,12 @@ let settled_leading : @ui.Leading = L5
 ///|
 // kept across runs: a value (no field of it changes)
 let settled_room : @ui.Style = @ui.css("align=AStart")
+
+///|
+/// How it went, in the options' place: 4 more over it than msg_main's gap, 8 in all under what is over it (a file's
+/// card over it would have it hug the card's foot).
+// kept across runs: a value (no field of it changes)
+let outcome_room : @ui.Style = @ui.css("align=AStart pt=S1")
 
 ///|
 /// 忽略 (askDismiss): 6 under the options, 12 on 18 in the subtle ink, the text's and underlined under the pointer.

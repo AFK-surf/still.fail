@@ -220,7 +220,7 @@ fn decision_rooms_node(
         let words = fn() { outcome().unwrap_or("") }
         if with_options {
           o.box(fn(r) {
-            @sf.style_node(r, fn() { settled_room })
+            @sf.style_node(r, fn() { outcome_room })
             @sf.ask_history_trigger_node(
               r,
               fn() { [@ui.span(words())] },
@@ -232,7 +232,11 @@ fn decision_rooms_node(
           })
           |> ignore
         } else {
-          @sf.words_node(o, words, fn() { settled_line }) |> ignore
+          o.box(fn(r) {
+            @sf.style_node(r, fn() { outcome_room })
+            @sf.words_node(r, words, fn() { settled_line }) |> ignore
+          })
+          |> ignore
         }
       })
     })

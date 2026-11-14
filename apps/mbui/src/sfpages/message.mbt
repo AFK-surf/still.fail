@@ -166,7 +166,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
             person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, link_to=link_to_in(m)), chat_title=chat_title_of(m), runs=m.words)
           })
         }
-        message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)), at=message_place(m) + "/f", said=m.said)
+        message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)), at=message_place(m) + "/f", said=m.said, over=if m.text != "" { files_under_words - msg_gap } else { 0.0 })
       } else {
         picking(here, c, src, m.ts, m.seq, m.by.name, if m.author_kind == "agent" { "agent" } else { "person" }, m.text, fn() {
           prose_with_files(c, src, here, m, files)
@@ -725,7 +725,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     )
     |> ignore
   }
-  message_files(c, src, here, rest, false, by=Some(by), at~, said=m.said)
+  message_files(c, src, here, rest, false, by=Some(by), at~, said=m.said, over=if m.text != "" { files_under_words } else { 0.0 })
 }
 
 ///|
@@ -1337,12 +1337,16 @@ let msg_row : @ui.Style = @ui.css("w=Full")
 let msg_row_share : @ui.Style = @ui.css("w=Full mt=S1_5")
 
 ///|
+/// msg_main's gap (S1): its head, its words, its files and what it asks 4 apart.
+let msg_gap : Double = 4.0
+
+///|
 // kept across runs: a value (no field of it changes)
 let msg_main : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let msg_main_share : @ui.Style = @ui.css("w=Full")
+let msg_main_share : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 /// Its head (msgHead): 24 high at least, its name, route and time 6 apart.

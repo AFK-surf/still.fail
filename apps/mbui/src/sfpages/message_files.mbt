@@ -114,7 +114,8 @@ fn file_flight_key(key : String, files : Array[String], flying : Array[String]) 
 
 ///|
 /// A message's files (Files), at the column's end when it is the viewer's (`mine`); `said`: the message's `said` (its
-/// pictures brushed in once decoded only then: image_reveal).
+/// pictures brushed in once decoded only then: image_reveal); `over`: the room over them (under its words: what makes
+/// them files_under_words under them).
 pub fn message_files(
   c : @ui.Ctx,
   src : Source,
@@ -126,6 +127,7 @@ pub fn message_files(
   landing_key? : String = "",
   corner? : Double = @sf.message_file_corner,
   at? : String = "",
+  over? : Double = 0.0,
 ) -> Unit {
   if list.length() == 0 {
     return
@@ -159,6 +161,7 @@ pub fn message_files(
     }
   }
   let column = if mine { files_column_end } else { files_column }
+  let column = if over > 0.0 { column.then(@ui.style(pt=@sf.room_of(over))) } else { column }
   let flight = flight_here(here)
   let flying_keys = match flight {
     Some(f) if landing_key == "" => f.files.map(fn(ff) { ff.key })
@@ -1018,6 +1021,11 @@ let files_column : @ui.Style = @ui.css("w=Full gap=S1_5 align=AStart")
 ///|
 // kept across runs: a value (no field of it changes)
 let files_column_end : @ui.Style = @ui.css("w=Full gap=S1_5 align=AEnd")
+
+///|
+/// How far a message's files are under its words: 8, twice what is between its other parts (msg_main's gap), a card
+/// being heavier than a line.
+let files_under_words : Double = 8.0
 
 ///|
 // kept across runs: a value (no field of it changes)

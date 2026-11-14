@@ -36,7 +36,8 @@ fn MessageFilesAt::here(self : MessageFilesAt) -> MessageHere {
 /// A message's files in `parent` (message_files'), `list` as it is now, at the column's end where they are the viewer's
 /// (`mine`): in rows by the width given, 6 apart along a row and between rows, a picture's and a video's box their data's
 /// at most that width, a card as wide as what it says (236 at most, that width at most). `by`: whose message they are
-/// (author, role, ts), for 引用 in their menus; `place` says where they are shown, `at` names where they are (thumb_occurrence's).
+/// (author, role, ts), for 引用 in their menus; `place` says where they are shown, `at` names where they are (thumb_occurrence's);
+/// `over`: the room over them (message_files').
 // the chat's page as nodes: held by its tests, not used by the app yet
 #warnings("-unused_value")
 fn message_files_node(
@@ -48,11 +49,16 @@ fn message_files_node(
   mine : () -> Bool,
   by : () -> (String, String, String)?,
   at : String,
+  over? : () -> Double = fn() { 0.0 },
 ) -> Unit {
   parent.show(fn() { list().length() > 0 }, fn(s) {
     s.by_room(fn(r, room) {
       r.box(fn(files) {
-        @sf.style_node(files, fn() { if mine() { files_wrap_end } else { files_wrap } })
+        @sf.style_node(files, fn() {
+          let wrap = if mine() { files_wrap_end } else { files_wrap }
+          let o = over()
+          if o > 0.0 { wrap.then(@ui.style(pt=@sf.room_of(o))) } else { wrap }
+        })
         files.wraps(Is(Some(files_gap))) |> ignore
         let keys = fn() { list().map(fn(a) { @sfbase.file_key(a) }) }
         files.each(keys, fn(k) { k }, fn(slot, k) {
