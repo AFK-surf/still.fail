@@ -26,6 +26,8 @@ export const SERVED_ROUTES = [
   "GET /admin/api/jobs", "GET /admin/api/jobs/*", "GET /admin/api/jobs/*/log",
   // (a list read again as what changed of it: routes/changed.ts)
   "POST /admin/api/changed/chats", "POST /admin/api/changed/sessions", "POST /admin/api/changed/threads",
+  // (what changes, as it changes: made by Node's events, carried and compressed by the program, `relay`)
+  "GET /admin/api/events",
 ];
 /// How many of the program answer at once (each one read at a time, as a reader of the pool's).
 const SERVERS = 2;
@@ -39,6 +41,9 @@ export class Served {
   readonly #binary: string;
   readonly #data: string;
   readonly #answer: (viewer: any, head: any, body: Buffer) => Promise<Handled>;
+  readonly #stream: ((viewer: any, head: any, body: Buffer) => Promise<{ status: number; headers: Record<string, string>; body: Buffer | AsyncIterable<Buffer> }>) | undefined;
+  /// The answers made as they come for each program, by its request's number: what lets each go when it stops.
+  readonly #streaming = new Map<MbProcess, Map<number, () => void>>();
   readonly #built: (viewer: any, build: number | null) => void;
   #servers: Server[] = [];
   /// What each connection's program is told of it, as said last (said again only as it changes).
@@ -48,11 +53,14 @@ export class Served {
 
   /// `answer`: a request of a connection's member given back, answered as serve.ts answers one; `built`: the build a
   /// connection's device says.
-  constructor(binary: string, data: string, answer: (viewer: any, head: any, body: Buffer) => Promise<Handled>, built: (viewer: any, build: number | null) => void) {
+  /// `stream`: one answered as it comes (GET /events), its body's pieces given the program as they are made.
+  constructor(binary: string, data: string, answer: (viewer: any, head: any, body: Buffer) => Promise<Handled>, built: (viewer: any, build: number | null) => void,
+    stream?: (viewer: any, head: any, body: Buffer) => Promise<{ status: number; headers: Record<string, string>; body: Buffer | AsyncIterable<Buffer> }>) {
     this.#binary = binary;
     this.#data = data;
     this.#answer = answer;
     this.#built = built;
+    this.#stream = stream;
   }
 
   /// Where the programs listen, once each does.
@@ -79,10 +87,14 @@ export class Served {
         const viewer = this.#viewerOf(Number(said.build.conn));
         if (viewer !== null) this.#built(viewer, typeof said.build.build === "number" ? said.build.build : null);
       }
-      else if (typeof said?.fallback === "number") void this.#fallback(server, said);
+      else if (typeof said?.fallback === "number") void (said.stream === true ? this.#relay(server, said) : this.#fallback(server, said));
+      else if (typeof said?.stop === "number") this.#streaming.get(child)?.get(said.stop)?.();
     });
     child.on("error", (error: Error) => log.warn("served", "a serving program failed", { error: error.message }));
     child.on("exit", (code: number) => {
+      // (what it was given as it came goes with it)
+      for (const stop of this.#streaming.get(child)?.values() ?? []) stop();
+      this.#streaming.delete(child);
       if (this.#closed) return;
       log.warn("served", "a serving program ended; starting it again", { code });
       const at = this.#servers.indexOf(server);
@@ -142,6 +154,45 @@ export class Served {
       handled = { status: 500, headers: { "content-type": "application/json" }, body: Buffer.from(JSON.stringify({ error: (e as Error).message })) };
     }
     server.process.postMessage({ answered: said.fallback, status: handled.status, headers: handled.headers, text: handled.body.toString() });
+  }
+
+  /// A request the program writes as it comes (`stream`: GET /events): its head, then each piece, then its end.
+  async #relay(server: Server, said: { fallback: number; conn: number; head: any; body?: string }) {
+    const n = said.fallback;
+    const viewer = this.#viewerOf(Number(said.conn));
+    const post = (m: unknown) => server.process.postMessage(m);
+    let answer;
+    try {
+      if (viewer === null || this.#stream === undefined) throw new Error("the connection is gone");
+      answer = await this.#stream(viewer, said.head, Buffer.from(said.body ?? ""));
+    } catch (e) {
+      post({ answered: n, status: 500, headers: { "content-type": "application/json" } });
+      post({ chunk: n, text: JSON.stringify({ error: (e as Error).message }) });
+      return post({ done: n });
+    }
+    post({ answered: n, status: answer.status, headers: answer.headers });
+    if (Buffer.isBuffer(answer.body)) {
+      if (answer.body.length > 0) post({ chunk: n, text: answer.body.toString() });
+      return post({ done: n });
+    }
+    const pieces = answer.body[Symbol.asyncIterator]();
+    let streams = this.#streaming.get(server.process);
+    if (streams === undefined) this.#streaming.set(server.process, (streams = new Map()));
+    let stopped = false;
+    streams.set(n, () => {
+      stopped = true;
+      void pieces.return?.();
+    });
+    try {
+      for (;;) {
+        const next = await pieces.next();
+        if (next.done || stopped) break;
+        post({ chunk: n, text: Buffer.from(next.value).toString() });
+      }
+    } finally {
+      streams.delete(n);
+      if (!stopped) post({ done: n });
+    }
   }
 
   async close() {

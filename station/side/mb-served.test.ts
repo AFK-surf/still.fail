@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { zstdDecompressSync } from "node:zlib";
+import { createZstdDecompress, zstdDecompressSync } from "node:zlib";
 import { MbProcess, mbReaderBinary } from "../src/read/mb-reader.ts";
 import { Readers } from "../src/read/pool.ts";
 import { withFront } from "../src/mesh/front.ts";
@@ -95,7 +95,28 @@ test("a routed request is answered by the MoonBit program as the admin API answe
     given.push({ head, body: body.toString() });
     assert.deepEqual(v, viewer);
     return { status: 200, headers: { "content-type": "application/json" }, body: Buffer.from('{"from":"node"}') };
-  }, (_, build) => builds.push(build));
+  }, (_, build) => builds.push(build), async (v, head) => {
+    // an event stream as Node's events make one: two pieces, then one more each time `more` is called, till let go
+    assert.deepEqual(v, viewer);
+    assert.equal(head.path, "/admin/api/events?shared=1");
+    const pieces = ["retry: 3000\n\n", "event: made\ndata: {}\n\n"];
+    const body: AsyncIterableIterator<Buffer> = {
+      [Symbol.asyncIterator]: () => body,
+      next: async () => {
+        while (pieces.length === 0 && !events.gone) await new Promise<void>((r) => (events.more = () => { pieces.push(`event: x\ndata: ${events.told++}\n\n`); r(); }));
+        if (events.gone) return { done: true, value: undefined };
+        return { done: false, value: Buffer.from(pieces.shift()!) };
+      },
+      return: async () => {
+        events.gone = true;
+        events.letGo();
+        return { done: true, value: undefined };
+      },
+    };
+    return { status: 200, headers: { "content-type": "text/event-stream" }, body };
+  });
+  const events = { more: () => {}, gone: false, told: 0, letGo: () => {}, wentAway: null as Promise<void> | null };
+  events.wentAway = new Promise<void>((r) => (events.letGo = r));
   t.after(() => served.close());
   const paths = await served.start();
   assert.equal(await station.route!(ALPN, paths, SERVED_ROUTES), true);
@@ -194,6 +215,51 @@ test("a routed request is answered by the MoonBit program as the admin API answe
   ] };
   assert.equal(bh.status, 200, JSON.stringify(bh));
   assert.deepEqual(batched, expected, diffAt(batched, expected) ?? "");
+  // the event stream: Node's, carried and compressed by the program as it comes, let go once the device is gone
+  {
+    // (a connection of its own: the device goes by closing it)
+    const acceptedEvents = station.accept();
+    const own = await device.connect(addrOf(station), ALPN);
+    const ownConn = (await acceptedEvents)!;
+    served.viewer(ownConn.handed!, viewer);
+    await (await own.openBi()).write(Buffer.from('{"hello":1}\n'));
+    void ownConn.acceptBi();
+    const es = await own.openBi();
+    await es.write(Buffer.from(`${JSON.stringify({ ...routedHead, path: "/admin/api/events?shared=1" })}\n`));
+    await es.finish();
+    const z = createZstdDecompress();
+    let seen = "";
+    z.on("data", (b: Buffer) => (seen += b.toString()));
+    let head: any = null;
+    let carry = Buffer.alloc(0);
+    const until = async (want: string) => {
+      while (!seen.includes(want)) {
+        const b = await es.read();
+        assert.ok(b !== null, `the stream ended before ${want}: ${seen}`);
+        if (head === null) {
+          carry = Buffer.concat([carry, b]);
+          const at = carry.indexOf(10);
+          if (at < 0) continue;
+          head = JSON.parse(carry.subarray(0, at).toString());
+          await new Promise<void>((r) => z.write(carry.subarray(at + 1), () => r()));
+        } else await new Promise<void>((r) => z.write(b, () => r()));
+        // (what it decompressed is told before its write's callback; a turn more for its 'data')
+        await new Promise((r) => setImmediate(r));
+      }
+    };
+    await until("event: made");
+    assert.equal(head.status, 200);
+    assert.equal(head.headers["content-encoding"], "zstd");
+    events.more();
+    await until("data: 0");
+    // gone: the next piece cannot be written, and Node's stream is let go
+    own.close(0, "gone");
+    for (let i = 0; i < 5 && !events.gone; i++) {
+      events.more();
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await events.wentAway;
+  }
   // a list read again as what changed of it (routes/changed.ts): what the device holds of it, by digest
   for (const [list, args, id] of [
     ["sessions", { connect: null, archived: false, lang: "en", viewer }, "key"],

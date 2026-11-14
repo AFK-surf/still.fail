@@ -19,7 +19,7 @@ import { deviceBuildsOf } from "./device-builds.ts";
 import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
-import { ALPN, type Members, handledGiven, sawBuild, serve } from "./serve.ts";
+import { ALPN, type Members, answerGiven, handledGiven, sawBuild, serve } from "./serve.ts";
 import { SERVED_ROUTES, Served } from "./served.ts";
 import { BUILD_HEADER } from "../api/oldest.ts";
 import { accept } from "./accept.ts";
@@ -168,7 +168,8 @@ export const MeshLive = Layer.effectDiscard(
         const served = yield* Effect.acquireRelease(
           Effect.sync(() => new Served(binary, admin.readers.data,
             (viewer, head, body) => handledGiven(members, viewer, head, body),
-            (viewer, build) => void sawBuild(cloud.state, viewer, build === null ? {} : { [BUILD_HEADER]: String(build) }))),
+            (viewer, build) => void sawBuild(cloud.state, viewer, build === null ? {} : { [BUILD_HEADER]: String(build) }),
+            (viewer, head, body) => answerGiven(members, viewer, head, body))),
           (served) => Effect.promise(() => served.close()),
         );
         members.served = served;

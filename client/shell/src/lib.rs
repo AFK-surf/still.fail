@@ -522,6 +522,8 @@ enum Handle {
     Listener(Arc<Listener>),
     /// A zstd stream being taken apart (`zstd.open`).
     Unzstd(Arc<Mutex<Unzstd>>),
+    /// A zstd stream being made (`zstd.stream`): each piece given flushed out whole (station/mesh/compress.ts's way).
+    Zstd(Arc<Mutex<zstd::stream::raw::Encoder<'static>>>),
 }
 
 /// A listening socket: TCP on this machine's loopback (one bound here, or one a launcher bound and handed down by its
@@ -921,6 +923,7 @@ impl Handle {
             Handle::IStream(_) => "stream",
             Handle::Listener(_) => "listener",
             Handle::Unzstd(_) => "unzstd",
+            Handle::Zstd(_) => "zstd",
         }
     }
 }
@@ -1262,8 +1265,42 @@ impl Inner {
                 .map_err(err)??;
                 Ok(Answer::bytes(json!({}), out))
             }
+            // A zstd stream made of what is given it piece by piece (`zstd.push`), each piece flushed: what an event stream
+            // a station's program answers goes out as (station/mesh/compress.ts `compressedStream`), `level` and a window of
+            // 2^`window` its.
+            "zstd.stream" => {
+                let level = a.get("level").and_then(Value::as_i64).unwrap_or(3) as i32;
+                let window = a.get("window").and_then(Value::as_u64).unwrap_or(20) as u32;
+                let mut e = zstd::stream::raw::Encoder::new(level).map_err(err)?;
+                e.set_parameter(zstd::zstd_safe::CParameter::WindowLog(window)).map_err(err)?;
+                Ok(Answer::json(json!({ "id": self.keep(Handle::Zstd(Arc::new(Mutex::new(e)))) })))
+            }
             "zstd.open" => Ok(Answer::json(json!({ "id": self.keep(Handle::Unzstd(Arc::new(Mutex::new(Unzstd::new()?)))) }))),
             "zstd.push" => {
+                if let Handle::Zstd(z) = self.handle(id_of(&a)?)? {
+                    use zstd::stream::raw::{InBuffer, Operation, OutBuffer};
+                    let input = bytes.unwrap_or_default();
+                    let mut z = z.lock().unwrap();
+                    let mut out = Vec::with_capacity(input.len() / 2 + 64);
+                    let mut chunk = vec![0u8; 64 * 1024];
+                    let mut inb = InBuffer::around(&input);
+                    while inb.pos() < input.len() {
+                        let mut o = OutBuffer::around(&mut chunk[..]);
+                        z.run(&mut inb, &mut o).map_err(err)?;
+                        let n = o.pos();
+                        out.extend_from_slice(&chunk[..n]);
+                    }
+                    loop {
+                        let mut o = OutBuffer::around(&mut chunk[..]);
+                        let left = z.flush(&mut o).map_err(err)?;
+                        let n = o.pos();
+                        out.extend_from_slice(&chunk[..n]);
+                        if left == 0 {
+                            break;
+                        }
+                    }
+                    return Ok(Answer::bytes(json!({}), out));
+                }
                 let Handle::Unzstd(z) = self.handle(id_of(&a)?)? else { return Err("not a zstd stream".into()) };
                 let input = bytes.unwrap_or_default();
                 let mut z = z.lock().unwrap();
