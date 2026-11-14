@@ -1,4 +1,4 @@
-// still.fail's own host's side of src/stillfail/reports.mbt on iOS (src/stillfail/core_engine.m includes it there), what
+// still.fail's own host's side of src/stillfail/reports.mbt on iOS and macOS (src/stillfail/core_engine.m includes it), what
 // Android's Crashes.java does: the app's crashes and hangs, to still.fail's PostHog project as
 // `$exception` events. iOS lets no app see its own end: MetricKit (MXMetricManager) gives the system's report of each
 // crash, and of each hang, as the app starts the next time. Each is kept in the app's files as it comes
@@ -6,8 +6,8 @@
 // batch to /batch/; what fails to go goes at the next start. A report's frames are the system's, unsymbolicated: each
 // binary's name, UUID and offset into its text, for the build's dSYM ( says how).
 //
-// A build without PostHog's key (Info.plist's StillfailPosthogKey: scripts/ios-core.sh writes it from the file
-// STILLFAIL_POSTHOG names, the TestFlight build's POSTHOG_JSON) sends nothing and keeps nothing, and answers `hello` 0:
+// A build without PostHog's key (Info.plist's StillfailPosthogKey: scripts/ios-core.sh and, for still.fail's own Mac app,
+// scripts/mac-app.sh write it from the file STILLFAIL_POSTHOG names, the release's POSTHOG_JSON) sends nothing and keeps nothing, and answers `hello` 0:
 // the app then reports what it reports as on a host without its own (reports.mbt). Nor one whose person turned it off
 // (the settings' 「发送使用统计和错误报告」, this device's own, in reports.json beside the kept ones): everything goes
 // by `sf_send`, which looks first.
@@ -29,8 +29,9 @@ static NSString *sf_hex(const unsigned char *b, size_t n) {
 }
 
 /// A report's id: its kind and what MetricKit said of it (its JSON, keys sorted: the same report given again, by
-/// pastDiagnosticPayloads or after a failed send, is the same id), hashed: the first 16 bytes of SHA-256, as hex.
-static NSString *sf_report_id(NSString *kind, NSDictionary *diagnostic) {
+/// pastDiagnosticPayloads or after a failed send, is the same id), hashed: the first 16 bytes of SHA-256, as hex. (None on
+/// macOS, which keeps no MetricKit report.)
+__attribute__((unused)) static NSString *sf_report_id(NSString *kind, NSDictionary *diagnostic) {
   NSData *json = [NSJSONSerialization dataWithJSONObject:diagnostic options:NSJSONWritingSortedKeys error:nil];
   if (!json) return nil;
   NSMutableData *all = [[kind stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding].mutableCopy;
@@ -227,13 +228,19 @@ static NSDictionary *sf_report_event(NSDictionary *kept, NSString *rid, NSString
 }
 
 #ifndef SF_REPORTS_PURE
+#if TARGET_OS_IPHONE
 #import <MetricKit/MetricKit.h>
+#else
+#include <sys/sysctl.h>
+#endif
 #include "moonbit.h"
 
+#if TARGET_OS_IPHONE
 /// At most this many reports kept, and sent each start: the newest.
 static const NSUInteger SF_MOST = 20;
 /// A hang reported from this long on (MetricKit gives shorter ones too: a hitch, not what a person waited through).
 static const double SF_HANG_MS = 2000;
+#endif
 /// At most this many reports' ids remembered as sent (pastDiagnosticPayloads gives them again for a while).
 static const NSUInteger SF_SENT = 200;
 
@@ -244,6 +251,13 @@ static dispatch_queue_t reports_queue;
 static NSString *signed_in;
 
 static BOOL sf_has_key(void) { return posthog_key.length > 0; }
+
+/// Who a report goes as before an account was ever signed in on this device.
+#if TARGET_OS_IPHONE
+static NSString *const sf_anonymous = @"ios-anonymous";
+#else
+static NSString *const sf_anonymous = @"macos-anonymous";
+#endif
 
 /// The app's files: Application Support/<bundle id>/, beside the core's (apple_engine.m core_data_dir).
 static NSString *sf_files_dir(void) {
@@ -291,22 +305,35 @@ static BOOL sf_reporting(void) {
 
 /// still.fail's own app (fail.still.iphone, TestFlight's) or another build of it (still.fail preview's, a debug one):
 /// its reports not counted as the released app's, as Android's android-mbui.
+/// On macOS still.fail's own Mac app (fail.still.desktop, its beta fail.still.desktop.beta) is `macos`, any other build
+/// `macos-mbui`; the device's model is the machine's (hw.model, "Mac16,1").
 static NSDictionary *sf_here(void) {
   NSDictionary *info = NSBundle.mainBundle.infoDictionary;
-  BOOL own = [NSBundle.mainBundle.bundleIdentifier isEqual:@"fail.still.iphone"];
   NSString *version = sf_string(info[@"CFBundleShortVersionString"]) ?: @"", *build = sf_string(info[@"CFBundleVersion"]) ?: @"";
   NSOperatingSystemVersion os = NSProcessInfo.processInfo.operatingSystemVersion;
+#if TARGET_OS_IPHONE
+  BOOL own = [NSBundle.mainBundle.bundleIdentifier isEqual:@"fail.still.iphone"];
   const char *model = getenv("MBUI_DEVICE_MODEL");
+  NSString *device = model ? @(model) : @"";
+  NSString *app = own ? @"ios" : @"ios-mbui", *system = @"iOS", *lib = own ? @"stillfail-ios" : @"stillfail-mbui-ios";
+#else
+  NSString *bid = NSBundle.mainBundle.bundleIdentifier ?: @"";
+  BOOL own = [bid isEqual:@"fail.still.desktop"] || [bid isEqual:@"fail.still.desktop.beta"];
+  char model[64] = {0};
+  size_t size = sizeof(model) - 1;
+  NSString *device = sysctlbyname("hw.model", model, &size, NULL, 0) == 0 ? @(model) : @"";
+  NSString *app = own ? @"macos" : @"macos-mbui", *system = @"macOS", *lib = own ? @"stillfail-macos" : @"stillfail-mbui-macos";
+#endif
   return @{
     @"release" : [NSString stringWithFormat:@"%@ (%@)", version, build],
-    @"app" : own ? @"ios" : @"ios-mbui",
+    @"app" : app,
     @"$app_version" : version,
     @"$app_build" : build,
-    @"$os" : @"iOS",
+    @"$os" : system,
     @"$os_version" : [NSString stringWithFormat:@"%ld.%ld", (long)os.majorVersion, (long)os.minorVersion],
     @"$device_manufacturer" : @"Apple",
-    @"$device_model" : model ? @(model) : @"",
-    @"$lib" : own ? @"stillfail-ios" : @"stillfail-mbui-ios",
+    @"$device_model" : device,
+    @"$lib" : lib,
   };
 }
 
@@ -375,6 +402,7 @@ static void report_kept(void) {
   });
 }
 
+#if TARGET_OS_IPHONE
 /// One report MetricKit gave kept, unless it was kept or sent already.
 static void sf_keep(NSString *kind, NSData *json, NSDate *at, double hang_ms, NSArray *sent) {
   NSDictionary *diagnostic = json ? sf_dict([NSJSONSerialization JSONObjectWithData:json options:0 error:nil]) : nil;
@@ -417,6 +445,7 @@ static void keep_payloads(NSArray<MXDiagnosticPayload *> *payloads) {
 @end
 
 static SFReports *subscriber;
+#endif
 
 /// PostHog's project from the Info.plist; MetricKit asked for the reports once the app runs (its delivery comes on a
 /// queue of its own, soon after), and for those it gave before (a start that ended before it kept them).
@@ -427,6 +456,7 @@ __attribute__((constructor)) static void reports_start(void) {
   reports_queue = dispatch_queue_create("stillfail-reports", DISPATCH_QUEUE_SERIAL);
   state_lock = [NSObject new];
   if (!sf_has_key()) return;
+#if TARGET_OS_IPHONE
   dispatch_async(dispatch_get_main_queue(), ^{
     subscriber = [SFReports new];
     [MXMetricManager.sharedManager addSubscriber:subscriber];
@@ -435,6 +465,7 @@ __attribute__((constructor)) static void reports_start(void) {
       keep_payloads(past);
     });
   });
+#endif
 }
 
 /// An error the app got past, sent at once as `type` with `value` and `reason` (CoreFailed, UiFault: Android's
@@ -443,7 +474,7 @@ static void sf_handled(NSString *type, NSString *value, NSString *reason) {
   if (!sf_has_key()) return;
   double at = floor(NSDate.date.timeIntervalSince1970 * 1000);
   dispatch_async(reports_queue, ^{
-    NSString *account = signed_in ?: sf_string(state_read()[@"account"]) ?: @"ios-anonymous";
+    NSString *account = signed_in ?: sf_string(state_read()[@"account"]) ?: sf_anonymous;
     NSMutableDictionary *p = [sf_here() mutableCopy];
     p[@"reason"] = reason;
     p[@"$exception_level"] = @"error";
@@ -465,7 +496,7 @@ static void sf_hang(NSString *json, NSString *name) {
   dispatch_async(reports_queue, ^{
     NSDictionary *said = sf_dict([NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil]);
     if (!said) return;
-    NSString *account = signed_in ?: sf_string(state_read()[@"account"]) ?: @"ios-anonymous";
+    NSString *account = signed_in ?: sf_string(state_read()[@"account"]) ?: sf_anonymous;
     NSMutableDictionary *p = [sf_here() mutableCopy];
     [p addEntriesFromDictionary:said];
     sf_send(@[ @{@"event" : name, @"distinct_id" : account, @"uuid" : NSUUID.UUID.UUIDString.lowercaseString,

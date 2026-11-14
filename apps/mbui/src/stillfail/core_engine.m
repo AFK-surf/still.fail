@@ -14,11 +14,8 @@
 int32_t mb_stillfail_core_linked(void) { return 1; }
 
 // What still.fail's own host is told (reports.mbt: crash reports, the bar's timing): Android's (src/host/
-// android_reports.c) and iOS's, MetricKit's reports of crashes and hangs (src/host/apple_reports.m, scripts/ios-core.sh
-// links MetricKit); on macOS nothing takes it, 0 says so. moon does not track the included file: touch this one after
-// changing it.
-#if TARGET_OS_IPHONE
+// android_reports.c), and iOS's and macOS's (src/host/apple_reports.m): on both the window thread's hangs and the errors
+// the app got past, on iOS MetricKit's reports of crashes and hangs as well (scripts/ios-core.sh links MetricKit). A
+// build without PostHog's key in its Info.plist sends nothing (`hello` 0). moon does not track the included file:
+// touch this one after changing it.
 #include "../host/apple_reports.m"
-#else
-int32_t mb_stillfail_tell(const void *what, const void *a, const void *b, int32_t n, int32_t m) { return 0; }
-#endif
