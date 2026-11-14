@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [49206681f](https://github.com/AFK-surf/monoid/commit/49206681fd5da4fb4db2afee4dd45c325658b6b4) station, core, app: retire a station (its chats, f | 1.99 | 2.71 | 11.58 | 31.19 | 41.64 | 27.8 | 53.36 | 96.96 | 112.67 |
 | [c52e9bd2e](https://github.com/AFK-surf/monoid/commit/c52e9bd2edee63163cd6774f9e516fb81604716e) app: a chat archived from its row says so where th | 1.98 | 2.71 | 11.55 | 31.15 | 41.53 | 27.77 | 53.26 | 96.86 | 114.75 |
 | [d05b8c0ed](https://github.com/AFK-surf/monoid/commit/d05b8c0ed97c5188433bf1a66ff476f6f8f690e8) refactor(core): the event stream's reader is base, | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.76 | 53.23 | 96.72 | 116.22 |
 | [9e98b2805](https://github.com/AFK-surf/monoid/commit/9e98b28053e67b8599b637dc99dd0540034f1bf2) app: 小屏's chat bar names its key to the chat's ser | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.76 | 53.23 | 96.93 | 116.85 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [ffa55870f](https://github.com/AFK-surf/monoid/commit/ffa55870f01816f0b3661d6bf6d80ff9b0c72f39) fix(mbui): show the floating outline button on wid | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.01 | 109.79 |
 | [6311979f9](https://github.com/AFK-surf/monoid/commit/6311979f9e1985bcf38250026136912de3ee9c73) cloud: a self-hosted cloud on workerd, its names,  | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 109.79 |
 | [9084bcb13](https://github.com/AFK-surf/monoid/commit/9084bcb13b397c98270d3b79612c6e4c53a90091) app tests: a chat's picture flying into its viewer | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 95.72 | 108.95 |
-| [ac936000a](https://github.com/AFK-surf/monoid/commit/ac936000aa4759c093e22d31daa3811a3e03f3c4) fix(mbui): jump to the clicked tick's message on t | 1.97 | 2.64 | 11.38 | 30.95 | 40.88 | 27.58 | 52.71 | 96.18 | 110.82 |
