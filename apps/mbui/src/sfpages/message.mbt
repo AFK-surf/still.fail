@@ -816,11 +816,25 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
     Some(l) => flash_of(c, reading_of(l.rk), m.ts)
     None => 0.0
   }
+  // (laid out on the way as it is once open all the way, cut by the pill as it widens: its words and what ends them in
+  // the room they have open, `/line` how wide they come to there; never laid anew at each width, where a line of them
+  // let go of the next would step up a line in one frame)
+  let laid_w = match widened {
+    Some((_, across_w)) if shown_open && opened_by < 1.0 => Some(across_w - notice_pill_inset)
+    _ => None
+  }
   let pill = fn() {
-    // (as wide as it was closed as it sets out, as the chat lets it once open, what it holds cut to it on the way)
+    // (as wide as it was closed as it sets out, as it is once open as it ends: as the chat lets it where what failed
+    // said is under its words (laid across it), else as its words and what ends them come to; what it holds cut to it
+    // on the way)
     let pill_style = match widened {
-      Some((closed_w, across_w)) if shown_open && opened_by < 1.0 =>
-        notice_pill_of(failed, true).then(notice_pill_cut).then(@ui.style(max_w=Fixed(closed_w + (across_w - closed_w) * opened_by)))
+      Some((closed_w, across_w)) if shown_open && opened_by < 1.0 => {
+        let open_w = match @motion.measured_size(c, open_key + "/line") {
+          Some((w, _)) if m.notice_detail == "" => @sf.dmin(w + notice_pill_inset, across_w)
+          _ => across_w
+        }
+        notice_pill_of(failed, true).then(notice_pill_cut).then(@ui.style(max_w=Fixed(closed_w + (open_w - closed_w) * opened_by)))
+      }
       _ => notice_pill_of(failed, shown_open)
     }
     let p = c.box(style=pill_style, id~, fn() {
@@ -828,7 +842,8 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
         let g = c.layer(fn() { c.box(style=if shown_open { notice_lit_open } else { notice_lit }, fn() {  }) |> ignore })
         c.look(g, @ui.look(alpha=lit))
       }
-      c.box(style=notice_line, fn() {
+      let line = fn() {
+      let l = c.box(style=notice_line, fn() {
         c.box(style=notice_words_room, fn() {
           if m.notice_short != "" || m.notice_lines.length() > 0 {
             // a chat's run changed: closed, what changed on its line, else what it runs on now; opened, both runs whole
@@ -916,7 +931,14 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
             }
         }
       })
-      |> ignore
+      if shown_open {
+        @motion.measure(c, l, open_key + "/line")
+      }
+      }
+      match laid_w {
+        Some(w) => c.box(style=notice_line_laid.then(@ui.style(w=Fixed(w))), keep=true, fn() { line() }) |> ignore
+        None => line()
+      }
       // what failed said of it, as it said it: opened only
       if shown_open && m.notice_detail != "" {
         let natural_h = match @motion.measured_size(c, open_key + "/detail") {
@@ -1520,6 +1542,12 @@ let notice_lit_open : @ui.Style = notice_lit.then(@ui.css("radius=Xl1_5"))
 /// its room whole (notice_action: kept, as a row's end).
 // kept across runs: a value (no field of it changes)
 let notice_line : @ui.Style = @ui.css("row align=AEnd")
+
+///|
+/// Its words and what ends them as it opens or shuts (system_notice's `laid_w`): from the pill's start, as wide as they
+/// come to in the room they have open.
+// kept across runs: a value (no field of it changes)
+let notice_line_laid : @ui.Style = @ui.css("align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
