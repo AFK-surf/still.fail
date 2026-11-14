@@ -247,12 +247,12 @@ fn station_view_node(
 /// its screens, profiles, connects and folders, and what else of it has a page of its own.
 fn station_overview_keys(core : Core, s : Json?) -> Array[String] {
   let address = text(s, "station")
-  station_overview_keys_by(s, station_part_read(core, address, station_screens_ask(address)).value)
+  station_overview_keys_by(s, station_part_read(core, address, station_screens_ask(address)).value, terminals=terminals_to_show(core, address, s))
 }
 
 ///|
 /// The keys of its overview's parts (station_overview_keys'), its screens as `screens` says them (None: not answered).
-fn station_overview_keys_by(s : Json?, screens : Json?) -> Array[String] {
+fn station_overview_keys_by(s : Json?, screens : Json?, terminals? : Bool = false) -> Array[String] {
   let o = field(s, "overview")
   let out = []
   if flag(s, "online") && field(s, "host") is Some(Object(_)) {
@@ -262,7 +262,8 @@ fn station_overview_keys_by(s : Json?, screens : Json?) -> Array[String] {
     Some(Object(_)) as v => {
       let all = items(v, "screens")
       let can_open = flag(v, "browser") && flag(v, "control")
-      if !all.is_empty() || can_open || text(v, "note") != "" {
+      // (its terminals there too, while it is up: 打开终端 at least)
+      if !all.is_empty() || can_open || text(v, "note") != "" || (terminals && flag(s, "online")) {
         out.push("allScreens")
       }
     }
@@ -350,7 +351,8 @@ fn station_env_form_ask(address : String, form : String) -> (String, Map[String,
 fn station_block_asks(core : Core, here : Here, address : String, s : Json?, manager : Bool, key : String) -> Array[(String, Map[String, Json])] {
   match key {
     "resources" => [station_net_ask(address), resources_ask(here, address)]
-    "allScreens" | "userPages" | "agentPages" | "screens" => [station_screens_ask(address)]
+    "allScreens" => [station_screens_ask(address), ..if (core.terminals_on)() { [terminals_ask(address)] } else { [] }]
+    "userPages" | "agentPages" | "screens" => [station_screens_ask(address)]
     "devices" => if (core.devices_on)() { [@settings.devices_ask(here)] } else { [] }
     "processes" => if flag(s, "online") { [resources_ask(here, address)] } else { [] }
     "system" =>
@@ -376,7 +378,7 @@ fn station_part_asks(core : Core, here : Here, address : String, s : Json?, mana
     "processes" => ["processes"]
     "settings" => station_settings_keys(s, manager)
     "machine" => []
-    _ => ["screens", ..station_overview_keys_by(s, None)]
+    _ => ["screens", ..station_overview_keys_by(s, None, terminals=(core.terminals_on)())]
   }
   let out : Array[(String, Map[String, Json])] = []
   let said : Map[String, Bool] = Map([])
@@ -664,7 +666,12 @@ fn station_all_screens_node(b : @view.View, core : Core, here : () -> Here, s : 
   let agent_tabs = fn() { items(v(), "screens").filter(fn(sc) { is_agent_screen(Some(sc)) }) }
   let user_tabs = fn() { items(v(), "screens").filter(fn(sc) { is_user_screen(Some(sc)) }) }
   let can_open = fn() { flag(v(), "browser") && flag(v(), "control") }
-  st_section_node(b, fn() { "屏幕与浏览器" }, count=fn() { screens().length() + agent_tabs().length() }, fn(sec) {
+  let terminals_counted = fn() {
+    guard (core.terminals_on)() && flag(s(), "online") else { return 0 }
+    let tv = (core.topic)("terminals", { "station": str(address) }).get().value
+    if terminals_shown(s(), tv) { items(tv, "terminals").length() } else { 0 }
+  }
+  st_section_node(b, fn() { "屏幕、浏览器与终端" }, count=fn() { screens().length() + agent_tabs().length() + terminals_counted() }, fn(sec) {
     @sf.group_node(sec, fn(g) {
       g.each(screens, fn(sc) { text(Some(sc), "id") }, fn(row, sc) {
         let sv = fn() { Some(sc.get()) }
@@ -705,6 +712,8 @@ fn station_all_screens_node(b : @view.View, core : Core, here : () -> Here, s : 
           lead=LeadLine(fn(l) { st_mark_node(l, fn() { "web" }) }),
         )
       })
+      // its terminals, then 打开终端 (station_terminals_node.mbt)
+      station_terminal_rows_node(g, core, address, s)
       g.show(fn() { screens().length() == 0 && agent_tabs().length() == 0 && items(v(), "screens").is_empty() && text(v(), "note") != "" }, fn(n) {
         said_row_node(n, fn() { text(v(), "note") }, lead=LeadLine(fn(l) { st_mark_node(l, fn() { "monitor" }) }))
       })

@@ -2039,5 +2039,13 @@
   "web-pages.screen.tabsCount": "{count} tabs",
   "web-pages.screen.tabsCount.one": "1 tab",
   "web-pages.screen.wholeScreen": "Whole screen",
-  "web-pages.screen.windows": "Windows"
+  "web-pages.screen.windows": "Windows",
+  "web-pages.terminal.title": "Terminal",
+  "web-pages.terminal.openRow": "Open a terminal",
+  "web-pages.terminal.copyCwd": "Copy working folder",
+  "web-pages.terminal.end": "End session",
+  "web-pages.terminal.typing": "{name} is typing",
+  "web-pages.terminal.looking": "{count} more watching",
+  "web-pages.terminal.nobody": "Nobody watching",
+  "web-pages.terminal.ended": "Ended"
 }

@@ -1092,7 +1092,7 @@ fn tape_swiped(p : TapePane, dx : Double, dy : Double) -> TapePane? {
   guard !@sf.pointer_rests() &&
     wide.tape_at.get() == p &&
     !tape_covered(p) &&
-    !(app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_))) &&
+    !(app.nav.top() is (Screen(_) | Terminal(_) | DriveRead(_) | DrivePlay(_))) &&
     dx.abs() > @ui.press_slop &&
     dx.abs() > dy.abs() * tape_swipe_steep else {
     return None

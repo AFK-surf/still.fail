@@ -38,6 +38,8 @@ pub(all) enum Page {
   Setting(@settings.Route)
   /// a station's screen, seen and driven (screen_view.mbt), over the app as Android's ScreenActivity is
   Screen(ScreenAt)
+  /// one of a station's terminals (src/sfpages terminal_view_node.mbt), over the whole window as a screen is
+  Terminal(TerminalAt)
 }
 
 ///|
@@ -706,6 +708,17 @@ pub(all) struct ScreenAt {
 }
 
 ///|
+/// A terminal's page: its station's address, its id (`new`: one opened for the page), whether it is only looked at,
+/// the folder a new one opens in.
+#derive(Eq)
+pub(all) struct TerminalAt {
+  station : String
+  terminal : String
+  watch : Bool
+  cwd : String
+}
+
+///|
 /// What page `p` is, by its kind alone: a name out of a fixed set written here, never a chat's, station's, session's,
 /// file's, job's or person's id, name, title or path, nor anything typed. What the window thread's hang reports sent
 /// to PostHog say of the page shown (shown_kind, mbui's journal_shows) and the device's performance record says too.
@@ -728,6 +741,7 @@ pub fn page_kind(p : Page) -> String {
     Place(place) => "Place " + place_kind(place)
     Setting(r) => "Setting " + setting_kind(r)
     Screen(_) => "Screen"
+    Terminal(_) => "Terminal"
   }
 }
 

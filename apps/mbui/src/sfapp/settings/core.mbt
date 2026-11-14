@@ -98,6 +98,8 @@ pub(all) struct Core {
   read_only : String
   /// whether the workspace's devices are asked for (the source's `asks_devices`: not in a replay of a run from before)
   devices_on : () -> Bool
+  /// whether a station's terminals are asked for (the source's `asks_terminals`: not in a replay of a run from before)
+  terminals_on : () -> Bool
 }
 
 ///|

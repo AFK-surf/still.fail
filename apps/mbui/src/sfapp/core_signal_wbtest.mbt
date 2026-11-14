@@ -1906,6 +1906,7 @@ test "a chat after closing the switcher reads station changes made in the gap" {
     asks_outline: fn() { true },
     switches_ahead: fn() { true },
     asks_station_updates: fn() { true },
+    asks_terminals: fn() { true },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.frame()

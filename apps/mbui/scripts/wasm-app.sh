@@ -20,7 +20,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 cd "$A"
 H=../../libs/mbui/src/host
 # The files whose `extern "C"` calls the shell answers: mbui's host, the core's engine, the app's own.
-decls="$H/host_native.mbt $H/device_native.mbt $H/stream_native.mbt $H/textref_native.mbt $H/native_native.mbt
+decls="$H/host_native.mbt $H/device_native.mbt $H/stream_native.mbt $H/textref_native.mbt $H/native_native.mbt $H/terminal_native.mbt
   src/core/native.mbt src/stillfail/link_native.mbt src/sfreplay/emit_native.mbt
   src/sfreplay/trace_native.mbt"
 O=$A/out/wasm-app

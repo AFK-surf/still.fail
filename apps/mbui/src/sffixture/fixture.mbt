@@ -1098,6 +1098,7 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
         v => v
       }
     "station" => @settings.station_said(wholes(), text(Some(Json::object(params)), "station"), "")
+    "terminals" => Some(fixture_terminals(text(Some(Json::object(params)), "station"), f.mode))
     "stationUpdates" => Some(fixture_station_updates(f, wholes()))
     "stationPart" => {
       let p = Some(Json::object(params))
@@ -2395,6 +2396,7 @@ pub fn fixture(mode : String) -> Source {
     asks_outline: fn() { true },
     switches_ahead: fn() { true },
     asks_station_updates: fn() { true },
+    asks_terminals: fn() { true },
   }
 }
 

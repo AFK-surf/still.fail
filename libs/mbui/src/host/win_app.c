@@ -22,6 +22,7 @@
 #include "win.h"
 #include <dwmapi.h>
 #include "post.h"
+#include "term.h"
 #include "app_calls.h"  // the app's own calls
 #include "done_watch.h"
 

@@ -650,6 +650,7 @@ pub fn source() -> @sfapp.Source {
     asks_outline: fn() { @sfcore.trace_switch("MBUI_OUTLINE") },
     switches_ahead: fn() { @sfcore.trace_switch("MBUI_SWITCH_AHEAD") },
     asks_station_updates: fn() { @sfcore.trace_switch("MBUI_STATION_UPDATES") },
+    asks_terminals: fn() { @sfcore.trace_switch("MBUI_TERMINALS") },
   }
 }
 

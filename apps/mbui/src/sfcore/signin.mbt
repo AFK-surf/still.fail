@@ -548,6 +548,9 @@ pub let trace_switches : Array[String] = [
   // (the stations' newer releases waiting for this person, `stationUpdates`, asked with the shell and read by their key
   // beside the app's update: sfpages station_updates.mbt. A trace without it has none asked, as its run's app did)
   "MBUI_STATION_UPDATES",
+  // (a station's terminals among its screens on its page, `terminals`: sfpages station_terminals_node.mbt. A trace
+  // without it has none asked, as its run's app did)
+  "MBUI_TERMINALS",
 ]
 
 ///|
