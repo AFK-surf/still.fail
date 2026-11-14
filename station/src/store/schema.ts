@@ -442,6 +442,18 @@ CREATE TABLE IF NOT EXISTS session_usage (
   session TEXT PRIMARY KEY,
   usage TEXT NOT NULL
 );
+-- The highest build each device a lock here names said as it asked (by its id in the lock; -1: none said) and when it
+-- was last seen, unix seconds (mesh/device-builds.ts): written only as the build rises or the day changes.
+CREATE TABLE IF NOT EXISTS device_builds (
+  id TEXT PRIMARY KEY,
+  build INTEGER NOT NULL,
+  at INTEGER NOT NULL
+);
+-- Since when the station keeps them (its first start with them), unix seconds: one row.
+CREATE TABLE IF NOT EXISTS device_builds_since (
+  one INTEGER PRIMARY KEY CHECK (one = 1),
+  at INTEGER NOT NULL
+);
 `;
 
 /// Each message as it reads now: its latest edit's words, files and quotes.

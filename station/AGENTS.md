@@ -164,7 +164,8 @@
   signer at hand to sign it after the head. A device keeps what a station showed it and goes by the same fork choice
   (`client/core-ts/src/lock-keep.ts`), so it follows a station that changes branch; refusing a fresh entry decides
   nothing for any other keeper.
-- Where a lock's active chain holds `moved {root}` (2026-11-13, nothing signs one yet), the state in force there is the
+- Where a lock's active chain holds `moved {root}` (2026-11-13; signed by an owner's device once everything that uses the
+  workspace takes it, client/core-ts/AGENTS.md), the state in force there is the
   rules' `state4` of the root's log, the person logs kept and the statements' bodies kept (`src/cloud/lock-bodies.ts`,
   `mesh/locks/<ws>.bodies.json`), by this station's clock (each app device by the signer its log says, never by its key
   on the log): `Cloud.locked` gives it to every reader of "the lock"
@@ -191,6 +192,11 @@
   locked, off or on): a station that pinned the chain goes by the state in force (`leftOut`: never `unpinned`; its home
   off, a joined unlocked one's members taken), and so does `enroll --join` on the machine (`src/cli.ts`
   `joinWorkspace`), which the cloud no longer refuses for a moved home (2026-11-14, `test/lock-moved-joined.test.ts`).
+- What build each device a lock here names last ran is kept by its id in the lock (`src/mesh/device-builds.ts`, in
+  stillfail.db, written only as the build rises or the day changes) and given to a device the lock lets in (GET /lock
+  `builds`, `serves` `builds`; GET /lock/person for the asker's own log's devices), with since when this station keeps
+  them: what a core hands a workspace over by (the user, 2026-11-14: 无感迁移, no date, no switch, nobody told to update).
+  Nothing of a device the asker's lock does not name. `test/device-builds.test.ts` holds it.
 
 ## Screens
 
