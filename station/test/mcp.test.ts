@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AGY_TOOL_BUDGET } from "../src/agents/agy.ts";
-import { CORE, fitted, INDIRECT, McpEndpoint, OUTWARD, type Tool, UNBOUND_REFUSAL, weight } from "../src/tools/mcp.ts";
+import { CLAUDE_TOOL_LOADED } from "../src/agents/claude.ts";
+import { CORE, EVERY_TURN, fitted, INDIRECT, type Listing, McpEndpoint, OUTWARD, type Tool, UNBOUND_REFUSAL, weight } from "../src/tools/mcp.ts";
 
 const echo: Tool = {
   name: "echo",
@@ -85,7 +86,7 @@ test("a runtime that budgets its tools is declared the core ones and those that 
   const all = station();
   const total = all.reduce((n, t) => n + weight(t), 0);
   assert.ok(total > AGY_TOOL_BUDGET, `the station's tools (${total} B) are more than the budget`);
-  const e = new McpEndpoint(() => "s", all, undefined, (session) => (session === "s" ? AGY_TOOL_BUDGET : undefined));
+  const e = new McpEndpoint(() => "s", all, undefined, (session) => (session === "s" ? { budget: AGY_TOOL_BUDGET } : undefined));
   const list: any[] = ((await rpc(e, "t", { jsonrpc: "2.0", id: 1, method: "tools/list" })).body as any).result.tools;
   const names = list.map((t) => t.name);
   const bytes = list.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t)), 0);
@@ -99,14 +100,48 @@ test("a runtime that budgets its tools is declared the core ones and those that 
   // The same every time.
   assert.deepEqual(fitted(all, AGY_TOOL_BUDGET).indirect.map((t) => t.name), indirect);
   // Without a budget, every tool as before.
-  const plain = new McpEndpoint(() => "other", all, undefined, (session) => (session === "s" ? AGY_TOOL_BUDGET : undefined));
+  const plain = new McpEndpoint(() => "other", all, undefined, (session) => (session === "s" ? { budget: AGY_TOOL_BUDGET } : undefined));
   assert.equal(((await rpc(plain, "t", { jsonrpc: "2.0", id: 1, method: "tools/list" })).body as any).result.tools.length, all.length);
+});
+
+test("a runtime that keeps tools back until they are searched for is told to load the two every turn calls, and no other list changes", async () => {
+  const all = station();
+  // As sessions/agents.ts gives each runtime's: Claude Code's mark, Antigravity CLI's budget, nothing for the rest.
+  const listings: Record<string, Listing> = { claude: { loaded: CLAUDE_TOOL_LOADED }, agy: { budget: AGY_TOOL_BUDGET } };
+  const e = new McpEndpoint((token) => token, all, undefined, (session) => listings[session]);
+  const list = async (token: string): Promise<any[]> => ((await rpc(e, token, { jsonrpc: "2.0", id: 1, method: "tools/list" })).body as any).result.tools;
+  const claude = await list("claude");
+  assert.deepEqual(claude.filter((t) => "_meta" in t).map((t) => [t.name, t._meta]), [["chat_post", { "anthropic/alwaysLoad": true }], ["chat_state", { "anthropic/alwaysLoad": true }]]);
+  assert.deepEqual(EVERY_TURN, ["chat_post", "chat_state"]);
+  // But for the mark, every tool as any runtime is declared it.
+  const before = JSON.stringify(all.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })));
+  assert.equal(JSON.stringify(claude.map(({ _meta, ...t }) => t)), before);
+  // Another runtime's list is byte for byte what it was, no `_meta` anywhere in it.
+  assert.equal(JSON.stringify(await list("codex")), before);
+  // One with a budget: what `fitted` gives, as before, unmarked.
+  const { declared, indirect } = fitted(all, AGY_TOOL_BUDGET);
+  const agy = await list("agy");
+  assert.deepEqual(agy.map((t) => t.name), [...declared.map((t) => t.name), INDIRECT]);
+  assert.deepEqual(agy.at(-1).inputSchema.properties.name.enum, indirect.map((t) => t.name));
+  assert.ok(agy.every((t) => !("_meta" in t)));
+});
+
+test("a budget counts the marks of the tools it declares loaded", async () => {
+  const all = station();
+  const list = async (listing: Listing): Promise<any[]> => ((await rpc(new McpEndpoint(() => "s", all, undefined, () => listing), "t", { jsonrpc: "2.0", id: 1, method: "tools/list" })).body as any).result.tools;
+  const bytes = (tools: any[]) => tools.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(t)), 0);
+  // A budget the unmarked list fills to the byte: with the marks, the list still stays within it.
+  const budget = bytes(await list({ budget: AGY_TOOL_BUDGET }));
+  const marked = await list({ budget, loaded: CLAUDE_TOOL_LOADED });
+  assert.deepEqual(marked.filter((t) => "_meta" in t).map((t) => t.name), EVERY_TURN);
+  assert.ok(bytes(marked) <= budget, `declared ${bytes(marked)} B of ${budget}`);
+  assert.equal(marked.at(-1).name, INDIRECT);
 });
 
 test("station_tool reads an undeclared tool's parameters, runs it as any call, and is refused as it is", async () => {
   let out = false;
   const all = [...station(), sized("slack_api", 3000)];
-  const e = new McpEndpoint(() => "s", all, () => (out ? UNBOUND_REFUSAL : undefined), () => AGY_TOOL_BUDGET);
+  const e = new McpEndpoint(() => "s", all, () => (out ? UNBOUND_REFUSAL : undefined), () => ({ budget: AGY_TOOL_BUDGET }));
   const call = async (args: unknown) => ((await rpc(e, "t", { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: INDIRECT, arguments: args } })).body as any).result;
   const read = await call({ name: "secret_save" });
   assert.deepEqual(JSON.parse(read.content[0].text), { name: "secret_save", description: all.find((t) => t.name === "secret_save")!.description, inputSchema: { type: "object" } });
