@@ -110,7 +110,7 @@ pub fn Tree::cursor_of(self : Tree, id : NodeId) -> Cursor {
   let n = self.nodes[id.at]
   match n.cursor {
     Some(c) => c
-    None => if n.on_press is Some(_) && self.takes_presses(id) { self.pressed_shape() } else { Arrow }
+    None => if n.on_press is Some(_) && !n.points && self.takes_presses(id) { self.pressed_shape() } else { Arrow }
   }
 }
 

@@ -9,7 +9,7 @@
 pub fn lit_within_node(v : @view.View, yields_to? : @view.View) -> Bool {
   v.focus_shown() ||
   (match @ui.pointing() {
-    Mouse => (v.pointer_within() && !yielded(yields_to)) || v.pressed()
+    Mouse => (v.pointed_in() && !yielded(yields_to)) || v.pressed()
     Finger => v.pressed()
   })
 }

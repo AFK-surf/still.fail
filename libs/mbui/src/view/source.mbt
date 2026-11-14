@@ -223,6 +223,7 @@ pub fn Tree::press_boxes(self : Tree) -> Array[(NodeId, (Double, Double, Double,
     let n = self.nodes[c.id.at]
     if alpha <= 0.01 ||
       n.hosted ||
+      (n.points && n.hold_only is None) ||
       (n.on_press is None && n.on_drag is None) ||
       n.as_ground ||
       self.pressless_at(c.id.at) {

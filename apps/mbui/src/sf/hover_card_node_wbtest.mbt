@@ -624,3 +624,87 @@ test "a card said a piece of its trigger stands beside that piece (a link in its
   assert_false(h.open("乙"), msg="left: closed")
   assert_true(card() is None, msg="gone: none said")
 }
+
+///|
+test "triggers without a mouse press (丙 and 丁) do not light lit_within_node or open their hover card when covered by a non-modal layer above them" {
+  let covered = @signals.signal(true)
+  let t = @ui.Tester::new(fn(_c) {  }, w=800.0, h=500.0, platform=0)
+  t.check_looks(false)
+  let hands : Map[String, HoverHand] = Map([])
+  let k_bing : Ref[@view.View?] = Ref(None)
+  let k_ding : Ref[@view.View?] = Ref(None)
+  @ui.set_view_app(fn(root) {
+    let layer : Ref[@view.View?] = Ref(None)
+    let tips = TipLayer::new(fn() { layer.val })
+    root.box(fn(row) {
+      row.row(Is(true)) |> ignore
+      row.box(fn(o) {
+        o.width(Is(Some(120.0))).height(Is(Some(44.0))).says(Is(Some(@view.said(Button, label="外")))) |> ignore
+        presses_node(o, fn() {  })
+        o.box(fn(k) {
+          k_bing.val = Some(k)
+          k.width(Is(Some(60.0))).height(Is(Some(20.0))).says(Is(Some(@view.said(Text, label="丙")))) |> ignore
+          hands["丙"] = hover_card_node(tips, k, fn(b) { hover_card_body(b, "丙", Map([])) })
+        })
+        |> ignore
+      })
+      |> ignore
+      row.box(fn(o) {
+        o
+        .width(Is(Some(120.0)))
+        .height(Is(Some(44.0)))
+        .says(Is(Some(@view.said(Group, label="拖"))))
+        .on_drag(fn(_d) {  })
+        |> ignore
+        o.box(fn(k) {
+          k_ding.val = Some(k)
+          k.width(Is(Some(60.0))).height(Is(Some(20.0))).says(Is(Some(@view.said(Text, label="丁")))) |> ignore
+          hands["丁"] = hover_card_node(tips, k, fn(b) { hover_card_body(b, "丁", Map([])) }, tapped=fn() {  })
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    // Non-modal covering bar over the triggers
+    root.show(fn() { covered.get() }, fn(bar) {
+      bar
+      .over(Is(true))
+      .width(Is(Some(400.0)))
+      .height(Is(Some(60.0)))
+      .ground(Is(0xFFFFFFFFL))
+      |> ground_node
+      |> ignore
+    })
+    layer.val = Some(root.box(fn(l) { l.over(Is(true)).over_all(Is(true)) |> ignore }))
+  })
+  t.draw()
+  for item in [("丙", k_bing), ("丁", k_ding)] {
+    let (name, vref) = item
+    let r = match t.semantics().filter(fn(s) { s.label == name && !s.hidden }) {
+      [s, ..] => s.rect
+      [] => fail("none read out as \{name}")
+    }
+    let (x, y) = (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
+    t.move_to(x, y)
+    t.run_for(hover_card_open_ms + hover_settled_ms)
+    assert_false(@signals.untracked(fn() { lit_within_node(vref.val.unwrap()) }), msg="\{name} covered: not lit")
+    assert_false(@signals.untracked(hands[name].open), msg="\{name} covered: card closed")
+  }
+  covered.set(false)
+  t.run_for(hover_short_ms)
+  for item in [("丙", k_bing), ("丁", k_ding)] {
+    let (name, vref) = item
+    let r = match t.semantics().filter(fn(s) { s.label == name && !s.hidden }) {
+      [s, ..] => s.rect
+      [] => fail("none read out as \{name}")
+    }
+    let (x, y) = (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
+    t.move_to(hover_away.0, hover_away.1)
+    t.run_for(hover_short_ms)
+    t.move_to(x, y)
+    t.run_for(hover_card_open_ms + hover_settled_ms)
+    assert_true(@signals.untracked(fn() { lit_within_node(vref.val.unwrap()) }), msg="\{name} uncovered: lit")
+    assert_true(@signals.untracked(hands[name].open), msg="\{name} uncovered: card open")
+  }
+}

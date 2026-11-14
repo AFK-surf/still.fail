@@ -127,6 +127,31 @@ fn Node::covers(self : Node, a : Double) -> Bool {
 }
 
 ///|
+/// Whether node `cover` (which draws a ground or glass of its own, Node::covers) lies in a layer over `under` (an
+/// `over` box not holding `under`, or outside what scrolls `under`) rather than beside it in the same flow.
+fn Tree::covers_over(self : Tree, under : NodeId, cover : NodeId) -> Bool {
+  if self.holds(under, cover) {
+    return false
+  }
+  let mut i = cover.at
+  while i >= 0 && !self.holds({ at: i, gen: self.nodes[i].gen }, under) {
+    let n = self.nodes[i]
+    if n.flex.style.position is Absolute || n.over_all {
+      return true
+    }
+    i = n.parent
+  }
+  let mut j = under.at
+  while j >= 0 && !self.holds({ at: j, gen: self.nodes[j].gen }, cover) {
+    if self.nodes[j].scroll_off is Some(_) {
+      return true
+    }
+    j = self.nodes[j].parent
+  }
+  false
+}
+
+///|
 /// The node over all else of the window (View::over_all) node `id` is in, it or what holds it; -1 none.
 fn Tree::over_all_of(self : Tree, id : NodeId) -> Int {
   guard self.alive_id(id) else { return -1 }

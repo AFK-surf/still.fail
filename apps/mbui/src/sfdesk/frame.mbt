@@ -1336,7 +1336,7 @@ let dock_made : Ref[@view.View?] = Ref(None)
 fn block_pointed() -> (Bool, Bool) {
   let within = fn(v : @view.View?) {
     match v {
-      Some(n) if n.alive() => n.pointer_within()
+      Some(n) if n.alive() => n.takes_input() && n.pointer_within()
       _ => false
     }
   }
