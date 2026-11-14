@@ -579,7 +579,7 @@ export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number;
 /// `searching`: other devices or newer locks are still being sought; `lastEnds`: why the last codes went away then.
 /// `lockMoved`: told a workspace's lock moved while looking; `lockSigned`, while waiting for the lock to name this
 /// device after a code was proved (`prove`).
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockSigned?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[] };
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockSigned?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[]; answering?: Map<string, Deferred.Deferred<void>> };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -908,15 +908,27 @@ function dial(inner: Inner, y: Trying, id: string, relays: string[], hello: J): 
     const reached = yield* Effect.timeoutOption(dialer.open(inner, id, relays), PAIR_DIAL_MS);
     if (reached._tag === "None") return yield* Effect.fail(CoreError.plainly("pair", "not reached"));
     const d = reached.value;
-    yield* Effect.onError(d.send(hello), () => Effect.sync(() => d.close()));
-    const answer = yield* Effect.orElseSucceed(Effect.timeoutOption(d.next(), PAIR_ANSWER_MS), () => null);
-    // (no word from it, or this try over meanwhile, or another begun: nothing kept of it)
-    if (answer === null || answer._tag === "None" || !looking(inner, y) || !isObject(answer.value) || answer.value.t !== "code") {
-      d.close();
-      return true;
-    }
-    keep(inner, y, id, d, arr(answer.value.workspaces).filter((w): w is string => typeof w === "string"));
-    return true;
+    // (reached and told who asks, its answer not here yet: it may be showing its code already, `prove` waits for it,
+    // till it is kept or let go)
+    const answering = Deferred.makeUnsafe<void>();
+    (y.answering ??= new Map()).set(id, answering);
+    return yield* Effect.ensuring(
+      Effect.gen(function* () {
+        yield* Effect.onError(d.send(hello), () => Effect.sync(() => d.close()));
+        const answer = yield* Effect.orElseSucceed(Effect.timeoutOption(d.next(), PAIR_ANSWER_MS), () => null);
+        // (no word from it, or this try over meanwhile, or another begun: nothing kept of it)
+        if (answer === null || answer._tag === "None" || !looking(inner, y) || !isObject(answer.value) || answer.value.t !== "code") {
+          d.close();
+          return true;
+        }
+        keep(inner, y, id, d, arr(answer.value.workspaces).filter((w): w is string => typeof w === "string"));
+        return true;
+      }),
+      Effect.sync(() => {
+        if (y.answering?.get(id) === answering) y.answering.delete(id);
+        Deferred.doneUnsafe(answering, Effect.void);
+      }),
+    );
   });
 }
 
@@ -1006,6 +1018,16 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     // as having rejected it.
     const checked = [...y.met.values()];
     const results = yield* Effect.forEach(checked, (m) => Effect.map(Effect.result(tryOne(inner, m, base, code)), (r) => [m, r] as const), { concurrency: "unbounded" });
+    // None took it, and a device reached is still to answer with its code (its dial's own wait, PAIR_ANSWER_MS): it may
+    // show the code typed already, its answer on the way (2026-11-14, side run of 09719be0: D typed the code its second
+    // trusted device showed while D had heard only the first's, which said it was wrong). Those it answers with, tried
+    // with the same code; whatever else came meanwhile, as before, is the next code's.
+    if (!results.some(([, r]) => r._tag === "Success" && "approved" in r.success) && (y.answering?.size ?? 0) > 0) {
+      yield* Effect.forEach([...y.answering!.values()], (a) => Deferred.await(a), { discard: true });
+      const late = [...y.met.values()].filter((m) => !checked.includes(m));
+      checked.push(...late);
+      results.push(...(yield* Effect.forEach(late, (m) => Effect.map(Effect.result(tryOne(inner, m, base, code)), (r) => [m, r] as const), { concurrency: "unbounded" })));
+    }
     let approved: J | null = null;
     let left = 0;
     const ends: CoreError[] = [];

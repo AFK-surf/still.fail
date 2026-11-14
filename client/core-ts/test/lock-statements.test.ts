@@ -268,6 +268,41 @@ test("a station taken in after the move (C): the chain as it moved brought to it
   assert.ok((posted[0]!.bodies ?? []).some((b) => (b as { kind?: string; key?: string }).kind === "station" && (b as { key?: string }).key === C), "the body that names it among the bodies");
 });
 
+// Not reached at the press: brought as that station is next read, nothing pressed again (the lead, 2026-11-14: as an
+// unmoved chain's `station` entry reaches its station whenever it is next read).
+test("a station taken in after the move, unreachable at the press: brought the chain, logs and bodies as it is next read, nothing pressed", async () => {
+  const w = await setUp();
+  // (C keeps no lock until a POST /lock reaches it; unreachable until `up`)
+  let up = false;
+  let pinned = false;
+  const posts: string[] = [];
+  const through = w.inner.stations.requests.call.bind(w.inner.stations.requests);
+  w.inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
+    if (addr.toString().endsWith(`/${C}`) && path.startsWith("/lock")) {
+      if (method === "POST" && path === "/lock") {
+        posts.push(up ? "reached" : "unreachable");
+        if (!up) return Effect.fail(new CoreError("station_offline", "not reached"));
+        pinned = true;
+        return Effect.succeed({ taken: 2, head: null });
+      }
+      if (!up) return Effect.fail(new CoreError("station_offline", "not reached"));
+      if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after=")) && !pinned) return Effect.succeed({ head: null, entries: [], takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] });
+    }
+    return (through as (...x: unknown[]) => Effect.Effect<unknown, CoreError>)(addr, method, path, body, ...rest);
+  }) as typeof w.inner.stations.requests.call;
+  const asked = w.asked();
+  const inC = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.joinStation", { workspace: "ws", station: C }), catch: (e) => e as CoreError }));
+  assert.equal(inC.error, undefined, inC.error?.message);
+  assert.deepEqual(posts, ["unreachable"], "tried at the press");
+  up = true;
+  await w.run(read(w.inner, "ws"));
+  console.log(`C brought: ${posts.join(", ")}; asked ${w.asked() - asked}`);
+  assert.deepEqual(posts, ["unreachable", "reached"], "brought as it was next read");
+  assert.equal(w.asked() - asked, 1, "the person asked once, at the press");
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(posts, ["unreachable", "reached"], "not brought again once taken");
+});
+
 test("off and on again by the root's person; another owner refused with lock_root_only, nobody asked", async () => {
   const w = await setUp();
   const off = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.disable", { workspace: "ws" }), catch: (e) => e as CoreError }));
