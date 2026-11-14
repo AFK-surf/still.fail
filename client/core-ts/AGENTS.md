@@ -284,7 +284,11 @@ event stream, `src/sse.ts`) are the core's
 base: another program is built on it without still.fail's business (the owner, 2026-11-14), so a base file imports
 only base files and packages, as types too. `scripts/base.ts` holds it: its `BASE` names the files, and the set is
 closed: nothing of it reaches, through any number of imports, a file that is not of it (its `STILL` is empty and stays
-so). The base says its own words with nothing else loaded (`src/lang.ts`: the two files beside it, `src/lang.zh.json`
+so), but the base in MoonBit as it is built for JavaScript (its `MADE`: `libs/base/js/base.js`, of no program by that
+library's own check, importing nothing): the reader of an event stream is written once there, for a core in MoonBit
+and for this one (the user, 2026-11-14), and `src/sse.ts` only calls it. A change to how a stream is read is made in
+`libs/base/src/wire/sse.mbt` and built (`sh libs/base/build.sh`, which needs MoonBit; `libs/base/AGENTS.md`, Built
+for JavaScript, says what may cross and what it costs), never written here again. The base says its own words with nothing else loaded (`src/lang.ts`: the two files beside it, `src/lang.zh.json`
 and `src/lang.en.json`, the script's `WORDS`: every key a base file says, of no program, the peer "the server"), and
 a program gives its own in their place (`words`). still.fail's are its catalog's, where each of those keys is written
 as still.fail says it, in a part named by more of the key (`client/i18n/catalog/zh/core-misc.wake.json`): a change to

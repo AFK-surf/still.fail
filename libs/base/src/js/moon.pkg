@@ -1,0 +1,9 @@
+import {
+  "base/wire",
+}
+
+options(
+  link: {
+    "js": { "exports": [ "sse_new", "sse_feed" ], "format": "esm" },
+  },
+)

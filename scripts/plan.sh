@@ -26,8 +26,8 @@ decide() {
   if has '^docs/releases/'; then static+=(web-beta); fi
   # (the app's page, each of the web app's pages: the app and mbui's web host built into it, apps/mbui/scripts/web-app.sh;
   # the Worker that serves them, cloud/src/web.ts)
-  if has '^(web/|client/|rules/js/|apps/mbui/(src|assets)/|libs/mbui/(src|web)/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc|src/(web|compat)\.ts)$|apps/mbui/scripts/web-app\.sh$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
-  if has '^(web/|client/|rules/js/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.admin\.jsonc)$)'; then static+=(admin); fi
+  if has '^(web/|client/|rules/js/|libs/base/js/|apps/mbui/(src|assets)/|libs/mbui/(src|web)/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc|src/(web|compat)\.ts)$|apps/mbui/scripts/web-app\.sh$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
+  if has '^(web/|client/|rules/js/|libs/base/js/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.admin\.jsonc)$)'; then static+=(admin); fi
   if has '^cloud/(src/preview\.ts|build-static\.ts|wrangler\.preview\.jsonc)$'; then static+=(preview); fi
   # (the official site, website/, with the legal pages it serves from web/public)
   if has '^(website/|web/public/((en/)?(terms|privacy|trademark)\.html|legal\.css|favicon-beta\.svg|favicon-beta-32\.png|apple-touch-icon-beta\.png)$|cloud/wrangler\.site-beta\.jsonc$)'; then static+=(site-beta); fi
@@ -51,17 +51,17 @@ decide() {
   # tools/apk: the repacked APK is what the app's delta applier makes byte for byte), or to how it is released (its
   # deltas too).
   android_beta=false
-  if has '^(apps/mbui/(src|core|android|ios|engine)/|libs/mbui/(src|android)/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|station/src/updates/keys\.ts$|web/public/avatars/index\.json$|media/|vendor/|libs/mbui/tools/apk/|scripts/(release\.sh|native\.ts|delta\.ts|release-deltas\.ts)$|\.github/release\.sh$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$)'; then android_beta=true; fi
+  if has '^(apps/mbui/(src|core|android|ios|engine)/|libs/mbui/(src|android)/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|libs/base/js/|station/src/updates/keys\.ts$|web/public/avatars/index\.json$|media/|vendor/|libs/mbui/tools/apk/|scripts/(release\.sh|native\.ts|delta\.ts|release-deltas\.ts)$|\.github/release\.sh$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$)'; then android_beta=true; fi
   # The beta Mac app: mbui's in the Electron one's place (scripts/release.sh --beta desktop), released, as the
   # Android one, for a change to what apps/mbui's Mac app is made of (its code, mbui's with its Mac host, the
   # client's, media's, vendor's) or to how it is built and released.
   mac_beta=false
-  if has '^(apps/mbui/(src|core|engine)/|libs/mbui/src/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|station/src/updates/keys\.ts$|web/public/avatars/index\.json$|media/|vendor/|scripts/(release|mac-feeds)\.sh$|scripts/(native|delta|release-deltas)\.ts$|\.github/(release-desktop\.sh|mac_signing\.py)$|apps/mbui/scripts/(beta|mac-app|mac|core)\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then mac_beta=true; fi
+  if has '^(apps/mbui/(src|core|engine)/|libs/mbui/src/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|libs/base/js/|station/src/updates/keys\.ts$|web/public/avatars/index\.json$|media/|vendor/|scripts/(release|mac-feeds)\.sh$|scripts/(native|delta|release-deltas)\.ts$|\.github/(release-desktop\.sh|mac_signing\.py)$|apps/mbui/scripts/(beta|mac-app|mac|core)\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then mac_beta=true; fi
   # The beta Windows app: mbui's in the Electron one's place (scripts/release.sh --beta desktop-win), released, as
   # the Mac one, for a change to what apps/mbui's Windows app is made of (its code, mbui's with its Windows host,
   # its installer, the client's, media's, vendor's) or to how it is built and released.
   win_beta=false
-  if has '^(apps/mbui/(src|core|engine|windows)/|libs/mbui/src/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|station/src/updates/keys\.ts$|web/public/avatars/index\.json$|media/|vendor/|scripts/(release|win-feeds)\.sh$|scripts/(native|delta|release-deltas|release-sign)\.ts$|apps/mbui/scripts/(win|core)\.sh$|libs/mbui/scripts/win\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then win_beta=true; fi
+  if has '^(apps/mbui/(src|core|engine|windows)/|libs/mbui/src/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|libs/base/js/|station/src/updates/keys\.ts$|web/public/avatars/index\.json$|media/|vendor/|scripts/(release|win-feeds)\.sh$|scripts/(native|delta|release-deltas|release-sign)\.ts$|apps/mbui/scripts/(win|core)\.sh$|libs/mbui/scripts/win\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then win_beta=true; fi
   # The mbui app's Windows shell and engine, prebuilt: fetched and the shell's tests run (windows-natives), for a
   # change to what they are made of.
   windows_natives=false

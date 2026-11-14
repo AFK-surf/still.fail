@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "base/js"
+
+import {
+  "base/wire",
+}
+
+// Values
+pub fn sse_feed(@wire.Sse, Bytes) -> FixedArray[FixedArray[String]]
+
+pub fn sse_new() -> @wire.Sse
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

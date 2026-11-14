@@ -3,8 +3,9 @@
 // ways to a peer and the choice among them, links, the streams' framing) and what runs a client (the host, the runtime,
 // errors, words in a person's language, traces, wakes, the scheduler, the reader of an event stream). Another program
 // is built on these without the rest (the owner, 2026-11-14), so a base file imports only base files, npm packages and
-// Node's own: as a value or as a type, `import("…")` in a type too; and the JSON of the base's own words (WORDS: the
-// two files beside src/lang.ts, which name no program), no other, nothing of still.fail's catalog. The set is closed:
+// Node's own: as a value or as a type, `import("…")` in a type too; the JSON of the base's own words (WORDS: the
+// two files beside src/lang.ts, which name no program), no other, nothing of still.fail's catalog; and the base in
+// MoonBit as it is built for JavaScript (MADE: libs/base/js, of no program either, which imports nothing). The set is closed:
 // through any number of imports, nothing of it reaches a file that is not of it. Nor does it say still.fail's names:
 // what is named so is given it. What still.fail gives it: the mesh its use, a station's protocol and what its hello
 // says (src/station/mesh-wire.ts), the words its catalog, over the base's own, and its product (src/i18n.ts), the
@@ -12,7 +13,8 @@
 // paths (src/route.ts), the addon its places (src/hosts/node-iroh.ts).
 //
 // Refused: an import in a file of BASE of a file that is not (STILL, what was let be till taken away, is empty and
-// stays so); an import this cannot read (an `import(…)` of what is no string, a `require`, `createRequire`, a name
+// stays so; but one of MADE, which is refused where it is not there, imports anything, says still.fail's name or is
+// imported by no base file); an import this cannot read (an `import(…)` of what is no string, a `require`, `createRequire`, a name
 // the app's bundler resolves: ALIASES); a JSON file that is not one of WORDS, and one of WORDS that nothing of the
 // base imports; the base's words not the same in every language (a key one lacks, a `{name}` one lacks), naming
 // still.fail, or having a key no base file says; a key a base file says that they lack (one it asks `t` or `tr` for,
@@ -60,6 +62,15 @@ const BASE = [
   "src/sync/scheduler.ts",
   "src/sse.ts",
 ];
+
+/// What a base file imports that is neither a file of BASE nor a package: the base in MoonBit built for JavaScript
+/// (libs/base/js, built and committed by libs/base/build.sh), each file from the package's root. A part of the base
+/// written once there, for a core in MoonBit and for this one (libs/base/AGENTS.md: src/sse.ts is its reader of an
+/// event stream). It is of no program by that library's own check, over its source (scripts/mb-base.ts: it names
+/// neither still.fail nor a program, and imports MoonBit's core and mbui's effect alone), and is what that source
+/// builds to by scripts/check.sh (`libs/base/build.sh --check`). Held here, of the built file itself: that it is
+/// there, imports nothing (so the set stays closed), says still.fail's name nowhere, and is imported by a base file.
+const MADE = ["../../libs/base/js/base.js"];
 
 /// The base's own words, a file a language, beside src/lang.ts, which imports them and no other JSON: every key a
 /// base file says, in words that name no program (the peer is "the server", what runs the base "the app"). A program
@@ -431,6 +442,8 @@ function found(): { refused: string[]; unused: string[] } {
   const used = new Set<number>();
   const base = new Set(BASE);
   const words = new Set(WORDS);
+  const made = new Set(MADE);
+  const taken = new Set<string>();
   const imported = new Set<string>();
   const own = keysOf(WORDS);
   const all = keysOf(["zh", "en"].flatMap((lang) => readdirSync(join(ROOT, CATALOG, lang)).filter((f) => f.endsWith(".json")).map((f) => `${CATALOG}/${lang}/${f}`)));
@@ -482,6 +495,10 @@ function found(): { refused: string[]; unused: string[] } {
     });
     for (const to of imports) {
       if (base.has(to)) continue;
+      if (made.has(to)) {
+        taken.add(to);
+        continue;
+      }
       if (to.endsWith(".json")) {
         if (words.has(to)) imported.add(to);
         else refused.push(`a base file imports JSON that is not the base's own words: ${file} -> ${to}\n  the base carries only its own words (WORDS, beside ${LANG}), which name no program: write there, in every language, what it says, and leave still.fail's text in its catalog, which ${SAYS} gives over them`);
@@ -503,6 +520,17 @@ function found(): { refused: string[]; unused: string[] } {
         refused.push(`a base file asks for a word the base's own lack: ${file}:${line}: ${text}${head ? "…" : ""}\n  write the key in the base's own words, in every language and of no program (WORDS, beside ${LANG}): with nothing else loaded it would be shown as the key`);
       }
     }
+  }
+  for (const file of MADE) {
+    if (!existsSync(join(ROOT, file))) {
+      refused.push(`MADE names a file that is not there: ${file}\n  build it (sh libs/base/build.sh, which needs MoonBit) and commit it, or take it out of MADE`);
+      continue;
+    }
+    if (!taken.has(file)) refused.push(`MADE names a file no base file imports: ${file}\n  take it out of MADE`);
+    const of = read(file);
+    if (of === null) continue;
+    for (const to of [...of.imports, ...of.unread]) refused.push(`the base in MoonBit built for JavaScript imports: ${file} -> ${to}\n  what a base file takes of it is one file, whole: have libs/base/src/js reach nothing that loads a script, and build it again (libs/base/build.sh)`);
+    if (/still\.?fail/i.test(textOf(file).replace(/^\/\/ Built by [^\n]*\n/, ""))) refused.push(`the base in MoonBit built for JavaScript says still.fail's name: ${file}\n  it is of no program: take the name out of libs/base/src (scripts/mb-base.ts holds that) and build it again (libs/base/build.sh)`);
   }
   for (const [file] of NAMED) if (!base.has(file)) refused.push(`NAMED names a file that is not of the base: ${file}\n  take its entry out of NAMED`);
   for (const file of CARRIED.flatMap(filesUnder)) {

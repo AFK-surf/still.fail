@@ -14,6 +14,7 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   `client/iroh-wasm` and what a browser has.
 - `src/wire`: what goes on a stream and how it is read, with no stream: lines, a request's head and a reply's, an
   event stream's text. Pure, with its tests.
+- `src/js`: the base as JavaScript calls it, and `js/`, what `build.sh` builds of it (below, Built for JavaScript).
 - `src/mesh`: the device side of the mesh on those two: the endpoint and its key, a link to a peer (hello, pings,
   renewal), a request a stream, replies as they come, a link opened again. `mesh.mbt`'s head says what of the
   TypeScript mesh (`client/core-ts/src/mesh.ts`) it leaves out.
@@ -21,7 +22,8 @@ of its workspace (`moon.work`); `effect` stays in mbui.
 ## It knows no program
 
 - Not still.fail's app, station or cloud, and not the program it was written for first: an instant messenger outside
-  this repository, which is all that uses it today. Nothing in this repository imports it yet. What a program needs
+  this repository. As MoonBit nothing in this repository imports it yet; the core in TypeScript takes one part of it
+  built for JavaScript (below), which is of no program either. What a program needs
   of it the program gives: its protocol, its credential and what its hello says (`Options`, `Mesh::link`), where its
   shell keeps files, where its page serves iroh from (`Shell::start`), and what it links: the shell's static library
   and iroh's wasm are still.fail's by name, and no file here names either.
@@ -48,7 +50,8 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   words back as the key.
 - In CI and a full check only, for a change here or to what it is built with of mbui (`effect`, and `halt`, which
   `effect` imports: `mb-base.ts` holds that list to `effect`'s `moon.pkg`): every package under `src/` type-checked
-  for native and for js, and every package's tests run on both. Today only `src/wire` has tests.
+  for native and for js, and every package's tests run on both. Today only `src/wire` has tests. And, for a change
+  here alone, `js/` held to what the source builds to (`build.sh --check`).
 - No Rust shell is linked there. A native test that reaches the shell's C (`shell.c`, through `src/shell` or
   `src/mesh`) fails to link, naming `sf_shell_start`: it is not skipped. Until the check has a shell to link, such a
   test is js's alone (`moon.pkg`'s `targets`) or stays out of what calls the shell; one that only reads constants
@@ -61,6 +64,36 @@ of its workspace (`moon.work`); `effect` stays in mbui.
 - `src/mesh/words_made.mbt` is made, and committed: `node scripts/mb-base-words.ts` writes it from the device
   base's own words (`client/core-ts/src/lang.zh.json`, `lang.en.json`: the keys `core-logic.mesh.*`), so a word is
   changed there, never here.
+
+## Built for JavaScript
+
+- A part of the base written once here is taken by a core in TypeScript as it is built for JavaScript (the user,
+  2026-11-14: 「固定下来做成 mb 的…这样两边共用」): `build.sh` builds the package `src/js` and what it reaches to
+  `js/base.js`, with the types moon writes for it (`js/base.d.ts`, `js/moonbit.d.ts`), committed as the rules' is
+  (`rules/build.sh`), so that nothing which takes it needs MoonBit. A change to `src/` runs `sh libs/base/build.sh`
+  and commits what it made; never edited by hand. It is its own artefact, apart from the rules': each carries its
+  own copy of what it uses of MoonBit's core (of `base.js`'s 9.4 KB minified, 4.0 KB is in `rules.js` too). One
+  build of both would carry it once, and moon can make one (a package of a third module importing both), which
+  this library, knowing no program, cannot be.
+- The first part so taken is the reader of an event stream (`src/wire/sse.mbt`; `client/core-ts/src/sse.ts` is all
+  that is left of the one in TypeScript, and that core's check lets a base file of its own import `js/base.js`:
+  `client/core-ts/scripts/base.ts`, `MADE`). It reads as that one read, to the byte: a change to what it gives for
+  some bytes is a change to still.fail's core on every platform, and is held by that core's tests
+  (`client/core-ts/test/sse.test.ts`) as by `wire_test.mbt`.
+- What crosses to JavaScript is what both sides hold the same way, so nothing is converted at a call: `Bytes` is a
+  `Uint8Array`, `String` a string, `FixedArray` an array (never `Array`, an object of MoonBit's own there; nor a
+  struct or an enum, whose fields moon names as it likes), `T?` of those the value or `undefined`. A value of the
+  base's own is handed back as it was got and never read there. Bytes given are read during the call and not kept
+  (their caller writes them again).
+- A function of `src/js` never says `raise`: built for JavaScript one that does throws nothing, and gives back an
+  object its caller would have to look into. What cannot go on is an `abort` with words: it reaches the caller as an
+  `Error` with those words. One with none (an index out of bounds, an `unwrap` of nothing) is an `Error` whose
+  message is empty, told apart only by its stack, where moon's names say the package and the function
+  (`_M0MP24base4wire3Sse6append`) and no line of a `.mbt` file. An integer divided by zero is 0 there, with no
+  error.
+- MoonBit's core reads UTF-8 on js with the engine's `TextDecoder`, two of them made as `base.js` is loaded: where
+  the engine has none (Hermes 0.81), the program's own must be there before this is loaded (still.fail's core:
+  `client/core-ts/src/hosts/hermes-globals.ts`, which its entry imports first).
 
 ## What a program on it gets with it
 
@@ -84,8 +117,8 @@ it, and its line goes then. Read from the code, none of them run:
   closes the connection alone) and a reply's stream after a read of it failed (`link.mbt:229-234`) stay for the
   page's life, with one entry a connection that ended and one an endpoint closed (`shell_js.mbt:82,92`). Natively
   the Rust shell lets a connection's streams go as it closes and keeps one entry a connection.
-- A peer's bytes are kept without a bound: an event stream's text with no blank line (`src/wire/sse.mbt:17,30-34`,
-  as the TypeScript reader), and `Reply::rest`, which also copies all it has for each piece that comes
+- A peer's bytes are kept without a bound: an event stream's text with no blank line (`src/wire/sse.mbt`,
+  `Sse::append`, as the reader in TypeScript before it), and `Reply::rest`, which also copies all it has for each piece that comes
   (`link.mbt:244-250`).
 - In a page a timer of the runtime's more than 2^31-1 ms away (24.8 days) is given to `setTimeout` as it is, which
   fires at once, and again (`shell_js.mbt:176-179,230-235`).
@@ -99,7 +132,11 @@ it, and its line goes then. Read from the code, none of them run:
   by package of a changed surface writes its own again, to commit; the check passes `--no-mbti` and writes none.
 - `wire` and `mesh` are one source for both targets: nothing in them asks which it is built for. What differs is
   under `shell.mbt`'s surface, and an op the mesh comes to ask is answered by both shells, under the Rust shell's
-  name and with its JSON.
+  name and with its JSON; and, in `wire`, the three things an event stream's reader does to many bytes at once
+  (`sse_js.mbt`: a typed array's `set`, `copyWithin`, `indexOf`; `sse_native.mbt`: MoonBit's own loops), since
+  MoonBit's loop a byte is 2.3 to 2.6 times slower in Hermes, which compiles nothing (measured, 2026-11-14). A
+  part that goes through many bytes or characters on js asks the engine for it so, in a file of its target, small
+  enough to read against the other; the package's tests run both.
 - A fiber's wait on the shell given up is not the shell's call given up: of its calls only a dial is
   (`Shell::give_up`), in a page too. A read let go of goes on, holding the stream's receiving half, and what it
   takes is lost to the next read. So a stream is never read again after a read of it was interrupted: it is reset

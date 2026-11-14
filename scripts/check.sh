@@ -454,6 +454,15 @@ if [ $full = 1 ]; then
       step "the base in MoonBit: every package checked for native and js, its tests on both" sh -c 'cd libs/base && pkgs=$(find src -name moon.pkg -exec dirname {} \; | sort) && [ -n "$pkgs" ] && moon check --no-mbti --target native $pkgs && moon check --no-mbti --target js $pkgs && moon test --target native $pkgs && moon test --target js $pkgs'
     else later "the base in MoonBit"; fi
   fi
+  # What the core in TypeScript takes of that base is committed as it is built for JavaScript (libs/base/js: the
+  # reader of an event stream, client/core-ts/src/sse.ts): held to what the source builds to, as the rules' is by
+  # rules.yml, for a change to the library alone (not to mbui's part of it: none of that is in what is built). The
+  # build is the newest MoonBit's, as CI has it: a release that compiles the same source to other JavaScript fails
+  # the next change here until libs/base/build.sh is run with it and what it made committed.
+  if part ts && touches '^libs/base/'; then
+    if has moon; then step "the base built for JavaScript is what its source builds to" sh libs/base/build.sh --check
+    else later "the base built for JavaScript"; fi
+  fi
   # The TypeScript core's own tests; its mesh tests on a simulated network, a few over the station's addon, prebuilt (its
   # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.
   # Run whenever one of what they read changed (the list `remembered` keys them by): a change to the words alone
@@ -465,12 +474,12 @@ if [ $full = 1 ]; then
   # rest of ts they went from 3.5 to past its five minutes as files were added (179 files; main 6045382883 cancelled at
   # 5:05, 43272321433, 2026-11-12), each file small and none worth cutting (212 s of CPU in all on a Mac, the most 17).
   # (core_test_paths: scripts/plan.sh reads it from this line for CI's check-core)
-  core_test_paths='^client/core-ts/|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^station/src/cloud/lock\.ts$|^station/test/lock-(chains|oracle)\.ts$|^scripts/native\.ts$'
+  core_test_paths='^client/core-ts/|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^libs/base/js/|^station/src/cloud/lock\.ts$|^station/test/lock-(chains|oracle)\.ts$|^scripts/native\.ts$'
   if part core-tests && touches "$core_test_paths"; then
     prep core deps client/core-ts; prep station deps station
     slice=${STILLFAIL_CORE_SHARD:-}
     # shellcheck disable=SC2016 # the command's own variables, expanded by its shell
-    remembered "tests: core-ts${slice:+ $slice}" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js station/src/cloud/lock.ts station/test/lock-chains.ts station/test/lock-oracle.ts scripts/native.ts" after core after station env CORE_SLICE="$slice" sh -c 'cd client/core-ts && files=$(ls test/*.test.ts | awk -v s="${CORE_SLICE:-0/1}" '"'"'BEGIN { split(s, a, "/") } NR % a[2] == a[1]'"'"') && [ -n "$files" ] && node ../../scripts/native.ts run mesh -- node --test --test-force-exit $files'
+    remembered "tests: core-ts${slice:+ $slice}" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js libs/base/js station/src/cloud/lock.ts station/test/lock-chains.ts station/test/lock-oracle.ts scripts/native.ts" after core after station env CORE_SLICE="$slice" sh -c 'cd client/core-ts && files=$(ls test/*.test.ts | awk -v s="${CORE_SLICE:-0/1}" '"'"'BEGIN { split(s, a, "/") } NR % a[2] == a[1]'"'"') && [ -n "$files" ] && node ../../scripts/native.ts run mesh -- node --test --test-force-exit $files'
   fi
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station: it and its tests run whenever it, one of its native parts or the words it says changed (station_paths:

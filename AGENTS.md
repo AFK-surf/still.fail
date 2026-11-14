@@ -17,7 +17,8 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
 - `apps/mbui/`: the app on every platform (Android, iOS, macOS, Windows, Linux, and the web), in MoonBit on mbui, the
   UI framework at `libs/mbui`.
 - `libs/base/`: the first of the base in MoonBit, of no program (the Rust shell's binding, the mesh's wire and its
-  device side). Nothing here is built on it yet.
+  device side). Of it the client core takes one part so far, built to JS as the rules are (`libs/base/js`): its
+  reader of an event stream.
 - `web/`: the web's host of that app, a few pages of its own (Preact) and the design system `web/ui`.
 - `website/`: the official site. `rules/`: rules shared by the station, cloud and core, in MoonBit, built to JS.
 - `scripts/`: checks, releases, the CI plan. `vendor/`: patched upstream code (its README says each patch).
