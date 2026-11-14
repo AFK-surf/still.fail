@@ -44,6 +44,10 @@ export function held(link: Link | undefined): Held {
   return h ?? { supported: null, logins: [] };
 }
 
+/// Where a station's list that could not be read says why (its link's errors): its logins' topics answer that while
+/// none is kept.
+export const LIST_KEY = "machineLogins/list";
+
 /// The station's list read whole: what it holds now.
 export function putList(link: Link, answer: unknown): void {
   const logins = Array.isArray(get(answer, "logins")) ? (get(answer, "logins") as J[]).filter(isObject) : [];

@@ -1003,9 +1003,10 @@ pub fn job_chat(job : Json?) -> ChatRef? {
 /// What chat `r`'s page opens on, asked of `ask` (opens_answered's): its view, answered once it is, or why it has none,
 /// or that its messages wait on a station (none of them on the device: Source.waits), its page showing them to come;
 /// and, its view read, what its posts are laid out by besides it: each login's card under a post (its login, and while
-/// that is under way its station's logins, which the card's head and steps follow), asked as the view says them, all
-/// at once. A card laid out as it came, a lateness after the rows, put every row over it up by its height in one frame
-/// (the owner's, 2026-11-14: data arriving late is no cause of motion; src/sfapp/chat_opens_whole_wbtest.mbt).
+/// that is under way its station's logins, which the card's head and steps follow), and each link's card in its posts'
+/// words (a screen's, a station's 共享调试's, a web service's: link_card_ask), asked as the view says them, all at once. A card laid out as
+/// it came, a lateness after the rows, put every row over it up by its height in one frame (the owner's, 2026-11-14:
+/// data arriving late is no cause of motion; src/sfapp/chat_opens_whole_wbtest.mbt, chat_rows_open_whole_wbtest.mbt).
 pub fn chat_opens(r : ChatRef, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
   let t = ask("chat", chat_params(r))
   if !opens_answered(t) {
@@ -1013,6 +1014,20 @@ pub fn chat_opens(r : ChatRef, ask : (String, Map[String, Json]) -> TopicState) 
   }
   let mut all = true
   for m in items(t.value, "messages") {
+    // (each link's card in a post's words, as the message tells them, its tree or its runs: a screen's a capsule or,
+    // previewed, the screen across its top. None of still.fail's notices, whose words are read as no post's; none
+    // read of a post's words here, every post of the chat each time it opens)
+    let links = if field(Some(m), "notice") is None && text(Some(m), "authorKind") != "ember" {
+      message_links_to(message_of(m), told=true)
+    } else {
+      Map([])
+    }
+    for _, to in links {
+      match link_card_ask(to) {
+        Some((name, params)) if to.station != "" => all = opens_answered(ask(name, params)) && all
+        _ => ()
+      }
+    }
     let card = field(Some(m), "card")
     let id = text(card, "login")
     if text(card, "type") != "login" || id == "" {
@@ -1029,6 +1044,28 @@ pub fn chat_opens(r : ChatRef, ask : (String, Map[String, Json]) -> TopicState) 
     }
   }
   all
+}
+
+///|
+/// What each link of message `m` is to, as the core says (each link's `to`), by its address: of a person's words' runs
+/// (the first run of each), or of an agent's Markdown (read as the row is, as its words are); none of a person's words
+/// said without runs; `told`: only as the message tells them (its runs, its tree), none read of its words here.
+pub fn message_links_to(m : Message, told? : Bool = false) -> Map[String, @sf.LinkTo] {
+  match m.words {
+    Some(Array(runs)) => {
+      let out : Map[String, @sf.LinkTo] = Map([])
+      for r in runs {
+        let href = text(Some(r), "link")
+        if href != "" && !out.contains(href) {
+          out[href] = @sf.link_to_of(field(Some(r), "to").unwrap_or(Json::null()))
+        }
+      }
+      out
+    }
+    _ if m.author_kind == "person" || m.mine => Map([])
+    _ if told && !(m.md is Some(Array(_))) => Map([])
+    _ => @sf.md_links_to(m.text, m.md)
+  }
 }
 
 ///|

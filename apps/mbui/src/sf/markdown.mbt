@@ -114,6 +114,13 @@ pub fn kept_words(text : String) -> Json? {
 }
 
 ///|
+/// `text`'s tree as the real core read it, kept (`kept_call`), if it was: for a made-up chat's message to carry, as a
+/// station's carries its own (`md`).
+pub fn kept_md(text : String) -> Json? {
+  kept_tree(text)
+}
+
+///|
 /// `text`'s tree as the real core read it, kept (`kept_call`), if it was.
 fn kept_tree(text : String) -> Json? {
   match kept_call.val {

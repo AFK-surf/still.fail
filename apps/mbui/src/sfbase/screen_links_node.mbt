@@ -69,7 +69,7 @@ fn screen_link_card_node(
         match (words, card()) {
           (Some(w), _) => w
           (None, Some(k)) => k.title
-          (None, None) => ""
+          (None, None) => card_title_unsaid(src, to)
         }
       })
       return
@@ -87,13 +87,13 @@ fn screen_link_card_node(
         match (words, card()) {
           (Some(w), _) => w
           (None, Some(k)) => k.title
-          (None, None) => ""
+          (None, None) => card_title_unsaid(src, to)
         }
       },
       fn() {
         match card() {
           Some(k) => k.line
-          None => ""
+          None => card_line_unsaid(src, to)
         }
       },
       fn() {
