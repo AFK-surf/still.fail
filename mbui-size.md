@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [187988cb9](https://github.com/AFK-surf/monoid/commit/187988cb96817a92c31fb7fc9601253e1e52082b) station: sessions' summaries and the session list  | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.58 | 103.28 |
 | [6b92c390c](https://github.com/AFK-surf/monoid/commit/6b92c390cbdac8dce1576111917d5c7b3328e2cb) station: a chat's entries and letters read by the  | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.88 | 112.98 |
 | [d64201f31](https://github.com/AFK-surf/monoid/commit/d64201f311356a3b2a8fad873a5cdb82149c52ae) mbui: a height declared to go its way keeps what i | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.58 | 111.75 |
 | [d64201f31](https://github.com/AFK-surf/monoid/commit/d64201f311356a3b2a8fad873a5cdb82149c52ae) mbui: a height declared to go its way keeps what i | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.58 | 111.75 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0b084bbe9](https://github.com/AFK-surf/monoid/commit/0b084bbe9e7db0dad894ab0af7fbe8fba3e63a06) core: a vault is written on a station the workspac | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.73 | 53.18 | 95.85 | 116.71 |
 | [c3fbd4046](https://github.com/AFK-surf/monoid/commit/c3fbd40467787b57b6c344ebfb048560c0e04074) mbui: what an answer changed at once is no jolt of | 1.98 | 2.7 | 11.52 | 31.11 | 41.44 | 27.73 | 53.18 | 95.83 | 110.48 |
 | [e86dddefe](https://github.com/AFK-surf/monoid/commit/e86dddefe9778505415fad3df944112b47c9de95) mbui: a key of a page's list on its way draws what | 1.98 | 2.7 | 11.51 | 31.11 | 41.43 | 27.73 | 53.18 | 95.86 | 98.77 |
-| [db745eb1c](https://github.com/AFK-surf/monoid/commit/db745eb1c246f7127cd098e990b115989b07e22f) fix(station): a renewal refused leaves the connect | 1.98 | 2.7 | 11.5 | 31.1 | 41.38 | 27.72 | 53.13 | 95.91 | 109.69 |
