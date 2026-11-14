@@ -102,7 +102,13 @@ fn mine_bubble_node(
     // typed, its ground coming in round them on the way: a flight, sf/motion.mbt's kind 4; View::flies_in)
     match flies_from {
       Some((x, y)) =>
-        b.flies_in(@motion.flight_by(@motion.moved()), fn(to) { Some((x - bubble_side, y - bubble_top, to.2, to.3)) })
+        b.flies_in(
+          // det-ok(motion-length): words sent's own, the old page's curve (sfbase's flight_across, flight_up: across
+          // first on the flight's ease, up 12% late), sf/motion.mbt kind 4
+          @motion.flight_by(@motion.tween(@sfbase.flight_desk_ms, ease=Flight)),
+          fn(to) { Some((x - bubble_side, y - bubble_top, to.2, to.3)) },
+          up_late=sent_up_late,
+        )
         |> ignore
       None => ()
     }
@@ -381,3 +387,7 @@ fn message_share_of(src : Source, here : MessageNodeHere, m : () -> Message) -> 
 fn message_files_at(here : MessageNodeHere, said : () -> Bool) -> MessageFilesAt {
   { station: fn() { here.station }, session: fn() { here.session }, view: here.view, said }
 }
+
+///|
+/// How much of their flight words sent rise after setting out across (sfbase's flight_up: 12% late).
+let sent_up_late : Double = 0.12

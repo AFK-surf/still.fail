@@ -67,6 +67,9 @@ priv struct Lift {
   top : Int
   d : (Double, Double, Double, Double)
   mut k : Double
+  /// how much of its way down or up is left (1 → 0): `k` but for one whose rise lags its way across (View::flies_in's
+  /// `up_late`)
+  mut ky : Double
   mut a : Double
   from : FromLook
   /// a flight with an end that stays (View::shared's `stays`): how that end draws its picture (covering, along; contained),
@@ -106,6 +109,8 @@ priv struct Departure {
 priv struct Flying {
   node : NodeId
   mut ghost : NodeId?
+  /// how much of its length its rise lags its way across (0: none; View::flies_in's `up_late`)
+  late : Double
   /// faded in as it comes (false: one with an end that stays, one picture moving)
   fades : Bool
   start : Double
@@ -172,6 +177,7 @@ pub fn View::shared(
 priv struct Incoming {
   node : NodeId
   from : ((Double, Double, Double, Double)) -> (Double, Double, Double, Double)?
+  late : Double
 }
 
 ///|
@@ -180,18 +186,21 @@ priv struct Incoming {
 /// lays it out: from where `from` says, given that place and size in the window (None: no flight, there at once),
 /// looking there as a thing with no ground and no edge would, its corners and ink its own, coming to its own look on
 /// the way; one thing moving, never faded, drawn over the rest of its layer all the way, as one View::shared pairs
-/// (the head of this file). `flight` is the way, @motion's shared, a Move. Made outside a change it is there at once.
+/// (the head of this file). `flight` is the way, @motion's shared, a Move; its rise (down or up, and its height) lags
+/// its way across by `up_late` of its length, both eased as the way is over the rest (0: one way; words sent: across
+/// first, up a little after). Made outside a change it is there at once.
 #callsite(autofill(loc))
 pub fn View::flies_in(
   self : View,
   flight : Flight,
   from : ((Double, Double, Double, Double)) -> (Double, Double, Double, Double)?,
+  up_late? : Double = 0.0,
   loc~ : SourceLoc,
 ) -> View {
   ignore(loc)
   guard self.live() is Some(n) && self.tree.in_change() else { return self }
   n.share_flight = Some(flight)
-  self.tree.incoming.push({ node: { at: self.at, gen: self.gen }, from })
+  self.tree.incoming.push({ node: { at: self.at, gen: self.gen }, from, late: dclamp(up_late, 0.0, 0.9) })
   self.tree.pairs_due()
   self
 }
@@ -214,7 +223,7 @@ fn Tree::incoming_now(self : Tree) -> Unit {
       corners: (a, b, c, d),
       ink: n.look.ink,
     }
-    self.fly_from(i.node, from, look, None) |> ignore
+    self.fly_from(i.node, from, look, None, i.late) |> ignore
   }
 }
 ///|
@@ -483,7 +492,8 @@ fn Tree::placed_window(self : Tree, at : Int) -> (Double, Double, Double, Double
 fn Tree::lift_rect(self : Tree, l : Lift) -> (Double, Double, Double, Double) {
   let (x, y, w, h) = self.placed_window(l.follow)
   let k = l.k
-  (x + l.d.0 * k, y + l.d.1 * k, dmax(w + l.d.2 * k, 0.0), dmax(h + l.d.3 * k, 0.0))
+  let ky = l.ky
+  (x + l.d.0 * k, y + l.d.1 * ky, dmax(w + l.d.2 * k, 0.0), dmax(h + l.d.3 * ky, 0.0))
 }
 
 ///|
@@ -908,6 +918,7 @@ fn Tree::paired(self : Tree, d : Departure, to : NodeId) -> NodeId? {
   let f : Flying = {
     node: to,
     ghost: Some({ at: ghost, gen: g.gen }),
+    late: 0.0,
     fades: true,
     start: at,
     dur: ms,
@@ -916,8 +927,8 @@ fn Tree::paired(self : Tree, d : Departure, to : NodeId) -> NodeId? {
     stop: fn() {  },
   }
   self.flights.push(f)
-  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 0.0, from: d.look, stays: None })
-  g.lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 1.0, from: d.look, stays: None })
+  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, ky: 1.0, a: 0.0, from: d.look, stays: None })
+  g.lift = Some({ follow: to.at, top, d: dd, k: 1.0, ky: 1.0, a: 1.0, from: d.look, stays: None })
   self.lifted_order()
   // (drawn as of each frame's moment while it goes; over at its end, a moment of its own)
   let stop_way = self.queued(fn() { self.drawn_at() }, fn(t) { self.flight_at(f, t) })
@@ -982,12 +993,13 @@ fn Tree::fly_stays(
   look : FromLook,
   stays : StaysEnd,
 ) -> Bool {
-  self.fly_from(to, from, look, Some(stays))
+  self.fly_from(to, from, look, Some(stays), 0.0)
 }
 
 ///|
 /// Node `to` set flying from `from` (where it sets out, how it looks there) to its place, one thing moving: not faded,
-/// no old copy, `stays` its end that stays where there is one (View::shared's; none: View::flies_in's). Whether it
+/// no old copy, `stays` its end that stays where there is one (View::shared's; none: View::flies_in's). Its rise lags its
+/// way across by `late` of its length (View::flies_in's `up_late`). Whether it
 /// flies (not, at once: as with motion reduced, or as far as nothing).
 fn Tree::fly_from(
   self : Tree,
@@ -995,6 +1007,7 @@ fn Tree::fly_from(
   from : (Double, Double, Double, Double),
   look : FromLook,
   stays : StaysEnd?,
+  late : Double,
 ) -> Bool {
   guard self.alive_id(to) && self.nodes[to.at].share_flight is Some(flight) else { return false }
   let to_v = self.handle(to.at)
@@ -1013,9 +1026,9 @@ fn Tree::fly_from(
   }
   let at = self.cause_now()
   let top = self.top_node_of(to.at)
-  let f : Flying = { node: to, ghost: None, fades: false, start: at, dur: ms, along, top, stop: fn() {  } }
+  let f : Flying = { node: to, ghost: None, late, fades: false, start: at, dur: ms, along, top, stop: fn() {  } }
   self.flights.push(f)
-  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 1.0, from: look, stays }) 
+  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, ky: 1.0, a: 1.0, from: look, stays })
   self.lifted_order()
   let stop_way = self.queued(fn() { self.drawn_said() }, fn(t) { self.flight_at(f, t) })
   let stop_end = to_v.at_moment(at + ms, fn() { self.flight_over(f) })
@@ -1032,14 +1045,19 @@ fn Tree::fly_from(
 /// Flight `f` drawn as of moment `t`: how much of its way is left and how far each is faded, both marked to be drawn so.
 fn Tree::flight_at(self : Tree, f : Flying, t : Double) -> Unit {
   let ms = t - f.start
-  let p = if ms <= 0.0 {
-    0.0
-  } else if ms >= f.dur {
-    1.0
-  } else {
-    (f.along)(ms)
+  let at = fn(ms : Double) {
+    if ms <= 0.0 {
+      0.0
+    } else if ms >= f.dur {
+      1.0
+    } else {
+      (f.along)(ms)
+    }
   }
+  // (across over the first of its length, its rise as long after it lags: one way where none)
+  let p = at(ms / (1.0 - f.late))
   let k = 1.0 - p
+  let ky = 1.0 - at((ms - f.late * f.dur) / (1.0 - f.late))
   // (the new one in over the first half of the way, the old one under it out over the second: never both half seen)
   let a_in = dmin(1.0, dmax(0.0, p * 2.0))
   let a_out = dmin(1.0, dmax(0.0, (1.0 - p) * 2.0))
@@ -1047,6 +1065,7 @@ fn Tree::flight_at(self : Tree, f : Flying, t : Double) -> Unit {
     match self.nodes[f.node.at].lift {
       Some(l) => {
         l.k = k
+        l.ky = ky
         l.a = if f.fades { a_in } else { 1.0 }
         self.lift_marked(f.node.at)
       }
@@ -1058,6 +1077,7 @@ fn Tree::flight_at(self : Tree, f : Flying, t : Double) -> Unit {
       match self.nodes[g.at].lift {
         Some(l) => {
           l.k = k
+          l.ky = ky
           l.a = a_out
           self.lift_marked(g.at)
           // (what it is drawn over the rest of drawn again with it)
