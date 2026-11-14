@@ -86,14 +86,30 @@ fn kept_rows_read_out(t : @ui.Tester, a11y : Bool) -> Array[String] {
 /// An instance as `drawn_from` says it, a glyph's place in the atlas left out (the atlas fills in another order where
 /// rows are built every frame: what is drawn the same).
 fn kept_rows_inst(line : String) -> String {
-  let f = line.split(" ").map(fn(v) { v.to_owned() }).collect()
-  // ("inst", then its numbers: its kind the 6th, in 1/64ths; a glyph's atlas rect the 13th to the 16th)
-  if f.length() > 16 && f[0] == "inst" && (f[6] == "64" || f[6] == "192" || f[6] == "448") {
-    for j in 13..=16 {
-      f[j] = "_"
+  // ("inst", then its numbers: its kind the 6th, in 1/64ths; a glyph's atlas rect the 13th to the 16th. Read in place:
+  // split into its fields and joined again, every line of every moment, it was a third of kept_rows_kinds' time)
+  guard line.has_prefix("inst ") else { return line }
+  // (where each field after "inst" starts: its numbers are ASCII, so a char's place is its code unit's)
+  let starts : Array[Int] = []
+  let mut i = 0
+  for ch in line {
+    if ch == ' ' {
+      starts.push(i + 1)
+      if starts.length() > 16 {
+        break
+      }
     }
+    i = i + 1
   }
-  f.join(" ")
+  guard starts.length() >= 16 else { return line }
+  let field = fn(k : Int) {
+    let e = if k < starts.length() { starts[k] - 1 } else { line.length() }
+    line.unsafe_substring(start=starts[k - 1], end=e)
+  }
+  let kind = field(6)
+  guard kind == "64" || kind == "192" || kind == "448" else { return line }
+  let rest = if starts.length() > 16 { line.unsafe_substring(start=starts[16] - 1, end=line.length()) } else { "" }
+  line.unsafe_substring(start=0, end=starts[12]) + "_ _ _ _" + rest
 }
 
 ///|

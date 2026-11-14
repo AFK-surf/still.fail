@@ -443,7 +443,7 @@ test "on the tape a chat brought over while its view is on its way: the page com
 /// What the last frame drew from `left` across on (its instances, as Tester::drawn_text says them).
 fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
   let out = []
-  for line in t.drawn_text().split("\n") {
+  for line in t.drawn_instances_text().split("\n") {
     if line.has_prefix("inst ") {
       // (its first number: where it is across, in 1/64 px)
       let mut x = 0

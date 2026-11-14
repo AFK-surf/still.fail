@@ -2560,6 +2560,7 @@ pub fn Tester::drawn_image_clips(Self) -> Array[((Double, Double, Double, Double
 pub fn Tester::drawn_images(Self) -> Array[Array[Double]]
 pub fn Tester::drawn_instances(Self) -> Array[Array[Double]]
 pub fn Tester::drawn_instances_keyed(Self) -> Array[Array[Double]]
+pub fn Tester::drawn_instances_text(Self) -> String
 pub fn Tester::drawn_lines(Self) -> Array[(Double, Double, Double, Double, Double, Int64)]
 pub fn Tester::drawn_notches(Self) -> Array[(Int32, Double, Double, Double, Double)]
 pub fn Tester::drawn_of(Self, String) -> (Double, Double)?
