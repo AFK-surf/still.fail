@@ -32,7 +32,7 @@ export const SERVED_ROUTES = [
   // (a member's own marks, written there: api/routes/marks.ts; what changed told the store's followers)
   "PUT /admin/api/threads/*/read", "PUT /admin/api/threads/*/hidden", "PUT /admin/api/threads/*/muted",
   "PUT /admin/api/threads/*/keep", "DELETE /admin/api/threads/*/keep", "PUT /admin/api/sessions/*/pin", "DELETE /admin/api/sessions/*/pin",
-  // (a person's message in words alone: written there, delivered by Node; any other kind Node's: `say`)
+  // (a person's message in words and quotes: written there, delivered by Node; with files or copies Node's: `say`)
   "POST /admin/api/threads/*/messages",
   // (names given by hand, and a card the member will not take up: marks.ts)
   "POST /admin/api/sessions/*/title", "PUT /admin/api/threads/*/title", "PUT /admin/api/threads/*/dismissed",
@@ -133,7 +133,7 @@ export class Served {
       untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage"),
       quotedOnly: tr(lang, "station.chat.quotedOnly"), updateApp: tr(lang, "station.admin.updateApp"), badN: tr(lang, "station.admin.badN"),
       postOnlyStillfail: tr(lang, "station.admin.postOnlyStillfail"), emptyMessage: tr(lang, "station.admin.emptyMessage"),
-      renameOnlyStillfail: tr(lang, "station.admin.renameOnlyStillfail"), nothingWaiting: tr(lang, "station.admin.nothingWaiting"),
+      renameOnlyStillfail: tr(lang, "station.admin.renameOnlyStillfail"), nothingWaiting: tr(lang, "station.admin.nothingWaiting"), updateClientForOption: tr(lang, "station.admin.updateClientForOption"),
       notInteger: Object.fromEntries(["after", "before", "from", "to"].map((name) => [name, tr(lang, "station.admin.notInteger", { name })])),
       fromAndTo: tr(lang, "station.admin.fromAndTo"), inScriptOutput: tr(lang, "station.transcript.inScriptOutput"),
     }]));

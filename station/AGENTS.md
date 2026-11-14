@@ -11,7 +11,7 @@
   none of their bytes by the program); where none runs (Windows, a checkout without the program) Node binds it itself
   with its addon (`native/mesh`), which keeps the image codecs and the rest as before. A device's requests of the
   routes in `src/mesh/served.ts` (the reads a device makes, `/batch`, `/changed`, its marks, names and a message in
-  words alone) the front hands the MoonBit program that answers them itself (station/mb's reader `--serve`), not
+  words and quotes) the front hands the MoonBit program that answers them itself (station/mb's reader `--serve`), not
   Node, which only tells it who each connection's member is, takes what it wrote (`changes`, `said`: Node's store
   tells, the hub delivers) and keeps a message's idempotency slot and timestamp (`claim`); and `GET /events`, which
   Node's events make and give it a piece at a time, each told several streams given once (`relay`), and which it
