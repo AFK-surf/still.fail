@@ -89,7 +89,10 @@
   is read by the MoonBit program (`src/agents/mb-agents.ts`, `mb/src/reader/agents.mbt`, its frames `mb/src/claude`)
   where it is built, off the station's thread: Node starts and ends the processes and is told the events, each line
   acknowledged to its runner once Node took them; a handover holds its reading first (`freeze`, hub.ts `handOver`).
-  `test/claude-here.test.ts` runs the driver's tests with it read here, as where the program is not.
+  A Codex app-server's output is read there too, its lines given Node whole but for its diffs (`turn/diff/updated`,
+  of which the station keeps nothing). One program for every driver, running while it has a process to read.
+  `test/claude-here.test.ts` and `test/codex-here.test.ts` run the drivers' tests with it read here, as where the
+  program is not.
 - Their tools are the station's MCP endpoint (`src/tools/`, HTTP on 127.0.0.1, a bearer token per session). What they
   read of how to work is `src/agents/instructions.ts` and the skills in `src/skills/`. A change to the instructions, a
   tool's parameters or its rules adds a note at the end of `src/agents/migrations.ts` (the next number, a sentence),

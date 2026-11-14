@@ -14,11 +14,15 @@ import { leave, listening, startRunner, type RunnerInfo } from "./runner.ts";
 type Json = any;
 
 /// What the program says of a process's lines: the events, the turn as it left it, up to where.
-export type Heard = { events: Json[]; turn: Json; to: number };
+/// `lines`: a process read as lines (a Codex app-server's, `kind` "lines"), its lines given whole, each with where it
+/// begins and ends, but for those nothing is kept of (mb `given`).
+export type Heard = { events: Json[]; turn: Json; to: number; lines?: { text: string; from: number; to: number }[] };
 
 export type HostedOptions = {
   label: string;
   heard: (heard: Heard) => void;
+  /// How its lines are read: Claude Code's frames by the program (the default), or given as they are.
+  kind?: "claude" | "lines";
   exit: (said: string, stderr: string) => void;
 };
 
@@ -37,7 +41,6 @@ const sleep = wall.sleep;
 export class AgentsHost {
   readonly #data: string;
   #proc: MbProcess | null = null;
-  #ready: Promise<void> | null = null;
   #next = 0;
   readonly #sessions = new Map<number, HostedProcess>();
   readonly #freezes = new Map<number, (states: Record<string, { turn: Json; live: Json }>) => void>();
@@ -47,39 +50,48 @@ export class AgentsHost {
     this.#data = data;
   }
 
-  /// The program for `data`'s processes, where it can read them.
+  /// The program for `data`'s processes, where it can read them: one for every driver of the station (each taking
+  /// it, `close` letting it go; it ends with the last).
   static where(data: string): AgentsHost | null {
     if (process.env.STILLFAIL_AGENTS_HOST === "0" || !platform.runnerSocketVisible) return null;
-    return mbReaderBinary() === null ? null : new AgentsHost(data);
+    if (mbReaderBinary() === null) return null;
+    let host = AgentsHost.#shared.get(data);
+    if (host === undefined || host.#closed) AgentsHost.#shared.set(data, (host = new AgentsHost(data)));
+    return host;
   }
 
-  #start(): Promise<void> {
-    if (this.#ready) return this.#ready;
+  static readonly #shared = new Map<string, AgentsHost>();
+  /// The drivers using it (`use`), each once: it ends once none is left (`close`).
+  readonly #users = new Set<object>();
+
+  use(user: object) {
+    this.#users.add(user);
+  }
+
+  /// The program, started if it is not running: what is said to it before it is ready waits in its stdin.
+  #ensure(): MbProcess {
+    if (this.#proc) return this.#proc;
     const proc = new MbProcess(mbReaderBinary()!, ["--agents", "1", "--data", this.#data]);
     this.#proc = proc;
-    this.#ready = new Promise<void>((resolve) => {
-      proc.on("message", (said: Json) => {
-        if (said?.ready === true) {
-          proc.postMessage({ wall: wall.now() });
-          resolve();
-        } else this.#said(said);
-      });
+    proc.postMessage({ wall: wall.now() });
+    proc.on("message", (said: Json) => {
+      if (said?.ready !== true) this.#said(said);
     });
     proc.on("error", (error: Error) => log.warn("agents", "the program reading agents failed", { error: error.message }));
     proc.on("exit", (code: number) => {
-      if (this.#closed) return;
+      // (ended here: it had nothing left to read, or the drivers are gone)
+      if (this.#closed || this.#proc !== proc) return;
       log.warn("agents", "the program reading agents ended; starting it again", { code });
       this.#proc = null;
-      this.#ready = null;
       // (each process read again from where it was acknowledged, the turn as its session knows it)
       const again = [...this.#sessions.values()];
       // timer: a retry after a failure, with a backoff (one that keeps ending is started again each second at most)
       wall.after(1_000, () => {
         if (this.#closed) return;
-        for (const p of again) if (!p.gone) void this.attach(p);
+        for (const p of again) if (!p.gone) this.attach(p);
       });
     });
-    return this.#ready;
+    return proc;
   }
 
   #said(said: Json) {
@@ -89,14 +101,25 @@ export class AgentsHost {
       done?.(said.states ?? {});
       return;
     }
-    const n = said?.lines ?? said?.exit ?? said?.closed ?? said?.left;
+    const n = said?.lines ?? said?.exit ?? said?.closed ?? said?.left ?? said?.ended;
     const p = typeof n === "number" ? this.#sessions.get(n) : undefined;
     if (p === undefined) return;
     if (said.lines !== undefined) {
-      p.heard({ events: Array.isArray(said.events) ? said.events : [], turn: said.turn, to: said.to });
-      this.post({ ack: n, to: said.to });
+      let lines: Heard["lines"];
+      if (Array.isArray(said.at)) {
+        const body: Buffer = said.body ?? Buffer.alloc(0);
+        let at = 0;
+        lines = said.at.map(([from, to, length]: [number, number, number]) => {
+          const text = body.subarray(at, at + length).toString("utf8");
+          at += length;
+          return { text, from, to };
+        });
+      }
+      if (p.heard({ events: Array.isArray(said.events) ? said.events : [], turn: said.turn, to: said.to, lines })) this.post({ ack: n, to: said.to });
     } else if (said.exit !== undefined) p.exited_(said.code ?? null, said.signal ?? null, typeof said.stderr === "string" ? said.stderr : "");
     else if (said.closed !== undefined) p.closed_();
+    // (its socket closed once it was read to its end: nothing more of it to read)
+    else if (said.ended !== undefined) this.forget(p);
     else p.left_();
   }
 
@@ -105,10 +128,10 @@ export class AgentsHost {
   }
 
   /// Reads `p`'s process (again, after the program started again: from where it was acknowledged).
-  async attach(p: HostedProcess) {
-    await this.#start();
+  attach(p: HostedProcess) {
+    this.#ensure();
     this.#sessions.set(p.n, p);
-    this.post({ attach: p.n, socket: p.info.socket, turn: p.turnNow(), live: p.liveNow() });
+    this.post({ attach: p.n, socket: p.info.socket, turn: p.turnNow(), live: p.liveNow(), kind: p.kind });
   }
 
   number() {
@@ -117,29 +140,41 @@ export class AgentsHost {
 
   forget(p: HostedProcess) {
     this.#sessions.delete(p.n);
+    // (it runs while it has a process to read: started again for the next)
+    if (this.#sessions.size === 0 && this.#proc !== null) {
+      const proc = this.#proc;
+      this.#proc = null;
+      void proc.terminate();
+    }
   }
 
   /// Every process's lines held (the station hands over): each one's turn and live steps as they stand then.
-  async freeze(): Promise<void> {
-    if (this.#proc === null || this.#sessions.size === 0) return;
+  /// `only`: those processes (a driver's own).
+  async freeze(only: HostedProcess[]): Promise<void> {
+    const held = only.filter((p) => this.#sessions.get(p.n) === p);
+    if (this.#proc === null || held.length === 0) return;
     const id = this.number();
     const states = await new Promise<Record<string, { turn: Json; live: Json }>>((resolve) => {
       this.#freezes.set(id, resolve);
-      this.post({ freeze: id });
+      this.post({ freeze: id, only: held.map((p) => p.n) });
     });
     for (const [n, state] of Object.entries(states)) this.#sessions.get(Number(n))?.froze(state.turn, state.live);
   }
 
   /// Read on again (a handover that did not happen).
-  thaw() {
-    for (const p of this.#sessions.values()) {
+  thaw(only: HostedProcess[]) {
+    for (const p of only) {
+      if (this.#sessions.get(p.n) !== p) continue;
       p.thawed();
       this.post({ thaw: p.n });
     }
   }
 
-  async close() {
+  async close(user: object) {
+    this.#users.delete(user);
+    if (this.#users.size > 0 || this.#closed) return;
     this.#closed = true;
+    if (AgentsHost.#shared.get(this.#data) === this) AgentsHost.#shared.delete(this.#data);
     await this.#proc?.terminate();
   }
 }
@@ -178,16 +213,20 @@ export class HostedProcess {
     await endRunner(data, id, options.label);
     const info = await startRunner(data, id, program, args, env, cwd);
     const p = new HostedProcess(host, info, options, turn, null);
-    await host.attach(p);
+    host.attach(p);
     return p;
   }
 
   /// Takes up the process a runner keeps, its turn and live steps as `turn` and `live` say.
-  static async adopt(host: AgentsHost, info: RunnerInfo, options: HostedOptions, turn: Json, live: Json) {
+  static adopt(host: AgentsHost, info: RunnerInfo, options: HostedOptions, turn: Json, live: Json) {
     if (!listening(info)) throw new Error(`runner ${info.id} has no socket`);
     const p = new HostedProcess(host, info, options, turn, live);
-    await host.attach(p);
+    host.attach(p);
     return p;
+  }
+
+  get kind(): "claude" | "lines" {
+    return this.#options.kind ?? "claude";
   }
 
   get pgid() {
@@ -207,10 +246,12 @@ export class HostedProcess {
     return this.#frozenState;
   }
 
-  heard(heard: Heard) {
-    if (this.gone) return;
-    this.#turn = heard.turn;
+  /// What the program read, unless it is let go or held (then not acknowledged: the next station's).
+  heard(heard: Heard): boolean {
+    if (this.gone || this.#frozen) return false;
+    if (heard.turn !== undefined) this.#turn = heard.turn;
     this.#options.heard(heard);
+    return true;
   }
 
   froze(turn: Json, live: Json) {
@@ -273,7 +314,10 @@ export class HostedProcess {
     else this.#host.post({ [what]: this.n });
   }
 
-  keepFrom(_at: number) {}
+  /// Up to where its runner may give the disk back, told with the next ack (process.ts `keepFrom`).
+  keepFrom(at: number) {
+    this.#host.post({ keep: this.n, at });
+  }
 
   freeze() {
     this.#frozen = true;

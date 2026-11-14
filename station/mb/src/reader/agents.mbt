@@ -34,6 +34,10 @@ priv struct Hosted {
   mut acked_err : Int64
   /// the end of the last line told Node
   mut told : Int64
+  /// its lines given Node as they are (a Codex app-server's: Node reads them, `lines`), not read here as Claude Code's
+  lines_only : Bool
+  /// up to where of stdout the runner may give the disk back, told with each ack (runner.ts `keep`)
+  mut keep : Int64?
   /// lines that came while frozen, each with where it ends
   held : Array[(Bytes, Int64)]
   mut frozen : Bool
@@ -89,7 +93,7 @@ fn Agents::told(self : Agents, line : String) -> Unit {
         Some(state) => @claude.Live::of_state(@jsjson.parse(state.stringify()) catch { _ => Null })
       }
       // (taken in now: what Node says of it next is had in order, whenever its socket opens)
-      let h = hosted(n.to_int(), turn, live)
+      let h = hosted(n.to_int(), turn, live, lines_only=said.value("kind") == Some(Json::string("lines")))
       self.sessions[h.n] = h
       ignore(self.host.rt.fork(name="agent", () => self.attach(h, socket)))
     }
@@ -104,10 +108,18 @@ fn Agents::told(self : Agents, line : String) -> Unit {
     | { "renewed": Number(n, ..), .. }
     | { "done": Number(n, ..), .. }
     | { "detach": Number(n, ..), .. }
-    | { "thaw": Number(n, ..), .. } => n.to_int()
+    | { "thaw": Number(n, ..), .. }
+    | { "keep": Number(n, ..), .. } => n.to_int()
     { "freeze": Number(id, ..), .. } => {
       let states : Map[String, Json] = {}
+      let only = match said.value("only") {
+        Some(Array(ns)) => ns.filter_map(x => match x { Number(k, ..) => Some(k.to_int()); _ => None })
+        _ => []
+      }
       for k, h in self.sessions {
+        if !only.contains(k) {
+          continue
+        }
         h.frozen = true
         states[k.to_string()] = Json::object({
           "turn": turn_json(h.turn),
@@ -141,6 +153,7 @@ fn Agents::told(self : Agents, line : String) -> Unit {
     }
     { "aborting": _, .. } => h.turn.aborting = true
     { "renewed": _, .. } => h.turn.renewed = Some(true)
+    { "keep": _, "at": Number(at, ..), .. } => h.keep = Some(at.to_int64())
     { "done": _, .. } => {
       self.send(h, { "op": "done" })
       self.end(h)
@@ -188,13 +201,23 @@ fn Agents::ack(self : Agents, h : Hosted) -> Unit {
   if h.left {
     return
   }
-  self.send(h, { "op": "ack", "out": Json::number(h.acked_out.to_double()), "err": Json::number(h.acked_err.to_double()) })
+  let ack : Map[String, Json] = {
+    "op": "ack",
+    "out": Json::number(h.acked_out.to_double()),
+    "err": Json::number(h.acked_err.to_double()),
+  }
+  if h.keep is Some(k) {
+    ack["keep"] = Json::number(k.to_double())
+  }
+  self.send(h, Json::object(ack))
 }
 
 ///|
-fn hosted(n : Int, turn : @claude.Turn, live : @claude.Live) -> Hosted {
+fn hosted(n : Int, turn : @claude.Turn, live : @claude.Live, lines_only~ : Bool) -> Hosted {
   {
     n,
+    lines_only,
+    keep: None,
     conn: Json::null(),
     outq: @effect.Queue::unbounded(),
     turn,
@@ -261,6 +284,8 @@ async fn Agents::attach(self : Agents, h : Hosted, socket : String) -> Unit {
     self.host.say(({ "left": Json::number(n.to_double()) } : Json).stringify())
   } else if !h.exited {
     self.host.say(({ "closed": Json::number(n.to_double()) } : Json).stringify())
+  } else {
+    self.host.say(({ "ended": Json::number(n.to_double()) } : Json).stringify())
   }
 }
 
@@ -347,6 +372,10 @@ fn strip_cr(s : String) -> String {
 /// Lines of its stdout, each with where it ends: what they say told Node, or acknowledged at once where they say
 /// nothing and nothing told is waiting.
 fn Agents::heard(self : Agents, h : Hosted, lines : Array[(Bytes, Int64)]) -> Unit {
+  if h.lines_only {
+    self.given(h, lines)
+    return
+  }
   let before = @jsjson.stringify(turn_json_js(h.turn))
   let events : Array[@jsjson.JValue] = []
   for l in lines {
@@ -499,4 +528,35 @@ fn turn_of(v : Json?) -> @claude.Turn {
     t.tasks = Some(kept)
   }
   t
+}
+
+///|
+/// A Codex app-server's turn's diff, whole each time it changes: the most of what it writes, of which the station keeps
+/// nothing (codex.ts `UNTOLD`, LiveFromCodex), not given Node.
+const DIFF : Bytes = b"{\"method\":\"turn/diff/updated\""
+
+///|
+/// Lines given Node as they are (`lines`, their bytes after it, each with where it begins and ends), but for those it
+/// keeps nothing of: acknowledged at once where none is given and nothing given is waiting.
+fn Agents::given(self : Agents, h : Hosted, lines : Array[(Bytes, Int64)]) -> Unit {
+  let end = lines[lines.length() - 1].1
+  let kept = lines.filter(l => !(l.0.length() >= DIFF.length() && l.0[0:DIFF.length()] == DIFF[:]))
+  if kept.length() == 0 && h.told <= h.acked_out {
+    h.acked_out = end
+    h.told = end
+    self.ack(h)
+    return
+  }
+  h.told = end
+  let body = @buffer.new()
+  let at = []
+  for l in kept {
+    let line = if l.0.length() > 0 && l.0[l.0.length() - 1] == b'\r' { l.0[0:l.0.length() - 1].to_bytes() } else { l.0 }
+    let from = l.1 - (l.0.length() + 1).to_int64()
+    at.push("[\{from},\{l.1},\{line.length()}]")
+    body.write_bytes(line)
+  }
+  let bytes = body.to_bytes()
+  self.host.say("{\"lines\":\{h.n},\"to\":\{end},\"at\":[\{at.join(",")}],\"bytes\":\{bytes.length()}}")
+  self.host.out(bytes)
 }
