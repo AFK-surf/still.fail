@@ -488,17 +488,31 @@ export async function putBlobs(blobs: string, index: Json, packed: Buffer): Prom
   if (data.length !== total) throw new Error("pieces do not match their data");
   mkdirSync(blobs, { recursive: true });
   let at = 0;
+  // A request can contain thousands of small files. Awaiting each file's streamed verification before starting the
+  // next serializes thousands of filesystem round trips on the station's shared I/O pool. Different contents can be
+  // checked together; pieces of the same content must still be written and verified in their original order.
+  type PieceToPut = { hash: string; size: number; offset: number; length: number; piece: Buffer };
+  const groups = new Map<string, PieceToPut[]>();
   for (const [hash, size, offset, length] of index as [string, number, number, number][]) {
     const piece = data.subarray(at, at + length);
     at += length;
+    const group = groups.get(hash) ?? [];
+    group.push({ hash, size, offset, length, piece });
+    groups.set(hash, group);
+  }
+  const pending = [...groups.values()];
+  let next = 0;
+  let failure: unknown;
+  let failed = false;
+  const put = async ({ hash, size, offset, length, piece }: PieceToPut) => {
     const done = join(blobs, hash);
-    if (existsSync(done)) continue;
+    if (existsSync(done)) return;
     const part = `${done}.part`;
     let has = 0;
     try {
       has = statSync(part).size;
     } catch {}
-    if (offset + length <= has && !(offset === 0 && has === 0)) continue;
+    if (offset + length <= has && !(offset === 0 && has === 0)) return;
     if (offset !== has) throw new Error("a content's pieces came out of order");
     const fd = openSync(part, offset === 0 ? "w" : "a");
     try {
@@ -513,7 +527,19 @@ export async function putBlobs(blobs: string, index: Json, packed: Buffer): Prom
       }
       renameSync(part, done);
     }
-  }
+  };
+  // Wait for every in-flight group even on failure: no writes may outlive the failed request or its retry.
+  await Promise.all(Array.from({ length: Math.min(8, pending.length) }, async () => {
+    while (!failed && next < pending.length) {
+      const group = pending[next++]!;
+      try {
+        for (const piece of group) await put(piece);
+      } catch (error) {
+        if (!failed) { failed = true; failure = error; }
+      }
+    }
+  }));
+  if (failed) throw failure;
   return index.length;
 }
 
