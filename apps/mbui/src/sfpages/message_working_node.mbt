@@ -68,6 +68,7 @@ fn working_said_node(
   came : () -> Double?,
   steadies : ActivitySteadies,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
+  faces? : Map[String, (@view.View, @motion.Way)] = Map([]),
 ) -> MessageRowNode {
   let live = fn() {
     @sfbase.hold(src, @sfbase.chat_scope(here.station, here.session), "live", {
@@ -76,6 +77,9 @@ fn working_said_node(
     }).get().value
   }
   let said = fn() { working_said(a(), live()) }
+  // (what it does now folded into its picture as a message of its agent's comes out of it, back once that is out:
+  // agent_said_node's `out_of`, emit.mbt's Fold and Return; 1 shown)
+  let fold = @motion.Way::new(1.0)
   message_row_frame_node(v, key, side, top, over~, fn(r) {
     // (made by the room the row gives it: how much of the line its words have, activity_visible_width's)
     r.by_room(fn(held, room) {
@@ -117,6 +121,17 @@ fn working_said_node(
             @sf.style_node(face, fn() { activity_face })
             face.box(fn(av) { agent_avatar_node(av, fn() { a().maker }, fn() { a().runtime }, fn() { "" }) |> ignore })
             |> ignore
+            // (what a message of its agent's coming while it is at work comes out of: agent_said_node's `out_of`; told no more
+            // as it is let go)
+            let agent = @signals.untracked(a).key
+            faces[agent] = (face, fold)
+            face.owns(fn() {
+              match faces.get(agent) {
+                Some((f, _)) if f.id() == face.id() => faces.remove(agent)
+                _ => ()
+              }
+            })
+            |> ignore
             // (its agent's card over its picture and the ring over it under a pointer, as over a message's picture:
             // the line's press and hold its own as ever)
             message_agent_card_node(face, src, here, @signals.untracked(a).key, pointed=true)
@@ -142,6 +157,7 @@ fn working_said_node(
             // (giving way as the line does, its words cut short and its clock whole: a box in a row that says nothing
             // of it is laid out as wide as what it holds, whatever the room)
             tail.cuts(Is(true)).min_width(Is(Some(0.0))) |> ignore
+            tail.alpha(By(fn() { fold.shown_on(tail) })) |> ignore
             let shown = activity_steady_node(tail, steadies, key, said, came)
             let style = fn() { if @sf.hovered_node(line) { now_words_hot } else { now_words } }
             tail.box(fn(words) { working_words_node(words, shown, came, style, visible, key.length()) }) |> ignore

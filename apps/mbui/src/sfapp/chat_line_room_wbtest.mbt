@@ -260,12 +260,13 @@ fn cr_time_under(sent : Double?, new : Double?) -> Bool {
 }
 
 ///|
-test "a chat's page made with its inside nodes, on 小屏 and 大屏: the turn over with no reply, the next message sent (one line) as one move: the time line under what was sent not drawn from the send's frame, the new words at their resting place against what was sent at every look, what was sent up only, no words drawn cut, at its foot" {
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: the turn over with no reply, the next message sent (one line) as one move: the time line under what was sent not drawn from the send's frame, the new words flying from where they were typed, their room to what was sent going one way to their rest against it, what was sent up only, no words drawn cut, at its foot" {
   for screen in cr_screens {
     let (t, _, _) = cr_turn(screen, 300.0)
     let at = "\{screen.0}"
     let next = "再看看"
     let was = cr_sent_y(t)
+    guard composer_field(t) is Some((_, field_y, _, field_h)) else { fail("\{at}: no composer's field") }
     cr_send(t, next)
     // (from the send's frame, every cr_look_ms while it moves, then at rest)
     let looks : Array[(Double?, Double?, Bool, String?)] = []
@@ -287,6 +288,15 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: the turn o
     guard rest.0 is Some(ra) && rest.1 is Some(rb) else { fail("\{at}: not drawn at rest") }
     let want = rb - ra
     let mut high = was
+    // (from the send's frame drawn where they were typed, in the composer's field: their bubble flies from there (the
+    // owner, 2026-11-15: 「没有飞行动效」); till then this held them at rest against what was sent from the first look,
+    // the page with no flight: the coordinator of the migration, 2026-11-15)
+    match looks[0].1 {
+      Some(b) => assert_true(b >= field_y - 0.5 && b <= field_y + field_h + 0.5, msg="\{at}: the new words at \{b} as sent, the field \{field_y}..\{field_y + field_h}")
+      None => fail("\{at}: the new words not drawn as sent")
+    }
+    // (their room to what was sent going one way to its rest, never past it, never back)
+    let mut left = -1.0
     for i, l in looks {
       assert_false(l.2, msg="\{at}, look \{i}: the time line under what was sent drawn")
       match l.3 {
@@ -294,8 +304,13 @@ test "a chat's page made with its inside nodes, on 小屏 and 大屏: the turn o
         None => ()
       }
       match (l.0, l.1) {
-        (Some(a), Some(b)) =>
-          assert_true(((b - a) - want).abs() <= 0.5, msg="\{at}, look \{i}: the new words \{b - a} under what was sent, \{want} at rest")
+        (Some(a), Some(b)) => {
+          let off = (b - a) - want
+          if left >= 0.0 {
+            assert_true(off.abs() <= left + 0.5, msg="\{at}, look \{i}: the new words \{off} off their rest under what was sent, \{left} the look before")
+          }
+          left = off.abs()
+        }
         _ => ()
       }
       match (high, l.0) {

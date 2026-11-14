@@ -486,7 +486,11 @@ fn[K] Places::first_past(self : Places[K], y : Double) -> Int {
 /// list: known and taken. Its counts are how it all ends; where a
 /// block is while a way goes is read through Places alone, at the moment it is read (as it is laid out, where flex has
 /// each way then), and what shows is made from where it showed as the way set out to where it ends, those that show
-/// no more at its end let go then.
+/// no more at its end let go then. `comes_way`: asked of a key that comes by data as it sets out (once, untracked): how
+/// its way goes, that long (ms) on that curve (0 … 1 of the time to 0 … 1 of the way), where the page says it (one's own
+/// words sent, their bubble flying in from the field on a flight's rise), else a Move. Said, the list's one way of that
+/// moment goes so, all of it (what is over the key, what gives its room back under it), not a Move: one motion, the
+/// key's (flex's ComeGroup `spec`; the coordinator of the migration, 2026-11-14).
 pub fn[K : Hash + Eq] View::scrolls_window(
   self : View,
   s : Scroll,
@@ -504,6 +508,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   goes? : (K) -> Bool = fn(_) { true },
   leaves_room? : (K) -> Bool = fn(_) { false },
   comes_whole? : (K) -> Bool = fn(_) { false },
+  comes_way? : (K) -> (Double, (Double) -> Double)? = fn(_) { None },
   at_once? : Bool = false,
   place? : ListPlace[K],
   near_foot? : (Double, () -> Bool, () -> Unit),
@@ -1331,6 +1336,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         Some(n) if (n.coming || !coming) &&
           n.flex.style.come_at == cause &&
           n.flex.style.come_ends == n.flex.style.come_ends => end = dmax(end, n.flex.style.come_ends)
+        // (on a way its page said, its end not laid out yet: that way's length from the cause, scrolls_window's
+        // `comes_way`, longer than a Move may be)
+        Some(n) if n.coming && n.flex.style.come_at == cause && n.flex.style.come_spec is Some((ms, _)) =>
+          end = dmax(end, cause + ms)
         _ => ()
       }
     }
@@ -2759,7 +2768,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                   _ => {
                     (m.come_off)()
                     st.come_group = None
-                    st.come_ends = cause + @flex.come_way_ms(from, 0.0, h)
+                    // (on a way its page said: that way's length still, from where it now sets out; else a Move's)
+                    st.come_ends = match st.come_spec {
+                      Some((ms, _)) if ms > 0.0 => st.come_at + ms
+                      _ => cause + @flex.come_way_ms(from, 0.0, h)
+                    }
                     if st.come_ends <= cause + 0.001 {
                       come_done(tree, row, m)
                     } else {
@@ -2776,6 +2789,21 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                 let ways = tree.list_inner_at(held_node.val, cause)
                 for k in tree.column_items(held_node.val) {
                   ways.push(tree.handle(k))
+                }
+                // (and whatever else under the list went in those groups, its end said again with theirs: a stale
+                // end of its own would set it at rest before the group's)
+                let below : Array[Int] = [held_node.val]
+                while below.length() > 0 {
+                  let at = below.pop().unwrap()
+                  for kid in tree.nodes[at].kids {
+                    let n = tree.nodes[kid]
+                    if n.live && n.coming && n.flex.style.come_group is Some(o) &&
+                      groups.iter().any(fn(g) { physical_equal(g, o) }) &&
+                      !ways.iter().any(fn(w) { w.at == kid }) {
+                      ways.push(tree.handle(kid))
+                    }
+                    below.push(kid)
+                  }
                 }
                 for g in groups {
                   @flex.come_group_set(g)
@@ -3229,6 +3257,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       whole_rows.push(row)
       self.tree.nodes[row.at].come_uncut = true
       self.tree.raise_in_list(self.at, whole_rows.map(fn(r) { r.id() }))
+    }
+    // (its way said by its page: given to View::comes as the each sets it off, after this, in this change)
+    if ok && coming {
+      match @signals.untracked(fn() { comes_way(k) }) {
+        Some(w) => {
+          self.tree.come_ways_said[row.at] = w
+          @signals.after_flush(fn() { self.tree.come_ways_said.remove(row.at) })
+        }
+        None => ()
+      }
     }
     if ok {
       let left = ways.filter(fn(w) { w.0.at != row.at })

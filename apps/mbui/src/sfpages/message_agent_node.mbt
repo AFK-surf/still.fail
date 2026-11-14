@@ -9,8 +9,9 @@
 // Not here yet, each where it comes in:
 // - a Mermaid chart: as its code till then; `code` takes viz_mermaid_node once it is in main (#5525).
 // - a vault item's card asking for a file to be picked (message_card_node's NotYet): nothing drawn for it yet.
-// - its picture held under the pane's top as a long one scrolls past (c.stick), and its coming out of its agent's picture
-//   (emit): the list's, as the list is made of nodes.
+// - its picture held under the pane's top as a long one scrolls past (c.stick).
+// Its coming out of its agent's picture is here (agent_said_node's `out_of`): grown out of it, one flight; the line
+// folding to its picture first and the picture's own glide (emit.mbt's Fold, Float, Return) are not.
 
 ///|
 /// The card an agent's message shows in place of its words (prose_with_files'), by kind: a vault item's, a phone's, a
@@ -59,9 +60,19 @@ fn agent_said_node(
   screens? : @sf.ScreensNode,
   shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
   core? : @settings.Core? = None,
+  out_of? : (@view.View, @motion.Way)? = None,
 ) -> MessageRowNode {
   let menu_on : Ref[() -> Bool] = Ref(fn() { false })
   let row = message_row_frame_node(v, key, side, top, over~, fn(r) {
+    // (come by data while its agent was at work: out of that agent's picture on its line (`out_of`), as emit.mbt's, each
+    // step from the cause's moment: the line folds into its picture (Fold); its own picture glides there from that one
+    // (Float, a flight: View::flies_in); its head and its words come out of it, the words a glyph at a time (Spit,
+    // emit_out's, sfbase's glyph_in); the line unfolds again (Return))
+    let out = match out_of {
+      Some((face, fold)) => Some(agent_out_steps(r, face, fold))
+      None => None
+    }
+    let out_glyphs = out.map(fn(o) { o.glyphs })
     let (_, on) = message_others_node(
       r,
       here,
@@ -79,11 +90,21 @@ fn agent_said_node(
         if agent != "" {
           message_agent_card_node(pic, src, here, agent, pointed=true)
         }
+        // (out of its agent's picture at work: from there, Float)
+        match out {
+          Some(o) => (o.avatar)(av)
+          None => ()
+        }
       },
       fn(h) {
         message_name_node(h, src, here, fn() { m().by.name }, fn() { message_agent_of(here, m().by.agent) }, fn() {
           m().by.from
         })
+        // (out of its picture: sliding out beside it, Spit)
+        match out {
+          Some(o) => (o.head)(h)
+          None => ()
+        }
       },
       None,
       fn(b) {
@@ -101,7 +122,7 @@ fn agent_said_node(
             // (its words and its files one piece, none apart, as the old list holds them to be picked: pickable's
             // pick_fill; a letter's, drawn by the old view alone, has them 4 apart)
             @sf.style_node(p, fn() { agent_prose_piece })
-            agent_prose_node(p, src, here, m, found~, found_at~, lit~, code~, screens=screens.unwrap_or(agent_screens(src, here, m)), shown?)
+            agent_prose_node(p, src, here, m, found~, found_at~, lit~, code~, screens=screens.unwrap_or(agent_screens(src, here, m)), shown?, glyphs=out_glyphs)
           } else {
             message_card_node(p, here, core, m)
           }
@@ -145,6 +166,7 @@ fn agent_prose_node(
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
   screens? : @sf.ScreensNode,
   shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
+  glyphs? : ((@view.View) -> Double, (Double, @view.GlyphAt) -> @view.GlyphLook)? = None,
 ) -> Unit {
   let place = message_files_at(here, fn() { m().said })
   let at = message_place(@signals.untracked(m)) + "/f"
@@ -208,6 +230,7 @@ fn agent_prose_node(
       chat_title=fn(h) { chat_title_of(m())(h) },
       // the files its paths name are its agent's (Chat.tsx ProseWithFiles' PathSession): their chips
       paths=@signals.untracked(m).by.agent != "",
+      glyphs~,
       // (a file it places: its card where it places it; a picture's its box, side by side with others, in a table's cell)
       files=fn(name) {
         let card = fn(a) {
@@ -274,4 +297,61 @@ fn message_path_held(src : Source, station : String, agent : String, path : Stri
     ],
     from=At(at.0, at.1, at.2, at.3),
   )
+}
+
+///|
+/// What an agent's message coming out of its picture at work does (agent_said_node's `out_of`; emit.mbt's poses, each
+/// from the cause's moment): its glyphs' look as they come (Spit: emit_out's, sfbase's glyph_in, read a line at a time
+/// and along it), its picture's way from that one (Float), its head's coming out beside it (Spit).
+priv struct AgentOut {
+  glyphs : ((@view.View) -> Double, (Double, @view.GlyphAt) -> @view.GlyphLook)
+  avatar : (@view.View) -> Unit
+  head : (@view.View) -> Unit
+}
+
+///|
+/// An agent's message in row `r` come out of its agent's picture at work `face`, whose line is `fold` (1 shown): the
+/// line folds (Fold), the message's picture glides from that one to its own place (Float, a flight: View::flies_in),
+/// its head slides out beside it and its words come a glyph at a time (Spit), and the line unfolds (Return).
+fn agent_out_steps(r : @view.View, face : @view.View, fold : @motion.Way) -> AgentOut {
+  let at = r.cause_at()
+  let fold_ms = @sfbase.Pose::Fold.ms()
+  let float_ms = @sfbase.Pose::Float.ms()
+  let spit_ms = @sfbase.Pose::Spit.ms()
+  let out_at = at + fold_ms + float_ms
+  // det-ok(motion-length): emit.mbt's Fold, Float, Spit and Return, a message coming out of its agent's picture
+  fold.go(0.0, @motion.tween(fold_ms, ease=Out), at~)
+  r.at_moment(out_at + spit_ms, fn() { fold.go(1.0, @motion.tween(@sfbase.Pose::Return.ms(), ease=Out), at=out_at + spit_ms) })
+  |> ignore
+  // (how long since it came out, ms: its words and head by it, nothing before)
+  let since = @motion.Way::new(0.0)
+  r.at_moment(out_at, fn() { since.go(1.0, @motion.tween(@sfbase.emit_out_ms_most, ease=Linear), at=out_at) }) |> ignore
+  let salt = 7
+  {
+    glyphs: (fn(w) { since.shown_on(w) * @sfbase.emit_out_ms_most }, fn(ms, g) {
+      @sfbase.glyph_in(ms, (g.line.to_double() + g.cx / 600.0) * @sfbase.glyph_line_ms, g.index, salt)
+    }),
+    avatar: fn(av) {
+      av.flies_in(after(fold_ms, float_ms), fn(_) { Some(face.laid_window_now()) }) |> ignore
+    },
+    head: fn(h) {
+      h.alpha(By(fn() { @ui.Ease::Out.at(dmin_one(since.shown_on(h) * @sfbase.emit_out_ms_most / @sfbase.emit_head_ms)) }))
+      |> ignore
+    },
+  }
+}
+
+///|
+/// A flight still for `wait` ms, then on over `ms` (emit.mbt's Float: a glide from rest to rest).
+fn after(wait : Double, ms : Double) -> @view.Flight {
+  { way: fn(_) { (wait + ms, fn(t) { if t <= wait { 0.0 } else { @ui.Ease::InOut.at(dmin_one((t - wait) / ms)) } }) } }
+}
+
+///|
+fn dmin_one(x : Double) -> Double {
+  if x > 1.0 {
+    1.0
+  } else {
+    x
+  }
 }

@@ -492,12 +492,16 @@ pub(all) struct ComeGroup {
   mut a : Double
   mut w : Double
   mut dur : Double
+  // how its way goes, where one of it says it (a list's key coming by data its page says the way of: the view's
+  // View::scrolls_window `comes_way`): that long (ms), on that curve (0 … 1 of the time to 0 … 1 of the way), all of it
+  // as a share of how far all of it goes, not a Move
+  mut spec : (Double, (Double) -> Double)?
 }
 
 ///|
 /// A group said at moment `at`, none in it yet.
 pub fn ComeGroup::new(at : Double) -> ComeGroup {
-  { at, members: [], set: false, v: 0.0, d: 0.0, s: 0.0, t1: 0.0, a: 0.0, w: 0.0, dur: 0.0 }
+  { at, members: [], set: false, v: 0.0, d: 0.0, s: 0.0, t1: 0.0, a: 0.0, w: 0.0, dur: 0.0, spec: None }
 }
 
 ///|
@@ -517,6 +521,25 @@ pub fn come_group_set(g : ComeGroup) -> Unit {
     v = v + (if d >= 0.0 { m.come_v } else { -m.come_v })
   }
   g.v = v
+  // (its way said: that long on that curve, from where each is, whatever its speed)
+  match g.spec {
+    Some((ms, _)) if ms > 0.0 => {
+      g.v = 0.0
+      g.dur = ms
+      g.d = 0.0
+      for m in g.members {
+        g.d = g.d + (m.come_goal - m.come_from).abs()
+      }
+      for m in g.members {
+        m.come_group = Some(g)
+        m.come_ends = g.at + ms
+        m.come_plan = m.come_goal
+      }
+      g.set = true
+      return
+    }
+    _ => ()
+  }
   // (turned away as a whole: slowing at one rate to rest, as one (come_turned's, of its speed and how far all of it
   // goes back: its gain then a Move's from rest for all of it, ω²·D, where it is all but still), each carried as far as
   // its own speed is of the group's, then its way back from there; what each then goes worked out again from how far
@@ -583,6 +606,10 @@ pub fn come_group_set(g : ComeGroup) -> Unit {
 /// Where item `s` of group `g` is `t` ms on from the group's moment, going to `goal` now, and how fast (points a ms):
 /// its share of the group's way.
 fn come_group_way(g : ComeGroup, s : Style, goal : Double, t : Double) -> (Double, Double) {
+  match g.spec {
+    Some(spec) if spec.0 > 0.0 => return come_spec_way(s, spec, goal, t)
+    _ => ()
+  }
   if g.v < 0.0 {
     // (slowing as one at one rate: carried as far as its own speed is of the group's; then its share of one way back,
     // set out still and gaining, as all of it, as it slowed: come_back_path of all of it, as a share)
@@ -662,6 +689,11 @@ fn come_height(s : Style, natural : Double) -> Double {
 /// goes and never past its rest: closing, put down and no less than `goal`; growing, put up and no more. What a way turned
 /// back sets out from (come_state) is as it is.
 fn come_tall_on(s : Style, goal : Double, t : Double) -> Double {
+  let said = match (s.come_group, s.come_spec) {
+    (Some(g), _) if g.set => g.spec is Some(_)
+    (_, Some(_)) => true
+    _ => false
+  }
   let (tall, _) = match (s.come_group, s.come_spec) {
     (Some(g), _) if g.set => come_group_way(g, s, goal, t)
     (_, Some(spec)) => come_spec_way(s, spec, goal, t)
@@ -673,6 +705,10 @@ fn come_tall_on(s : Style, goal : Double, t : Double) -> Double {
     tall
   } else if goal < s.come_from {
     fmax((tall * g + 0.000001).floor() / g, goal)
+  } else if said {
+    // (on a way said (a length and a curve, which comes to its end exactly): toward its rest as the grid puts it up, so
+    // its last frame is where it rests, no step as it does)
+    fmin((tall * g - 0.000001).ceil() / g, (goal * g - 0.000001).ceil() / g)
   } else {
     fmin((tall * g - 0.000001).ceil() / g, goal)
   }

@@ -1,9 +1,11 @@
 // A chat's page made with its inside nodes (sfbase's chat_page_nodes on), read above its end, its rows on the host's
 // pixels: words sent take the list back to its foot (chat_body_node's sent_here_count: ListPlace::to_end), which ends
 // at its foot as its foot is when it gets there (the sent row measured taller than counted, the composer shrunk), never
-// short of it (the coordinator of the migration, 2026-11-14: 50.9 short, the sent words never seen). In the press's
-// frame the list has not jumped; then, every frame a host draws, it goes down only, to rest with the sent row's foot on
-// the pinned foot's top, at its foot; the answer that comes after followed there. On 小屏 and 大屏.
+// short of it (the coordinator of the migration, 2026-11-14: 50.9 short, the sent words never seen). A go-to: in the
+// press's frame the list stands at its foot, the sent words' bubble flying in as at its foot, no glide beside the
+// flight (the coordinator of the migration, 2026-11-15; till then it glided there from the frame after); then, every
+// frame a host draws, it goes down only, to rest with the sent row's foot on the pinned foot's top, at its foot; the
+// answer that comes after followed there. On 小屏 and 大屏.
 
 ///|
 /// The words sent: enough to take several lines, so the row they are sent in comes out taller than the list counts it
@@ -44,10 +46,8 @@ fn csa_open(screen : (String, Double, Double, Int)) -> @ui.Tester {
 }
 
 ///|
-/// What is seen of the chat's list (the page's list under the composer's field): the first row in sight, how far it is
-/// scrolled, whether it is at its foot, where its last row in sight ends, and where its pinned foot's top is drawn.
+/// What is seen of the chat's list (the page's list under the composer's field): how far it is scrolled, whether it is at its foot, where its last row in sight ends, and where its pinned foot's top is drawn.
 priv struct CsaList {
-  first : Int
   at : Double
   at_foot : Bool
   last_foot : Double
@@ -61,8 +61,8 @@ fn csa_list(t : @ui.Tester, at : String) -> CsaList {
   let cx = fx + fw / 2.0
   for l in @ui.view_tree().unwrap().lists_seen() {
     guard l.rows.iter().any(fn(r) { r.2.0 <= cx && cx <= r.2.0 + r.2.2 }) else { continue }
-    guard (l.rows, l.rows.last()) is ([f, ..], Some(last)) else { continue }
-    return { first: f.0, at: l.at, at_foot: l.at_foot, last_foot: last.2.1 + last.2.3, foot_top: l.foot_top, count: l.count }
+    guard l.rows.last() is Some(last) else { continue }
+    return { at: l.at, at_foot: l.at_foot, last_foot: last.2.1 + last.2.3, foot_top: l.foot_top, count: l.count }
   }
   @halt.saying("\{at}: no list under the composer")
 }
@@ -90,7 +90,7 @@ fn csa_read_up(t : @ui.Tester, screen : (String, Double, Double, Int)) -> Unit {
 }
 
 ///|
-/// Sent (`send`) read above the end on `screen`: in the press's frame not jumped;
+/// Sent (`send`) read above the end on `screen`: in the press's frame at its foot (a go-to);
 /// every frame a host draws to csa_rest_ms after it down only, at rest at its foot with its last row (the sent one) on the
 /// pinned foot's top; the answer come after followed there.
 fn csa_sent_lands(t : @ui.Tester, name : String, send : () -> Unit) -> Unit raise {
@@ -98,8 +98,7 @@ fn csa_sent_lands(t : @ui.Tester, name : String, send : () -> Unit) -> Unit rais
   assert_false(before.at_foot, msg="\{name}: at its end before sending")
   send()
   let pressed = csa_list(t, name)
-  assert_eq(pressed.first, before.first, msg="\{name}: jumped in the press's frame, its first row \{before.first} to \{pressed.first}")
-  assert_false(pressed.at_foot, msg="\{name}: at its end in the press's frame")
+  assert_true(pressed.at_foot, msg="\{name}: not at its end in the press's frame (at \{pressed.at})")
   let seen : Array[CsaList] = []
   t.each_frame(Some(fn() { seen.push(csa_list(t, name)) }))
   t.run_shown(csa_rest_ms)

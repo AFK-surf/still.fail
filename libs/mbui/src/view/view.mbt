@@ -666,6 +666,9 @@ struct Node {
   /// on its way whole (a page's list's key said `comes_whole`, View::scrolls_window): not cut to its room as it makes
   /// its way, nor what it holds; cut as what holds it cuts it
   mut come_uncut : Bool
+  // (on a way its list's page said of its key, View::scrolls_window `comes_way`: a flight in to it goes with it,
+  // shared.mbt's Tree::rides_said_way; let go with the way)
+  mut list_key_way : Bool
   /// it, and what it holds, take no press (View::presses)
   mut inert : Bool
   /// it is a modal layer while this holds (View::modal): what it does not hold takes no input
@@ -771,6 +774,10 @@ pub struct Tree {
   /// fades over them, each with the moment it waits till: left out of their column's one way of that moment
   /// (Tree::come_group_settle) where it goes to a smaller place from rest; noted only till the pick's change is made
   priv pick_waits : Map[Int, Double]
+  // (a list key's way its page said (View::scrolls_window `comes_way`), by its node, till the each sets it off in the same
+  // change (View::comes); and those set off so, till their group is said (Tree::come_group_settle): its way the group's)
+  priv come_ways_said : Map[Int, (Double, (Double) -> Double)]
+  priv come_ways_lead : Map[Int, (Double, (Double) -> Double)]
   /// the places of the page's lists' feet (View::scrolls_window's `foot`, pinned on the list's own node, not under
   /// its held column), each with the held column whose one way what comes or goes or resizes in it goes in
   /// (Tree::come_group_join), where the list's blocks' insides join it
@@ -1230,6 +1237,8 @@ pub struct Tree {
   priv shared_stays : Map[String, Array[Int]]
   priv departures : Array[Departure]
   priv arrivals : Array[NodeId]
+  /// those made in that change that fly in from what is none of the tree (View::flies_in), each with where from
+  priv incoming : Array[Incoming]
   priv mut pairs_asked : Bool
   /// the pictures asked for in a change or a frame's layout (View::image_ask), each by the node that asked: asked of
   /// what hosts the tree as that ends, where that node still stands (Tree::change_ended, Tree::brought)
@@ -1353,6 +1362,8 @@ pub fn Tree::new(
     come_groups: {},
     list_inner: {},
     pick_waits: {},
+    come_ways_said: {},
+    come_ways_lead: {},
     list_feet: {},
     list_raised: {},
     old_builds_begun: 0,
@@ -1530,6 +1541,7 @@ pub fn Tree::new(
     shared_stays: {},
     departures: [],
     arrivals: [],
+    incoming: [],
     pairs_asked: false,
     images_wanted: [],
     flights: [],
@@ -1792,6 +1804,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.come_wake = None
       n.clips_said = false
       n.come_uncut = false
+      n.list_key_way = false
       n.inert = false
       n.modal = false
       n.back_goes_on = false
@@ -1952,6 +1965,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         come_wake: None,
         clips_said: false,
         come_uncut: false,
+        list_key_way: false,
         inert: false,
         modal: false,
         back_goes_on: false,
@@ -8951,7 +8965,26 @@ fn View::comes(
   // (from nothing or to nothing, or turned back on such a way: what a box taking no room holding nothing opens or
   // closes its padding by (flex's come_fill, Style's gone_empty); not one in another's place, from as tall as that was)
   st.come_fill = to <= 0.0 || from <= 0.0 || (n.coming && st.come_fill) || fill
-  // (a structure's way a Move, whatever a height change declared said before; a height change declared its own)
+  // (a structure's way a Move, whatever a height change declared said before; a height change declared its own; a list
+  // key's its page said, which leads its group's: View::scrolls_window `comes_way`)
+  let spec = match (spec, tree.come_ways_said.get(v.at)) {
+    (None, Some(w)) if to > 0.0 => {
+      tree.come_ways_said.remove(v.at)
+      tree.come_ways_lead[v.at] = w
+      n.list_key_way = true
+      Some(w)
+    }
+    // (said again in the same change, from elsewhere (as a send sets it out from what is given back): still its page's)
+    (None, None) if to > 0.0 && n.coming && st.come_at == at =>
+      match tree.come_ways_lead.get(v.at) {
+        Some(w) => Some(w)
+        None => if n.list_key_way { st.come_spec } else { spec }
+      }
+    _ => {
+      n.list_key_way = false
+      spec
+    }
+  }
   st.come_spec = spec
   st.come_foot = foot
   st.come_from = from
@@ -9046,6 +9079,8 @@ fn View::comes(
       guard v.live() is Some(m) && m.coming && st.come_at == at && st.come_to >= 1.0 else { return }
       tree.measured_now()
       let ends = if st.come_ends == st.come_ends { st.come_ends } else { at + @flex.move_most_ms }
+      // (one asked before, by this way said twice in its change or its group: let go, so no end of before is waited for)
+      (m.come_off)()
       m.come_off = v.at_moment(ends, fn() { come_done(tree, v, m) })
       tree.hand_at_end(ends)
     })
@@ -9260,9 +9295,41 @@ fn Tree::come_group_settle(
     }
     _ => ()
   }
+  // (a way a list's page said of a key coming in it: the group's, all of it on that curve that long (flex's ComeGroup
+  // `spec`))
+  for w in live {
+    match self.come_ways_lead.get(w.at) {
+      Some(said) => {
+        self.come_ways_lead.remove(w.at)
+        if w.live() is Some(m) && m.flex.style.come_spec is Some(_) {
+          g.spec = Some(said)
+        }
+      }
+      None => ()
+    }
+  }
   // (one alone goes its own way, as it always did)
   if live.length() + under_way.length() < 2 {
     return
+  }
+  // (one still on a way its page said, as this sets out (a list key's `comes_way`): what is left of that way, read
+  // before what is on its way is set out again from here, below)
+  let said_left : Ref[(Double, (Double) -> Double)?] = Ref(None)
+  if g.spec is None {
+    for k in under_way {
+      let n = self.nodes[k]
+      match n.flex.style.come_spec {
+        Some((ms, curve)) if n.list_key_way && ms > 0.0 && at < n.flex.style.come_at + ms => {
+          let u0 = dmax((at - n.flex.style.come_at) / ms, 0.0)
+          let c0 = curve(u0)
+          if c0 < 0.999999 {
+            said_left.val = Some((n.flex.style.come_at + ms - at, fn(x) { (curve(u0 + x * (1.0 - u0)) - c0) / (1.0 - c0) }))
+          }
+          break
+        }
+        _ => ()
+      }
+    }
   }
   for k in under_way {
     let ms = self.nodes[k].flex.style
@@ -9275,6 +9342,30 @@ fn Tree::come_group_settle(
     ms.come_ends = at + @flex.come_way_ms(h, sp, ms.come_goal)
     ms.come_group = None
     live.push(self.handle(k))
+  }
+  // (and the group of this moment on that way's curve, what is left of it, as long as that is left or as a Move of how
+  // far all of it goes takes, whichever is longer: nothing of it set on a Move halfway, nothing new hurried by its end;
+  // scrolls_window)
+  match said_left.val {
+    Some((left, curve)) => {
+      let mut far = 0.0
+      for w in live {
+        if w.live() is Some(m) {
+          let st = m.flex.style
+          if st.come_goal == st.come_goal {
+            far = dmax(far, (st.come_goal - st.come_from).abs())
+          }
+        }
+      }
+      g.spec = Some((dmax(left, @flex.move_ms(far)), curve))
+      // (and what rode it rides this from here: a later group reads what is left of this one)
+      for w in live {
+        if w.live() is Some(m) && m.list_key_way {
+          m.flex.style.come_spec = g.spec
+        }
+      }
+    }
+    None => ()
   }
   g.members.clear()
   for w in live {
@@ -9305,8 +9396,17 @@ fn Tree::come_group_settle(
 /// The way of node `m` (of `v`) there: laid out as it is, cut as it says, and what followed the clock for it let go.
 fn come_done(tree : Tree, v : View, m : Node) -> Unit {
   let st = m.flex.style
+  // (its way made longer since this moment was asked for (a group it went on in set out later, on a way said: Tree's
+  // come_group_settle, a list's send set-out): at rest at the end it has now, not before)
+  if m.coming && st.come_ends == st.come_ends && st.come_ends > tree.cause_now() + 0.001 {
+    (m.come_off)()
+    m.come_off = v.at_moment(st.come_ends, fn() { come_done(tree, v, m) })
+    tree.hand_at_end(st.come_ends)
+    return
+  }
   m.coming = false
   m.come_uncut = false
+  m.list_key_way = false
   st.come_grid = 0.0
   st.come_foot = false
   m.come_off = fn() {  }

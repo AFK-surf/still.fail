@@ -342,3 +342,24 @@ pub fn sent_picture_told(station : String, a : Attachment) -> String? {
   }
   sent_picture(station, a)
 }
+
+///|
+/// Where the words of what was sent from here stood in the composer's field as they were sent (the top left of their
+/// first line, in the window), by the key its row has in its chat's list (sent_local's), till that row's bubble takes
+/// it to fly from there (sent_from_take): on a chat's page made as nodes, where the composer is an old view hosted in
+/// the list's foot, so its words are none of the window's tree to pair with (mbui's View::flies_in).
+let sent_from_at : Map[String, (Double, Double)] = Map([])
+
+///|
+/// The words of what was sent from here as `key` (sent_local's) stood at (`x`, `y`) in the composer's field.
+pub fn sent_from_said(key : String, x : Double, y : Double) -> Unit {
+  sent_from_at[key] = (x, y)
+}
+
+///|
+/// Where the words of what was sent from here as `key` stood as they were sent (sent_from_said), taken: told once.
+pub fn sent_from_take(key : String) -> (Double, Double)? {
+  let at = sent_from_at.get(key)
+  sent_from_at.remove(key)
+  at
+}

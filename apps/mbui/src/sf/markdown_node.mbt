@@ -48,6 +48,7 @@ pub fn markdown_node(
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
   files? : (String) -> PlacedNode?,
   screens? : ScreensNode,
+  glyphs? : ((@view.View) -> Double, (Double, @view.GlyphAt) -> @view.GlyphLook)? = None,
   loc~ : SourceLoc,
 ) -> @view.View {
   parent.box(made_for=loc, fn(col) {
@@ -94,6 +95,7 @@ pub fn markdown_node(
       files: files.unwrap_or(fn(_) { None }),
       places: files is Some(_),
       screens,
+      glyphs,
     }
     let blocks = @signals.computed(fn(_) { md_node_blocks(text(), tree()) })
     if one_line {
@@ -135,6 +137,9 @@ priv struct MdNode {
   /// is images, so nothing is made to choose between them (md_cell_images)
   places : Bool
   screens : ScreensNode?
+  /// how each glyph of its words is drawn, by a state as it is now (markdown_node's `glyphs`: words coming a glyph at a
+  /// time; View::glyphs_by), none: as laid
+  glyphs : ((@view.View) -> Double, (Double, @view.GlyphAt) -> @view.GlyphLook)?
 }
 
 ///|
@@ -658,6 +663,11 @@ fn md_words_node(
     w.runs_marks(By(fn() { found() + passage_marks(runs(), (md.lit)()) })) |> ignore
     // (what a go-to brings before the eyes in them, where they have it: sought_part)
     w.sought(fn() { sought_part(runs(), found(), (md.lit)().0).map(fn(r) { @ui.runs_piece(w, r.0, r.1) }) }) |> ignore
+    // (each glyph as it comes, where it is told so: markdown_node's `glyphs`)
+    match md.glyphs {
+      Some((state, f)) => w.glyphs_by(By(fn() { state(w) }), f) |> ignore
+      None => ()
+    }
     // (on one line as wide as they are, cut short with an ellipsis where the column is narrower: one_line's)
     if cut {
       w.cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore
