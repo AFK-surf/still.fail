@@ -71,6 +71,18 @@ export type Tokens = {
 export const clock = { now: () => Date.now() };
 export const nowSeconds = () => Math.floor(clock.now() / 1000);
 export const randomSecret = () => b64url(crypto.getRandomValues(new Uint8Array(32)));
+/**
+ * A secret a person pastes after a command (an enrollment's token: `stillfail station enroll <origin> <token>`, the
+ * installers' `sh -s -- <token>`, PowerShell's): never one beginning with `-`, which a command line or PowerShell takes
+ * for an option (one token in 64 did, and its command failed saying nothing that helped, 2026-11-14). One beginning so
+ * is drawn again: the same length, less than 0.03 bit of its 256 lost (log2 64/63). `draw` is a test's.
+ */
+export function pastedSecret(draw: () => string = randomSecret): string {
+  for (;;) {
+    const secret = draw();
+    if (!secret.startsWith("-")) return secret;
+  }
+}
 export const b64url = (value: Uint8Array) =>
   btoa(String.fromCharCode(...value))
     .replaceAll("+", "-")

@@ -16,7 +16,7 @@ import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import { STATIONS_PER_WORKSPACE } from "../../client/limits.ts";
 import { CODE_TTL_DAYS, isAdmin, newCode, normalizeCode } from "./admin";
-import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
+import { digest, nowSeconds, pastedSecret, randomSecret, type Identity } from "./auth";
 import { header, publicOrigins } from "./compat";
 import type { Env } from "./env";
 import { grantKeys } from "./grants";
@@ -1329,7 +1329,8 @@ export class Directory extends DurableObject<Env> {
   async #enrollment(sub: string, workspace: string, name: unknown, rig = false): Promise<{ token: string; expires_at: number }> {
     const clean = cleanName(name) ?? fail(400, "invalid_name");
     if (this.#stationsFull(workspace)) fail(429, "too_many_stations");
-    const token = randomSecret();
+    // (pasted after a command: never beginning with `-`, auth.ts pastedSecret)
+    const token = pastedSecret();
     const expires = nowSeconds() + ENROLLMENT_TTL_SEC;
     this.#run("DELETE FROM enrollments WHERE expires_at <= ?", nowSeconds());
     this.#run("INSERT INTO enrollments (token_hash, workspace, name, created_by, expires_at, rig) VALUES (?, ?, ?, ?, ?, ?)", await digest(token), workspace, clean, sub, expires, rig ? 1 : null);
