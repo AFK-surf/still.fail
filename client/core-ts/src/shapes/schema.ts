@@ -2325,6 +2325,7 @@ export const SHAPES: Record<string, Shape> = {
     ["drop", opt("ScreenDrop"), { doc: "Where a file dropped into a view of it is put on the station's machine; none from a station before files." }],
     ["peek", "bool", { default: true, doc: "It can be previewed (`screen.view` with `peek`): a tab of the station's browser; none from a station before previews." }],
     ["userTab", opt("bool"), { doc: "A page a person opened on the station (`screen.openBrowser`), kept in its browser's own profile and put to sleep while idle." }],
+    ["farview", opt("bool"), { doc: "A Farview tab: the app draws it itself in Farview's own protocol (`farview.view`), not as a screen's pictures; none from a station before it." }],
     ["sleeping", opt("bool"), { doc: "Its browser tab is put to sleep (`screen.sleep` or idle): opening a view wakes it at its saved address." }],
     ["site", opt("String"), { doc: "The site's host (`mail.proton.me`), when its address is an http(s) page." }],
     ["closable", "bool", { default: true, doc: "The viewer may close it (`screen.close`): a tab of the station's browser, for a member who may drive it; none from a station before it." }],

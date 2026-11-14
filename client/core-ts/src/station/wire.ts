@@ -82,6 +82,9 @@ export interface StationWire {
   /// A view of one of the station's terminals: the head line carries `terminal`, and the stream stays open both ways
   /// (the station's answer, then frames each way: terminals.ts). Only the mesh carries one.
   terminal?(station: StationAddr, head: RequestHead, terminal: TerminalAsk): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
+  /// A Farview tab's own protocol: the head line carries `farview` (the tab's screen), and the station carries the
+  /// stream to the tab's host as it is, both ways (farview.ts). Only the mesh carries one.
+  farview?(station: StationAddr, head: RequestHead, screen: string): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
 }
 
 /// What a terminal view asks, as its head line's `terminal` has it (station/src/terminals/terminals.ts `asked`): its

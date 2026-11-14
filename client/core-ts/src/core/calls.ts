@@ -6,6 +6,7 @@ import { parseAsk, type Ask } from "../asks-parse.ts";
 import { parseAttend, type AttendCall } from "../attend-parse.ts";
 import { parseScreen, type ScreenCall } from "../screens.ts";
 import { parseTerminal, type TerminalCall } from "../terminals.ts";
+import { parseFarview, type FarviewCall } from "../farview.ts";
 import type { FontsCall } from "../font-files.ts";
 import { parseComposer, type ComposerAct } from "../composer.ts";
 import { conform } from "../conform.ts";
@@ -178,6 +179,8 @@ export type Call =
   | { kind: "screen"; call: ScreenCall }
   /// A station's terminal viewed and typed into (terminals.ts): `terminal.view` and what goes on it.
   | { kind: "terminal"; call: TerminalCall }
+  /// A chat's Farview tab in its own protocol (farview.ts): `farview.view` and what the app says on it.
+  | { kind: "farview"; call: FarviewCall }
   /// The workspace lock (views/lock.ts): `lock.<name>` on a workspace, with what it takes.
   | { kind: "lock"; name: string; workspace: string; params: Record<string, unknown> }
   | { kind: "lockPrompt"; name: string; params: Record<string, unknown> }
@@ -214,7 +217,7 @@ function fromOf(params: unknown): { from?: unknown } {
 /// those that hand it what they read as it comes (`stream`: a player's part of a file, let go of as it seeks elsewhere
 /// or closes), so that nothing no page waits for any more goes on coming over the network.
 export function cancellable(call: Call): boolean {
-  return ((call.kind === "stationPreview" || call.kind === "stationFilePart" || call.kind === "driveRead") && call.stream) || call.kind === "previewSocket" || (call.kind === "screen" && call.call.kind === "view") || (call.kind === "terminal" && call.call.kind === "view");
+  return ((call.kind === "stationPreview" || call.kind === "stationFilePart" || call.kind === "driveRead") && call.stream) || call.kind === "previewSocket" || (call.kind === "screen" && call.call.kind === "view") || (call.kind === "terminal" && call.call.kind === "view") || (call.kind === "farview" && call.call.kind === "view");
 }
 
 function opStation(op: ops.Request): string | null {
@@ -239,6 +242,7 @@ export function callStation(call: Call): string | null {
     case "screen":
       return call.call.kind === "view" ? call.call.station : null;
     case "terminal":
+    case "farview":
       return call.call.kind === "view" ? call.call.station : null;
     case "decisionForm":
     case "policyForm":
@@ -1297,6 +1301,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
   if (screen) return { kind: "screen", call: screen };
   const terminal = parseTerminal(name, p, bytes);
   if (terminal) return { kind: "terminal", call: terminal };
+  const farview = parseFarview(name, p, bytes);
+  if (farview) return { kind: "farview", call: farview };
   const ask = parseAsk(name, p);
   if (ask) return { kind: "ask", ask };
   const op = ops.request(name, p);

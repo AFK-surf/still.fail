@@ -258,6 +258,17 @@ export class MeshWire implements StationWire {
       return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
     });
   }
+  farview(station: StationAddr, head: RequestHead, screen: string): Effect.Effect<WireSocket, CoreError, import("effect").Scope.Scope> {
+    const env = this.#env;
+    return Effect.gen(function* () {
+      const status = env.status(station.workspace);
+      const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
+      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace), env.off?.(station.workspace), "farview"));
+      const [reply, send] = yield* link.duplex(head, { farview: { screen } });
+      yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
+      return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
+    });
+  }
 }
 
 /// Whichever answers of an attempt under way (`asked`) and another (`b`); one that fails leaves it to the other. Once
