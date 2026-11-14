@@ -258,7 +258,11 @@ for t in $targets; do
         # (real_size's, every screen opened on a workspace of real size and given its changes, the same: a sweep of every
         # screen, its bars set on the default run; 40-102 s a run at the four rates, #5407 42976047326)
         # (switches_still's, every screen's switches pressed, its table set on the default run: main's switches job's alone)
-        case $f in */screens_wbtest.mbt | */squeeze_said_wbtest.mbt | */words_large_wbtest.mbt | */real_size_wbtest.mbt | */switches_still_wbtest.mbt) continue ;; esac
+        # (corners' and contrast's too, said here since a branch's changed files at a rate (APP_GROUP=1/1, every run on the
+        # one): main's rates never ran them (their groups are the default rate's alone), and a branch that changed
+        # corners_wbtest ran its three at 120 and 60 with the motion counted on one runner, cut at its 5 minutes,
+        # lock-upgrade-page 43559278519, 2026-11-14)
+        case $f in */screens_wbtest.mbt | */squeeze_said_wbtest.mbt | */words_large_wbtest.mbt | */real_size_wbtest.mbt | */switches_still_wbtest.mbt | */corners_wbtest.mbt | */contrast_wbtest.mbt) continue ;; esac
       fi
       # (in k runs of its tests by their index: moon test FILE --index FROM-TO, the tests in the file's order)
       m=$(grep -c '^test "' "$f")
