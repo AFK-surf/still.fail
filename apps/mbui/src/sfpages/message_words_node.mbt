@@ -180,7 +180,8 @@ fn mine_said_node(
       // (nothing under it at all while it is followed, but what did not go: no box of nothing in its column, its gap
       // with it. There and gone at once, apart from the pick of what is under it: it goes in the frame the key after it
       // comes, which sets out from as tall as that gives back (the list's), where one of its states in another's place
-      // makes its way)
+      // leaves: what it showed fading where it is, what it shows now seen once its place holds it whole, its place
+      // making its way between, no words of either cut by it (msg_part_leave_ms))
       let lone = fn() {
         match out() {
           Some(o) => o.state == "failed" || !o.followed
@@ -188,7 +189,7 @@ fn mine_said_node(
         }
       }
       col.show(at_once=true, lone, fn(n) {
-        n.pick(under, fn(u, now) {
+        n.pick(under, leave=msg_part_leave_ms, fn(u, now) {
           match now {
             MineBlocked =>
               blocked_line_node(u, src, here.tips, fn() { here.station }, fn() {
