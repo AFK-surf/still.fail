@@ -5238,6 +5238,18 @@ pub fn rows_slot_on(h : Double, g : Double) -> Double {
 }
 
 ///|
+/// How tall a row `h` tall on its way (`st`'s come_*, at `at`) to `goal` is laid out on a grid of `g` pixels a point: as
+/// flex lays it there (flex's rows_on_way), between its rests as laid, its end where not laid out yet as it will be; as
+/// rows_slot_on past its end.
+fn rows_way_on(st : @flex.Style, h : Double, goal : Double, at : Double, g : Double) -> Double {
+  if !(st.come_ends == st.come_ends && at >= st.come_ends) {
+    @flex.rows_on_way(h, st.come_from, goal, g)
+  } else {
+    rows_slot_on(h, g)
+  }
+}
+
+///|
 /// Node `at` a page's list's rows' holder (Tree::set_rows_grid), its rows laid out on the grid there is; those let go
 /// since no more counted. Made in a row of another such list, a fault (rows_list_nested_said).
 fn Tree::rows_list(self : Tree, at : Int) -> Unit {
@@ -8837,6 +8849,16 @@ fn View::comes(
   // (going: as long as its way to nothing; coming, as far as what it comes to, the first time it is laid out)
   st.come_ends = if to <= 0.0 { at + @flex.come_way_ms(from, speed, 0.0) } else { 0.0 / 0.0 }
   st.come_plan = st.come_goal
+  // (under a page's list on a host's grid whose keys make their way (not said at_once: Tree's list_inner, joining), in
+  // one of its blocks, its head or its foot: on that grid as it goes, so what holds it goes one way with it; not a slot
+  // of the list's own, nor what lies in a column laid on that grid itself: those are put on it as rows, flex's
+  // rows_on_way. An at_once list's insides as they were, till it is switched on)
+  let own = tree.column_of(v.at)
+  let list = if own >= 0 { tree.list_of(own) } else { own }
+  st.come_grid = match tree.list_inner.get(list) {
+    Some((true, _)) if !st.come_across && list != own => tree.rows_grid
+    _ => 0.0
+  }
   n.coming = true
   // (one way with what else comes or goes in its column at this moment and what is on its way there now)
   tree.come_group_join(v, st, at)
@@ -9156,6 +9178,7 @@ fn Tree::come_group_settle(
 fn come_done(tree : Tree, v : View, m : Node) -> Unit {
   let st = m.flex.style
   m.coming = false
+  st.come_grid = 0.0
   m.come_off = fn() {  }
   st.come_now = 0.0 / 0.0
   // (all of what it comes to, the gap before it whole: as its column lays it out from here, whether it is measured

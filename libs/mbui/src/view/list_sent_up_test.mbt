@@ -63,7 +63,8 @@ priv struct SuCase {
 /// A page's list 300 by 400 of the rows 0 to `rows` − 1 (est 40), following its foot, its pinned foot su_foot tall; the
 /// sent words' block 40 over a part `part_h` tall (none where 0) its show makes, shown at first; the line `line_h` tall,
 /// the key its page says goes leaving its room; the next key `next_h` tall. `reduced`: its motion reduced. `gone_at_once`:
-/// its page says the sent words are simply gone (`goes` false for them). Drawn once, at 0.
+/// its page says the sent words are simply gone (`goes` false for them). `g`: its rows on a host's grid of so many pixels a
+/// point (none where 0). Drawn once, at 0.
 fn su_case(
   line_h : Double,
   part_h : Double,
@@ -71,6 +72,7 @@ fn su_case(
   reduced? : Bool = false,
   rows? : Int = 10,
   gone_at_once? : Bool = false,
+  g? : Double = 0.0,
 ) -> SuCase {
   let keys = @signals.signal(Array::makei(rows, fn(i) { i }), same=fn(a, b) { a == b })
   let foot = @signals.signal(su_foot, same=fn(a, b) { a == b })
@@ -118,6 +120,9 @@ fn su_case(
   })
   if reduced {
     tree.reduces_motion(fn() { true })
+  }
+  if g > 0.0 {
+    tree.set_rows_grid(g)
   }
   tree.frame(390.0, 844.0) |> ignore
   { tree, scroll, keys, foot, foot_box, part, part_h, next_h, rows }
@@ -568,5 +573,23 @@ test "13. guard: the sent words, not said to leave their room, simply gone at it
     assert_true((seen[0].1 - 44.0).abs() < 0.5, msg="\{at}: the room \{seen[0].1} before, 44 wanted")
     assert_true((seen[1].0 - seen[0].0 - 64.0).abs() < 0.5, msg="\{at}: 行9 from \{seen[0].0} to \{seen[1].0}, down 64 wanted")
     assert_true(su_room(c, true).abs() < 0.5, msg="\{at}: the room \{su_room(c, true)} at rest, none wanted")
+  }
+}
+
+///|
+test "4 on a host's grid (2, 2.75, 3, 3.5): the room 52, the foot back 40 (declared) and a part of 22 closing as a key of 150 comes: up only, never a device pixel down" {
+  for g in [2.0, 2.75, 3.0, 3.5] {
+    for rate in rc_rates {
+      let c = su_case(52.0, 22.0, 150.0, g~)
+      let seen = su_walk(c, { room: true, foot: true, declared: true, part: true, comes: true }, rate)
+      let from = su_look(su_change_at) - 1
+      for i in (from + 1)..<seen.length() {
+        for j, y in seen[i] {
+          let was = seen[i - 1][j]
+          guard y != rc_none && was != rc_none else { continue }
+          assert_true(y <= was + 0.01, msg="grid \{g}, at \{rate} a second, look \{i}: row \{j} down from \{was} to \{y}")
+        }
+      }
+    }
   }
 }

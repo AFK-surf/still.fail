@@ -123,6 +123,15 @@ yet and you can add one, add it.
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.
+- A page's list's rows on the host's pixels rest at their heights put up. A height on its way under it (in a block,
+  its head or its foot: a part coming or closing, a declared resize; any depth, beside anything) is laid on that grid
+  where it is worked out, toward where it goes and never past its rest (flex Style's `come_grid`, set by
+  `View::comes`), so the row round it goes one way with it and is at its rest before the way ends; only under a list
+  whose keys make their way: an `at_once` list's insides go raw as they did, the rule coming with each as it is
+  switched on. A row on a way of its own (a key coming or going) is laid between its two rests as laid (flex's
+  `rows_on_way`, what the list counts it by too). No height is put on the grid twice, and none is put up by a reader of
+  its own, or a send's column steps down as its ways end (`src/flex/rows_grid_way_test.mbt`,
+  `src/flex/rows_grid_held_way_test.mbt`).
 - What is pressed in a column that scrolls (a page's list or a plain one) stays where it was pressed, all the way, as
   what the press opens or shuts round it comes or goes, over it or under it, at the column's foot too (the user,
   2026-11-12: 「所有点击展开的控件，展开和收起前后点击的元素位置不能变化」): the framework's, from the press
