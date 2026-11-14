@@ -14,9 +14,10 @@
   rules the lock's next sync is built to (the root AGENTS.md, 2026-11-12), written from the model's fourth round
   (`station/test/lock-roster4-model.ts`, its defaults; 2026-11-13). The station and the core go by `lock_chain_js` and
   `person_chain_js` (`station/src/cloud/log-keep.ts`, `client/core-ts/src/lock-keep.ts`); `fold_person` takes `web`,
-  `web.remove` and `ws` and the workspace chain `moved {root}` from this build on, which every part takes as it is,
-  while nothing signs them and nothing calls the rest yet: an older station or app refuses a chain with a kind it does
-  not know, so nothing writes them until this build has been out seven days (the root AGENTS.md, Changes). They are
+  `web.remove` and `ws` and the workspace chain `moved {root}` from this build on, which every part takes as it is:
+  an older station or app refuses a chain with a kind it does not know, so a device writes them only once everything
+  that keeps or reads that log or workspace runs a build that takes them (client/core-ts/AGENTS.md, A lock held here;
+  the user, 2026-11-14: 无感迁移, no date, no switch, nobody told to update). They are
   held to the models they were written from (`station/test/lock-fork-choice-model.ts`,
   `station/test/lock-roster4-model.ts`) by `station/test/rules-fork.test.ts`: a change to either changes both.
 - A device of a person's log has two keys there: its `key`, sealed for its person's presence, which signs that log

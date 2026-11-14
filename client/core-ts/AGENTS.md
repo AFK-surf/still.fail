@@ -224,9 +224,9 @@ another; the accounts' list's merge across stations and its refills.
   under a lock that is off): the person's own secrets opened first (the box key's ask), then `off` signed (their own
   lock's), the secrets written to the plain library after; one ask for both needs the host to open two sealed values
   under one prompt, not built. `test/lock-statements-made.test.ts` holds the bodies and the take-over to the model.
-- What moves a chain is `handOver` (views/lock.ts, src/lock-handover.ts), reached by tests and, behind a switch that is
-  off, by itself (below): the call `lock.handOver` answers `unknown_call` unless chains are handed over by themselves
-  (`handsOver`, where the owner's page offers it) or the host says `handOverByTests` (the tests' FakeHost, the e2e
+- What moves a chain is `handOver` (views/lock.ts, src/lock-handover.ts), reached by itself (below) and by tests: the
+  call `lock.handOver` answers `unknown_call` unless chains are handed over by themselves (`handsOver`, where the
+  owner's page offers it) or the host says `handOverByTests` (the tests' FakeHost, the e2e
   device's host; never the environment nor a preference). An owner's own app device, by the signer the chain names it with, its person bound there to their
   log pinned here, says in that log what the state as if moved lacks of the chain's list at its head (`open`, each
   member bound to a log, each station; their own web pages; its signer), in one ask; once a station of the workspace
@@ -240,8 +240,8 @@ another; the accounts' list's merge across stations and its refills.
   their app as it next holds the seed for something they do (personal-lock.ts `#addWebs`, views/lock.ts `websIn`;
   2026-11-14), before the move or after it from the chain as it moved, nobody approving it again: only one their own
   device approved on the chain (by the key that signed it), not run out, off neither the chain nor their log; and,
-  as `web` may not be written yet (rules/AGENTS.md), only where chains are handed over by themselves (`handsOver`) or
-  once a chain of theirs moved. One not said by the move is out till then, told so and whom to ask (`left`), and in at its next hello once
+  as an older station or app refuses a log holding `web` (rules/AGENTS.md), only once their log may hold one
+  (views/lock.ts `mayWriteNew`, below). One not said by the move is out till then, told so and whom to ask (`left`), and in at its next hello once
   said: a page refused is not tried again while it only waits (no timer), so it comes back as it is opened again, or as
   the person presses to ask there: its stations are tried again first, and where one lets it in nothing is asked
   (views/pair.ts `begin`). A member bound
@@ -251,10 +251,25 @@ another; the accounts' list's merge across stations and its refills.
   before its plan and again before the `moved` (`readBound`; of an unmoved chain a station gives them to a device the
   chain lets in, station/src/cloud/state.ts `logsOf`), and its `guard` holds the devices too. `test/lock-handover.test.ts`
   runs it on the station's own code, `test/lock-handover-model.test.ts` holds its plan to the model's handover.
-- A chain is handed over by itself (views/lock.ts `handsOver`) only from `HAND_OVER_FROM` (src/lock-handover.ts; null:
-  never yet, set with the floors once the builds that read `moved`, `ws` and `web` have been out seven days) or on a
-  host made for tests that says `handOverAuto` (never the environment nor a preference; the tests and rounds that call
-  `lock.handOver` themselves do not set it). The owner's (the user, 2026-11-14, 「都按推荐」): the person who turned safe
+- A chain is handed over by itself (views/lock.ts `handsOver`) on every build from `HAND_OVER_FROM` (src/lock-handover.ts,
+  the day it was written; a host made for tests may say `handOverAuto` before it), with no date anyone waits for and
+  nobody told to update (the user, 2026-11-14: 无感迁移, no date, no switch, nobody told to update): each workspace once
+  everything that uses it takes a moved one, one where something still runs an older build going on by its chain as
+  before. Besides the waits below: every station the chain names said it serves `builds` too (`stationsWaited`, shown as
+  those are: the owner can update it); every app device the chain lets in was last seen by one of its stations on a
+  build that takes a moved workspace (`MOVED_FROM_BUILD`, station/src/api/moved-from.ts; one under `COUNTED_FROM` taken
+  as able, none said not), or not for `IDLE_SECS` (src/lock-handover.ts `devicesWaited`, by what its stations said,
+  `lockBuilds`); web pages not waited for (the user, 2026-11-14: one too old is told to reload once moved); and the
+  person may write a kind an older station or app refuses in their own log (views/lock.ts `mayWriteNew`: it holds one
+  already, or every station of every workspace of theirs here said `logs` and `builds` on GET /lock/person and each
+  app device on their log is able or idle, `personBuilds`), before the first statement is said and again before the
+  `moved`, as `#addWebs` waits for it too. The devices' builds and the writer's other workspaces say nothing to anyone
+  (`heldBack`; `handOverState`'s `held` names them for the tests; `lock.handOver` answers `lock_not_ready` in the
+  upgrade's title). For now, each lifted by its own change, nor is a chain with a web page whose person has no app on
+  it (`webOnlyIn`: the page telling them to install one is not drawn yet, and the move would shut them out unsaid),
+  more than `HAND_OVER_MEMBERS_MOST` members bound to a log, or a root's log past `HAND_OVER_LOG_MOST` with the
+  statements (past `LOGS_MOST` and `CHAIN_MOST` a moved workspace is a dead end); a host made for tests that calls
+  `lock.handOver` itself is not held to these three, so what a move does with such a workspace stays run. The owner's (the user, 2026-11-14, 「都按推荐」): the person who turned safe
   mode on (whose device signed the genesis, `genesisPerson`) hands over; another owner's device only once that person
   has not in 14 days from the later of `HAND_OVER_FROM` and the genesis, or is no owner on the chain any more
   (`mayHandOver`); after the move only that person turns safe mode off or on again (`lock_root_only`, as it is); a member
@@ -267,16 +282,17 @@ another; the accounts' list's merge across stations and its refills.
   `moved` follows with no key as the lock is held or the person's lock changes (views/lock.ts `movedBySelf`, through
   `handOver`'s `guard`), once a station of the workspace took it all. Where no ask comes, `handOverState` says `asks`
   and the page offers it once (`upgrade.askText`, `lock.handOver`, which takes a `moved` signed by itself meanwhile as
-  done). While the switch is on, an owner's device reads the logs its chain binds as
+  done). An owner's device reads the logs its chain binds as
   the lock is read (views/lock.ts `readLockOnce`), so the plan never asks the stations itself.
 - A `moved` waits for every station the chain names (the lead, 2026-11-14): a station whose rules do not know `moved`
   refuses it and goes on letting people in by the chain of before, a member taken out after the move too, and the
   floors do not stop that (the device taken out is the one that talks to it). So `moved` is signed, by `movedBySelf`
   and by `lock.handOver` alike (their `guard`), only once each of them said to this device in its GET /lock `serves`
-  that it serves `bodies` and `logs`, never by the version the cloud lists (the cloud is the adversary, and serves the
+  that it serves `bodies`, `logs` and `builds` (what its devices ran, src/lock-handover.ts `devicesWaited`), never by the version the cloud lists (the cloud is the adversary, and serves the
   updates). What each last said is kept beside the lock as it is read (views/lock.ts `keepServes`, `lockServes`), so one
   asleep now that said so before holds nothing up; one that never did (older, or not reached since) does, with no
-  deadline: one gone for good is taken out by an owner and is then not named. The statements are said meanwhile;
+  deadline: one gone for good is taken out by an owner and is then not named. The statements are said meanwhile where
+  the person may write them (`mayWriteNew`: a station of theirs that never said `builds` holds them back too);
   `handOverState` names those waited for (`{waits, stations}`) and `lock.handOver` answers `lock_stations_not_ready`.
 - Nothing the core does by itself (as a lock comes, a retry, a background writer) reads a value sealed for the
   person's presence or asks them: only what a person asked for on this device does, once for it, and what needs such

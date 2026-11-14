@@ -46,10 +46,10 @@ import { tookOut, unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
-import { type ChainWeb, type Device as PersonDevice, type PersonalEnv, type Stated, type Statements, personOf, personRules } from "../personal-lock.ts";
+import { type ChainWeb, type Device as PersonDevice, type PersonalEnv, type Stated, type Statements, checkChain, personOf, personRules } from "../personal-lock.ts";
 import { CHAIN_MOST, type Folded, type InForce, bodyHash, bodyRefused, fold, goodFor, inForce, movedRoot, wsTag } from "../lock-moved.ts";
 import { type Said, bodiesOf, byHash, plan, prevOf } from "../lock-statements.ts";
-import { HAND_OVER_FROM, type HandOverPlan, type Who, handOverPlan, mayHandOver } from "../lock-handover.ts";
+import { type BuildsSeen, HAND_OVER_FROM, HAND_OVER_LOG_MOST, HAND_OVER_MEMBERS_MOST, type HandOverPlan, type Who, devicesWaited, handOverPlan, mayHandOver } from "../lock-handover.ts";
 import { type Act, CLOUD_WRITE_MS, PENDING_MOST, actText, cloudSilent, type Pending, type PendingRow, bounded, pastBound, pendingFields, pendingRow, repeats } from "../lock-pending.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -818,7 +818,9 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
           else p.serving.delete(id);
           if (r._tag === "Success" && arr(get(r.success, "serves")).includes("forks")) p.forks.add(id);
           else p.forks.delete(id);
-          if (r._tag === "Success") keepServes(inner, ws, id, ["bodies", "logs"].every((x) => arr(get(r.success, "serves")).includes(x)));
+          if (r._tag === "Success") keepServes(inner, ws, id, ["bodies", "logs", "builds"].every((x) => arr(get(r.success, "serves")).includes(x)));
+          // (and what it saw of the devices' builds, src/lock-handover.ts `devicesWaited`)
+          if (r._tag === "Success") keepBuilds(inner, LOCK_BUILDS, ws, id, arr(get(r.success, "serves")).includes("builds") ? get(r.success, "builds") : null);
           if (r._tag !== "Success" || !p.serving.has(id)) return null;
           const head = readHead(get(r.success, "head"));
           p.heads.set(id, head);
@@ -1773,13 +1775,12 @@ export function ownLockEnv(inner: Inner): Pick<PersonalEnv, "approved" | "vouche
 /// `genesis`, each `web` device of theirs it names, not run out, nor taken off it; a chain that moved too (it is
 /// frozen as it was and still names them, so a page comes back as its person next does something on their app). One
 /// a page, its `exp` the latest of the chains', `by` the key that signed the entry that named it so there. None until
-/// `web` may be written: a station or app from before `web` refuses a log holding one whole (rules/AGENTS.md: nothing
-/// writes it until its build has been out seven days), so only where a chain of theirs moved, or where chains are
-/// handed over by themselves (`handsOver`).
+/// `web` may be written in their log: a station or app from before `web` refuses a log holding one whole
+/// (rules/AGENTS.md), so only once everything that keeps or reads it takes it (`mayWriteNew`).
 export function websIn(inner: Inner, sub: string, genesis: string): ChainWeb[] {
   const out = new Map<string, ChainWeb>();
   const at = now(inner);
-  if (!handsOver(inner) && !inner.workspaces.owned().some(([ws, owner]) => owner === sub && movedHere(inner, ws))) return [];
+  if (!mayWriteNew(inner, sub)) return [];
   for (const [ws, owner] of inner.workspaces.owned()) {
     const h = held(inner, ws);
     if (owner !== sub || !h?.head) continue;
@@ -2186,7 +2187,9 @@ export function personalStations(inner: Inner): NonNullable<PersonalEnv["station
           // back for it alone, is asked again now. Nothing else would ask it until a lock of theirs next moved.
           if (!before && answered(sub)) inner.runner.fork(ownLockFor(inner, at.workspace));
         });
-        return Effect.tapError(Effect.tap(inner.stations.requests.call(at, "GET", "/lock/person", null, { quiet: true }), (answer) => Effect.andThen(noted, kept(at, answer))), (e) => (e.code === "lock_unconfirmed" ? noted : Effect.void));
+        // (with what it serves and saw of the builds of this person's own devices, `mayWriteNew`)
+        const builds = (answer: unknown) => Effect.sync(() => keepBuilds(inner, PERSON_BUILDS, sub, at.station, ["logs", "builds"].every((x) => arr(get(answer, "serves")).includes(x)) ? get(answer, "builds") : null));
+        return Effect.tapError(Effect.tap(inner.stations.requests.call(at, "GET", "/lock/person", null, { quiet: true }), (answer) => Effect.andThen(Effect.andThen(noted, kept(at, answer)), builds(answer))), (e) => (e.code === "lock_unconfirmed" ? noted : Effect.void));
       };
       return Effect.map(answersOf(inner, asked.map(ask), () => OTHERS_MS, asked.map(String)), (answers) => {
         const ok = answers.filter((r) => r._tag === "Success");
@@ -3051,7 +3054,7 @@ export function sayAdmit(inner: Inner, sub: string, ws: string, meant: Said[], n
 }
 
 /// Which stations of `ws` last said to this device, in their GET /lock's `serves`, that they serve `bodies` and `logs`
-/// (what a moved chain is made of), kept beside the lock (`lockServes`, a few ids) as the lock is read: one asleep now
+/// (what a moved chain is made of) and `builds` (what its devices ran, `heldBack`), kept beside the lock (`lockServes`, a few ids) as the lock is read: one asleep now
 /// that said so before stands; one that answered without them, or was never reached, does not. Never the cloud's word
 /// of their version (the cloud is the adversary, and serves the updates).
 const SERVES = "lockServes";
@@ -3066,8 +3069,91 @@ function keepServes(inner: Inner, ws: string, id: string, serves: boolean): void
   inner.data.put(SERVES, ws, { ready: serves ? [...was, id] : was.filter((x) => x !== id) });
 }
 
-/// The stations the chain `entries` names that have not said to this device they serve `bodies` and `logs`
-/// (`servesHeld`): a `moved` waits for them (the lead's decision, 2026-11-14). A station whose rules do not know
+/// What the stations said of the devices' builds (station/src/mesh/device-builds.ts), kept as they say it: of a
+/// workspace's lock beside it (`lockBuilds`, by the workspace, as its GET /lock is read), of a person's own devices
+/// beside their lock (`personBuilds`, by the person, as their GET /lock/person is read). Per station its `since` (one
+/// that answers without `builds` no longer counted), per device the highest build and the latest sight any of them
+/// said: what a station asleep now said before stands.
+const LOCK_BUILDS = "lockBuilds";
+const PERSON_BUILDS = "personBuilds";
+function buildsHeld(inner: Inner, table: string, key: string): BuildsSeen {
+  const r = inner.data.record(table, key);
+  return isObject(r) && isObject(r.since) && isObject(r.devices) ? (r as unknown as BuildsSeen) : { since: {}, devices: {} };
+}
+/// What station `id` said of the builds as it answered (`said`: its `builds`, null where it serves none): kept, written
+/// only where something changed.
+function keepBuilds(inner: Inner, table: string, key: string, id: string, said: unknown): void {
+  const was = buildsHeld(inner, table, key);
+  const since = { ...was.since };
+  const devices = { ...was.devices };
+  let changed = false;
+  const s = get(said, "since");
+  if (said !== null && typeof s === "number") {
+    if (since[id] !== s) (since[id] = s), (changed = true);
+  } else if (id in since) delete since[id], (changed = true);
+  const told = get(said, "devices");
+  if (isObject(told)) for (const [d, v] of Object.entries(told)) {
+    const build = get(v, "build"), at = get(v, "at");
+    if (typeof build !== "number" || typeof at !== "number") continue;
+    const had = devices[d];
+    if (had !== undefined && had.build >= build && had.at >= at) continue;
+    devices[d] = { build: Math.max(build, had?.build ?? -1), at: Math.max(at, had?.at ?? 0) };
+    changed = true;
+  }
+  if (changed) inner.data.put(table, key, { since, devices });
+}
+
+/// Whether `sub`'s device here may write in their own log a kind a station or app from before refuses whole (a `ws`
+/// statement, a `web`; rules/AGENTS.md): their log holds one already (those refuse it as it is), or every station of
+/// every workspace they are signed in to here (`personStations`, locked or not) said on GET /lock/person that it serves
+/// `logs` and `builds`, and every app device on their log but this one is able or not seen for IDLE_SECS by what those
+/// stations saw (src/lock-handover.ts `devicesWaited`). Not so: nothing new is written, nobody asked, and what would have
+/// been says nothing (the user, 2026-11-14: nobody told to update).
+export function mayWriteNew(inner: Inner, sub: string): boolean {
+  const personal = inner.adb.personal();
+  const log = personal.entries(sub);
+  if (log.some((e) => e.kind === "ws" || e.kind === "web" || e.kind === "web.remove")) return true;
+  const seen = buildsHeld(inner, PERSON_BUILDS, sub);
+  const stations = personStations(inner, sub).map((a) => a.station);
+  if (stations.length === 0 || stations.some((id) => typeof seen.since[id] !== "number")) return false;
+  const mine = personal.keyId();
+  const apps = [...(checkChain(log, sub)?.devices.values() ?? [])].filter((d) => d.key !== mine).map((d) => d.id);
+  return devicesWaited(apps, seen, stations, now(inner)).length === 0;
+}
+
+/// What holds back the handover of `ws`'s chain `entries` by `sub`'s device besides its plan's waits, saying nothing to
+/// anyone (the user, 2026-11-14: 无感迁移, nobody told to update; `handOverState`'s `held` names them for the tests): each
+/// app device the chain lets in but this one not able nor idle by what its stations saw (`lockBuilds`,
+/// src/lock-handover.ts `devicesWaited`); the person not to write in their log yet (`mayWriteNew`); and, for now (each
+/// lifted by its own change, client/core-ts/AGENTS.md), a web page whose person has no app on the chain (`webOnlyIn`:
+/// the page that tells them to install one is not drawn yet), more than HAND_OVER_MEMBERS_MOST members bound to a log,
+/// or the root's log past HAND_OVER_LOG_MOST with the `more` entries the handover is to say. Those for now are not held
+/// to (`forNow` false) only where a host made for tests calls `lock.handOver` itself (`handOverByTests`), so what a
+/// move does with such a workspace stays run until they are lifted.
+function heldBack(inner: Inner, ws: string, sub: string, entries: readonly Entry[], more: number, forNow = true): string[] {
+  if (entries.length === 0) return [];
+  const at = now(inner);
+  let checked: Checked;
+  try {
+    checked = checkLock([...entries], at);
+  } catch {
+    return ["chain"];
+  }
+  const f = fold(entries);
+  const base = bases.get(inner) ?? null;
+  const apps = [...checked.devices].filter(([id, d]) => d.kind === "app" && id !== base).map(([id]) => id);
+  const out = devicesWaited(apps, buildsHeld(inner, LOCK_BUILDS, ws), [...f.stations.keys()], at).map((id) => `device ${id}`);
+  if (!mayWriteNew(inner, sub)) out.push("writer");
+  if (!forNow) return out;
+  if (webOnlyIn(f.devices.values(), at).size > 0) out.push("web only");
+  if (f.persons.size > HAND_OVER_MEMBERS_MOST) out.push("members");
+  if (inner.adb.personal().after(sub).length + more > HAND_OVER_LOG_MOST) out.push("log");
+  return out;
+}
+
+/// The stations the chain `entries` names that have not said to this device they serve `bodies`, `logs` and `builds`
+/// (`servesHeld`): a `moved` waits for them (the lead's decision, 2026-11-14; `builds` the owner's, 2026-11-14: one that
+/// holds the move back is shown, as these are). A station whose rules do not know
 /// `moved` refuses that entry and goes on letting people in by the chain of before (a member taken out after the move
 /// too, whose device is the one that talks to it): so `moved` is signed only once every station the chain names said
 /// so. No deadline: one gone for good is taken out of the workspace by an owner, and is then not named.
@@ -3081,8 +3167,9 @@ export function stationsWaited(inner: Inner, ws: string, entries: readonly Entry
 export const stationsNotReady = (inner: Inner, ws: string, ids: readonly string[]): CoreError =>
   new CoreError("lock_stations_not_ready", waitedLines(inner, ws, { waits: [], stations: ids }).join(t("core-misc.lock.listSep")), 409);
 
-/// Whether chains are handed over by themselves here: from HAND_OVER_FROM by this device's clock (src/lock-handover.ts;
-/// null, never yet), or on a host made for tests that says so (`Host.handOverAuto`).
+/// Whether chains are handed over by themselves here: from HAND_OVER_FROM by this device's clock (src/lock-handover.ts:
+/// on every build from it, each workspace once what uses it takes a moved one, `heldBack`), or on a host made for tests
+/// that says so before it (`Host.handOverAuto`).
 export function handsOver(inner: Inner): boolean {
   return inner.host.handOverAuto === true || (HAND_OVER_FROM !== null && now(inner) >= HAND_OVER_FROM);
 }
@@ -3095,6 +3182,10 @@ const HAND_OVER_ROUNDS = 3;
 /// and not on their log): the lines the owner's page shows of them (`waitedLines`), joined.
 export const notReady = (inner: Inner, ws: string, w: { waits: readonly string[]; devices?: readonly { sub: string; id: string }[] }): CoreError =>
   new CoreError("lock_not_ready", waitedLines(inner, ws, { ...w, stations: [] }).join(t("core-misc.lock.listSep")), 409);
+/// What `lock.handOver` answers where only what says nothing holds it back (`heldBack`): waiting as `lock_not_ready`
+/// waits, in the words the page says of an upgrade not done (none of what holds it back is said: nobody is told to
+/// update, the user, 2026-11-14).
+const heldNotReady = (): CoreError => new CoreError("lock_not_ready", t("core-misc.lock.upgrade.title"), 409);
 /// The ask of a handover's statements: what the person is asked for, as the page's button says it.
 const handOverReason = () => t("core-misc.lock.reason.handOver");
 
@@ -3126,7 +3217,8 @@ function waitedLines(inner: Inner, ws: string, w: { waits: readonly string[]; de
 /// (`askText`, `lock.handOver`). None while the `moved` is on its way, once moved, and on any other device.
 function upgradeOf(inner: Inner, ws: string): J | null {
   const s = handOverWhere(inner, ws);
-  if (s === null || "moving" in s) return null;
+  // (held back by what says nothing to anyone, `heldBack`: no line, no button)
+  if (s === null || "moving" in s || "held" in s) return null;
   const titleText = t("core-misc.lock.upgrade.title");
   return "asks" in s ? { titleText, lines: [], askText: t("core-misc.lock.upgrade.ask") } : { titleText, lines: waitedLines(inner, ws, s) };
 }
@@ -3180,6 +3272,7 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
     };
     const refusal = (p: HandOverPlan): CoreError | null => ("refused" in p ? notAllowed() : "waits" in p ? notReady(inner, ws, p) : null);
     const salt = () => saltHex(inner);
+    const byTests = inner.host.handOverByTests === true;
     for (let round = 0; round < HAND_OVER_ROUNDS; round++) {
       // (what a call before said that no station took yet: brought now, and waited on)
       if (personal.waitingIn(sub, ws) !== null) {
@@ -3187,9 +3280,18 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
         const waiting = personal.waitingIn(sub, ws);
         if (waiting !== null) return { pending: waiting };
       }
+      // (moved by itself meanwhile, `movedBySelf`, as what was pending was taken: handed over, as asked)
+      if (movedHere(inner, ws)) return null;
       const p = planOf(held(inner, ws)?.entries ?? [], personal.after(sub));
       const no = refusal(p);
       if (no !== null || "refused" in p || "waits" in p) return yield* Effect.fail(no ?? notAllowed());
+      // (held back saying nothing, `heldBack`: answered as a handover waiting is, in the page's words of an upgrade not
+      // done, nothing said and nobody asked)
+      if (heldBack(inner, ws, sub, held(inner, ws)?.entries ?? [], p.says.length + p.webs.length, !byTests).length > 0) {
+        // (a station of the chain that holds it back is named, as before the `moved`)
+        const waited = stationsWaited(inner, ws, held(inner, ws)?.entries ?? []);
+        return yield* Effect.fail(waited.length > 0 ? stationsNotReady(inner, ws, waited) : heldNotReady());
+      }
       for (const u of p.unsaid) if (notedRole(inner, ws, sub, u.sub, u.email) === null) note(inner, ws, sub, u.sub, u.role);
       const restate = personal.signKeys(sub).get(base)?.sign_key !== signer.id;
       if (p.says.length > 0 || p.webs.length > 0 || restate) {
@@ -3205,9 +3307,12 @@ export function handOver(inner: Inner, sub: string, ws: string): Effect.Effect<u
       }
       // The `moved`, once every statement is taken: its target made again in the turn, from the head it goes after.
       const guard = (entries: readonly Entry[]): CoreError | null => {
+        // (moved meanwhile by itself, `movedBySelf`: handed over, as asked, below)
+        if (movedRoot(entries) !== null) return lockMoved();
         const q = planOf(entries, personal.entries(sub));
         if ("refused" in q || "waits" in q) return refusal(q);
         if (q.says.length > 0 || q.webs.length > 0) return new CoreError(LACKING, "what is to be said changed");
+        if (heldBack(inner, ws, sub, entries, 0, !byTests).length > 0) return heldNotReady();
         const waited = stationsWaited(inner, ws, entries);
         return waited.length > 0 ? stationsNotReady(inner, ws, waited) : null;
       };
@@ -3271,6 +3376,8 @@ export function handOversIn(inner: Inner, sub: string): { ws: string; make: Stat
       make: (after) => {
         const q = planHere(inner, ws, who, held(inner, ws)?.entries ?? [], after);
         if ("refused" in q || "waits" in q) return new CoreError("lock_not_ready", "refused" in q ? q.refused : `waits for ${q.waits.join(", ")}`);
+        const back = heldBack(inner, ws, sub, held(inner, ws)?.entries ?? [], q.says.length + q.webs.length);
+        if (back.length > 0) return new CoreError("lock_not_ready", `held back: ${back.join(", ")}`);
         for (const u of q.unsaid) if (notedRole(inner, ws, sub, u.sub, u.email) === null) note(inner, ws, sub, u.sub, u.role);
         const bodies = bodiesOf(ws, q.says, after, byHash(bodiesHeld(inner, ws)), () => saltHex(inner));
         return { bodies, shown: handOverShown(inner, ws, bodies.length), also: q.webs.map((w) => ({ kind: "web" as const, body: w })) };
@@ -3300,10 +3407,10 @@ export function movedBySelf(inner: Inner, ws: string): Effect.Effect<void> {
     const who = whoHere(inner, sub);
     if (who === null || personal.waitingIn(sub, ws) !== null || personal.signKeys(sub).get(who.base)?.sign_key !== who.signer) return;
     const q = planHere(inner, ws, who, held(inner, ws)?.entries ?? [], personal.entries(sub));
-    if (!("says" in q) || q.says.length > 0 || q.webs.length > 0 || stationsWaited(inner, ws, held(inner, ws)?.entries ?? []).length > 0) return;
+    if (!("says" in q) || q.says.length > 0 || q.webs.length > 0 || stationsWaited(inner, ws, held(inner, ws)?.entries ?? []).length > 0 || heldBack(inner, ws, sub, held(inner, ws)?.entries ?? [], 0).length > 0) return;
     const guard = (entries: readonly Entry[]): CoreError | null => {
       const p = planHere(inner, ws, who, entries, personal.entries(sub));
-      return "refused" in p || "waits" in p || p.says.length > 0 || p.webs.length > 0 || stationsWaited(inner, ws, entries).length > 0 ? new CoreError(LACKING, "not to be moved by itself now") : null;
+      return "refused" in p || "waits" in p || p.says.length > 0 || p.webs.length > 0 || stationsWaited(inner, ws, entries).length > 0 || heldBack(inner, ws, sub, entries, 0).length > 0 ? new CoreError(LACKING, "not to be moved by itself now") : null;
     };
     busy.add(ws);
     yield* Effect.ensuring(
@@ -3320,14 +3427,14 @@ export function movedBySelf(inner: Inner, ws: string): Effect.Effect<void> {
 /// and `stations`, those the chain names that have not said they serve what a moved chain is made of
 /// (`stationsWaited`: what is to be said is said meanwhile, the `moved` waits), either empty, not both, no deadline; `asks`, something is still to be said and no ask of the person's own lock's key came yet (what the
 /// security page will offer); `moving`, all said, the `moved` not taken yet. Worked out as read, of what is held.
-export function handOverState(inner: Inner, ws: string): null | { waits: string[]; stations: string[] } | { asks: true } | { moving: true } {
+export function handOverState(inner: Inner, ws: string): null | { waits: string[]; stations: string[] } | { held: string[] } | { asks: true } | { moving: true } {
   const s = handOverWhere(inner, ws);
   return s !== null && "waits" in s ? { waits: s.waits, stations: s.stations } : s;
 }
 
 /// `handOverState`, with the devices of members waited for that the chain names and their log does not (the plan's
 /// `devices`), which the owner's page names (`upgradeOf`).
-function handOverWhere(inner: Inner, ws: string): null | { waits: string[]; devices?: { sub: string; id: string }[]; stations: string[] } | { asks: true } | { moving: true } {
+function handOverWhere(inner: Inner, ws: string): null | { waits: string[]; devices?: { sub: string; id: string }[]; stations: string[] } | { held: string[] } | { asks: true } | { moving: true } {
   const sub = inner.workspaces.owner(ws);
   if (sub === null || movedHere(inner, ws) || !handingOver(inner, ws, sub)) return null;
   const who = whoHere(inner, sub);
@@ -3337,6 +3444,8 @@ function handOverWhere(inner: Inner, ws: string): null | { waits: string[]; devi
   if ("refused" in q) return null;
   const stations = stationsWaited(inner, ws, held(inner, ws)?.entries ?? []);
   if ("waits" in q || stations.length > 0) return { waits: "waits" in q ? q.waits : [], ...("waits" in q && q.devices !== undefined ? { devices: q.devices } : {}), stations };
+  const back = heldBack(inner, ws, sub, held(inner, ws)?.entries ?? [], q.says.length + q.webs.length);
+  if (back.length > 0) return { held: back };
   return q.says.length > 0 || q.webs.length > 0 || personal.signKeys(sub).get(who.base)?.sign_key !== who.signer ? { asks: true } : { moving: true };
 }
 
