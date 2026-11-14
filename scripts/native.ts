@@ -319,6 +319,21 @@ function ghosttyVt(): Part {
   };
 }
 
+/// A crate that links libghostty-vt where it is made for macOS or Linux: that build of it is in its key, and its build
+/// is told where it is (GHOSTTY_VT_DIR, which the crate's build.rs reads).
+function withGhosttyVt(part: Part): Part {
+  const linked = (t: Target) => t === "darwin-arm64" || LINUX(t);
+  return {
+    ...part,
+    recipe: (t) => ({ ...(part.recipe(t) as object), ...(linked(t) ? { ghosttyVt: key("ghostty-vt", t) } : {}) }),
+    build(t, out) {
+      const before = process.env.GHOSTTY_VT_DIR;
+      if (linked(t)) process.env.GHOSTTY_VT_DIR = ensure("ghostty-vt", t);
+      try { part.build(t, out); } finally { if (before === undefined) delete process.env.GHOSTTY_VT_DIR; else process.env.GHOSTTY_VT_DIR = before; }
+    },
+  };
+}
+
 /// An mbui offscreen program and its portable launcher. The sources are conservative: a change to an app component or
 /// the framework selects a new binary. A separate scene or drive file is never part of the key.
 function mbuiRenderer(app: string, launcher: string): Part {
@@ -387,7 +402,8 @@ const PARTS: Record<string, Part> = {
   // The TypeScript station's launcher (§2) and an agent's runner (§1).
   // On Windows with stillfail-station-w.exe beside it: the launcher as the logon task runs it, with no window.
   launcher: withHidden(stationCrate("station/native/launcher", exe("stillfail-station"), exe("stillfail-station"))),
-  runner: { ...stationCrate("station/native/runner", exe("stillfail-runner"), exe("stillfail-runner")), targets: STATION_BINS, env: "STILLFAIL_RUNNER" },
+  // On macOS and Linux with libghostty-vt linked, the screen of a terminal it keeps (its build.rs, src/ghostty.rs).
+  runner: withGhosttyVt({ ...stationCrate("station/native/runner", exe("stillfail-runner"), exe("stillfail-runner")), targets: STATION_BINS, env: "STILLFAIL_RUNNER" }),
   // Windows' display as the station's desktop screen, what still.fail Helper is on macOS.
   screen: { ...stationCrate("station/native/screen", () => "stillfail-screen.exe", "stillfail-screen.exe"), targets: ["win32-x64"], env: "STILLFAIL_SCREEN" },
   // For the station's tests: the Rust station's cold storage as a command (test/cold-compat.test.ts), and a member's
