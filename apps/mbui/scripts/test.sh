@@ -423,7 +423,12 @@ for t in $targets; do
           # last; the third's pages on its one program 249 s at 354; the first's 146 s at 800 and the second's 184 s at
           # 717 on their four and two (#6134, 43568641653, 43569987964). So the third reckoned 1400 and the fourth 900:
           # by the table the first's pages some 1060 s, the second's 830, the third's 260, the fourth's 760)
-          *) specs="4,4,600,1 2,4,430,1 1,4,1400,1 4,4,900,1" ;;
+          # (but the third at 1400 took the many short files, its pages on its one program a process each, one after
+          # another: 115 files 287 s of a job 295 s of its 5 minutes on main 0ebf623b 43573188215, where at 700 it had
+          # 41-45 files, 138-197 s. A file's time in the table leaves out its process's start, which on one program
+          # adds up. The third reckoned 700 again, the fourth kept at 900: by the table the third's pages 343 s in 112
+          # files to 385 in 43, the first's 943 in 130 to 942 in 158, on its four programs)
+          *) specs="4,4,600,1 2,4,430,1 1,4,700,1 4,4,900,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
