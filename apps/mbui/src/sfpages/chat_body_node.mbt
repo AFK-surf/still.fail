@@ -489,6 +489,17 @@ fn chat_body_node(
       // (mine_bubble_node's flies_from); mbui's View::scrolls_window `comes_whole`, the coordinator of the migration,
       // 2026-11-14; the flight, the owner, 2026-11-15: 「没有飞行动效」)
       comes_whole=fn(k) { kept.here.contains(k) },
+      // (and the list's one way of that moment on its bubble's rise, not a Move: the bubble and all the list rising as one
+      // (sfbase's flight_up: the flight's length, its rise 12% late on the flight's ease); mbui's View::scrolls_window
+      // `comes_way`, the coordinator of the migration, 2026-11-14)
+      comes_way=fn(k) {
+        if kept.here.contains(k) {
+          // det-ok(motion-length): words sent's own, their flight's (message_words_node's flies_in), sf/motion.mbt kind 4
+          Some((@sfbase.flight_desk_ms, fn(x) { @ui.Flight.at(@sf.dmax((x - sent_up_late) / (1.0 - sent_up_late), 0.0)) }))
+        } else {
+          None
+        }
+      },
       // (what shows held by what is read: not by the row saying the page before comes, which what comes in is put in
       // under, going on down with what shows)
       holds=fn(k) { k != "older" },

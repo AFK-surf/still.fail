@@ -8948,6 +8948,12 @@ fn View::comes(
       tree.come_ways_lead[v.at] = w
       Some(w)
     }
+    // (said again in the same change, from elsewhere (as a send sets it out from what is given back): still its page's)
+    (None, None) if to > 0.0 && n.coming && st.come_at == at =>
+      match tree.come_ways_lead.get(v.at) {
+        Some(w) => Some(w)
+        None => spec
+      }
     _ => spec
   }
   st.come_spec = spec
