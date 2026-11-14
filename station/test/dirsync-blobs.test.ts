@@ -24,7 +24,7 @@ test("interleaved pieces are verified in order, with other contents and retries"
   }
 });
 
-test("a bad content is refused and no in-flight write survives the failed request", async () => {
+test("a bad content is refused and the request can be retried", async () => {
   const dir = await mkdtemp(join(tmpdir(), "dirsync-blobs-"));
   try {
     const good = Array.from({ length: 20 }, (_, i) => Buffer.from(`content-${i}`));
@@ -33,6 +33,7 @@ test("a bad content is refused and no in-flight write survives the failed reques
     const index = [[expected, wrong.length, 0, wrong.length], ...good.map((b) => [blobId(b), b.length, 0, b.length])];
     await assert.rejects(putBlobs(dir, index, zstdCompressSync(Buffer.concat([wrong, ...good]))), /does not match its id/);
     assert.ok(!(await readdir(dir)).includes(`${expected}.part`));
+    assert.ok((await readdir(dir)).every((name) => !name.endsWith(".part")));
     // A retry can complete all contents, including ones already written by the failed request.
     const right = Buffer.from("right");
     assert.equal(await putBlobs(dir, index, zstdCompressSync(Buffer.concat([right, ...good]))), index.length);

@@ -506,7 +506,7 @@ export async function putBlobs(blobs: string, index: Json, packed: Buffer): Prom
   let failed = false;
   const put = async ({ hash, size, offset, length, piece }: PieceToPut) => {
     const done = join(blobs, hash);
-    if (existsSync(done)) return;
+    if (await stat(done).then(() => true, () => false)) return;
     const part = `${done}.part`;
     let has = 0;
     try {
