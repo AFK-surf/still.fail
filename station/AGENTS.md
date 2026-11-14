@@ -113,6 +113,10 @@
   CRDT library (it grows, and every station would have to compact it together). With no version both came from (each
   station's memory of before) MEMORY.md's lines, and a file both kept on since it was copied, are put together each
   line once; skills of one name and nothing alike are kept apart as `<name>-<station>` (the user, 2026-11-14).
+  Two versions of one history whose common version a station does not keep (and the other could not give) keep
+  every line of both: a merge never drops what either had. `test/memory-sync-random.test.ts` holds it over random
+  worlds (`MEMORY_RANDOM_SEEDS` for more; it fails on 0.1.9133's code), `test/memory-sync-upgrade.test.ts` that what
+  0.1.9133 to 0.1.9168 left (a skill kept apart twice, a station's own file moved) is mended (`#mend`).
 
 ## How a workspace's devices reach its stations (its ways)
 
