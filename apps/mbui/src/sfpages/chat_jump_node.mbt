@@ -392,7 +392,11 @@ fn chat_ask_node(
     (if chat_jumps(jump, view) { float_above } else { 0.0 }) +
     (if chat_outlines(src, jump, view) { float_above } else { 0.0 })
   }
-  chat_float_stand(foot, width, lift, shown, fn(o) {
+  // (over the round buttons under it: as one comes or goes, it moves there from where it is on a Move, set off at
+  // their cause, as the old page's chat-ask/lift)
+  let lifted = @motion.Way::new(@signals.untracked(lift))
+  foot.reacts(lift, fn(to) { lifted.go(to, @sf.move_spring, at=foot.cause_at()) }, at_start=false)
+  chat_float_stand(foot, width, fn() { lifted.shown_on(foot) }, shown, fn(o) {
     let press = fn() {
       let asks = asks_of(@signals.untracked(view))
       guard asks.length() > 0 else { return }

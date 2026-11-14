@@ -1311,7 +1311,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // go as last laid out, a column moved in its fill for what came in or grew over what shows (Scroll::grew_above)
   // further than that was read at its foot before that layout said how far it goes now, and taken there: what was
   // read 100 off its foot gone as a block 150 taller than counted came in at its top.)
+  // (held by a block's top a standing limit says, binding as last laid out (ListPlace::follow_from): off its foot then to
+  // every rule of it, however near the foot it lies)
+  let capped = @signals.signal(false, same=fn(a, b) { a == b })
   let at_most = @signals.computed(fn(_) {
+    guard !capped.get() else { return false }
     guard s.seen.get() is Some((_, vh)) else { return false }
     let all = places(laid.get())
     top_now(all, at()) >= foot_top(all, vh) - 0.5 && s.rest_now() is None && s.glides_till() is None
@@ -1321,6 +1325,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // where it would be at its foot. By its own blocks, so in the same layout as one measured anew or grown there, as
   // its near_foot is; not by how far the scroll went as last laid out, which a block come or grown has not reached yet)
   let at_foot_now = @signals.computed(fn(_) {
+    if capped.get() {
+      return false
+    }
     if s.x.get() == @double.infinity {
       return true
     }
@@ -2068,6 +2075,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         // of as the hand brings it back to its foot; an ask this list put back as it was cut short by its foot still
         // going down let go of, the list where the hand put it: not one its page gave anew)
         s.held = false
+        // (a limit its foot was followed by let go of: the reader took the list, to its foot or not)
+        match place {
+          Some(p) => p.from = None
+          None => ()
+        }
         match (place, ask_cut_was.val) {
           (Some(p), Some(was)) if ask_cut.val && p.asked is Some(a) && physical_equal(a, was) => {
             p.asked = None
@@ -2212,7 +2224,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       follows_foot = false
       held = false
     }
-    // (its foot followed no further than a block's top `margin` under where it shows from: held there, off its foot,
+    // (its foot followed no further than a block's top `margin` under what covers its top: held there, off its foot,
     // once it would go further, and followed no further after)
     // (held at its foot by a field in a row, the room it shows in another than as it was last so held: what shows held
     // from that room's foot, at its foot still)
@@ -2222,10 +2234,30 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         aoff = aoff + (row_vh.val - vh_now)
       }
     }
+    // (a standing limit: its key met among the keys, gone from them after that, the limit with it)
     let from = match place {
-      Some(p) => p.from.bind(fn(f) { laid_at.get(f.0).map(fn(i) { (i, f.1) }) })
+      Some(p) =>
+        match p.from {
+          Some((k, margin)) =>
+            match laid_at.get(k) {
+              Some(i) => {
+                p.from_met = true
+                Some((i, margin))
+              }
+              None => {
+                if p.from_met {
+                  p.from = None
+                  p.from_met = false
+                }
+                None
+              }
+            }
+          None => None
+        }
       None => None
     }
+    let was_capped = capped.untracked()
+    let mut binds = false
     let mut top = 0.0
     let mut vh = 0.0
     let mut again = true
@@ -2307,18 +2339,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         _ => 0.0
       }
       top = if follows_foot || to_end { most } else { dclamp(all.top(ai) + aoff + moved, 0.0, most) }
+      // (its margin under what covers its top, as a block brought is: ListPlace::follow_from)
+      let from_edge = fn(margin : Double) { margin + @signals.untracked(fn() { s.top_covered() }) }
+      binds = false
       match from {
-        Some((i, margin)) if follows_foot && i < all.length() && all.top(i) - margin < most => {
-          top = dmax(0.0, all.top(i) - margin)
+        Some((i, margin)) if (follows_foot || was_capped) &&
+          !asked &&
+          i < all.length() &&
+          all.top(i) - from_edge(margin) < most => {
+          top = dmax(0.0, all.top(i) - from_edge(margin))
           follows_foot = false
-          // (held by it from now, as it is measured anew in this fill too)
+          // (held by it while it binds, as it is measured anew in this fill too)
           ai = i
-          aoff = -margin
-          asked = true
-          match place {
-            Some(p) => p.from = None
-            None => ()
-          }
+          aoff = -from_edge(margin)
+          binds = true
         }
         _ => ()
       }
@@ -2400,6 +2434,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         self.tree.room_bindings_run()
       }
     }
+    capped.set(binds)
     if pin_ends.val {
       pin_ends.val = false
       pin.val = None
@@ -2627,6 +2662,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       // ask cut short by its foot still going down was put back, the next fill going on with it)
       if !follows_foot &&
         !held &&
+        !binds &&
         !ask_cut.val &&
         !has_pin &&
         @signals.untracked(follows) &&
@@ -3272,8 +3308,11 @@ priv enum ListAsk[K] {
 /// asked before the block is among its keys waits for it; a later one in its place.
 pub struct ListPlace[K] {
   priv mut asked : ListAsk[K]?
-  /// its foot followed no further than this block's top so far under where it shows from (ListPlace::follow_from)
+  /// its foot followed no further than this block's top so far under what covers its top (ListPlace::follow_from): a
+  /// standing limit, kept as it takes hold, till the hand takes the list, an ask, another said, or its key goes
   priv mut from : (K, Double)?
+  /// whether the key `from` names has been among the keys since it was said (gone after that, the limit goes with it)
+  priv mut from_met : Bool
   priv mut laid_again : () -> Unit
   priv mut glide : (ListAsk[K]) -> Bool
   /// what is told what is in sight as that changes (ListPlace::on_sight), what was told last (ListPlace::sight_now),
@@ -3287,7 +3326,7 @@ pub struct ListPlace[K] {
 ///|
 /// One for a page's list, asking nothing yet.
 pub fn[K] ListPlace::new() -> ListPlace[K] {
-  { asked: None, from: None, laid_again: fn() {  }, glide: fn(_) { false }, sight_fns: [], sight: None, sight_of: fn() { None }, sight_listened: fn() {  } }
+  { asked: None, from: None, from_met: false, laid_again: fn() {  }, glide: fn(_) { false }, sight_fns: [], sight: None, sight_of: fn() { None }, sight_listened: fn() {  } }
 }
 
 ///|
@@ -3328,10 +3367,20 @@ pub fn[K] ListPlace::to_end(self : ListPlace[K], glide? : Bool = true) -> Unit {
 }
 
 ///|
-/// Its foot, where its list follows it, followed no further than block `key`'s top `margin` under the top of where it
-/// shows (Ctx::list_follow_from's: a message come while it is at its foot read from its start); held there, off its
-/// foot, once it would go further. None: followed all the way again.
+/// Its foot, where its list follows it, followed no further than block `key`'s top `margin` under what covers its top
+/// (Scroll::top_covered: the bar it runs under; none, its own top), as a block brought is (Ctx::list_follow_from's: a
+/// message come while it is at its foot read from its start). A standing limit (the coordinator of the migration,
+/// 2026-11-14): not used up as it takes hold, it stands till the hand takes the list (a drag, the wheel, a key that
+/// scrolls, the bar's thumb; to its foot too: the reader's choice, followed from there), an ask (`bring`, `centre`,
+/// `to_end`, a glide), another said here (or None), or its key is no longer among the keys. While it stands and binds
+/// (that top would go over the margin at its foot), the list is held by that top at the margin and is off its foot to
+/// every rule of its foot, however near the foot it lies (Scroll::at_foot_now false, a key come after not followed),
+/// from the frame it would go further, however its key comes (on its way or at once) or grows; while it stands and does
+/// not bind (all from that key down fits), the list is at its foot as any, following it, held again as it comes to
+/// bind. None: followed all the way again. (Counted from the list's own top till 2026-11-14, when only its own test
+/// said it, under no cover.)
 pub fn[K] ListPlace::follow_from(self : ListPlace[K], key : K?, margin? : Double = 0.0) -> Unit {
   self.from = key.map(fn(k) { (k, margin) })
+  self.from_met = false
   (self.laid_again)()
 }
