@@ -152,7 +152,7 @@ pub fn chat_page_body_node(
         foot~,
         composer?,
         lead~,
-        read=fn(place, rows) { chat_read_node(o, src, r, view, place, rows, shows, cover) },
+        read=fn(place, scroll, rows) { chat_read_node(o, src, r, view, place, scroll, rows, shows, cover) },
         to=r,
         shows~,
       )
