@@ -356,11 +356,11 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
         ]),
       )
   }
-  c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
-    c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
-      // (short of room, how it is reached and what its latency is called are cut short; the figures are not)
+  c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, justify=JBetween, flow=true, line_gap=2.0, fn() {
+    c.box(dir=Row, w=Cut, gap=6.0, align=ACenter, fn() {
+      // (short of room, what its latency is called is cut short; how it is reached and the figures are not)
       c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-        c.text(text(n, "path"), size=t.t.meta, color=t.p.muted, wrap=false, line=18.0, w=Cut) |> ignore
+        c.text(text(n, "path"), size=t.t.meta, color=t.p.muted, wrap=false, line=18.0) |> ignore
         match field(n, "loss") {
           Some(Object(_)) as l =>
             c.text(text(l, "text"), size=@sf.theme().t.meta, weight=500, color=tone(l), wrap=false, line=18.0) |> ignore
@@ -370,7 +370,7 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
       |> ignore
       match field(n, "rtt") {
         Some(Object(_)) as r =>
-          c.box(dir=Row, gap=4.0, align=ACenter, fn() {
+          c.box(dir=Row, w=Cut, gap=4.0, align=ACenter, fn() {
             c.text("·", size=t.t.meta, color=t.p.muted, wrap=false, line=18.0) |> ignore
             c.text(tr("android-settings.stations.rtt"), size=t.t.meta, color=t.p.muted, wrap=false, line=18.0, w=Cut) |> ignore
             c.text(text(r, "text"), size=@sf.theme().t.meta, weight=500, color=tone(r), wrap=false, line=18.0) |> ignore

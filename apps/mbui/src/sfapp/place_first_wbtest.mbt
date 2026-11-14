@@ -320,7 +320,7 @@ test "a place of the bar in view shows what the device holds the first time it i
 ///|
 /// What Station draws in its bones when all but how each station up is reached is held (stationNet, asked only from its
 /// tab: bars.mbt place_reads): the network line of each online station of the fixture's, its bars, nothing else.
-let station_net_bones : Int = 16
+let station_net_bones : Int = 15
 
 ///|
 test "Station left before the core said how its stations are reached: come back to, its network line still alone in its bones (nothing said to keep), the rest as the device holds it" {

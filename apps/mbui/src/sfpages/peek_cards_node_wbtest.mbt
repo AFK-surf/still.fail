@@ -253,7 +253,7 @@ fn peek_faded_apart(faults : Array[String], name : String) -> (Array[String], Ar
 
 ///|
 /// How many such a reconnecting station's card has: its three chips' marks and figures, its network's words.
-let peek_faded_faults : Int = 15
+let peek_faded_faults : Int = 14
 
 ///|
 test "a station's card as nodes: the same words where they were and the same rectangles as the old card's, in each state" {

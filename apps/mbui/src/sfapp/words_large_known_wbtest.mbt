@@ -16,24 +16,15 @@ let words_large_known : Map[String, Int] = {
     ("phone-zh search-results", 7),
     ("phone-zh chat-preview-csv", 6),
     ("phone-zh chat-screens", 4),
-    ("phone-zh place-stations", 1),
     ("phone-zh share-card", 3),
     ("phone-zh share-card-dark", 3),
     ("phone-zh settings-workspace", 1),  // was 0, +1 (g) page_node.mbt:935 / workspace_page.mbt:397 真问题，待修
-    ("phone-zh settings-stations", 1),
-    ("phone-zh settings-stations-add", 1),
-    ("phone-zh settings-stations-existing", 1),
-    ("phone-zh settings-stations-command", 1),
     ("phone-zh settings-new-connect-platform", 1),
     ("phone-zh settings-kept", 1),
     ("phone-zh settings-kept-many", 1),
     ("phone-zh settings-vault-words", 14),
     ("phone-zh settings-add-people", 1),  // was 0, +1 (g) page_node.mbt:935 / workspace_page.mbt:397 真问题，待修
     ("phone-zh settings-workspace-mark", 1),  // was 0, +1 (g) page_node.mbt:935 / workspace_page.mbt:397 真问题，待修
-    ("phone-zh settings-stations-tasks", 1),
-    ("phone-zh place-stations-tasks", 1),
-    ("phone-zh settings-stations-devices", 1),
-    ("phone-zh place-stations-devices", 1),
     ("phone-zh settings-run", 1),
     ("phone-zh share-card-poster", 3),
     ("phone-zh share-card-receipt", 3),
@@ -74,14 +65,9 @@ let words_large_known : Map[String, Int] = {
     // of its nodes again as the tree's squeeze came to say what shares their row; it was 1 before its panel became nodes)
     ("phone-en chat-station-sheet", 1),
     ("phone-en drive-upload", 1),
-    ("phone-en place-stations", 1),
     ("phone-en share-card", 3),
     ("phone-en share-card-dark", 3),
     ("phone-en screen-files-done", 2),
-    ("phone-en settings-stations", 1),
-    ("phone-en settings-stations-add", 1),
-    ("phone-en settings-stations-existing", 1),
-    ("phone-en settings-stations-command", 1),
     ("phone-en settings-profile-signin", 1),  // was 0, +1 (e) accounts.mbt:601 真问题，待修
     ("phone-en settings-new-connect-app", 1),
     ("phone-en settings-memory-doc", 1),  // was 0, +1 (g) page_node.mbt:1267 真问题，待修
@@ -89,10 +75,6 @@ let words_large_known : Map[String, Int] = {
     ("phone-en settings-kept-many", 1),
     ("phone-en settings-vault-words", 14),
     ("phone-en settings-vault-add", 1),
-    ("phone-en settings-stations-tasks", 1),
-    ("phone-en place-stations-tasks", 1),
-    ("phone-en settings-stations-devices", 1),
-    ("phone-en place-stations-devices", 1),
     ("phone-en settings-run", 1),
     ("phone-en settings-about", 1),  // was 0, +1 (g) page_node.mbt:1267 真问题，待修
     ("phone-en settings-notify-denied", 1),  // was 0, +1 (g) notify_node.mbt:671 真问题，待修

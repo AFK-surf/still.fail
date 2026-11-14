@@ -703,11 +703,12 @@ fn net_line_node(p : @view.View, net : () -> Json?) -> Unit {
   let muted = fn() { @sf.theme().p.muted }
   p.box(fn(row) {
     @sf.style_node(row, fn() { net_row })
+    row.wraps(Is(Some(2.0))) |> ignore
     row.box(fn(left) {
       @sf.style_node(left, fn() { net_left }, in_row=true)
       left.box(fn(l) {
         @sf.style_node(l, fn() { net_path })
-        net_words_node(l, fn() { text(n(), "path") }, muted, cut=true)
+        net_words_node(l, fn() { text(n(), "path") }, muted)
         l.show(fn() { field(n(), "loss") is Some(Object(_)) }, fn(x) {
           net_words_node(x, fn() { text(field(n(), "loss"), "text") }, tone(fn() { field(n(), "loss") }), weight=500)
         })
@@ -715,7 +716,8 @@ fn net_line_node(p : @view.View, net : () -> Json?) -> Unit {
       |> ignore
       left.show(fn() { field(n(), "rtt") is Some(Object(_)) }, fn(x) {
         x.box(fn(l) {
-          @sf.style_node(l, fn() { net_rtt })
+          @sf.style_node(l, fn() { net_rtt }, in_row=true)
+          net_words_node(l, fn() { "·" }, muted)
           net_words_node(l, fn() { tr("android-settings.stations.rtt") }, muted, cut=true)
           net_words_node(l, fn() { text(field(n(), "rtt"), "text") }, tone(fn() { field(n(), "rtt") }), weight=500)
         })
@@ -725,28 +727,11 @@ fn net_line_node(p : @view.View, net : () -> Json?) -> Unit {
     |> ignore
     row.box(fn(right) {
       @sf.style_node(right, fn() { net_right }, in_row=true)
-      for way in [("↑", "up", "upTotal"), ("↓", "down", "downTotal")] {
+      for way in [("↑", "up"), ("↓", "down")] {
         right.box(fn(l) {
           @sf.style_node(l, fn() { net_way })
           net_words_node(l, fn() { way.0 }, muted)
-          // (5 before it, then 68 for it: Stations.kt padding(start = 5.dp).width(68.dp); the 68 as much wider as its
-          // words are drawn bigger by the system's size of words, so ↑'s and ↓'s stay whole and in one column, the
-          // totals in one after them)
-          l.box(fn(sp) {
-            sp
-            .width(By(fn() {
-              let size = @sf.theme().t.meta
-              Some(net_speed_pad + net_speed_w * @sf.node_sp(sp, size) / size)
-            }))
-            .padding(Is((net_speed_pad, 0.0, 0.0, 0.0)))
-            |> ignore
-            net_words_node(sp, fn() { text(n(), way.1) }, fn() { @sf.theme().p.text }, weight=500)
-          })
-          |> ignore
-          l.show(fn() { opt_text(n(), way.2) is Some(_) }, fn(x) {
-            x.min_width(Is(Some(60.0))) |> ignore
-            net_words_node(x, fn() { fill("android-settings.stations.total", [("total", opt_text(n(), way.2).unwrap_or(""))]) }, muted)
-          })
+          net_words_node(l, fn() { text(n(), way.1) }, fn() { @sf.theme().p.text }, weight=500)
         })
         |> ignore
       }
@@ -757,42 +742,32 @@ fn net_line_node(p : @view.View, net : () -> Json?) -> Unit {
 }
 
 ///|
-/// Its line (net_line's): the left of it and ↑ over ↓, 10 apart, in their middle.
+/// Its line (net_line's): the left of it and ↑ / ↓, 10 apart, in their middle.
 // kept across runs: a value (no field of it changes)
-let net_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+let net_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter justify=JBetween")
 
 ///|
-/// Its left: how it goes over its round trip, 2 apart, taking what the right leaves.
+/// Its left: how it goes and its round trip, 6 apart, taking what the right leaves.
 // kept across runs: a value (no field of it changes)
-let net_left : @ui.Style = @ui.css("w=Full gap=S0_5")
+let net_left : @ui.Style = @ui.css("row w=Cut gap=S1_5 align=ACenter")
 
 ///|
-/// How it goes and packets lost, 8 apart.
+/// How it goes and packets lost, 6 apart.
 // kept across runs: a value (no field of it changes)
-let net_path : @ui.Style = @ui.css("row gap=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let net_rtt : @ui.Style = @ui.css("row align=ACenter")
-
-///|
-/// ↑ over ↓, 2 apart.
-// kept across runs: a value (no field of it changes)
-let net_right : @ui.Style = @ui.css("gap=S0_5")
+let net_path : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let net_way : @ui.Style = @ui.css("row align=ACenter")
+let net_rtt : @ui.Style = @ui.css("row w=Cut gap=S1 align=ACenter")
 
 ///|
-/// How far a speed is from its arrow (net_line's 5).
-// kept across runs: a value
-let net_speed_pad : Double = 5.0
+/// ↑ and ↓, 10 apart.
+// kept across runs: a value (no field of it changes)
+let net_right : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
-/// How wide a speed is at the system's default size of words (net_line's 68), wider as its words are drawn bigger.
-// kept across runs: a value
-let net_speed_w : Double = 68.0
+// kept across runs: a value (no field of it changes)
+let net_way : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 /// Words of it (net_line's) in `p`: the meta's size on a line of 18, `weight`, in `ink`; `cut`: cut short where the

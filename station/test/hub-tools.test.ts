@@ -1886,7 +1886,7 @@ test("a login card in Slack: only for a login here waiting for its page's code; 
   r.hub.logins = { page: (id) => pages[id] ?? null, answer: (id, code, by) => void answered.push([id, code, by]) };
   // A login at no such step (a loopback one): kept in the chat, omitted on the platform.
   await r.call(key, "chat_post", { to, text: "登录 https://app.still.fail/w/ws/s/st/login/l2", card: { type: "login", login: "l2" } });
-  assert.deepEqual(r.chat.carried.slice(-1), [undefined]);
+  assert.deepEqual(r.chat.carried.slice(-1), [null]);
   await r.call(key, "chat_post", { to, text: "登录 gh", card: { type: "login", login: "l3" } });
   await r.call(key, "chat_post", { to, text: "登录 gcloud", card: { type: "login", login: "l1" } });
   // The platform is given the page; the chat keeps the card without it.
