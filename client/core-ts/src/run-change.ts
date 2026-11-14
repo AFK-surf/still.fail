@@ -47,10 +47,21 @@ function runText(run: J): string {
   return parts.join(" · ");
 }
 
-/// A run's change as its notice says it (NoticeShown `words`, `short`, `lines`); null for a message that is none.
-/// `words`: the parts that changed, before and after (Opus 5.5 · 高 → Sonnet 5.5 · 中), an effort or a speed alone named
-/// (思考深度：高 → 中, 账号：a → b). `short`: those parts as they are now alone. `lines`: the run before and after, whole.
-export function runChangeOf(change: unknown): { words: string; short: string; lines: string[] } | null {
+/// The mark a side of a change is drawn with (RunSides): who made its model, else its runtime's maker (the app's
+/// maker_mark, as a chat's agent is drawn).
+function markOf(run: J): { maker: string; runtime: string } {
+  const id = str(get(run, "model"));
+  return { maker: (id !== null ? format.makerOf(id)?.[0] : null) ?? "", runtime: str(get(run, "runtime")) ?? "claude" };
+}
+
+type Sides = { was: string; now: string; to: string; wasMaker: string; wasRuntime: string; nowMaker: string; nowRuntime: string };
+
+/// A run's change as its notice says it (NoticeShown `words`, `short`, `lines`, `sides`); null for a message that is
+/// none. `words`: the parts that changed, before and after (Opus 5.5 · 高 → Sonnet 5.5 · 中), an effort or a speed alone
+/// named (思考深度：高 → 中, 账号：a → b). `short`: those parts as they are now alone. `lines`: the run before and after,
+/// whole. `sides`: with another runtime or model, the two sides of `words` apart, each with the mark it is drawn with,
+/// and what leads what it runs on now where it is said alone (换成, as `short`).
+export function runChangeOf(change: unknown): { words: string; short: string; lines: string[]; sides?: Sides } | null {
   if (!isObject(change) || !isObject(change.was) || !isObject(change.now)) return null;
   const { was, now } = change;
   const differs = PARTS.filter((p) => {
@@ -66,5 +77,9 @@ export function runChangeOf(change: unknown): { words: string; short: string; li
   const NAMED: Partial<Record<Part, string>> = { effort: "core-logic.notice.run.effort", fast: "core-logic.notice.run.speed", account: "core-logic.notice.run.account" };
   const named = changed.length === 1 ? (NAMED[changed[0]!] ?? null) : null;
   if (named !== null) return { words: t(named, { change: arrow }), short: t(named, { change: side(now) }), lines };
-  return { words: arrow, short: t("core-logic.notice.run.to", { now: side(now) }), lines };
+  const short = t("core-logic.notice.run.to", { now: side(now) });
+  if (!changed.includes("runtime") && !changed.includes("model")) return { words: arrow, short, lines };
+  const [a, b] = [markOf(was), markOf(now)];
+  const sides = { was: side(was), now: side(now), to: t("core-logic.notice.run.toLead"), wasMaker: a.maker, wasRuntime: a.runtime, nowMaker: b.maker, nowRuntime: b.runtime };
+  return { words: arrow, short, lines, sides };
 }

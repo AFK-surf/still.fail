@@ -330,7 +330,17 @@ export const SHAPES: Record<string, Shape> = {
     ["short", opt("String"), { said: true, doc: "A chat's run changed (run-change.ts): what it runs on now in what changed alone (换成 Codex · GPT-6), said in\nplace of `words` where they have not the room on their line. Absent otherwise." }],
     ["lines", opt(vec("String")), { said: true, doc: "A chat's run changed: how it ran and how it runs, whole (之前：…, 现在：…), shown in place of `words` once\nthe notice is opened. Absent otherwise." }],
     ["md", opt("Value"), { doc: "`words` read as Markdown (markdown.ts), its runs of words in `words`: what the clients draw (a chat it opened is\na link to it). Absent where a view reads none of its messages' words (a decision's)." }],
+    ["sides", opt("RunSides"), { doc: "A chat's run changed to another runtime or model: the two sides of `words` apart, each drawn after its\nmark. Absent otherwise." }],
   ], { doc: "still.fail's notice as a chat shows it (core views.ts noticeOf)." }),
+  RunSides: struct([
+    ["was", "String", { said: true, doc: "What changed as it was (Claude Code · Opus 5.5)." }],
+    ["now", "String", { said: true, doc: "What changed as it is now (Codex · GPT-6)." }],
+    ["to", "String", { said: true, doc: "What leads `now` said alone, where the line has not the room for both (换成, as `short` says it)." }],
+    ["wasMaker", "String", { doc: "Who made the model it ran (a maker mark's id), empty where not known: then its runtime's maker's." }],
+    ["wasRuntime", "String"],
+    ["nowMaker", "String", { doc: "As `wasMaker`, of the model it runs now." }],
+    ["nowRuntime", "String"],
+  ], { doc: "A chat's run changed to another runtime or model, its two sides apart (run-change.ts)." }),
   RuntimeInstall: struct([
     ["runtime", "String", { doc: "claude | codex | dsh | grok | cursor | devin: what `software.update` installs ({station, id: runtime})." }],
     ["state", "String", { doc: "missing | installing | failed | installed" }],

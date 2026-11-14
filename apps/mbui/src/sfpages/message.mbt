@@ -811,6 +811,24 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
               for line in m.notice_lines {
                 c.text(line, style=notice_words_open.then(@ui.text_style(color=ink))) |> ignore
               }
+            } else if m.notice_sides is Some(sides) {
+              // another runtime or model: each side after the mark of who made its model, as a chat's agents are drawn;
+              // where the line has not the room for both, what it ran on left out and what it runs on now led by 换成
+              // (Ctx::box drop and more)
+              let words = notice_words.then(@ui.text_style(color=ink))
+              let (mark, _) = c.text_size(notice_size)
+              c.box(style=notice_sides, fn() {
+                c.box(style=notice_sides_part, more=true, fn() { c.text(sides.to, style=words) |> ignore }) |> ignore
+                c.box(style=notice_sides_part, drop=1, fn() {
+                  @sf.maker_mark(c, sides.was_maker, sides.was_runtime, mark) |> ignore
+                  c.text(sides.was, style=words) |> ignore
+                  c.text("→", style=words) |> ignore
+                })
+                |> ignore
+                @sf.maker_mark(c, sides.now_maker, sides.now_runtime, mark) |> ignore
+                c.text(sides.now, style=notice_words_cut.then(@ui.text_style(color=ink)), keep=true) |> ignore
+              })
+              |> ignore
             } else {
               c.text(said, style=notice_words.then(@ui.text_style(color=ink)), shorter=[m.notice_short], allow_ellipsis=true)
               |> ignore
@@ -1431,6 +1449,18 @@ let notice_line : @ui.Style = @ui.css("row align=AEnd")
 let notice_words_room : @ui.Style = @ui.css("clip")
 
 ///|
+/// A run changed to another runtime or model, on its line: each side after its mark, what it ran on left out where the
+/// line has not the room (system_notice's).
+// kept across runs: a value (no field of it changes)
+let notice_sides : @ui.Style = @ui.css("row align=ACenter gap=S1")
+
+///|
+/// A part of it: what it ran on and the arrow, or 换成 in its place.
+// kept across runs: a value (no field of it changes)
+let notice_sides_part : @ui.Style = @ui.css("row align=ACenter gap=S1")
+
+
+///|
 // kept across runs: a value (no field of it changes)
 let notice_end : @ui.Style = @ui.css("row align=AEnd")
 
@@ -1447,6 +1477,12 @@ let notice_leading : @ui.Leading = L7
 /// Its words about a profile (one line closed).
 // kept across runs: a value (no field of it changes)
 let notice_words : @ui.TextStyle = @ui.text_style(size=notice_size, leading=notice_leading, wrap=false)
+
+///|
+/// What a run runs on now beside what it ran on (system_notice's sides): kept whole till what it ran on has left its
+/// line, cut short only then.
+// kept across runs: a value (no field of it changes)
+let notice_words_cut : @ui.TextStyle = @ui.text_style(size=notice_size, leading=notice_leading, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -362,12 +362,18 @@ test("a notice that a chat's run changed says what changed, what it runs on now 
   assert.equal(notice.short, "换成 Sonnet 5.5 · 中");
   assert.deepEqual(notice.lines, ["之前：Claude Code · Opus 5.5 · 高 · 自动 · a@x.com", "现在：Claude Code · Sonnet 5.5 · 中 · 自动 · a@x.com"]);
   assert.equal(notice.failed, false);
+  // Its two sides apart, each with the mark it is drawn with: who made the model, else the runtime's maker.
+  assert.deepEqual(notice.sides, { was: "Opus 5.5 · 高", now: "Sonnet 5.5 · 中", to: "换成", wasMaker: "anthropic", wasRuntime: "claude", nowMaker: "anthropic", nowRuntime: "claude" });
   // Another runtime: its speed said only where both have one; the account kept to and the most context said whole.
   notice = shown(run, { ...run, runtime: "codex", model: "gpt-6", effort: "high", fast: true, profile: "cx", account: "b@x.com", pinned: true, context: 200000 });
   assert.equal(notice.words, "Claude Code · Opus 5.5 → Codex · GPT-6");
+  assert.deepEqual(notice.sides, { was: "Claude Code · Opus 5.5", now: "Codex · GPT-6", to: "换成", wasMaker: "anthropic", wasRuntime: "claude", nowMaker: "openai", nowRuntime: "codex" });
+  // The runtime's default model: no maker said, the app draws the runtime's.
+  assert.equal(shown(run, { ...run, runtime: "agy", model: null }).sides.nowMaker, "");
   assert.equal(notice.lines[1], "现在：Codex · GPT-6 · 高 · Fast · b@x.com · 上下文 200K");
   // An effort or a speed alone is named.
   assert.equal(shown(run, { ...run, effort: "low" }).words, "思考深度：高 → 低");
+  assert.equal(shown(run, { ...run, effort: "low" }).sides, undefined);
   assert.equal(shown({ ...run, fast: false }, { ...run, fast: true }).short, "速度：Fast");
   // Another account alone (the station moved it, an allowance run out) is named; with another runtime it is the rest's.
   notice = shown(run, { ...run, profile: "cc2", account: "b@x.com" });

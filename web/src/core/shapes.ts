@@ -1864,6 +1864,22 @@ export interface LinkedChat {
 	thread?: number;
 }
 
+/** A chat's run changed to another runtime or model, its two sides apart (run-change.ts). */
+export interface RunSides {
+	/** What changed as it was (Claude Code · Opus 5.5). */
+	was: string;
+	/** What changed as it is now (Codex · GPT-6). */
+	now: string;
+	/** What leads `now` said alone, where the line has not the room for both (换成, as `short` says it). */
+	to: string;
+	/** Who made the model it ran (a maker mark's id), empty where not known: then its runtime's maker's. */
+	wasMaker: string;
+	wasRuntime: string;
+	/** As `wasMaker`, of the model it runs now. */
+	nowMaker: string;
+	nowRuntime: string;
+}
+
 /** still.fail's notice as a chat shows it (core views.ts noticeOf). */
 export interface NoticeShown {
 	/** It says something failed (the station began it with ⚠️): drawn in red. */
@@ -1902,6 +1918,11 @@ export interface NoticeShown {
 	 * a link to it). Absent where a view reads none of its messages' words (a decision's).
 	 */
 	md?: unknown;
+	/**
+	 * A chat's run changed to another runtime or model: the two sides of `words` apart, each drawn after its
+	 * mark. Absent otherwise.
+	 */
+	sides?: RunSides;
 }
 
 /** Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture. */

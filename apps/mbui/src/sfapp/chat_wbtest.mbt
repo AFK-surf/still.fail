@@ -779,17 +779,21 @@ test "a notice opened keeps the size of its words" {
 test "a chat's run changed: what changed on a line, else what it runs on now; pressed, both runs whole" {
   // (the user, 2026-11-06: 默认按最小差异显示，点击查看完整信息，如果差异太大一行显示不了，就只显示变化后的信息)
   let t = chat_tester("chat-run-change")
-  assert_eq(t.lines_of("Opus 5.5 · 高 → Sonnet 5.5 · 中"), ["Opus 5.5 · 高 → Sonnet 5.5 · 中"])
-  // too long for a phone's line: what it runs on now alone
-  assert_eq(t.lines_of("Claude Code · Sonnet 5.5 · 中 · 标准 → Codex · GPT-6 Astra · 高 · Fast"), [
-    "换成 Codex · GPT-6 Astra · 高 · Fast",
-  ])
-  let (x, y) = t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中").unwrap()
+  // (the words drawn, each whole: what a row left out is of no size)
+  let shown = fn() { t.words().filter(fn(w) { w.3 > 0.0 }).map(fn(w) { w.0 }) }
+  let first = shown()
+  // each side after the mark of who made its model
+  assert_true(first.contains("Opus 5.5 · 高") && first.contains("Sonnet 5.5 · 中"), msg=first.join(" | "))
+  // too long for a phone's line: what it runs on now alone, whole, after 换成 and its mark
+  assert_true(!first.contains("Claude Code · Sonnet 5.5 · 中 · 标准"), msg=first.join(" | "))
+  assert_true(first.contains("换成") && first.contains("Codex · GPT-6 Astra · 高 · Fast"), msg=first.join(" | "))
+  assert_eq(t.lines_of("Codex · GPT-6 Astra · 高 · Fast"), ["Codex · GPT-6 Astra · 高 · Fast"])
+  let (x, y) = t.find("Opus 5.5 · 高").unwrap()
   t.tap(x, y)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("之前：Claude Code · Opus 5.5 · 高 · 自动 · lin@example.com") is Some(_))
   assert_true(t.find("现在：Claude Code · Sonnet 5.5 · 中 · 自动 · lin@example.com") is Some(_))
-  assert_true(t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中") is None)
+  assert_true(!shown().contains("→"))
 }
 
 ///|

@@ -2228,8 +2228,25 @@ fn with_run_change(v : Json) -> Json {
   match v {
     Object(m) => {
       let o = m.copy()
-      let notice = fn(words : String, short : String, was : String, now : String) -> Json {
-        { "failed": false, "words": Json::string(words), "short": Json::string(short), "lines": [Json::string(was), Json::string(now)] }
+      let notice = fn(words : String, short : String, was : String, now : String, sides : Json) -> Json {
+        {
+          "failed": false,
+          "words": Json::string(words),
+          "short": Json::string(short),
+          "lines": [Json::string(was), Json::string(now)],
+          "sides": sides,
+        }
+      }
+      let sides = fn(was : String, was_maker : String, was_runtime : String, now : String, now_maker : String, now_runtime : String) -> Json {
+        {
+          "was": Json::string(was),
+          "now": Json::string(now),
+          "to": "换成",
+          "wasMaker": Json::string(was_maker),
+          "wasRuntime": Json::string(was_runtime),
+          "nowMaker": Json::string(now_maker),
+          "nowRuntime": Json::string(now_runtime),
+        }
       }
       let was = "之前：Claude Code · Opus 5.5 · 高 · 自动 · lin@example.com"
       let mid = "现在：Claude Code · Sonnet 5.5 · 中 · 自动 · lin@example.com"
@@ -2238,10 +2255,22 @@ fn with_run_change(v : Json) -> Json {
       o["messages"] = [
         msg(1, "person", by_person("林"), "换个模型试试", "刚刚", { "mine": true }),
         msg(2, "ember", { "name": "still.fail" }, "已切换：Opus 5.5 · high → Sonnet 5.5 · medium", "刚刚", {
-          "notice": notice("Opus 5.5 · 高 → Sonnet 5.5 · 中", "换成 Sonnet 5.5 · 中", was, mid),
+          "notice": notice(
+            "Opus 5.5 · 高 → Sonnet 5.5 · 中",
+            "换成 Sonnet 5.5 · 中",
+            was,
+            mid,
+            sides("Opus 5.5 · 高", "anthropic", "claude", "Sonnet 5.5 · 中", "anthropic", "claude"),
+          ),
         }),
         msg(3, "ember", { "name": "still.fail" }, "已切换：" + long, "刚刚", {
-          "notice": notice(long, "换成 Codex · GPT-6 Astra · 高 · Fast", "之前：Claude Code · Sonnet 5.5 · 中 · 标准 · 自动 · lin@example.com", now),
+          "notice": notice(
+            long,
+            "换成 Codex · GPT-6 Astra · 高 · Fast",
+            "之前：Claude Code · Sonnet 5.5 · 中 · 标准 · 自动 · lin@example.com",
+            now,
+            sides("Claude Code · Sonnet 5.5 · 中 · 标准", "anthropic", "claude", "Codex · GPT-6 Astra · 高 · Fast", "openai", "codex"),
+          ),
         }),
       ]
       o["asks"] = []

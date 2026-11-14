@@ -7,7 +7,8 @@
 ///|
 /// One of the fixture's notices (seq 9, ts9): `words` (its Markdown's tree, `md`), a failure (`failed`), what failed
 /// said (`detail`); about a profile (`link` where its link starts); a runtime the station lacks (`install`); reportable;
-/// its agent waiting to retry (`retry`), or its failed turn to try again (`again`); a chat's run changed (`short`, `lines`).
+/// its agent waiting to retry (`retry`), or its failed turn to try again (`again`); a chat's run changed (`short`, `lines`,
+/// `sides`).
 fn nt_msg(
   words? : String = "Willow 的 codex 这一轮超时了，已经停下",
   md? : Json? = None,
@@ -20,6 +21,7 @@ fn nt_msg(
   again? : Bool = false,
   short? : String = "",
   lines? : Array[String] = [],
+  sides? : Json? = None,
 ) -> Message {
   let n : Map[String, Json] = { "failed": Json::boolean(failed), "words": Json::string(words) }
   // (as the core reads its words: one paragraph, where it says no other)
@@ -41,6 +43,9 @@ fn nt_msg(
   }
   if lines.length() > 0 {
     n["lines"] = Json::array(lines.map(fn(l) { Json::string(l) }))
+  }
+  if sides is Some(d) {
+    n["sides"] = d
   }
   @sfbase.message_of({
     "seq": 9,
@@ -209,6 +214,20 @@ fn nt_cases() -> Array[(String, Message, Json?, Bool)] {
     short="换成 Codex · GPT-6 Astra · 高 · Fast",
     lines=["之前：Claude Code · Sonnet 5.5 · 中 · 标准 · 自动 · lin@example.com", "现在：Codex · GPT-6 Astra · 高 · Fast · 自动 · lin@example.com"],
   )
+  let sided = nt_msg(
+    words="Claude Code · Opus 5.5 → Codex · GPT-6",
+    short="换成 Codex · GPT-6",
+    lines=["之前：Claude Code · Opus 5.5 · 高 · 自动 · lin@example.com", "现在：Codex · GPT-6 · 高 · 自动 · lin@example.com"],
+    sides=Some({
+      "was": "Claude Code · Opus 5.5",
+      "now": "Codex · GPT-6",
+      "to": "换成",
+      "wasMaker": "anthropic",
+      "wasRuntime": "claude",
+      "nowMaker": "openai",
+      "nowRuntime": "codex",
+    }),
+  )
   let report_long = "本轮 agent 未在对话中回复，以下是它最后输出的文字，由 station 代为转发（并非它发出的消息），请留意"
   [
     ("closed", nt_msg(), None, false),
@@ -228,6 +247,8 @@ fn nt_cases() -> Array[(String, Message, Json?, Bool)] {
     ("trying again", nt_msg(words="模型服务出错，回复即可重试", failed=true, again=true), Some(nt_doing("session.retry")), false),
     ("run changed", run, None, false),
     ("run changed open", run, None, true),
+    ("run changed sides", sided, None, false),
+    ("run changed sides open", sided, None, true),
     ("profile", nt_msg(words="Willow 上 codex 的登录已失效：请在设置里重新登录", failed=true, link=22), None, false),
     ("profile open", nt_msg(words="Willow 上 codex 的登录已失效：请在设置里重新登录", failed=true, link=22), None, true),
     ("chat opened", nt_opened(), None, false),
@@ -302,7 +323,8 @@ fn nt_known(c : (String, Message, Json?, Bool), scale : Double) -> (Int, Int, In
 /// do not: 31.200000000000003 against 31.2); where `under` (x, y), the underline drawn from x at y set `by` lower first.
 fn nt_drawn(t : @ui.Tester, under? : (Double, Double, Double)? = None) -> String {
   let r = fn(v : Double) { (v * 100.0).round() / 100.0 }
-  t.words().map(fn(w) { "\{w.0}@\{r(w.1)},\{r(w.2)} \{r(w.3)}x\{r(w.4)} a\{w.5}" }).join("\n") +
+  // (but what the old view's row left out, 换成 while what a run ran on is there: words of no size, never drawn)
+  t.words().filter(fn(w) { w.3 > 0.0 || w.4 > 0.0 }).map(fn(w) { "\{w.0}@\{r(w.1)},\{r(w.2)} \{r(w.3)}x\{r(w.4)} a\{w.5}" }).join("\n") +
   "\n" +
   t
   .drawn_rects()
