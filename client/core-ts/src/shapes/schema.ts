@@ -2145,6 +2145,8 @@ export const SHAPES: Record<string, Shape> = {
     ["available", "bool", { doc: "An app keeping keys in the system's secure storage (a web page is not)." }],
     ["locked", "bool", { doc: "The workspace's lock is on and checks out: the vault needs it." }],
     ["canSign", "bool", { doc: "This device signs in the lock." }],
+    ["stateText", opt("String"), { said: true, doc: "Not signing (`canSign` false) for a reason that is not its not being trusted, in words: an upgraded\nworkspace's members still syncing, or this device to be verified once (`confirmText`). Absent otherwise (views/vault.ts `whyNot`)." }],
+    ["confirmText", opt("String"), { said: true, doc: "With `stateText`, where a press ends it: its words; it calls `lock.confirmSigner` (this device's signer said\non its person's own log, the person asked once), after which this device signs as any other." }],
     ["setUp", "bool", { doc: "This device's box key is published (`vault.setup`)." }],
     ["vaults", vec("VaultRow")],
     ["requests", vec("VaultRequest")],

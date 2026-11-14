@@ -558,6 +558,34 @@ export class PersonalLock {
     return Effect.ignore(this.#append(sub, seed, "device", { key, id, label, sign_key: signKey }, true, within), { log: "Unhandled", message: "personal lock: this device said again" });
   }
 
+  /// Whether this device is on `sub`'s chain pinned here and its last entry there does not say the signer it keeps (one
+  /// from before signers were said, or naming another): where a workspace's chain moved its state names the device by
+  /// that signer alone, so it is no signer there, its vaults closed to it, until `#restate` or `confirmSigner` says it.
+  signerUnsaid(sub: string): boolean {
+    const signKey = this.#mySignKey();
+    const mine = this.#myKey === null ? undefined : this.#lastSaid(sub).get(this.#myKey);
+    return signKey !== null && mine !== undefined && mine.said?.sign_key !== signKey;
+  }
+
+  /// This device said again on `sub`'s chain with its signer, by itself, the person asked once (`reason`): what `#restate`
+  /// does as it rides on another ask, for a device whose person asks nothing else of it (views/vault.ts `whyNot`, the call
+  /// `lock.confirmSigner`). Nothing where it is said already. Null, or, no station of theirs taking it by the call's
+  /// wait, `{pending}`, its row.
+  confirmSigner(sub: string, reason: string): Effect.Effect<{ pending: PendingRow } | null, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      if (!this.signerUnsaid(sub)) return null;
+      const seed = yield* this.#unseal(reason);
+      const mine = this.#myKey === null ? undefined : this.#lastSaid(sub).get(this.#myKey);
+      const signKey = this.#mySignKey();
+      // (said meanwhile, as the person was asked)
+      if (mine === undefined || signKey === null || mine.said?.sign_key === signKey) return null;
+      const { key, id, label } = mine.device;
+      const pending = yield* this.#append(sub, seed, "device", { key, id, label, sign_key: signKey }, false, this.asked());
+      return pending === null ? null : { pending: pendingRow(pending, this.#env.stations?.names?.(sub) ?? []) };
+    });
+  }
+
   /// With the seed in hand for something else: the person's devices that a device on the lock approved face to face in a
   /// workspace's lock, and that said there the key they would be on it with (`approved`), put on it, each as it comes
   /// (one put on, a device it approved comes next), at most APPROVED_AT_ONCE at a time. Nothing more is asked of the
