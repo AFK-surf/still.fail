@@ -454,6 +454,14 @@ CREATE TABLE IF NOT EXISTS device_builds_since (
   one INTEGER PRIMARY KEY CHECK (one = 1),
   at INTEGER NOT NULL
 );
+-- The models a person starred in a workspace, as their devices carry them (api/routes/stars.ts; the stars as JSON,
+-- client/core-ts/src/preset-records.ts Stars): one row a person (their sub) a workspace, read by its key.
+CREATE TABLE IF NOT EXISTS model_stars (
+  ws TEXT NOT NULL,
+  sub TEXT NOT NULL,
+  stars TEXT NOT NULL,
+  PRIMARY KEY (ws, sub)
+);
 `;
 
 /// Each message as it reads now: its latest edit's words, files and quotes.
