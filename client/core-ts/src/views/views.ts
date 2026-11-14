@@ -850,6 +850,16 @@ function outlineDate(ms: number, offsetMin: number): string {
   return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+/// What a person said of what they quoted, on one line, where a message is only quotes with their comments (the
+/// composer's `comment`: its words are there, its own text empty): the first comment that has words, else "".
+function quoteComment(message: J): string {
+  for (const q of arr(message.quotes)) {
+    const words = (str(get(q, "comment")) ?? "").replace(/\s+/g, " ").trim();
+    if (words !== "") return words;
+  }
+  return "";
+}
+
 /// Words cut to `max` columns (`OUTLINE_WORDS`: a character from U+1100 on two), `…` after where cut.
 function cutWords(words: string, max: number): string {
   let columns = 0;
@@ -3977,7 +3987,7 @@ export class Views implements Owner {
       if (was !== undefined && was.by === by && was.offset === clock.offsetMin) return [was.item];
       const m = shownMessage(raw, [], viewer, slackUsers, members_, bots, get(summary, "creator"));
       const at = u64(m.createdAt);
-      const words = wordsOf(m);
+      const words = wordsOf(m) || quoteComment(m);
       const item = sharedValue({
         seq: m.seq, mine: m.mine === true, author: str(m.author) ?? "", by: m.by,
         words: words === "" && arr(m.attachments).length > 0 ? t("core-views.file") : cutWords(words, OUTLINE_WORDS),
