@@ -419,13 +419,13 @@ fn body_both(mode : String, s : (String, Double, Double, Int), at : String, scal
   t.set_font_scale(scale)
   t.run_for(rest)
   if at != "end" {
-    // (its top's room the list's head and what covers its top (list_top, the chat's bar's room): at its top, its first
-    // row under it; else the row at its top as the old list had it, `put_y` under the list's window's top, a bring's
-    // offset being from under that cover)
+    // (its top's room the list's head (list_top, the chat's bar's room), what covers its top the bar alone (bar_foot):
+    // at its top, its first row under its head; else the row at its top as the old list had it, `put_y` under the
+    // list's window's top, a bring's offset being from under that cover)
     if put == "top" {
-      place.bring(keys0.iter().find_first(fn(k) { k != "top" }).unwrap(), offset=-put_y)
+      place.bring(keys0.iter().find_first(fn(k) { k != "top" }).unwrap(), offset=bar_foot - list_top - put_y)
     } else {
-      place.bring(put, offset=list_top - put_y)
+      place.bring(put, offset=bar_foot - put_y)
     }
     t.run_for(@ui.move_most_ms)
   }
@@ -1287,8 +1287,8 @@ test "the page before read in over a chat's list as nodes at its top: what is re
   let t = body_new(src, s.1, s.2, s.3, view, entries, place~, made=fn(k, p) { views[k] = p })
   t.run_for(@ui.move_most_ms)
   let keys0 = body_keys(v0, read0)
-  // (at its very top: its first row under its head, the chat's bar's room, what covers the list's top: a bring's
-  // offset is from under it)
+  // (at its very top: its first row under its head, the chat's bar's room, as far as the list goes: a bring's offset
+  // is from under what covers the list's top, the bar)
   place.bring(keys0.iter().find_first(fn(k) { k != "top" }).unwrap())
   t.run_for(@ui.move_most_ms)
   let read_key = keys0.iter().find_first(fn(k) { k.has_prefix("m:") }).unwrap()

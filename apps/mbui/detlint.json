@@ -359,7 +359,7 @@
     "corners-each": {},
     "cursor-hand": {},
     "tier-outside-shell": {
-      "src/sfapp/chat.mbt": 4,
+      "src/sfapp/chat.mbt": 3,
       "src/sfapp/drive.mbt": 5,
       "src/sfapp/drive_parts.mbt": 2,
       "src/sfapp/newchat.mbt": 2,
