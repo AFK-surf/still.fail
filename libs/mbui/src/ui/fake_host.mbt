@@ -366,6 +366,8 @@ impl @hostapi.Host for FakeHost with shape(self, text, size, weight, style, out)
       0.0
     } else if real is Some(a) {
       a
+    } else if self.cjk_marks && c >= 0x2010 && c <= 0x206F && (style & @hostapi.style_proportional) == 0 {
+      size
     } else if c < 0x2E80 {
       if mono {
         size * 0.6

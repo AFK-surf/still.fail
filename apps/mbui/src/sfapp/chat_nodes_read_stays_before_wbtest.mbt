@@ -17,12 +17,12 @@ fn rs_pages_before(s : (String, Double, Double, Int), late : Double) -> Array[St
   let mut strokes = 0
   while k.l.first.get() > 1 && strokes < 60 {
     // (a stroke further up, what it asks held till the list is at rest)
-    k.gate = true
+    k.gate.val = true
     rs_up(t, s, s.2 * 0.4)
     strokes += 1
     rs_run(t, long_rest_ms * 2.0)
     if k.held.is_empty() {
-      k.gate = false
+      k.gate.val = false
       continue
     }
     let first = k.l.first.get()

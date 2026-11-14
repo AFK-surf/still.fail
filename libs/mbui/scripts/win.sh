@@ -29,6 +29,7 @@ PY=$(command -v python || command -v python3)
 if [ -n "$APPMOD" ]; then
   EXE=$AM/_build/native/$MODE/build/$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$APPMOD/moon.mod")/$PKG/$PKG.exe
 fi
+[ -z "${MBUI_WIN_HOOK:-}" ] || . "$MBUI_WIN_HOOK"
 
 # Each build's copies made afresh in out/win/stage, then mirrored into out/win/mod and out/win/app (scripts/mbc
 # mirror: a file only written when its content changed), so that moon, which goes by mtimes, builds anew only what
@@ -109,6 +110,7 @@ shot_dir() {
 
 case "${1:-build}" in
   build)
+    if type app_prebuild >/dev/null 2>&1; then app_prebuild; fi
     webview2_sdk
     export LIB="$(cygpath -w "$PWD/$WV2/build/native/x64");$LIB"
     echo "win.sh: staging $PKG"
@@ -127,12 +129,12 @@ case "${1:-build}" in
     code=0
     B=$M; [ -z "$APPMOD" ] || B=$AM
     # (its warnings a line each, not rendered: moon renders them, ~600-1100 with their sources, after the last task,
-    # 5-10 s of the runner's one core with nothing else of the build left, as moon's --trace shows, still.fail's CI,
-    # 2026-10-24)
+    # 5-10 s of the runner's one core with nothing else of the build left, as moon's --trace shows, 2026-10-24)
     echo "win.sh: building $PKG"
     (cd $B && export PATH="$SHIM:$PATH" MBC_LOG="$LOG" MBC_VERBOSE=1 && time moon build --no-render --target native $FLAG src/$PKG) || code=$?
     cat out/mbc.log 2>/dev/null || echo "win.sh: moon ran no command through scripts/mbc (out/mbc/win)"
     [ $code = 0 ] || exit $code
+    if type app_postbuild >/dev/null 2>&1; then app_postbuild; fi
     ls -la $EXE ;;
   run)
     ./$EXE ;;
@@ -142,4 +144,6 @@ case "${1:-build}" in
     MBUI_BENCH=${MBUI_BENCH:--1} MBUI_SCRIPT=shot MBUI_SHOT_DIR="$(shot_dir out/shot-win)" ./$EXE ;;
   bench)
     MBUI_BENCH=1 ./$EXE ;;
+  *)
+    if type app_cmd >/dev/null 2>&1; then app_cmd "$@"; else echo "win.sh: no command $1" >&2; exit 1; fi ;;
 esac

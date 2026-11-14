@@ -18,6 +18,25 @@
 // so a row's height changes by its words told longer and by its card answered.
 
 
+///|
+/// The gate opened: what it held set off `k.late` from now.
+fn rs_open_gate(k : RsCore) -> Unit {
+  let was = k.held.copy()
+  k.held.clear()
+  for h in was {
+    k.held.push((k.now + k.late, h.1))
+  }
+  k.gate.val = false
+}
+
+///|
+/// A step of the core's from outside the frames: `k` told what changed.
+fn rs_told(k : RsCore, f : () -> Unit) -> Unit {
+  @ui.came_from_outside()
+  f()
+  k.told.set(k.told.get() + 1)
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // 2. A reply at the chat's end, an agent's working line (at the end: what comes there is another principle's)
 
@@ -30,8 +49,8 @@ fn rs_reply(s : (String, Double, Double, Int)) -> Array[String] {
     broken,
     rs_read_held(t, k, s, "\{s.0}: a reply came", fn() { rs_told(k, fn() { k.l.last.set(k.l.last.get() + 1) }) }),
   )
-  rs_push(broken, rs_read_held(t, k, s, "\{s.0}: its agent at work", fn() { rs_told(k, fn() { k.working = true }) }))
-  rs_push(broken, rs_read_held(t, k, s, "\{s.0}: its agent done", fn() { rs_told(k, fn() { k.working = false }) }))
+  rs_push(broken, rs_read_held(t, k, s, "\{s.0}: its agent at work", fn() { rs_told(k, fn() { k.working.val = true }) }))
+  rs_push(broken, rs_read_held(t, k, s, "\{s.0}: its agent done", fn() { rs_told(k, fn() { k.working.val = false }) }))
   broken
 }
 

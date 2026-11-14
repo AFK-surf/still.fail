@@ -28,7 +28,6 @@ fn init {
     "src/sfreplay/flows/station_file_sent_test.mbt",
     "src/sfreplay/flows/viewer_test.mbt",
     "src/sfreplay/flows/wide_answer_reply_test.mbt",
-    "src/sfreplay/flows/wide_resize_test.mbt",
     "src/sfreplay/flows/wide_switcher_test.mbt",
   ])
 }

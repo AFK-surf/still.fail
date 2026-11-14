@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build the macOS app and run it. MODE=release|debug, APP=demo|textdiff|bench (only that app is built; an app of a module
-# outside mbui: MBUI_APP_MOD, still.fail's apps/mbui), then:
-#   scripts/mac.sh build | run [env...] | script ime | bench | shot
+# outside mbui: MBUI_APP_MOD), then:
+#   scripts/mac.sh build | bundle | run [env...] | script ime | bench | shot
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -12,10 +12,12 @@ MODE=${MODE:-release}
 FLAG=""; [ "$MODE" = release ] && FLAG=--release
 PKG=${APP:-demo}
 EXE=$(pkg_build $PKG native $MODE)/$PKG.exe
-# the photos app (still.fail's apps/mbui) shows made-up pictures from out/pictures
-[ $PKG = photos ] && [ "${1:-build}" != build ] && gallery_pictures
+[ -z "${MBUI_MAC_HOOK:-}" ] || . "$MBUI_MAC_HOOK"
+# the photos app shows made-up pictures from out/pictures
+[ $PKG = photos ] && [ "${1:-build}" != build ] && [ "${1:-build}" != bundle ] && gallery_pictures
 case "${1:-build}" in
   build)
+    if type app_prebuild >/dev/null 2>&1; then app_prebuild; fi
     # moon's build, with the C that moonc generates split and compiled in parallel (scripts/mbc: a `cc` first on
     # PATH that moon uses for every C step, all but that one passed through; MBC_SPLIT=0 compiles it whole)
     # (moon's own time and how many tasks it ran said after it, beside mbc's: chk keeps only the errors, and a release's
@@ -30,7 +32,34 @@ case "${1:-build}" in
     echo "mac.sh: compiled again: $(find _build/native/$MODE/build -name '*.core' -newer out/moon.start 2>/dev/null |
       sed -E 's#.*/build/##; s#/[^/]+[.]core$##' | sort | tr '\n' ' ')"
     cat out/mbc.log 2>/dev/null || true
+    if type app_postbuild >/dev/null 2>&1; then app_postbuild; fi
     ls -la $EXE ;;
+  bundle)
+    if [ "${MBUI_SKIP_BUILD:-0}" != 1 ] || [ ! -f "$EXE" ]; then bash "$D/mac.sh" build; fi
+    OUT=out/mac
+    NAME=${MBUI_MAC_NAME:-$PKG}
+    ID=${MBUI_APP_ID:-dev.mbui.$PKG}
+    N=${MBUI_BUILD:-1}
+    EXE_NAME=${MBUI_MAC_EXE:-$NAME}
+    APPDIR="$OUT/$NAME.app"
+    ZIP=${MBUI_MAC_ZIP:-$OUT/$NAME-mac.zip}
+    rm -rf "$APPDIR" "$ZIP"
+    mkdir -p "$APPDIR/Contents/MacOS" "$APPDIR/Contents/Resources"
+    cp "$EXE" "$APPDIR/Contents/MacOS/$EXE_NAME"
+    strip -S -x "$APPDIR/Contents/MacOS/$EXE_NAME"
+    PLIST="$APPDIR/Contents/Info.plist"
+    plutil -create xml1 "$PLIST"
+    for kv in "CFBundleIdentifier $ID" "CFBundleName $NAME" "CFBundleDisplayName $NAME" "CFBundleExecutable $EXE_NAME" \
+      "CFBundlePackageType APPL" "CFBundleInfoDictionaryVersion 6.0" "CFBundleShortVersionString 0.1.$N" \
+      "CFBundleVersion $N" "LSMinimumSystemVersion ${MACOSX_DEPLOYMENT_TARGET:-13.0}" "NSPrincipalClass NSApplication"; do
+      plutil -insert "${kv%% *}" -string "${kv#* }" "$PLIST"
+    done
+    plutil -insert NSHighResolutionCapable -bool YES "$PLIST"
+    plutil -insert NSSupportsAutomaticGraphicsSwitching -bool YES "$PLIST"
+    if type app_bundle >/dev/null 2>&1; then app_bundle "$APPDIR"; fi
+    codesign --force --sign "${MAC_SIGN_IDENTITY:--}" --timestamp=none "$APPDIR"
+    (cd "$OUT" && ditto -c -k --sequesterRsrc --keepParent "$NAME.app" "$(basename "$ZIP")")
+    ls -la "$ZIP" ;;
   run)
     on_screen ./$EXE ;;
   script)
@@ -41,4 +70,6 @@ case "${1:-build}" in
     MBUI_SCRIPT=shot MBUI_SHOT_DIR=$PWD/out/shot on_screen ./$EXE ;;
   bench)
     MBUI_BENCH=1 on_screen ./$EXE ;;
+  *)
+    if type app_cmd >/dev/null 2>&1; then app_cmd "$@"; else echo "mac.sh: no command $1" >&2; exit 1; fi ;;
 esac

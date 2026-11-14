@@ -112,10 +112,10 @@ fn Tree::least_now(self : Tree) -> Double {
 }
 
 ///|
-/// Whether node `n` is pressed only where it is drawn, no room grown round it: a column's edge, its pointer's shape a
-/// resize (the user, 2026-10-28: 左右各 6px, 同 web; the old view's the same, ui's as_drawn).
+/// Whether node `n` is pressed only where it is drawn, no room grown round it: a column's edge or a corner, its pointer's
+/// shape a resize (the user, 2026-10-28: 左右各 6px, 同 web; the old view's the same, ui's as_drawn).
 fn Node::as_drawn(self : Node) -> Bool {
-  self.cursor is Some(ResizeX) || self.cursor is Some(ResizeY)
+  self.cursor is Some(ResizeX | ResizeY | ResizeNWSE | ResizeNESW)
 }
 
 ///|

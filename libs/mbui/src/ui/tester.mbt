@@ -414,6 +414,7 @@ pub fn Tester::new(
     generation_asks: 0,
     generation_on_face_add: Ref(false),
     tabular: 0.0,
+    cjk_marks: false,
     glyph_box: (6.0, 10.0),
     faces_wider: {},
     latin: None,
@@ -3012,6 +3013,13 @@ pub fn Tester::tabular_wider(self : Tester, em : Double) -> Unit {
 }
 
 ///|
+/// Punctuation (U+2010 to U+206F: ‘ ’ “ ” … —) set a whole em wide unless set proportional
+/// (@hostapi.style_proportional), from now on: as a Chinese face (思源黑体) draws it, its pwid asked or not.
+pub fn Tester::cjk_face_marks(self : Tester) -> Unit {
+  self.fake.cjk_marks = true
+}
+
+///|
 /// Each printable ASCII letter (U+0020 to U+007E, 95 of them) measured `regular[c - 32]` ems wide, and `bold[c - 32]`
 /// at weight 600 and more, from now on, outside the code face: as a real face measures it, where the fake host's half
 /// an em is narrower than every real face's digits, `%` and `$` (a figure the fake fitted cut short on a device: the
@@ -3300,6 +3308,8 @@ pub fn Tester::cursor(self : Tester) -> Cursor {
     6 => Grabbing
     7 => Crosshair
     8 => NotAllowed
+    9 => ResizeNWSE
+    10 => ResizeNESW
     _ => Arrow
   }
 }

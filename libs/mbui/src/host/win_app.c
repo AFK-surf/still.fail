@@ -534,6 +534,8 @@ static LPCSTR cursor_name(int kind) {
     case 6: return IDC_SIZEALL;
     case 7: return IDC_CROSS;
     case 8: return IDC_NO;
+    case 9: return IDC_SIZENWSE;
+    case 10: return IDC_SIZENESW;
     default: return IDC_ARROW;
   }
 }

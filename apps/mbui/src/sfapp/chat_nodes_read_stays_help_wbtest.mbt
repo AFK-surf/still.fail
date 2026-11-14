@@ -21,10 +21,10 @@ priv struct RsCore {
   l : LongChat
   mut now : Double
   mut late : Double
-  mut gate : Bool
+  gate : Ref[Bool]
   held : Array[(Double, () -> Unit)]
   told : @signals.Signal[Int]
-  mut working : Bool
+  working : Ref[Bool]
   grown : Array[Int]
   carded : Map[Int, Bool]
   mut look : (() -> Unit)?
@@ -38,7 +38,7 @@ let rs_more : String = "补充一下：签名那一步要先在钥匙串里解�
 /// The long chat's value as `k` changes it.
 fn rs_value(k : RsCore, v : Map[String, Json]) -> Map[String, Json] {
   let out = v.copy()
-  if k.working {
+  if k.working.val {
     out["agents"] = Json::array(
       items(Some(Json::object(v)), "agents").map(fn(a) {
         guard a is Object(m) else { return a }
@@ -98,7 +98,7 @@ fn rs_source(k : RsCore) -> Source {
     },
     call: fn(name, params, done) {
       let go = fn() { (base.call)(name, params, done) }
-      if k.gate || k.late > 0.0 {
+      if k.gate.val || k.late > 0.0 {
         k.held.push((k.now + k.late, go))
       } else {
         go()
@@ -110,7 +110,7 @@ fn rs_source(k : RsCore) -> Source {
 ///|
 /// What `k` holds that is due now, answered (between frames, as the core's come), and the long chat's own answers.
 fn rs_answer(k : RsCore) -> Unit {
-  if !k.gate {
+  if !k.gate.val {
     let due : Array[() -> Unit] = []
     let kept : Array[(Double, () -> Unit)] = []
     for h in k.held {
@@ -135,17 +135,6 @@ fn rs_answer(k : RsCore) -> Unit {
 }
 
 ///|
-/// The gate opened: what it held set off `k.late` from now.
-fn rs_open_gate(k : RsCore) -> Unit {
-  let was = k.held.copy()
-  k.held.clear()
-  for h in was {
-    k.held.push((k.now + k.late, h.1))
-  }
-  k.gate = false
-}
-
-///|
 /// The long chat opened on screen `s` with its page made as nodes, at its end and at rest, the core answering at once.
 fn rs_open(s : (String, Double, Double, Int)) -> (@ui.Tester, Source, RsCore) {
   let (_, w, h, platform) = s
@@ -156,10 +145,10 @@ fn rs_open(s : (String, Double, Double, Int)) -> (@ui.Tester, Source, RsCore) {
     l: long_chat(),
     now: 0.0,
     late: 0.0,
-    gate: false,
+    gate: Ref(false),
     held: [],
     told: @signals.signal(0),
-    working: false,
+    working: Ref(false),
     grown: [],
     carded: Map([]),
     look: None,
@@ -433,14 +422,6 @@ fn rs_read_held(
 /// The end (rs_end_gap's) held as `cause` happens, said as `what`.
 fn rs_end_held(t : @ui.Tester, k : RsCore, what : String, cause : () -> Unit) -> String? {
   rs_held(t, k, "\{what} (at the end)", fn() { rs_end_gap(t) }, cause)
-}
-
-///|
-/// A step of the core's from outside the frames: `k` told what changed.
-fn rs_told(k : RsCore, f : () -> Unit) -> Unit {
-  @ui.came_from_outside()
-  f()
-  k.told.set(k.told.get() + 1)
 }
 
 ///|
