@@ -175,38 +175,54 @@ fn switch_settle(ms : Double) -> Double {
 /// nothing, as a row closed to nothing does what is in it, is none). What is in the toasts' region (`Region`) or a tip
 /// (`Tooltip`) is none of the page's: left out (the file's head).
 fn switch_places(t : @ui.Tester) -> Map[String, (Double, Double, Double, Double)] {
-  // (each node's `parent` is where its holder is in this same list)
+  // (each node's `parent` is where its holder is in this same list; what its holders cut it to and whether one of them
+  // shows over the page worked out once a node, from its holder's, so a frame's walk is as long as its nodes: walked up
+  // from each node to the root it was the longest part of the sweep's every frame on a chat's deep tree)
   let all = t.semantics()
+  let n = all.length()
+  let cut : Array[(Double, Double, Double, Double)] = Array::make(n, (0.0, 0.0, 0.0, 0.0))
+  let over : Array[Bool] = Array::make(n, false)
+  let done : Array[Bool] = Array::make(n, false)
+  // (what holds node `i` cuts it to, as (x0, y0, x1, y1), and whether one of its holders shows over the page)
+  fn held(i : Int) -> Unit {
+    if done[i] {
+      return
+    }
+    done[i] = true
+    let up = all[i].parent
+    if up < 0 || up >= n || up == i {
+      cut[i] = (-1.0e18, -1.0e18, 1.0e18, 1.0e18)
+      return
+    }
+    held(up)
+    let p = all[up]
+    let (px, py, pw, ph) = p.rect
+    let (a0, b0, a1, b1) = cut[up]
+    cut[i] = (
+      @cmp.maximum(a0, px),
+      @cmp.maximum(b0, py),
+      @cmp.minimum(a1, px + pw),
+      @cmp.minimum(b1, py + ph),
+    )
+    over[i] = over[up] || switch_over_page(p)
+  }
   let out : Map[String, (Double, Double, Double, Double)] = Map([])
-  for n in all {
-    if n.label == "" || n.hidden || switch_over_page(n) {
+  for i, node in all {
+    if node.label == "" || node.hidden || switch_over_page(node) {
       continue
     }
-    let (x, y, w, h) = n.rect
-    let mut x0 = x
-    let mut y0 = y
-    let mut x1 = x + w
-    let mut y1 = y + h
-    let mut up = n.parent
-    let mut steps = 0
-    let mut over = false
-    while steps < 64 {
-      steps = steps + 1
-      guard up >= 0 && up < all.length() else { break }
-      let p = all[up]
-      if switch_over_page(p) {
-        over = true
-        break
-      }
-      let (px, py, pw, ph) = p.rect
-      x0 = @cmp.maximum(x0, px)
-      y0 = @cmp.maximum(y0, py)
-      x1 = @cmp.minimum(x1, px + pw)
-      y1 = @cmp.minimum(y1, py + ph)
-      up = p.parent
+    held(i)
+    if over[i] {
+      continue
     }
-    if !over && x1 - x0 >= 1.0 && y1 - y0 >= 1.0 {
-      out["\{Repr(n.role)} \{n.label}"] = n.rect
+    let (x, y, w, h) = node.rect
+    let (a0, b0, a1, b1) = cut[i]
+    let x0 = @cmp.maximum(x, a0)
+    let y0 = @cmp.maximum(y, b0)
+    let x1 = @cmp.minimum(x + w, a1)
+    let y1 = @cmp.minimum(y + h, b1)
+    if x1 - x0 >= 1.0 && y1 - y0 >= 1.0 {
+      out["\{Repr(node.role)} \{node.label}"] = node.rect
     }
   }
   out
