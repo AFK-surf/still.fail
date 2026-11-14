@@ -10,10 +10,11 @@
   "res": ["app/src/main/res"],
   "assets": ["../out/android/apk/assets"],
   "jniLibs": ["../out/android/apk/jniLibs", "app/src/main/jniLibs"],
-  "rules": [],
+  "rules": ["app/proguard-rules.pro"],
   "lock": "apk.lock",
   "merged": ["androidx.window:window:"],
   "variants": {
+    "release": {"minify": true, "placeholders": {}},
     "debug": {"debuggable": true, "placeholders": {}}
   }
 }

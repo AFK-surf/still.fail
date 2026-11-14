@@ -200,22 +200,27 @@ setup() {
   "$out/setup-bare.exe" --pack "$(cygpath -w "$to")" "$(cygpath -w "$out/setup.env")" "${w[@]}" || return 1
   echo "win.sh: $(basename "$to") $(wc -c < "$to") bytes ($name 0.1.$n)"
 }
-case "${1:-build}" in
-  core) core; exit $? ;;
-  put) put core; exit $? ;;
-  collate) collate; exit $? ;;
-  engine-sync) engine_sync; exit $? ;;
-  sealed) sealed; exit $? ;;
-  setup) setup; exit $? ;;
-  setup-bare) setup_bare; exit $? ;;
-esac
-if [ "$APP" = stillfail ] && [ "${1:-build}" = build ] && [ "${MBUI_WIN_CORE:-1}" != 0 ]; then
-  core || exit 1
-fi
-if [ "$APP" = stillfail ] && [ "${1:-build}" = build ]; then
-  res || exit 1
-fi
-bash "$MBUI_DIR/scripts/win.sh" "$@" || exit $?
-if [ "$APP" = stillfail ] && [ "${1:-build}" = build ]; then
-  if [ "${MBUI_WIN_CORE:-1}" != 0 ]; then put core; else put; fi
-fi
+app_prebuild() {
+  if [ "$APP" = stillfail ] && [ "${MBUI_WIN_CORE:-1}" != 0 ]; then core || exit 1; fi
+  if [ "$APP" = stillfail ]; then res || exit 1; fi
+}
+app_postbuild() {
+  if [ "$APP" = stillfail ]; then
+    if [ "${MBUI_WIN_CORE:-1}" != 0 ]; then put core || exit 1; else put || exit 1; fi
+  fi
+}
+app_cmd() {
+  case "$1" in
+    core) core ;;
+    put) put core ;;
+    collate) collate ;;
+    engine-sync) engine_sync ;;
+    sealed) sealed ;;
+    setup) setup ;;
+    setup-bare) setup_bare ;;
+    *) echo "win.sh: no command $1" >&2; exit 1 ;;
+  esac
+}
+[ -z "${MBUI_IN_WIN_SH:-}" ] || { return 0 2>/dev/null || exit 0; }
+export MBUI_IN_WIN_SH=1 MBUI_WIN_HOOK="$D/win.sh"
+exec bash "$MBUI_DIR/scripts/win.sh" "$@"
