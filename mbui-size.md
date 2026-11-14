@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0ebf623bd](https://github.com/AFK-surf/monoid/commit/0ebf623bdbc303c70e9639de68d7ed575a79a8f0) mbui: a page's list holds what is read by where it | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.53 | 96.57 | 109.53 |
 | [9cc79f0da](https://github.com/AFK-surf/monoid/commit/9cc79f0da3a19367c817e3cbd49ec26be2ba4680) mbui: the second headless component, a toggle (a c | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.53 | 96.57 | 109.53 |
 | [dcc40cd3d](https://github.com/AFK-surf/monoid/commit/dcc40cd3d0a49d817e142be258c09582365af23b) Fix passkey forwarding across screen handovers and | 2 | 2.73 | 11.63 | 31.28 | 41.83 | 27.88 | 53.53 | 96.31 | 114.99 |
 | [65d5916fc](https://github.com/AFK-surf/monoid/commit/65d5916fc200358be03efb7245cfea4926eb7177) mbui: converge 6-platform build/size/idlemem scrip | 2 | 2.73 | 11.63 | 31.27 | 41.83 | 27.88 | 53.51 | 96.42 | 112.94 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [41b38a6ec](https://github.com/AFK-surf/monoid/commit/41b38a6ecdc8183b81d040100fb94b96cef1755c) core: a workspace's chain handed over by itself, b | 1.98 | 2.71 | 11.53 | 31.14 | 41.48 | 27.75 | 53.21 | 96.58 | 113.48 |
 | [d32206ba1](https://github.com/AFK-surf/monoid/commit/d32206ba19b7943c81adb9d5a561918ae1d668eb) mbui app: a chat's page made as nodes, its compose | 1.98 | 2.71 | 11.53 | 31.13 | 41.48 | 27.75 | 53.21 | 96.75 | 104.52 |
 | [3c1dde380](https://github.com/AFK-surf/monoid/commit/3c1dde38007643b1ddd306a846b566392dd70bd2) fix(mbui): an agent's history's 详情 unfolds whole,  | 1.98 | 2.7 | 11.52 | 31.12 | 41.46 | 27.74 | 53.19 | 96.91 | 107.21 |
-| [49a1b3e8a](https://github.com/AFK-surf/monoid/commit/49a1b3e8a66ca5ad2e529586dc666f8cb43f4884) app tests: the third's other runs at 60 reckoned a | 1.98 | 2.7 | 11.52 | 31.12 | 41.45 | 27.74 | 53.19 | 97.44 | 112.7 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0ebf623bd](https://github.com/AFK-surf/monoid/commit/0ebf623bdbc303c70e9639de68d7ed575a79a8f0) mbui: a page's list holds what is read by where it | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57 |
 | [9cc79f0da](https://github.com/AFK-surf/monoid/commit/9cc79f0da3a19367c817e3cbd49ec26be2ba4680) mbui: the second headless component, a toggle (a c | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.26 |
 | [dcc40cd3d](https://github.com/AFK-surf/monoid/commit/dcc40cd3d0a49d817e142be258c09582365af23b) Fix passkey forwarding across screen handovers and | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 56.74 |
 | [65d5916fc](https://github.com/AFK-surf/monoid/commit/65d5916fc200358be03efb7245cfea4926eb7177) mbui: converge 6-platform build/size/idlemem scrip | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 56.74 |
