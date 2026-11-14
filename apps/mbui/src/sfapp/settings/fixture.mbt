@@ -609,7 +609,7 @@ pub fn fixture_page(mode : String) -> String {
       }
       station_parts["ws1/st1"] = "overview"
     }
-    "settings-station-retire-sending" | "settings-station-retire-quiet" | "settings-station-retire-failed" | "settings-station-retire-accounts" | "settings-station-retire-done" | "settings-station-retire-done-left" | "settings-station-taking" => {
+    "settings-station-retire-sending" | "settings-station-retire-sent" | "settings-station-retire-sent-failed" | "settings-station-retire-quiet" | "settings-station-retire-failed" | "settings-station-retire-accounts" | "settings-station-retire-done" | "settings-station-retire-done-left" | "settings-station-taking" => {
       fx.copies = Some(fixture_copies_retire(if m == "settings-station-taking" { "taking" } else { m.unsafe_substring(start=24, end=m.length()) }))
       fx.retire_others = 1
       station_parts["ws1/st1"] = "overview"
@@ -750,7 +750,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" | "settings-station-network" | "settings-station-away" | "settings-station-copies" | "settings-station-copies-alone" | "settings-station-restore" | "settings-station-restore-offer" | "settings-station-restore-confirm" | "settings-station-restore-confirm-long" | "settings-station-restored" | "settings-station-retire" | "settings-station-retire-panel" | "settings-station-retire-panel-pick" | "settings-station-retire-panel-none" | "settings-station-retire-panel-joined" | "settings-station-retire-panel-long" | "settings-station-retire-sending" | "settings-station-retire-quiet" | "settings-station-retire-failed" | "settings-station-retire-accounts" | "settings-station-retire-done" | "settings-station-retire-done-left" | "settings-station-taking" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" | "settings-station-network" | "settings-station-away" | "settings-station-copies" | "settings-station-copies-alone" | "settings-station-restore" | "settings-station-restore-offer" | "settings-station-restore-confirm" | "settings-station-restore-confirm-long" | "settings-station-restored" | "settings-station-retire" | "settings-station-retire-panel" | "settings-station-retire-panel-pick" | "settings-station-retire-panel-none" | "settings-station-retire-panel-joined" | "settings-station-retire-panel-long" | "settings-station-retire-sending" | "settings-station-retire-sent" | "settings-station-retire-sent-failed" | "settings-station-retire-quiet" | "settings-station-retire-failed" | "settings-station-retire-accounts" | "settings-station-retire-done" | "settings-station-retire-done-left" | "settings-station-taking" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -4132,17 +4132,30 @@ fn fixture_copies_restored() -> Json {
 fn fixture_copies_retire(step : String) -> Json {
   let to = "Maple"
   let keys = ["sending", "quiet", "handing", "accounts", "connects"]
+  // (`sent`: all of it there, the chats still working, 暂停聊天 not yet, waiting for the hand-over's confirmation;
+  // `sent-failed`: back there after a hand-over failed, that row saying why and that the chats work again: as the
+  // core's copies.ts says)
+  let sent = step == "sent" || step == "sent-failed"
   let at = match step {
     "sending" => 0
-    "quiet" => 1
+    "quiet" | "sent" | "sent-failed" => 1
     "failed" => 2
     "accounts" => 3
     _ => 5
   }
   let steps = keys.mapi(fn(i, key) {
-    let state = if i < at { "done" } else if i == at { if step == "failed" { "failed" } else { "now" } } else { "todo" }
+    let state = if i < at {
+      "done"
+    } else if i == at {
+      if step == "failed" || step == "sent-failed" { "failed" } else if step == "sent" { "todo" } else { "now" }
+    } else {
+      "todo"
+    }
     let note = match (state, key) {
+      ("todo", _) if step == "sent" && i == at => tr("core-views.copies.retire.waiting")
       ("now", "sending") => fill("core-views.copies.retire.sent", [("done", "1.5 GB"), ("total", "3.2 GB")])
+      ("failed", _) if step == "sent-failed" =>
+        fill("core-views.copies.retire.resumed", [("why", fill("core-views.copies.retire.why.failed", [("name", to)]))])
       ("failed", _) => fill("core-views.copies.retire.why.offline", [("name", to)])
       _ => ""
     }
@@ -4171,11 +4184,11 @@ fn fixture_copies_retire(step : String) -> Json {
       ("steps", Json::array(steps)),
       ("left", left),
       ("done", Json::boolean(at == 5)),
-      ("stopped", Json::boolean(at > 0 && at < 5)),
+      ("stopped", Json::boolean(at > 0 && at < 5 && !sent)),
       ("to", str("st2")),
       ("toName", str(to)),
       ("cancellable", Json::boolean(at <= 2)),
-      ("retriable", Json::boolean(step == "failed")),
+      ("retriable", Json::boolean(step == "failed" || step == "sent-failed")),
     ])
   }
   let taking = fn(origin : String, name : String, line : String, level : String) {

@@ -53,6 +53,9 @@ test "迁移 as a station is retired: its steps a row each at the top of its pag
   // (mode, words its rows say besides the steps, what is pressed at its head's end, the call that press makes)
   let states = [
     ("settings-station-retire-sending", ["1.5 GB / 3.2 GB"], ["取消"], "copies.retireCancel"),
+    // (all of it sent, the hand-over waiting for its card; back there after a hand-over failed, the chats working again)
+    ("settings-station-retire-sent", ["等待确认"], ["取消"], "copies.retireCancel"),
+    ("settings-station-retire-sent-failed", ["Maple 放入聊天时出错，聊天已恢复"], ["取消", "重试"], "copies.retireAgain"),
     ("settings-station-retire-quiet", [], ["取消"], "copies.retireCancel"),
     ("settings-station-retire-failed", ["连不上 Maple"], ["取消", "重试"], "copies.retireAgain"),
   ]
@@ -71,6 +74,11 @@ test "迁移 as a station is retired: its steps a row each at the top of its pag
     }
     for b in ["取消", "重试", "移出 workspace"] {
       assert_eq(retire_said(t, b), buttons.contains(b), msg="\{mode}: \{b}")
+    }
+    // (at `sent` the note is 暂停聊天's: under it, over the next row)
+    if mode.has_prefix("settings-station-retire-sent") {
+      let note = words[0]
+      assert_true(retire_y(t, steps[1]) < retire_y(t, note) && retire_y(t, note) < retire_y(t, steps[2]), msg="\{mode}: \{note}")
     }
     assert_true(!retire_said(t, "备份"), msg=mode)
     // (no row of its own for the end: once there every row is done)

@@ -26,7 +26,18 @@ export type DoorRoute = {
 /// read, the rest of the stream's bytes in `reader`), the member and their connection.
 export type MemberAsk = { conn: Connection; viewer: Viewer; head: any; stream: Stream; reader: Reader };
 
+/// What a part says of its own kind of options card (one whose card has an object under the part's key): whether a
+/// member may choose on it (why not, refused before the card closes, else null), and what is done once they did. `at`:
+/// where the card is (its thread, its entry's n and ts), so the part goes by the card it posted itself, never by what
+/// another card says it is.
+export type CardAt = { thread: number; n: number; ts: string | null };
+export type CardChoice = {
+  may(viewer: Viewer, card: any, at: CardAt): string | null;
+  chosen(viewer: Viewer, card: any, option: string, at: CardAt): void;
+};
+
 export class StationParts {
+  readonly #cards = new Map<string, CardChoice>();
   readonly #routes: (Route[] | ((tools: Tools) => Route[]))[] = [];
   /// The routes as made for an admin API's tools, and how many parts' routes they were made of.
   readonly #made = new WeakMap<Tools, { of: number; routes: Route[] }>();
@@ -53,6 +64,23 @@ export class StationParts {
   streams(key: string, answer: (ask: MemberAsk) => Promise<void>): void {
     if (this.#streams.has(key)) throw new Error(`a member's ${key} requests are answered twice`);
     this.#streams.set(key, answer);
+  }
+
+  /// A part's own kind of options card (`{"retire": {…}}` beside its options, its options closing it): a member's
+  /// choosing on one in the app (the route that closes a card) is let only where the part says, as that member, and
+  /// the part is told of it once the card closed. Nothing else decides one (a message, a platform's reply).
+  cardChoice(key: string, choice: CardChoice): void {
+    if (this.#cards.has(key)) throw new Error(`a ${key} card's choice is taken twice`);
+    this.#cards.set(key, choice);
+  }
+
+  /// The part whose card `card` is, if one.
+  cardChoiceOf(card: any): CardChoice | undefined {
+    for (const [key, choice] of this.#cards) {
+      const v = card?.[key];
+      if (v !== null && typeof v === "object" && !Array.isArray(v)) return choice;
+    }
+    return undefined;
   }
 
   /// Which of a part's requests besides reads a read-only member may make (their own marks, say).

@@ -33,7 +33,7 @@ function whole(v: unknown, min: number): number | null {
   return typeof v === "number" && Number.isInteger(v) && v >= min ? v : null;
 }
 
-export const routes = ({ read, store }: Tools): Route[] => {
+export const routes = ({ read, store, cardChoice }: Tools): Route[] => {
   /// Answered by the store, its refusals as `{error}`; 503 while there is no store (a station starting).
   const write = async (f: (s: Store) => Promise<Answer> | Answer): Promise<Answer> => {
     if (store === undefined) return error(503, "station starting");
@@ -167,7 +167,15 @@ export const routes = ({ read, store }: Tools): Route[] => {
               if (n === null) throw new Refused(400, tr(r.lang, "station.admin.badN"));
               const option = typeof i.option === "string" ? i.option.trim() : "";
               if (option === "") throw new Refused(400, tr(r.lang, "station.admin.badOption"));
+              // (a part's own card, a station's retirement's: who may choose on it is the part's to say, as this member)
+              const asked = s.entriesBetween(t.id, n, n)[0];
+              const card = asked === undefined ? undefined : cardOfEntry(asked);
+              const own = card === undefined || card === null ? undefined : cardChoice?.(card);
+              const at = { thread: t.id, n, ts: asked?.ts ?? null };
+              const why = own?.may(r.viewer, card, at) ?? null;
+              if (why !== null) throw new Refused(403, why);
               if (!s.closeCard(viewer, t.id, n, option, r.lang)) throw new Refused(409, tr(r.lang, "station.admin.waitChanged"));
+              own?.chosen(r.viewer, card, option, at);
               s.setRead(viewer, t.id, n);
               return ok({ closedCard: { thread: t.id, n } });
             }

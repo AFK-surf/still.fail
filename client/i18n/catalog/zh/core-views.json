@@ -701,6 +701,8 @@
   "core-views.copies.retire.step.accounts": "移账号",
   "core-views.copies.retire.step.connects": "移连接",
   "core-views.copies.retire.sent": "{done} / {total}",
+  "core-views.copies.retire.waiting": "等待确认",
+  "core-views.copies.retire.resumed": "{why}，聊天已恢复",
   "core-views.copies.retire.left": "{n} 个账号没移过去",
   "core-views.copies.retire.leftNote": "{names}：需要在 {name} 上重新添加",
   "core-views.copies.taking.coming": "正在接收聊天",

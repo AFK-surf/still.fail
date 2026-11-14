@@ -121,7 +121,10 @@ function retireWhy(reason: unknown, name: string): string {
 
 /// The steps a station's retirement goes through, in their order (the station's replica/retire.ts `Step`), a row each;
 /// `accounts` only where its accounts move with it (its home workspace). Its last, `done`, has no row: once there every
-/// row is done and the page offers taking the station out of the workspace.
+/// row is done and the page offers taking the station out of the workspace. Nor has `sent` (all of it there, the chats
+/// still working, the hand-over waiting for a person's confirmation; or back there after a hand-over failed, the chats
+/// working again): 传文件 done, 暂停聊天 waiting for the confirmation, or saying why the hand-over did not go, to be
+/// tried again as a failed row is.
 const RETIRE_STEPS = ["sending", "quiet", "handing", "accounts", "connects"] as const;
 
 /// This station being retired from the workspace (the station's replica/retire.ts): its steps, a row each, done, under
@@ -137,14 +140,20 @@ function retireOf(r: J, manage: boolean): J | null {
   // (its accounts' step where they move: its home workspace, or once the station is at it or past it with some left)
   const accounts = r.home === true || step === "accounts" || left.length > 0;
   const keys = RETIRE_STEPS.filter((k) => k !== "accounts" || accounts);
-  const at = keys.indexOf(step as (typeof RETIRE_STEPS)[number]);
+  // (at `sent` it stands before 暂停聊天: its row is the one that waits)
+  const at = keys.indexOf((step === "sent" ? "quiet" : step) as (typeof RETIRE_STEPS)[number]);
   const steps = keys.map((key, i) => {
-    const state = step === "done" || (at >= 0 && i < at) ? "done" : i === at ? (failed ? "failed" : "now") : "todo";
+    // (at `sent` nothing runs: 暂停聊天 waits, not under way, for the hand-over's confirmation; after one failed, why,
+    // and that the chats work again, which is what a person needs to know first)
+    const waits = step === "sent" && i === at;
+    const state = step === "done" || (at >= 0 && i < at) ? "done" : i === at ? (failed ? "failed" : waits ? "todo" : "now") : "todo";
     const note = state === "failed"
-      ? retireWhy(r.reason, to)
-      : state === "now" && key === "sending" && num(r.total) > 0
-        ? t("core-views.copies.retire.sent", { done: size(num(r.done)), total: size(num(r.total)) })
-        : "";
+      ? (step === "sent" ? t("core-views.copies.retire.resumed", { why: retireWhy(r.reason, to) }) : retireWhy(r.reason, to))
+      : waits
+        ? t("core-views.copies.retire.waiting")
+        : state === "now" && key === "sending" && num(r.total) > 0
+          ? t("core-views.copies.retire.sent", { done: size(num(r.done)), total: size(num(r.total)) })
+          : "";
     return { key, label: t(`core-views.copies.retire.step.${key}`, { name: to }), state, note };
   });
   return {
@@ -155,7 +164,7 @@ function retireOf(r: J, manage: boolean): J | null {
     },
     done: step === "done" && !failed,
     // (its chats stopped: from here it goes on until they are there)
-    stopped: step !== "sending" && step !== "done",
+    stopped: step !== "sending" && step !== "sent" && step !== "done",
     to: str(r.to),
     toName: to,
     cancellable: manage && r.cancellable === true,

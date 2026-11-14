@@ -19,7 +19,9 @@ const body = (r: Request): any => {
 export const routes = ({ copies, retire }: { copies: Copies; retire: Retire }): Route[] => [
   // This station retired from the asker's workspace: its chats there go on on `to` (replica/retire.ts). The
   // workspace's owners and admins; GET /retire/preview says what it would move; DELETE calls it off (refused, in words, where it cannot be), POST /retire/again tries
-  // a step that failed again now.
+  // a step that failed again now: resting at `sent` after a hand-over failed, the hand-over itself (its chats pause
+  // again: the person asked it). One started here goes on from `sent` by itself (the panel said the chats would
+  // pause); one an agent asked for (station_retire) waits there for its card.
   {
     method: "POST",
     pattern: /^\/retire$/,

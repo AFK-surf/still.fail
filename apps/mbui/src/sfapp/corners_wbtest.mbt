@@ -64,9 +64,10 @@ let corner_modes : Array[String] = {
     "settings-station-restore", "settings-station-restore-offer", "settings-station-restore-confirm", "settings-station-restore-confirm-long",
     "settings-station-restored",
     // (a station retired: its panel, Maple chosen, two up and none chosen, none up, a joined workspace's, a long name;
-    // then 迁移's steps as it goes, sending, paused, failed, its accounts moving, done, done with accounts left; and a
+    // then 迁移's steps as it goes, sending, all sent waiting for the hand-over, back there after one failed, paused,
+    // failed, its accounts moving, done, done with accounts left; and a
     // station taking retired ones' chats in)
-    "settings-station-retire-panel", "settings-station-retire-panel-pick", "settings-station-retire-panel-none", "settings-station-retire-panel-joined", "settings-station-retire-panel-long", "settings-station-retire-sending", "settings-station-retire-quiet", "settings-station-retire-failed", "settings-station-retire-accounts", "settings-station-retire-done", "settings-station-retire-done-left", "settings-station-taking", "settings-profile-move", "settings-profile-move-key",
+    "settings-station-retire-panel", "settings-station-retire-panel-pick", "settings-station-retire-panel-none", "settings-station-retire-panel-joined", "settings-station-retire-panel-long", "settings-station-retire-sending", "settings-station-retire-sent", "settings-station-retire-sent-failed", "settings-station-retire-quiet", "settings-station-retire-failed", "settings-station-retire-accounts", "settings-station-retire-done", "settings-station-retire-done-left", "settings-station-taking", "settings-profile-move", "settings-profile-move-key",
     "settings-stations-add",
     "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing", "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long", "settings-adb-lock-two", "settings-adb-idle", "settings-adb-desk",
     // (a request for the phone waiting on a phone that lacks something; granted, the card under it for each kind of step

@@ -32,7 +32,7 @@ import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
 import { connectRoutes } from "./routes/connects.ts";
 import { type Drive, stationDrive } from "../drive/drive.ts";
-import type { StationParts } from "../parts.ts";
+import type { CardChoice, StationParts } from "../parts.ts";
 import { HelperFiles } from "../helper/files.ts";
 import type { HelperApp } from "../helper/app.ts";
 import type { HelperGrants } from "../helper/grants.ts";
@@ -85,6 +85,8 @@ export type Tools = {
   /// The hub, the jobs and the rest of the agents' side, for what needs a session run, stopped or changed; none where
   /// there are no agents (tests of reads).
   agents?: AgentsParts;
+  /// The part whose own kind of options card `card` is (parts.ts `cardChoice`): who may choose on it, and what then.
+  cardChoice?(card: unknown): CardChoice | undefined;
 };
 
 /// What the admin API answers with besides the readers: the write side, once there.
@@ -153,6 +155,7 @@ export class Admin {
       get agents() {
         return agentsNow();
       },
+      cardChoice: (card) => deps.parts?.cardChoiceOf(card),
     };
     this.tools = tools;
     this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools),

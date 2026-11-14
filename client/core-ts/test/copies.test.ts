@@ -140,6 +140,19 @@ test("a station retired: its steps a row each, done, under way, failed or not ye
   assert.equal(left.retire.done, true);
   assert.deepEqual(retiring("connects", { home: false, accountsLeft: [{ id: "p1", name: "", error: "x" }] }).retire.left?.label, "1 个账号没移过去");
   assert.ok("ok" in conform("StationCopies", left), JSON.stringify(conform("StationCopies", left)));
+  // all of it sent, waiting for the hand-over's confirmation: no row of its own, the chats still working
+  const sent = retiring("sent", { cancellable: true });
+  assert.deepEqual(rows(sent), ["传文件:done", "暂停聊天，补传改动:todo:等待确认", "Aspen 接收聊天:todo", "移账号:todo", "移连接:todo"]);
+  assert.equal(sent.retire.stopped, false);
+  assert.equal(sent.retire.done, false);
+  assert.equal(sent.retire.cancellable, true);
+  // back there after a hand-over failed (the chats working again): why, and that they work again, tried again as a failed
+  // row is
+  const fell = retiring("sent", { error: "station said so", reason: "failed", retriable: true, cancellable: true });
+  assert.deepEqual(rows(fell), ["传文件:done", "暂停聊天，补传改动:failed:Aspen 放入聊天时出错，聊天已恢复", "Aspen 接收聊天:todo", "移账号:todo", "移连接:todo"]);
+  assert.equal(fell.retire.retriable, true);
+  assert.equal(fell.retire.stopped, false);
+  assert.ok("ok" in conform("StationCopies", fell), JSON.stringify(conform("StationCopies", fell)));
 });
 
 test("a station taking retired ones' chats in: a row for each, whose and where it stands at each step, and one that failed", () => {

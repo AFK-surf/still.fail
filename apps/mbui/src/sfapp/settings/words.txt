@@ -1924,6 +1924,9 @@ core-views.copies.retire.step.accounts
 core-views.copies.retire.step.connects
 core-views.copies.retire.sent
 core-views.copies.retire.why.offline
+core-views.copies.retire.why.failed
+core-views.copies.retire.waiting
+core-views.copies.retire.resumed
 core-views.copies.retire.left
 core-views.copies.retire.leftNote
 core-views.copies.andLast

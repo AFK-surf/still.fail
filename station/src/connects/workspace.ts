@@ -247,6 +247,31 @@ export class WorkspaceConnects {
     for (const id of this.ownIn(ws)) await this.move(id, to, null, stationLang(), to);
   }
 
+  /// What was kept of `ws`'s platforms while its chats were quiet, taken here after all, in order, as it would have been
+  /// as it came: its chats work here again (a retirement called off, or a hand-over that failed: replica/retire.ts).
+  async takeHeld(ws: string): Promise<void> {
+    const mine: { id: string; event: ChatEvent }[] = [];
+    await this.inHeld(async () => {
+      const lines = (await readFile(this.heldFile, "utf8").catch(() => "")).split("\n").filter((l) => l !== "");
+      if (lines.length === 0) return;
+      const rest: string[] = [];
+      for (const line of lines) {
+        let e: Json;
+        try {
+          e = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (e?.ws === ws && typeof e.id === "string") mine.push({ id: e.id, event: e.event as ChatEvent });
+        else rest.push(line);
+      }
+      await this.writeHeld(rest);
+    });
+    for (const { id, event } of mine) {
+      await this.receive(id, event).catch((error) => log.warn("connects", "an event kept while a workspace was quiet not taken", { connect: id, error: (error as Error).message }));
+    }
+  }
+
   private inHeld(f: () => Promise<void>): Promise<void> {
     const turn = this.heldTurn.then(f);
     this.heldTurn = turn.catch(() => {});
@@ -340,7 +365,7 @@ export const WorkspaceConnectsLive = Layer.effectDiscard(
     agents.connects(() => connects.remote.connects());
     agents.route((id, event) => connects.receive(id, event));
     agents.connectHeld((ws, kind, own) => connects.heldBy(ws, kind, own));
-    agents.retireConnects = { of: (ws) => connects.ownIn(ws), named: (ws) => connects.namedIn(ws), move: (ws, to) => connects.moveAll(ws, to) };
+    agents.retireConnects = { of: (ws) => connects.ownIn(ws), named: (ws) => connects.namedIn(ws), move: (ws, to) => connects.moveAll(ws, to), takeHeld: (ws) => connects.takeHeld(ws) };
     const routes: Route[] = [
       {
         method: "POST",

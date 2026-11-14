@@ -18,6 +18,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { rebuildable, roomOf } from "../sessions/footprint.ts";
+import { BUILTIN_SKILLS, FEEDBACK_SKILL } from "../sessions/agent-home.ts";
 import { runtimeKind } from "../agents/runtime.ts";
 import { sessionPlaces, storage, transcriptSources } from "../read/transcript.ts";
 import { moved } from "./restore.ts";
@@ -33,12 +34,20 @@ export type CarriedGit = { dir: string; remote: string; branch: string | null; h
 /// nothing of its directory goes); its list (the hash of its file, the name it is sent by), how many files and bytes
 /// it names; `at`: where the list is on the station it was gathered on.
 export type CarriedSession = { key: string; workspace: string; room: string | null; list: string; files: number; bytes: number; at: string };
-/// A job or service a session had running, which stays behind (its agent is told: retire.ts).
-export type CarriedJob = { session: string; name: string; command: string };
+/// A job or service a session had running as its chats stopped: what it takes to run it again on the station the chats
+/// go to, as one runs again after its station restarted (jobs.ts `relaunch`): where it ran, its port (a web service),
+/// whether it is a watch (retire.ts `#startJobs`). One gathered by a station from before has only its name and command,
+/// and is not started again there (its agent is told it did not move).
+export type CarriedJob = { session: string; name: string; command: string; cwd?: string; port?: number | null; watch?: boolean };
+/// What of a workspace's agent home goes along (its MEMORY.md, presets.json and the skills people or agents made: not
+/// the station's own, nor those of the deployment linked beside them): where it is on the station gathered on, and its
+/// list as a session's (retire.ts merges it into the agent home there, agent-carry.ts).
+export type CarriedHome = { dir: string; list: string; files: number; bytes: number; at: string };
 /// What goes along with a workspace's chats, all but the files: `dataDir` the retired station's; each session and its
 /// list; the linked worktrees; the sessions whose directory is not the station's own (a person's project), which stays;
-/// the jobs that stay behind; where each worktree's bundle is on the station gathered on.
-export type CarryIndex = { v: 2; dataDir: string; sessions: CarriedSession[]; gits: CarriedGit[]; skipped: string[]; jobs: CarriedJob[]; bundles: Record<string, string>; files: number; bytes: number };
+/// the jobs that were running; where each worktree's bundle is on the station gathered on; its agent home (none in an
+/// index of a station from before, or where it has none).
+export type CarryIndex = { v: 2; dataDir: string; sessions: CarriedSession[]; gits: CarriedGit[]; skipped: string[]; jobs: CarriedJob[]; bundles: Record<string, string>; files: number; bytes: number; agent?: CarriedHome | null };
 /// What a gathering answers (the rest is on disk): where its index is, and how much it names.
 export type Gathered = { index: string; files: number; bytes: number; gits: number; skipped: number };
 
@@ -178,7 +187,8 @@ const listFile = (scratch: string, key: string) => join(scratch, "lists", `${cre
 /// one's room, a git checkout in it as git lists its files (tracked and not ignored) with its repository, a linked
 /// worktree's commits no remote has in a bundle; written in `scratch` (a list a session, the index of them). A file of
 /// the gathering before that has the same size and time is not read again (its hash from that session's list then).
-export function gather(dataDir: string, db: string, ws: string, home: boolean, scratch: string): Gathered {
+/// `agent`: the workspace's agent home here, whose own files go along too (`homeFiles`).
+export function gather(dataDir: string, db: string, ws: string, home: boolean, scratch: string, agent: string | null = null): Gathered {
   const d = new DatabaseSync(db, { readOnly: true, timeout: 30_000 });
   const gits: CarriedGit[] = [];
   const sessions: CarriedSession[] = [];
@@ -192,8 +202,10 @@ export function gather(dataDir: string, db: string, ws: string, home: boolean, s
   let before = new Map<string, { size: number; mtimeMs: number; hash: string }>();
   let seen = new Set<string>();
   let list: ListFile | null = null;
+  /// Where what is added may be (the agent home's own files are under it, not the data directory's sessions).
+  let under: (path: string) => boolean = (path) => carriedPlace(dataDir, path);
   const add = (path: string) => {
-    if (seen.has(path) || !carriedPlace(dataDir, path) || list === null) return;
+    if (seen.has(path) || !under(path) || list === null) return;
     seen.add(path);
     let st;
     try {
@@ -404,11 +416,82 @@ export function gather(dataDir: string, db: string, ws: string, home: boolean, s
   } finally {
     d.close();
   }
-  const index: CarryIndex = { v: 2, dataDir, sessions, gits, skipped, jobs: [], bundles, files, bytes };
+  // The agent home's own files, a list as a session's, in the same way (the hashes of the gathering before kept).
+  let carriedHome: CarriedHome | null = null;
+  if (agent !== null && existsSync(agent)) { // sync: in the gathering's own thread (gatherSoon)
+    const at = join(scratch, "lists", "agent-home.jsonl");
+    before = new Map();
+    if (existsSync(at)) for (const line of linesOf(at)) { // sync: in the gathering's own thread (gatherSoon)
+      try {
+        const f = JSON.parse(line) as CarriedFile;
+        if ("hash" in f) before.set(f.path, { size: f.size, mtimeMs: f.mtimeMs, hash: f.hash });
+      } catch {}
+    }
+    seen = new Set();
+    list = new ListFile(at);
+    under = (path) => within(path, agent) && path !== agent;
+    for (const path of homeFiles(agent)) add(path);
+    const done = list;
+    list = null;
+    const hash = done.close();
+    carriedHome = { dir: agent, list: hash, files: done.files, bytes: done.bytes, at };
+    files += done.files;
+    bytes += done.bytes;
+  }
+  const index: CarryIndex = { v: 2, dataDir, sessions, gits, skipped, jobs: [], bundles, files, bytes, agent: carriedHome };
   const path = indexFile(scratch);
   writeFileSync(`${path}.tmp`, JSON.stringify(index)); // sync: in the gathering's own thread (gatherSoon)
   renameSync(`${path}.tmp`, path); // sync: in the gathering's own thread (gatherSoon)
   return { index: path, files, bytes, gits: gits.length, skipped: skipped.length };
+}
+
+/// The files of an agent home that go along: its MEMORY.md and presets.json, and every skill of its skills/ that people
+/// or agents made (none of the station's own, which it writes again at every start; none whose name begins with a dot
+/// or is `synced`, its runtimes' and a sync's own; none linked there, the deployment's), each skill's files but what a
+/// build or an install makes again. A link is not followed.
+export function homeFiles(agent: string): string[] {
+  const out: string[] = [];
+  const file = (path: string) => {
+    try {
+      if (lstatSync(path).isFile()) out.push(path); // sync: in the gathering's own thread (gatherSoon)
+    } catch {}
+  };
+  file(join(agent, "MEMORY.md"));
+  file(join(agent, "presets.json"));
+  const skills = join(agent, "skills");
+  const own = new Set([...BUILTIN_SKILLS, FEEDBACK_SKILL]);
+  const walk = (dir: string) => {
+    let names: string[] = [];
+    try {
+      names = readdirSync(dir); // sync: in the gathering's own thread (gatherSoon)
+    } catch {}
+    for (const name of names.sort()) {
+      const path = join(dir, name);
+      let st;
+      try {
+        st = lstatSync(path); // sync: in the gathering's own thread (gatherSoon)
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) {
+        if (!rebuildable(path)) walk(path);
+      } else if (st.isFile()) out.push(path);
+    }
+  };
+  let names: string[] = [];
+  try {
+    names = readdirSync(skills); // sync: in the gathering's own thread (gatherSoon)
+  } catch {}
+  for (const name of names.sort()) {
+    if (name.startsWith(".") || name === "synced" || own.has(name)) continue;
+    try {
+      if (!lstatSync(join(skills, name)).isDirectory()) continue; // sync: in the gathering's own thread (gatherSoon)
+    } catch {
+      continue;
+    }
+    walk(join(skills, name));
+  }
+  return out;
 }
 
 /// What the index at `indexPath` says put under this station's data directory `dataDir`, each session's list and each
@@ -481,7 +564,7 @@ export function place(dataDir: string, indexPath: string, from: string): { place
 if (!isMainThread && workerData?.carry !== undefined) {
   const a = workerData.carry;
   try {
-    const answer = a.op === "gather" ? gather(a.dataDir, a.db, a.ws, a.home, a.scratch) : a.op === "preview" ? preview(a.dataDir, a.db, a.ws, a.home) : place(a.dataDir, a.index, a.from);
+    const answer = a.op === "gather" ? gather(a.dataDir, a.db, a.ws, a.home, a.scratch, a.agent ?? null) : a.op === "preview" ? preview(a.dataDir, a.db, a.ws, a.home) : place(a.dataDir, a.index, a.from);
     parentPort!.postMessage({ answer });
   } catch (e) {
     parentPort!.postMessage({ error: (e as Error).message });
