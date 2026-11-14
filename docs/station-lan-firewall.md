@@ -28,6 +28,12 @@ another subnet need a separate discovery mechanism or an explicitly configured a
 a LAN client to initiate a connection, but does not promise that all peer-initiated hole-punching paths will work.
 Keep the existing outbound default block and relay/proxy exceptions; do not allow the whole LAN or public UDP range.
 
+A station publishes which relays it is on to the Mainline DHT, and devices look it up there. Where a company's filter
+marks the DHT as risky (its bootstrap names, such as `router.bittorrent.com`, or BitTorrent UDP traffic), set
+`STILLFAIL_NO_DHT=1` in the station service's environment: the station then neither publishes to the DHT nor looks
+stations up there, and mDNS stays on. Devices still reach it through still.fail's relays; one that fell back to
+iroh's public relays (none of still.fail's answering) is found only through the DHT, so it is not found then.
+
 Back up the anchor, validate with `pfctl -nf`, and reload only the affected anchor. Do not flush unrelated states.
 Verify a real QUIC stream from a second LAN machine reports a direct path, then repeat after a station restart.
 Also verify that arbitrary LAN connections and unapproved public TCP/UDP destinations remain blocked and that the

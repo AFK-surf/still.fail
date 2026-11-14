@@ -66,8 +66,8 @@ export type Endpoint = {
   close(): Promise<void>;
 };
 /// What an endpoint is bound with. `relayOnly`: through the relays alone, no IP transports (what measures the way
-/// through a relay).
-export type Bind = { secretKey: Buffer; alpns: Buffer[]; relayUrls: string[]; discovery?: boolean; bindAddr?: string; relayOnly?: boolean; congestion?: "cubic" | "bbr" };
+/// through a relay). `dht`: false leaves the DHT out of `discovery`, mDNS kept (on when not said).
+export type Bind = { secretKey: Buffer; alpns: Buffer[]; relayUrls: string[]; discovery?: boolean; dht?: boolean; bindAddr?: string; relayOnly?: boolean; congestion?: "cubic" | "bbr" };
 /// What binds endpoints: the addon, or what stands in for it (a test's mesh in memory).
 export type Endpoints = { bind(options: Bind): Promise<Endpoint> };
 

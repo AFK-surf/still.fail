@@ -500,6 +500,7 @@ class FrontEndpoint implements Endpoint {
         relayUrls: options.relayUrls,
         // (the addon finds and is found unless told not to)
         discovery: options.discovery !== false,
+        ...(options.dht === false ? { dht: false } : {}),
         ...(options.bindAddr ? { bindAddr: options.bindAddr } : {}),
         ...(options.relayOnly ? { relayOnly: true } : {}),
         ...(options.congestion ? { congestion: options.congestion } : {}),
