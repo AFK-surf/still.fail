@@ -5,6 +5,6 @@
 ///|
 fn init {
   @ui.sizes_steady_known([
-    ("src/sfpages/settings_rig_wbtest.mbt", 6),
+    ("src/sfpages/settings_rig_wbtest.mbt", 2),
   ])
 }
