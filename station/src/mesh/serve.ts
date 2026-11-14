@@ -520,6 +520,8 @@ function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"],
 /// the workspace's logs in every phase (`Cloud.logsOf`, person-sync.ts): the workspace is rooted in it for good.
 export function ownChainsOf(cloud: Cloud, sub: string, workspace: string | null | undefined): [string, unknown[]][] {
   const all = personChainsOf(cloud).of(sub);
+  // (a Cloud made without the constructor, as tests make one, may have none of these: read on every request, so optional)
+  if (typeof cloud.home !== "function" || typeof cloud.chain !== "function" || typeof cloud.locked !== "function") return all;
   const ws = workspace && workspace !== cloud.home() ? workspace : null;
   const root = cloud.chain(ws)?.state?.moved;
   const bound = root === undefined ? undefined : cloud.locked(ws)?.state?.persons.get(sub);
