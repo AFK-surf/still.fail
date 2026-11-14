@@ -463,6 +463,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
           } else if f.mode == "chat-turn-failed" {
             with_failed_turn(rich_chat(f.older), f.step > 0)
+          } else if f.mode == "chat-turn-unanswered" {
+            with_unanswered_turn(rich_chat(f.older), f.step > 0)
           } else if f.mode == "chat-model-limit-before" || f.mode == "chat-model-limit-after" {
             with_model_limit(rich_chat(f.older), f.mode == "chat-model-limit-after")
           } else if f.mode == "chat-run-change" {
@@ -2378,6 +2380,35 @@ fn with_failed_turn(v : Json, retried : Bool) -> Json {
     Object(m) => {
       let o = m.copy()
       let words = if @sf.language() == "en" { "Connection lost; reply to retry" } else { "与模型服务的连接中断，回复即可重试" }
+      let notice : Map[String, Json] = { "failed": true, "words": Json::string(words) }
+      if !retried {
+        notice["againSession"] = "s-c1"
+      }
+      o["messages"] = [
+        msg(1, "person", by_person("林"), "请继续处理这个任务", "刚刚", { "mine": true }),
+        msg(2, "ember", { "name": "still.fail" }, "⚠️ " + words, "刚刚", { "notice": Json::object(notice) }),
+      ]
+      o["asks"] = []
+      o["askClear"] = false
+      o["more"] = false
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The chat `v` ending on a turn the station stopped asking for a state ("chat-turn-unanswered"): its notice
+/// (回复即可继续) offers 重试 too till it is pressed (`retried`).
+fn with_unanswered_turn(v : Json, retried : Bool) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let words = if @sf.language() == "en" {
+        "This turn stopped without a result; reply to continue"
+      } else {
+        "本轮未产出结果即停止，回复即可继续"
+      }
       let notice : Map[String, Json] = { "failed": true, "words": Json::string(words) }
       if !retried {
         notice["againSession"] = "s-c1"
