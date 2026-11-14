@@ -284,7 +284,8 @@ pub fn vault_foot_node(
           p,
           fn() { tr(if remove() { "android-settings.vault.act.remove" } else if describe() { "android-settings.vault.act.change" } else if save() { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }) },
           approve,
-          tone=Primary,
+          // (one to delete the item: red, as what cannot be undone)
+          tone=if @signals.untracked(remove) { DangerSolid } else { Primary },
           busy=fn() { busy(true) },
           disabled=fn() { under() || empty() || !valid_time() },
           card_words=foot,

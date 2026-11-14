@@ -1758,7 +1758,7 @@ test("a request withdrawn by the agent that asked: its card closed, gone from it
     const [r] = pendingOf(h.secrets, null, "bob@x.com");
     assert.ok(r);
     const told = h.notified.length;
-    assert.throws(() => h.secrets.cancel("s2", r.id), /No such request in this chat/);
+    assert.throws(() => h.secrets.cancel("s2", r.id), /unknown session/);
     assert.throws(() => h.secrets.cancel("s1", "r_none"), /No such request in this chat/);
     assert.match(h.secrets.cancel("s1", r.id), /Withdrew request r_\w+/);
     assert.deepEqual(pendingOf(h.secrets, null, "bob@x.com"), []);

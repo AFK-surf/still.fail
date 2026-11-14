@@ -774,7 +774,7 @@ pub fn vault_foot(
           }
           act(true, "vault.approve", what, obj(params))
         }
-        @sf.button(c, tr(yes), key="vault/" + request + "/yes", tone=Primary, busy=busy(true), disabled=under || empty || !valid_time, on_press=approve)
+        @sf.button(c, tr(yes), key="vault/" + request + "/yes", tone=if remove { DangerSolid } else { Primary }, busy=busy(true), disabled=under || empty || !valid_time, on_press=approve)
         if entered && !under && !empty && valid_time {
           // (told once the frame's builds are over: Enter in the field is seen by the build it came to)
           c.tell("vault/" + request + "/approve", approve)
