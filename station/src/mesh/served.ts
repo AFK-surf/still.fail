@@ -23,6 +23,9 @@ export const SERVED_ROUTES = [
   "GET /admin/api/threads", "GET /admin/api/threads/*", "GET /admin/api/threads/*/entries", "GET /admin/api/threads/*/letters",
   // (several of those in one: admin.ts `batch`, all answered there or the batch given Node)
   "POST /admin/api/batch",
+  "GET /admin/api/jobs", "GET /admin/api/jobs/*", "GET /admin/api/jobs/*/log",
+  // (a list read again as what changed of it: routes/changed.ts)
+  "POST /admin/api/changed/chats", "POST /admin/api/changed/sessions", "POST /admin/api/changed/threads",
 ];
 /// How many of the program answer at once (each one read at a time, as a reader of the pool's).
 const SERVERS = 2;

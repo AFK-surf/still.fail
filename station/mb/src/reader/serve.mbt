@@ -418,7 +418,8 @@ async fn Serving::answer(self : Serving, conn : Json, who : Member, asked : Json
     }
     return self.whole(headers, @utf8.encode("{\"answers\":[\{answers}]}"), level=9)
   }
-  match self.read_path(who, lang, words, path) {
+  let posted = if asked.value("method") == Some(Json::string("POST")) { Some((body, runtimes)) } else { None }
+  match self.read_path(who, lang, words, path, posted?) {
     Text(status, text) => self.whole(headers, @utf8.encode(text), status~)
     Give => self.fallback(conn, asked, body)
   }
@@ -444,7 +445,14 @@ fn batched(route : String) -> Bool {
 
 ///|
 /// One GET of `who`'s read here (`path` with its /admin/api and its query), as the admin API answers it.
-fn Serving::read_path(self : Serving, who : Member, lang : String, words : Json, path : String) -> Done raise {
+fn Serving::read_path(
+  self : Serving,
+  who : Member,
+  lang : String,
+  words : Json,
+  path : String,
+  posted? : (Bytes, Array[String]),
+) -> Done raise {
   let error = (m : String) => ({ "error": Json::string(m) } : Json).stringify()
   let (route, query) = match path.find("?") {
     Some(at) => (path[0:at].to_string(), path[at + 1:].to_string())
@@ -455,15 +463,25 @@ fn Serving::read_path(self : Serving, who : Member, lang : String, words : Json,
   if self.elsewhere(route, who.viewer) is Some(m) {
     return Text(404, error(m))
   }
-  let read = match route_read(route, pairs, who.viewer, lang) {
+  let routed = match posted {
+    Some((body, runtimes)) => changed_read(route, pairs, who.viewer, lang, body, runtimes)
+    None => route_read(route, pairs, who.viewer, lang)
+  }
+  let read = match routed {
     Read(op, args) => (op, args)
     Missing(m) => return Text(404, error(m))
+    Refuse(status, m) => return Text(status, error(m))
     Not => return Give
   }
   let (op, args) = read
   guard args is Object(a) else { return Give }
-  // (the words and the time the pool gives a read: read/pool.ts `wordsIn`; a session's history only its own word)
-  if op == "timeline" {
+  // (the words and the time the pool gives a read: read/pool.ts `wordsIn`, a list's in `changed` its own args'
+  // (`changedOf`); a session's history only its own word)
+  if op == "changed" {
+    guard a.get("args") is Some(Object(inner)) else { return Give }
+    inner["words"] = words
+    inner["now"] = Json::number(self.now().to_double())
+  } else if op == "timeline" {
     a["words"] = { "inScriptOutput": words.value("inScriptOutput").unwrap_or(Json::string("")) }
   } else {
     a["words"] = words
@@ -578,6 +596,7 @@ async fn Serving::fallback(self : Serving, conn : Json, asked : Json, body : Byt
 priv enum Route {
   Read(String, Json)
   Missing(String)
+  Refuse(Int, String)
   Not
 }
 
@@ -643,6 +662,19 @@ fn Serving::elsewhere(self : Serving, route : String, viewer : Json) -> String? 
         None
       } else {
         Some("unknown thread \{id}")
+      }
+    }
+    "jobs" => {
+      // (one not there is the route's to say)
+      guard db.all("SELECT session_key FROM jobs WHERE id = ?", [Json::string(id)]) is [job, ..] else { return None }
+      let ws = match db.all("SELECT ws FROM sessions WHERE key = ?", [job.get("session_key").unwrap_or(Json::null())]) {
+        [row, ..] => row.get("ws").unwrap_or(Json::null())
+        _ => Json::null()
+      }
+      if sees(ws) {
+        None
+      } else {
+        Some("no job \{id}")
       }
     }
     _ => None
@@ -713,8 +745,64 @@ fn route_read(route : String, pairs : Array[(String, String)], viewer : Json, la
       let params = pairs.map(p => Json::array([Json::string(p.0), Json::string(p.1)]))
       Read(which.to_string(), { "viewer": viewer, "thread": Json::number(signed_number(id)), "params": Json::array(params) })
     }
+    ["jobs"] => Read("openJobs", { "viewer": viewer, "lang": l, "chats": Json::boolean(param("chats") != Some("0")) })
+    ["jobs", id] => Read("job", { "id": Json::string(segment(id)) })
+    ["jobs", id, "log"] => {
+      let args : Map[String, Json] = { "id": Json::string(segment(id)) }
+      given(args, ["lines"])
+      Read("jobLog", Json::object(args))
+    }
     _ => Not
   }
+}
+
+///|
+/// api/routes/changed.ts: a list read again as what changed of it, the list's own args as its GET's (`id` what names
+/// a row), the client's `held` and the runtimes it takes.
+fn changed_read(route : String, pairs : Array[(String, String)], viewer : Json, lang : String, body : Bytes, runtimes : Array[String]) -> Route {
+  let list = match route {
+    "/admin/api/changed/chats" => "chats"
+    "/admin/api/changed/sessions" => "sessions"
+    "/admin/api/changed/threads" => "threads"
+    _ => return Not
+  }
+  if body.length() > 1000000 {
+    return Refuse(413, "request too large")
+  }
+  let held = match (try { Some(@json.parse(@utf8.decode_lossy(body))) } catch { _ => None }) {
+    Some(Object(m)) =>
+      match m.get("held") {
+        Some(Object(_) as h) => Some(h)
+        _ => None
+      }
+    _ => None
+  }
+  guard held is Some(held) else { return Refuse(400, "held: each held row's digest by its id") }
+  let get = match route_read("/admin/api/" + list, pairs, viewer, lang) {
+    Read(_, args) => args
+    _ => return Not
+  }
+  let id = if list == "chats" { "id" } else if list == "sessions" { "key" } else { "id" }
+  // (the chats' own args: a GET /chats with neither marks, shared nor rows, api/routes/chats.ts `chatsOf`)
+  let args = if list == "chats" {
+    let a : Map[String, Json] = { "viewer": viewer, "archived": Json::boolean(pairs.iter().any(p => p.0 == "archived" && p.1 == "1")) }
+    for p in pairs {
+      if p.0 == "page" {
+        a["page"] = Json::string(p.1)
+        break
+      }
+    }
+    Json::object(a)
+  } else {
+    get
+  }
+  Read("changed", {
+    "op": Json::string(list),
+    "args": args,
+    "id": Json::string(id),
+    "held": held,
+    "runtimes": Json::array(runtimes.map(r => Json::string(r))),
+  })
 }
 
 ///|

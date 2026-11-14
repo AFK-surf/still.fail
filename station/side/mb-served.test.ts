@@ -156,6 +156,10 @@ test("a routed request is answered by the MoonBit program as the admin API answe
     [`/threads/${thread}/entries?before=20&limit=5`, "entries", { viewer, thread, params: [["before", "20"], ["limit", "5"]] }],
     [`/threads/${thread}/entries?before=x`, "entries", { viewer, thread, params: [["before", "x"]] }],
     [`/threads/${thread}/letters`, "letters", { viewer, thread, params: [] }],
+    ["/jobs", "openJobs", { viewer, lang: "en", chats: true }],
+    ["/jobs?chats=0", "openJobs", { viewer, lang: "en", chats: false }],
+    ["/jobs/none", "job", { id: "none" }],
+    ["/jobs/none/log?lines=5", "jobLog", { id: "none", lines: "5" }],
   ] as const;
   // What a read needs prepared first (a station's pool prepares it as a read is refused for it, and the program gives such
   // a request to Node meanwhile), prepared as the station's own readers do: then the program answers each itself.
@@ -190,6 +194,24 @@ test("a routed request is answered by the MoonBit program as the admin API answe
   ] };
   assert.equal(bh.status, 200, JSON.stringify(bh));
   assert.deepEqual(batched, expected, diffAt(batched, expected) ?? "");
+  // a list read again as what changed of it (routes/changed.ts): what the device holds of it, by digest
+  for (const [list, args, id] of [
+    ["sessions", { connect: null, archived: false, lang: "en", viewer }, "key"],
+    ["threads", { viewer, session: null, lang: "en" }, "id"],
+    ["chats", { viewer, archived: false }, "id"],
+  ] as const) {
+    const cs = await theirs.openBi();
+    await cs.write(Buffer.from(`${JSON.stringify({ ...routedHead, method: "POST", path: `/admin/api/changed/${list}` })}\n${JSON.stringify({ held: { s1: "x" } })}`));
+    await cs.finish();
+    const got = await readAll(cs);
+    const at2 = got.indexOf(10);
+    const h = JSON.parse(got.subarray(0, at2).toString());
+    const b = got.subarray(at2 + 1);
+    const ours = JSON.parse((h.headers["content-encoding"] === "zstd" ? zstdDecompressSync(b) : b).toString());
+    const want = JSON.parse(await worker.read("changed", { op: list, args, id, held: { s1: "x" }, runtimes: [...RUNTIME_KINDS] }, "en"));
+    assert.equal(h.status, 200, JSON.stringify(h));
+    assert.deepEqual(ours, want, `changed/${list}: ${diffAt(ours, want)}`);
+  }
   assert.equal(given.length, givenBefore, `given to Node: ${given.slice(givenBefore).map((g) => g.head.path).join(", ")}`);
   // what is of another workspace, and a thread that is no number: not there, as the admin API says
   assert.deepEqual(await read("/sessions/elsewhere"), { status: 404, body: { error: "unknown session elsewhere" } });
