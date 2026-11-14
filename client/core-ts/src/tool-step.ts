@@ -14,12 +14,12 @@ export type ToolPart =
   | { kind: "path"; path: string; extra?: string }
   /** Lines: ` ` the same, `-` taken out, `+` put in, `@` a file's or a hunk's header. */
   | { kind: "diff"; rows: [string, string][] }
-  /** Words as Markdown. */
-  | { kind: "markdown"; text: string }
+  /** Words as Markdown, optionally with dispatch card metadata (`target` recipient/agent and `summary`). */
+  | { kind: "markdown"; text: string; target?: string; summary?: string }
   /** A list of things to do: completed, in_progress, or anything else. */
   | { kind: "plan"; items: { text: string; status: string }[] }
-  /** Fields one to a row: short in a line, long as a block, nested data as JSON. */
-  | { kind: "fields"; rows: { key: string; value: string; form: "short" | "long" | "json" }[] }
+  /** Fields one to a row: short in a line (`prose`: natural-language text), long as a Markdown block, nested data as JSON. */
+  | { kind: "fields"; rows: { key: string; value: string; form: "short" | "long" | "json"; prose?: true }[] }
   /** The one thing it asked about (a search's words, an address), in a line of its own. */
   | { kind: "lead"; text: string }
   /** Nothing to show, said. */
@@ -207,16 +207,74 @@ function patch(text: string): ToolPart {
   return { kind: "diff", rows };
 }
 
-/** Fields one to a row: short ones inline, long text as a block, nested data as compact JSON. */
+const PROSE_FIELD_KEYS = new Set([
+  "summary",
+  "description",
+  "title",
+  "reason",
+  "about",
+  "role",
+  "Role",
+  "explanation",
+  "note",
+  "question",
+]);
+
+const LONG_TEXT_KEYS = new Set([
+  "message",
+  "Message",
+  "prompt",
+  "Prompt",
+  "text",
+  "body",
+  "content",
+  "Content",
+  "reason",
+  "notes",
+  "brief",
+  "task",
+  "SystemPrompt",
+]);
+
+const DISPATCH_TOOLS = new Set([
+  "Agent",
+  "Task",
+  "SendMessage",
+  "send_message",
+  "subagent",
+  "spawn_agent",
+  "invoke_subagent",
+  "followup_task",
+  "session_send",
+  "chat_create",
+]);
+
+function isLongFieldText(key: string, value: string): boolean {
+  if (value.includes("\n") || value.length > 90) return true;
+  if (LONG_TEXT_KEYS.has(key) && value.length > 40) return true;
+  if (value.length > 40 && /[`*_#[\]]/.test(value)) return true;
+  return false;
+}
+
+/** Fields one to a row: short ones inline, long text as a full-width Markdown block, nested data as compact JSON. */
 function fields(a: Args, skip: string[], say: Say): ToolPart {
-  const rows = Object.entries(a).filter(([k, v]) => !skip.includes(k) && v !== null && v !== undefined && v !== "");
+  const fieldSkip = skip.filter((k) => k !== "description" && k !== "summary");
+  const rows = Object.entries(a).filter(([k, v]) => !fieldSkip.includes(k) && v !== null && v !== undefined && v !== "");
   if (!rows.length) return { kind: "none", text: say("web-main.tool.noArgs") };
   return {
     kind: "fields",
-    rows: rows.map(([k, v]) => typeof v === "string"
-      ? { key: k, value: v, form: v.includes("\n") || v.length > 120 ? "long" : "short" }
-      : typeof v === "object" ? { key: k, value: JSON.stringify(v, null, 2), form: "json" }
-      : { key: k, value: String(v), form: "short" }),
+    rows: rows.map(([k, v]) => {
+      if (typeof v === "string") {
+        const long = isLongFieldText(k, v);
+        return long
+          ? { key: k, value: v, form: "long" as const }
+          : { key: k, value: v, form: "short" as const, ...(PROSE_FIELD_KEYS.has(k) ? { prose: true as const } : {}) };
+      }
+      if (typeof v === "object") {
+        return { key: k, value: JSON.stringify(v, null, 2), form: "json" as const };
+      }
+      return { key: k, value: String(v), form: "short" as const };
+    }),
   };
 }
 
@@ -247,9 +305,69 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
     const items = ((a.todos ?? a.plan) as unknown[]).filter(isArgs).map((t) => ({ text: str(t.content) ?? str(t.step) ?? "", status: str(t.status) ?? "" }));
     return [...(typeof a.explanation === "string" ? [{ kind: "markdown", text: a.explanation } as ToolPart] : []), { kind: "plan", items }];
   }
-  const prompt = str(a.prompt) ?? str(a.Prompt);
-  if (prompt !== undefined && (name === "Agent" || name === "Task" || name === "subagent" || name === "invoke_subagent" || prompt.length > 200)) {
-    return [...facts(a, [...skip, "prompt", "Prompt"]), { kind: "markdown", text: prompt }];
+  const dispatchBody =
+    str(a.prompt) ??
+    str(a.Prompt) ??
+    str(a.message) ??
+    str(a.Message) ??
+    str(a.brief) ??
+    str(a.task) ??
+    (DISPATCH_TOOLS.has(name) ? str(a.text) ?? str(a.content) : undefined);
+  if (
+    dispatchBody !== undefined &&
+    (DISPATCH_TOOLS.has(name) ||
+      ((a.prompt !== undefined || a.Prompt !== undefined) && dispatchBody.length > 200))
+  ) {
+    const target =
+      str(a.to) ??
+      str(a.recipient) ??
+      str(a.Recipient) ??
+      str(a.agent_id) ??
+      str(a.subagent_type) ??
+      str(a.TypeName) ??
+      str(a.task_name) ??
+      str(a.chat) ??
+      str(a.name);
+    const summary =
+      str(a.summary) ??
+      str(a.description) ??
+      str(a.Role) ??
+      str(a.role) ??
+      str(a.title);
+    const consumed = [
+      ...skip,
+      "prompt",
+      "Prompt",
+      "message",
+      "Message",
+      "brief",
+      "task",
+      "text",
+      "content",
+      "to",
+      "recipient",
+      "Recipient",
+      "agent_id",
+      "subagent_type",
+      "TypeName",
+      "task_name",
+      "chat",
+      "name",
+      "summary",
+      "description",
+      "Role",
+      "role",
+      "title",
+    ];
+    return [
+      ...facts(a, consumed),
+      {
+        kind: "markdown",
+        text: dispatchBody,
+        ...(target ? { target } : {}),
+        ...(summary ? { summary } : {}),
+      },
+    ];
   }
   if (typeof a.text === "string" && a.text.length > 0 && Object.values(a).filter((v) => typeof v === "string" && v.length > 120).length <= 1) {
     return [...facts(a, [...skip, "text"]), { kind: "markdown", text: a.text }];
@@ -378,8 +496,15 @@ export function toolResult(name: string, call: string, result: string, failed: b
     const lines = name === "read" ? readLines(inner, /^\d+: ?/) : null;
     return [lines !== null ? code(lines, languageOf(file)) : output(inner, false)];
   }
-  const body = stripped.trim() !== "" ? stripped : result;
-  const parsed = failed ? undefined : parse(body);
+  const rawBody = stripped.trim() !== "" ? stripped : result;
+  const parsedRaw = failed ? undefined : parse(rawBody);
+  const unwrapped =
+    Array.isArray(parsedRaw) &&
+    parsedRaw.length > 0 &&
+    parsedRaw.every((item) => isArgs(item) && item.type === "text" && typeof item.text === "string")
+      ? parsedRaw.map((item) => (item as { text: string }).text).join("\n")
+      : rawBody;
+  const parsed = failed ? undefined : parse(unwrapped);
   if (parsed !== undefined) return [isArgs(parsed) ? fields(parsed, [], say) : { kind: "json", text: JSON.stringify(parsed, null, 2) }];
-  return [output(body, failed)];
+  return [output(unwrapped, failed)];
 }

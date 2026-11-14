@@ -116,6 +116,7 @@ export function kindOf(tool: string, input?: string | Record<string, J> | null):
     case "define_subagent":
     case "manage_subagents":
     case "send_message":
+    case "SendMessage":
     case "followup_task":
     case "list_agents":
     case "wait_agent":
@@ -384,8 +385,17 @@ export function told(tool: string, input: string, known: Known = {}): string | n
   if (name === "clock__curr_time") return "查看当前时间";
   if (name === "list_agents") return "查看子 agent 列表";
   if (name === "wait_agent") return "等待子 agent 完成";
-  if (name === "send_message") {
-    const to = typeof a.Recipient === "string" && a.Recipient ? a.Recipient : typeof a.recipient === "string" && a.recipient ? a.recipient : typeof a.task_name === "string" && a.task_name ? a.task_name : "";
+  if (name === "send_message" || name === "SendMessage") {
+    if (typeof a.summary === "string" && a.summary.trim() !== "") return firstLine(a.summary);
+    const to = typeof a.Recipient === "string" && a.Recipient
+      ? a.Recipient
+      : typeof a.recipient === "string" && a.recipient
+      ? a.recipient
+      : typeof a.to === "string" && a.to
+      ? a.to
+      : typeof a.task_name === "string" && a.task_name
+      ? a.task_name
+      : "";
     const msg = typeof a.Message === "string" && !a.Message.startsWith("gAAAAAB")
       ? firstLine(a.Message)
       : typeof a.message === "string" && !a.message.startsWith("gAAAAAB")
@@ -430,14 +440,20 @@ export function doing(tool: string, input: string, known: Known = {}): string {
   const own = told(tool, input, known);
   if (own) return own;
   const a = args(input) ?? {};
-  const desc = typeof a.description === "string" ? a.description : typeof a.toolSummary === "string" ? a.toolSummary : "";
+  const desc = typeof a.description === "string"
+    ? a.description
+    : typeof a.toolSummary === "string"
+    ? a.toolSummary
+    : typeof a.summary === "string"
+    ? a.summary
+    : "";
   const said = firstLine(desc);
   if (said) return said;
   const kind = kindOf(tool, a);
   const keys =
     kind === "search"
       ? ["pattern", "Pattern", "query", "Query", "queries", "path", "Path", "target_directory", "DirectoryPath", "SearchDirectory", "SearchPath", "file_path", "url"]
-      : ["command", "cmd", "CommandLine", "file_path", "target_file", "path", "Path", "target_directory", "DirectoryPath", "pattern", "Pattern", "url", "query", "Query", "queries", "prompt", "Prompt"];
+      : ["command", "cmd", "CommandLine", "file_path", "target_file", "path", "Path", "target_directory", "DirectoryPath", "pattern", "Pattern", "url", "query", "Query", "queries", "prompt", "Prompt", "message", "Message", "text", "reason", "title", "Role", "to", "Recipient", "recipient"];
   let target = "";
   for (const name of keys) {
     const v = a[name];

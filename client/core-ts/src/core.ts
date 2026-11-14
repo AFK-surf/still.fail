@@ -400,7 +400,17 @@ export class Core {
       handlers.historyTool = (_i, call) => {
         const c = call as Extract<Call, { kind: "historyTool" }>;
         // Markdown read here for the clients that draw its tree (markdown.ts), as everywhere else.
-        const withMd = (parts: ToolPart[]) => parts.map((part) => (part.kind === "markdown" ? { ...part, md: markdown(part.text) } : part));
+        const withMd = (parts: ToolPart[]) =>
+          parts.map((part) => {
+            if (part.kind === "markdown") return { ...part, md: markdown(part.text) };
+            if (part.kind === "fields") {
+              return {
+                ...part,
+                rows: part.rows.map((r) => (r.form === "long" ? { ...r, md: markdown(r.value) } : r)),
+              };
+            }
+            return part;
+          });
         return Effect.sync(() => ({
           call: withMd(toolCall(c.name, c.call, c.said, t)),
           result: c.result === null ? null : withMd(toolResult(c.name, c.call, c.result, c.failed, t)),

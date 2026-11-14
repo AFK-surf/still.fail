@@ -97,8 +97,18 @@ export function hint(text: string, tool = ""): string {
           "url",
           "description",
           "toolSummary",
+          "summary",
           "prompt",
           "Prompt",
+          "message",
+          "Message",
+          "text",
+          "reason",
+          "title",
+          "Role",
+          "to",
+          "Recipient",
+          "recipient",
         ]
       : [
           "command",
@@ -120,22 +130,36 @@ export function hint(text: string, tool = ""): string {
           "queries",
           "description",
           "toolSummary",
+          "summary",
           "prompt",
           "Prompt",
+          "message",
+          "Message",
+          "text",
+          "reason",
+          "title",
+          "Role",
+          "to",
+          "Recipient",
+          "recipient",
         ];
   const key = keys.find((k) => a[k] !== undefined && a[k] !== null && a[k] !== "");
-  const value = key !== undefined ? a[key] : undefined;
+  const fallbackKey = key === undefined
+    ? Object.keys(a).find((k) => k !== "toolSummary" && (typeof a[k] === "string" && a[k].trim() !== ""))
+    : undefined;
+  const activeKey = key ?? fallbackKey;
+  const value = activeKey !== undefined ? a[activeKey] : undefined;
   const raw = typeof value === "string" ? value : Array.isArray(value) ? value.map((p) => (typeof p === "string" ? p : "")).join(" ") : "";
-  const isCmd = key === "command" || key === "cmd" || key === "CommandLine";
+  const isCmd = activeKey === "command" || activeKey === "cmd" || activeKey === "CommandLine";
   const isPath =
-    key === "file_path" ||
-    key === "target_file" ||
-    key === "path" ||
-    key === "Path" ||
-    key === "target_directory" ||
-    key === "DirectoryPath" ||
-    key === "SearchDirectory" ||
-    key === "SearchPath";
+    activeKey === "file_path" ||
+    activeKey === "target_file" ||
+    activeKey === "path" ||
+    activeKey === "Path" ||
+    activeKey === "target_directory" ||
+    activeKey === "DirectoryPath" ||
+    activeKey === "SearchDirectory" ||
+    activeKey === "SearchPath";
   const cleaned = isCmd ? summaryCommand(raw) : isPath ? cleanPath(raw) : raw;
   if (cleaned !== "") return line(cleaned, 160);
   if (tool.startsWith("File ")) return line(cleanPath(tool.slice(5).trim()), 160);
@@ -147,7 +171,13 @@ export function hint(text: string, tool = ""): string {
 
 function describe(text: string): string | null {
   const a = args(text);
-  const d = typeof a?.description === "string" ? a.description : typeof a?.toolSummary === "string" ? a.toolSummary : null;
+  const d = typeof a?.description === "string"
+    ? a.description
+    : typeof a?.toolSummary === "string"
+    ? a.toolSummary
+    : typeof a?.summary === "string"
+    ? a.summary
+    : null;
   if (d === null || d.trim() === "") return null;
   return line(d.trim(), 160);
 }
@@ -202,7 +232,7 @@ function stepName(tool: string, text: string): string {
   if (name === "web_search" || name === "search_web" || name === "read_url_content" || name === "web__run") return "WebSearch";
   if (name === "web_fetch") return "WebFetch";
   if (name === "search_tool") return "ToolSearch";
-  if (name === "subagent" || name === "spawn_agent" || name === "invoke_subagent" || name === "define_subagent" || name === "manage_subagents" || name === "swarm" || name === "send_message" || name === "followup_task" || name === "list_agents" || name === "wait_agent") return "Agent";
+  if (name === "subagent" || name === "spawn_agent" || name === "invoke_subagent" || name === "define_subagent" || name === "manage_subagents" || name === "swarm" || name === "send_message" || name === "SendMessage" || name === "followup_task" || name === "list_agents" || name === "wait_agent") return "Agent";
   if (kindOf(tool, a) === "command" && (a?.CommandLine !== undefined || /^(?:cd|git|pnpm|npm|node|cargo|python3?|sh|bash|zsh|rg|ls|cat|mkdir|rm|cp|mv|curl|gh)\b/.test(name))) {
     return "Bash";
   }

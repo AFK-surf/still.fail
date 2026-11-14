@@ -156,7 +156,17 @@ for (const key of sorted(relays)) {
 for (const key of sorted(tools)) {
   const ask = JSON.parse(key) as { name?: string; call?: string; result?: string; failed?: boolean; said?: boolean };
   const say = (k: string, a?: Record<string, string | number>) => tr("zh", k, a);
-  const withMd = (parts: ToolPart[]) => parts.map((p) => (p.kind === "markdown" ? { ...p, md: markdown(p.text) } : p));
+  const withMd = (parts: ToolPart[]) =>
+    parts.map((p) => {
+      if (p.kind === "markdown") return { ...p, md: markdown(p.text) };
+      if (p.kind === "fields") {
+        return {
+          ...p,
+          rows: p.rows.map((r) => (r.form === "long" ? { ...r, md: markdown(r.value) } : r)),
+        };
+      }
+      return p;
+    });
   kept["history.tool"][key] = {
     call: withMd(toolCall(ask.name ?? "", ask.call ?? "", ask.said === true, say)),
     result: typeof ask.result === "string" ? withMd(toolResult(ask.name ?? "", ask.call ?? "", ask.result, ask.failed === true, say)) : null,

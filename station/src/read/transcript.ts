@@ -93,6 +93,20 @@ const SAYING = [
   "Role",
   "Recipient",
   "Message",
+  "summary",
+  "message",
+  "recipient",
+  "subagent_type",
+  "TypeName",
+  "agent_id",
+  "brief",
+  "task",
+  "text",
+  "reason",
+  "about",
+  "Action",
+  "TaskId",
+  "skill",
 ];
 /// Calls whole in brief too: what they hold is what a history shows of them (a post, a state, what went to Slack).
 const WHOLE = new Set(["chat_post", "chat_state", "slack_api"]);

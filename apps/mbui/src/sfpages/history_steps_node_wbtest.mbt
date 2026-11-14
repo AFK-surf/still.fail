@@ -264,3 +264,82 @@ test "history group thought hides duplicate first-line preview in summary when e
   assert_true(t.rect_of(full) is Some(_))
   steps_reset()
 }
+
+///|
+test "history tool step renders dispatch card, full-width stacked long fields, and result section header" {
+  let msg = "All 4 review findings are valid (`src/sf/markdown.mbt`). Please fix all 4."
+  let sum = "Tell verifier all 4 findings are valid, ask to fix all"
+  let call_json = "{\"to\":\"a036720bc24844903\",\"message\":\"All 4 review findings are valid (`src/sf/markdown.mbt`). Please fix all 4.\",\"summary\":\"Tell verifier all 4 findings are valid, ask to fix all\"}"
+  let res_json = "{\"type\":\"message_sent\",\"recipient\":\"a036720bc24844903\",\"recipient_kind\":\"agent\"}"
+  let item : Json = {
+    "body": {
+      "kind": "group",
+      "content": {
+        "summary": sum,
+        "failures": 0,
+        "pending": 0,
+        "rows": [
+          {
+            "kind": "step",
+            "content": {
+              "name": "SendMessage",
+              "said": "",
+              "hint": "",
+              "meta": "",
+              "call": Json::string(call_json),
+              "result": Json::string(res_json),
+              "failed": false,
+            },
+          },
+        ],
+      },
+    },
+  }
+  steps_reset()
+  @sf.set_words(@sfbase.fill)
+  let src = @sffixture.fixture("history")
+  let ask : Map[String, Json] = {
+    "name": Json::string("SendMessage"),
+    "call": Json::string(call_json),
+    "failed": Json::boolean(false),
+    "said": Json::boolean(false),
+    "result": Json::string(res_json),
+  }
+  let tk = "g-send/group/0\u{1}" + Json::object(ask).stringify()
+  steps_own.tools[tk] = {
+    "call": [
+      {
+        "kind": "markdown",
+        "target": "a036720bc24844903",
+        "summary": Json::string(sum),
+        "text": Json::string(msg),
+        "md": [["p", ["All 4 review findings are valid (", ["code", "src/sf/markdown.mbt"], "). Please fix all 4."]]],
+      },
+    ],
+    "result": [
+      {
+        "kind": "fields",
+        "rows": [
+          { "key": "type", "value": "message_sent", "form": "short" },
+          { "key": "recipient", "value": "a036720bc24844903", "form": "short" },
+          { "key": "recipient_kind", "value": "agent", "form": "short" },
+        ],
+      },
+    ],
+  }
+  steps_own.opened["g-send/group"] = true
+  steps_own.opened["g-send/group/0"] = true
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=600.0, tree=fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    let tips = @sf.TipLayer::new(fn() { Some(root) })
+    root.lines_up(Is(None)) |> ignore
+    root.box(fn(v) { item_node(v, src, "ws1/st1", "s-c1", "g-send", Some(item), false, tips) }) |> ignore
+  })
+  t.draw()
+  assert_true(t.rect_of("代理") is Some(_), msg="SendMessage shows 代理 badge")
+  assert_true(t.rect_of("→ a036720bc24844903") is Some(_), msg="dispatch card shows target badge")
+  assert_true(t.rect_of("返回") is Some(_), msg="result section header is shown")
+  assert_true(t.rect_of("message_sent") is Some(_), msg="result fields are shown")
+  assert_true(t.rect_of("recipient_kind") is Some(_), msg="recipient_kind is shown")
+  steps_reset()
+}
