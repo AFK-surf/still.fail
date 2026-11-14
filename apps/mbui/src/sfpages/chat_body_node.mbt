@@ -287,8 +287,8 @@ priv struct ChatBodyKeeps {
 /// put where `place` asks: where it opens as chat_open_place says (its unread line `lead` under its top, where it was
 /// left, else at its end, followed there), and at an unread line come after while it is still at its end; a chat too short to fill what shows at its foot, over the composer (the old
 /// list's from_end); the page before asked as it nears its top. `made`, told each row's key and what holds it as its row
-/// is made (a block made, or made again as its key comes to be another kind of row). `read`, given `place` and its rows,
-/// for what is told the core of what is read (chat_read_node). `to`: the chat it is (none in a list's own tests), its
+/// is made (a block made, or made again as its key comes to be another kind of row). `read`, given `place`, `scroll` and
+/// its rows, for what is told the core of what is read (chat_read_node). `to`: the chat it is (none in a list's own tests), its
 /// way to the newest in the list's foot over the composer and the message it is told to go to brought in
 /// (chat_jump_node's), while `shows` (it is drawn) where the reader is kept for a go-to inside it.
 fn chat_body_node(
@@ -307,7 +307,7 @@ fn chat_body_node(
   place? : @view.ListPlace[String] = @view.ListPlace::new(),
   keeps? : ChatBodyKeeps = { opened: notices_open, copied: @sf.LiveMap::new(), steadies: ActivitySteadies::new() },
   made? : (String, @view.View) -> Unit = fn(_, _) {  },
-  read? : (@view.ListPlace[String], () -> ChatBodyRows) -> Unit = fn(_, _) {  },
+  read? : (@view.ListPlace[String], @view.Scroll, () -> ChatBodyRows) -> Unit = fn(_, _, _) {  },
   to? : ChatRef,
   shows? : () -> Bool = fn() { true },
 ) -> @view.View {
@@ -587,7 +587,7 @@ fn chat_body_node(
     },
     at_start=false,
   )
-  read(place, fn() { rows.get() })
+  read(place, scroll, fn() { rows.get() })
   v
 }
 
