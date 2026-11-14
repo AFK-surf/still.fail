@@ -1197,6 +1197,8 @@ pub struct Tree {
   /// told as a node's pointer's shape is said anew (View::cursor): what hosts it shows the pointer's shape again, no frame
   /// asked for it (nothing is drawn for a shape)
   mut on_cursor : () -> Unit
+  /// whether what is pressed shows the hand as the pointer is over it, not the arrow (Tree::hand_over_presses)
+  hands : @signals.Signal[Bool]
   /// what hosts the tree told as what may take input changes (a modal layer said on, what is drawn over what, a node
   /// let go, leaving, said to take no press): what it holds of its own, an old view's press, to ask whether that may
   /// still take input (Tree::takes_presses)
@@ -1498,6 +1500,7 @@ pub fn Tree::new(
     rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
     on_cursor: fn() {  },
+    hands: @signals.signal(true),
     on_modals: fn() {  },
     shared_live: {},
     shared_n: 0,

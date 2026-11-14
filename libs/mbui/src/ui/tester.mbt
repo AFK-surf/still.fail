@@ -3300,6 +3300,8 @@ pub fn Tester::cursor(self : Tester) -> Cursor {
     6 => Grabbing
     7 => Crosshair
     8 => NotAllowed
+    9 => ResizeNWSE
+    10 => ResizeNESW
     _ => Arrow
   }
 }

@@ -85,3 +85,17 @@ test "a still pointer over a node whose shape is said anew: the host told it at 
   // (before any frame: shown, none asked)
   assert_eq((t.cursor(), t.fake.cursors_told - told, t.fake.wants), (Grab, 1, false))
 }
+
+///|
+test "the window's tree said to show no hand over what is pressed: the arrow over a node's link too; said again, the hand" {
+  let m = links_made(@signals.signal(linked_runs))
+  let g = link_glyphs(m.t)[0]
+  let tree = view_app.val.unwrap()
+  tree.hand_over_presses(false)
+  m.t.move_to(g.0 + g.2 / 2.0, g.1 + g.3 / 2.0)
+  m.t.draw()
+  assert_eq(m.t.cursor(), Arrow, msg="over the link, no hand")
+  tree.hand_over_presses(true)
+  m.t.draw()
+  assert_eq(m.t.cursor(), Hand, msg="said again: the hand over it, the pointer still")
+}
