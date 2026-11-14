@@ -307,7 +307,12 @@ test("(a), (c) a member's log one entry longer, and (a) the chain one entry long
     lockView(w.inner, "ws");
     const log = since(s).calls;
     assert.equal(log.fold_held_js ?? 0, 0, `(${which}) the chain, unchanged, checked again: ${JSON.stringify(log)}`);
-    assert.equal(log.state4_moved_js ?? 0, 1, `(${which}) the state as if moved (or in force) made once: ${JSON.stringify(log)}`);
+    // ((a) the plan, the chain as if moved made of what is held anew each time, src/lock-handover.ts; (c) the state in
+    // force over the chain as it moved read once, kept while it is the chain held, src/lock-moved.ts `carriedOf`)
+    const made = which === "a" ? "state4_moved_js" : "state4_carried_js", other = which === "a" ? "state4_carried_js" : "state4_moved_js";
+    assert.equal(log[made] ?? 0, 1, `(${which}) the state as if moved (or in force) made once: ${JSON.stringify(log)}`);
+    assert.equal(log[other] ?? 0, 0, `(${which}) the state as if moved (or in force) made once: ${JSON.stringify(log)}`);
+    if (which === "c") assert.equal(log.carried_js ?? 0, 0, `(c) the chain as it moved, held, read again: ${JSON.stringify(log)}`);
     if (which === "a") {
       s = snapshot();
       // (the chain as the stations and this device hold it now: what it signed since by itself is on it)
