@@ -4,12 +4,16 @@
 // written as JSON.stringify writes it.
 
 ///|
-/// An entry (transcript.ts `TimelineEntry`), of it what a search reads.
+/// An entry (transcript.ts `TimelineEntry`): `said`, a call's brief made of its whole input (transcript.ts `briefs`).
 pub(all) struct Entry {
   at : String?
   kind : String
   text : String
   tool : String?
+  ok : Bool?
+  call_id : String?
+  subagent : Bool
+  said : String?
 }
 
 ///|
@@ -21,6 +25,22 @@ pub struct ReadState {
 ///|
 pub fn ReadState::new() -> ReadState {
   { inner: Map([]) }
+}
+
+///|
+/// A reading's state from what a mark or a snapshot kept of it (`new Map(inner)`).
+fn ReadState::of(pairs : Array[(String, Int)]) -> ReadState {
+  let inner = Map([])
+  for p in pairs {
+    inner[p.0] = p.1
+  }
+  { inner, }
+}
+
+///|
+/// What it keeps, in its order (`[...state.inner]`).
+fn ReadState::pairs(self : ReadState) -> Array[(String, Int)] {
+  self.inner.iter().collect()
 }
 
 ///|
@@ -203,42 +223,6 @@ fn parsed_args(raw : String) -> (@jsjson.JValue?, String) {
 }
 
 ///|
-fn dsh(r : @jsjson.JValue, out : Array[Entry]) -> Unit raise {
-  let kind = string_of(get(Some(r), "type")).unwrap_or("")
-  let at = time_at(r)
-  let data = get(Some(r), "data")
-  let message = match get(data, "message") {
-    Some(m) => Some(m)
-    None => data
-  }
-  if kind == "user/message" {
-    guard string_of(get(get(data, "source"), "kind")) == Some("user") else { return }
-    let text = dsh_text(get(data, "content"))
-    if trim(text) != "" {
-      out.push({ at, kind: "user", text: clip(text), tool: None })
-    }
-  } else if kind == "assistant/message" {
-    guard get(message, "content") is Some(Arr(blocks)) else { return }
-    for block in blocks {
-      let b = Some(block)
-      let t = string_of(get(b, "type"))
-      let text = string_of(get(b, "text")).unwrap_or("")
-      if t == Some("text") && trim(text) != "" {
-        out.push({ at, kind: "assistant", text: clip(text), tool: None })
-      } else if t == Some("reasoning") && trim(text) != "" {
-        out.push({ at, kind: "thinking", text: clip(text), tool: None })
-      } else if t == Some("tool-call") {
-        let name = string_of(get(b, "name")).unwrap_or("")
-        let (_, args) = parsed_args(string_of(get(b, "arguments")).unwrap_or(""))
-        out.push({ at, kind: "tool_call", text: if kept_whole(name) { args } else { clip(args) }, tool: Some(name) })
-      }
-    }
-  } else if kind == "tool/result" {
-    out.push({ at, kind: "tool_result", text: clip(dsh_text(get(message, "content"))), tool: None })
-  }
-}
-
-///|
 /// transcript.ts `grokQuery`: what is inside a `<user_query>` around the whole.
 fn grok_query(text : String) -> String {
   let n = text.length()
@@ -265,86 +249,6 @@ fn grok_query(text : String) -> String {
     body = body.view(end_offset=body.length() - 1).to_owned()
   }
   body
-}
-
-///|
-fn grok(r : @jsjson.JValue, out : Array[Entry]) -> Unit {
-  let rj = Some(r)
-  let kind = string_of(get(rj, "type")).unwrap_or("")
-  let content = get(rj, "content")
-  if kind == "user" {
-    if get(rj, "synthetic_reason") is Some(_) || get(rj, "prompt_index") is None {
-      return
-    }
-    let text = grok_query(match content { Some(Str(s)) => @jsjson.raw_text(s); c => dsh_text(c) })
-    if trim(text) != "" {
-      out.push({ at: None, kind: "user", text: clip(text), tool: None })
-    }
-  } else if kind == "reasoning" {
-    let text = match get(rj, "summary") {
-      Some(Arr(xs)) => xs.map(s => string_of(get(Some(s), "text")).unwrap_or("")).filter(t => t != "").join("\n\n")
-      _ => ""
-    }
-    if trim(text) != "" {
-      out.push({ at: None, kind: "thinking", text: clip(text), tool: None })
-    }
-  } else if kind == "assistant" {
-    let text = match content { Some(Str(s)) => @jsjson.raw_text(s); c => dsh_text(c) }
-    if trim(text) != "" {
-      out.push({ at: None, kind: "assistant", text: clip(text), tool: None })
-    }
-    if get(rj, "tool_calls") is Some(Arr(calls)) {
-      for call in calls {
-        let c = Some(call)
-        let mut name = string_of(get(c, "name")).unwrap_or("")
-        let raw = string_of(get(c, "arguments")).unwrap_or("")
-        let args = match (try { Ok(@jsjson.parse(raw)) } catch { e => Err(e) }) {
-          Ok(input) => {
-            let mut input = input
-            if name == "use_tool" && string_of(get(Some(input), "tool_name")) is Some(tool) {
-              name = "mcp__" + tool
-              input = get(Some(input), "tool_input").unwrap_or(Obj([]))
-            }
-            @jsjson.stringify_pretty(input)
-          }
-          Err(_) => raw
-        }
-        out.push({ at: None, kind: "tool_call", text: if kept_whole(name) { args } else { clip(args) }, tool: Some(name) })
-      }
-    }
-  } else if kind == "tool_result" {
-    let text = match content {
-      Some(Str(s)) => @jsjson.raw_text(s)
-      Some(c) => to_text(c)
-      None => to_text(Null)
-    }
-    out.push({ at: None, kind: "tool_result", text: clip(text), tool: None })
-  }
-}
-
-///|
-fn cursor(r : @jsjson.JValue, out : Array[Entry]) -> Unit raise {
-  let rj = Some(r)
-  let kind = string_of(get(rj, "type")).unwrap_or("")
-  let at = time_at(r)
-  if kind == "user" || kind == "assistant" || kind == "thinking" {
-    let text = string_of(get(rj, "text")).unwrap_or("")
-    if trim(text) != "" {
-      out.push({ at, kind, text: clip(text), tool: None })
-    }
-  } else if kind == "tool" {
-    let mut name = string_of(get(rj, "name")).unwrap_or("")
-    let mut input = get(rj, "args").unwrap_or(Obj([]))
-    if name == "mcp" &&
-      string_of(get(Some(input), "providerIdentifier")) is Some(provider) &&
-      string_of(get(Some(input), "toolName")) is Some(tool) {
-      name = "mcp__\{provider}__\{tool}"
-      input = get(Some(input), "args").unwrap_or(Obj([]))
-    }
-    let args = @jsjson.stringify_pretty(input)
-    out.push({ at, kind: "tool_call", text: if kept_whole(name) { args } else { clip(args) }, tool: Some(name) })
-    out.push({ at, kind: "tool_result", text: clip(cursor_result(get(rj, "result"))), tool: None })
-  }
 }
 
 ///|
@@ -392,60 +296,6 @@ fn claude_command(content : String) -> Bool {
   }
   let rest = content.view(start_offset=i).to_owned()
   ["<command-name>", "<local-command-stdout>", "<local-command-caveat>"].iter().any(t => rest.has_prefix(t))
-}
-
-///|
-fn claude(r : @jsjson.JValue, out : Array[Entry]) -> Unit {
-  let rj = Some(r)
-  let kind = string_of(get(rj, "type")).unwrap_or("")
-  let at = string_of(get(rj, "timestamp"))
-  let queued = get(rj, "attachment")
-  if kind == "attachment" && string_of(get(queued, "type")) == Some("queued_command") {
-    let prompts : Array[String?] = match get(queued, "prompt") {
-      Some(Str(s)) => [Some(@jsjson.raw_text(s))]
-      Some(Arr(bs)) =>
-        bs.map(b => if string_of(get(Some(b), "type")) == Some("text") { string_of(get(Some(b), "text")) } else { None })
-      _ => []
-    }
-    for t in prompts {
-      if t is Some(text) && trim(text) != "" {
-        out.push({ at, kind: "user", text: clip(text), tool: None })
-      }
-    }
-    return
-  }
-  if (kind != "user" && kind != "assistant") || get(rj, "isMeta") is Some(Bool(true)) {
-    return
-  }
-  let content = get(get(rj, "message"), "content")
-  if content is Some(Str(s)) {
-    let text = @jsjson.raw_text(s)
-    if kind == "user" && claude_command(text) {
-      return
-    }
-    out.push({ at, kind, text: clip(text), tool: None })
-    return
-  }
-  guard content is Some(Arr(blocks)) else { return }
-  for block in blocks {
-    let b = Some(block)
-    let text_of = (k : String) => match string_of(get(b, k)) {
-      Some(t) if t != "" => Some(t)
-      _ => None
-    }
-    match string_of(get(b, "type")) {
-      Some("text") => if text_of("text") is Some(t) { out.push({ at, kind, text: clip(t), tool: None }) }
-      Some("thinking") => if text_of("thinking") is Some(t) { out.push({ at, kind: "thinking", text: clip(t), tool: None }) }
-      Some("tool_use") => {
-        let name = string_of(get(b, "name")).unwrap_or("")
-        let input = pretty(Some(get(b, "input").unwrap_or(Null)))
-        out.push({ at, kind: "tool_call", text: if kept_whole(name) { input } else { clip(input) }, tool: Some(name) })
-      }
-      Some("tool_result") =>
-        out.push({ at, kind: "tool_result", text: clip(to_text(get(b, "content").unwrap_or(Null))), tool: None })
-      _ => ()
-    }
-  }
 }
 
 ///|
@@ -529,95 +379,5 @@ fn typed_parts(content : @jsjson.JValue?) -> String {
       .filter(t => trim(t) != "" && !injected(t) && !wrapped(t))
       .join("\n")
     _ => ""
-  }
-}
-
-///|
-/// What the station says of a call taken out of a script when the script's output comes (station.transcript
-/// .inScriptOutput, in the worker's language).
-let in_script_output : String = "（结果在脚本的输出里）"
-
-///|
-fn codex(r : @jsjson.JValue, state : ReadState, out : Array[Entry]) -> Unit {
-  let rj = Some(r)
-  guard string_of(get(rj, "type")) == Some("response_item") else { return }
-  let p = Some(get(rj, "payload").unwrap_or(Null))
-  let at = string_of(get(rj, "timestamp"))
-  let kind = string_of(get(p, "type")).unwrap_or("")
-  let name = string_of(get(p, "name")).unwrap_or("")
-  let call_id = string_of(get(p, "call_id"))
-  let call = (tool : String, text : String) => { at, kind: "tool_call", text, tool: Some(tool) }
-  match kind {
-    "message" => {
-      let role = string_of(get(p, "role")).unwrap_or("")
-      if role != "user" && role != "assistant" {
-        return
-      }
-      let content = get(p, "content").unwrap_or(Null)
-      let text = if role == "user" { typed_parts(Some(content)) } else { to_text(content) }
-      if role == "user" && injected(text) {
-        return
-      }
-      if trim(text) != "" {
-        out.push({ at, kind: role, text: clip(text), tool: None })
-      }
-      return
-    }
-    "reasoning" => {
-      let chosen = match get(p, "content") {
-        Some(Arr(xs)) if xs.length() > 0 => @jsjson.JValue::Arr(xs)
-        _ => get(p, "summary").unwrap_or(@jsjson.JValue::Arr([]))
-      }
-      let text = to_text(chosen)
-      if trim(text) != "" {
-        out.push({ at, kind: "thinking", text: clip(text), tool: None })
-      }
-      return
-    }
-    _ => ()
-  }
-  if kind == "custom_tool_call" && name == "exec" {
-    let script = string_of(get(p, "input")).unwrap_or("")
-    let (calls, only) = script_calls(script)
-    if !only {
-      out.push(call("exec", clip(script)))
-    }
-    for c in calls {
-      let (tool, args) = c
-      let text = @jsjson.stringify_pretty(args)
-      out.push(call(tool, if is_posting(tool) { text } else { clip(text) }))
-    }
-    if !only && call_id is Some(id) && calls.length() > 0 {
-      state.inner[id] = calls.length()
-    }
-    return
-  }
-  if kind == "function_call" || kind == "custom_tool_call" {
-    let given = match get(p, "arguments") {
-      Some(g) => Some(g)
-      None => get(p, "input")
-    }
-    let raw = match given {
-      None => ""
-      Some(Str(s)) => @jsjson.raw_text(s)
-      Some(g) => @jsjson.stringify(g)
-    }
-    let (_, args) = parsed_args(raw)
-    out.push(call(name, if kept_whole(name) { args } else { clip(args) }))
-    return
-  }
-  if kind == "function_call_output" || kind == "custom_tool_call_output" {
-    let text = to_text(get(p, "output").unwrap_or(Null))
-    out.push({ at, kind: "tool_result", text: clip(text), tool: None })
-    let count = match call_id {
-      Some(id) => state.inner.get(id).unwrap_or(0)
-      None => 0
-    }
-    if call_id is Some(id) {
-      state.inner.remove(id)
-    }
-    for _ in 0..<count {
-      out.push({ at, kind: "tool_result", text: in_script_output, tool: None })
-    }
   }
 }
