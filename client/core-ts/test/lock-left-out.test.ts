@@ -42,7 +42,9 @@ type Approver = { where: (hello: J) => string[]; approve: (hello: J) => J };
 
 /// `named`: s1 a member by X's log (`noApp`: a log no station was given, so naming no app of s1's). `web`: this core a
 /// web page. `waiting`: the station given no root's log. `older`: a station from before its refusal said `apps`.
-async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean } = {}) {
+/// `carried`: s1 a member the chain names with X as an app of theirs, bound to no log, no log of theirs anywhere (the
+/// state carries them by the chain alone).
+async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean; personHeld?: boolean; carried?: boolean } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const alice = new Log("r1"), bob = new Log("r2"), x = new Log("s1");
@@ -54,8 +56,8 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   const app = (l: Log) => ({ id: l.app.base.hex, sub: l.sub, kind: "app", label: `${l.sub}'s app`, sign_key: l.app.signer.id });
   const body = {
     owner: "r1", ...settings, passkeys: [], stations: [{ key: A, name: "a" }], gateways: [],
-    members: [{ sub: "r1", email: "r1@x.com", role: "owner" }, { sub: "r2", email: "r2@x.com", role: "admin" }, ...(o.named ? [{ sub: "s1", email: "s1@x.com", role: "member" }] : [])],
-    devices: [app(alice), app(bob), ...(o.named ? [app(x)] : [])],
+    members: [{ sub: "r1", email: "r1@x.com", role: "owner" }, { sub: "r2", email: "r2@x.com", role: "admin" }, ...(o.named || o.carried ? [{ sub: "s1", email: "s1@x.com", role: "member" }] : [])],
+    devices: [app(alice), app(bob), ...(o.named || o.carried ? [app(x)] : [])],
   };
   const first = signed({ v: 1, ws: "ws", seq: 0, prev: null, at: 1000, kind: "genesis", body }, alice.app.signer);
   const moved = signed({ v: 1, ws: "ws", seq: 1, prev: stationHash(first), at: 1000, kind: "moved", body: { root: alice.genesis } }, alice.app.signer);
@@ -80,7 +82,7 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   for (const l of o.waiting ? [bob] : o.named && !o.noApp ? [alice, bob, x] : [alice, bob]) bring(l);
   const viewer = viewerOf("s1", { base }, "member", "ws");
   /// What the station does to each of its asks: `lie`, a device its refusals name to ask in place of those it would.
-  const st = { lie: null as string | null, refusals: [] as J[], admitted: 0 };
+  const st = { lie: null as string | null, refusals: [] as J[], admitted: 0, personHeld: o.personHeld === true, personUntold: o.personHeld === true };
   /// The link's hello to A, as the station answers it: null where it lets this device in; else its refusal, told the
   /// core as the mesh wire tells it (station/mesh-wire.ts `refusedFor`).
   const hello = (): CoreError | null => {
@@ -93,6 +95,8 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
       const refusal = refusalOf(c, said, viewer.device, e, undefined, "s1") as J;
       if (st.lie !== null && refusal.left !== undefined) refusal.left = { approvers: [st.lie] };
       if (o.older && refusal.left !== undefined) delete refusal.left.apps;
+      // (its own lock not heard of here yet: the refusals before the test's own say nothing of it)
+      if (st.personUntold) delete refusal.person;
       st.refusals.push(refusal);
       return hooks.lockRefused?.(inner, "ws", A, refusal.lock, refusal) ?? new CoreError("lock_unconfirmed", e.message);
     }
@@ -111,6 +115,8 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
     const [ws, id] = addr.toString().split("/");
     if (id !== A || !path.startsWith("/lock")) return (original as (...x: unknown[]) => unknown)(addr, method, path, body, ...rest);
     if (ws !== "ws") return Effect.fail(httpError(404, { error: "no route" }));
+    // (its person's own lock not read yet: not answered, until the test lets it be)
+    if (st.personHeld && method === "GET" && path === "/lock/person") return Effect.fail(new CoreError("station_offline", "not reached"));
     // (its link's hello first: a station that refused this device is not dialled again until told to, as the mesh does)
     const waits = hooks.lockWaiting?.(inner, ws, A) ?? null;
     if (waits !== null) return Effect.fail(waits);
@@ -132,6 +138,8 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
       const a = approvers.get(id);
       if (a === undefined) return yield* there.send({ t: "no", error: "not_here" });
       const where = a.where(hello);
+      // (one that would sign nothing for it shows no code, as views/pair.ts `serveTrusted` answers)
+      if (where.length === 0) return yield* there.send({ t: "no", error: "not_here" });
       yield* there.send({ t: "code", workspaces: where });
       const m = (yield* there.next()) as J;
       const p = pakeStart(CODE, pairSession(base.hex, id, where), (b) => b.fill(5));
@@ -162,7 +170,7 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   const now = () => Math.floor(r.host.nowMs() / 1000);
   /// What a failure says of where it got: the station's refusals and admissions, the page.
   const why = () => `refused ${st.refusals.length}, last left ${JSON.stringify(st.refusals.at(-1)?.left)?.slice(0, 30)} error ${String(st.refusals.at(-1)?.error).slice(0, 80)}; admitted ${st.admitted}; standing ${inner.adb.personal().standing("s1")}`;
-  return { why, r, inner, c, st, alice, bob, x, base, A, approvers, dialled, run, ask, page, bring, now, hello };
+  return { why, r, inner, c, st, alice, bob, x, base, A, approvers, dialled, run, ask, page, bring, now, hello, moved };
 }
 
 /// Whom the page lists: each member's sub.
@@ -236,25 +244,59 @@ test("a member's new web page: it asks that member's own app, `web` said, in", a
   assert.equal(subs(after), "r1,r2,s1");
 });
 
-test("a member's web page left out, said on their log meanwhile by their app (carried from the chain, personal-lock.ts `#addWebs`): as it is while it only waits (ten minutes), nothing tells it; as the person presses to ask, its station is tried again first and lets it in, nothing dialled", async () => {
+// A web page taken off its person's own log where the chain moved (`web.remove`, 设置 › 安全's 移除) is told so by its
+// station's refusal, which carries that log (`person`): it takes it, so its page says it is out and waits, never that
+// the station has not heard of its approval yet (2026-11-14, the locks' end to end, round 16).
+test("a member's web page taken off their log: refused, told out (its page waits, not confirmed), never 'not heard yet'", async () => {
+  const w = await setUp({ named: true, web: true });
+  w.x.add("web", { id: w.base.hex, label: "Chrome", exp: w.now() + 30 * 86400 }, w.x.app.key, w.now());
+  w.bring(w.x);
+  await w.r.host.time.pass(600_000);
+  assert.equal((await w.page()).me.confirmed, true, `in (${w.why()})`);
+  w.x.add("web.remove", { id: w.base.hex }, w.x.app.key, w.now());
+  w.bring(w.x);
+  const refused = w.st.refusals.length;
+  const no = w.hello();
+  assert.ok(no !== null && w.st.refusals.length > refused, "refused");
+  assert.notEqual(no!.message, "station 尚未收到此设备的批准，即将重试", "not told its approval was not heard yet");
+  const after = await w.page();
+  assert.deepEqual([after.me.confirmed, after.me.waiting], [false, true], `out, its page waiting (${w.why()})`);
+});
+
+test("a member's web page left out, said on their log meanwhile by their app (carried from the chain, personal-lock.ts `#addWebs`): nothing tells it, and its link's own retry asks its station again (views/lock.ts `waiting`): in, nothing pressed, no app dialled", async () => {
   const w = await setUp({ named: true, web: true });
   const before = await w.page();
   assert.deepEqual([before.me.confirmed, before.me.waiting], [false, true], "out, able to ask");
-  const refused = w.st.refusals.length;
   w.x.add("web", { id: w.base.hex, label: "Chrome", exp: w.now() + 20 * 86400 }, w.x.app.key, w.now());
   w.bring(w.x);
-  await w.r.host.time.pass(600_000);
-  const waited = await w.page();
-  assert.deepEqual([waited.me.confirmed, waited.me.waiting, w.st.refusals.length - refused, w.st.admitted], [false, true, 0, 0], "not tried while it only waits: nothing tells a page refused that its person's log changed (no timer, no polling)");
-  // X's app is there to be dialled, and would approve: the ask is not made all the same.
+  // X's app is there to be dialled, and would approve: nothing asks it.
   w.approvers.set(w.x.app.base.hex, { where: () => ["ws"], approve: () => ({ t: "approved", workspaces: ["ws"], failed: [] }) });
-  const asked = await w.ask("lock.pair", { workspace: "ws" });
-  assert.equal(asked.error, undefined, asked.error?.message);
-  assert.ok(w.st.admitted > 0, `its station tried again and let it in (${w.why()})`);
-  assert.deepEqual(w.dialled, [], "no app dialled: nothing asked of the person's own");
+  // (before 2026-11-14 it stayed out while it only waited, ten minutes and for good: the chain's head, which its mark
+  // waited for, never moves once the chain moved)
+  await w.r.host.time.pass(600_000);
   const after = await w.page();
+  assert.ok(w.st.admitted > 0, `its station asked again and let it in (${w.why()})`);
+  assert.deepEqual(w.dialled, [], "no app dialled: nothing asked of the person's own");
   assert.deepEqual([after.me.confirmed, after.me.pair ?? null], [true, null], `in, no try on the page (${w.why()})`);
   assert.equal(subs(after), "r1,r2,s1", "it reads the list");
+});
+
+// A device refused where the chain moved is asked again at its link's own retry (views/lock.ts `waiting`): the chain's
+// head never moves there, so the mark of before (asked again once it does) held it back for good, and a device let in
+// by a statement it is not given came in only as the person opened the app or pressed (2026-11-14, the locks' end to
+// end, round 12: bob's second app, after he was made a member again).
+test("a device refused where the chain moved, then let in by what it is not given: asked again at its link's next retry, let in, nobody asked, nothing pressed", async () => {
+  const w = await setUp({ named: true, web: true });
+  const before = await w.page();
+  assert.deepEqual([before.me.confirmed, before.me.waiting], [false, true], "out");
+  const asked = w.r.host.secureAsked.length;
+  w.x.add("web", { id: w.base.hex, label: "Chrome", exp: w.now() + 20 * 86400 }, w.x.app.key, w.now());
+  w.bring(w.x);
+  // (the link's next retry: it dials unless `lockWaiting` holds the station back, as station/mesh-wire.ts does)
+  assert.equal(hooks.lockWaiting?.(w.inner, "ws", w.A) ?? null, null, "not held back: asked again at the link's retry");
+  assert.equal(w.hello(), null, `let in (${w.why()})`);
+  assert.deepEqual(w.dialled, [], "nothing pressed, no app dialled");
+  assert.equal(w.r.host.secureAsked.length, asked, "nobody asked");
 });
 
 test("a member's own second app: the personal exchange with their app on the log, then in", async () => {
@@ -276,6 +318,34 @@ test("a member's own second app: the personal exchange with their app on the log
   const after = await w.page();
   assert.equal(after.me.confirmed, true, `in (${w.why()})`);
   assert.equal(subs(after), "r1,r2,s1");
+});
+
+// 2026-11-14, the side run of f6cfdf7af1 (N, alice's new app after one was taken off): the stations' refusal came
+// before its own lock was read, which named an admin (「…或请其管理员…」), and `lock.pair` then answered "this device
+// waits in no workspace". The refusal's own word on the person's log says it (`offOwnLock`), whichever comes first.
+test("a member's own second app refused before its own lock was read, and after: its refusal names no admin, and asking joins their log", async () => {
+  for (const first of ["refusal", "own lock"] as const) {
+    const w = await setUp({ named: true, personHeld: first === "refusal" });
+    const personal = w.inner.adb.personal();
+    if (first === "refusal") assert.equal(personal.standing("s1"), "none", "its own lock not read yet");
+    else await w.run(personal.refresh("s1"));
+    // (the refusal that tells it, before its own lock was loaded here: what it tells is not taken then, as
+    // personal-lock.ts `heardFrom` takes nothing for a person whose lock it has not loaded yet; a newly signed-in app)
+    w.st.personUntold = false;
+    const heardFrom = personal.heardFrom.bind(personal);
+    if (first === "refusal") personal.heardFrom = () => Effect.void;
+    const said = w.hello();
+    personal.heardFrom = heardFrom;
+    console.log(`${first} first: standing ${personal.standing("s1")}; refused: ${said?.message}`);
+    assert.ok(said !== null, "refused");
+    assert.doesNotMatch(said!.message, /管理员|admin/i, `${first} first`);
+    w.approvers.set(w.x.app.base.hex, { where: () => ["person:s1"], approve: () => ({ t: "no", error: "not_here" }) });
+    w.st.personHeld = false;
+    const asked = await w.ask("lock.pair", { workspace: "ws" });
+    console.log(`${first} first: lock.pair ${asked.error?.code ?? "ok"}; dialled ${w.dialled.map((d) => d.slice(0, 8)).join(" ")}`);
+    assert.equal(asked.error, undefined, `${first} first: ${asked.error?.message}`);
+    assert.deepEqual(w.dialled, [w.x.app.base.hex], `${first} first: X alone dialled, its own log's`);
+  }
 });
 
 test("a station that names a wrong device to ask: nothing let in, the page still able to ask", async () => {
@@ -336,4 +406,57 @@ test("a web page of someone with no app, told by a station from before (no `apps
   const after = await w.page();
   assert.deepEqual(new Set(w.dialled), new Set([w.alice.app.base.hex, w.bob.app.base.hex]), "the owners' and admins' apps dialled");
   assert.deepEqual([after.me.confirmed, after.me.pair?.state, (after.me.pair?.approvers as J[]).map((a) => a.showing)], [false, "none", [false, false]]);
+});
+
+// A member the chain names with an app of theirs (X) and binds to no log, no log of theirs anywhere: their new app asks
+// their own devices and begins no log of its own, the device of theirs that approves it beginning their log in that ask
+// (views/pair.ts `carriedUnbound`). Only while the stations' list still names an app of theirs (their refusal's
+// `apps`): the chain held, frozen at the move, says nothing of one taken out since and added again, whose new app is
+// a newcomer, its own log begun and an owner or admin asked, as before the move (the lead, 2026-11-14: else nobody
+// could let them in).
+test("a carried member with no log, the list naming an app of theirs: their new app begins no log, brings its key to join theirs, and asks their own app alone", async () => {
+  const w = await setUp({ carried: true });
+  await w.page();
+  assert.equal(w.st.refusals.at(-1)?.left?.apps, true, `told the list names an app of theirs (${w.why()})`);
+  const hellos: J[] = [];
+  w.approvers.set(w.x.app.base.hex, { where: (hello) => (hellos.push(hello), []), approve: () => ({ t: "no" }) });
+  const asked = await w.ask("lock.pair", { workspace: "ws" });
+  assert.equal(asked.error, undefined, asked.error?.message);
+  await w.page();
+  assert.ok(w.dialled.includes(w.x.app.base.hex), `their own app dialled (${w.why()})`);
+  assert.equal(w.dialled.includes(w.alice.app.base.hex), false, "no owner's");
+  assert.equal(w.inner.adb.personal().standing("s1"), "none", "no log begun here");
+  assert.ok(hellos.length > 0 && hellos[0].log === undefined && typeof hellos[0].personal?.key === "string", `its hello brings its key to join theirs, no log (${JSON.stringify(hellos[0])?.slice(0, 200)})`);
+});
+
+test("a carried member taken out and added again: their new app, told the list names no app of theirs, begins its log, asks an owner, and is admitted face to face, bound by that admit", async () => {
+  const w = await setUp({ carried: true });
+  w.alice.say("member.remove", { sub: "s1", cancels: [stationHash(w.moved)] }, "ws");
+  w.bring(w.alice);
+  // (its link's next hello, as its own retry dials it: refused again, now told the list names no app of theirs)
+  w.hello();
+  await w.page();
+  assert.equal(w.c.locked()!.state!.members.has("s1"), false, "out of the station's list");
+  assert.equal(w.st.refusals.at(-1)?.left?.apps, false, `told the list names no app of theirs (${w.why()})`);
+  w.approvers.set(w.alice.app.base.hex, {
+    // (an owner's app shows a code only for a newcomer whose hello brings their log, views/pair.ts `admitOf`)
+    where: (hello) => (Array.isArray(hello.log) && hello.log.length > 0 ? ["ws"] : []),
+    approve: (hello) => {
+      w.alice.say("member", { sub: "s1", email: "s1@x.com", lock: stationHash(hello.log[0]), role: "member" }, "ws");
+      w.bring(w.alice);
+      return { t: "approved", workspaces: ["ws"], failed: [] };
+    },
+  });
+  const asked = await w.ask("lock.pair", { workspace: "ws" });
+  assert.equal(asked.error, undefined, asked.error?.message);
+  const trying = await w.page();
+  assert.ok(w.dialled.includes(w.alice.app.base.hex), `an owner's app dialled (${w.why()})`);
+  assert.equal(trying.me.pair?.state, "code", `a code shown by the owner's app, the hello bringing its log (${JSON.stringify(trying.me.pair)?.slice(0, 200)}; ${w.why()})`);
+  const done = await w.ask("lock.pairCode", { workspace: "ws", code: CODE });
+  assert.equal(done.error, undefined, done.error?.message);
+  const after = await w.page();
+  assert.equal(after.me.confirmed, true, `in (${w.why()})`);
+  const log = w.inner.adb.personal().root("s1");
+  assert.ok(log !== null, "its own log begun");
+  assert.equal(w.c.locked()!.state!.persons.get("s1"), log, "bound at the station by that admit");
 });

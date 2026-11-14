@@ -298,7 +298,9 @@ export class CommaStats {
   constructor(path: string, read: Read, changes: (changed: () => void) => () => void, ready: Promise<void> = Promise.resolve()) {
     this.#read = read;
     this.#changes = changes;
-    this.#db = new DatabaseSync(path);
+    // Shared with the process serving as a new one starts beside it (a handover): another's write waited for, as the
+    // store's is, not refused at once ("database is locked" stopped a station's next process as it made this).
+    this.#db = new DatabaseSync(path, { timeout: 5000 });
     this.#db.exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
     this.stats = new RevIndex(this.#db, "stats_index", ready);
     this.tasks = new RevIndex(this.#db, "task_index", ready);
@@ -451,7 +453,8 @@ export class CommaStats {
     const skipped = new Set(unread);
     const read = (row: Json) => !skipped.has(row.station ?? "");
     let changed = { stats: 0, tasks: 0 };
-    this.#db.exec("BEGIN");
+    // (the write taken first: begun deferred, its read then write was refused at once while the process beside it wrote)
+    this.#db.exec("BEGIN IMMEDIATE");
     try {
       // Recheck in this transaction's snapshot. If preparation is no longer usable, classify again without writing a
       // partial build; any dirty rows allowed here are included and checked by the original predicate.

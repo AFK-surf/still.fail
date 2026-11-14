@@ -6,9 +6,10 @@
 ///|
 /// Chat `r`'s messages as `src` reads them (view_of_chat), in node `v`, growing to what the column it is in leaves
 /// them, once its view is read (till then none: its bones are the old page's), laid out by the room the column gives it
-/// (View::by_room: its width what the shell gives the page, as it changes), `top` over its first row (its bar's room),
-/// `foot` under its last and the composer `composer` builds under that, in the list's foot (till the view is read, at
-/// the foot of the room it is given), `lead` the unread line under its top, its tips `tips`, its time on top `stint`;
+/// (View::by_room: its width what the shell gives the page, as it changes), under the chat's bar, `cover` tall (where
+/// it is drawn to, what hides the list's top), `room` more over its first row, `foot` under its last and the composer
+/// `composer` builds under that, in the list's foot (till the view is read, at the foot of the room it is given),
+/// `lead` the unread line under its top, its tips `tips`, its time on top `stint`;
 /// what is read told the core while `shows` (chat_read_node).
 pub fn chat_page_body_node(
   v : @view.View,
@@ -17,7 +18,8 @@ pub fn chat_page_body_node(
   tips~ : @sf.TipLayer,
   stint~ : () -> Int,
   shows~ : () -> Bool,
-  top? : () -> Double = fn() { list_top },
+  cover? : () -> Double = fn() { bar_foot },
+  room? : Double = list_room,
   foot? : () -> Double = fn() { list_foot },
   composer? : (@view.View) -> Unit,
   lead? : Double = unread_lead,
@@ -100,9 +102,9 @@ pub fn chat_page_body_node(
     }
   })
   // (its rows by the width it is given, never one worked out of the shell's state)
-  v.by_room(fn(b, room) {
+  v.by_room(fn(b, given) {
     b.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
-    let width = fn() { room.width() }
+    let width = fn() { given.width() }
     // (the composer at the foot of the room before the view is read, in the list's foot once it is)
     match composer {
       Some(build) =>
@@ -130,7 +132,14 @@ pub fn chat_page_body_node(
         width,
         tips,
         stint,
-        jump: None,
+        // (a quote's card pressed: the message it quotes gone to, where the chat holds it, and the passage it quotes lit
+        // there alone where its words have it, as the old page's cards (message.mbt quote_cards): chat_goes_to)
+        jump: Some(fn(ts, passage) {
+          match @signals.untracked(view).messages.iter().find_first(fn(m) { m.ts == ts }) {
+            Some(m) => @sfbase.go_to(r, m.seq, passage~)
+            None => ()
+          }
+        }),
       }
       let core = @signals.untracked(fn() { @sfbase.workspace_in_view(src).0 }).map(fn(w) { @sfbase.settings_core(src, w) })
       chat_body_node(
@@ -145,11 +154,12 @@ pub fn chat_page_body_node(
         },
         sending=fn() { @sfbase.sending_now(r.station + "\u{1}" + r.session) },
         core~,
-        top~,
+        cover~,
+        room~,
         foot~,
         composer?,
         lead~,
-        read=fn(place, rows) { chat_read_node(o, src, r, view, place, rows, shows, top) },
+        read=fn(place, scroll, rows) { chat_read_node(o, src, r, view, place, scroll, rows, shows, cover) },
         to=r,
         shows~,
       )

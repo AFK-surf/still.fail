@@ -1016,12 +1016,15 @@ export class Data {
     // Beside it, once its chain moved to its people's logs: the person logs and the statements' bodies its stations
     // gave (views/lock.ts `lockLogs`, `lockBodies`); whom the person here added and as what (`lockAdded`); whether the
     // lock held says it is in safe mode, a few bytes (`lockSafe`); which of its stations last said to this device that
-    // they serve what a moved chain is made of (`lockServes`); what they saw of its devices' builds (`lockBuilds`).
-    if (table === "lockLogs" || table === "lockBodies" || table === "lockAdded" || table === "lockSafe" || table === "lockServes" || table === "lockBuilds") return [this.#ofWorkspace(key) ?? null, [key, table]];
+    // they serve what a moved chain is made of (`lockServes`).
+    if (table === "lockLogs" || table === "lockBodies" || table === "lockAdded" || table === "lockSafe" || table === "lockServes") return [this.#ofWorkspace(key) ?? null, [key, table]];
     // A workspace's ways as its stations keep them (views/ways-stations.ts): in the workspace's, by its id.
     if (table === "ways") return [this.#ofWorkspace(key) ?? null, [key, "ways"]];
     // Its stations' names and marks as they keep them (views/station-marks.ts): in the workspace's, by its id.
     if (table === "stationMarks") return [this.#ofWorkspace(key) ?? null, [key, "stationMarks"]];
+    // Its person's presets as the device carries them, and which of its stations are from before (presets-kept.ts):
+    // in the workspace's, by its id.
+    if (table === "presetRecords") return [this.#ofWorkspace(key) ?? null, [key, "presetRecords"]];
     // A workspace's vaults as its stations hold them (views/vault.ts): the vaults, box certificates and requests by the
     // workspace's id; each vault's items by `<workspace>/<vault>`.
     if (table === "vault") return [this.#ofWorkspace(key) ?? null, [key, "vault"]];
@@ -1330,6 +1333,13 @@ export class Data {
   overviewFormerly(station: string): unknown {
     this.#readQuery({ topic: "$overview-formerly", station });
     return this.of(station)?.overviewFormerly(station);
+  }
+
+  /// A station's own software as its overview lists it (account.ts overviewSoftware), kept beside it: read in a
+  /// computed, it is made again only as that changes.
+  overviewSoftware(station: string): unknown {
+    this.#readQuery({ topic: "$overview-software", station });
+    return this.of(station)?.overviewSoftware(station);
   }
 
   /// How the views make a declaration's values (db/kept.ts), for each database to make them as their records are

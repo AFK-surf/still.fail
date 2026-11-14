@@ -97,6 +97,7 @@ fn Room::measure(self : Room, w : Double) -> Unit {
   self.measured.clear()
   self.measured.append(live)
   let mut i = 0
+  let marks = self.tree.room_marks
   // (one asked as those read are made is measured as it is asked: those after it too)
   while i < self.measured.length() {
     let (v, cell) = self.measured[i]
@@ -104,14 +105,16 @@ fn Room::measure(self : Room, w : Double) -> Unit {
     self.tree.room_bindings_run()
     i = i + 1
   }
-  for m in self.measured {
-    let (v, cell) = m
-    if v.alive() {
-      let h = self.height_at(v, w)
-      if h != cell.untracked() {
-        @halt.saying(
-          "Room::tall: what reads how tall a node made by its room comes to changed that (\{h} for \{cell.untracked()}): say it outside what is measured",
-        )
+  if self.tree.room_marks > marks {
+    for m in self.measured {
+      let (v, cell) = m
+      if v.alive() {
+        let h = self.height_at(v, w)
+        if h != cell.untracked() {
+          @halt.saying(
+            "Room::tall: what reads how tall a node made by its room comes to changed that (\{h} for \{cell.untracked()}): say it outside what is measured",
+          )
+        }
       }
     }
   }

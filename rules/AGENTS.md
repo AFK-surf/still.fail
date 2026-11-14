@@ -24,4 +24,31 @@
   alone, and the `sign_key` its entries say, the key it signs a workspace's things with unasked (a vault's versions,
   items and box certificates). `fold_person` keeps the last `sign_key` said and every one said; `state4` names an app
   device by it, never by its `key` (the lead, 2026-11-13: nothing the workspace signer signed checked out against a
-  moved state). One whose log says none is listed and signs nothing of the workspace's.
+  moved state). One whose log says none is listed and signs nothing of the workspace's, but by the signer the chain as
+  it moved names it with (below).
+- Once a chain moved, the station and the core read it with `state4_moved` and `roster_moved`, as it moved beside the
+  logs (the model's D6, the lead's, 2026-11-14): what the logs have not said yet of someone it named, it still says
+  (`roster.mbt` `Carried`, `state4.mbt` `carry_of`), so `moved` alone hands it over, nobody waited for or asked. A
+  removal takes back the chain's saying of its subject whether it names it or not, so one said under build 9040's
+  rules (the logs alone) still takes out whom it did; someone re-admitted to the log the chain bound them to (or bound
+  by an admit where the chain bound them to none) has what the chain carried of theirs again (the lead, 2026-11-14:
+  re-admitting is an owner's or admin's own act). Every reader must make the same state, so the build that reads them
+  is a move's floor (`MOVED_FROM_BUILD`, station/src/api/moved-from.ts) and a station says `carried` in its `serves`.
+- A member the chain bound to no log binds a log of their own to themselves (the lead, 2026-11-14): `bind {key, sig}`
+  in that log, `sig` the signer's (`key`, one the chain names for an own, signing app device of theirs) over
+  `bind_form` (the workspace, the member, the log, the `moved` entry's hash) under `bind_tag`, a tag no other form a
+  device's signer signs has (`Crypto.tagged_sig_valid`: the tag, a NUL, the form's SHA-256; a lock entry's is
+  `stillfail-lock/1 sig`, a vault's `stillfail-vault*/1`, a rig's `stillfail-rig-*/1`). It sets the chain's own admit
+  of them to that log (`roster.mbt` `binds_of`), so nothing new is labelled: a removal of them takes it back, a real
+  admit of their role binds before it. A station says `bind` in its `serves`.
+- Two bindings of one member (the lead's review, 2026-11-14) settle by what their signer cannot choose, never by an
+  entry hash (ground at will by whoever makes the log): a binding whose log took off a device that proves another
+  attacks it, the grounded extension decides as the list does for removals, and of those in, the smaller signer key
+  wins (then the smaller entry hash). Every device a binding not out took off, the chain carries no more: so a device
+  the member took off never binds them again (a thief's log bound by a lost phone would else seal their vaults to the
+  thief), as a removal the stations took was final before the move. Where each took the other's device off, nobody
+  is in: the member stands bound to no log, without any of those devices, until an owner or admin admits them (a real
+  admit binds before any `bind`), the manual case the owner took for two devices removing each other. Known and
+  taken: a removed signer whose log reaches a reader (by a station or the cloud, the lock's adversary) can so put the
+  member back to unbound with those devices out until then; proofs by several of the member's signers outweighing one
+  is not built.

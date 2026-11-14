@@ -12,10 +12,9 @@
 // keeper would refuse (a body it would take but was not given yet is not offered). Where the core is stricter on
 // purpose, as the station is: "not on" and "no root" are `waiting`, naming nobody.
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
-import { type Entry as StationEntry, entryHash as stationHash, signedBytes } from "../../../station/src/cloud/lock.ts";
 import { hashOf as modelHash } from "../../../station/test/lock-fork-choice-model.ts";
-import { type Body, type D4, type D4Member, World4, bodyHash as modelBodyHash, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, revoked } from "../../../station/test/lock-roster4-model.ts";
-import { type Family, type Holder, V3, type V3v, drawSteps3, spec } from "../../../station/test/lock-roster-model.ts";
+import { type Body, type D4, type D4Member, World4, bodyHash as modelBodyHash, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, m8, revoked, bareChain } from "../../../station/test/lock-roster4-model.ts";
+import { type Family, type Holder, V3, type V3v, drawSteps3 } from "../../../station/test/lock-roster-model.ts";
 import { Rng, WS } from "../../../station/test/lock-world-sim.ts";
 import { type Entry, canonical } from "../src/lock.ts";
 import { type Kept, hashOf, keep } from "../src/lock-keep.ts";
@@ -41,23 +40,10 @@ const sorted = (xs: Iterable<string>) => [...xs].sort().join(",");
 
 /// The workspace chain of `ws` the device under test holds: the model keeper's old chain where it keeps one (M7), else
 /// a genesis whose owner is the root's person with the root's app, and its `moved {root}` (as the station's check).
-const made = new Map<string, Entry[]>();
 function chainFor(w: World4, h: Holder, ws: string, root: string): Entry[] {
   const old = w.x.old.get(h);
   if (old !== undefined && ws === WS) return old.active.map((x) => old.store.get(x)!) as unknown as Entry[];
-  const id = `${ws}|${root}`;
-  const had = made.get(id);
-  if (had) return had;
-  const app = spec("alice's app");
-  const sign = (e: Omit<StationEntry, "sig">): StationEntry => ({ ...e, sig: { key: app.signer.id, alg: "Ed25519", sig: app.signer.sign(signedBytes(stationHash(e as StationEntry))) } }) as StationEntry;
-  const g = sign({ v: 1, ws, seq: 0, prev: null, at: 1000, kind: "genesis", body: {
-    owner: "alice", origins: [], rp_id: "", cloud_keys: { keys: [] }, members: [{ sub: "alice", email: "alice@x", role: "owner" }],
-    devices: [{ id: app.base.hex, sub: "alice", kind: "app", label: app.name, sign_key: app.signer.id }], passkeys: [], stations: [], gateways: [],
-  } });
-  const moved = sign({ v: 1, ws, seq: 1, prev: stationHash(g), at: 1000, kind: "moved", body: { root } });
-  const out = [g, moved] as unknown as Entry[];
-  made.set(id, out);
-  return out;
+  return bareChain(ws, root) as unknown as Entry[];
 }
 
 /// What the core keeps standing for keeper `h` in `ws`: each person log (src/lock-keep.ts `keep` by the person logs'
@@ -222,6 +208,7 @@ export function scriptedWorlds(from: number, to: number): Out {
       for (const kind of ["web", "off"] as const) for (const parent of ["same", "any"] as const) revoked(seed, kind, parent);
       m6(seed);
       for (const m of [{}, { away: true }, { attack: "same" as const }, { attack: "any" as const }]) m7(seed, m);
+      for (const m of [{}, { away: true }]) m8(seed, m);
       o.worlds++;
     }
   } finally {

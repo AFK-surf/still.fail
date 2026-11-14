@@ -77,20 +77,78 @@ fn ug_row_corner() -> Double {
 }
 
 ///|
-/// The chats that cost the most (usage_chats'): on a card of rows, its title, the first 8 until all are asked for, each
-/// a row (usage_chat_row_node), 显示全部 / 收起 under them where there are more.
-fn usage_chats_node(parent : @view.View, core : Core, v : () -> Json?) -> Unit {
+/// Four-dimensional spending breakdown card (`对话 | 人 | 模型 | 账号`): replaces the old chats-only card so people,
+/// models, and accounts have full ranked lists with cost, subtitle, share, and progress bar; deleted chats are
+/// aggregated into a single summary row at the bottom.
+fn usage_ranks_node(parent : @view.View, core : Core, v : () -> Json?) -> Unit {
+  let rank_keys = ["chats", "people", "models", "profiles"]
+  let rank_labels = fn() { ["对话", "人", "模型", "账号"] }
   let all_items = fn() {
-    match items(v(), "lists").search_by(fn(l) { text(Some(l), "key") == "chats" }) {
+    let rk = usage_pick.rank.get()
+    let raw = match items(v(), "lists").search_by(fn(l) { text(Some(l), "key") == rk }) {
       Some(i) => items(Some(items(v(), "lists")[i]), "items")
       None => []
     }
+    if rk != "chats" {
+      raw
+    } else {
+      let active : Array[Json] = []
+      let mut del_count = 0
+      let mut del_share = 0.0
+      for it in raw {
+        let title = text(Some(it), "title")
+        let key = text(Some(it), "key")
+        if title == "已删除的对话" && field(Some(it), "chat") is None && key != "deleted/all" {
+          del_count = del_count + 1
+          del_share = del_share + number(Some(it), "share")
+        } else {
+          active.push(it)
+        }
+      }
+      if del_count > 0 {
+        let pct = (del_share * 100.0).to_int().to_string() + "%"
+        active.push({
+          "key": Json::string("deleted/agg"),
+          "title": Json::string("已删除的对话（\{del_count} 个）"),
+          "sub": Json::string("历史已清理的对话汇总"),
+          "costText": Json::string(""),
+          "share": Json::number(del_share),
+          "shareText": Json::string(pct),
+        })
+      }
+      active
+    }
   }
-  parent.show(fn() { all_items().length() > 0 }, fn(at) {
+  parent.show(fn() { items(v(), "lists").length() > 0 }, fn(at) {
     ug_card_node(at, rows=true, fn(k) {
-      @sf.words_node(k, fn() { @sf.t("web-main.usage.topChats") }, fn() { ug_card_title }) |> ignore
+      k.box(fn(head) {
+        head.gap(Is(12.0)) |> ignore
+        @sf.words_node(head, fn() { "花费明细" }, fn() { ug_card_title }) |> ignore
+        head.box(fn(bar) {
+          bar.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+          @sf.segmented_node(
+            bar,
+            rank_labels,
+            fn() { rank_keys.search(usage_pick.rank.get()).unwrap_or(0) },
+            fn(i) {
+              match rank_keys.get(i) {
+                Some(rk) => {
+                  usage_pick.rank.set(rk)
+                  usage_pick.all.set(false)
+                }
+                None => ()
+              }
+            },
+          )
+        })
+        |> ignore
+      })
+      |> ignore
       // (out across its room to @sf.corner_inset from its edges, their words in line with its title: ug_rows)
-      k.box(fn(rows) {
+      // (a breakdown in another's place, as a tab's: one pick by the breakdown, its rows going as one with it, never
+      // each row of one going as the other's come, which a press saw change twice: switches_still's settings-usage)
+      k.pick(fn() { usage_pick.rank.get() }, fn(ranked, rk) {
+        ranked.box(fn(rows) {
         let out = @sf.corner_inset - @sf.card_pad
         rows.margin(Is((out, 0.0, out, 0.0))) |> ignore
         rows.each(
@@ -98,8 +156,8 @@ fn usage_chats_node(parent : @view.View, core : Core, v : () -> Json?) -> Unit {
             let all = all_items()
             if usage_pick.all.get() { all } else { all.iter().take(ug_first).collect() }
           },
-          fn(it) { text(Some(it), "key") },
-          fn(row, it) { usage_chat_row_node(row, core, fn() { Some(it.get()) }) },
+          fn(it) { rk + "/" + text(Some(it), "key") },
+          fn(row, it) { usage_rank_row_node(row, core, fn() { rk }, fn() { Some(it.get()) }) },
         )
         rows.show(fn() { all_items().length() > ug_first }, fn(m) {
           m.box(fn(b) {
@@ -121,44 +179,77 @@ fn usage_chats_node(parent : @view.View, core : Core, v : () -> Json?) -> Unit {
           })
           |> ignore
         })
+        })
+        |> ignore
       })
-      |> ignore
     })
   })
 }
 
 ///|
-/// A chat and what it spent (usage_chat_row's): its name and its cost on a line, who it was for, its model and where it
-/// is and its share under them, a bar of its share last; pressed, it opens (the hover's ground under the pointer).
-fn usage_chat_row_node(parent : @view.View, core : Core, it : () -> Json?) -> Unit {
+/// A row in the spending breakdown card: first line has title on the left and cost on the right; second line has
+/// subtitle on the left and percentage share on the right; third line is the share bar.
+fn usage_rank_row_node(parent : @view.View, core : Core, rank_key : () -> String, it : () -> Json?) -> Unit {
   let chat = fn() { field(it(), "chat") }
-  let opens = fn() { chat() is Some(Object(_)) }
+  let item_key = fn() { text(it(), "key") }
+  let is_deleted = fn() { item_key().has_prefix("deleted/") }
+  let opens_chat = fn() { rank_key() == "chats" && !is_deleted() && (chat() is Some(Object(_)) || item_key().contains("/")) }
+  let filters_only = fn() { rank_key() != "chats" && item_key() != "" }
+  let interactive = fn() { opens_chat() || filters_only() }
   parent.box(fn(r) {
     r
     .padding(Is((@sf.card_pad - @sf.corner_inset, 8.0, @sf.card_pad - @sf.corner_inset, 8.0)))
     .gap(Is(6.0))
     .radius(By(ug_row_corner))
-    .ground(By(fn() { if opens() && r.pointed() { @ui.tree_theme().color(Hover) } else { 0L } }))
+    .ground(By(fn() { if interactive() && r.pointed() { @ui.tree_theme().color(Hover) } else { 0L } }))
     |> ignore
-    @sf.presses_node(r, on=opens, fn() {
+    @sf.presses_node(r, on=interactive, fn() {
       @signals.untracked(fn() {
-        if opens() {
+        if opens_chat() {
           (core.open_chat)(text(chat(), "station"), text(chat(), "session"), text(it(), "title"))
+        } else if filters_only() {
+          let rk = rank_key()
+          let ik = item_key()
+          let cur = usage_pick.only.get()
+          usage_pick.only.set(if cur == (rk, ik) { ("", "") } else { (rk, ik) })
         }
       })
     })
-    // (one that opens read out as a link to its chat; one that does not, words alone)
-    r.says(By(fn() { if opens() { Some(@view.said(Link, label=text(it(), "title"))) } else { None } })) |> ignore
-    let lit = fn() { opens() && @sf.lit_node(r) }
+    r.says(By(fn() {
+      if opens_chat() {
+        Some(@view.said(Link, label=text(it(), "title")))
+      } else if filters_only() {
+        Some(@view.said(Button, label=text(it(), "title")))
+      } else {
+        None
+      }
+    })) |> ignore
+    let lit = fn() { interactive() && (@sf.lit_node(r) || (filters_only() && usage_pick.only.get() == (rank_key(), item_key()))) }
     ug_line_node(r, fn(l) {
       ug_grow_words(l, fn() { text(it(), "title") }, ug_row_title).words_look(By(fn() {
-        @ui.style_words(if lit() { ug_row_title_lit } else { ug_row_title })
-      })).ink(By(fn() { @ui.style_ink(if lit() { ug_row_title_lit } else { ug_row_title }) }))
+        @ui.style_words(if lit() { ug_row_title_lit } else if is_deleted() { ug_row_sub } else { ug_row_title })
+      })).ink(By(fn() { @ui.style_ink(if lit() { ug_row_title_lit } else if is_deleted() { ug_row_sub } else { ug_row_title }) }))
       |> ignore
       @sf.words_node(l, fn() { text(it(), "costText") }, fn() { ug_cost }) |> ignore
     })
+    let row_sub = fn() -> String {
+      let base = text(it(), "sub")
+      let tm = text(it(), "topModel")
+      let tok = text(it(), "tokensText")
+      let parts : Array[String] = []
+      if base != "" {
+        parts.push(base)
+      }
+      if tm != "" && !base.contains(tm) {
+        parts.push(tm)
+      }
+      if tok != "" && !base.contains("token") {
+        parts.push(if tok.contains("token") { tok } else { tok + " token" })
+      }
+      parts.join(" · ")
+    }
     ug_line_node(r, fn(l) {
-      ug_grow_words(l, fn() { text(it(), "sub") }, ug_row_sub) |> ignore
+      ug_grow_words(l, row_sub, ug_row_sub) |> ignore
       @sf.words_node(l, fn() { text(it(), "shareText") }, fn() { ug_line_end }) |> ignore
     })
     usage_track_node(r, fn() { number(it(), "share") })
@@ -205,11 +296,12 @@ fn usage_track_node(parent : @view.View, share : () -> Double) -> Unit {
 }
 
 ///|
-/// What was spent in all (usage_overview's), on a card: its head (what its figure is, the way to the prices at its
-/// end, in lines where it has not the room), the cost large and its change against the days before after it on its
-/// foot (under it where the line has not the room); once something was spent, the days' parts named and what they
-/// are split by, and the days' bars; what the page is narrowed to.
+/// What was spent in all (usage_overview's), on a card: its head (what its figure is, active filter chips inline, and
+/// the way to the prices at its end), the cost large and its change against the days before on the left with compact
+/// secondary metrics (input tokens + cache hit rate, output tokens, calls) on the right; once something was spent,
+/// the days' parts named with their costs and what they are split by, and the days' bars with Y-axis scale.
 fn usage_overview_node(parent : @view.View, core : Core, v : () -> Json?, chart : () -> Json?, press : UsagePress, tips? : @sf.TipLayer) -> Unit {
+  let shown_v = fn() { if v() is Some(_) { v() } else { chart() } }
   let cost = fn() {
     match items(v(), "tiles").get(0) {
       Some(t) => Some(t)
@@ -219,9 +311,9 @@ fn usage_overview_node(parent : @view.View, core : Core, v : () -> Json?, chart 
   parent.show(fn() { items(chart(), "tiles").length() > 0 }, fn(at) {
     ug_card_node(at, fn(k) {
       k.box(fn(h) {
-        h.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))).wraps(Is(Some(12.0))) |> ignore
+        h.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))).wraps(Is(Some(8.0))) |> ignore
         ug_grow_words(h, fn() {
-          let shown = if v() is Some(_) { v() } else { chart() }
+          let shown = shown_v()
           let period = text(shown, "period")
           let label = match items(shown, "tiles").get(0) { Some(t) => text(Some(t), "label"); None => "" }
           if period == "" { label } else { label + " · " + period }
@@ -230,12 +322,37 @@ fn usage_overview_node(parent : @view.View, core : Core, v : () -> Json?, chart 
       })
       |> ignore
       k.box(fn(f) {
-        f.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(End))).wraps(Is(Some(12.0))) |> ignore
-        @sf.words_node(f, fn() { if v() is None { "…" } else { text(cost(), "value") } }, fn() { ug_hero_value }) |> ignore
-        f.show(fn() { text(cost(), "change") != "" }, fn(c) {
-          c.row(Is(true)).gap(Is(4.0)).padding(Is((0.0, 0.0, 0.0, 6.0))).lines_up(Is(Some(Middle))) |> ignore
-          @sf.words_node(c, fn() { text(cost(), "change") }, fn() { ug_change }) |> ignore
-          @sf.words_node(c, fn() { text(v(), "versus") }, fn() { ug_change_versus }) |> ignore
+        f.row(Is(true)).gap(Is(20.0)).lines_up(Is(Some(End))).wraps(Is(Some(12.0))) |> ignore
+        f.box(fn(left) {
+          left.row(Is(true)).grow(Is(1.0)).basis(Is(Some(160.0))).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(12.0)).lines_up(Is(Some(End))).wraps(Is(Some(8.0))) |> ignore
+          @sf.words_node(left, fn() { if v() is None { "…" } else { text(cost(), "value") } }, fn() { ug_hero_value }) |> ignore
+          left.show(fn() { text(cost(), "change") != "" }, fn(c) {
+            c.row(Is(true)).gap(Is(4.0)).padding(Is((0.0, 0.0, 0.0, 6.0))).lines_up(Is(Some(Middle))) |> ignore
+            @sf.words_node(c, fn() { text(cost(), "change") }, fn() { ug_change }) |> ignore
+            @sf.words_node(c, fn() { text(v(), "versus") }, fn() { ug_change_versus }) |> ignore
+          })
+        })
+        |> ignore
+        f.show(fn() { items(shown_v(), "tiles").length() >= 4 }, fn(right) {
+          right.row(Is(true)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(16.0)).padding(Is((0.0, 0.0, 0.0, 2.0))).lines_up(Is(Some(Start))).wraps(Is(Some(10.0))) |> ignore
+          for idx in [2, 3, 1] {
+            right.box(fn(m) {
+              let tile = fn() { items(shown_v(), "tiles").get(idx) }
+              m.shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(2.0)) |> ignore
+              @sf.words_node(m, fn() { text(tile(), "value") }, fn() { ug_tile_value })
+              |> ignore
+              @sf.words_node(m, fn() {
+                let lbl = text(tile(), "label")
+                let sub = text(tile(), "sub")
+                if sub != "" { lbl + " (" + sub + ")" } else { lbl }
+              }, fn() { ug_tile_label })
+              .shrink(Is(1.0))
+              .min_width(Is(Some(0.0)))
+              .allow_ellipsis(Is(true))
+              |> ignore
+            })
+            |> ignore
+          }
         })
       })
       |> ignore
@@ -255,8 +372,6 @@ fn usage_overview_node(parent : @view.View, core : Core, v : () -> Json?, chart 
 fn usage_prices_link_node(parent : @view.View, core : Core) -> Unit {
   parent.box(fn(b) {
     b
-    // (giving way in its line as an old view's box of no width said does in a row: its words on one line no wider than
-    // it then, cut short there)
     .shrink(Is(1.0))
     .padding(Is((8.0, 4.0, 8.0, 4.0)))
     .says(By(fn() { Some(@view.said(Link, label=@sf.t("web-main.usage.costPrices"))) }))
@@ -269,18 +384,14 @@ fn usage_prices_link_node(parent : @view.View, core : Core) -> Unit {
 }
 
 ///|
-/// The days' bars' parts named and what they are split by (usage_split's): each part a dot of its colour and its name
-/// (one pressed seen alone, not the rest; the words' ink under the hand), in lines where they have not the room; under
-/// them, where both have parts, 按人 or 按模型 (a narrow page's choice, filling the line), the one pressed shown from the
-/// press till what it reads is answered (`press`).
+/// The days' bars' parts named (with each part's cost) and what they are split by (`按人 | 按模型 | 按账号`).
 fn usage_split_node(parent : @view.View, v : () -> Json?, press : UsagePress) -> Unit {
   let lists = fn() { items(v(), "lists") }
   let choices = fn() {
-    ["people", "models"].filter(fn(k) {
+    ["people", "models", "profiles"].filter(fn(k) {
       lists().iter().any(fn(l) { text(Some(l), "key") == k && items(Some(l), "parts").length() > 0 })
     })
   }
-  // (their names, as the lists title them)
   let split_labels = fn() {
     choices().map(fn(k) {
       match lists().search_by(fn(l) { text(Some(l), "key") == k }) {
@@ -289,12 +400,31 @@ fn usage_split_node(parent : @view.View, v : () -> Json?, press : UsagePress) ->
       }
     })
   }
-  // (the parts named and the choice sharing a line alike, each from nothing (both w=Full in it, as Fill), in lines where
-  // they have not the room: ug_split_line)
+  let series_cost = fn(pv : Json?) -> String {
+    let direct = text(pv, "costText")
+    if direct != "" {
+      return direct
+    }
+    let split = text(v(), "split")
+    let key = text(pv, "key")
+    if key == "" {
+      return ""
+    }
+    match lists().search_by(fn(l) { text(Some(l), "key") == split }) {
+      Some(i) => {
+        let its = items(Some(lists()[i]), "items")
+        match its.search_by(fn(it) { text(Some(it), "key") == key }) {
+          Some(j) => text(Some(its[j]), "costText")
+          None => ""
+        }
+      }
+      None => ""
+    }
+  }
   parent.box(fn(line) {
-    line.row(Is(true)).gap(Is(12.0)).wraps(Is(Some(12.0))).lines_up(Is(Some(Middle))) |> ignore
+    line.row(Is(true)).gap(Is(12.0)).wraps(Is(Some(10.0))).lines_up(Is(Some(Middle))) |> ignore
     line.box(fn(legend) {
-      legend.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).row(Is(true)).gap(Is(12.0)).wraps(Is(Some(12.0))).lines_up(Is(Some(Middle))) |> ignore
+      legend.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).row(Is(true)).gap(Is(14.0)).wraps(Is(Some(8.0))).lines_up(Is(Some(Middle))) |> ignore
       legend.each(
         fn() { items(v(), "series").mapi(fn(i, s) { (i, s) }) },
         fn(p) { p.0 },
@@ -344,6 +474,9 @@ fn usage_split_node(parent : @view.View, v : () -> Json?, press : UsagePress) ->
               if selected() || (can_pick() && @sf.lit_node(it)) { ug_legend_lit } else { ug_legend_words }
             })
             |> ignore
+            it.show(fn() { series_cost(pv()) != "" }, fn(c) {
+              @sf.words_node(c, fn() { series_cost(pv()) }, fn() { ug_legend_cost }) |> ignore
+            })
           }
         },
       )
@@ -442,6 +575,8 @@ fn usage_chart_node(parent : @view.View, v : () -> Json?, filtered : () -> Json?
   }
   parent.box(fn(area) {
     area
+    .row(Is(true))
+    .gap(Is(8.0))
     .gesture(
       @ui.touch_slop(),
       tap=fn(d) {
@@ -460,11 +595,17 @@ fn usage_chart_node(parent : @view.View, v : () -> Json?, filtered : () -> Json?
       },
     )
     |> ignore
-    area.box(fn(plot) {
-      plot.height(Is(Some(@sf.usage_plot))) |> ignore
-      plot.box(fn(row) {
-        // (as high as the plot from nothing, whatever its days hold: ug_days' h=Full)
-        row.row(Is(true)).grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).min_height(Is(Some(0.0))).gap(By(gap)) |> ignore
+    area.show(fn() { area.window().0 >= 380.0 }, fn(scale) {
+      let top_val = fn() { number(v(), "top").to_int() }
+      scale.height(Is(Some(@sf.usage_plot))).lies_along(Is(Between)).shrink(Is(0.0)) |> ignore
+      @sf.words_node(scale, fn() { "$" + top_val().to_string() }, fn() { ug_scale_label }) |> ignore
+      @sf.words_node(scale, fn() { "$" + (top_val() / 2).to_string() }, fn() { ug_scale_label }) |> ignore
+      @sf.words_node(scale, fn() { "$0" }, fn() { ug_scale_label }) |> ignore
+    })
+    area.box(fn(col) {
+      col.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+      col.box(fn(row) {
+        row.row(Is(true)).height(Is(Some(@sf.usage_plot))).gap(By(gap)) |> ignore
         row.each(daily, fn(d) { text(Some(d), "day") }, fn(day, d) {
           let dv = fn() { Some(d.get()) }
           let key = fn() { text(dv(), "day") }
@@ -478,11 +619,8 @@ fn usage_chart_node(parent : @view.View, v : () -> Json?, filtered : () -> Json?
             .min_height(Is(Some(0.0)))
             .lies_along(Is(End))
             .says(By(fn() { Some(@view.said(Button, label=text(dv(), "label") + " " + shown_cost_text(dv()))) }))
-            // (by the keyboard and a screen reader, each day its own; a finger or the pointer on the days is the
-            // area's, one tap or one slide one choice: what the hand does takes no press of a day's)
             .focusable(Is(true))
             .on_press(fn() { press(@signals.untracked(key)) })
-            // (taking no finger nor pointer of its own: the days' area's, under it)
             .takes(fn(_, _, _) { [] })
             |> ignore
             usage_bar_node(day, v, dv, fn() {
@@ -493,12 +631,10 @@ fn usage_chart_node(parent : @view.View, v : () -> Json?, filtered : () -> Json?
         })
       })
       |> ignore
-    })
-    |> ignore
-    area.box(fn(b) { b.height(Is(Some(1.0))).ground(By(fn() { @ui.tree_theme().color(Line) })) |> ignore }) |> ignore
-    area.box(fn(labels) {
-      labels.row(Is(true)).padding(Is((0.0, 6.0, 0.0, 0.0))).gap(By(gap)) |> ignore
-      labels.each(daily, fn(d) { text(Some(d), "day") }, fn(cell, d) {
+      col.box(fn(b) { b.height(Is(Some(1.0))).ground(By(fn() { @ui.tree_theme().color(Line) })) |> ignore }) |> ignore
+      col.box(fn(labels) {
+        labels.row(Is(true)).padding(Is((0.0, 6.0, 0.0, 0.0))).gap(By(gap)) |> ignore
+        labels.each(daily, fn(d) { text(Some(d), "day") }, fn(cell, d) {
           cell.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).lines_up(Is(Some(Middle))) |> ignore
           cell.box(fn(room) {
             // (as wide as the widest date, never wider: an old view's one-line words in a column, capped at its width)
@@ -517,7 +653,9 @@ fn usage_chart_node(parent : @view.View, v : () -> Json?, filtered : () -> Json?
             |> ignore
           })
           |> ignore
+        })
       })
+      |> ignore
     })
     |> ignore
   })
@@ -598,15 +736,14 @@ fn usage_bar_node(parent : @view.View, v : () -> Json?, d : () -> Json?, on : ()
 }
 
 ///|
-/// What the page is narrowed to (usage_narrowed's): each a chip that takes it off, 8 apart, in lines where they have
-/// not the room: the one seen alone (只看 林), the day (只看 10/5).
+/// What the page is narrowed to (usage_narrowed's): each a chip that takes it off, 8 apart, inline in the overview
+/// card's header: the one seen alone (只看 林), the day (只看 10/5).
 fn usage_narrowed_node(parent : @view.View, v : () -> Json?, chart : () -> Json?, tips? : @sf.TipLayer) -> Unit {
   let only = fn() { usage_pick.only.get().0 != "" }
   let day = fn() { usage_pick.day.get() != "" }
   parent.show(fn() { only() || day() }, fn(at) {
+    let out = @sf.card_corner - @sf.small_corner - @sf.card_pad
     at.box(fn(chips) {
-      // (the last of the card, at its foot's start: its chips concentric with its corner there, as usage_narrowed's)
-      let out = @sf.card_corner - @sf.small_corner - @sf.card_pad
       chips.row(Is(true)).gap(Is(8.0)).wraps(Is(Some(8.0))).margin(Is((out, 0.0, 0.0, out))) |> ignore
       chips.show(only, fn(s) {
         let name = fn() {
@@ -651,9 +788,9 @@ fn usage_narrowed_node(parent : @view.View, v : () -> Json?, chart : () -> Json?
 }
 
 ///|
-/// The page's body under its head (usage_body's): the summary, the overview, then (once something was spent) the chats,
-/// or that none was spent (in its bones while it is still read, what failed said over it); how it is counted last; 16
-/// apart.
+/// The page's body under its head: for `7 天` / `30 天`, the period overview + daily trend card first, then the
+/// 4-tab spending breakdown card (`对话 | 人 | 模型 | 账号`), then basis notes; for `累计`, the clean all-time summary
+/// & 12-month heatmap card.
 fn usage_body_node(
   parent : @view.View,
   core : Core,
@@ -667,40 +804,46 @@ fn usage_body_node(
   let details_pending = fn() { flag(v(), "detailsPreparing") || flag(chart(), "detailsPreparing") }
   parent.box(fn(b) {
     b.gap(Is(ug_body_gap)) |> ignore
-    usage_summary_node(b, chart, page_w, tips?)
-    b.show(details_pending, fn(at) {
-      let sample = fn() { Some(usage_sample()) }
-      @sf.waiting_node(at, fn(s) {
-        s.box(fn(details) {
-          details.gap(Is(ug_body_gap)) |> ignore
-          usage_overview_node(details, core.quiet(), sample, sample, press)
-          usage_none_node(details)
-        }) |> ignore
-      }, note=fn() { { reading: true, text: @sf.t("common.reading"), failing: [] } })
-    })
-    b.show(fn() { !details_pending() }, fn(at) { usage_overview_node(at, core, v, chart, press, tips?) })
-    b.show(fn() { v() is None && error() is Some(_) }, fn(p) {
-      @sf.words_node(p, fn() { @sf.t("web-pages.settings.usage.failed", args=[("error", error_text(error().unwrap()))]) }, fn() { ug_failed }) |> ignore
-    })
-    b.show(fn() { v() is Some(_) && !details_pending() }, fn(q) {
-    q.pick(fn() { flag(v(), "empty") }, fn(p, empty) {
-      if empty {
-        let wait = fn() { field(v(), "wait") }
-        p.pick(fn() { flag(wait(), "reading") || failing_of(wait()).length() > 0 }, fn(q, waits) {
-          if waits {
-            @sf.waiting_node(q, fn(s) { usage_none_node(s) }, note=fn() {
-              { reading: flag(wait(), "reading"), text: "", failing: failing_of(wait()) }
-            })
-          } else {
-            usage_none_node(q)
-          }
-        })
+    b.pick(fn() { usage_pick.summary.get() }, fn(body, is_sum) {
+      if is_sum {
+        usage_summary_node(body, chart, page_w, tips?)
       } else {
-        usage_chats_node(p, core, v)
+        body.gap(Is(ug_body_gap)) |> ignore
+        body.show(details_pending, fn(at) {
+          let sample = fn() { Some(usage_sample()) }
+          @sf.waiting_node(at, fn(s) {
+            s.box(fn(details) {
+              details.gap(Is(ug_body_gap)) |> ignore
+              usage_overview_node(details, core.quiet(), sample, sample, press)
+              usage_none_node(details)
+            }) |> ignore
+          }, note=fn() { { reading: true, text: @sf.t("common.reading"), failing: [] } })
+        })
+        body.show(fn() { !details_pending() }, fn(at) { usage_overview_node(at, core, v, chart, press, tips?) })
+        body.show(fn() { v() is None && error() is Some(_) }, fn(p) {
+          @sf.words_node(p, fn() { @sf.t("web-pages.settings.usage.failed", args=[("error", error_text(error().unwrap()))]) }, fn() { ug_failed }) |> ignore
+        })
+        body.show(fn() { v() is Some(_) && !details_pending() }, fn(q) {
+          q.pick(fn() { flag(v(), "empty") }, fn(p, empty) {
+            if empty {
+              let wait = fn() { field(v(), "wait") }
+              p.pick(fn() { flag(wait(), "reading") || failing_of(wait()).length() > 0 }, fn(q, waits) {
+                if waits {
+                  @sf.waiting_node(q, fn(s) { usage_none_node(s) }, note=fn() {
+                    { reading: flag(wait(), "reading"), text: "", failing: failing_of(wait()) }
+                  })
+                } else {
+                  usage_none_node(q)
+                }
+              })
+            } else {
+              usage_ranks_node(p, core, v)
+            }
+          })
+        })
+        usage_notes_node(body, v)
       }
     })
-    })
-    usage_notes_node(b, v)
   })
   |> ignore
 }
@@ -719,17 +862,9 @@ fn usage_summary_node(parent : @view.View, v : () -> Json?, page_w : () -> Doubl
         mid.row(Is(true)).lies_along(Is(Middle)) |> ignore
       mid.box(fn(sum) {
         sum.grow(Is(1.0)).basis(Is(Some(0.0))).max_width(Is(Some(760.0))).gap(Is(24.0)) |> ignore
-        // (its title in its middle, cut short where it has not the room; the rest as wide as it)
-        sum.show(fn() { text(sv(), "title") != "" }, fn(t) {
-          t.box(fn(m) {
-            m.row(Is(true)).lies_along(Is(Middle)) |> ignore
-            @sf.words_node(m, fn() { text(sv(), "title") }, fn() { ug_sum_title }) |> ignore
-          })
-          |> ignore
-        })
         sum.box(fn(figs) {
           figs.row(Is(true)).gap(Is(16.0)).wraps(Is(Some(16.0))).lies_along(Is(Middle)) |> ignore
-          figs.each(fn() { items(sv(), "figures").mapi(fn(i, f) { (i, f) }) }, fn(p) { p.0 }, fn(f, p) {
+          figs.each(fn() { items(sv(), "figures").iter().take(3).collect().mapi(fn(i, f) { (i, f) }) }, fn(p) { p.0 }, fn(f, p) {
               f.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(96.0))).gap(Is(2.0)) |> ignore
               ug_centered_words(f, fn() { text(Some(p.get().1), "value") }, ug_figure_value)
               ug_centered_words(f, fn() { text(Some(p.get().1), "label") }, ug_figure_label)
@@ -745,7 +880,6 @@ fn usage_summary_node(parent : @view.View, v : () -> Json?, page_w : () -> Doubl
           })
         })
         |> ignore
-        @sf.words_node(sum, fn() { text(sv(), "asOf") }, fn() { ug_note }) |> ignore
         sum.show(fn() { text(sv(), "partial") != "" }, fn(s) {
           @sf.words_node(s, fn() { text(sv(), "partial") }, fn() { ug_note }) |> ignore
         })
@@ -787,7 +921,7 @@ fn usage_named_node(n : @view.View, lv : () -> Json?) -> Unit {
 /// running total each week a bar of its rows from the foot; each month's name over the week its first days are in
 /// (none where its weeks have not the room); under it the levels from less to more, or what a column is. 12 apart.
 fn usage_year_node(parent : @view.View, av : () -> Json?, weeks : () -> Int, tips? : @sf.TipLayer) -> Unit {
-  let views = fn() { strings(av(), "views") }
+  let views = fn() { strings(av(), "views").iter().take(2).collect() }
   let shown = fn() { if usage_pick.year.get() < views().length() { usage_pick.year.get() } else { 0 } }
   let first = fn() { 52 - weeks() }
   let faint = fn() { @sf.alpha(@sf.theme().p.text, if @sf.theme().dark { 0.14 } else { 0.18 }) }
@@ -1066,15 +1200,32 @@ pub fn usage_node(
     @sf.segmented_node(
       l,
       head=true,
-      fn() { usage_days_choices.map(fn(n) { @sf.t("web-main.usage.days", args=[("n", n.to_string())]) }) },
       fn() {
-        let days = match pressed.get() {
-          Some((d, _)) => d
-          None => usage_pick.days.get()
-        }
-        if days == 30 { 1 } else { 0 }
+        [
+          @sf.t("web-main.usage.days", args=[("n", "7")]),
+          @sf.t("web-main.usage.days", args=[("n", "30")]),
+          "累计",
+        ]
       },
-      fn(k) { press(usage_days_choices[k], usage_pick.split.untracked()) },
+      fn() {
+        if usage_pick.summary.get() {
+          2
+        } else {
+          let days = match pressed.get() {
+            Some((d, _)) => d
+            None => usage_pick.days.get()
+          }
+          if days == 30 { 1 } else { 0 }
+        }
+      },
+      fn(k) {
+        if k == 2 {
+          usage_pick.summary.set(true)
+        } else {
+          usage_pick.summary.set(false)
+          press(usage_days_choices[k], usage_pick.split.untracked())
+        }
+      },
     )
   }
   match bar_actions {
@@ -1163,6 +1314,36 @@ pub fn usage_prices_node(
 ) -> Unit {
   let topic = fn() { (core.topic)("usage", { "scope": str(here().workspace), "days": Json::number(days.to_double()) }).get() }
   let tables = fn() { items(topic().value, "prices") }
+  let merged_table = fn() -> Json? {
+    let ts = tables()
+    if ts.length() == 0 {
+      return None
+    }
+    let seen : Array[String] = []
+    let merged_rows : Array[Json] = []
+    let mut note = ""
+    for t in ts {
+      let n = text(Some(t), "note")
+      if note == "" && items(Some(t), "rows").length() > 0 && n != "" {
+        note = n
+      }
+      for r in items(Some(t), "rows") {
+        let m = text(Some(r), "model")
+        if m != "" && !seen.contains(m) {
+          seen.push(m)
+          merged_rows.push(r)
+        }
+      }
+    }
+    if note == "" {
+      note = "每百万 token 的美元折算单价，取自各服务商公开 API 价格"
+    }
+    Some({
+      "station": Json::string("模型折算单价"),
+      "note": Json::string(note),
+      "rows": Json::array(merged_rows),
+    })
+  }
   let wait = fn() { field(topic().value, "wait") }
   let blocks = fn() {
     match topic().value {
@@ -1173,7 +1354,7 @@ pub fn usage_prices_node(
         } else if tables().length() == 0 {
           ["none"]
         } else {
-          tables().mapi(fn(i, _) { "card/\{i}" })
+          ["unified"]
         }
     }
   }
@@ -1196,10 +1377,7 @@ pub fn usage_prices_node(
             { reading: failing.length() == 0, text: "", failing }
           })
         "none" => @sf.page_none_node(b, fn() { @sf.t("web-main.usage.noPrices") })
-        _ => {
-          let i = @string.parse_int(key[5:]) catch { _ => 0 }
-          up_card_node(b, fn() { tables().get(i) })
-        }
+        _ => up_card_node(b, merged_table)
       }
     },
     on_back~,
@@ -1224,9 +1402,34 @@ fn up_card_node(parent : @view.View, tv : () -> Json?, tree? : () -> Json? = fn(
       // (at the card's foot: as far past the card's words under it as its scroll reaches to either side,
       // up_table_across)
       t.margin(Is((0.0, 0.0, 0.0, @sf.corner_inset - @sf.card_pad))) |> ignore
-      @sf.table_node(t, fn() { up_markdown(tv()) }, bleed=@sf.card_pad - @sf.corner_inset, tree~)
+      let tree_fn = fn() {
+        match tree() {
+          Some(x) => Some(x)
+          None => up_tree(tv())
+        }
+      }
+      @sf.table_node(t, fn() { up_markdown(tv()) }, bleed=@sf.card_pad - @sf.corner_inset, tree=tree_fn)
     })
   })
+}
+
+///|
+fn up_tree(tv : Json?) -> Json? {
+  let rows = items(tv, "rows")
+  if rows.length() == 0 {
+    return None
+  }
+  let cell = fn(s : String) { Json::array([Json::string("td"), Json::array([Json::string(s)])]) }
+  let row = fn(cells : Array[String]) { Json::array([Json::string("tr"), Json::array(cells.map(cell))]) }
+  let head = [@sf.t("web-main.model.models")]
+  head.append(items(Some(rows[0]), "rates").map(fn(r) { text(Some(r), "label") }))
+  let trs = [row(head)]
+  for r in rows {
+    let cells = [text(Some(r), "model")]
+    cells.append(items(Some(r), "rates").map(fn(x) { text(Some(x), "value") }))
+    trs.push(row(cells))
+  }
+  Some(Json::array([Json::array([Json::string("table"), Json::array(trs)])]))
 }
 
 ///|

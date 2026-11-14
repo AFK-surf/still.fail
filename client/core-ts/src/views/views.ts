@@ -49,6 +49,7 @@ import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
 import { usageSummary } from "./usage-summary.ts";
 import { fleetView } from "./fleet.ts";
+import { stationUpdates } from "./station-updates.ts";
 import { chatsCard, usageCard } from "./rail-cards.ts";
 import { resourcesView } from "./resources.ts";
 import { stationProfileSummary, workspaceProfiles } from "./profiles.ts";
@@ -89,7 +90,7 @@ export const WINDOW_UNTOLD = 50;
 /// (`stationsWhole` is the core's own: a scope's stations, each its page with the models it can run, as `stations` was
 /// before its items were rows. choose.ts reads it for a model's choice and its borrowing; no UI asks it, and protocol.ts
 /// does not offer it.)
-const VIEW_TOPICS = new Set(["chats", "chatRow", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "profilesWhole", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEW_TOPICS = new Set(["chats", "chatRow", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "profilesWhole", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "stationUpdates", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, what its agents are doing as its list's row says it.
@@ -137,6 +138,10 @@ const chatPrefsIn = (v: Value | undefined): J => {
   const prefs = v !== undefined && "ok" in v ? v.ok : null;
   return { chatTabs: get(prefs, "chatTabs"), stationUpdatesDismissed: get(prefs, "stationUpdatesDismissed") };
 };
+
+/// The station updates let be of the prefs (`stationUpdatesDismissed`: a version a station, as a chat's notice of it
+/// keeps it), what the offer of the stations' newer releases reads of them.
+const updatesDismissedIn = (v: Value | undefined): J => get(v !== undefined && "ok" in v ? v.ok : null, "stationUpdatesDismissed");
 
 /// A station taken for down, in words, as its link says why (link.ts DownCause): the device's network, the station, or
 /// the way between them, or its update.
@@ -1175,6 +1180,12 @@ export class Views implements Owner {
         scope = view.scope as string;
         perStation = (s) => (s === view.station ? [{ topic: "overview", station: s }] : []);
         break;
+      case "stationUpdates":
+        // (each station's own software, of what is kept beside its overview: views/station-updates.ts; the versions let be)
+        scope = view.scope as string;
+        perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }];
+        topics.push({ topic: "prefs" });
+        break;
       case "settings":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }];
@@ -1860,6 +1871,18 @@ export class Views implements Owner {
         });
         return { ok: fleetView(read, profiles, usage, now, offset) };
       }
+      case "stationUpdates": {
+        // (an owner's or an admin's alone: nobody else can update a station)
+        const scope = view.scope as string;
+        const stations = this.#stationsOr(scope);
+        if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+        const role = get(this.ok({ topic: "workspace", workspace: scope }), "role");
+        const manages = role === "owner" || role === "admin";
+        const data = this.#core.data;
+        // (a version let be on a chat's notice of it, 不再提醒此版本, is not offered here either)
+        const dismissed = this.prefsPart(updatesDismissedIn);
+        return { ok: stationUpdates(manages ? stations.map((s) => ({ station: s.address, name: s.name, online: s.online && !down(this.link(s.address)), software: data.overviewSoftware(s.address), dismissed: str(get(dismissed, s.address)) })) : []) };
+      }
       case "railCard": {
         const scope = view.scope as string;
         // (the list's count of its rows at work, as its window counts them: none of its rows read)
@@ -2048,7 +2071,11 @@ export class Views implements Owner {
         const slackUsers = arr(get(part, "slackUsers")).filter((u): u is string => typeof u === "string");
         this.local.settle(s.address, data.rowsRev(s.address));
         const listed = arr(read.ok);
-        const asked = this.local.pendingRows(s.address);
+        const asked = [...this.local.pendingRows(s.address), ...this.local.restoringRows(s.address).filter((row) => {
+          const thread = get(row, "thread");
+          const session = get(row, "session");
+          return (typeof thread === "number" ? data.chatOfThread(s.address, thread) : data.chatOfSession(s.address, String(session ?? ""))) === undefined;
+        })];
         // What failed to go in the station's chats, once for the list (looked up for each row, 1400 of them, on every
         // change of one: 2026-11-08).
         const failed = this.local.failedOutboxes(s.address);
@@ -3363,11 +3390,17 @@ export class Views implements Owner {
       const about = get(turn, "about");
       const key = str(get(session, "key"));
       const detail = str(get(turn, "detail")) ?? "";
-      if (key === undefined || get(turn, "outcome") !== "failed" || get(about, "thread") !== id) continue;
-      // Waiting to retry at capacity: 取消; else one that failed for the provider or the connection and is still where
-      // the session stands (nothing ran or was sent since): 重试, as a reply would (station actor.ts `retryable`).
-      const mark = detail.startsWith("overloaded:") && present.waiting(session) !== null ? "retrySession"
-        : present.sessionStatus(session) === "failed" && AGAIN.some((reason) => detail.startsWith(`${reason}:`)) ? "againSession" : null;
+      const outcome = get(turn, "outcome");
+      if (key === undefined || (outcome !== "failed" && outcome !== "completed") || get(about, "thread") !== id) continue;
+      // Waiting to retry at capacity: 取消; else one that failed for the provider or the connection, or one the station
+      // stopped asking for a state (回复即可继续), and is still where the session stands (nothing ran or was sent
+      // since): 重试, as a reply would (station actor.ts `retryable`).
+      const status = present.sessionStatus(session);
+      const mark = outcome === "failed" && detail.startsWith("overloaded:") && present.waiting(session) !== null ? "retrySession"
+        : outcome === "failed" && status === "failed" && AGAIN.some((reason) => detail.startsWith(`${reason}:`)) ? "againSession"
+        // Its allowance asked again showed a limit its words did not name: 重新分配账号 (actor.ts `LIMIT_SHOWN`).
+        : outcome === "failed" && status === "failed" && detail.startsWith("limit:") ? "reassignSession"
+        : outcome === "completed" && status === "unexpected" ? "againSession" : null;
       if (mark === null) continue;
       const at = messages.findIndex((m) => m.system === true && m.seq === get(about, "seq") && m.ts === get(about, "ts"));
       const notice = messages[at];

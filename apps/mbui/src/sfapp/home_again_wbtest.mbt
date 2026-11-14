@@ -105,8 +105,9 @@ fn home_again_measure(t : @ui.Tester, name : String, act : () -> Unit, span? : D
     }
   }
   take()
+  // (the display's frames as an idle host has them: what nothing asks for not drawn, Tester::frame_as_host)
   while t.time() < start + span {
-    t.frame()
+    t.frame_as_host() |> ignore
     take()
   }
   let mut peak = -1
@@ -364,7 +365,7 @@ test "home again: Home come back to in a taller phone's window, and from a page 
       } else if place == "connects" {
         (723, 0, 506)
       } else {
-        (723, 0, 619)
+        (348, 0, 274)
       }
       assert_eq(home_again_peak.val, first, msg="\{tag} home→\{place}")
       t.run_for(kept_switch_over_ms)

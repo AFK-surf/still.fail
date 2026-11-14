@@ -40,6 +40,8 @@
 #        stand-in `op` first on PATH and with none (kitdemo's MBUI_OPCHECK, src/kitdemo/gallery/opcheck.mbt)
 #   scripts/host_contract.sh linux picked       what the system's picker gave told between frames, not taken as a frame
 #        begins (kitdemo's MBUI_PICKCHECK with MBUI_PICK_FILES, src/kitdemo/gallery/pickcheck.mbt)
+#   scripts/host_contract.sh linux dropped      a folder and a file let go on the window as a file manager lets them go,
+#        taken by the box there and read whole (kitdemo's MBUI_DROPCHECK, src/kitdemo/gallery/dropcheck.mbt)
 #   scripts/host_contract.sh linux notices      (a session bus) a notification the app shows kept, and clicked by the
 #        run's script (MBUI_DRIVE `notice`, as the desktop's click): what it opens given to the app (kitdemo's
 #        MBUI_NOTICECHECK, src/kitdemo/gallery/noticecheck.mbt)
@@ -53,7 +55,12 @@
 #        through the app: its length and size once ready, (Linux) the middle of its first frame as the canvas drew it
 #        red and its frames' times read, played to its end, a frame grabbed (kitdemo's MBUI_PLAYCHECK,
 #        src/kitdemo/gallery/playcheck.mbt); on Android, sent behind as it plays and brought back: paused as it went
-#   scripts/host_contract.sh linux badge        (a session bus) the number on the app's icon as a dock is told it
+#   scripts/host_contract.sh windows stream     test/host/streamcheck-av1.obu (a second of AV1, 64 × 48 at 10 frames a
+#        second) decoded by the host's stream as an MP4's samples are handed over (kitdemo's MBUI_STREAMCHECK,
+#        src/kitdemo/gallery/streamcheck.mbt): where the system has its AV1 decoder (the AV1 Video Extension), its last
+#        frame shown at its size; with MBUI_NO_AV1=1, as a machine without it: the app told so first, every frame let go
+#        and none shown, the run ending as ever
+#   scripts/host_contract.sh linux badge       (a session bus) the number on the app's icon as a dock is told it
 #        (Canonical's LauncherEntry: its Update signal) and given it when it asks (Query) (kitdemo's MBUI_BADGECHECK,
 #        src/kitdemo/gallery/badgecheck.mbt)
 #   scripts/host_contract.sh linux links        (a session bus: dbus-run-session's) the app started with a link of its
@@ -759,6 +766,25 @@ INSTALL
         *) echo "play contract ($H): sent behind as it played, it said \"${l:-nothing}\", not paused"; tail -30 $O/play-behind.log; exit 1 ;;
       esac
     fi ;;
+  stream)
+    [ "$H" = windows ] || { echo "stream contract: Windows' (the only host that decodes AV1)"; exit 1; }
+    vars="MBUI_STREAMCHECK=$(base64 < test/host/streamcheck-av1.obu | tr -d '\n\r') MBUI_STREAMCHECK_SIZE=64x48"
+    # (no decoder: said so, and the frames let go, none shown)
+    run "MBUI_NO_AV1=1 $vars" $O/stream-none.log || true
+    have=$(grep -a "STREAMCHECK" $O/stream-none.log | sed 's/.*STREAMCHECK/STREAMCHECK/' | tr -d '\r' | paste -sd'|' -)
+    want="STREAMCHECK here 0|STREAMCHECK shown none"
+    [ "$have" = "$want" ] || { echo "stream contract (windows, no AV1): the host said \"$have\", not \"$want\""; tail -20 $O/stream-none.log; exit 1; }
+    echo "stream contract (windows, no AV1): $have"
+    run "$vars" $O/stream.log || true
+    have=$(grep -a "STREAMCHECK" $O/stream.log | sed 's/.*STREAMCHECK/STREAMCHECK/' | tr -d '\r' | paste -sd'|' -)
+    if [ "${have%%|*}" = "STREAMCHECK here 0" ]; then
+      # (a machine without the AV1 Video Extension: nothing more to look at here)
+      echo "stream contract (windows): no AV1 decoder on this machine, $have"
+    else
+      want="STREAMCHECK here 1|STREAMCHECK shown 64x48 at 9"
+      [ "$have" = "$want" ] || { echo "stream contract (windows): the host said \"$have\", not \"$want\""; tail -20 $O/stream.log; exit 1; }
+      echo "stream contract (windows): $have ($(grep -a 'win: streams: AV1\|win: stream .*AV1' $O/stream.log | tr -d '\r' | paste -sd';' -))"
+    fi ;;
   fontscale)
     [ "$H" = windows ] || { echo "fontscale contract: Windows'"; exit 1; }
     # the system's Text size set as Settings sets it (its value in the person's registry, 100-225), the app run, what
@@ -925,6 +951,26 @@ INSTALL
       echo "picked contract (linux): what was picked not told between frames"; tail -20 $O/picked.log; exit 1
     fi
     echo "picked contract (linux): told between frames" ;;
+  dropped)
+    # (Linux) files let go on the window as a file manager lets them go (the drive script's `drop`: the host's own drop,
+    # linux_app.c's drop_drive, the way its GTK drop target goes): a folder and a file, taken by the box there and read
+    # (kitdemo's MBUI_DROPCHECK, src/kitdemo/gallery/dropcheck.mbt): the folder's by their way down, each folder named
+    # with a "/" at its end.
+    [ "$H" = linux ] || { echo "dropped contract: Linux only"; exit 1; }
+    U=$PWD/$O/dropped
+    rm -rf "$U"
+    mkdir -p "$U/in/sub"
+    printf 'a\n' > "$U/in/a.txt"
+    printf 'bb\n' > "$U/in/sub/b.txt"
+    printf 'ccc\n' > "$U/c.txt"
+    DRV=$(printf 'drop 480 360 %s|%s\nuntil dropped\n' "$U/in" "$U/c.txt" | base64 | tr -d '\n\r')
+    r=0
+    run "MBUI_DROPCHECK=1 MBUI_DRIVE_B64=$DRV" $O/dropped.log || r=$?
+    grep -a "DROPCHECK\|^DRIVE" $O/dropped.log || true
+    if [ $r != 0 ] || ! grep -aqF "DROPCHECK taken 5: in/,c.txt,in/sub/,in/a.txt,in/sub/b.txt (9 bytes)" $O/dropped.log; then
+      echo "dropped contract (linux): what was let go not taken and read whole"; tail -20 $O/dropped.log; exit 1
+    fi
+    echo "dropped contract (linux): a folder and a file let go, taken and read" ;;
   notices)
     # (Linux) the app as its desktop entry runs it (MBUI_APP_ID: its notifications the desktop's, linux_life.h), a
     # notification shown, then clicked by the run's script as the desktop's click would be: the app says what it opened
@@ -1013,5 +1059,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, badge, secret, a11y, fontscale, posted, picked, op; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, badge, secret, a11y, fontscale, posted, picked, dropped, op; ios: free, done)" >&2; exit 1 ;;
 esac

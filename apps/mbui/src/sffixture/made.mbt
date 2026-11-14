@@ -41,6 +41,9 @@ pub fn fixture_reset() -> Unit {
   fix_job_more.val = 0
   new_fix.presets.clear()
   new_fix.presets.push_iter([fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")].iter())
+  new_fix.others.clear()
+  new_fix.others.push_iter(fix_others().iter())
+  new_fix.others_reading = false
   fix_chats.clear()
   fix_timers.clear()
   fix_downloads.clear()

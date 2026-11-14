@@ -77,7 +77,7 @@ fn option_row_node(
   on_pick : ((Int) -> Unit)?,
   loc~ : SourceLoc,
 ) -> Unit {
-  r.box(made_for=loc, fn(row) {
+  let fill = fn(row : @view.View) {
     style_node(row, fn() {
       let ot = option_type()
       @ui.style(
@@ -200,43 +200,42 @@ fn option_row_node(
         icon_node(c, "check", 14.0, By(fn() { theme().p.accent })) |> ignore
       })
     }
-    // pressed while free: its ripple in the ink (SettingParts.kt options: ripple(color = C.ink)), read out a button
-    // named as it is
-    match on_pick {
-      Some(f) if !history => {
-        row
-        .presses(By(free))
-        .focusable(By(free))
-        .says(By(fn() { Some(@view.said(Button, label=o().0)) }))
-        .on_press(fn() {
-          if @signals.untracked(free) {
-            f(i())
-          }
-        })
-        |> ignore
-        let rippled = press_look(row, Is(option_row_corner), fn() { false }, ink=fn() { alpha(theme().p.text, 0.1) })
-        let on_it = fn(d : @view.Drag) { row.finger_target(d.wx, d.wy) }
-        row.gesture(
-          @ui.touch_slop(),
-          press=fn(d) { if @signals.untracked(free) { (rippled.down)(d) } },
-          tap=fn(d) {
-            (rippled.tapped)(d)
-            if on_it(d) && @signals.untracked(free) {
-              f(i())
-            }
-          },
-          drag=fn(d) {
-            if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && @signals.untracked(free) {
-              f(i())
-            }
-          },
-        )
-        |> ignore
-      }
-      _ => ()
-    }
-  })
-  |> ignore
+  }
+  match on_pick {
+    Some(f) if !history =>
+      // pressed while free: its ripple in the ink (SettingParts.kt options: ripple(color = C.ink)), read out a button
+      // named as it is
+      @headless.button(
+        made_for=loc,
+        r,
+        fn() { o().0 },
+        fn(_) { f(i()) },
+        disabled=fn() { !free() },
+        fn(row, b) {
+          fill(row)
+          let rippled = press_look(row, Is(option_row_corner), fn() { false }, ink=fn() { alpha(theme().p.text, 0.1) })
+          let on_it = fn(d : @view.Drag) { row.finger_target(d.wx, d.wy) }
+          row.gesture(
+            @ui.touch_slop(),
+            press=fn(d) { if !b.disabled() { (rippled.down)(d) } },
+            tap=fn(d) {
+              (rippled.tapped)(d)
+              if on_it(d) {
+                b.press()
+              }
+            },
+            drag=fn(d) {
+              if d.kind == Up && @ui.pointing() is Mouse && on_it(d) {
+                b.press()
+              }
+            },
+          )
+          |> ignore
+        },
+      )
+      |> ignore
+    _ => r.box(made_for=loc, fill) |> ignore
+  }
 }
 
 ///|

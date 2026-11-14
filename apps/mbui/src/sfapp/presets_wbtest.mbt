@@ -176,14 +176,18 @@ test "不用预设 from a held control lets go of the preset" {
 }
 
 ///|
-test "with no presets at all, the capsule opens a new one's dialog, not a menu of 不用预设 alone" {
+test "with none of one's own, the capsule opens 新预设 and 其他成员的预设, not a menu of 不用预设 alone" {
   new_run()
   @sffixture.new_fix.presets.clear()
   let t = preset_mode("newchat")
   press(t, "预设")
   t.run_for(@ui.move_most_ms)
   assert_false(shows(t, "不用预设"), msg=runs(t))
-  assert_true(shows(t, "新预设") && shows(t, "名字") && shows(t, "添加目录"), msg=runs(t))
+  assert_true(shows(t, "新预设") && shows(t, "其他成员的预设"), msg=runs(t))
+  // (新预设: the new one's dialog)
+  t.tap_text("新预设")
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "名字") && shows(t, "添加目录"), msg=runs(t))
 }
 
 ///|
@@ -698,8 +702,9 @@ fn picker_pressed(
   let ways : Array[String] = []
   let n = ((ms * 2.0 + @ui.move_most_ms * 2.0) / @ui.frame_period_default).ceil().to_int()
   for i in 0..=n {
+    // (each of the display's frames, as an idle host has them: what nothing asks for not drawn, Tester::frame_as_host)
     if i > 0 {
-      t.run_for(@ui.frame_period_default)
+      t.frame_as_host() |> ignore
     }
     let now = t.time() - start
     for w in t.ways_set_out() {

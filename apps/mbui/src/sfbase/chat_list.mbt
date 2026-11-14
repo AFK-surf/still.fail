@@ -815,14 +815,17 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
     rd.ticked = false
     rd.floor_counted = false
     // every chat kept whose data the page read: its activities whose turn is over let go, its page shown or not
-    // (not one a message of it drawn elsewhere keeps: its topic never asked for)
+    // (not one a message of it drawn elsewhere keeps: its topic never asked for), read through the source of the page
+    // that holds it, never the window's: a chat whose page has not read it yet (one made as nodes, its composer's old
+    // view not built yet) or is left (told so as this frame's builds are over: pages_left) read through the window's
+    // would be a reader of its own, its topic held past its page
     let (station, session) = match rk.find("\u{1}") {
       Some(i) => (rk.exact_view(end=i).to_owned(), rk.exact_view(start=i + 1).to_owned())
       None => continue
     }
     let r : ChatRef = { station, session, title: "", station_name: "" }
     let page_src = page_source_for_chat(src, r)
-    if chat_kept_from(page_src, r) is None {
+    if physical_equal(page_src, src) || chat_kept_from(page_src, r) is None {
       continue
     }
     match view_of_chat(page_src, r).0 {
@@ -2563,7 +2566,7 @@ fn shown_sign(e : Entry) -> String {
         Some(d) => "\{d.resolved}\{d.dismissed}\{@ui.some_text(d.chosen)}"
         None => ""
       }
-      "m\{m.text.length()}|\{m.attachments.length()}|\{m.quotes.length()}|\{m.time is Some(_)}|\{m.waiting}|\{m.joined}|\{m.followed}|\{d}|\{m.notice_failed}|\{m.notice_words.length()}|\{m.notice_retry_session}|\{m.notice_again_session}|\{m.notice_detail.length()}"
+      "m\{m.text.length()}|\{m.attachments.length()}|\{m.quotes.length()}|\{m.time is Some(_)}|\{m.waiting}|\{m.joined}|\{m.followed}|\{d}|\{m.notice_failed}|\{m.notice_words.length()}|\{m.notice_retry_session}|\{m.notice_again_session}|\{m.notice_reassign_session}|\{m.notice_detail.length()}"
     }
     Out(o) => "o\{o.text.length()}|\{o.attachments.length()}|\{o.state}|\{o.joined}|\{o.followed}"
     State(a, b, c) => "s" + a + b + c

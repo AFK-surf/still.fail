@@ -1,8 +1,8 @@
 #!/bin/sh
 # Proves rules/protocol/lock.spthy with Tamarin (tamarin-prover and maude on PATH), each lemma on its own, a minute at
 # most; then plants a mistake in a copy for each of what it is to catch, which must then be falsified: a station taking
-# an entry no device of its lock signed, a device approving a key whose code it was not shown, a vault's key sealed to
-# a box key no device certified. Exits 1 when a lemma is not verified, or a planted mistake not caught.
+# an entry no device of its lock signed, a device approving a key whose code it was not shown, a binding taken on an
+# approval's signature, a vault's key sealed to a box key no device certified. Exits 1 when a lemma is not verified, or a planted mistake not caught.
 cd "$(dirname "$0")"
 bad=0
 lemmas=$(grep -oE '^lemma [a-z_]+' lock.spthy | cut -d' ' -f2)
@@ -24,6 +24,8 @@ plant "a station takes an entry unsigned" each_key_taken_as_its_signer_approved 
   "In(<'device', pkNew, pk(signer), sign(<'device', pkNew>, signer)>)" "In(<'device', pkNew, pk(signer)>)"
 plant "a device approves a key it was shown no code of" approved_only_as_shown \
   "In(pkNew), !Shown(h(pkNew)) ]" "In(pkNew) ]"
+plant "a binding taken on an approval's signature (no tag of its own)" bound_only_as_proved \
+  "In(<'bind', log, pk(signer), sign(<'bind', log>, signer)>) ]" "In(<'bind', log, pk(signer), sign(<'device', log>, signer)>) ]"
 plant "a vault's key sealed to a box key no device certified" sealed_to_certified \
   "In(<'box', boxPub, pk(d), sign(<'box', boxPub>, d)>)" "In(<'box', boxPub, pk(d)>)"
 for l in $(grep -oE '^lemma [a-z_]+' person.spthy | cut -d' ' -f2); do

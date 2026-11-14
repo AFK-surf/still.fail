@@ -9,6 +9,7 @@ import { CoreError } from "./error.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as ops from "./ops.ts";
+import * as present from "./present.ts";
 import type { Owner } from "./core/routing.ts";
 import { topicKey, type Topic } from "./protocol.ts";
 import * as model from "./shapes/model.ts";
@@ -18,6 +19,8 @@ import { arr as arrU, equal, get as getU, isObject } from "./util.ts";
 import { borrowable, effortDefault, lends, models, quotaLine, servingIn, sourced, subsetEfforts } from "./views/models.ts";
 import { profileServes } from "./views/profile-scope.ts";
 import { pendingKeyMade } from "./views/local.ts";
+import { type PresetRecord, type Stars, isGone } from "./preset-records.ts";
+import { type Who, fromBefore, heldOf, starredKeys, starsHeld } from "./presets-kept.ts";
 import { work } from "./work.ts";
 import { ofAddress } from "./workspace.ts";
 
@@ -351,6 +354,12 @@ export type ChooseEnv = {
   now: () => number;
   /// An agent as a chat's view has it (views.ts `agent`).
   agent: (station: string, key: string) => J;
+  /// Who the device is in a workspace (views/presets.ts `whoIn`); null while no account reaches it.
+  who?: (scope: string) => Who | null;
+  /// Someone else's preset of a workspace as last read (views/presets.ts `othersFound`).
+  othersFound?: (scope: string, id: string) => PresetRecord | undefined;
+  /// The person starred or unstarred a model in a workspace: carried to its stations (views/presets.ts `carryAll`).
+  starsChanged?: (scope: string) => void;
 };
 
 export class Choose implements Owner {
@@ -413,12 +422,11 @@ export class Choose implements Owner {
   }
 
   /// What the preset picked for the scope's new chats binds them to (`presetBinds`), with its name; none for none. Every
-  /// choice made reads this, so it reads the picked one's station's presets alone, as that station said them last (not
-  /// the scope's stations: `topic-work`'s pick, with three times the stations).
+  /// choice made reads this, so it reads the picked one alone (`#pickedOne`: the device's record of it by its id, else
+  /// the one station's list that has it), never the scope's stations' (`topic-work`'s pick, with three times the
+  /// stations).
   #bound(scope: string): { name: string; model: J | null; stations: string[] | null } | undefined {
-    const kept = this.#record(`ws:${scope}:preset`);
-    if (!isObject(kept) || typeof kept.id !== "string" || kept.id === "" || typeof kept.station !== "string") return undefined;
-    const p = arr(get(this.#env.store.get({ topic: "presets", station: kept.station }), "presets")).find((x) => get(x, "id") === kept.id);
+    const p = this.#pickedOne(scope)?.p;
     return p === undefined ? undefined : { name: text(get(p, "name")) ?? "", ...presetBinds(p) };
   }
 
@@ -426,6 +434,17 @@ export class Choose implements Owner {
   allows(scope: string, id: string): boolean {
     const stations = this.#bound(scope)?.stations;
     return stations === null || stations === undefined || stations.includes(id);
+  }
+
+  /// Whether station `addr` runs the model a preset binds (`pm`; and its runtime, where it names one), as the station's
+  /// overview lists its models: a preset's chats run with what it names on any station they start on (the user,
+  /// 2026-11-14: 「我一个 argon 的预设，切到其它 station，模型不是 argon，这他妈对吗？」), so a station that does not run
+  /// it is neither offered nor started on, never one the station's own first model stands in for.
+  #runsBound(addr: string, pm: J): boolean {
+    const entry = optionOf(this.#onStation(addr)[0], text(get(pm, "model")));
+    if (entry === undefined) return false;
+    const rt = text(get(pm, "runtime"));
+    return rt === null || arr(entry.runtimes).includes(rt);
   }
 
   #keepChoice(scope: string, id: string, choice: J, key = `ws:${scope}:station:${id}`): void {
@@ -551,12 +570,12 @@ export class Choose implements Owner {
     // workspace joined whose profile's `workspaces` do not name it); then the control's are made apart, as before.
     const servesAll = arr(get(served, "profiles")).length === arr(get(raw, "profiles")).filter((p) => get(p, "enabled") !== false).length;
     view.pick = overview !== null ? this.#face(addr, servesAll ? options : models(raw, this.#env.now())) : null;
-    // The workspace's presets, every station's up now (each as it was read last), to pick from where the page's
-    // control opens (its menu: each by its name and station's); the one picked whichever station it is of. Held with
-    // the page, which has each station's read as it shows: the menu finds them read, never waits on a station.
-    const listed = this.#workspacePresets(online);
-    view.presets = listed.map(({ p, station: at, stationName }) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", station: at, stationName }));
-    const picked = this.#picked(scope, listed);
+    // The person's own presets, to pick from where the page's control opens (its menu: each by its name, and the
+    // station it was made on): as the device holds them (views/presets.ts), whatever station is up, and those a station
+    // from before up now lists that they made; others' only at a press (`otherPresets`). The one picked, theirs or
+    // someone else's, whichever station it is of.
+    view.presets = this.#ownPresets(scope, online).map(({ p, station: at, stationName }) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", station: at, stationName }));
+    const picked = this.#pickedOne(scope);
     view.preset = picked === undefined ? "" : (text(get(picked.p, "id")) ?? "");
     view.presetStation = picked?.station ?? "";
     view.presetName = picked === undefined ? "" : (text(get(picked.p, "name")) ?? "");
@@ -568,6 +587,18 @@ export class Choose implements Owner {
     if (binds !== null && binds.stations !== null) {
       const named = binds.stations;
       view.stations = arr(view.stations).filter((s) => s === station || named.includes(typeof s.id === "string" ? s.id : ""));
+    }
+    if (binds !== null && binds.model !== null) {
+      const pm = binds.model;
+      view.stations = arr(view.stations).filter((s) => s === station || (typeof s.station === "string" && this.#runsBound(s.station, pm)));
+      if (overview !== null && !this.#runsBound(addr, pm)) {
+        // its control shows the preset's model as it names it, never the station's own first one in its place
+        const m = String(pm.model);
+        // (`model` stays the station's: the page asks only whether there is one)
+        const runtime = text(get(pm, "runtime")) ?? view.runtime;
+        view.pick = { value: { model: m, runtime, effort: text(get(pm, "effort")) }, valueOption: { name: model.name(m), maker: present.maker(m), runtimes: [] }, efforts: [] };
+        if (view.problem === null) view.problem = t("core-logic.choose.problem.preset_model_missing", { name, preset: text(get(picked!.p, "name")) ?? "", model: model.name(m) });
+      }
     }
     view.station = station;
     return view;
@@ -609,28 +640,50 @@ export class Choose implements Owner {
     return lends(v !== undefined && "ok" in v ? v.ok : [], here, (station) => this.#env.store.get({ topic: "overview", station }));
   }
 
-  /// The presets of the scope's stations `online` (their addresses' `presets` topics), as each station said them last,
-  /// with the station each is of.
-  #workspacePresets(online: J[]): { p: J; station: string; stationName: string }[] {
-    const out: { p: J; station: string; stationName: string }[] = [];
+  /// The scope's stations as listed (StationRow), up or not.
+  #listed(scope: string): J[] {
+    const v = this.#env.store.value({ topic: "stations", scope });
+    return v !== undefined && "ok" in v ? arr(v.ok) : [];
+  }
+
+  /// What station `address` from before lists (its `presets` topic, as it said them last), where the device holds it
+  /// is one (presets-kept.ts `before`); none of any other.
+  #listedBefore(scope: string, address: string, before: string[]): J[] {
+    if (!before.includes(stationId(address))) return [];
+    return arr(get(this.#env.store.get({ topic: "presets", station: address }), "presets"));
+  }
+
+  /// The person's own presets in `scope` as the new chat's page lists them: the device's live records by when each was
+  /// made, then those a station from before up now (`online`) lists that they made (their email) and the device holds
+  /// nothing of; each with the station it was made on (its address and name).
+  #ownPresets(scope: string, online: J[]): { p: J; station: string; stationName: string }[] {
+    const held = heldOf(this.#env.data, scope);
+    const names = new Map(this.#listed(scope).map((s) => [typeof s.station === "string" ? s.station : "", typeof s.name === "string" ? s.name : ""]));
+    const live = Object.values(held.records).filter((r): r is PresetRecord => !isGone(r));
+    live.sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
+    const out = live.map((r) => ({ p: r as J, station: `${scope}/${r.home}`, stationName: names.get(`${scope}/${r.home}`) ?? "" }));
+    const email = (this.#env.who?.(scope)?.email ?? "").toLowerCase();
+    if (email === "" || held.before.length === 0) return out;
     for (const s of online) {
       const at = typeof s.station === "string" ? s.station : "";
-      if (at === "") continue;
-      const topic: Topic = { topic: "presets", station: at };
-      for (const p of arr(get(this.#env.store.get(topic), "presets"))) out.push({ p, station: at, stationName: typeof s.name === "string" ? s.name : "" });
+      for (const p of this.#listedBefore(scope, at, held.before)) {
+        const id = text(get(p, "id"));
+        if (id === null || held.records[id] !== undefined || (text(get(p, "createdBy")) ?? "").toLowerCase() !== email) continue;
+        out.push({ p, station: at, stationName: typeof s.name === "string" ? s.name : "" });
+      }
     }
     return out;
   }
 
-  /// What preset `p` of station `at` is shown by: its first folders' marks (each its name, its repository, its own
-  /// picture as its station found it), three at most.
+  /// What preset `p` (made on station `at`) is shown by: its first folders' marks (each its name, its repository, its
+  /// own picture as the station it is on found it), three at most.
   #marks(p: J, at: string): J[] {
-    const offered = arr(get(this.#env.store.get({ topic: "presets", station: at }), "candidates"));
     return arr(get(p, "dirs"))
       .slice(0, 3)
       .map((d) => {
         const path = text(get(d, "path")) ?? "";
         const repo = text(get(d, "repo"));
+        const offered = arr(get(this.#env.store.get({ topic: "presets", station: text(get(d, "station")) ?? at }), "candidates"));
         const found = offered.find((o) => get(o, "path") === path || (repo !== null && get(o, "repo") === repo));
         const name = text(get(found, "name")) ?? path.split("/").filter((x) => x !== "").pop() ?? path;
         const icon = text(get(found, "icon"));
@@ -638,12 +691,30 @@ export class Choose implements Owner {
       });
   }
 
-  /// The preset the scope's new chats are opened with, as last picked on this device, among those `listed`; none for
-  /// none picked, or one no station has (as their presets were read last).
-  #picked(scope: string, listed: { p: J; station: string; stationName: string }[]): { p: J; station: string; stationName: string } | undefined {
+  /// The preset the scope's new chats are opened with, as last picked on this device (`ws:<scope>:preset`, `{id,
+  /// station}`, and the content of someone else's as read then, `record`): the device's record of it by its id (one of
+  /// the person's own, wherever it was made; a deleted one, none); else as a station from before lists it (`before`: its
+  /// address), the one it was picked on first; else someone else's as kept with the pick; else, picked before this
+  /// core, as its station lists it. None for none picked, or one nothing here has.
+  #pickedOne(scope: string): { p: J; station: string; before: string | null } | undefined {
     const kept = this.#record(`ws:${scope}:preset`);
     if (!isObject(kept) || typeof kept.id !== "string" || kept.id === "") return undefined;
-    return listed.find((x) => x.station === kept.station && get(x.p, "id") === kept.id);
+    const id = kept.id;
+    const at = typeof kept.station === "string" ? kept.station : "";
+    const held = heldOf(this.#env.data, scope);
+    const own = held.records[id];
+    if (own !== undefined) return isGone(own) ? undefined : { p: own, station: `${scope}/${own.home}`, before: null };
+    const order = [...(held.before.includes(stationId(at)) ? [stationId(at)] : []), ...held.before.filter((x) => x !== stationId(at))];
+    for (const sid of order) {
+      const address = `${scope}/${sid}`;
+      const p = this.#listedBefore(scope, address, held.before).find((x) => get(x, "id") === id);
+      if (p !== undefined) return { p: fromBefore(p, address) ?? p, station: address, before: address };
+    }
+    const record = get(kept, "record");
+    if (isObject(record) && record.id === id && typeof record.home === "string") return { p: record, station: `${scope}/${record.home}`, before: null };
+    if (at === "") return undefined;
+    const p = arr(get(this.#env.store.get({ topic: "presets", station: at }), "presets")).find((x) => get(x, "id") === id);
+    return p === undefined ? undefined : { p: fromBefore(p, at) ?? p, station: at, before: null };
   }
 
   /// The station the scope's new chat page is on: the one picked, up or not, else the first up (its id).
@@ -667,27 +738,30 @@ export class Choose implements Owner {
     if (bound !== undefined && bound.stations !== null && station !== null && !bound.stations.includes(station)) {
       throw CoreError.invalid(t("core-logic.choose.error.preset_station", { name: bound.name }));
     }
+    if (bound !== undefined && bound.model !== null && station !== null && !this.#runsBound(address(scope, station), bound.model)) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_model_station", { name: bound.name, model: model.name(String(bound.model.model)) }));
+    }
     if (station !== null) this.#keepStation(scope, station);
     // the preset, whichever station it is of (`presetStation`, its address; "" for none)
     const preset = get(params, "preset");
     if (typeof preset === "string") {
       const presetStation = text(get(params, "presetStation")) ?? "";
-      this.#env.data.put(TABLE, `ws:${scope}:preset`, { id: preset, station: presetStation }, false);
+      // (someone else's: kept with its content as read now, so that the page and what it binds hold with its station
+      // away; read again, it is kept as read then: views/presets.ts)
+      const other = preset !== "" && heldOf(this.#env.data, scope).records[preset] === undefined ? this.#env.othersFound?.(scope, preset) : undefined;
+      this.#env.data.put(TABLE, `ws:${scope}:preset`, { id: preset, station: presetStation, ...(other !== undefined ? { record: other } : {}) }, false);
       if (preset !== "" && station === null && !FIELDS.some((f) => get(params, f) !== undefined)) {
         const found = this.#online(scope);
         const online = Array.isArray(found) ? found[0] : [];
-        const picked = this.#picked(scope, this.#workspacePresets(online));
+        const picked = this.#pickedOne(scope);
         if (picked !== undefined) {
           const p = picked.p;
-          const pm = get(p, "model");
-          const wantModel = isObject(pm) ? text(get(pm, "model")) : null;
+          const pm = presetBinds(p).model;
+          const runs = (s: J) => pm === null || (typeof s.station === "string" && this.#runsBound(s.station, pm));
+          // the least busy of `pool` that runs the model it binds (none: the page says the one it is on does not)
           const pickBest = (pool: J[]): string | null => {
-            if (pool.length === 0) return null;
-            const compatible =
-              wantModel !== null
-                ? pool.filter((s) => typeof s.station === "string" && optionOf(this.#onStation(s.station)[0], wantModel) !== undefined)
-                : pool;
-            const list = compatible.length > 0 ? compatible : pool;
+            const list = pool.filter(runs);
+            if (list.length === 0) return null;
             const sorted = [...list].sort((a, b) => {
               const ra = typeof get(get(get(a, "overview"), "counts"), "running") === "number" ? a.overview.counts.running : 0;
               const rb = typeof get(get(get(b, "overview"), "counts"), "running") === "number" ? b.overview.counts.running : 0;
@@ -709,6 +783,10 @@ export class Choose implements Owner {
             targetStationId = pickBest(pool);
           } else if (get(p, "autoStation") === true) {
             targetStationId = pickBest(online);
+          } else if (pm !== null) {
+            // any station: the one it is on where that runs its model, else the least busy that does
+            const on = this.#held(scope) ?? online[0];
+            if (on !== undefined && !runs(on)) targetStationId = pickBest(online);
           }
           if (targetStationId !== null && targetStationId !== "") {
             this.#keepStation(scope, targetStationId);
@@ -754,35 +832,62 @@ export class Choose implements Owner {
 
   /// `newChat.create`: what a new chat on `station` is asked to be made with, as picked there.
   create(station: string): J {
-    const [, r] = this.#onStation(station);
-    if (r.entry === null || r.runtime === null) throw CoreError.invalid(t("core-logic.choose.error.enable_models"));
-    const ask: J = { runtime: r.runtime, model: r.entry.model ?? null };
-    if (r.effort !== null) ask.effort = r.effort;
-    if (r.profile !== null) ask.profile = r.profile;
-    else if (r.profiles !== null && r.profiles.length > 1) ask.profiles = r.profiles;
-    if (r.fast !== null) ask.fast = r.fast;
-    if (r.context !== null) ask.context = r.context;
-    // The preset picked: by its id where it is this station's, else all of it as its station said it (its folders
-    // that station's), with what it binds for the station to hold the chat to.
     const scope = ofAddress(station);
+    const sid = stationId(station);
+    const overview = this.#env.store.get({ topic: "overview", station });
+    const [, r] = this.#onStation(station);
+    let runtime = r.runtime;
+    let chosenModel: string | null = r.entry?.model ?? null;
+    let effort = r.effort;
+    let profile = r.profile;
+    let profiles = r.profiles;
+    let fast = r.fast;
+    let context = r.context;
+    if ((r.entry === null || runtime === null) && overview === undefined) {
+      const bound = this.#bound(scope);
+      const saved: J = (bound !== undefined && bound.model !== null ? bound.model : undefined)
+        ?? this.#choice(scope, sid)
+        ?? arr(this.#record(`ws:${scope}:frequent`))[0];
+      runtime = text(get(saved, "runtime")) ?? "claude";
+      chosenModel = text(get(saved, "model"));
+      effort = text(get(saved, "effort"));
+      profile = text(get(saved, "profile"));
+      profiles = Array.isArray(get(saved, "profiles")) ? arr(get(saved, "profiles")).filter((x: unknown): x is string => typeof x === "string") : null;
+      fast = typeof get(saved, "fast") === "boolean" ? Boolean(get(saved, "fast")) : null;
+      context = typeof get(saved, "context") === "number" ? Number(get(saved, "context")) : null;
+    } else if (r.entry === null || runtime === null) {
+      throw CoreError.invalid(t("core-logic.choose.error.enable_models"));
+    }
+    const ask: J = { runtime, model: chosenModel };
+    if (effort !== null) ask.effort = effort;
+    if (profile !== null) ask.profile = profile;
+    else if (profiles !== null && profiles.length > 1) ask.profiles = profiles;
+    if (fast !== null) ask.fast = fast;
+    if (context !== null) ask.context = context;
+    // The preset picked: all of it as the device holds it (`presetCopy`: each folder of this station's as it is, another
+    // station's said to be there by its name), with what it binds for the station to hold the chat to, so the chat is
+    // opened with the newest whether or not this station was brought it yet; by its id only on a station from before
+    // that lists it (as before: one from before `presetCopy` opens the chat with none).
     const bound = this.#bound(scope);
-    if (bound !== undefined && bound.stations !== null && !bound.stations.includes(stationId(station))) {
+    if (bound !== undefined && bound.stations !== null && !bound.stations.includes(sid)) {
       throw CoreError.invalid(t("core-logic.choose.error.preset_station", { name: bound.name }));
     }
-    const online = (() => {
-      const v = this.#env.store.value({ topic: "stations", scope });
-      return v !== undefined && "ok" in v ? arr(v.ok) : [];
-    })();
-    const picked = this.#picked(scope, this.#workspacePresets(online));
+    if (overview !== undefined && bound !== undefined && bound.model !== null && !this.#runsBound(station, bound.model)) {
+      throw CoreError.invalid(t("core-logic.choose.error.preset_model_station", { name: bound.name, model: model.name(String(bound.model.model)) }));
+    }
+    const online = this.#listed(scope);
+    const picked = this.#pickedOne(scope);
     if (picked !== undefined) {
-      if (picked.station === station) ask.preset = get(picked.p, "id");
+      const id = text(get(picked.p, "id"));
+      const before = heldOf(this.#env.data, scope).before;
+      if (picked.before === station || this.#listedBefore(scope, station, before).some((x) => get(x, "id") === id)) ask.preset = id;
       else {
         // each folder where it is: this station's as they are, another's said to be there (by its name)
         const names = new Map(online.map((s) => [typeof s.station === "string" ? s.station : "", typeof s.name === "string" ? s.name : ""]));
         const dirs = arr(get(picked.p, "dirs")).map((d) => {
           const at = text(get(d, "station")) ?? picked.station;
           const dir: J = { path: get(d, "path"), repo: get(d, "repo") ?? null };
-          if (at !== station) dir.elsewhere = text(get(d, "stationName")) ?? names.get(at) ?? at;
+          if (at !== station) dir.elsewhere = text(get(d, "stationName")) ?? (names.get(at) || stationId(at));
           return dir;
         });
         ask.presetCopy = {
@@ -1280,12 +1385,17 @@ export class Choose implements Owner {
     return [...out.values()].sort((a, b) => Number(a.id === "") - Number(b.id === ""));
   }
 
-  /// The models starred in `scope` (`ws:<scope>:liked`, kept on this device), by key, the first starred first. None ever
-  /// starred here: those the workspace's profiles name in config.json, ticked on before every model a profile's check
-  /// found ran (2026-11-02 用户「以前的模型选择变成已经点过的勾」), kept once one is starred or unstarred.
+  /// The models starred in `scope` (`ws:<scope>:liked`, kept on this device and carried to the workspace's stations as
+  /// its person's: views/presets.ts), by key, the first starred first (presets-kept.ts `starredKeys`). None ever starred
+  /// here nor on any station: the defaults (`#likedFirst`), kept once one is starred or unstarred.
   #liked(scope: string, station: string | null = null): string[] {
-    const kept = this.#record(`ws:${scope}:liked`);
-    if (kept !== undefined) return arr(kept).filter((k): k is string => typeof k === "string");
+    const kept = starsHeld(this.#record(`ws:${scope}:liked`));
+    return kept !== null ? starredKeys(kept) : this.#likedFirst(scope, station);
+  }
+
+  /// What a device that never starred shows starred: those the workspace's profiles name in config.json, ticked on
+  /// before every model a profile's check found ran (2026-11-02 用户「以前的模型选择变成已经点过的勾」).
+  #likedFirst(scope: string, station: string | null): string[] {
     const out: string[] = [];
     // (the control's own station's overview first, then the workspace's others as `stationsWhole` has them)
     const overviews = [station !== null ? this.#env.store.get({ topic: "overview", station }) : undefined, ...arr(this.#env.store.get({ topic: "stationsWhole", scope })).map((s) => get(s, "overview"))];
@@ -1305,13 +1415,21 @@ export class Choose implements Owner {
     if (m === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "model" }));
     const scope = ofAddress(station);
     const key = model.key(m);
-    const now = this.#liked(scope, station).filter((k) => {
-      if (model.key(k) === key) return false;
+    // (the defaults, where none is kept, as each starred once: kept from now on)
+    const was: Stars = starsHeld(this.#record(`ws:${scope}:liked`)) ?? starsHeld(this.#likedFirst(scope, station))!;
+    const next: Stars = { ...was };
+    const at = this.#env.now();
+    // (it and its tiers from before unstarred, one change more each; then it starred, where it is)
+    for (const k of Object.keys(was)) {
       const split = model.splitAgyTier(k);
-      return split === null || model.key(split.model) !== key;
-    });
-    if (liked) now.push(key);
-    this.#env.data.put(TABLE, `ws:${scope}:liked`, now, false);
+      if (k !== key && model.key(k) !== key && (split === null || model.key(split.model) !== key)) continue;
+      if (k === key && liked) continue;
+      if (was[k]!.on || k === key) next[k] = { on: false, rev: was[k]!.rev + 1, at: was[k]!.at };
+    }
+    if (liked) next[key] = { on: true, rev: (was[key]?.rev ?? 0) + 1, at };
+    else if (was[key] === undefined) next[key] = { on: false, rev: 1, at };
+    this.#env.data.put(TABLE, `ws:${scope}:liked`, next, false);
+    this.#env.starsChanged?.(scope);
     this.#changed();
   }
 

@@ -24,7 +24,9 @@ export type TurnOutcome = { kind: "completed" } | { kind: "aborted" } | { kind: 
 /// A turn's steps as they happen (runtime/mod.rs `LiveEvent`, the same JSON).
 export type LiveEvent =
   | { kind: "start"; id: string; step: "text" | "thinking" | "tool"; tool?: string; input?: string; subagent?: boolean; parent?: string }
-  | { kind: "delta"; id: string; field: "text" | "input" | "output"; text: string }
+  /// `tokens`: how many tokens the model wrote by it, where the runtime says so instead of the words (Claude's thinking
+  /// left out of the stream, its `estimated_tokens`): the rate counts these in place of guessing them of `text`.
+  | { kind: "delta"; id: string; field: "text" | "input" | "output"; text: string; tokens?: number }
   | { kind: "end"; id: string }
   | { kind: "phase"; phase: "starting" | "requesting" | "responding" | "working" }
   /// What it has going in the background now, all of it (said again whenever it changes; none once its process ends).
@@ -166,10 +168,11 @@ const CONTEXT = ["context window", "context_window", "context length", "context_
 const NETWORK = /stream disconnected|error sending request|connection (?:reset|refused|closed|error|failed)|network error|timed out|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up|fetch failed|dns error|tls handshake/i;
 
 /// The model whose own allowance a limit was, as the runtime named it (Claude Code's "You've reached your Fable limit.
-/// Switch to another model…": Fable has a weekly cap of its own, under the account's), so it is told apart from the
-/// account's limit, whose quota then still shows room (#4365); null for the account's own ("your weekly usage limit").
+/// Switch to another model…", or "You've hit your Fable limit · resets …": Fable has a weekly cap of its own, under the
+/// account's), so it is told apart from the account's limit, whose quota then still shows room (#4365); null for the
+/// account's own ("your weekly usage limit", "You've hit your weekly limit").
 export function modelLimitOf(text: string): string | null {
-  const name = /\breached your ([\w.\- ]+?) limit\b/i.exec(text)?.[1]?.trim();
+  const name = /\b(?:reached|hit) your ([\w.\- ]+?) limit\b/i.exec(text)?.[1]?.trim();
   return name && !ACCOUNT_LIMIT.test(name) ? name : null;
 }
 const ACCOUNT_LIMIT = /\b(?:usage|session|weekly|daily|monthly|spend|rate|\d+[- ]hour)\b/i;

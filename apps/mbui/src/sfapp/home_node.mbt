@@ -196,6 +196,25 @@ fn home_top_bar_node(
         |> ignore
       })
       |> ignore
+      // the stations' newer releases waiting for this person, in the app's own update mark as the wide frames' sidebar
+      // offers them beside the app's own; pressed, their dialog (sfpages station_updates.mbt)
+      let stations_said = fn() {
+        match workspace() {
+          Some(w) if (src.asks_station_updates)() => @sfpages.station_updates_said(settings_core(src, w), w.id)
+          _ => ""
+        }
+      }
+      row.show(fn() { stations_said() != "" }, fn(s) {
+        s.box(fn(k) {
+          @sf.round_key_node(k, "download", stations_said, fn() {
+            match @signals.untracked(workspace) {
+              Some(w) => @sfpages.station_updates_dialog(src, settings_core(src, w), w.id)
+              None => ()
+            }
+          }, icon_size=20.0)
+        })
+        |> ignore
+      })
       row.box(fn(end) {
         end.row(Is(true)).grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))).gap(Is(10.0)).lines_up(Is(Some(Middle))).lies_along(Is(End))
         |> ignore

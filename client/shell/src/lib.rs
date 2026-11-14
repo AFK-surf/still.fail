@@ -723,6 +723,31 @@ fn storage_path(dir: &std::path::Path, key: &str) -> PathBuf {
     dir.join(name)
 }
 
+/// A file to write a kept value in (`storage.set`: the partial one, renamed over the value once written). On Unix
+/// its user's alone whatever the process's umask (0600, less what the umask takes of that): a value kept is a
+/// device's key among others, and was readable by whomever the umask let (0644 under most), unless the program had
+/// set the whole process's umask for it. What a crash left there is taken away first and the file made only if none
+/// is there, so its mode is the one it is made with (none is set after: a filesystem may refuse that, where writing
+/// did not fail before) and nothing is written through a link left in its place. One shell writes its values one
+/// at a time (the disk thread). Two processes writing one key at once, which no program does, each write a file of
+/// their own, and one of them fails (here, or at its rename), where their bytes went into one file before.
+fn create_private(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    #[cfg(unix)]
+    {
+        match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+            _ => {}
+        }
+        let mut options = std::fs::OpenOptions::new();
+        std::os::unix::fs::OpenOptionsExt::mode(options.write(true).create_new(true), 0o600);
+        options.open(path)
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::File::create(path)
+    }
+}
+
 fn headers_of(response: &reqwest::Response) -> Value {
     Value::Array(response.headers().iter().map(|(k, v)| json!([k.as_str(), String::from_utf8_lossy(v.as_bytes())])).collect())
 }
@@ -1212,7 +1237,7 @@ impl Inner {
                     // Synced through the handle it was written with: Windows syncs only a handle that may write (one
                     // opened again to read, as this did, failed every storage.set there).
                     let partial = path.with_extension("partial");
-                    let mut file = std::fs::File::create(&partial).map_err(err)?;
+                    let mut file = create_private(&partial).map_err(err)?;
                     std::io::Write::write_all(&mut file, &value).and_then(|()| file.sync_all()).map_err(err)?;
                     drop(file);
                     std::fs::rename(&partial, &path).map_err(err)?;
@@ -2007,8 +2032,12 @@ impl Inner {
         }
         // A path's kind as stat (links followed) says it: "file", "dir" or "other"; null when it cannot be (none there,
         // no right): what the station's programs ask of the filesystem (station/mb src/locate), as Node's statSync does.
+        // With `lstat`, the path itself as lstat says it (a link "link", not followed).
         if op == "fs.stat" {
-            return Ok(match std::fs::metadata(str_of(a, "path")?) {
+            let path = str_of(a, "path")?;
+            let lstat = a.get("lstat").and_then(Value::as_bool).unwrap_or(false);
+            return Ok(match if lstat { std::fs::symlink_metadata(path) } else { std::fs::metadata(path) } {
+                Ok(m) if m.file_type().is_symlink() => json!("link"),
                 Ok(m) if m.is_file() => json!("file"),
                 Ok(m) if m.is_dir() => json!("dir"),
                 Ok(_) => json!("other"),
@@ -2093,8 +2122,11 @@ impl Inner {
         // `bigint` says them; null when it cannot be.
         if op == "fs.meta" {
             let Ok(meta) = std::fs::metadata(str_of(a, "path")?) else { return Ok(Value::Null) };
-            let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
-            return Ok(json!({ "size": meta.len(), "mtimeMs": modified }));
+            let since = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok());
+            let modified = since.map(|d| d.as_millis() as u64);
+            // `mtime`: as Node's statSync (no `bigint`) says `mtimeMs`, its fraction of a millisecond kept.
+            let mtime = since.map(|d| d.as_secs() as f64 * 1e3 + d.subsec_nanos() as f64 / 1e6);
+            return Ok(json!({ "size": meta.len(), "mtimeMs": modified, "mtime": mtime, "dir": meta.is_dir() }));
         }
         // The end of a file, at most `bytes` of it (up to its size when opened), decoded as TextDecoder("utf-8") does
         // (what is not UTF-8 replaced, a leading byte order mark dropped); null when it does not open.
@@ -2110,6 +2142,66 @@ impl Inner {
             }
             let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
             return Ok(json!(String::from_utf8_lossy(body)));
+        }
+        // Bytes of a file as hex, from byte `from` (0), `length` of them where it says (to its end where not), or with
+        // `zstd` what the zstd frames there hold (station/mb src/history's transcripts read a piece at a time, a put-away
+        // one a frame at a time); with `exact`, a file that ends before `length` is a failure. Null when it does not open.
+        if op == "fs.bytes" {
+            use std::io::{Read, Seek, SeekFrom};
+            let Ok(mut file) = std::fs::File::open(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let from = a.get("from").and_then(Value::as_u64).unwrap_or(0);
+            let length = a.get("length").and_then(Value::as_u64);
+            let mut bytes = Vec::new();
+            file.seek(SeekFrom::Start(from)).map_err(err)?;
+            match length {
+                Some(n) => file.take(n).read_to_end(&mut bytes),
+                None => file.read_to_end(&mut bytes),
+            }
+            .map_err(err)?;
+            if a.get("exact").and_then(Value::as_bool).unwrap_or(false) && length.is_some_and(|n| (bytes.len() as u64) < n) {
+                return Err("a put-away transcript ended early".into());
+            }
+            if a.get("zstd").and_then(Value::as_bool).unwrap_or(false) {
+                bytes = zstd::decode_all(bytes.as_slice()).map_err(err)?;
+            }
+            return Ok(json!(hex::encode(bytes)));
+        }
+        // A program run to its end, as Node's execFileSync runs one (station/src/read/sessions.ts `inRepositories`: `git
+        // ls-files`): `command` with `args`, nothing on its stdin and its stderr let go, its stdout decoded as
+        // Buffer.toString("utf8") does; null where it did not end well: not started, ended by a signal or with a code
+        // not 0, still running after `timeoutMs` (killed then), or writing more than `maxBytes`.
+        if op == "proc.run" {
+            use std::io::Read;
+            use std::process::{Command, Stdio};
+            let args: Vec<String> = a.get("args").and_then(Value::as_array).map(|v| v.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+            let timeout = std::time::Duration::from_millis(a.get("timeoutMs").and_then(Value::as_u64).unwrap_or(5000));
+            let most = a.get("maxBytes").and_then(Value::as_u64).unwrap_or(1 << 20) as usize;
+            let Ok(mut child) = Command::new(str_of(a, "command")?).args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
+                return Ok(Value::Null);
+            };
+            let mut stdout = child.stdout.take().expect("piped");
+            let reading = std::thread::spawn(move || {
+                let mut out = Vec::new();
+                let over = (&mut stdout).take(most as u64 + 1).read_to_end(&mut out).is_err() || out.len() > most;
+                (out, over)
+            });
+            let started = std::time::Instant::now();
+            let status = loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => break Some(status),
+                    Ok(None) if started.elapsed() < timeout => std::thread::sleep(std::time::Duration::from_millis(2)),
+                    _ => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        break None;
+                    }
+                }
+            };
+            let (out, over) = reading.join().unwrap_or((Vec::new(), true));
+            return Ok(match status {
+                Some(s) if s.success() && !over => json!(String::from_utf8_lossy(&out)),
+                _ => Value::Null,
+            });
         }
         // What a link points to, as Node's readlinkSync gives it; null when the path is no link or cannot be read.
         if op == "fs.readlink" {
@@ -2995,6 +3087,33 @@ mod tests {
         shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![1, 2, 3]));
         assert_eq!(answer(1).1, "");
         assert!(dir.path().join("device").exists());
+        // A value kept is its user's alone, whatever the process's umask (0644 by the umask of most, before): made
+        // so, and one written over a file from before, or over a partial one a crash left, is made so too.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = |name: &str| std::fs::metadata(dir.path().join(name)).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode("device"), 0o600);
+            std::fs::set_permissions(dir.path().join("device"), std::fs::Permissions::from_mode(0o644)).unwrap();
+            std::fs::write(dir.path().join("device.partial"), b"left").unwrap();
+            std::fs::set_permissions(dir.path().join("device.partial"), std::fs::Permissions::from_mode(0o644)).unwrap();
+            shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![1, 2, 3]));
+            assert_eq!(answer(1).1, "");
+            assert_eq!(mode("device"), 0o600);
+            assert!(!dir.path().join("device.partial").exists());
+            // A partial one left that is a link to somewhere is taken away, never written through: what it led to
+            // is as it was, and the value is a file of its own.
+            std::fs::write(dir.path().join("elsewhere"), b"another's").unwrap();
+            std::os::unix::fs::symlink(dir.path().join("elsewhere"), dir.path().join("device.partial")).unwrap();
+            shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![4, 5]));
+            assert_eq!(answer(1).1, "");
+            assert_eq!(std::fs::read(dir.path().join("elsewhere")).unwrap(), b"another's");
+            assert_eq!(std::fs::read(dir.path().join("device")).unwrap(), vec![4, 5]);
+            assert!(std::fs::symlink_metadata(dir.path().join("device")).unwrap().file_type().is_file());
+            assert_eq!(mode("device"), 0o600);
+            shell.call(1, "storage.set".into(), br#"{"key":"device"}"#, Some(vec![1, 2, 3]));
+            assert_eq!(answer(1).1, "");
+        }
         shell.call(2, "storage.get".into(), br#"{"key":"device"}"#, None);
         assert_eq!(answer(2).2, Some(vec![1, 2, 3]));
         shell.call(3, "storage.get".into(), br#"{"key":"a/b"}"#, None);
@@ -3112,7 +3231,26 @@ mod tests {
         assert_eq!(sync("fs.read", json!({ "path": at("a/packed.zst"), "zstd": true }))["value"], json!("x".repeat(1000)));
         assert_eq!(std::fs::read_dir(dir.path().join("a")).unwrap().count(), 2);
         assert_eq!(sync("fs.hash", json!({ "path": at("a/b/plain.txt") }))["value"], plain["value"]["sha256"]);
+        // a piece of a file as hex, a frame of it decompressed, and one that ends early
+        assert_eq!(sync("fs.bytes", json!({ "path": at("a/packed.zst"), "zstd": true }))["value"], json!(hex::encode("x".repeat(1000))));
+        let whole = sync("fs.bytes", json!({ "path": at("a/b/plain.txt") }))["value"].as_str().unwrap().to_string();
+        assert_eq!(sync("fs.bytes", json!({ "path": at("a/b/plain.txt"), "from": 1, "length": 2 }))["value"], json!(whole[2..6]));
+        assert!(sync("fs.bytes", json!({ "path": at("a/b/plain.txt"), "from": 1, "length": 1_000_000, "exact": true }))["error"].is_string());
+        assert_eq!(sync("fs.bytes", json!({ "path": at("none") }))["value"], Value::Null);
         assert_eq!(sync("fs.hash", json!({ "path": at("none") }))["value"], Value::Null);
+        // a program's output, and one that fails, runs too long or writes too much; a link as lstat says it
+        #[cfg(unix)]
+        {
+            assert_eq!(sync("proc.run", json!({ "command": "printf", "args": ["a\\nb"] }))["value"], json!("a\nb"));
+            assert_eq!(sync("proc.run", json!({ "command": "false" }))["value"], Value::Null);
+            assert_eq!(sync("proc.run", json!({ "command": "sleep", "args": ["5"], "timeoutMs": 50 }))["value"], Value::Null);
+            assert_eq!(sync("proc.run", json!({ "command": "printf", "args": ["abcdef"], "maxBytes": 3 }))["value"], Value::Null);
+            assert_eq!(sync("proc.run", json!({ "command": "/no/such/program" }))["value"], Value::Null);
+            std::os::unix::fs::symlink(at("a/b/plain.txt"), at("a/link")).unwrap();
+            assert_eq!(sync("fs.stat", json!({ "path": at("a/link"), "lstat": true }))["value"], json!("link"));
+            assert_eq!(sync("fs.stat", json!({ "path": at("a/link") }))["value"], json!("file"));
+            std::fs::remove_file(at("a/link")).unwrap();
+        }
         // copied, renamed, a folder made, then let go with what it holds; nothing there is no failure
         assert_eq!(sync("fs.copy", json!({ "from": at("a/b/plain.txt"), "to": at("a/copy.txt") }))["value"], Value::Null);
         assert_eq!(sync("fs.rename", json!({ "from": at("a/copy.txt"), "to": at("a/moved.txt") }))["value"], Value::Null);

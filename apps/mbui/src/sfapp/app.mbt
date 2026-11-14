@@ -489,6 +489,16 @@ fn app_is(src : Source) -> AppIs {
 }
 
 ///|
+/// A layout's name as a hang report says it (@ui.journal_arranged): one of a fixed few, never more.
+fn layout_name(l : @sf.Layout) -> String {
+  match l {
+    Small => "Small"
+    Medium => "Medium"
+    Large => "Large"
+  }
+}
+
+///|
 /// What the app shows as a whole in a window `width` wide (sfbase's Shown, its name shown_kind's): what the window's
 /// tree picks (app_tree's share sheet over another app, app_is, shell_is), a page the stack's top: on 小屏 the page on
 /// top, on 中屏 and 大屏 the page the pane lands on and shows (the chats' sidebar or the rail beside it are no page;
@@ -542,6 +552,16 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     // (what the app shows, by its kind alone, told the window thread's journal as it changes, on every host: what its
     // hang reports and the device's performance record say; no frame asks it)
     root.reacts(fn() { @sfbase.shown_kind(shown_now(src, root.window().0)) }, @ui.journal_shows)
+    // (how it lays out what it shows, 小屏/中屏/大屏 by @sf.layout's name, and the window's size, told the journal as
+    // either changes: what a hang report says beside the page, so it is made again in a Tester's window of that size)
+    root.reacts(
+      fn() {
+        let (w, h) = root.window()
+        (layout_name(@sf.layout(w)), w, h)
+      },
+      // (none before the first frame gives the window)
+      fn(a) { if a.1 > 0.0 { @ui.journal_arranged(a.0, a.1, a.2) } },
+    )
     // (what the splash waits by, kept by what lives through the app's states: splash_begin)
     splash_owner.val = Some(root)
     // (its nodes drawn in still.fail's theme, the one its old views are built in, as light or dark is set: view's
@@ -1235,6 +1255,9 @@ fn first_page_node(v : @view.View, src : Source) -> Unit {
       if first_shown.get() {
         return None
       }
+      // (told again as a page declares more of what it reads: a chat's login cards, as its view says them, sfbase's
+      // page_opens_node; read held then)
+      @sfbase.page_declared_now() |> ignore
       // (once answered, the core's status read no more for it, though what the first page shows comes to be another)
       let answered = first_answered.get()
       guard workspace_in_view(src).0 is Some(w) else { return None }

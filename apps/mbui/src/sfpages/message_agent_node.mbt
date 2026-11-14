@@ -52,6 +52,7 @@ fn agent_said_node(
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
   found_at? : () -> Int? = fn() { None },
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   share? : MessageShare? = None,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
@@ -87,14 +88,20 @@ fn agent_said_node(
       None,
       fn(b) {
         // (what it quotes ahead of its words, as the old body's)
-        message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, message_place(@signals.untracked(m)))
+        message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, message_place(@signals.untracked(m)), said=fn() { m().said })
         // (its words, or the card in their place: one in the other's place as the post says)
         b.pick(fn() { agent_card_kind(m()) == "" }, fn(p, words) {
+          // (what is read in it starts here, its words or the card in their place, under its head line and what it
+          // quotes: what a page's list holds what shows by, where it starts (View::read_from))
+          p.read_from() |> ignore
+          // (and what is picked of it is of its key, what is read of it alone, not its head line: quoted by it, all of
+          // it taken by 全选, chat_quote_node)
+          @ui.picked_of(p, key, whole=true) |> ignore
           if words {
             // (its words and its files one piece, none apart, as the old list holds them to be picked: pickable's
             // pick_fill; a letter's, drawn by the old view alone, has them 4 apart)
             @sf.style_node(p, fn() { agent_prose_piece })
-            agent_prose_node(p, src, here, m, found~, found_at~, code~, screens=screens.unwrap_or(agent_screens(src, here, m)), shown?)
+            agent_prose_node(p, src, here, m, found~, found_at~, lit~, code~, screens=screens.unwrap_or(agent_screens(src, here, m)), shown?)
           } else {
             message_card_node(p, here, core, m)
           }
@@ -121,7 +128,7 @@ fn agent_said_node(
 
 ///|
 /// An agent's message's words and files (prose_with_files') in `v`, as `m` says them as they change: its words as the
-/// core read their Markdown at the body's size, those `found` says in bold (and marked where `found_at` says: markdown_node's); a link tapped opens where it leads (a file
+/// core read their Markdown at the body's size, those `found` says in bold (and marked where `found_at` says: markdown_node's), the passage `lit` says lit where they have it; a link tapped opens where it leads (a file
 /// it places, that file; a path, that file of its agent's; else the link), held (or right clicked) its menu; a bare link
 /// to a chat read as that chat's title; its paths its agent's files' chips; the files it places drawn where it places
 /// them (their cards); the rest of its files under its words. `code`: what draws a fenced block of a language another
@@ -134,11 +141,12 @@ fn agent_prose_node(
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
   found_at? : () -> Int? = fn() { None },
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
   screens? : @sf.ScreensNode,
   shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
 ) -> Unit {
-  let place : MessageFilesAt = { station: fn() { here.station }, session: fn() { here.session }, view: here.view }
+  let place = message_files_at(here, fn() { m().said })
   let at = message_place(@signals.untracked(m)) + "/f"
   let by = fn() -> (String, String, String)? {
     let now = m()
@@ -188,6 +196,7 @@ fn agent_prose_node(
       size=fn() { body_size },
       found~,
       found_at~,
+      lit~,
       // (its tables slid sideways out over the row's side to the pane's edge: the side as the list is laid out when it
       // is made, markdown_node's bleed being a number)
       bleed=@signals.untracked(fn() { row_side((here.width)()) }),

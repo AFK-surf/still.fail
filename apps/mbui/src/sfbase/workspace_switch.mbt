@@ -432,6 +432,43 @@ pub fn page_opens_node(v : @view.View, src : Source) -> Unit {
       })
     },
   )
+  // (a chat on top: what it opens on past its view (chat_opens: its posts' login cards), declared as its view, held,
+  // says them, and as what they say is answered, so the first page's wait and the page's own reads find them held;
+  // once all of it is answered, what it came to is kept for that page and its view followed no more here, so a long
+  // chat's every change is not walked again for it)
+  let opened : Ref[(Page, Array[(String, Map[String, Json])])?] = Ref(None)
+  v.reacts(
+    fn() {
+      page_declared_now() |> ignore
+      guard workspace_in_view(src).0 is Some(_) && app.nav.top() is Chat(r) else {
+        opened.val = None
+        return []
+      }
+      match opened.val {
+        Some((p, more)) if p == Chat(r) => return more
+        _ => opened.val = None
+      }
+      let held = read_held_found(src)
+      let more : Array[(String, Map[String, Json])] = []
+      let all = chat_opens(r, fn(name, params) {
+        if name != "chat" {
+          more.push((name, params))
+        }
+        held(name, params).unwrap_or({ value: None, error: None, version: -1, waiting: false })
+      })
+      if all {
+        opened.val = Some((Chat(r), more))
+      }
+      more
+    },
+    fn(more) {
+      // (in the change its view's answer is told in, not after it: the first page's wait looks for them held once
+      // that change is told whole)
+      for d in more {
+        declare_page_topic(src, d.0, d.1)
+      }
+    },
+  )
 }
 
 ///|
@@ -441,7 +478,6 @@ pub fn page_opens_node(v : @view.View, src : Source) -> Unit {
 /// (opens_ahead_node), never waited for (Home shows, a switch is done, the splash goes, as before they were asked
 /// there). Whether all of it is answered.
 pub fn shell_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
-  ignore(src)
   let of = Json::string(ws)
   let reads : Array[(String, Map[String, Json])] = [
     ("lock", { "workspace": of }),
@@ -453,6 +489,10 @@ pub fn shell_opens(src : Source, ws : String, ask : (String, Map[String, Json]) 
     ("notify", {}),
     ("notify", notify_params(ws)),
   ]
+  // (the stations' newer releases waiting for this person: sfpages station_updates.mbt, the bars' key of them)
+  if (src.asks_station_updates)() {
+    reads.push(("stationUpdates", { "scope": of }))
+  }
   reads.fold(init=true, fn(all, r) { opens_answered(ask(r.0, r.1)) && all })
 }
 

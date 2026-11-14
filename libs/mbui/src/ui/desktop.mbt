@@ -401,11 +401,11 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
 
 ///|
 /// The shape for what is under the pointer, told the host when it changes: the one said for it (Ctx::cursor); else a
-/// field's I-beam; the hand over what takes presses (a button, a row, a link in words: Ctx::takes_presses), unless
-/// said to be the arrow (a ground: a stage, the room round a list's rows); the I-beam over words picked with the
-/// pointer; else the arrow. Held, the shape it was pressed with stays (a slider's thumb dragged off its line, words
-/// picked across a link: what reads its click while it is not held reads none then), a drag area's its own once the
-/// press is its drag, pressed no more.
+/// field's I-beam; the hand over what takes presses (a button, a row, a link in words: Ctx::takes_presses; the arrow
+/// where the window's tree says so, Tree::hand_over_presses), unless said to be the arrow (a ground: a stage, the room
+/// round a list's rows); the I-beam over words picked with the pointer; else the arrow. Held, the shape it was pressed
+/// with stays (a slider's thumb dragged off its line, words picked across a link: what reads its click while it is not
+/// held reads none then), a drag area's its own once the press is its drag, pressed no more.
 fn Ctx::show_cursor(self : Ctx) -> Unit {
   let area = self.down && self.dragging && drags.contains(self.drag_scroll)
   if self.down && !area {
@@ -434,7 +434,11 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
       if target != 0 && self.editors.contains(target) {
         Cursor::IBeam.code()
       } else if said is None && (hit_marks(target) & mark_takes) != 0 {
-        Cursor::Hand.code()
+        // (the window's tree's shape for what is pressed: a hand unless the app said otherwise, Tree::pressed_shape)
+        match view_app.val {
+          Some(tree) => @signals.untracked(fn() { tree.pressed_shape() }).code()
+          None => Cursor::Hand.code()
+        }
       } else if self.sel_at(self.px, self.py) is Some(_) {
         // words that are picked with the pointer
         Cursor::IBeam.code()
@@ -1453,6 +1457,47 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
 pub fn Ctx::selection_made(self : Ctx) -> Int {
   ignore(self)
   picked.made
+}
+
+///|
+/// Whether every paragraph with words picked by the pointer belongs to box `i`, once the pointer has let it go.
+/// Membership is by each rich paragraph's identity, not by the bounds of its glyphs: a wrapped line can extend past
+/// its box, and either the box or its words can be clipped by what scrolls. An empty pick belongs to no box.
+pub fn Ctx::selection_in(self : Ctx, i : Int) -> Bool {
+  guard !picked.dragging && picked.layer is OldLayer(_) && i >= 0 && i < self.count else { return false }
+  let mut any = false
+  for _, span in picked.spans {
+    if span.a < span.b {
+      any = true
+      break
+    }
+  }
+  guard any else { return false }
+  // Like rect_of's old-view selection reader, a kept list row must be built while it reads a pick. The node-based
+  // selection API follows a signal instead (picked_now).
+  if nodes_run.building is Some(_) {
+    built_aside(why="what is picked read by a box")
+  }
+  let nodes : Array[Int] = []
+  self.rich_nodes(i, nodes)
+  let own : Map[Int, Bool] = Map([])
+  for j in nodes {
+    let n = self.nodes[j]
+    match (n.rcut, n.rich) {
+      (Some(r), _) | (None, Some(r)) if r.select => own[r.base] = true
+      _ => ()
+    }
+  }
+  for key, span in picked.spans {
+    if span.a >= span.b {
+      continue
+    }
+    match key {
+      Para(base) if own.contains(base) => ()
+      _ => return false
+    }
+  }
+  true
 }
 
 ///|

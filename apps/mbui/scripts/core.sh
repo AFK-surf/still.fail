@@ -117,9 +117,10 @@ PY
 # HBC_CACHE (a directory: CI's, kept in the Actions cache by every job that makes the core): core.hbc kept there by
 # what it is made of, by content, and taken from there when that is the same. A checkout's mtimes are all new, so the
 # stamp above never holds on CI: each job made the core again, ~14 s of a CPU (Windows' 13.9 s beside cl compiling the
-# app, 2026-10-24, 40064767331). What it is made of: HBC_TREES of the checkout as committed, none of them changed in
-# it (else no key: made, not kept, and why said); this module's core/ and the tsconfig.json and package.json over it;
-# this script; the entry; hermesc itself (the bytecode is its Hermes's: Windows' is the engine's own).
+# app, 2026-10-24, 40064767331). What it is made of: HBC_TREES of the checkout as committed, with the config files of
+# the directories above them (hbc_paths), none of them changed in it (else no key: made, not kept, and why said); this
+# module's core/ and the tsconfig.json and package.json over it; this script; the entry; hermesc itself (the bytecode
+# is its Hermes's: Windows' is the engine's own).
 SHA=$(command -v sha256sum > /dev/null && echo sha256sum || echo "shasum -a 256")
 # (as bash's paths: Windows' runner says D:\a\..., and a glob over it, the newest 8's keep below, matched nothing, so
 # none went: the Windows job's HBC_CACHE grew to 566 MB, its restore 40 s, 2026-10-30)
@@ -133,15 +134,37 @@ SHA=$(command -v sha256sum > /dev/null && echo sha256sum || echo "shasum -a 256"
 # with what it `extends`) and the package.json nearest over each file it bundles (the nearest alone, of each: esbuild
 # 0.28.2, tried). The root's are over the rules, the brand and this module's core/, the station's over its two. A
 # tsconfig's `strict` over the entry is the whole bundle's "use strict", its `verbatimModuleSyntax` an unused import
-# kept; a package.json's `type`, `sideEffects` and `imports` are what an import means. hbc_inputs works them out of
-# the metafile's files and refuses one that is not named here, as it does a file.
-# Those four are in the key and, on purpose, in none of the lists of what starts a release or a preview
+# kept; a package.json's `type`, `sideEffects` and `imports` are what an import means. The four are named to say
+# which there are today; the key has them named or not, as it has such a file in every directory over a path named
+# here (hbc_paths, below), so a file the bundle takes is all this line is ever given: the config over it is in the key
+# with it, one added later too. The one config to name by hand is what a tsconfig.json `extends` from outside these,
+# which hbc_inputs refuses the bundle for until it is named.
+# The config files are in the key and, on purpose, in none of the lists of what starts a release or a preview
 # (scripts/plan.sh's beta apps, beta.sh APP_SRC, preview.yml's paths), which name the files above them alone: the key
 # is what keeps a wrong core.hbc from being taken, and a miss costs seconds; the lists say which pushes release the
 # apps, and the four change about twice a day (station/package.json's packages, 2026-11) without changing the core.
 # One that does change it ships with the next release, its core made anew because the key changed. Do not make the
 # two agree: a file the bundle takes goes in both, a config file here alone (decided in #6106, 2026-11-14).
 HBC_TREES="client/core-ts client/i18n rules/js station/src/updates/keys.ts station/src/api/moved-from.ts web/public/avatars/index.json package.json tsconfig.json station/package.json station/tsconfig.json"
+# What the key is of in the checkout: HBC_TREES and, for each of them and for this module's core/ where it lies in the
+# checkout, the package.json, tsconfig.json and jsconfig.json of every directory above it, up to the checkout's own:
+# every place the config esbuild makes a file of theirs by can be, now or after a later commit. Worked out of
+# HBC_TREES, never written: most are not there (today the four it names and web/tsconfig.json are), one that is not
+# says nothing to `git ls-tree`, and the commit that adds it is a new key. As #6106 merged (2026-11-14) the key was of
+# HBC_TREES alone: a config added between one of them and the root (client/tsconfig.json, web/package.json) left it as
+# it was, so the core.hbc made without it went on being taken, and the next commit to change the key, whatever it was
+# of, had its bundle refused for it. Each once, in one order on every machine (C's).
+hbc_paths() {
+  local p n own=
+  case $ROOT/core in "$SF_SRC"/*) own=${ROOT#"$SF_SRC"/}/core ;; esac
+  { for p in $HBC_TREES; do echo "$p"; done
+    for p in $HBC_TREES $own; do
+      while [ -n "$p" ]; do
+        case $p in */*) p=${p%/*} ;; *) p= ;; esac
+        for n in package.json tsconfig.json jsconfig.json; do echo "${p:+$p/}$n"; done
+      done
+    done; } | LC_ALL=C sort -u
+}
 # The same two over DIR, wherever it lies: this module's core/ is the checkout's own or a copy with no repository over
 # it (beta.sh's WORK), and the entry is made strict by the root's tsconfig.json in the one and by none in the other,
 # so the key has them by content (nothing where there is none).
@@ -164,16 +187,17 @@ hbc_no_key() {
 }
 hbc_key() {
   [ -n "${HBC_CACHE:-}" ] || return 1
-  local trees changed
+  local trees changed paths
+  paths=$(hbc_paths)
   # (a path that is not there says nothing, as the bundle takes nothing from it: `rev-parse HEAD:media` failed once
   # media was gone, 2026-11-07, so there was no key and nothing was kept; none of them there is no checkout of ours)
-  trees=$(git -C "$SF_SRC" ls-tree HEAD -- $HBC_TREES 2> /dev/null) \
-    || { hbc_no_key "\`git ls-tree HEAD\` failed in $SF_SRC: $(git -C "$SF_SRC" ls-tree HEAD -- $HBC_TREES 2>&1 > /dev/null | head -1)"; return 1; }
+  trees=$(git -C "$SF_SRC" ls-tree HEAD -- $paths 2> /dev/null) \
+    || { hbc_no_key "\`git ls-tree HEAD\` failed in $SF_SRC: $(git -C "$SF_SRC" ls-tree HEAD -- $paths 2>&1 > /dev/null | head -1)"; return 1; }
   [ -n "$trees" ] || { hbc_no_key "git has none of HBC_TREES at HEAD in $SF_SRC"; return 1; }
   # (a status that fails is not a clean tree)
-  changed=$(git -C "$SF_SRC" status --porcelain -uno -- $HBC_TREES 2> /dev/null) \
-    || { hbc_no_key "\`git status\` failed in $SF_SRC: $(git -C "$SF_SRC" status --porcelain -uno -- $HBC_TREES 2>&1 > /dev/null | head -1)"; return 1; }
-  [ -z "$changed" ] || { hbc_no_key "$(echo "$changed" | head -1 | cut -c4-) is changed in $SF_SRC and not committed$(echo "$changed" | awk 'END { if (NR > 1) print " (and " NR - 1 " more of HBC_TREES)" }')"; return 1; }
+  changed=$(git -C "$SF_SRC" status --porcelain -uno -- $paths 2> /dev/null) \
+    || { hbc_no_key "\`git status\` failed in $SF_SRC: $(git -C "$SF_SRC" status --porcelain -uno -- $paths 2>&1 > /dev/null | head -1)"; return 1; }
+  [ -z "$changed" ] || { hbc_no_key "$(echo "$changed" | head -1 | cut -c4-) is changed in $SF_SRC and not committed$(echo "$changed" | awk 'END { if (NR > 1) print " (and " NR - 1 " more of what the key is of)" }')"; return 1; }
   { echo "$trees"
     (cd "$ROOT/core" && find . -type f | LC_ALL=C sort | xargs $SHA)
     hbc_over "$ROOT/core" | while IFS= read -r f; do echo "${f##*/}"; $SHA < "$f"; done
@@ -182,14 +206,16 @@ hbc_key() {
     $SHA < "$1"; } | $SHA | cut -c1-24
 }
 
-# The bundle just made (esbuild's metafile) held to what the key covers, which is HBC_TREES as committed, this
+# The bundle just made (esbuild's metafile) held to what the key covers, which is hbc_paths as committed, this
 # module's core/ and the core's packages (its lockfile): a file git tracks elsewhere is refused, saying the line to
 # change; and with a key ($1), a file git does not track is too (one a build made, an entry of one's own: the key says
-# nothing of what is in it). So is what esbuild makes each file by and lists nowhere (HBC_TREES says which). It never
+# nothing of what is in it). So is what esbuild makes each file by and lists nowhere (HBC_TREES says which): the
+# nearest config over a file HBC_TREES has is in hbc_paths wherever it is, so what is left to refuse of those is what
+# a tsconfig.json extends from elsewhere, and the config over a file that is itself refused. It never
 # passes having held nothing: the entry is among the files it found, and every input the metafile says is a file here
 # (a metafile read from another place, or a path in a form this does not know, was nothing checked and no refusal).
 hbc_inputs() {
-  HBC_OVER=$(hbc_over "$ROOT/core") "$PY" - "$OUT/core-hermes.meta.json" "$ROOT" "$SF_SRC" "$1" "$ENTRY" $HBC_TREES <<'PY'
+  HBC_OVER=$(hbc_over "$ROOT/core") "$PY" - "$OUT/core-hermes.meta.json" "$ROOT" "$SF_SRC" "$1" "$ENTRY" $(hbc_paths) <<'PY'
 import json, os, re, subprocess, sys
 meta, root, checkout, key, entry = sys.argv[1:6]
 trees = sys.argv[6:]
@@ -240,8 +266,9 @@ def extended(ts):
             sys.exit('hermes: ' + said(ts) + ' is over files of the bundle and extends ' + e + ", no file by its path, which core.hbc's key cannot be held to: name a file there is, by ./ or ../")
         out.append(os.path.realpath(there[0]))
     return out
-# (those over this module's core/ are in the key by content, hbc_over's: not what they extend)
-by, in_key = {}, set(os.path.realpath(c) for c in os.environ.get('HBC_OVER', '').split('\n') if c)
+# (those over this module's core/ are in the key by content, hbc_over's: not what they extend; `by` the first file
+# found under each, `via` the config that extends it where it was come to that way)
+by, via, in_key = {}, {}, set(os.path.realpath(c) for c in os.environ.get('HBC_OVER', '').split('\n') if c)
 for p in files:
     if within(p, packages):
         continue
@@ -249,12 +276,12 @@ for p in files:
     if not p.endswith('.json'):
         made_by.append(nearest(os.path.dirname(p), ('tsconfig.json', 'jsconfig.json')))
     for c in [os.path.realpath(c) for c in made_by if c]:
-        todo = extended(c) if within(p, own) and c in in_key else [c]
+        todo = [(e, c) for e in extended(c)] if within(p, own) and c in in_key else [(c, None)]
         while todo:
-            c = todo.pop()
+            c, e = todo.pop()
             if c not in by:
-                by[c] = p
-                todo += extended(c)
+                by[c], via[c] = p, e
+                todo += [(x, c) for x in extended(c)]
 taken = [p for p in files if not within(p, own) and not within(p, packages)]
 taken += sorted(c for c in by if c not in taken and not within(c, own) and not within(c, packages))
 elsewhere = set(p for p in taken if not any(within(p, t) for t in keyed))
@@ -267,9 +294,14 @@ if listed.returncode != 0:
 tracked = set(listed.stdout.decode().split('\0'))
 wrong = 0
 for p in taken:
-    what = 'takes ' + said(p) if p in files else 'is made by ' + said(p) + ' (esbuild applies it to ' + said(by[p]) + ', and its metafile does not list it)'
+    what = 'takes ' + said(p) if p in files else ('is made by ' + said(p) + ' (' + (said(via[p]) + ' extends it, ' if via[p] else '')
+                                                  + 'esbuild applies it to ' + said(by[p]) + ', and its metafile does not list it)')
+    # (the nearest config over a file: the key has it once it has the file, hbc_paths; one come to by `extends` is named)
+    mend = ('add it' + (' (or its directory)' if p in files else '') + ' to HBC_TREES in apps/mbui/scripts/core.sh'
+            if p in files or via[p] or by[p] not in elsewhere
+            else 'it does once ' + said(by[p]) + ' (or its directory) is in HBC_TREES in apps/mbui/scripts/core.sh, with nothing added for it')
     if p in elsewhere and said(p) in tracked:
-        print('hermes: the bundle ' + what + ", which core.hbc's key does not cover: add it" + (' (or its directory)' if p in files else '') + ' to HBC_TREES in apps/mbui/scripts/core.sh')
+        print('hermes: the bundle ' + what + ", which core.hbc's key does not cover: " + mend)
     elif key and said(p) not in tracked:
         print('hermes: the bundle ' + what + ", which git does not track here: core.hbc's key is of what is committed and says nothing of it (commit it, or make the core without HBC_CACHE)")
     else:

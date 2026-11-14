@@ -28,11 +28,15 @@ pub struct Shell {
   rt : @effect.Runtime
   // private fields
 }
+pub fn Shell::answer(Self, Int64, @json.Json, bytes? : Bytes) -> Unit
 pub fn Shell::ask(Self, String, @json.Json) -> @json.Json raise ShellError
 pub async fn Shell::call(Self, String, @json.Json, bytes? : Bytes, called? : (Int64) -> Unit) -> Answer
 pub fn Shell::give_up(Self, Int64) -> Unit
 pub fn Shell::pump(Self, Int64) -> Bool
+pub fn Shell::random(Self, Int32) -> Bytes
+pub fn Shell::refuse(Self, Int64, String) -> Unit
 pub fn Shell::start(@effect.Runtime, String) -> Self raise ShellError
+pub fn Shell::stood_in(@effect.Runtime, calls~ : (Int64, String, @json.Json, Bytes?) -> Unit, asks~ : (String, @json.Json) -> @json.Json raise ShellError, draws~ : (Int32) -> Bytes) -> Self
 pub fn Shell::tell(Self, String, @json.Json, bytes? : Bytes) -> Unit
 
 // Type aliases

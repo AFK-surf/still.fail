@@ -2,11 +2,13 @@
 // pool, a stream's one after another in the order they came; H.264 by GStreamer (linux_gst.h: where it is, with a
 // decoder of H.264, h264_here is true), a live pipeline of the stream's own from its config (appsrc ! decodebin, the
 // system's best decoder, VA-API's where it has one, else gst-libav's, which takes a live stream on slice threads,
-// holding no frame back; then RGBA). Each frame decoded is kept as pixels until the app shows it ("f TS W H", then
-// mb_host_stream_show) or a later one; one that does not decode, or that its decoder passed over, is let go ("d TS");
-// the decoder failing says "b" and starts anew from the next key frame. The one shown becomes the stream's texture as
-// the renderer first draws it (mb_stream_tex, in the GL context), so it is drawn in the frame that showed it. Each
-// event asks for a frame (mb_app_wake). As Windows' win_stream.cpp has its JPEG.
+// holding no frame back; its frames as the decoder made them, NV12 or I420: GS_YUV_CAPS). Each frame decoded is kept
+// as it came until the app shows it ("f TS W H", then mb_host_stream_show) or a later one; one that does not decode,
+// or that its decoder passed over, is let go ("d TS"); the decoder failing says "b" and starts anew from the next key
+// frame. The one shown becomes the stream's texture in the GL context before the frame that showed it is drawn: a
+// JPEG's pixels as the renderer first draws it (mb_stream_tex), an H.264 frame's planes as the frame is presented
+// (mb_streams_upload: drawn into it by linux_render.c's mb_yuv_draw, its colours the GPU's, as Apple's, Android's and
+// Windows' hosts have theirs). Each event asks for a frame (mb_app_wake). As Windows' win_stream.cpp has its JPEG.
 #include <epoxy/gl.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <glib.h>
@@ -22,7 +24,8 @@
 typedef struct {
   double ts;
   int w, h;
-  uint8_t *px;  // RGBA, w × h (opaque: a JPEG's)
+  uint8_t *px;  // a JPEG's: RGBA, w × h (opaque)
+  mb_yuv yuv;   // an H.264 frame's: its planes as decoded
 } Frame;
 
 // A stream's H.264 decoder (its config's: started anew with each, and as it fails): its pipeline, its source, its bus;
@@ -68,6 +71,7 @@ static Stream *stream_of(int id) {
 static void frame_free(Frame *f) {
   if (!f) return;
   g_free(f->px);
+  g_free(f->yuv.data);
   g_free(f);
 }
 
@@ -211,14 +215,8 @@ static int on_decoded(void *sink, gpointer data) {
   g_signal_emit_by_name(sink, "pull-sample", &sample);
   if (!sample) return 0;
   GstBufferHead *b = gs.gst_sample_get_buffer(sample);
-  void *caps = gs.gst_sample_get_caps(sample), *st = caps ? gs.gst_caps_get_structure(caps, 0) : NULL;
-  int w = 0, h = 0;
-  if (st) gs.gst_structure_get_int(st, "width", &w), gs.gst_structure_get_int(st, "height", &h);
-  uint8_t *px = NULL;
-  if (b && w > 0 && h > 0 && gs.gst_buffer_get_size(b) >= (gsize)w * h * 4) {
-    px = g_malloc((size_t)w * h * 4);
-    gs.gst_buffer_extract(b, 0, px, (gsize)w * h * 4);
-  }
+  mb_yuv yuv;
+  int got = gs_sample_yuv(sample, &yuv);
   guint64 n = b && b->pts != GCLOCK_NONE ? b->pts / 1000000 : 0;
   gs.gst_mini_object_unref(sample);
   g_mutex_lock(&lock);
@@ -229,14 +227,14 @@ static int on_decoded(void *sink, gpointer data) {
     if (f && f->n == n) g_queue_pop_head(&s->dec->fed);
     else f = NULL;
   }
-  if (f && px) {
+  if (f && got) {
     Frame *fr = g_new0(Frame, 1);
-    fr->ts = f->ts, fr->w = w, fr->h = h, fr->px = px;
+    fr->ts = f->ts, fr->w = yuv.w, fr->h = yuv.h, fr->yuv = yuv;
     g_queue_push_tail(&s->decoded, fr);
     char *t = stamp(f->ts);
-    say_locked(s, g_strdup_printf("f %s %d %d", t, w, h));
+    say_locked(s, g_strdup_printf("f %s %d %d", t, yuv.w, yuv.h));
     g_free(t);
-    px = NULL;
+    got = 0;
   } else if (f) {
     char *t = stamp(f->ts);
     say_locked(s, g_strdup_printf("d %s", t));
@@ -244,7 +242,7 @@ static int on_decoded(void *sink, gpointer data) {
   }
   g_mutex_unlock(&lock);
   g_free(f);
-  g_free(px);
+  if (got) g_free(yuv.data);
   mb_app_wake();
   return 0;
 }
@@ -291,7 +289,7 @@ static void decoder_start(Stream *s) {
   d->need_key = 1;
   GError *e = NULL;
   void *pipe = gs.gst_parse_launch(
-      "appsrc name=in is-live=true format=time ! decodebin ! videoconvert ! video/x-raw,format=RGBA ! "
+      "appsrc name=in is-live=true format=time ! decodebin ! videoconvert ! " GS_YUV_CAPS " ! "
       "appsink name=out sync=false emit-signals=true",
       &e);
   void *src = pipe ? gs.gst_bin_get_by_name(pipe, "in") : NULL, *sink = pipe ? gs.gst_bin_get_by_name(pipe, "out") : NULL;
@@ -441,8 +439,8 @@ int32_t mb_host_h264_here(void) { return h264_decodes(); }
 int32_t mb_host_stream_feeds(void) { return 0; }
 void mb_host_stream_codec(int32_t id, moonbit_string_t cmd, moonbit_bytes_t data) { (void)id, (void)cmd, (void)data; }
 
-// The texture a stream's instances are drawn with (the GL context current): the frame shown last, made its texture
-// here the first time it is drawn; 0 before one is shown.
+// The texture a stream's instances are drawn with (the GL context current): the frame shown last, a JPEG's made its
+// texture here the first time it is drawn (an H.264 frame's already, mb_streams_upload); 0 before one is shown.
 unsigned mb_stream_tex(int id) {
   Stream *s = stream_of(id);
   if (!s) return 0;
@@ -474,13 +472,18 @@ unsigned mb_stream_tex(int id) {
   return s->tex;
 }
 
-// As a frame begins (the GL context current): the textures of the streams closed since let go.
+// As a frame begins and as it is presented (the GL context current): the textures of the streams closed since let go,
+// and an H.264 frame shown since drawn into its stream's (its planes let go then: the frame kept for its size).
 void mb_streams_upload(void) {
   for (guint i = 1; streams && i < streams->len; i++) {
     Stream *s = g_ptr_array_index(streams, i);
     if (s->closed && s->tex) {
       glDeleteTextures(1, &s->tex);
       s->tex = 0;
+    }
+    if (!s->closed && s->shown && s->shown->yuv.data) {
+      mb_yuv_draw(&s->shown->yuv, &s->tex, &s->tex_w, &s->tex_h);
+      g_clear_pointer(&s->shown->yuv.data, g_free);
     }
   }
 }
@@ -509,6 +512,10 @@ void mb_host_stream_direct(int32_t id, double route, double after, int32_t what)
 // H.265 not decoded here (a remote screen asks H.264): apple_stream.m's is the one that does.
 int32_t mb_host_h265_here(void) { return 0; }
 void mb_host_stream_hevc(int32_t id, moonbit_bytes_t hvcc, int32_t w, int32_t h) { (void)id; (void)hvcc; (void)w; (void)h; }
+
+// Nor AV1 (Windows' decodes it: win_stream.cpp).
+int32_t mb_host_av1_here(void) { return 0; }
+void mb_host_stream_av1(int32_t id, moonbit_bytes_t av1c, int32_t w, int32_t h) { (void)id; (void)av1c; (void)w; (void)h; }
 
 // A frame not to be shown, a decoder emptied, the sound's clock and volume (@hostapi.stream_frame_shown, stream_flush,
 // stream_audio_played, _queued, _volume): win_stream.cpp's alone so far. Here a frame not to be shown is decoded as

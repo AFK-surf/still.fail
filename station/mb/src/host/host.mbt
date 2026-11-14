@@ -91,10 +91,18 @@ pub async fn Host::line(self : Host) -> String? {
 }
 
 ///|
-/// Writes `text` and a newline to stdout.
+/// Writes `text` and a newline to stdout, U+2028 and U+2029 written as JSON escapes (`\u2028`, `\u2029`): the station
+/// reads each line with node:readline, which ends a line at either of them too, so a chat's text with one cut the
+/// answer that held it in two, neither JSON, and its read was never answered (2026-11-14). A line said here is JSON,
+/// where they can stand only in a string, and so are the same escaped.
 pub fn Host::say(self : Host, text : String) -> Unit {
   ignore(self)
-  ignore(out_ffi(@utf8.encode(text + "\n")))
+  let line = if text.contains("\u{2028}") || text.contains("\u{2029}") {
+    text.replace_all(old="\u{2028}", new="\\u2028").replace_all(old="\u{2029}", new="\\u2029")
+  } else {
+    text
+  }
+  ignore(out_ffi(@utf8.encode(line + "\n")))
 }
 
 ///|

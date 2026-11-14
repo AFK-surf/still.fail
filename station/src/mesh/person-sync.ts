@@ -233,6 +233,11 @@ export function followPersons(cloud: Cloud, chains: PersonChains, call: PeerCall
       const w = m.home ? null : m.workspace;
       const heads = `${headsIn(chains, m.workspace)}|${cloud.chain(w) === null ? "" : `${cloud.bodies(w).all().size}:${cloud.lacking(w).length}:${cloud.forceWord(w)}`}`;
       for (const p of m.peers) if (typeof p?.id === "string" && p.id !== st.station) bring(p.id, m.workspace, heads);
+      // The workspace's rigs its person signed for too, where its chain moved (a station that only runs tasks: what
+      // its state is made of, which no station of the roster brings it otherwise; lock-sync.ts brings it the chain).
+      // (signed for as `givenTo` reads it: `rigs` filters by that only while the lock is on, and a moved workspace
+      // turned off reads none)
+      if (cloud.chain(w)?.state?.moved !== undefined) for (const r of cloud.rigsNamed(m.workspace)) if (cloud.rigVouched?.(m.workspace, r) === true) bring(r.id, m.workspace, heads);
     }
   };
   look();

@@ -3,10 +3,11 @@
 // there view_open answers 0 and the app says it cannot play it). Its bytes come only through the app, as Apple's and
 // Android's do: its source is an appsrc in seekable mode, a stream of the file's bytes from where it is (as HTTP's is),
 // read from the app 256 KB at a time while the source wants more (view_read_next, view_read_answer); one it seeks away
-// from is let go, the next begun from there as it next wants bytes. Its pictures come out as RGBA (an appsink after
-// videoconvert) and are drawn in the canvas, as Android's are: its newest frame the view's picture (MB_VIEW_TEX + its
-// id: mb_player_tex), a texture made from it as the renderer first draws it, so a player moves with a list in step with
-// what is around it and what is painted after it draws over it. Its sound goes to the system's (playbin's own sink).
+// from is let go, the next begun from there as it next wants bytes. Its pictures come out as the decoder made them,
+// NV12 or I420 (an appsink after videoconvert, which passes them through: GS_YUV_CAPS), and are drawn in the canvas, as
+// Android's are: its newest frame the view's picture (MB_VIEW_TEX + its id: mb_player_tex), drawn into its texture as a
+// frame begins (mb_players_upload: its colours worked out on the GPU, linux_render.c's mb_yuv_draw), so a player moves
+// with a list in step with what is around it and what is painted after it draws over it. Its sound goes to the system's (playbin's own sink).
 // Played, paused, sought (to the frame, or to the nearest key frame at once), at a rate, at a volume, muted while it is
 // scrubbed; buffering while it is to play and waits on the app's bytes; its frame shown grabbed as a JPEG (grab_shown);
 // a frame of its file at a time grabbed as a PNG (grab_frame) by a playbin of its own, paused there, its bytes read
@@ -77,8 +78,8 @@ typedef struct Player {
   int next_read;
   GQueue gone;
   double given, total;
-  // (under lock) the newest frame: its pixels (RGBA), its size, whether it is new since its texture was made
-  uint8_t *px;
+  // (under lock) the newest frame: its planes, its size, whether it is new since its texture was made
+  mb_yuv frame;
   int w, h, fresh, drawn;
   // the main thread's
   int state;  // -1 failed, -2 unsupported, -3 unparseable, 0 opening, 1 ready
@@ -185,15 +186,14 @@ static uint8_t *sample_pixels(void *sample, int *w, int *h) {
   return px;
 }
 
-// a frame for the canvas (a streaming thread's): its pixels kept as the newest
+// a frame for the canvas (a streaming thread's): its planes kept as the newest
 static int take_sample(Player *p, void *sample) {
   if (!sample) return 0;
-  int w, h;
-  uint8_t *px = sample_pixels(sample, &w, &h);
-  if (px) {
+  mb_yuv f;
+  if (gs_sample_yuv(sample, &f)) {
     g_mutex_lock(&p->lock);
-    g_free(p->px);
-    p->px = px, p->w = w, p->h = h, p->fresh = 1;
+    g_free(p->frame.data);
+    p->frame = f, p->w = f.w, p->h = f.h, p->fresh = 1;
     g_mutex_unlock(&p->lock);
     mb_app_wake();
   }
@@ -521,7 +521,7 @@ static int player_open(moonbit_string_t type) {
   if (!gs_here()) return 0;
   GError *e = NULL;
   void *video = gs.gst_parse_bin_from_description(
-      "videoconvert ! video/x-raw,format=RGBA ! appsink name=pictures emit-signals=true max-buffers=2", TRUE, &e);
+      "videoconvert ! " GS_YUV_CAPS " ! appsink name=pictures emit-signals=true max-buffers=2", TRUE, &e);
   if (!video) {
     vlog("view: no player (%s): videoconvert or appsink missing", e ? e->message : "?");
     g_clear_error(&e);
@@ -565,7 +565,7 @@ static void player_close(Player *p) {
   g_free(p->frames);
   gs.gst_object_unref(p->sink);
   g_queue_clear(&p->gone);
-  g_free(p->px);
+  g_free(p->frame.data);
   g_clear_pointer(&p->still, g_bytes_unref);
   if (p->tex) g_array_append_val(gone_texs, p->tex);
   g_mutex_clear(&p->lock);
@@ -588,9 +588,11 @@ static void player_seek(Player *p, double ms, int flags, double rate) {
 // its frame shown, at most `side` pixels on its longer side, as a JPEG
 static void player_grab(Player *p, double side) {
   g_mutex_lock(&p->lock);
-  GdkPixbuf *pb = p->px ? gdk_pixbuf_new_from_data(g_memdup2(p->px, (gsize)p->w * p->h * 4), GDK_COLORSPACE_RGB, TRUE,
-                                                   8, p->w, p->h, p->w * 4, (GdkPixbufDestroyNotify)g_free, NULL)
-                        : NULL;
+  // (its colours worked out here, on the CPU: a frame grabbed, not drawn)
+  uint8_t *px = p->frame.data ? mb_yuv_rgba(&p->frame) : NULL;
+  GdkPixbuf *pb = px ? gdk_pixbuf_new_from_data(px, GDK_COLORSPACE_RGB, TRUE, 8, p->frame.w, p->frame.h,
+                                                p->frame.w * 4, (GdkPixbufDestroyNotify)g_free, NULL)
+                     : NULL;
   g_mutex_unlock(&p->lock);
   GBytes *still = NULL;
   if (pb) {
@@ -794,45 +796,33 @@ static void player_read_answer(Player *p, int rid, moonbit_bytes_t data, double 
   }
 }
 
-// The player's picture for the renderer (the GL context current): its newest frame, made its texture as it is first
-// drawn; 0 before it has one. The app is told once the first is drawn (shown: a frame asked for).
+// The player's picture for the renderer (the GL context current): its newest frame's texture, drawn as the frame
+// began (mb_players_upload); 0 before it has one. The app is told once the first is drawn (shown: a frame asked for).
 unsigned mb_player_tex(int vid) {
   Player *p = player_of(vid);
   if (!p) return 0;
   g_mutex_lock(&p->lock);
-  if (p->px && (p->fresh || !p->tex)) {
-    glActiveTexture(GL_TEXTURE1);  // (the images' unit, which the renderer binds it to next)
-    if (!p->tex) {
-      glGenTextures(1, &p->tex);
-      glBindTexture(GL_TEXTURE_2D, p->tex);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-      p->tex_w = p->tex_h = 0;
-    } else {
-      glBindTexture(GL_TEXTURE_2D, p->tex);
-    }
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    if (p->w == p->tex_w && p->h == p->tex_h) {
-      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, p->w, p->h, GL_RGBA, GL_UNSIGNED_BYTE, p->px);
-    } else {
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, p->w, p->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, p->px);
-      p->tex_w = p->w, p->tex_h = p->h;
-    }
-    p->fresh = 0;
-    if (!p->drawn) p->drawn = 1, mb_app_wake();
-  }
   GLuint t = p->tex;
+  if (t && !p->drawn) p->drawn = 1, mb_app_wake();
   g_mutex_unlock(&p->lock);
   return t;
 }
 
-// As a frame begins (the GL context current): the textures of players closed since deleted.
+// As a frame begins (the GL context current): the textures of players closed since deleted, and each player's newest
+// frame, new since, drawn into its texture (its planes kept: a grab of the frame shown reads them).
 void mb_players_upload(void) {
-  if (!gone_texs || !gone_texs->len) return;
-  glDeleteTextures((GLsizei)gone_texs->len, (GLuint *)gone_texs->data);
-  g_array_set_size(gone_texs, 0);
+  if (gone_texs && gone_texs->len) {
+    glDeleteTextures((GLsizei)gone_texs->len, (GLuint *)gone_texs->data);
+    g_array_set_size(gone_texs, 0);
+  }
+  for (Player *p = players; p; p = p->next) {
+    g_mutex_lock(&p->lock);
+    if (p->frame.data && (p->fresh || !p->tex)) {
+      mb_yuv_draw(&p->frame, &p->tex, &p->tex_w, &p->tex_h);
+      p->fresh = 0;
+    }
+    g_mutex_unlock(&p->lock);
+  }
 }
 
 // A new GL context: the old one's textures gone with it (made again from the frames kept).

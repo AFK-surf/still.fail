@@ -28,6 +28,8 @@ fn main {
   let imaged = @ui.env("MBUI_IMAGECHECK")
   // MBUI_PLAYCHECK=<a video, base64>: played by the host's player, its bytes read through the app (playcheck.mbt)
   let play = @ui.env("MBUI_PLAYCHECK")
+  // MBUI_STREAMCHECK=<AV1's OBUs, base64>: decoded by the host's stream, the picture shown said (streamcheck.mbt)
+  let streamed = @ui.env("MBUI_STREAMCHECK")
   // MBUI_BADGECHECK=<n>: the number on the app's icon set, for the desktop's side to be asked (badgecheck.mbt)
   let badge = @ui.env("MBUI_BADGECHECK")
   // MBUI_SECRETCHECK=kept|taken|left|end: a secret copied, the app ending, for the clipboard to be read (secretcheck.mbt)
@@ -42,6 +44,8 @@ fn main {
   let picked = @ui.env("MBUI_PICKCHECK") == "1"
   // MBUI_OPCHECK=ran|missing: how a run of `op` ended told between frames, said on the log (opcheck.mbt)
   let op_case = @ui.env("MBUI_OPCHECK")
+  // MBUI_DROPCHECK=1: files let go on the window taken and read, said on the log (dropcheck.mbt)
+  let dropped = @ui.env("MBUI_DROPCHECK") == "1"
   if imaged != "" {
     @gallery.image_check_follow()
   }
@@ -56,6 +60,8 @@ fn main {
       @gallery.post_check_run(c)
     } else if picked {
       @gallery.pick_check_run(c)
+    } else if dropped {
+      @gallery.drop_check_run(c)
     } else if op_case != "" {
       @gallery.op_check_run(c, op_case)
     } else if updated != "" {
@@ -70,6 +76,8 @@ fn main {
       @gallery.pdf_check_run(c, pdf)
     } else if play != "" {
       @gallery.play_check_run(c, play)
+    } else if streamed != "" {
+      @gallery.stream_check_run(c, streamed)
     } else if badge != "" {
       @gallery.badge_check_run(c, badge)
     } else if secret != "" {

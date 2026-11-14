@@ -28,6 +28,7 @@ import { hashOf } from "../cloud/log-keep.ts";
 import { type Entry, LockRefusal, admit, admitPerson, asEntry, endpointProof, fold, lowerRole, personFold } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerScreen } from "./screens.ts";
+import { pinBrought } from "./moved-pin.ts";
 import type { ScreenHub } from "../screens/hub.ts";
 import type { MemberAsk } from "../parts.ts";
 import { compressed } from "./compress.ts";
@@ -211,8 +212,13 @@ function toldOut(cloud: Cloud, ws: string | null, device: string, hello: any): {
   if (cloud.chain(ws)?.state?.moved === undefined) return null;
   const proof = lockProof(hello?.lock);
   const ids = new Set([device, ...(proof && endpointProof(ws ?? cloud.home() ?? "", proof.base, device, proof.proof) ? [proof.base] : [])]);
-  // (a removal took out the keys of its subject's log: those the logs kept here put on with these ids)
+  // (a removal took out the keys of its subject's log: those the logs kept here put on with these ids; and the key the
+  // chain as it moved named each with, for a device it carried)
   const keys = new Set(ids);
+  for (const id of ids) {
+    const k = cloud.chain(ws)?.state?.devices.get(id)?.sign_key;
+    if (k !== undefined) keys.add(k);
+  }
   for (const [, entries] of personChainsOf(cloud).every()) {
     for (const e of entries) {
       const d = (e.kind === "genesis" ? (e.body as any)?.device : e.kind === "device" ? e.body : null) as { id?: unknown; key?: unknown } | null;
@@ -373,13 +379,17 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     const atHash = at !== undefined && at.seq === from ? { after_hash: hashOf(at) } : {};
     // (`builds`: what build each device its lock names last ran, as seen here, device-builds.ts; given only to a device the
     // lock let in, as admission let this one, and of a workspace with none, of nobody)
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
+    // (`carried`: a moved chain read as it moved beside its people's logs, cloud/lock.ts `state4Moved`, 2026-11-14: every
+    // reader must make the same state, so a core hands a chain over only once each of its stations says it)
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(from, ws), ...atHash, takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs", "builds", "carried", "bind"], builds: deviceBuildsOf(cloud).of(lockDeviceIds(cloud, ws)) }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
   let keep = false;
+  let withState: { logs: unknown; bodies: unknown } = { logs: undefined, bodies: undefined };
   try {
     const said = JSON.parse(body.toString("utf8") || "{}");
+    withState = { logs: said?.logs, bodies: said?.bodies };
     // (`keep`: what is brought was taken by another keeper already, a station the device read it of: kept as a station's
     // would be, also off the chain gone by; else only what goes on from its head, cloud/state.ts `keepLock`)
     keep = said?.keep === true;
@@ -395,6 +405,15 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
   try {
     if (cloud.chain(ws) === null) {
       if (viewer.role !== "owner") return [403, { error: "only the workspace's owner turns its lock on" }];
+      // A moved chain: by the same door, on the same condition read on its state in force (moved-pin.ts `pinBrought`).
+      if ((entries as Entry[]).some((e) => e.kind === "moved")) {
+        try {
+          pinBrought(cloud, ws, viewer.workspace || cloud.home() || "", entries as Entry[], withState.logs, withState.bodies, { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof }, cloud.state?.station ?? "");
+        } catch (e) {
+          return [403, { error: (e as Error).message }];
+        }
+        return [200, { taken: entries.length, head: lockHead(cloud, ws) }];
+      }
       // Brought by one of its owner's devices as the chain brought names them (one approved after the genesis too:
       // the owner takes a station in from the phone they approved since).
       const brought = fold(entries as Entry[], nowSecs());
@@ -497,7 +516,7 @@ export function lockPartRoute(cloud: Cloud, part: string, method: string, body: 
     const chains = personChainsOf(cloud);
     // (with what this station serves of the person's logs and the builds of the app devices on the asker's own log, as
     // seen here: what their core reads before it writes a kind an older station or app refuses, device-builds.ts)
-    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
+    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })), serves: ["logs", "builds", "carried", "bind"], builds: deviceBuildsOf(cloud).of(personDeviceIds(cloud, viewer.sub)) }];
     if (method !== "POST") return [405, { error: "GET or POST" }];
     let said: any;
     try {
@@ -563,7 +582,9 @@ export function inLock(cloud: Cloud, admitted: Admitted, named: string, endpoint
   if (locked.waiting === true) throw new LockRefusal(NOT_GIVEN);
   const v = admitted.viewer;
   const { device, role } = admit(locked.state, { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof }, nowSecs());
-  if (device.kind === "app" && locked.state.persons.has(v.sub)) {
+  // (an app device the chain as it moved still says, its person's log never having put it on, `by` "chain": let in by
+  // the state, which no log it brings can say more of than the log kept here does)
+  if (device.kind === "app" && locked.state.persons.has(v.sub) && device.by !== "chain") {
     const person = onPersonalLock(cloud, admitted, named, endpoint, hello);
     if (person === null) throw new LockRefusal("this device goes by its person's own lock in this workspace, and it brought none");
     return person;

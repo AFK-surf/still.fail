@@ -864,6 +864,12 @@ pub fn Runtime::timer_slots(self : Runtime) -> Int {
 }
 
 ///|
+/// Whether a fiber waits for the next frame (`next_frame`): the host owes it one.
+pub fn Runtime::waits_frame(self : Runtime) -> Bool {
+  !self.frame_waiters.is_empty()
+}
+
+///|
 /// Nothing is ready to run.
 pub fn Runtime::idle(self : Runtime) -> Bool {
   self.ready.is_empty() && self.later.is_empty()

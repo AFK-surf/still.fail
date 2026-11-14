@@ -50,6 +50,7 @@ export class Accounts {
   private deps: AccountsDeps;
   private health: (id: string) => ProfileHealth = () => ({});
   private checkAgain: (id: string) => Promise<unknown> = async () => {};
+  private quotaAgain: (id: string) => Promise<unknown> = async () => {};
   private rechecking = new Map<string, Promise<void>>();
   private picked = new Map<string, number>();
   /// Accounts a turn ran into the allowance of, and when: passed over until their allowance is read again, or for
@@ -74,6 +75,31 @@ export class Accounts {
   /// Lets the pool have a profile checked again (accounts/index.ts `check`).
   setRecheck(recheck: (id: string) => Promise<unknown>) {
     this.checkAgain = recheck;
+  }
+
+  /// Lets the pool have a profile's allowance asked again (accounts/index.ts `readQuota`).
+  setQuotaAgain(read: (id: string) => Promise<unknown>) {
+    this.quotaAgain = read;
+  }
+
+  /// What a turn on profile `id` running `model` ran into, its failure's words naming no limit: its allowance asked
+  /// again says it (the runtime's words for a limit change, as Claude Code's for Fable's did on 2026-11-14: "You've hit
+  /// your Fable limit", read as the model failing, so the session stayed on the account and failed again and again).
+  /// The name of the model whose own week is used up there, null when a window of the account's is, else undefined.
+  async limitAfter(id: string, model: string | null): Promise<string | null | undefined> {
+    try {
+      await this.quotaAgain(id);
+    } catch {
+      return undefined;
+    }
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    const quota = this.healthOf(id).quota;
+    const full = (w: any) => Number(w?.usedPercent) >= 100 && !(typeof w?.resetsAt === "number" && w.resetsAt <= now);
+    if (windowsOf(this.quotaForModel(id, quota, model)).some(full)) return null;
+    const runs = model ?? this.deps.config().profiles.find((p) => p.id === id)?.model ?? null;
+    if (runs === null || quota?.state !== "ok" || !Array.isArray(quota.scoped)) return undefined;
+    const own = quota.scoped.find((w: any) => typeof w?.scope === "string" && full(w) && modelWords(w.scope).every((x) => modelWords(modelKey(runs)).includes(x)));
+    return own ? (own.scope as string) : undefined;
   }
 
   /// Profile `id` checked again, a runtime on it having failed to sign in (once at a time): one whose login is over is
@@ -182,10 +208,9 @@ export class Accounts {
     if (kept.length > 0) this.modelSpent.set(key, kept);
     else this.modelSpent.delete(key);
     const runs = model ?? this.deps.config().profiles.find((p) => p.id === id)?.model ?? null;
-    const words = (m: string) => m.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w !== "");
     // The runtime names it in words ("Fable" for claude-fable-5-1); one run by its default, unknown, is the same default.
     const named = (s: { named: string; ran: string | null }) =>
-      runs === null ? s.ran === null : (s.ran !== null && sameModel(runs, s.ran)) || words(s.named).every((w) => words(modelKey(runs)).includes(w));
+      runs === null ? s.ran === null : (s.ran !== null && sameModel(runs, s.ran)) || modelWords(s.named).every((w) => modelWords(modelKey(runs)).includes(w));
     return kept.filter(named).at(-1)?.at;
   }
 
@@ -489,3 +514,6 @@ export class Accounts {
     return { row, runtime, model, effort, profile, profiles: nextProfiles, pinned: undefined, repick: canRepick };
   }
 }
+
+/// A model's name in words, as a runtime names it ("Fable") and as its id spells it (claude-fable-5-1).
+const modelWords = (m: string) => m.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w !== "");

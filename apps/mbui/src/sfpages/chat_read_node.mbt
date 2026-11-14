@@ -1,7 +1,8 @@
 // What a chat's page made as nodes tells the core of what is read and where the chat is, out of one fact: what its list
-// has in sight (@view.ListPlace::on_sight, told at rest, never on a frame of a scroll). The chat shows (`client.focus
-// {chat}`): its end seen (at its foot, the window not short of the chat's end) and the last message seen whole, which
-// marks what is read and places the unread line; where it is (`chat.place`): the message at the top and how far its top
+// has in sight (@view.ListPlace::on_sight), as the old page's list told it (sfbase's chat_list.mbt): the chat shows
+// (`client.focus {chat}`) as that changes, where it is (`chat.place`) at rest alone. The chat shows: its end seen (at
+// its foot, the window not short of the chat's end) and the last message seen whole, which marks what is read and
+// places the unread line; where it is (`chat.place`): the message at the top and how far its top
 // is under the list's (in the screen's pixels), none at its end, told as the message at the top changes; as the page goes
 // (sfapp's chat_left, chat_read_left), that it shows no more and where it was left. Told while the page is drawn (sfbase's
 // chat_page_made's `drawn`, what the old page's view was built by: none of it while another page covers it, what is in
@@ -29,14 +30,16 @@ let chat_reads : Map[String, ChatRead] = Map([])
 
 ///|
 /// Chat `r`'s page (in `v`, its view `view` as it changes) telling the core what is read and where it is from what its
-/// list `place` has in sight (the file's head), its rows as `rows` has them, while `shows` (it is drawn); where it is
-/// kept and told as a place is (sfbase's kept_place_of), what covers the list's top `cover` tall.
+/// list `place` has in sight (the file's head), its rows as `rows` has them, while `shows` (it is drawn), where it is
+/// at rest (`scroll`, the list's, neither in the hand nor going on by itself); where it is kept and told as a place is (sfbase's
+/// kept_place_of), what covers the list's top `cover` tall.
 fn chat_read_node(
   v : @view.View,
   src : Source,
   r : ChatRef,
   view : () -> ChatView,
   place : @view.ListPlace[String],
+  scroll : @view.Scroll,
   rows : () -> ChatBodyRows,
   shows : () -> Bool,
   cover : () -> Double,
@@ -55,9 +58,12 @@ fn chat_read_node(
       }
   }
   chat_reads[k] = a
-  // what is in sight taken and told: while the chat is open (none once it is left) and its page is drawn
-  let seen = fn(s : @view.Sight[String]) {
-    guard chat_reads.get(k) is Some(now) && physical_equal(now, a) && @signals.untracked(shows) else { return }
+  // (while the chat is open, none once it is left, and its page is drawn)
+  let live = fn() { chat_reads.get(k) is Some(now) && physical_equal(now, a) && @signals.untracked(shows) }
+  // what is in sight taken as it changes, the hand on it or not, as the old page's list read it each frame (sfbase's
+  // read_place): where it is (where it was left, to the pixel, as it is left there: chat_read_left) and the last
+  // message seen whole
+  let taken = fn(s : @view.Sight[String]) {
     let rs = @signals.untracked(rows)
     let cv = @signals.untracked(view)
     a.sight = Some((s, rs))
@@ -88,11 +94,65 @@ fn chat_read_node(
       }
       _ => ()
     }
-    guard app_in_front() else { return }
-    chat_read_focus(src, r, cv, a, !cv.newer && s.at_foot)
-    chat_read_place(src, r, cv, a, exact=false)
+  }
+  // told once the frame (or the change between frames) that took it is over, as the old page told it once its
+  // frame's builds were over (sfbase's after_build_or_scroll): what is in sight then, the last of what its passes
+  // told (a moment's layout tells it again as the rows it brought in are measured, each nearer what is so). That it
+  // shows, its end seen or not and the last message seen whole, as either changes (sfbase's tell_focus, the old page
+  // telling it moving or not); where it is only where it was owed at rest (`placing`, settle's)
+  let telling = Ref(false)
+  let placing = Ref(false)
+  let tell = fn() {
+    guard !telling.val else { return }
+    telling.val = true
+    @ui.after_frame(fn() {
+      telling.val = false
+      guard live() && app_in_front() && a.sight is Some((s, _)) else {
+        placing.val = false
+        return
+      }
+      let cv = @signals.untracked(view)
+      chat_read_focus(src, r, cv, a, !cv.newer && s.at_foot)
+      if placing.val && !@signals.untracked(fn() { scroll.in_hand() }) {
+        placing.val = false
+        chat_read_place(src, r, cv, a, exact=false)
+      }
+    })
+  }
+  // where it is (`chat.place`) told at rest alone, as the old page told it only while its list was not moving (ui's
+  // Ctx::list_moving: held, flung, easing): never while the hand holds the list (each move of a finger is an input the
+  // list tells what is in sight at), nor while it goes on by itself after (a fling's glide, a notch of the wheel easing
+  // in: Scroll::glides_till), but once as the hand lets go with nothing to go on by, or as that ends; a pixel wheel's
+  // stroke, which eases not, leaves it at rest at once, told then, as the old page did
+  let owed = Ref(false)
+  let due : Ref[() -> Unit] = Ref(fn() {  })
+  fn settle() -> Unit {
+    guard owed.val else { return }
+    guard live() else {
+      owed.val = false
+      return
+    }
+    guard !@signals.untracked(fn() { scroll.in_hand() }) else { return }
+    (due.val)()
+    due.val = fn() {  }
+    match scroll.glides_till() {
+      Some(end) if end > v.cause_at() => due.val = v.at_moment(end, settle)
+      _ => {
+        owed.val = false
+        placing.val = true
+        tell()
+      }
+    }
+  }
+  let seen = fn(s : @view.Sight[String]) {
+    guard live() else { return }
+    taken(s)
+    owed.val = true
+    tell()
+    settle()
   }
   place.on_sight(seen)
+  v.reacts(fn() { scroll.in_hand() }, fn(held) { if !held { settle() } }, at_start=false)
   // (told only as what is in sight differs: as it comes to be drawn again, what is in sight then)
   v.reacts(shows, fn(on) { if on && place.sight_now() is Some(s) { seen(s) } }, at_start=false)
 }

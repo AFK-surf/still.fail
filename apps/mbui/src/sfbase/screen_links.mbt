@@ -144,11 +144,24 @@ pub(all) struct ScreenCard {
 }
 
 ///|
+/// What a link's card asks the core for what it says (screen_card_of's, adb_card_of's, service_card_of's; its chat's as
+/// it opens, chat_opens): a screen's `screenCard`, a station's 共享调试's `adbCard`, a web service's `job`; None for a
+/// link that is no such card.
+pub fn link_card_ask(to : @sf.LinkTo) -> (String, Map[String, Json])? {
+  let station = Json::string(to.station)
+  match to.card {
+    "screen" => Some(("screenCard", { "station": station, "screen": Json::string(to.screen) }))
+    "adb" => Some(("adbCard", { "station": station }))
+    "service" => Some(("job", { "station": station, "id": Json::string(to.job) }))
+    _ => None
+  }
+}
+
+///|
 /// The card of the screen `href` names, once the core has said.
 pub fn screen_card_of(src : Source, to : @sf.LinkTo) -> ScreenCard? {
-  guard to.card == "screen" else { return None }
-  let (station, screen) = (to.station, to.screen)
-  let v = src.topic("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).get().value
+  guard to.card == "screen" && link_card_ask(to) is Some((name, params)) else { return None }
+  let v = src.topic(name, params).get().value
   guard v is Some(Object(_)) else { return None }
   Some({
     kind: text(v, "kind"),
@@ -164,9 +177,8 @@ pub fn screen_card_of(src : Source, to : @sf.LinkTo) -> ScreenCard? {
 ///|
 /// The card of the 共享调试 `href` names, once the core has said.
 pub fn adb_card_of(src : Source, to : @sf.LinkTo) -> Json? {
-  guard to.card == "adb" else { return None }
-  let station = to.station
-  match src.topic("adbCard", { "station": Json::string(station) }).get().value {
+  guard to.card == "adb" && link_card_ask(to) is Some((name, params)) else { return None }
+  match src.topic(name, params).get().value {
     Some(Object(_)) as v => v
     _ => None
   }
@@ -204,9 +216,9 @@ pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens 
 /// it is known), its station's name with its port, and how it stands (运行中, 已停止…); whether it is down (stopped or
 /// failed: its title quieter).
 pub fn service_card_of(src : Source, to : @sf.LinkTo) -> (String, String, Bool) {
-  guard to.card == "service" else { return ("", "", false) }
-  let (station, job) = (to.station, to.job)
-  let j = src.topic("job", { "station": Json::string(station), "id": Json::string(job) }).get().value
+  guard to.card == "service" && link_card_ask(to) is Some((name, params)) else { return ("", "", false) }
+  let station = to.station
+  let j = src.topic(name, params).get().value
   let name = match text(j, "name") {
     "" => @sf.t("android-chat.preview.service")
     n => n
@@ -248,6 +260,23 @@ pub fn service_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.Link
     link_card_words(c, title, line, down, link_words)
   })
   |> ignore
+}
+
+///|
+/// What a card says as its title where no screen's card is (a station's 共享调试's, its own; a screen's the core has
+/// not said yet, 屏幕, as its link bare reads): never nothing, so it is named a link whatever has come.
+pub fn card_title_unsaid(src : Source, to : @sf.LinkTo) -> String {
+  if to.card == "adb" {
+    adb_title(src, to)
+  } else {
+    @sf.t("android-misc.screen.title")
+  }
+}
+
+///|
+/// What a card says under its title where no screen's card is: a station's 共享调试's line, as the core says it.
+pub fn card_line_unsaid(src : Source, to : @sf.LinkTo) -> String {
+  text(adb_card_of(src, to), "line")
 }
 
 ///|
@@ -307,11 +336,11 @@ pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, 
   let title = match (words, card) {
     (Some(w), _) => w
     (None, Some(k)) => k.title
-    (None, None) => ""
+    (None, None) => card_title_unsaid(src, to)
   }
   let line = match card {
     Some(k) => k.line
-    None => ""
+    None => card_line_unsaid(src, to)
   }
   match (card, if to.card == "screen" { Some((to.station, to.screen)) } else { None }) {
     (Some(k), Some((station, screen))) if k.peek && !k.gone => {

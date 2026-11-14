@@ -49,7 +49,9 @@
 - Everything lasting is one SQLite file, `stillfail.db` (`src/store/store.ts`, schema in `src/store/schema.ts`): one
   write connection on the main thread; reads in reader threads (`src/read/pool.ts`: what is told as it changes and
   what devices ask each on a line of its own) or the MoonBit program (`mb/`) for the reads moved to it, the worker
-  kept for a checkout without it. A move to the program is compared with the worker on the same data.
+  kept for a checkout without it. A move to the program is compared with the worker on the same data. At a handover
+  the next process opens it while the one serving writes: every connection waits its turn (a busy timeout), and a
+  transaction that writes begins `BEGIN IMMEDIATE` (`scripts/check.sh` refuses what a change adds otherwise).
 - A read answers by an index and a limit, never by going through all a station has (a station keeps months of chats):
   the `*-bounded.test.ts` tests count the rows a read fetches; a new read gets one. Old data a new index needs is
   built in the background (`src/read/*-builder.ts`), its batches taking one shared permit and yielding to writes
@@ -102,6 +104,16 @@
 - An agent's own answer is never forwarded: it posts with `chat_post` and ends each turn with a state (`all_done`,
   `need_human`, `waiting`); a turn ended without one is asked again.
 
+## The agents' memory
+
+- A workspace's MEMORY.md and team skills are one for all its stations (the user, 2026-11-14: 「直接全局共享，跟 station
+  相关的直接说明是哪个 station」): `src/share/memory.ts` keeps each file's recent versions and brings the stations level,
+  merging two versions made apart from the one both came from (`src/share/memory-merge.ts`, as `git merge-file`, both
+  kept where both changed). What is one machine's says which station it is of; the agents' instructions say so. No
+  CRDT library (it grows, and every station would have to compact it together). With no version both came from (each
+  station's memory of before) MEMORY.md's lines, and a file both kept on since it was copied, are put together each
+  line once; skills of one name and nothing alike are kept apart as `<name>-<station>` (the user, 2026-11-14).
+
 ## How a workspace's devices reach its stations (its ways)
 
 - A workspace's own relays and the ways its devices do not take are its stations' (`src/mesh/ways.ts`; the root
@@ -121,6 +133,23 @@
   itself stays in the cloud's store of pictures, the record keeping its address. A station that only runs tasks keeps
   none (it asks and answers nothing new); its name stays the cloud's.
 
+## Presets and starred models
+
+- A person's presets and the models they starred are the same on all their devices and every station of the
+  workspace (the user, 2026-11-14: 「预设和模型收藏会在整个 workspace 同步」), carried by that person's own devices: a
+  device reads each station's (`GET /presets/kept`, `GET /stars`), keeps the newer of each record by the one rule
+  both sides keep (`client/core-ts/src/preset-records.ts`: `rev` counts the changes, a deletion is a record), and
+  brings a station what it lacks (`PUT /presets/kept`, `PUT /stars`). The stations never bring them level with each
+  other, nothing of them goes to the cloud, and a station never rewrites a record a device brought (two stations given
+  one keep the same bytes). A station changes a record itself only for an app from before (POST, PUT, DELETE
+  /presets), which is listed only those made on it (`home`).
+- It keeps so many deletions of each owner's (those of nobody said one owner of their own), by the rule a device keeps
+  them by (`preset-records.ts` `goneKept`): a PUT whose deletion would be dropped as it is written changes nothing and
+  tells nothing (`Presets.carry`), so nothing goes round. A deletion of nobody said is given in everyone's GET
+  /presets/kept: its maker's device takes it as its own.
+- Agents see every preset a station keeps, whoever's (chat_create `preset`); people see their own by default and
+  others' after a press (`GET /presets/others`). That is a default filter, not a permission (Its data, above).
+
 ## A station's mode: whole, or only tasks (a rig)
 
 - A station is whole, or it only runs tasks (只执行任务; `rig` in the code: `src/rig/`; the user, 2026-11-04 and
@@ -136,7 +165,11 @@
   signed (`client/core-ts/src/rig-form.ts`: a grant with its timeout, idle or fixed, as a vault's secret; a grant
   taken back; 免批准, which opens it to every chat of the workspace), and the machine checks the signature itself against
   the lock it pinned: the cloud or a station that says otherwise lets no chat in. In security mode a station takes it
-  only once that person signed for it (`src/rigs/adds.ts`), or the lock already lists it as a station.
+  only once that person signed for it (`src/rigs/adds.ts`), or the lock already lists it as a station. Where the
+  workspace's chain moved the rig pins it by its enrollment's hash as before and waits for its state: meanwhile it
+  answers a station what its person signed for it (`rig.added`, `rig.proof`; `src/mesh/peer.ts` `heardWaiting`), and a
+  station that took it gives it the logs and bodies as it gives a station its list names (`Cloud.givenTo`,
+  `src/mesh/person-sync.ts`), which it checks against the chain it pinned (2026-11-14, `test/rig-moved.test.ts`).
 - What a machine is changes only when two agree, neither alone: what was asked of the machine over a way the control
   plane has no part in (whole to tasks: a member's device that reached it, `POST /mode`, with their lock to pin, kept
   as theirs; tasks to whole: its person's signature, `rig.full`), kept there for an hour, and the control plane
@@ -166,13 +199,17 @@
   nothing for any other keeper.
 - Where a lock's active chain holds `moved {root}` (2026-11-13; signed by an owner's device once everything that uses the
   workspace takes it, client/core-ts/AGENTS.md), the state in force there is the
-  rules' `state4` of the root's log, the person logs kept and the statements' bodies kept (`src/cloud/lock-bodies.ts`,
-  `mesh/locks/<ws>.bodies.json`), by this station's clock (each app device by the signer its log says, never by its key
-  on the log): `Cloud.locked` gives it to every reader of "the lock"
+  rules' state of the root's log, the person logs kept and the statements' bodies kept (`src/cloud/lock-bodies.ts`,
+  `mesh/locks/<ws>.bodies.json`), read with the chain as it moved (`src/cloud/lock.ts` `state4Moved`, `roster4Moved`;
+  2026-11-14: what the logs have not said yet of those it named, it still says, its devices `by` "chain", an app device
+  of them let in by the state where its person's log never put it on, `src/mesh/serve.ts` `inLock`; this station says
+  `carried` in its `serves` so a core hands a chain over only where every reader reads it so), by this station's clock
+  (each app device by the signer its log says, never by its key on the log): `Cloud.locked` gives it to every reader of "the lock"
   (admission, the vault, rigs, the roster); what reads the chain itself (its seq, head, genesis: `lock-sync.ts`, the
   cloud's copy in `presence.ts`, `lockHead`, pinning) reads `Cloud.chain`. Off is a state (`locked` null, nothing let
-  go); without the root's log or its `open` (`waiting`) nobody is let in and the chain's stations are answered only the
-  lock's own methods. A body is taken only against an entry kept that commits to it (`bodyRefusal`), and given only in
+  go); without the root's log (`waiting`) nobody is let in and the chain's stations are answered only the lock's own
+  methods; without an `open` there, the chain's settings stand. A member the chain bound to no log is bound to theirs
+  by their own `bind` (rules/AGENTS.md); this station says `bind` in its `serves`. A body is taken only against an entry kept that commits to it (`bodyRefusal`), and given only in
   its workspace, by the list its bodies make, on or off (`Cloud.givenTo`): to a station or device it names
   (`lock.bodies.*`, `person-sync.ts`; `GET /lock/bodies`, with `lacking`: while off, only to a connection that proves
   itself a device the list names), and to one a removal took out, that removal and its `prev` chain alone (the rules'
@@ -192,6 +229,17 @@
   locked, off or on): a station that pinned the chain goes by the state in force (`leftOut`: never `unpinned`; its home
   off, a joined unlocked one's members taken), and so does `enroll --join` on the machine (`src/cli.ts`
   `joinWorkspace`), which the cloud no longer refuses for a moved home (2026-11-14, `test/lock-moved-joined.test.ts`).
+  A joined station that pins no lock of such a workspace (enrolled by its token alone, `leftOut` "unpinned") is offered
+  the plane's moved chain, never pinning it by that alone (`Cloud.movedOffered`, cloud/presence.ts `takeFromPlane`), and
+  pins it once the state made of the logs and bodies a station of it gives names its own key (`src/mesh/moved-pin.ts`,
+  tried again as a failure is, `lock-sync.ts`): what 「保护」 after a move says is a statement, which the chain never
+  names (2026-11-14, `test/lock-moved-pin.test.ts`). A station gives the bodies only to a station its list names
+  (`bodiesGiven`); the logs heard in the workspace to any station of its roster, as before. No wider than before a move
+  (the lead, 2026-11-14): a station pinning no lock of a workspace, its enrollment naming none, is unprotected and lets
+  in whoever the plane's credentials say, so its first pin is the plane's word either way (trust on first use), a chain
+  the plane made up pinning after a move exactly where one before does; its home, enrolled by its token alone, pins only
+  what its owner's device brings (POST /lock, the moved chain with the logs and bodies, `pinBrought`: their state must
+  let that device in as an owner's and name this station); one enrolled with a lock's hash only a chain holding it.
 - What build each device a lock here names last ran is kept by its id in the lock (`src/mesh/device-builds.ts`, in
   stillfail.db, written only as the build rises or the day changes) and given to a device the lock lets in (GET /lock
   `builds`, `serves` `builds`; GET /lock/person for the asker's own log's devices), with since when this station keeps

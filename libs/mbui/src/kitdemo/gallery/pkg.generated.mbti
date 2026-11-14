@@ -38,6 +38,8 @@ pub fn secret_check_run(@ui.Ctx, String) -> Unit
 
 pub fn site_check_run(@ui.Ctx) -> Unit
 
+pub fn stream_check_run(@ui.Ctx, String) -> Unit
+
 pub fn text_check_run(@ui.Ctx, String) -> Unit
 
 pub fn update_check_run(@ui.Ctx, String) -> Unit

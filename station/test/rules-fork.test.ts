@@ -12,7 +12,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { type Entry, endpointProof, entryHash, sigValid, validKeyId } from "../src/cloud/lock.ts";
+import { type Entry, endpointProof, entryHash, sigValid, taggedSigValid, validKeyId } from "../src/cloud/lock.ts";
 import { key, signed } from "./lock-world-sim.ts";
 import { VARIANTS } from "./lock-fork-choice-model.ts";
 import { pool, print } from "./lock-fork-pool.ts";
@@ -30,7 +30,7 @@ const SCRIPTED = Number(process.env.RULES_FORK_SCRIPTED ?? 6);
 const BATCH = 6;
 
 /// What the rules export for this, as rules/js/rules.js is built (without them, no world is run).
-const NEW = ["tie_of_js", "fork_before_js", "lock_chain_js", "person_chain_js", "person_fold_js", "roster_js", "state4_js", "ws_tag_js", "body_hash_js", "body_refusal_js"];
+const NEW = ["tie_of_js", "fork_before_js", "lock_chain_js", "person_chain_js", "person_fold_js", "roster_js", "state4_js", "roster_moved_js", "state4_moved_js", "ws_tag_js", "body_hash_js", "body_refusal_js"];
 const missing = NEW.filter((f) => typeof (rules as Record<string, unknown>)[f] !== "function");
 const FAMILIES = ["free", "faults"] as const;
 
@@ -59,7 +59,7 @@ const addMore = (a: More, b: More): More => {
   for (const k of Object.keys(a) as (keyof More)[]) if (k !== "refused") (out[k] as number) = (a[k] as number) + (b[k] as number);
   return out;
 };
-const none: More = { bodies: 0, refused: {}, inForce: 0, lacking: 0, lists: 0, states: 0, off: 0, notOn: 0, webs: 0, old: 0, moved: 0, afterMoved: 0, rolesOther: 0, admitted: 0, removals: 0, toldOut: 0 };
+const none: More = { bodies: 0, refused: {}, inForce: 0, lacking: 0, lists: 0, states: 0, off: 0, notOn: 0, webs: 0, old: 0, moved: 0, afterMoved: 0, rolesOther: 0, admitted: 0, removals: 0, toldOut: 0, carried: 0 };
 const sum = (os: Out[]): Out => os.reduce((a, o) => ({
   worlds: a.worlds + o.worlds, checks: a.checks + o.checks, branched: a.branched + o.branched, refusedSeen: a.refusedSeen + o.refusedSeen,
   statements: a.statements + o.statements, differ: [...a.differ, ...o.differ], more: addMore(a.more, o.more),
@@ -67,7 +67,7 @@ const sum = (os: Out[]): Out => os.reduce((a, o) => ({
 const said = (r: Record<string, number>) => Object.entries(r).map(([k, n]) => `${k}: ${n}`).join("; ") || "none";
 const told = (o: Out) => {
   const m = o.more;
-  print(`  bodies offered ${m.bodies}, refused ${Object.values(m.refused).reduce((a, b) => a + b, 0)} (${said(m.refused)}); statements in force ${m.inForce}, entries lacking their body ${m.lacking}; lists ${m.lists}, states ${m.states} (off ${m.off}, not on ${m.notOn}); web devices ${m.webs}; old chains ${m.old}, moved ${m.moved}, an entry after it refused ${m.afterMoved}, chosen otherwise by votes by role ${m.rolesOther}; devices of a state let in by admit ${m.admitted}; removals compared ${m.removals}, holders a removal took out told ${m.toldOut}`);
+  print(`  bodies offered ${m.bodies}, refused ${Object.values(m.refused).reduce((a, b) => a + b, 0)} (${said(m.refused)}); statements in force ${m.inForce}, entries lacking their body ${m.lacking}; lists ${m.lists}, states ${m.states} (off ${m.off}, not on ${m.notOn}); web devices ${m.webs}; old chains ${m.old}, moved ${m.moved}, an entry after it refused ${m.afterMoved}, chosen otherwise by votes by role ${m.rolesOther}; devices of a state let in by admit ${m.admitted}; removals compared ${m.removals}, holders a removal took out told ${m.toldOut}; states of a chain carried (D6) ${m.carried}`);
 };
 
 test("the rules' active chain of the workspace lock is every model keeper's, at each quarter of a world and at its end", async () => {
@@ -92,15 +92,15 @@ test("the rules' person logs, bodies, lists and states are the fourth round's mo
   assert.ok(o.branched > 0 && o.refusedSeen > 0 && o.statements > 0 && Object.keys(m.refused).length > 0 && m.lacking > 0 && m.inForce > 0 && m.admitted > 0 && m.removals > 0 && m.toldOut > 0, `${o.branched} beaten, ${o.refusedSeen} refused, ${o.statements} statements, ${m.lacking} lacking, ${m.removals} removals, ${m.toldOut} told out`);
 });
 
-test("the rules are the fourth round's model's on its scripted worlds: bodies no one's, web devices by a keeper's clock, a revoked key, off and on again, the handover", async () => {
+test("the rules are the fourth round's model's on its scripted worlds: bodies no one's, web devices by a keeper's clock, a revoked key, off and on again, the handover, the handover that waits for nobody", async () => {
   assert.ok(ask !== null, "no rules to compare");
   const o = sum(await scriptedOut);
-  print(`person logs and a workspace, scripted: ${o.worlds} seeds of M2, M5, a revoked key's web device and off, M6, M7's four rows, ${o.checks} chains compared, ${o.branched} children beaten, ${o.refusedSeen} entries refused, ${o.statements} statements' reasons; ${o.differ.length} differ`);
+  print(`person logs and a workspace, scripted: ${o.worlds} seeds of M2, M5, a revoked key's web device and off, M6, M7's four rows, M8's two, ${o.checks} chains compared, ${o.branched} children beaten, ${o.refusedSeen} entries refused, ${o.statements} statements' reasons; ${o.differ.length} differ`);
   told(o);
   for (const d of o.differ.slice(0, 3)) print(`  ${d.slice(0, 300)}`);
   assert.equal(o.differ.length, 0, "the rules and the model differ (the first are printed above)");
   const m = o.more;
-  assert.ok(m.off > 0 && m.moved > 0 && m.afterMoved === m.moved && m.webs > 0 && o.branched > 0 && Object.keys(m.refused).length >= 5, `off ${m.off}, moved ${m.moved}, after it refused ${m.afterMoved}, web devices ${m.webs}, ${o.branched} beaten, ${Object.keys(m.refused).length} reasons a body was refused`);
+  assert.ok(m.off > 0 && m.moved > 0 && m.carried > 0 && m.afterMoved === m.moved && m.webs > 0 && o.branched > 0 && Object.keys(m.refused).length >= 5, `off ${m.off}, moved ${m.moved}, after it refused ${m.afterMoved}, web devices ${m.webs}, ${o.branched} beaten, ${Object.keys(m.refused).length} reasons a body was refused`);
 });
 
 // A device has three keys: its base key (`id`), its key on its person's log (`key`, sealed for the person's presence:
@@ -110,7 +110,7 @@ test("the rules are the fourth round's model's on its scripted worlds: bodies no
 // device by it, never by the log's key (the lead, 2026-11-13: nothing the workspace signer signed checked out against
 // the moved state).
 test("a person's log says each device's signer: the fold keeps it and those said before, and a moved workspace's state names the device by it, never by its key on the log", () => {
-  const crypto = { sha256Hex: (s: string) => createHash("sha256").update(s).digest("hex"), sigValid, validKeyId, endpointProof };
+  const crypto = { sha256Hex: (s: string) => createHash("sha256").update(s).digest("hex"), sigValid, validKeyId, endpointProof, taggedSigValid };
   const [log1, log2, log3] = [key(7101), key(7102), key(7103)];
   const [s1, s2a, s2b] = [key(7201), key(7202), key(7203)];
   const [id1, id2, id3] = [key(7301).hex, key(7302).hex, key(7303).hex];

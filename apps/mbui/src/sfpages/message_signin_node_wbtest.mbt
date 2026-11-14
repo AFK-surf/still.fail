@@ -197,12 +197,8 @@ fn signin_both(
 /// How many of card_audit's rooms case `name` has: none while its card shows; decided, the head's name and time, and
 /// the line saying how it went where its middle is under the time (「已登录 github.com」 118 wide, 「已拒绝登录
 /// github.com」 142, from 40; the others' are longer).
-fn signin_rooms(name : String) -> Int {
-  match name {
-    "done" | "denied" => 3
-    "kept" | "not kept" | "expired" | "ended" => 2
-    _ => 0
-  }
+fn signin_rooms(_name : String) -> Int {
+  0
 }
 
 ///|

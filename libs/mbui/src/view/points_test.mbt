@@ -127,3 +127,111 @@ test "pointed at alone over a card that takes a press: the pointer moved over it
   tree.frame(390.0, 844.0) |> ignore
   assert_eq((first, moved.val, card_moved.val), ((1, 0), 2, 1))
 }
+
+///|
+test "covering bar (opaque ground or glass holding a control) hides both press targets and points-only nodes under it without cutting its own button's press room" {
+  let row_pressed = Ref(0)
+  let bar_btn_pressed = Ref(0)
+  let row_ref : Ref[@view.View?] = Ref(None)
+  let tag_ref : Ref[@view.View?] = Ref(None)
+  let btn_ref : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(row) {
+        row_ref.val = Some(row)
+        row.width(Is(Some(300.0))).height(Is(Some(60.0))).on_press(fn() { row_pressed.val += 1 }) |> ignore
+        row.box(fn(tag) {
+          tag_ref.val = Some(tag)
+          tag.width(Is(Some(120.0))).height(Is(Some(30.0))).points(Is(true)) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      // Covering bar over the top 40px, with opaque ground and a 24x24 button at (200, 8)
+      root.box(fn(bar) {
+        bar
+        .over(Is(true))
+        .width(Is(Some(300.0)))
+        .height(Is(Some(40.0)))
+        .ground(Is(0xFFFFFFFFL))
+        |> ignore
+        bar.box(fn(btn) {
+          btn_ref.val = Some(btn)
+          btn
+          .over(Is(true))
+          .offset(Is((200.0, 8.0)))
+          .width(Is(Some(24.0)))
+          .height(Is(Some(24.0)))
+          .on_press(fn() { bar_btn_pressed.val += 1 })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree.press_least(fn() { 36.0 })
+  tree.frame(390.0, 844.0) |> ignore
+  // Over the bar's empty area at (20, 20): neither the row nor the points-only tag underneath is pointed or pressed
+  tree.point_at(20.0, 20.0)
+  tree.frame(390.0, 844.0) |> ignore
+  let under_bar = (
+    @signals.untracked(fn() { row_ref.val.unwrap().pointed_in() }),
+    @signals.untracked(fn() { tag_ref.val.unwrap().pointed_in() }),
+  )
+  tree.press(20.0, 20.0) |> ignore
+  // Below the bar at (20, 50): the row is pointed and pressed
+  tree.point_at(20.0, 50.0)
+  tree.frame(390.0, 844.0) |> ignore
+  let below_bar = @signals.untracked(fn() { row_ref.val.unwrap().pointed_in() })
+  tree.press(20.0, 50.0) |> ignore
+  // Near the small button on the bar at (212, 36) (within its 36x36 press_room, inside the bar): reaches the button
+  tree.point_at(212.0, 36.0)
+  tree.frame(390.0, 844.0) |> ignore
+  let on_btn_room = @signals.untracked(fn() { btn_ref.val.unwrap().pointed() })
+  tree.press(212.0, 36.0) |> ignore
+  assert_eq((under_bar, below_bar, row_pressed.val, on_btn_room, bar_btn_pressed.val), ((false, false), true, 1, true, 1))
+}
+
+///|
+test "a small button's press reach is not stolen by an adjacent points-only sibling" {
+  let btn_ref : Ref[@view.View?] = Ref(None)
+  let tag_ref : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(bar) {
+        bar.row(Is(true)).width(Is(Some(200.0))).height(Is(Some(40.0))) |> ignore
+        bar.box(fn(btn) {
+          btn_ref.val = Some(btn)
+          btn.width(Is(Some(24.0))).height(Is(Some(24.0))).on_press(fn() {  }) |> ignore
+        })
+        |> ignore
+        bar.box(fn(tag) {
+          tag_ref.val = Some(tag)
+          tag.width(Is(Some(80.0))).height(Is(Some(24.0))).points(Is(true)) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  tree.press_least(fn() { 36.0 })
+  tree.frame(390.0, 844.0) |> ignore
+  // At x=26, y=12: 2px past the 24px button's right edge (within its 6px press_reach) and inside the points-only tag
+  tree.point_at(26.0, 12.0)
+  tree.frame(390.0, 844.0) |> ignore
+  let near_btn = (
+    @signals.untracked(fn() { btn_ref.val.unwrap().pointed() }),
+    @signals.untracked(fn() { tag_ref.val.unwrap().pointed_in() }),
+  )
+  // At x=50, y=12: well inside the points-only tag, outside the button's reach
+  tree.point_at(50.0, 12.0)
+  tree.frame(390.0, 844.0) |> ignore
+  let on_tag = (
+    @signals.untracked(fn() { btn_ref.val.unwrap().pointed() }),
+    @signals.untracked(fn() { tag_ref.val.unwrap().pointed_in() }),
+  )
+  assert_eq((near_btn, on_tag), ((true, false), (false, true)))
+}

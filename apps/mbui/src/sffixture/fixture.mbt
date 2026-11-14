@@ -1081,8 +1081,12 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
     match name {
       // (files-reading: the stations not read yet, the files' sidebar waiting on them)
       _ if f.mode == "files-reading" => None
-      "stations" => fixture_stations_way(value)
-      _ => fixture_stations_way(fixture_topic_inner(f, "stations", { "scope": Json::string(text(Some(Json::object(params)), "scope")) }))
+      "stations" => fixture_stations_behind(f, fixture_stations_way(value))
+      _ =>
+        fixture_stations_behind(
+          f,
+          fixture_stations_way(fixture_topic_inner(f, "stations", { "scope": Json::string(text(Some(Json::object(params)), "scope")) })),
+        )
     }
   }
   let value = match name {
@@ -1092,6 +1096,7 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
         v => v
       }
     "station" => @settings.station_said(wholes(), text(Some(Json::object(params)), "station"), "")
+    "stationUpdates" => Some(fixture_station_updates(f, wholes()))
     "stationPart" => {
       let p = Some(Json::object(params))
       @settings.station_said(wholes(), text(p, "station"), text(p, "part"))
@@ -1460,6 +1465,9 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
       } else {
         Some(fix_presets_of(text(Some(Json::object(params)), "station")))
       }
+    // (a preset whole, and the other members': the new chat's preset menu's and its dialog's)
+    "preset" => fix_preset_one(text(Some(Json::object(params)), "id"))
+    "otherPresets" => Some(fix_other_presets())
     "newChat" | "pick" => fixture_new_topic(f, name)
     // none left up long, as the core answers it (the first page waits for it); decide_fixture.mbt's modes say theirs
     "longJobs" if !decide_mode(f.mode) => Some({ "groups": [], "lit": false, "ids": [] })
@@ -2106,7 +2114,14 @@ pub fn fixture(mode : String) -> Source {
       }
       match name {
         "session.retry" => {
-          if f.mode == "chat-turn-failed" {
+          if f.mode == "chat-turn-failed" || f.mode == "chat-turn-unanswered" {
+            f.step += 1
+            f.changed()
+          }
+          done(Ok(Json::object({})))
+        }
+        "session.reassign" => {
+          if f.mode == "chat-turn-limit" {
             f.step += 1
             f.changed()
           }
@@ -2370,6 +2385,7 @@ pub fn fixture(mode : String) -> Source {
     asks_devices: fn() { true },
     asks_outline: fn() { true },
     switches_ahead: fn() { true },
+    asks_station_updates: fn() { true },
   }
 }
 
@@ -2567,4 +2583,144 @@ fn fixture_phone_lend(mode : String) -> Json {
     return []
   }
   [{ "station": "ws1/st1", "phase": "offered", "adb": adb, "serial": "127.0.0.1:37762", "tunnels": 0 }]
+}
+
+///|
+/// The stations whole `v` where a mode shows their newer releases waiting (`…station-updates…`): each one's own software
+/// a release behind, not updating itself (its page, its part and `stationUpdates` all saying so; one that lists none
+/// given one), every one up and a third (Cedar) beside them, the second under way (40%), the third failed; else as
+/// they are.
+fn fixture_stations_behind(f : Fixture, v : Json?) -> Json? {
+  guard f.mode.contains("station-updates") && v is Some(Array(stations)) else { return v }
+  let own : Json = {
+    "id": "station",
+    "name": "Station",
+    "installed": true,
+    "version": "0.1.4765",
+    "shownText": "0.1.4765",
+    "updatable": true,
+    "checkedAt": 1.0,
+  }
+  let up = Ref(0)
+  // (every one up, and a third, Cedar, made of Maple: several waiting, each as it may stand)
+  let all : Array[Json] = stations.map(fn(s) {
+    match s {
+      Object(m) => {
+        let w = m.copy()
+        w["online"] = Json::boolean(true)
+        w["problems"] = Json::array([])
+        Json::object(w)
+      }
+      _ => s
+    }
+  })
+  match all.get(1) {
+    Some(Object(m)) => {
+      let w = m.copy()
+      w["station"] = Json::string("ws1/st3")
+      w["id"] = Json::string("st3")
+      w["name"] = Json::string("Cedar")
+      all.push(Json::object(w))
+    }
+    _ => ()
+  }
+  Some(
+    Json::array(
+      all.map(fn(s) {
+        match (s, field(Some(s), "overview")) {
+          (Object(m), Some(Object(ov))) => {
+            let state = if flag(Some(s), "online") {
+              up.val += 1
+              match up.val {
+                2 => "updating"
+                3 => "failed"
+                _ => "idle"
+              }
+            } else {
+              "idle"
+            }
+            let behind = fn(u : Json) -> Json {
+              match u {
+                Object(um) => {
+                  let o = um.copy()
+                  let version = text(Some(u), "version")
+                  o["latest"] = Json::string("0.1.4800")
+                  o["newer"] = Json::boolean(version != "0.1.4800")
+                  o["auto"] = Json::boolean(false)
+                  o["state"] = Json::string(state)
+                  o["tipText"] = Json::string("")
+                  if state == "updating" {
+                    o["percent"] = Json::number(40.0)
+                    o["progress"] = Json::string("正在下载 0.1.4800：40%")
+                  }
+                  if state == "failed" {
+                    o["message"] = Json::string("下载中断：网络连接已断开")
+                  }
+                  Json::object(o)
+                }
+                _ => u
+              }
+            }
+            let updates = items(Some(Json::object(ov)), "updates")
+            let has = updates.iter().any(fn(u) { text(Some(u), "id") == "station" })
+            let o = ov.copy()
+            let all : Array[Json] = if has { [] } else { [own] }
+            all.append(updates)
+            o["updates"] = Json::array(all.map(fn(u) { if text(Some(u), "id") == "station" { behind(u) } else { u } }))
+            let w = m.copy()
+            w["overview"] = Json::object(o)
+            Json::object(w)
+          }
+          _ => s
+        }
+      }),
+    ),
+  )
+}
+
+///|
+/// The stations' newer releases waiting for this person (the core's `stationUpdates`, views/station-updates.ts), of the
+/// stations whole the made-up cores describe (`wholes`): only where a mode shows them (`…station-updates…`: the
+/// sidebar's and Home's key of them, their dialog), each up whose own software is newer and does not update itself; none
+/// elsewhere, so no other screen shows their key.
+fn fixture_station_updates(f : Fixture, wholes : Json?) -> Json {
+  let listed : Array[Json] = []
+  if f.mode.contains("station-updates") {
+    let stations = match wholes {
+      Some(Array(a)) => a
+      _ => []
+    }
+    for s in stations {
+      let own = items(field(Some(s), "overview"), "updates").iter().find_first(fn(u) { text(Some(u), "id") == "station" })
+      guard flag(Some(s), "online") && own is Some(u) else { continue }
+      guard flag(Some(u), "newer") && flag(Some(u), "updatable") && !flag(Some(u), "auto") else { continue }
+      let state = match text(Some(u), "state") {
+        "updating" => "updating"
+        "failed" => "failed"
+        _ => "offered"
+      }
+      let item : Map[String, Json] = {
+        "station": Json::string(text(Some(s), "station")),
+        "name": Json::string(text(Some(s), "name")),
+        "state": Json::string(state),
+        "versionText": Json::string(text(Some(u), "version") + " → " + text(Some(u), "latest")),
+        "canUpdate": Json::boolean(state != "updating"),
+      }
+      if state == "updating" {
+        item["percent"] = Json::number(40.0)
+        item["detail"] = Json::string(text(Some(u), "progress"))
+      }
+      if state == "failed" {
+        item["detail"] = Json::string(text(Some(u), "message"))
+      }
+      listed.push(Json::object(item))
+    }
+  }
+  let n = listed.filter(fn(i) { text(Some(i), "state") != "updating" }).length()
+  {
+    "items": Json::array(listed),
+    "offered": Json::number(n.to_double()),
+    "labelText": Json::string(if n > 0 { "\{n} 台 station 有新版本" } else { "" }),
+    "titleText": "Station 更新",
+  }
 }

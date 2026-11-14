@@ -850,3 +850,40 @@ test "sending a new chat lets go of the draft it carried from" {
   t.frame()
   assert_false(fresh.watched(), msg="the carried draft is no longer shown")
 }
+
+///|
+test "pressing enter twice in a new chat sends immediately and leaves the new draft empty when reopened" {
+  new_run()
+  let base = fixture("home")
+  let calls : Array[(String, Json)] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      if name == "composer.marks" {
+        return
+      }
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
+  t.frame()
+  assert_true(app.nav.top() == NewChat)
+  t.tap_text("做任何事")
+  t.type_text("把发布说明写一下")
+  t.key(@ui.key_code_enter)
+  assert_true(app.nav.top() is Chat(_), msg="first Enter immediately starts the chat without waiting for composer.marks")
+  assert_false(calls.any(fn(c) { c.0 == "chat.outsideRefs" }), msg="plain text never blocks on chat.outsideRefs")
+  let text_calls_after_first = calls.filter(fn(c) {
+    c.0 == "composer.text" && @sfbase.text(Some(c.1), "key") == "new:ws1"
+  }).length()
+  t.key(@ui.key_code_enter)
+  t.frame()
+  let text_calls_after_second = calls.filter(fn(c) {
+    c.0 == "composer.text" && @sfbase.text(Some(c.1), "key") == "new:ws1"
+  }).length()
+  assert_eq(text_calls_after_second, text_calls_after_first, msg="a second Enter must not write the sent text back into new:ws1")
+  app.nav.become(NewChat)
+  t.frame()
+  assert_eq(@sfbase.writing(src, "new:ws1").field.text(), "", msg="reopening NewChat shows an empty composer")
+}

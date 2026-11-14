@@ -12,10 +12,10 @@
 // difference is told with the seed, the place and the keeper.
 import { createHash } from "node:crypto";
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
-import { type Entry, canonical, endpointProof, sigValid, validKeyId } from "../src/cloud/lock.ts";
+import { type Entry, canonical, endpointProof, sigValid, taggedSigValid, validKeyId } from "../src/cloud/lock.ts";
 import { type Family, type Keeper, type Variant, World, drawSteps, hashOf, signed, variantName } from "./lock-fork-choice-model.ts";
 import { type Holder, V3, type V3v, drawSteps3, effect, spec, stationKeys3, v3Name } from "./lock-roster-model.ts";
-import { type Body, type D4, type D4Member, type W4Options, WS2, World4, bodyHash, tagOf, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, revoked, unsigned } from "./lock-roster4-model.ts";
+import { type Body, type D4, type D4Member, type W4Options, WS2, World4, bodyHash, tagOf, d4Diff, d4Said, look4, m2, m5Clock, m6, m7, m8, revoked, unsigned } from "./lock-roster4-model.ts";
 import { Rng, WS } from "./lock-world-sim.ts";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../rules/js/rules.js";
@@ -35,7 +35,7 @@ export const crypto = {
     }
     return ok;
   },
-  validKeyId, endpointProof,
+  validKeyId, endpointProof, taggedSigValid,
 };
 
 type Off = { at: number; why: string; refusal?: string; winner?: string; step?: string; under?: string };
@@ -115,8 +115,10 @@ export type More = {
   webs: number; old: number; moved: number; afterMoved: number; rolesOther: number; admitted: number;
   /// Removals in force compared (whom each took out, `without`), and (keeper, holder) pairs told by one.
   removals: number; toldOut: number;
+  /// States compared where the keeper's chain moved and is carried (D6).
+  carried: number;
 };
-const more0 = (): More => ({ bodies: 0, refused: {}, inForce: 0, lacking: 0, lists: 0, states: 0, off: 0, notOn: 0, webs: 0, old: 0, moved: 0, afterMoved: 0, rolesOther: 0, admitted: 0, removals: 0, toldOut: 0 });
+const more0 = (): More => ({ bodies: 0, refused: {}, inForce: 0, lacking: 0, lists: 0, states: 0, off: 0, notOn: 0, webs: 0, old: 0, moved: 0, afterMoved: 0, rolesOther: 0, admitted: 0, removals: 0, toldOut: 0, carried: 0 });
 
 /// The web devices on a log's active chain by id (the model's `websAt` before the clock).
 function websOn(k: Keeper<any>): string[] {
@@ -176,7 +178,10 @@ function keepers4(o: Out, w: World4, at: string, r: Rng, offered: Body[] = []) {
       if (!root) continue;
       const here = `${where}, ${ws === WS ? "W1" : "W2"}`;
       const f = w.inForce(h, ws);
-      const got = rules.roster_js(ws, root, chains(), kept(), [], crypto) as any;
+      // (D6: where the keeper's chain moved, the rules read it as it moved: its active chain, the `moved` last)
+      const moved = movedChain(w, h, ws);
+      const list = listOf(ws, root, moved);
+      const got = list(chains(), kept(), []);
       if ("error" in got) {
         o.differ.push(`${here}: the rules' list: ${got.error}`);
         continue;
@@ -194,7 +199,7 @@ function keepers4(o: Out, w: World4, at: string, r: Rng, offered: Body[] = []) {
       if (want.rooted) {
         o.more.lists++;
         say("members", sorted(got.members.map((m: any) => `${m.sub} ${m.role} ${m.lock} ${m.admit ?? ""}`)), sorted([...want.members].map(([sub, m]) => `${sub} ${m.role} ${m.lock} ${m.admit}`)));
-        say("keys let in", sorted(got.members.flatMap((m: any) => (m.keys ?? []).map((k: string) => `${k} ${m.sub}`))), sorted([...want.letIn].map(([k, sub]) => `${k} ${sub}`)));
+        say("keys let in", sorted(keysOf(got).map(([k, sub]) => `${k} ${sub}`)), sorted([...want.letIn].map(([k, sub]) => `${k} ${sub}`)));
         say("stations", sorted(got.stations), sorted([...want.stations]));
         say("pairs", sorted(got.pairs.map((p: any) => `${p.sub}|${p.lock} ${p.role}`)), sorted([...want.pairs].map(([k, role]) => `${k} ${role}`)));
         say("undecided", sorted(got.undecided.map((p: any) => `${p.sub}|${p.lock}`)), sorted([...want.undecided]));
@@ -217,16 +222,26 @@ function keepers4(o: Out, w: World4, at: string, r: Rng, offered: Body[] = []) {
           else if (theirs !== null) say(`why ${st.kind} #${st.hash.slice(0, 6)} has no effect`, st.why ?? "", theirs);
         }
       }
-      sameState(o, here, w, h, ws, root, chains(), kept());
-      takenOut(o, here, w, h, ws, root, chains(), kept(), f.stmts);
+      sameState(o, here, w, h, ws, root, chains(), kept(), moved);
+      takenOut(o, here, w, h, ws, chains(), kept(), f.stmts, list);
     }
     oldChain(o, where, w, h, r);
   }
 }
 
+/// D6: the chain `h` goes by where it moved and is carried (the model's `carriedOf`): its active chain, the `moved` last.
+function movedChain(w: World4, h: Holder, ws: string): Entry[] | null {
+  return w.carriedOf(h, ws)?.chain ?? null;
+}
+/// The rules' list at a keeper: rooted in `root`, or, where its chain moved, in what `moved` names with the chain as it moved.
+const listOf = (ws: string, root: string, moved: Entry[] | null) => (chains: Entry[][], kept: Body[], without: string[]): any =>
+  moved === null ? rules.roster_js(ws, root, chains, kept, without, crypto) : rules.roster_moved_js(ws, moved, chains, kept, without, crypto);
+/// The keys a list of the rules lets in, and whose: of each member's log, and the app devices the chain as it moved still says.
+const keysOf = (r: any): [string, string][] => [...r.members.flatMap((m: any) => (m.keys ?? []).map((k: string) => [k, m.sub])), ...(r.carried_keys ?? []).map((x: any) => [x.key, x.sub])];
+
 /// Whom each removal in force at `h` took out: the keys the rules' list names with every statement in force of that
 /// subject's removals left out (`without`), against the model's `admitsBefore` for every holder of the world.
-function takenOut(o: Out, here: string, w: World4, h: Holder, ws: string, root: string, chains: Entry[][], kept: Body[], stmts: Map<string, Body>) {
+function takenOut(o: Out, here: string, w: World4, h: Holder, ws: string, chains: Entry[][], kept: Body[], stmts: Map<string, Body>, list: ReturnType<typeof listOf>) {
   const subjectOf = (b: Body) => (b.kind === "member.remove" ? `m|${b.sub}` : b.kind === "station.remove" ? `s|${b.key}` : null);
   const seen = new Set<string>();
   for (const b of stmts.values()) {
@@ -235,9 +250,9 @@ function takenOut(o: Out, here: string, w: World4, h: Holder, ws: string, root: 
     seen.add(subject);
     o.more.removals++;
     const without = [...new Set([...stmts.values()].filter((x) => subjectOf(x) === subject).map((x) => bodyHash(x)))];
-    const r = rules.roster_js(ws, root, chains, kept, without, crypto) as any;
+    const r = list(chains, kept, without);
     if ("error" in r) return void o.differ.push(`${here}: the rules' list without ${subject}: ${r.error}`);
-    const keys = new Set<string>([...r.stations, ...r.members.flatMap((m: any) => m.keys ?? [])]);
+    const keys = new Set<string>([...r.stations, ...keysOf(r).map(([k]) => k)]);
     for (const to of w.holders) {
       const want = w.admitsBefore(h, to, b);
       const got = keys.has(w.keyOfHolder(to));
@@ -248,11 +263,11 @@ function takenOut(o: Out, here: string, w: World4, h: Holder, ws: string, root: 
 }
 
 /// The state (D4) at `h` for `ws`, field for field, by the keeper's clock.
-function sameState(o: Out, here: string, w: World4, h: Holder, ws: string, root: string, chains: Entry[][], kept: Body[]) {
+function sameState(o: Out, here: string, w: World4, h: Holder, ws: string, root: string, chains: Entry[][], kept: Body[], moved: Entry[] | null) {
   o.more.states++;
   const want = w.d4(h, ws);
   const now = w.clock(h);
-  const got = rules.state4_js(ws, root, chains, kept, now, crypto) as any;
+  const got = (moved === null ? rules.state4_js(ws, root, chains, kept, now, crypto) : rules.state4_moved_js(ws, moved, chains, kept, now, crypto)) as any;
   if ("error" in got) return void o.differ.push(`${here}: the rules' state: ${got.error}`);
   if (want === "off") o.more.off++;
   if (typeof want === "string") {
@@ -263,8 +278,10 @@ function sameState(o: Out, here: string, w: World4, h: Holder, ws: string, root:
   }
   if (want.on === "not on") o.more.notOn++;
   const s = got.state;
-  const r = rules.roster_js(ws, root, chains, kept, [], crypto) as any;
-  const settings = r.settings === null ? "-" : canonical({ origins: s.origins, rp_id: s.rp_id, cloud_keys: s.cloud_keys });
+  const r = listOf(ws, root, moved)(chains, kept, []);
+  if (moved !== null) o.more.carried++;
+  // (D6: where the root's log says neither `open` nor `off`, the chain as it moved says the settings)
+  const settings = r.settings === null && moved === null ? "-" : canonical({ origins: s.origins, rp_id: s.rp_id, cloud_keys: s.cloud_keys });
   const devs = (sub: string, kind: string) => s.devices.map(([, d]: [string, any]) => d).filter((d: any) => d.sub === sub && d.kind === kind);
   const members = new Map<string, D4Member>((s.members as [string, any][]).map(([sub, m]) => [sub, {
     role: m.role, email: m.email === "" ? "-" : m.email, lock: new Map(s.persons as [string, string][]).get(sub) ?? "none",
@@ -371,6 +388,7 @@ export function scriptedWorlds(from: number, to: number): Out {
       for (const kind of ["web", "off"] as const) for (const parent of ["same", "any"] as const) revoked(seed, kind, parent);
       m6(seed);
       for (const m of [{}, { away: true }, { attack: "same" as const }, { attack: "any" as const }]) m7(seed, m);
+      for (const m of [{}, { away: true }, { self: true }, ...(["removed", "circle", "honest", "self"] as const).map((rival) => ({ rival }))]) m8(seed, m);
       misshapen(o, seed, r);
       // (one whose device says no signer: listed, signing nothing, its web page let in)
       const u = unsigned(seed);

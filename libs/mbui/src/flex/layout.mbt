@@ -654,6 +654,7 @@ fn size_node(
       any_w = !bx.of_cb_w
       any_h = !bx.of_cb_h
     }
+    let leaf = node.children.length() == 0 && !node.room
     let mut k = 0
     while k < n {
       let same_cb = same(c[k + 4], cb_w) && same(c[k + 5], cb_h)
@@ -662,8 +663,7 @@ fn size_node(
           (
             (any_w || same(c[k + 4], cb_w)) &&
             (any_h || same(c[k + 5], cb_h)) &&
-            same(c[k], kw) &&
-            same(c[k + 1], kh)
+            (leaf || (same(c[k], kw) && same(c[k + 1], kh)))
           )
         ) &&
         reusable(kw, aw, c[k], c[k + 2], c[k + 6]) &&
@@ -753,6 +753,22 @@ fn size_uncached(
   perform : Bool,
 ) -> Double {
   let s = node.style
+  // what it holds kept to its foot while its height goes its way (Style's come_foot), given that height by what lays it
+  // out: laid out whole at the height it comes to, measured so, and moved so its bottom is the node's bottom (its top
+  // cut there as it grows, the room over it empty as it closes)
+  if s.come_foot && perform && known(kh) {
+    s.come_foot = false
+    let now = s.come_now
+    s.come_now = undef
+    size_uncached(node, kw, undef, aw, ah, cb_w, cb_h, false) |> ignore
+    let natural = out_h.val
+    let w = size_uncached(node, kw, natural, aw, ah, cb_w, cb_h, perform)
+    s.come_now = now
+    s.come_foot = true
+    come_keep_foot(node, kh - natural)
+    out_h.val = kh
+    return w
+  }
   // an item coming or going along a row: as wide as its way has got of what it comes to, what it holds laid out whole
   // from its start at that (Style's come_across), as tall as that makes it; given its width by what lays it out (a
   // row's item at its basis), what it holds laid out whole all the same
@@ -777,14 +793,21 @@ fn size_uncached(
     // height
     let now = s.come_now
     s.come_now = undef
-    let fw = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false)
+    size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false) |> ignore
     s.come_now = now
     let natural = out_h.val
     let tall = come_height(s, natural)
     if known(tall) {
       // (what it holds laid out whole, in as much room as it comes to, not in the part of it its way has got: what
-      // is measured in it by the room it is given comes out the same all the way; it, as tall as its way has got)
-      let w = size_uncached(node, if known(kw) { kw } else { fw }, natural, aw, ah, cb_w, cb_h, perform)
+      // is measured in it by the room it is given comes out the same all the way; it, as tall as its way has got.
+      // Across, given what it was given (`kw`, else the room `aw` offers), never the width it came to measured so: a
+      // node told its room (View::by_room) measured in a room offered comes to what it holds there, and laid out again
+      // at that width it is told another room and lays it out otherwise, a table's rows beside each other at 760 and
+      // 586 wide stacked, frame after frame: settings-station-processes' 平铺, the switches' sweep, 2026-11-14)
+      let w = size_uncached(node, kw, natural, aw, ah, cb_w, cb_h, perform)
+      if perform {
+        come_keep_foot(node, tall - natural)
+      }
       out_h.val = tall
       return w
     }
@@ -924,6 +947,19 @@ fn size_uncached(
     return layout_flex(node, b, if known(w) { w } else { fw }, sized, aw, ah, perform)
   }
   layout_flex(node, b, w, h, aw, ah, perform)
+}
+
+///|
+/// What `node` holds, laid out whole at the height its come way goes to, kept to its foot where it says so (Style's
+/// come_foot): moved by `by` (how much shorter it shows than that height, as a negative), so its bottom is the node's
+/// bottom and what is over the node's top is cut there. Nothing where it keeps to its top, as ever.
+fn come_keep_foot(node : Node, by : Double) -> Unit {
+  if !node.style.come_foot || by == 0.0 {
+    return
+  }
+  for c in node.children {
+    c.top = c.top + by
+  }
 }
 
 ///|

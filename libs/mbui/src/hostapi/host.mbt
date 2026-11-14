@@ -228,6 +228,8 @@ pub(open) trait Host {
   st_direct(Self, Int, Double, Double, Int) -> Unit = _
   st_h265_here(Self) -> Int = _
   st_hevc(Self, Int, Bytes, Int, Int) -> Unit = _
+  st_av1_here(Self) -> Int = _
+  st_av1(Self, Int, Bytes, Int, Int) -> Unit = _
   st_open(Self) -> Int = _
   st_h264(Self, Int, Bytes, Int, Int) -> Unit = _
   st_frame(Self, Int, Bytes, Int, Double) -> Unit = _
@@ -1605,7 +1607,8 @@ pub fn window_front(what : String) -> Bool {
 
 ///|
 /// The pointer's shape from now on: 0 the arrow, 1 a hand, 2 the text's I-beam, 3 resizing sideways, 4 up and down,
-/// 5 an open hand, 6 a closed hand, 7 a crosshair, 8 what cannot be done. Nothing where there is no pointer.
+/// 5 an open hand, 6 a closed hand, 7 a crosshair, 8 what cannot be done, 9 resizing from a top left or bottom right
+/// corner, 10 from a top right or bottom left one. Nothing where there is no pointer.
 pub fn set_cursor(kind : Int) -> Unit {
   current.val.set_cursor(kind)
 }
@@ -2438,7 +2441,8 @@ pub fn install_package(name : String, data : Bytes) -> Unit {
 /// file come there posted on channel "runner" (done_watch.h: macOS, Android, Windows); 10 the canvas's GL context made
 /// anew, as one lost (Linux and the browser: the images' contract, scripts/host_contract.sh), 11 whether it has been since;
 /// 12 input to the screen measured by the host, `text` "MODE X Y" (macOS's mac_latency.h, Android's Latency.java: its
-/// own events from then on, the process ending with what it measured). False where
+/// own events from then on, the process ending with what it measured); 13 files let go on the window, `text` "X Y
+/// PATH|PATH…", as the system's drop of them (Linux's linux_app.c drop_drive). False where
 /// the host has no such path (the caller sends it to the app itself).
 pub fn drive(kind : Int, text : String) -> Bool {
   current.val.drive(kind, text)
@@ -3288,3 +3292,15 @@ fn st_h265_here() -> Int { current.val.st_h265_here() }
 
 ///|
 fn st_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit { current.val.st_hevc(id, hvcc, w, h) }
+
+///|
+impl Host with st_av1_here(_) { 0 }
+
+///|
+impl Host with st_av1(_, _, _, _, _) { () }
+
+///|
+fn st_av1_here() -> Int { current.val.st_av1_here() }
+
+///|
+fn st_av1(id : Int, av1c : Bytes, w : Int, h : Int) -> Unit { current.val.st_av1(id, av1c, w, h) }

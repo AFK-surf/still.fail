@@ -32,6 +32,7 @@ const CHANGE: Record<string, (o: J, n: number) => J> = {
   formerly: (o, n) => ({ ...o, copies: { ...o.copies, formerly: [...o.copies.formerly, `ws/gone-${n}`] } }),
   profiles: (o, n) => ({ ...o, profiles: o.profiles.map((p: J, i: number) => (i === 0 ? { ...p, name: `${p.name}·${n}` } : p)) }),
   profiled: (o, n) => ({ ...o, mesh: { ...o.mesh, name: `${o.mesh.name}·${n}` } }),
+  software: (o, n) => ({ ...o, updates: o.updates.map((u: J) => (u.id === "station" ? { ...u, latest: `0.1.${9000 + n}` } : u)) }),
 };
 
 const station = UP[0]!;

@@ -281,3 +281,31 @@ test "the button as a node pressed and let go: its ground's colour as the old on
   let (old, new) = (button_answers(false, on, off), button_answers(true, on, off))
   assert_eq((new == old, new[0] != new[3]), (true, true), msg="old \{Repr(old)}\nnode \{Repr(new)}")
 }
+
+///|
+test "a button with an icon at work: the spinner in the icon's place, never the two side by side" {
+  let busy = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = @ui.Tester::new(fn(_) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(col) {
+      col.width(Is(Some(300.0))).height(Is(Some(200.0))).lines_up(Is(Some(Start))) |> ignore
+      button_node(col, fn() { "刷新" }, fn() {  }, icon="refresh", busy=fn() { busy.get() }) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let words_at = fn() { t.drawn_glyphs()[0].0 }
+  let rest = words_at()
+  busy.set(true)
+  t.frame()
+  t.run_for(past_button_ms)
+  let working = words_at()
+  // (the words where they were, give or take the icon's ink against the spinner's whole square: before, an icon's
+  // room and a spinner's both before them)
+  assert_true((working - rest).abs() < button_icon / 2.0, msg="words at \{rest} at rest, \{working} at work")
+  busy.set(false)
+  t.frame()
+  t.run_for(past_button_ms)
+  assert_eq(words_at(), rest)
+}

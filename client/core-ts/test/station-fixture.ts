@@ -126,6 +126,8 @@ export function stationHost(answers: Answers) {
     if (!(key in answers) && key === "GET /jobs?chats=0") key = "GET /jobs";
     if (key in answers) return answers[key] instanceof Status ? jsonResponse((answers[key] as Status).code, (answers[key] as Status).body) : jsonResponse(200, answers[key]);
     if (path.startsWith("/admin/api/threads/") && path.includes("/entries")) return jsonResponse(200, { last: 0, entries: [] });
+    // (a person's presets and stars as carried, unless the test answers them: a station from before, no such route)
+    if (/^\/admin\/api\/(presets\/kept|presets\/others|stars)$/.test(path)) return jsonResponse(404, { error: `no route ${req.method} ${path.replace("/admin/api", "")}` });
     return jsonResponse(404, { error: "no" });
   };
   // How its events stream answers: opens, fails (the station is not reached), hangs (a try that takes long), a status

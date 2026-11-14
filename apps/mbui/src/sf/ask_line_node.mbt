@@ -56,7 +56,7 @@ pub fn ask_line_button_node(
   loc~ : SourceLoc,
 ) -> @view.View {
   let live = fn() { !disabled() }
-  parent.box(made_for=loc, fn(b) {
+  @headless.button(made_for=loc, parent, label, fn(_) { press() }, disabled~, fn(b, _) {
     style_node(b, fn() {
       let h = button_height()
       let out = option_type().pad_in - @ui.capsule_in(option_row_corner, h)
@@ -80,9 +80,7 @@ pub fn ask_line_button_node(
     b
     .ground(By(fn() { alpha(theme().p.hover, lit.shown(b)) }))
     .alpha(By(fn() { seen.shown(b) }))
-    .says(By(fn() { Some(@view.said(Button, label=label())) }))
     |> ignore
-    presses_node(b, fn() { if @signals.untracked(live) { press() } }, on=live)
     b.box(fn(w) {
       let words = fn() { ask_line_words(theme().chat_list.state_quiet.then(ask_line_button_words)) }
       w
@@ -112,36 +110,36 @@ pub fn ask_history_trigger_node(
   open : (@view.View) -> Unit,
   loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(made_for=loc, fn(b) {
-    style_node(b, fn() { ask_history_line })
-    let on = fn() { lit_node(b) || b.focus_shown() }
-    let lit = EdgeWay::new(if @signals.untracked(on) { 1.0 } else { 0.0 })
-    b.reacts(on, fn(o) { lit.go(b, if o { 1.0 } else { 0.0 }, dur_ms) })
-    b
-    .says(By(fn() {
-      Some(@view.said(Button, label=words().map(fn(w) { w.text }).join("") + " · " + t("web-main.history.details")))
-    }))
-    |> ignore
-    presses_node(b, fn() { open(b) })
-    b.box(fn(w) {
-      // (giving way to the chevron where the line has not the room for both: its words wrap, as the old row's do)
-      w
-      .shrink(Is(1.0))
-      .min_width(Is(Some(0.0)))
-      .words_runs(By(words))
-      .words_look(By(fn() { @ui.style_words(style()) }))
-      .ink(By(fn() { @ui.style_ink(style()) }))
+  @headless.button(
+    made_for=loc,
+    parent,
+    fn() { words().map(fn(w) { w.text }).join("") + " · " + t("web-main.history.details") },
+    open,
+    fn(b, _) {
+      style_node(b, fn() { ask_history_line })
+      let on = fn() { lit_node(b) || b.focus_shown() }
+      let lit = EdgeWay::new(if @signals.untracked(on) { 1.0 } else { 0.0 })
+      b.reacts(on, fn(o) { lit.go(b, if o { 1.0 } else { 0.0 }, dur_ms) })
+      b.box(fn(w) {
+        // (giving way to the chevron where the line has not the room for both: its words wrap, as the old row's do)
+        w
+        .shrink(Is(1.0))
+        .min_width(Is(Some(0.0)))
+        .words_runs(By(words))
+        .words_look(By(fn() { @ui.style_words(style()) }))
+        .ink(By(fn() { @ui.style_ink(style()) }))
+        |> ignore
+      })
       |> ignore
-    })
-    |> ignore
-    b.box(fn(m) {
-      style_node(m, fn() { ask_history_mark.then(@ui.style(h=Fixed(node_sp(m, line)))) })
-      icon_node(m, "chevron-right", 12.0, By(fn() {
-        let p = theme().p
-        mix(p.text, lit.shown(m), p.muted)
-      }))
+      b.box(fn(m) {
+        style_node(m, fn() { ask_history_mark.then(@ui.style(h=Fixed(node_sp(m, line)))) })
+        icon_node(m, "chevron-right", 12.0, By(fn() {
+          let p = theme().p
+          mix(p.text, lit.shown(m), p.muted)
+        }))
+        |> ignore
+      })
       |> ignore
-    })
-    |> ignore
-  })
+    },
+  )
 }

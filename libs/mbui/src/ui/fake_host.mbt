@@ -339,8 +339,8 @@ impl @hostapi.Host for FakeHost with font_metrics(self, size, weight, style, out
 
 ///|
 /// Fake shaping: one cluster per extended grapheme cluster, as real hosts
-/// make them; Latin half an em wide (0.6 in the code face), everything else
-/// a full em.
+/// make them; Latin half an em wide (0.6 in the code face; ASCII as a real face where the test says:
+/// Tester::latin_advances), everything else a full em.
 impl @hostapi.Host for FakeHost with shape(self, text, size, weight, style, out) {
   if self.live is Some(l) {
     return l.host.shape(text, size, weight, style, out)
@@ -355,10 +355,21 @@ impl @hostapi.Host for FakeHost with shape(self, text, size, weight, style, out)
   while i < n && k < cap {
     let c = text.at(i).to_int()
     let len = @text.next_grapheme(text, i) - i
+    let mono = (style & @hostapi.style_mono) != 0
+    // (a letter measured as a real face measures it: latin_advances)
+    let real = match self.latin {
+      Some((regular, bold)) if !mono && c >= 32 && c <= 126 =>
+        Some(size * (if weight >= 600 { bold[c - 32] } else { regular[c - 32] }))
+      _ => None
+    }
     let adv = if c == 10 {
       0.0
+    } else if real is Some(a) {
+      a
+    } else if self.cjk_marks && c >= 0x2010 && c <= 0x206F && (style & @hostapi.style_proportional) == 0 {
+      size
     } else if c < 0x2E80 {
-      if (style & @hostapi.style_mono) != 0 {
+      if mono {
         size * 0.6
       } else {
         size * 0.5
@@ -366,7 +377,7 @@ impl @hostapi.Host for FakeHost with shape(self, text, size, weight, style, out)
     } else {
       size
     }
-    let adv = if weight >= 600 && c != 10 { adv + size * self.bold } else { adv }
+    let adv = if weight >= 600 && c != 10 && real is None { adv + size * self.bold } else { adv }
     let adv = if self.ui_face != 0.0 && c != 10 && in_ui_face(style) { adv + size * self.ui_face } else { adv }
     let adv = if self.tabular != 0.0 && c >= 48 && c <= 57 && (style & @hostapi.style_tabular) != 0 {
       adv + size * self.tabular
@@ -1880,10 +1891,11 @@ impl @hostapi.Host for FakeHost with nt_cancel(self, tag) {
 }
 
 ///|
-/// 0: what it lets the app show (1 granted, 2 denied, 3 ask, 0 unknown); 1: asked to let it (where it is not granted or
-/// unknown: the person's answer due, as the test said); 2: the answer, as a frame begins (never between frames: the
-/// person answers as the frame after the ask begins); 3: its settings opened, counted; 4: whether it shows the number on
-/// the app's icon, as the system it plays does.
+/// 0: what it lets the app show (1 granted, 2 denied, 3 ask, 4 default, 0 unknown); 1: asked to let it (where it is not
+/// granted or unknown: the person's answer due, as the test said); 2: the answer, as a frame begins (never between
+/// frames: the person answers as the frame after the ask begins), refused leaving it denied, but a browser's "default"
+/// as it was (its prompt put away); 3: its settings opened, counted, as the system it plays has them (none a browser's
+/// page opens: 0, nothing counted); 4: whether it shows the number on the app's icon, as the system it plays does.
 impl @hostapi.Host for FakeHost with nt_state(self, what) {
   match what {
     0 =>
@@ -1891,6 +1903,7 @@ impl @hostapi.Host for FakeHost with nt_state(self, what) {
         "granted" => 1
         "denied" => 2
         "ask" => 3
+        "default" => 4
         _ => 0
       }
     1 => {
@@ -1909,7 +1922,13 @@ impl @hostapi.Host for FakeHost with nt_state(self, what) {
       match self.notice_due {
         Some((yes, _)) if frame_running.val => {
           self.notice_due = None
-          self.notice_perm = if yes { "granted" } else { "denied" }
+          self.notice_perm = if yes {
+            "granted"
+          } else if self.notice_perm == "default" {
+            "default"
+          } else {
+            "denied"
+          }
           if yes {
             1
           } else {
@@ -1919,6 +1938,9 @@ impl @hostapi.Host for FakeHost with nt_state(self, what) {
         _ => -1
       }
     3 => {
+      if self.platform == 4 {
+        return 0
+      }
       self.notice_settings += 1
       1
     }
@@ -1965,6 +1987,11 @@ impl @hostapi.Host for FakeHost with st_h264(self, id, avcc, w, h) {
 ///|
 impl @hostapi.Host for FakeHost with st_hevc(self, id, hvcc, w, h) {
   fake_fed(self, id, "hevc \{w}x\{h} hvcc=\{hvcc.length()}")
+}
+
+///|
+impl @hostapi.Host for FakeHost with st_av1(self, id, av1c, w, h) {
+  fake_fed(self, id, "av1 \{w}x\{h} av1c=\{av1c.length()}")
 }
 
 ///|
@@ -2082,6 +2109,16 @@ impl @hostapi.Host for FakeHost with st_h264_here(self) {
 /// Whether it decodes H.265 (Tester::set_h265).
 impl @hostapi.Host for FakeHost with st_h265_here(self) {
   if self.h265_here {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+/// Whether it decodes AV1 (Tester::set_av1).
+impl @hostapi.Host for FakeHost with st_av1_here(self) {
+  if self.av1_here {
     1
   } else {
     0

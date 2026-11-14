@@ -26,7 +26,7 @@ decide() {
   if has '^docs/releases/'; then static+=(web-beta); fi
   # (the app's page, each of the web app's pages: the app and mbui's web host built into it, apps/mbui/scripts/web-app.sh;
   # the Worker that serves them, cloud/src/web.ts)
-  if has '^(web/|client/|rules/js/|apps/mbui/(src|assets)/|libs/mbui/(src|web)/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc|src/(web|compat)\.ts)$|apps/mbui/scripts/web-app\.sh$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
+  if has '^(web/|client/|rules/js/|apps/mbui/(src|assets)/|libs/mbui/(src|web)/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc|src/(web|compat)\.ts)$|apps/mbui/scripts/web-app\.sh$|libs/mbui/scripts/web\.sh$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
   if has '^(web/|client/|rules/js/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.admin\.jsonc)$)'; then static+=(admin); fi
   if has '^cloud/(src/preview\.ts|build-static\.ts|wrangler\.preview\.jsonc)$'; then static+=(preview); fi
   # (the official site, website/, with the legal pages it serves from web/public)
@@ -44,7 +44,7 @@ decide() {
   # The station in TypeScript, its native parts (vendor/: the mesh addon's iroh), its programs in MoonBit (station/mb: the
   # shell they link, client/shell, and mbui's effect), the rules it checks the lock and
   # vaults by (rules/js), what it shares with the core (client/core-ts/src: scripts/plan-covers.ts finds which), the words it says, the installer it carries (cloud/src/install*.ts: scripts/installers.ts), its deltas (scripts/delta.ts, release-deltas.ts).
-  if has '^(station/(src|native|mb)/|client/shell/|libs/mbui/src/effect/|rules/js/|client/core-ts/src/(shapes/(dsl|schema|model)|lock-form|rig-form|whitespace|titles|chat-row|cache-policy|codex-quota|mediaFacts|digest|redact)\.ts$|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign|delta|release-deltas)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
+  if has '^(station/(src|native|mb)/|client/shell/|libs/mbui/src/effect/|rules/js/|client/core-ts/src/(shapes/(dsl|schema|model)|lock-form|rig-form|whitespace|titles|chat-row|cache-policy|codex-quota|mediaFacts|digest|redact|preset-records)\.ts$|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign|delta|release-deltas)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
   # The beta Android app: mbui's in the Kotlin one's place (scripts/release.sh --beta android), released for a
   # change to what apps/mbui's beta is made of (scripts/beta.sh APP_SRC: its code, mbui's with its Android host's
   # Java, JZlib among it, the client's, media's, vendor's), to the tool that packs and repacks its APK (mbui's
@@ -55,12 +55,12 @@ decide() {
   # twice a day (station/package.json's packages) without changing the core. One that does change it ships with the
   # next release, its core made anew because the key changed.
   android_beta=false
-  if has '^(apps/mbui/(src|core|android|ios|engine)/|libs/mbui/(src|android)/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|station/src/(updates/keys|api/moved-from)\.ts$|web/public/avatars/index\.json$|media/|vendor/|libs/mbui/tools/apk/|scripts/(release\.sh|native\.ts|delta\.ts|release-deltas\.ts)$|\.github/release\.sh$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$)'; then android_beta=true; fi
+  if has '^(apps/mbui/(src|core|android|ios|engine)/|libs/mbui/(src|android)/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|station/src/(updates/keys|api/moved-from)\.ts$|web/public/avatars/index\.json$|media/|vendor/|libs/mbui/tools/apk/|scripts/(release\.sh|native\.ts|delta\.ts|release-deltas\.ts)$|\.github/release\.sh$|apps/mbui/scripts/(beta|android|android-core|core)\.sh$|libs/mbui/scripts/android\.sh$)'; then android_beta=true; fi
   # The beta Mac app: mbui's in the Electron one's place (scripts/release.sh --beta desktop), released, as the
   # Android one, for a change to what apps/mbui's Mac app is made of (its code, mbui's with its Mac host, the
   # client's, media's, vendor's) or to how it is built and released.
   mac_beta=false
-  if has '^(apps/mbui/(src|core|engine)/|libs/mbui/src/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|station/src/(updates/keys|api/moved-from)\.ts$|web/public/avatars/index\.json$|media/|vendor/|scripts/(release|mac-feeds)\.sh$|scripts/(native|delta|release-deltas)\.ts$|\.github/(release-desktop\.sh|mac_signing\.py)$|apps/mbui/scripts/(beta|mac-app|mac|core)\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then mac_beta=true; fi
+  if has '^(apps/mbui/(src|core|engine)/|libs/mbui/src/|(apps|libs)/mbui/moon\.(mod|work)$|client/|rules/js/|station/src/(updates/keys|api/moved-from)\.ts$|web/public/avatars/index\.json$|media/|vendor/|scripts/(release|mac-feeds)\.sh$|scripts/(native|delta|release-deltas)\.ts$|\.github/(release-desktop\.sh|mac_signing\.py)$|apps/mbui/scripts/(beta|mac-app|mac|core)\.sh$|libs/mbui/scripts/mac\.sh$|apps/mbui/scripts/mac-icon\.swift$)'; then mac_beta=true; fi
   # The beta Windows app: mbui's in the Electron one's place (scripts/release.sh --beta desktop-win), released, as
   # the Mac one, for a change to what apps/mbui's Windows app is made of (its code, mbui's with its Windows host,
   # its installer, the client's, media's, vendor's) or to how it is built and released.

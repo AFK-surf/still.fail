@@ -35,6 +35,8 @@ pub fn app_visible() -> Bool
 
 pub fn arc(Double, Double, Double, from~ : Double, sweep~ : Double) -> Array[(Double, Double)]
 
+pub fn av1_here() -> Bool
+
 pub fn badge_shown() -> Bool
 
 pub let bench_app : Int32
@@ -217,6 +219,8 @@ pub fn install_package(String, Bytes) -> Unit
 pub fn is_gif(Bytes) -> Bool
 
 pub fn italic(String) -> @text.Run
+
+pub fn journal_arranged(String, Double, Double) -> Unit
 
 pub fn journal_shown() -> String
 
@@ -1372,6 +1376,7 @@ pub fn Ctx::selection_by_finger(Self) -> Bool
 pub fn Ctx::selection_clear(Self) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::selection_end(Self, loc~ : SourceLoc) -> (Double, Double, Double)?
+pub fn Ctx::selection_in(Self, Int32) -> Bool
 pub fn Ctx::selection_made(Self) -> Int32
 pub fn Ctx::semantics(Self, Int32, @view.Role, id? : Int32, label? : String, description? : String, value? : String, check? : @view.Check, expanded? : Bool, selected? : Bool, pressed? : Bool, disabled? : Bool, modal? : Bool, range? : (Double, Double, Double), actions? : Array[@view.Action]) -> Unit
 pub fn Ctx::semantics_dump(Self) -> String
@@ -2404,6 +2409,7 @@ pub struct Stream {
   // private fields
 }
 pub fn Stream::audio(Self, Bytes) -> Unit
+pub fn Stream::av1(Self, Bytes, Int32, Int32) -> Unit
 pub fn Stream::close(Self) -> Unit
 pub fn Stream::direct_count(Self) -> (Int32, Int32)
 pub fn Stream::frame(Self, Bytes, Bool, Double) -> Unit
@@ -2510,6 +2516,7 @@ pub fn Tester::by_hand(Self, () -> Unit) -> Unit
 pub fn Tester::census(Self) -> Census
 pub fn Tester::check_looks(Self, Bool) -> Unit
 pub fn Tester::check_rows(Self, Double, Double) -> Unit raise
+pub fn Tester::cjk_face_marks(Self) -> Unit
 pub fn Tester::clear(Self) -> Unit
 pub fn Tester::click(Self, @view.Role, label? : String, has? : String, checked? : @view.Check, selected? : Bool, expanded? : Bool, disabled? : Bool, within? : SemNode) -> Unit raise
 pub fn Tester::clipboard(Self) -> String
@@ -2647,6 +2654,7 @@ pub fn Tester::key_catching(Self) -> Bool
 pub fn Tester::key_named(Self, String) -> Bool
 pub fn Tester::key_told(Self, Int32, Int32, Double) -> Unit
 pub fn Tester::keyboard_gone(Self) -> Unit
+pub fn Tester::latin_advances(Self, FixedArray[Double], FixedArray[Double]) -> Unit
 pub fn Tester::leave(Self) -> Unit
 pub fn Tester::lines_of(Self, String) -> Array[String]
 pub fn Tester::list_moving(Self) -> Bool
@@ -2735,6 +2743,7 @@ pub fn Tester::set_env(Self, String, String) -> Unit
 pub fn Tester::set_font_scale(Self, Double) -> Unit
 pub fn Tester::set_frame_period(Self, Double) -> Unit
 pub fn Tester::set_frame_times(Self, Array[Double]) -> Unit
+pub fn Tester::set_av1(Self, Bool) -> Unit
 pub fn Tester::set_h265(Self, Bool) -> Unit
 pub fn Tester::set_ime_inset(Self, Double) -> Unit
 pub fn Tester::set_keyboard(Self, Bool) -> Unit

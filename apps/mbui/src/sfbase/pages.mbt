@@ -170,7 +170,11 @@ pub fn chat_page_made(
               // (coming to need the viewer while open, felt, as its old view felt it)
               feel_needed_node(col, retained, r)
               b(col, retained, r, fn(n) {
-                app.nav.page_island(
+                // (its height going the way the composer's ground sets out on for what it holds, from that cause's
+                // moment and by its spec, so the room under the last row goes with that ground, one motion:
+                // composer_set_out, foot_resizes)
+                let island : Ref[@view.View?] = Ref(None)
+                island.val = app.nav.page_island(
                   n,
                   serial,
                   fn(c, page) {
@@ -183,12 +187,13 @@ pub fn chat_page_made(
                   // (cut to itself, its ground its shape all the way: laid out at its one line as words are sent from
                   // it, its ground going down to that on its own way drawn whole over its node's top, not cut flat)
                   over=true,
+                  reshaped=fn(_was) { foot_resizes(island.val, r) },
                 )
                 // (in the list's foot, nothing to the hand but what it holds that takes it: the room round the
                 // composer's capsule, over it and the bar's under it, the page's, as a press or what is let go there
                 // from outside)
                 |> @ui.old_takes_own
-                |> ignore
+                |> Some
                 // (the composer as wide as the column is drawn, where it is drawn, whatever the column is laid out
                 // at: its own way to another width with_side's)
                 match narrower {
@@ -248,6 +253,53 @@ pub fn chat_page_made(
     None => ()
   }
   retained
+}
+
+///|
+/// The way a chat's composer's ground last set out on for what it holds (a line more, a file, a quote; sfpages'
+/// composer reshape, its `by` changed): its draft, the moment its build said it, and where that way is declared (when
+/// it set out, how long, and how far on it the ground is drawn at a moment: @motion.reshape_way, reshape_share, read
+/// once the frame that set it off is laid out). Said by the composer's build at that cause, none for words sent from
+/// it (their row carries its room) nor once a later build sets out on none; taken by the one height change of its node
+/// in a list's foot it comes out as (foot_resizes).
+// kept across runs: said again by each composer's build, taken once
+pub let composer_set_out : Ref[(String, Double, () -> (Double, Double, (Double) -> Double)?)?] = Ref(None)
+
+///|
+/// The old view `island` holding chat `r`'s composer in its list's foot come to another height: where its composer's
+/// ground set out on a way for that (composer_set_out), its height goes that very way (View::resizes, kept to its foot:
+/// the composer grows from it): from when the ground set out, as long as its way is declared, at each moment as far on
+/// as the ground is drawn then (its own way read, not one worked out beside it), so the room under the last row and
+/// what stands on the foot go with the ground in the same frames, one way, as the old list's foot went with it
+/// (sfpages' composer_way_for_list). Otherwise at once.
+fn foot_resizes(island : @view.View?, r : ChatRef) -> Unit {
+  guard composer_set_out.val is Some((draft, _, declared)) &&
+    draft == r.station + ":" + r.session &&
+    island is Some(v) else {
+    return
+  }
+  composer_set_out.val = None
+  guard declared() is Some((start, dur, ground)) && dur > 0.0 else {
+    v.resizes(foot=true) |> ignore
+    return
+  }
+  // (told after it set out: the rest of its way, from where it has got to)
+  let since = @ui.tree_cause().unwrap_or(start) - start
+  let gone = if since > 0.0 { since } else { 0.0 }
+  let left = dur - gone
+  guard left > 0.0 else { return }
+  let p0 = ground(start + gone)
+  v.resizes(
+    spec=(left, fn(f) {
+      if p0 >= 1.0 {
+        1.0
+      } else {
+        (ground(start + gone + f * left) - p0) / (1.0 - p0)
+      }
+    }),
+    foot=true,
+  )
+  |> ignore
 }
 
 ///|

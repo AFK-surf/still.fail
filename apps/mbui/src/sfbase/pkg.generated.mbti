@@ -2838,9 +2838,11 @@ pub(all) struct Message {
   notice_md : @json.Json?
   notice_retry_session : String
   notice_again_session : String
+  notice_reassign_session : String
   notice_detail : String
   notice_short : String
   notice_lines : Array[String]
+  notice_sides : RunSides?
   chats : Array[LinkedChat]
 }
 pub fn Message::linked(Self, String) -> LinkedChat?
@@ -3217,6 +3219,16 @@ pub struct RowsMade {
   known : Int32
   list : Array[Entry]
   keys : Array[String]
+}
+
+pub(all) struct RunSides {
+  was : String
+  now : String
+  to : String
+  was_maker : String
+  was_runtime : String
+  now_maker : String
+  now_runtime : String
 }
 
 #derive(Eq)

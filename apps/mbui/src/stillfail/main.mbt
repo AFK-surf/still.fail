@@ -314,6 +314,7 @@ let core_source : @sfapp.Source = {
   asks_devices: fn() { true },
   asks_outline: fn() { true },
   switches_ahead: fn() { true },
+  asks_station_updates: fn() { true },
 }
 
 ///|

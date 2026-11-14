@@ -74,7 +74,6 @@ let words_large_known : Map[String, Int] = {
     ("phone-en settings-kept", 1),
     ("phone-en settings-kept-many", 1),
     ("phone-en settings-vault-words", 14),
-    ("phone-en settings-vault-add", 1),
     ("phone-en settings-run", 1),
     ("phone-en settings-about", 1),  // was 0, +1 (g) page_node.mbt:1267 真问题，待修
     ("phone-en settings-notify-denied", 1),  // was 0, +1 (g) notify_node.mbt:671 真问题，待修

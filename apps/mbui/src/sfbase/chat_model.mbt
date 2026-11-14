@@ -369,6 +369,20 @@ pub(all) struct LinkedChat {
 }
 
 ///|
+/// A chat's run changed to another runtime or model, as the core says it (RunSides): what changed as it was and as it
+/// is now, each drawn after the mark of who made its model ("": its runtime's maker's, @sf.maker_mark's), and what
+/// leads what it is now said alone (换成).
+pub(all) struct RunSides {
+  was : String
+  now : String
+  to : String
+  was_maker : String
+  was_runtime : String
+  now_maker : String
+  now_runtime : String
+}
+
+///|
 /// A message of the chat (ChatMessage), with what the core decides of it.
 pub(all) struct Message {
   seq : Double
@@ -417,12 +431,17 @@ pub(all) struct Message {
   notice_retry_session : String
   /// the agent whose failed turn this notice can try again (重试), while that turn is where it stands
   notice_again_session : String
+  /// the agent whose failed turn, its allowance showing a limit, this notice can move to another account (重新分配账号),
+  /// while that turn is where it stands
+  notice_reassign_session : String
   /// a failure's own words, as what failed said them, shown under its words when the notice is opened
   notice_detail : String
   /// a chat's run changed: what it runs on now, said in place of its words where they have not the room on their line
   /// ("": none), and how it ran and runs, whole, shown in place of its words once it is opened
   notice_short : String
   notice_lines : Array[String]
+  /// a chat's run changed to another runtime or model: its words' two sides apart, each drawn after its mark
+  notice_sides : RunSides?
   /// the chats its words link to that their lists have (archived ones too)
   chats : Array[LinkedChat]
 }
@@ -581,6 +600,7 @@ pub fn message_of(m : Json) -> Message {
     notice_md: field(field(s, "notice"), "md"),
     notice_retry_session: text(field(s, "notice"), "retrySession"),
     notice_again_session: text(field(s, "notice"), "againSession"),
+    notice_reassign_session: text(field(s, "notice"), "reassignSession"),
     notice_detail: text(field(s, "notice"), "detail"),
     notice_short: text(field(s, "notice"), "short"),
     notice_lines: items(field(s, "notice"), "lines").filter_map(fn(l) {
@@ -589,6 +609,19 @@ pub fn message_of(m : Json) -> Message {
         _ => None
       }
     }),
+    notice_sides: match field(field(s, "notice"), "sides") {
+      Some(Object(_)) as d =>
+        Some({
+          was: text(d, "was"),
+          now: text(d, "now"),
+          to: text(d, "to"),
+          was_maker: text(d, "wasMaker"),
+          was_runtime: text(d, "wasRuntime"),
+          now_maker: text(d, "nowMaker"),
+          now_runtime: text(d, "nowRuntime"),
+        })
+      _ => None
+    },
     chats: items(s, "chats").map(fn(c) -> LinkedChat {
       let c = Some(c)
       { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note"), thread: opt_number(c, "thread") }
@@ -972,10 +1005,98 @@ pub fn job_chat(job : Json?) -> ChatRef? {
 
 ///|
 /// What chat `r`'s page opens on, asked of `ask` (opens_answered's): its view, answered once it is, or why it has none,
-/// or that its messages wait on a station (none of them on the device: Source.waits), its page showing them to come.
+/// or that its messages wait on a station (none of them on the device: Source.waits), its page showing them to come;
+/// and, its view read, what its posts are laid out by besides it: each login's card under a post (its login, and while
+/// that is under way its station's logins, which the card's head and steps follow), and each link's card in its posts'
+/// words (a screen's, a station's 共享调试's, a web service's: link_card_ask), asked as the view says them, all at once. A card laid out as
+/// it came, a lateness after the rows, put every row over it up by its height in one frame (the owner's, 2026-11-14:
+/// data arriving late is no cause of motion; src/sfapp/chat_opens_whole_wbtest.mbt, chat_rows_open_whole_wbtest.mbt).
 pub fn chat_opens(r : ChatRef, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
   let t = ask("chat", chat_params(r))
-  opens_answered(t) || t.waiting
+  if !opens_answered(t) {
+    return t.waiting
+  }
+  let mut all = true
+  for m in items(t.value, "messages") {
+    // (each link's card in a post's words, as the message tells them, its tree or its runs: a screen's a capsule or,
+    // previewed, the screen across its top. None of still.fail's notices, whose words are read as no post's; none
+    // read of a post's words here, every post of the chat each time it opens)
+    let links = if field(Some(m), "notice") is None && text(Some(m), "authorKind") != "ember" {
+      message_links_to(message_of(m), told=true)
+    } else {
+      Map([])
+    }
+    for _, to in links {
+      match link_card_ask(to) {
+        Some((name, params)) if to.station != "" => all = opens_answered(ask(name, params)) && all
+        _ => ()
+      }
+    }
+    let card = field(Some(m), "card")
+    let id = text(card, "login")
+    if text(card, "type") != "login" || id == "" {
+      continue
+    }
+    let station = card_login_station(r.station, text(card, "station"))
+    let (name, params) = machine_login_ask(station, id)
+    let l = ask(name, params)
+    if !opens_answered(l) {
+      all = false
+    } else if flag(l.value, "active") {
+      let (name, params) = machine_logins_ask(station)
+      all = opens_answered(ask(name, params)) && all
+    }
+  }
+  all
+}
+
+///|
+/// What each link of message `m` is to, as the core says (each link's `to`), by its address: of a person's words' runs
+/// (the first run of each), or of an agent's Markdown (read as the row is, as its words are); none of a person's words
+/// said without runs; `told`: only as the message tells them (its runs, its tree), none read of its words here.
+pub fn message_links_to(m : Message, told? : Bool = false) -> Map[String, @sf.LinkTo] {
+  match m.words {
+    Some(Array(runs)) => {
+      let out : Map[String, @sf.LinkTo] = Map([])
+      for r in runs {
+        let href = text(Some(r), "link")
+        if href != "" && !out.contains(href) {
+          out[href] = @sf.link_to_of(field(Some(r), "to").unwrap_or(Json::null()))
+        }
+      }
+      out
+    }
+    _ if m.author_kind == "person" || m.mine => Map([])
+    _ if told && !(m.md is Some(Array(_))) => Map([])
+    _ => @sf.md_links_to(m.text, m.md)
+  }
+}
+
+///|
+/// The station a login's card under a post of a chat on `chat_station` is of: the chat's, or `other` of its workspace
+/// where the card names one.
+pub fn card_login_station(chat_station : String, other : String) -> String {
+  if other == "" {
+    return chat_station
+  }
+  match chat_station.find("/") {
+    Some(i) => chat_station.exact_view(end=i).to_owned() + "/" + other
+    None => other
+  }
+}
+
+///|
+/// What the core is asked for login `id` of `station` (its card's, and its chat's as it opens: chat_opens): its
+/// `machineLogin`.
+pub fn machine_login_ask(station : String, id : String) -> (String, Map[String, Json]) {
+  ("machineLogin", { "station": Json::string(station), "id": Json::string(id) })
+}
+
+///|
+/// What the core is asked for station `station`'s logins (what may be done of them: a login's card's, its page's
+/// 登录's): its `machineLogins`.
+pub fn machine_logins_ask(station : String) -> (String, Map[String, Json]) {
+  ("machineLogins", { "station": Json::string(station) })
 }
 
 ///|

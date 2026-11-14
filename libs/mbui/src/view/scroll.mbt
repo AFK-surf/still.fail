@@ -65,6 +65,8 @@ pub struct Scroll {
   priv mut hand_y : Double
   priv mut hand_wy : Double
   priv mut hand_v : Double
+  /// the hand on it now: from its press to its let go (Scroll::in_hand)
+  priv hand_on : @signals.Signal[Bool]
   /// taken over from what it went down on (View::claims): its first move from where it went down counted past the slop
   priv mut claimed : Bool
   /// what is told as it scrolls (its bar), at the moment
@@ -108,6 +110,12 @@ pub struct Scroll {
   /// View::scrolls_window's, a plain column's View::scrolls'): given the node before the press is done, what to do once
   /// it is
   priv mut pressed_said : (View) -> () -> Unit
+  /// what it does as a node in it says what is read in its block starts at it (View::read_from): a page's list's
+  /// (View::scrolls_window) keeps it for that block; elsewhere nothing
+  priv mut read_from_said : (View) -> Unit
+  /// what it does as a node in it says it holds what a go-to brings (View::sought): a page's list's
+  /// (View::scrolls_window) keeps it for its block; elsewhere nothing
+  priv mut sought_said : (View, () -> ((Double, Double) -> (Double, Double, Double, Double)?)?) -> Unit
   /// whether it is at its foot, followed, told only as that changes (Scroll::at_foot_now): a page's list's by its own
   /// blocks and anchor (View::scrolls_window), else by how far it goes as last laid out (View::scrolls)
   priv mut at_foot_said : (() -> Bool)?
@@ -166,6 +174,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     hand_y: 0.0,
     hand_wy: 0.0,
     hand_v: 0.0,
+    hand_on: @signals.signal(false, same=fn(a, b) { a == b }),
     claimed: false,
     on_scrolled: fn(_) {  },
     to_foot: fn(_) { false },
@@ -187,6 +196,8 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     held: false,
     held_said: fn() {  },
     pressed_said: fn(_) { fn() {  } },
+    read_from_said: fn(_) {  },
+    sought_said: fn(_, _) {  },
     at_foot_said: None,
     foot_covered: fn() { 0.0 },
     top_cover: fn() { 0.0 },
@@ -203,6 +214,14 @@ fn[T] same_ref(a : T?, b : T?) -> Bool {
     (Some(x), Some(y)) => physical_equal(x, y)
     _ => false
   }
+}
+
+///|
+/// Whether the hand holds it now (a finger's or a pointer's drag on it, from its press to its let go), followed: for
+/// what tells others of what it shows only at rest (a chat's page telling the core what is read, none while the hand
+/// scrolls: Scroll::glides_till for what it is on by itself after), never for what lays out or draws.
+pub fn Scroll::in_hand(self : Scroll) -> Bool {
+  self.hand_on.get()
 }
 
 ///|
@@ -312,7 +331,7 @@ fn Scroll::where_at(self : Scroll, t : Double) -> Double {
     None =>
       match self.notch.get() {
         Some(n) =>
-          dclamp(n.x0 + (if t - n.t0 >= n.end { n.total } else { ease_come(n.total, n.v0, t - n.t0) }), 0.0, most)
+          dclamp(n.x0 + (if t - n.t0 >= n.end { n.total } else { ease_come(n.total, n.v0, t - n.t0, tau=n.tau) }), 0.0, most)
         None => dclamp(self.x.get(), 0.0, most)
       }
   }
@@ -1225,6 +1244,8 @@ pub fn View::scrolls(
     s.held = false
     s.held_said = fn() {  }
     s.pressed_said = fn(_) { fn() {  } }
+    s.read_from_said = fn(_) {  }
+    s.sought_said = fn(_, _) {  }
     s.fill = fn(_, _, _) {  }
     s.fill_put = fn() {  }
     s.whole = None
@@ -1301,8 +1322,11 @@ pub fn View::scrolls(
         s.hand_y = hy
         s.hand_wy = hwy
         s.hand_v = 0.0
+        s.hand_on.set(true)
       }
       Moved => {
+        // (taken over by a move: held from there, though its press went down on what it holds)
+        s.hand_on.set(true)
         // (taken over: the first move from where it went down past the slop alone, in the window's points, as big
         // in its own terms as it is drawn)
         let mut dy = hy - s.hand_y
@@ -1323,6 +1347,7 @@ pub fn View::scrolls(
       // (let go: flung at the finger's speed as of then, by its own events (Drag's `vy`: a pause before it let go, none),
       // no faster than a fling goes in the window's points, then in its own terms)
       Up => {
+        s.hand_on.set(false)
         let (_, _, sc) = self.tree.placed(self.at)
         // (how fast it went, worked out as it is let go: none of its moves asked it)
         let hvy = if across { d.vx() } else { d.vy() }
@@ -1334,13 +1359,15 @@ pub fn View::scrolls(
         }
       }
       // (called off: a page's list's let go of still)
-      Off =>
+      Off => {
+        s.hand_on.set(false)
         if s.as_list {
           s.hand_v = 0.0
           s.let_go(self, d.at)
         } else {
           s.stopped(d.at) |> ignore
         }
+      }
     }
   })
   // (a part of what it holds brought into sight: its top or its foot to its own, as little as that takes)

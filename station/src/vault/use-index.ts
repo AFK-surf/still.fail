@@ -6,6 +6,7 @@ import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 import { backfillPendingPreparation, pendingPreparationComplete } from "./pending-index.ts";
 import { initializeReboxIndex } from "./rebox-index.ts";
+import { installSchema } from "./schema-install.ts";
 import { mbReaderBinary } from "../read/mb-reader.ts";
 import { MbUseReader } from "./use-reader-mb.ts";
 
@@ -110,9 +111,7 @@ export type PendingPrepare = { kind: "pending"; id: number; ws: string; members:
 export type UseAnswer = { id: number; bodies?: string[]; ready?: true; error?: string };
 
 export function initializeUseIndex(db: DatabaseSync): void {
-  db.exec("SAVEPOINT vault_use_schema");
-  try { db.exec(SCHEMA); db.exec("RELEASE vault_use_schema"); }
-  catch (error) { db.exec("ROLLBACK TO vault_use_schema; RELEASE vault_use_schema"); throw error; }
+  installSchema(db, "vault_use_schema", SCHEMA, ["SELECT 1 FROM vault_use_backfill_all WHERE id = 1"]);
 }
 
 export function readUses(db: DatabaseSync, q: UseRead, knownAmbiguous?: boolean): string[] {

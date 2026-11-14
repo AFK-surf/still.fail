@@ -24,6 +24,56 @@ test "a request's head line" {
 }
 
 ///|
+test "a request's head line with what each kind of request says after its headers, as the device mesh in TypeScript writes each" {
+  // Each expectation is what Node printed for that mesh's own expression of the head (client/core-ts/src/mesh.ts:
+  // `Link.request` 576, `ask` 622, `socket` 585, `duplex` 591, each written by `#open` as JSON.stringify and a
+  // newline, 514), run on these heads 2026-11-14.
+  // A request: a header said twice keeps its first place and takes the later value (Object.fromEntries).
+  inspect(
+    @wire.head_line("PUT", "/files/a b?x=1&y=é", [("content-type", "text/plain"), ("x-n", "1"), ("content-type", "application/json")]),
+    content="{\"method\":\"PUT\",\"path\":\"/files/a b?x=1&y=é\",\"headers\":{\"content-type\":\"application/json\",\"x-n\":\"1\"}}\n",
+  )
+  // An ask: no body, its further fields after the headers.
+  let adb : Map[String, Json] = {
+    "adb": { "offer": { "connect": 5555, "pair": null, "name": "Pixel \"8\"" }, "phone": "abababab" },
+  }
+  inspect(
+    @wire.head_line("POST", "/adb", [], more=adb),
+    content="{\"method\":\"POST\",\"path\":\"/adb\",\"headers\":{},\"adb\":{\"offer\":{\"connect\":5555,\"pair\":null,\"name\":\"Pixel \\\"8\\\"\"},\"phone\":\"abababab\"}}\n",
+  )
+  // A socket: `socket` true.
+  inspect(
+    @wire.head_line("GET", "/preview/3000/ws", [("sec-websocket-protocol", "vite-hmr")], more={ "socket": true }),
+    content="{\"method\":\"GET\",\"path\":\"/preview/3000/ws\",\"headers\":{\"sec-websocket-protocol\":\"vite-hmr\"},\"socket\":true}\n",
+  )
+  // A duplex: what it is of, with a number that is no whole one.
+  let screen : Map[String, Json] = {
+    "screen": { "id": "main", "width": 1280.5, "fps": 30, "audio": true, "opus": true, "self": "cdcdcdcd" },
+  }
+  inspect(
+    @wire.head_line("GET", "/screens/view", [("idempotency-key", "k1")], more=screen),
+    content="{\"method\":\"GET\",\"path\":\"/screens/view\",\"headers\":{\"idempotency-key\":\"k1\"},\"screen\":{\"id\":\"main\",\"width\":1280.5,\"fps\":30,\"audio\":true,\"opus\":true,\"self\":\"cdcdcdcd\"}}\n",
+  )
+  // Several fields, in the order given, their own fields in theirs; numbers as JavaScript writes them.
+  let several : Map[String, Json] = { "a": 1, "b": [1.5, 0, 1.0e21, 1.0e-7, "</script>😀"], "a2": { "z": 1, "a": 2 } }
+  inspect(
+    @wire.head_line("GET", "/x", [], more=several),
+    content="{\"method\":\"GET\",\"path\":\"/x\",\"headers\":{},\"a\":1,\"b\":[1.5,0,1e+21,1e-7,\"</script>😀\"],\"a2\":{\"z\":1,\"a\":2}}\n",
+  )
+  // A number that is none is null, wherever it is, in a head's line and in a control line.
+  let zero = 0.0
+  let none : Map[String, Json] = {
+    "a": Json::number(zero / zero),
+    "b": [Json::number(1.0 / zero), { "c": Json::number(-1.0 / zero) }, 2],
+  }
+  inspect(
+    @wire.head_line("GET", "/x", [], more=none),
+    content="{\"method\":\"GET\",\"path\":\"/x\",\"headers\":{},\"a\":null,\"b\":[null,{\"c\":null},2]}\n",
+  )
+  inspect(@wire.hello_line("x", says=none), content="{\"credential\":\"x\",\"a\":null,\"b\":[null,{\"c\":null},2]}\n")
+}
+
+///|
 test "lines come off what is carried, the rest stays" {
   let carry = @wire.Carry::new()
   carry.push(b"{\"status\":20")
@@ -75,7 +125,7 @@ test "events come as their blocks end, whatever the chunks" {
 
 ///|
 /// The events of `stream` fed in the chunks `cuts` (byte offsets, ascending) cut it into.
-fn fed(stream : Bytes, cuts : Array[Int]) -> Array[@wire.Event] {
+fn fed(stream : Bytes, cuts : Array[Int]) -> Array[@wire.Event] raise {
   let sse = @wire.Sse::new()
   let out : Array[@wire.Event] = []
   let mut at = 0
@@ -193,4 +243,117 @@ test "a CR is dropped wherever it is, and a field no line begins with is no fiel
     sse.feed(b"da\rta: a\rb\r\n\r\nretry: 3\ndata\n data: x\nevent\n\n\n\ndata:\n\n") ==
     [{ name: "message", data: "ab", id: None }, { name: "message", data: "", id: None }],
   )
+}
+
+///|
+/// The events a reader keeping `most` bytes of a block gives for `stream` fed in the chunks `cuts` cut it into, and
+/// whether it then failed as a block too long: asked once more with nothing at the end, since a feed that gave
+/// events fails only at the next.
+fn bounded(stream : Bytes, cuts : Array[Int], most : Int) -> (Array[@wire.Event], Bool) {
+  let sse = @wire.Sse::new(most~)
+  let out : Array[@wire.Event] = []
+  let mut at = 0
+  for cut in [..cuts, stream.length(), stream.length()] {
+    out.append(sse.feed(stream[at:cut].to_owned())) catch {
+      @wire.TooLong(most=said) => {
+        guard said == most else { return (out, false) }
+        return (out, true)
+      }
+    }
+    at = cut
+  }
+  (out, false)
+}
+
+///|
+/// The bound `sse` fails by as it is fed `chunk`; None where it reads it.
+fn refused(sse : @wire.Sse, chunk : Bytes) -> Int? {
+  ignore(sse.feed(chunk)) catch {
+    @wire.TooLong(most~) => return Some(most)
+  }
+  None
+}
+
+///|
+/// `stream` cut every way the made cases are: whole, a byte at a time, and in two at each place.
+fn cuttings(stream : Bytes) -> Array[Array[Int]] {
+  let ways : Array[Array[Int]] = [[], Array::makei(stream.length() - 1, i => i + 1)]
+  for at in 1..<stream.length() {
+    ways.push([at])
+  }
+  ways
+}
+
+///|
+test "a block is kept up to its reader's bound, and one a byte longer ends the reading, whatever the chunks" {
+  let a : @wire.Event = { name: "message", data: "a", id: None }
+  let b : @wire.Event = { name: "message", data: "b", id: None }
+  // "data: xxx" is 9 bytes: kept, with the events round it. Its CRs are not counted.
+  for text in ["data: a\n\ndata: xxx\n\ndata: b\n\n", "data: a\r\n\r\ndata: xxx\r\n\r\ndata: b\r\n\r\n"] {
+    let stream = @utf8.encode(text)
+    for cuts in cuttings(stream) {
+      let (events, over) = bounded(stream, cuts, 9)
+      assert_true(events == [a, { name: "message", data: "xxx", id: None }, b])
+      assert_false(over)
+    }
+  }
+  // "data: xxxx" is 10: what came before it is given, nothing of it or after it, and the reader has failed.
+  let stream = b"data: a\n\ndata: xxxx\n\ndata: b\n\n"
+  for cuts in cuttings(stream) {
+    let (events, over) = bounded(stream, cuts, 9)
+    assert_true(events == [a])
+    assert_true(over)
+  }
+}
+
+///|
+test "what has no blank line is held up to the bound and no further; a reader that failed stays failed" {
+  // 4 bytes and a newline may still be a block of 4: waited for.
+  let sse = @wire.Sse::new(most=4)
+  assert_true(sse.feed(b"abcd\n") == [])
+  assert_true(sse.feed(b"\n") == [])
+  // A byte more with no blank line is a block too long, whatever comes after.
+  assert_true(sse.feed(b"abcd") == [])
+  assert_true(sse.feed(b"e") == [])
+  assert_eq(refused(sse, b"f"), Some(4))
+  assert_eq(refused(sse, b"\n\ndata: late\n\n"), Some(4))
+}
+
+///|
+test "a stream with no blank line passes the bound a device keeps by default: refused, not held" {
+  let sse = @wire.Sse::new()
+  // 16 MiB of a line with no end, a MiB a chunk: held. Two bytes more: refused.
+  let chunk = Bytes::make(1024 * 1024, b'x')
+  for _ in 0..<16 {
+    assert_true(sse.feed(chunk) == [])
+  }
+  assert_true(sse.feed(b"x") == [])
+  assert_eq(refused(sse, b"x"), Some(16777216))
+  assert_eq(@wire.max_event, 16777216)
+}
+
+///|
+test "an event of very many data lines is its lines, a newline between two" {
+  let lines = 5000
+  let block = StringBuilder()
+  let expected = StringBuilder()
+  for i in 0..<lines {
+    block.write_string("data: line \{i}\n")
+    if i > 0 {
+      expected.write_char('\n')
+    }
+    expected.write_string("line \{i}")
+  }
+  block.write_char('\n')
+  let events = @wire.Sse::new().feed(@utf8.encode(block.to_string()))
+  assert_true(events == [{ name: "message", data: expected.to_string(), id: None }])
+}
+
+///|
+test "a reader told to keep the most an Int says reads as one with no bound in reach: no sum of it wraps" {
+  let sse = @wire.Sse::new(most=0x7FFF_FFFF)
+  assert_true(sse.feed(b"data: a\n\ndata: b") == [{ name: "message", data: "a", id: None }])
+  assert_true(sse.feed(b"\n") == [])
+  assert_true(sse.feed(b"\n") == [{ name: "message", data: "b", id: None }])
+  assert_true(sse.feed(b"") == [])
 }

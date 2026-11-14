@@ -106,11 +106,17 @@ struct FakeHost {
   generation_on_face_add : Ref[Bool]
   // what a digit set all one width (@hostapi.style_tabular) adds to its advance, in ems (0 by default: the same either way)
   mut tabular : Double
+  // whether the marks of East Asian Ambiguous width (U+2010 to U+206F) are a whole em unless set proportional
+  // (@hostapi.style_proportional), as a CJK face draws them (false by default: half an em either way)
+  mut cjk_marks : Bool
   // how big each glyph's picture is, in points (6 by 10 by default): what fills an atlas's plots, as large ones do
   mut glyph_box : (Double, Double)
   // what a face given by its number (face_add, a face's preview) adds to a cluster's advance in what is set in it, in
   // ems (none by default: each measures as the system's)
   faces_wider : Map[Int, Double]
+  // each printable ASCII letter's advance in ems, regular and bold (weight 600 and more), as a real face measures it
+  // (Tester::latin_advances; none by default: half an em each, 0.6 in the code face)
+  mut latin : (FixedArray[Double], FixedArray[Double])?
   // native views: what was asked of them, a line each ("open 1 video/mp4", "place 1 0 0 390 220 shown"…)
   views : Array[String]
   mut view_ids : Int
@@ -198,8 +204,9 @@ struct FakeHost {
   mut hold_words : (String, String, String)?
   /// how the app over another app was ended (@ui.over_done), each time: whether on into the app
   overs_done : Array[Bool]
-  /// what the system lets the app show ("granted", "denied", "ask", "unknown": Tester::set_notice_permission), what
-  /// the person answers when asked (None: never), how often the app asked, and the answer due: from the frame after it
+  /// what the system lets the app show ("granted", "denied", "ask", "default", "unknown": Tester::set_notice_permission),
+  /// what the person answers when asked (None: never), how often the app asked, and the answer due: from the frame after
+  /// it
   mut notice_perm : String
   mut notice_reply : Bool?
   mut notice_asks : Int
@@ -302,6 +309,8 @@ struct FakeHost {
   mut h264 : Bool
   /// whether it decodes H.265 (Tester::set_h265; a run's ENV line)
   mut h265_here : Bool
+  /// whether it decodes AV1 (Tester::set_av1; a run's ENV line)
+  mut av1_here : Bool
   /// whether its H.264 decoder is driven from here (stream_feed.mbt: Tester::set_stream_feeds; a run's ENV line)
   mut stream_feeds : Bool
   /// whether a stream may be shown by a system video layer of the host's (stream.mbt: Tester::set_stream_layers; a

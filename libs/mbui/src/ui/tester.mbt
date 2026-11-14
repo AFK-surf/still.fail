@@ -24,6 +24,9 @@ pub struct Tester {
   /// whether the frame being drawn is one of those (or what it left owed): how a motion goes frame to frame is not
   /// judged on it (Tester::judges_motion), so a run at a rate judges the frames the default run does, no more
   mut on_way : Bool
+  /// whether run_for draws the display's frames on its way while the app asks for them, whatever the rate
+  /// (Tester::run_shown, for as long as it runs)
+  mut shown : Bool
   /// whether how what moves goes is judged on those frames too (MBUI_TEST_MOTION: test_motion_judged)
   mut motion : MotionJudged
   /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
@@ -414,8 +417,10 @@ pub fn Tester::new(
     generation_asks: 0,
     generation_on_face_add: Ref(false),
     tabular: 0.0,
+    cjk_marks: false,
     glyph_box: (6.0, 10.0),
     faces_wider: {},
+    latin: None,
     views: [],
     view_ids: 0,
     view_ready: {},
@@ -510,6 +515,7 @@ pub fn Tester::new(
     h264,
     audio_here: false,
     h265_here: false,
+    av1_here: false,
     stream_feeds: false,
     stream_layers: false,
     stream_layers_srgb: false,
@@ -611,7 +617,7 @@ pub fn Tester::new(
   let between = test_frames_between()
   tester_rested.clear()
   frames_at_one.val = (-1.0, 0)
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, inputs_next: @double.infinity, each: None, before }
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, shown: false, motion: test_motion_judged(loc.to_string()), host_frames: false, inputs_next: @double.infinity, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -821,7 +827,8 @@ pub let first_frame_ms : Double = 1000.0 / 60.0
 
 ///|
 /// Draws one frame, at the display's first frame `ms` or more on (by default, and at the least, the next one): frames
-/// come only at the display's vsync (Tester::set_frame_period, set_frame_times), as on a host.
+/// come only at the display's vsync (Tester::set_frame_period, set_frame_times), as on a host. Drawn whether or not
+/// anything asks for it: Tester::frame_as_host draws only those that something does.
 /// A frame as a host's: what the clock and what was said (an input, a signal set, a host's or the core's word) bring,
 /// drawn as the host draws it (parts kept, the scene's layers copied), nothing else taken as changed. A test that
 /// changed what is no signal (a made-up core's state, a page opened by hand) says so first (Tester::stepped).
@@ -850,6 +857,82 @@ fn Tester::clock_frame(self : Tester, ms? : Double = 0.0) -> Unit {
     self.frame_at(self.at_due(if want > next { self.tick_at(want) } else { next }))
   }
 }
+
+///|
+/// The display's next frame as an idle host has it: drawn where something asks for it, else not drawn at all, the
+/// clock only passing it (Tester::frame_unasked), what shows the last frame's. A test walking a span frame by frame to
+/// look at each walks by this, paying only for the frames that do something; so does run_for on a host's run's way
+/// (set_frame_period). Whether it drew.
+pub fn Tester::frame_as_host(self : Tester) -> Bool {
+  let at = self.at_due(self.tick_after(self.fake.time))
+  if self.frame_unasked(at) {
+    self.fake.time = at
+    false
+  } else {
+    self.frame_at(at)
+    true
+  }
+}
+
+///|
+/// Whether nothing asks for a frame at `at`, the display's next: no test's or host's hook on each frame (a scripted
+/// run, Tester::each_frame, a hook before it, between frames or as it begins: what a host says each frame), the app at
+/// rest as its last frame ended (nothing said to move, no frame asked for, no wake, nothing left to lay out or paint),
+/// nothing due by then (Tester::next_due: a wake, a motion's end, a decode, the fake host's own moments, what the
+/// outside says next; a timer of the runtime's), and nothing come since that a frame takes as it begins (an input, a
+/// message posted, a step of the test's, a signal set, the window's tree told, a host's answer or a native view's or a
+/// stream's word, a decode done, the window resized, a frame of the host's asked for). Such a frame an idle host never
+/// draws (Tester::run_as_host's `skip_unasked`): it would draw what the last one did.
+fn Tester::frame_unasked(self : Tester, at : Double) -> Bool {
+  let c = g()
+  let hair = at + due_hair
+  self.frames > 0 &&
+  driver.val is None &&
+  self.each is None &&
+  self.before is None &&
+  frame_hook.val is None &&
+  between_frames.val is None &&
+  c.frame_by is None &&
+  !c.motion_left &&
+  !c.wants_frame &&
+  !self.fake.wants &&
+  self.fake.frames_on == frames_on_seen.val &&
+  !(self.fake.wake > self.fake.time + due_hair && self.fake.wake <= hair) &&
+  !(c.waited_at() >= 0.0 && c.waited_at() <= hair) &&
+  fake_posted.is_empty() &&
+  tester_size.val is None &&
+  outside_events.val == outside_seen.val &&
+  hand.typed.untracked() == typed_seen.val &&
+  @signals.untracked(fn() { hand.events.get() + hand.presses.get() }) == events_seen.val &&
+  !paint_left() &&
+  !layout_left() &&
+  !frame_watch_of().is_stale() &&
+  !layout_watch_of().is_stale() &&
+  !paint_watch_of().is_stale() &&
+  outside_tickets.is_empty() &&
+  outside_takers.is_empty() &&
+  views_stirred.is_empty() &&
+  open_views.is_empty() &&
+  open_streams.is_empty() &&
+  self.fake.notice_opened == "" &&
+  fx.val.idle() &&
+  !fx.val.waits_frame() &&
+  (match fx.val.next_timer() {
+    Some(ms) => ms.to_double() > hair
+    None => true
+  }) &&
+  self.next_due() > hair &&
+  self.pending().is_empty() &&
+  (match view_app.val {
+    Some(tree) => !view_owes(tree)
+    None => true
+  })
+}
+
+///|
+/// The fake host's frames_on as the last frame drawn found it (Tester::frame_unasked: one asked since is a frame owed).
+// kept across runs: set by each frame a Tester draws
+let frames_on_seen : Ref[Int] = Ref(0)
 
 ///|
 /// A display's frame at `t`, or the moment something is due at (Tester::next_due: a wake, a motion's end) where that
@@ -1118,6 +1201,7 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   bench_frame_ends()
   self.hold_a11y_whole()
   self.frames = self.frames + 1
+  frames_on_seen.val = self.fake.frames_on
   // (what the window's tree did in it, where a test asked: tester_tree_work.mbt)
   tree_frame_kept()
   // (each box's presses said to be another's that one's to take, where the box is: presses.mbt)
@@ -2059,15 +2143,13 @@ pub fn Tester::scroll_to_end(self : Tester) -> Unit {
 }
 
 ///|
-/// The first and last rows of the list in view (-1, -1 when none).
+/// The first and last rows of the list in view (-1, -1 when none). A page's list's those the reader sees, between what
+/// covers its top and its pinned foot (ListSeen's `sight`), not those drawn under a bar over it: its first the row
+/// scroll_to brings to its top, as an old list's, so a test stepping back a row at a time walks it in order.
 pub fn Tester::visible(self : Tester) -> (Int, Int) {
   match self.list_on() {
     Old(st) => (st.vis_first, st.vis_last)
-    Tree(l) =>
-      match (l.rows, l.rows.last()) {
-        ([first, ..], Some(last)) => (first.0, last.0)
-        _ => (-1, -1)
-      }
+    Tree(l) => l.sight
   }
 }
 
@@ -3010,6 +3092,26 @@ pub fn Tester::tabular_wider(self : Tester, em : Double) -> Unit {
 }
 
 ///|
+/// Punctuation (U+2010 to U+206F: ‘ ’ “ ” … —) set a whole em wide unless set proportional
+/// (@hostapi.style_proportional), from now on: as a Chinese face (思源黑体) draws it, its pwid asked or not.
+pub fn Tester::cjk_face_marks(self : Tester) -> Unit {
+  self.fake.cjk_marks = true
+}
+
+///|
+/// Each printable ASCII letter (U+0020 to U+007E, 95 of them) measured `regular[c - 32]` ems wide, and `bold[c - 32]`
+/// at weight 600 and more, from now on, outside the code face: as a real face measures it, where the fake host's half
+/// an em is narrower than every real face's digits, `%` and `$` (a figure the fake fitted cut short on a device: the
+/// agent's tiles' `$1,9…`, 2026-11-14). Bold measured so adds no bold_wider.
+pub fn Tester::latin_advances(self : Tester, regular : FixedArray[Double], bold : FixedArray[Double]) -> Unit {
+  guard regular.length() == 95 && bold.length() == 95 else {
+    @halt.saying("latin_advances: 95 advances each, U+0020 to U+007E")
+  }
+  self.fake.latin = Some((regular, bold))
+  words_forgotten()
+}
+
+///|
 /// Each glyph's picture `w` by `h` points from now on (6 by 10 till said: the fake host's), so few fill the atlas.
 pub fn Tester::glyph_box(self : Tester, w : Double, h : Double) -> Unit {
   self.fake.glyph_box = (w, h)
@@ -3285,6 +3387,8 @@ pub fn Tester::cursor(self : Tester) -> Cursor {
     6 => Grabbing
     7 => Crosshair
     8 => NotAllowed
+    9 => ResizeNWSE
+    10 => ResizeNESW
     _ => Arrow
   }
 }

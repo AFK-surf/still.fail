@@ -371,6 +371,14 @@ if part ts; then
     } | grep -nE '\b(access|appendFile|chmod|chown|close|copyFile|cp|exists|fchmod|fchown|fdatasync|fstat|fsync|ftruncate|futimes|lchown|link|lstat|lutimes|mkdir|mkdtemp|open|opendir|read|readdir|readFile|readlink|readv|realpath|rename|rm|rmdir|stat|statfs|symlink|truncate|unlink|utimes|write|writeFile|writev|exec|execFile|spawn|gzip|gunzip|deflate|deflateRaw|inflate|inflateRaw|unzip|brotliCompress|brotliDecompress|zstdCompress|zstdDecompress)Sync(\.native)?\(' \
       | grep -v 'sync:' > "$tmp/syncs" || true
     step "the station's main thread waits on nothing (in what this adds)" sh -c "! grep . '$tmp/syncs'"
+    # A database the process serving writes as the next one starts beside it (a handover): what a change adds opens no
+    # SQLite connection without a busy timeout, and begins no transaction but BEGIN IMMEDIATE outside one already open:
+    # a deferred BEGIN or a SAVEPOINT begun outside a transaction that reads and then writes is refused the write at once,
+    # with no busy timeout waited ("database is locked": a station's next process stopped by itself, 2026-11-14). One that
+    # only reads, or one of its own (":memory:", a file no other connection opens), says so on its line with "deferred:".
+    added 'station/src/*.ts' | grep -nE 'new DatabaseSync\(' | grep -vE 'timeout|":memory:"|deferred:' > "$tmp/sqlite" || true
+    added 'station/src/*.ts' | grep -nE 'exec\(["`](BEGIN( DEFERRED)?["`;]|SAVEPOINT )' | grep -v 'deferred:' >> "$tmp/sqlite" || true
+    step "a starting process waits its turn for the database (in what this adds)" sh -c "! grep . '$tmp/sqlite'"
   fi
   # No way into a station from outside (AGENTS.md): every socket a station listens on is this machine's own, and says
   # so on its line (127.0.0.1; the fd the launcher holds, a Unix socket's path); the mesh's endpoint is bound by
@@ -447,12 +455,13 @@ if [ $full = 1 ]; then
     if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root after core pnpm test; fi
   fi
   # The base in MoonBit (libs/base): every package under its src/ (each directory with a moon.pkg) type-checked for
-  # native and for js, and every package's tests run on both (today wire alone has any); for a change to it or to
+  # native and for js, and every package's tests run on both (wire's; the mesh's, on a shell stood in for it; on js
+  # the turning of the page's shell); for a change to it or to
   # what it is built with of mbui: effect, and halt, which effect imports (scripts/mb-base.ts holds that list to
   # effect's moon.pkg and to the line below). By package, never the workspace, and writing no interface (--no-mbti):
   # mbui is a member of its workspace, and moon would write mbui's pkg.generated.mbti files too. No Rust shell is
   # linked here: a native test that reaches the shell's C does not link, and says so (libs/base/AGENTS.md). No test
-  # opens a link, and nothing reads the page's shell's JavaScript.
+  # opens a link to a peer, and nothing reads what the page's shell's JavaScript does with iroh.
   if part ts && touches '^libs/base/|^libs/mbui/src/(effect|halt)/|^libs/mbui/moon\.(mod|work)$'; then
     if has moon; then
       # shellcheck disable=SC2016 # the command's own variable, expanded by its shell
@@ -502,7 +511,7 @@ if [ $full = 1 ]; then
     fi
   fi
   # The station's tests (station/test): every file, or one slice of them (STILLFAIL_STATION_SHARD="<i>/<n>": the
-  # longest files one to a slice first, then the rest in order, every n-th: scripts/station-slice.sh). CI runs them in slices on Linux runners of their own (pipeline.yml,
+  # files dealt by what each costs, the longest first, each onto the slice with the least: scripts/station-slice.sh). CI runs them in slices on Linux runners of their own (pipeline.yml,
   # check-station), not on macos-ci: four runners share that Mac, the tests took 2.3 to 4.1 minutes there by what else
   # ran, and three checks at once went past the job's five (6 of some 18 in half a day, 2026-11-09; the files doubled
   # in the five days before). A machine to itself, a slice takes the same every run.

@@ -21,7 +21,7 @@ import { RUNTIME_KINDS, type RuntimeKind } from "../agents/runtime.ts";
 import { USED_WITHIN_MS, askWhich, candidates, choose } from "./model-choice.ts";
 import { sameModel } from "./config.ts";
 import { contextAsked } from "./context-cap.ts";
-import { type Preset, type PresetCopy, type PresetModel, presetCopyInput } from "./presets.ts";
+import { type Preset, type PresetCopy, type PresetModel, type Presets, presetCopyInput } from "./presets.ts";
 import { STATION_AUTHOR } from "../store/rows.ts";
 
 type Json = any;
@@ -97,7 +97,8 @@ function makeChat(
   }
 }
 
-/// The preset an agent names (chat_create `preset`): one of this station's in workspace `ws`, by its id or its name.
+/// The preset an agent names (chat_create `preset`): one this station keeps in workspace `ws` (whoever's, wherever it
+/// was made: sessions/presets.ts), by its id or its name.
 function presetNamed(hub: Hub, ws: string | null, named: string): Preset {
   const all = hub.presets.list(ws ?? hub.workspaces()[0] ?? null);
   const lower = named.toLowerCase();
@@ -125,11 +126,12 @@ function boundHere(hub: Hub, ws: string | null, pm: PresetModel, name: string) {
 
 /// Preset `p` of this station as a chat on another station is opened with (as the app gives one, core choose.ts):
 /// each folder said to be where it is (`here`: this station, by its id) unless that is the chat's station `there`, and
-/// what it binds the chat to with it.
-function copyFor(p: Preset, here: string, there: string): PresetCopy {
+/// what it binds the chat to with it. A folder naming this station is this station's (`presets.isHere`); another's is
+/// told by its name as this station knows it.
+function copyFor(presets: Presets, p: Preset, here: string, there: string): PresetCopy {
   const dirs = p.dirs.map(({ station, stationName, guides: _g, skills: _k, ...d }) => {
-    if (station === undefined) return { ...d, elsewhere: here };
-    return station.slice(station.lastIndexOf("/") + 1) === there ? d : { ...d, elsewhere: stationName || station };
+    if (station === undefined || presets.isHere(station)) return { ...d, elsewhere: here };
+    return station.slice(station.lastIndexOf("/") + 1) === there ? d : { ...d, elsewhere: presets.nameOf(station, stationName) };
   });
   const stations = p.station !== undefined ? [p.station] : p.stations;
   return { id: p.id, name: p.name, dirs, instructions: p.instructions, ...(p.model ? { model: p.model } : {}), ...(stations && stations.length > 0 ? { stations } : {}) };
@@ -298,7 +300,7 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
     session: key, key: k, title, ...choice, choose: model === null, runtimeGiven: runtime !== null, createdBy, from: { title: from, link: fromLink },
     ...(fast !== null ? { fast } : {}),
     ...(context !== null ? { context } : {}),
-    ...(preset !== null ? { presetCopy: copyFor(preset, hub.station() ?? "", there) } : {}),
+    ...(preset !== null ? { presetCopy: copyFor(hub.presets, preset, hub.station() ?? "", there) } : {}),
   };
   let made: Json;
   try {

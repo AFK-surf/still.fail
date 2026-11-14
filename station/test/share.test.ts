@@ -386,7 +386,8 @@ test("a borrowed Codex subscription's login is written in its home, the profile 
   all.set(A, a).set(B, b);
   const jwt = (claims: object) => ["{}", JSON.stringify(claims), "s"].map((p) => Buffer.from(p).toString("base64url")).join(".");
   mkdirSync(join(a.data, "homes", "plus"), { recursive: true });
-  writeFileSync(join(a.data, "homes", "plus", "auth.json"), JSON.stringify({ tokens: { id_token: "id", access_token: jwt({ exp: Math.floor(Date.now() / 1000) + 86400 }), account_id: "acct", refresh_token: "r" } }));
+  // (two days: outside the window a host renews it in before lending, which would call its provider)
+  writeFileSync(join(a.data, "homes", "plus", "auth.json"), JSON.stringify({ tokens: { id_token: "id", access_token: jwt({ exp: Math.floor(Date.now() / 1000) + 2 * 86400 }), account_id: "acct", refresh_token: "r" } }));
   await a.sharing.shareProfile("plus", true, null);
   await settle(a, b);
   const copy = b.config.raw().profiles[0];

@@ -451,6 +451,7 @@
   "core-views.station.lock_short": "Blocked by security mode",
   "core-views.station.offline_network": "No network: can't reach {name}",
   "core-views.station.network": "No network connection",
+  "core-views.station.job_gone": "{name} no longer has this job",
   "core-views.station.not_listed": "This station isn't in the list",
   "core-views.unsent": "Not sent: {text}",
   "core-views.resources.basis": "Counts only still.fail's desktop app, station and the processes agents start on this machine; commands that finish within seconds may be partly missed. Figures come from the counts macOS keeps per process, as Activity Monitor's do; 100% CPU is one core",
@@ -745,6 +746,16 @@
   "core-views.software.updating": "Updating",
   "core-views.software.installing": "Installing",
   "core-views.software.update_failed": "Update failed",
+  "core-views.stationUpdates.title": "Station updates",
+  "core-views.stationUpdates.offered": {
+    "one": "1 station has an update",
+    "other": "{n} stations have updates"
+  },
+  "core-views.stationUpdates.going": {
+    "one": "1 station is updating",
+    "other": "{n} stations are updating"
+  },
+  "core-views.stationUpdates.version": "{from} → {to}",
   "core-views.software.install_failed": "Install failed",
   "core-views.software.separator": "; ",
   "core-views.copies.and": ", ",

@@ -49,7 +49,7 @@ let corners_everywhere_known : Map[String, Int] = {
 /// new-workspace and new-workspace-code, …) has it too: the rail behind it, not the panel.
 let corners_tape_rail : Array[String] = [
   "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "new-workspace", "new-workspace-code", "rail-menu",
-  "place", "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
+  "home-station-updates", "station-updates", "home-station-updates-app", "station-updates-app", "place", "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
   "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose",
   "chat-download", "chat-failed", "chat-feedback", "chat-image-coming", "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-flash-notice",
   "chat-history-side", "chat-info", "chat-job", "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters",
@@ -70,7 +70,10 @@ let corners_tape_rail : Array[String] = [
   "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station",
   // (a preset's dialog over 新对话 and its steps further in: the rail behind them, not the panel)
   "newchat-preset-new", "newchat-preset-new-add", "newchat-preset-new-browse", "newchat-preset-new-browse-repos",
-  "newchat-preset-new-clone", "newchat-preset-new-clones", "player-audio", "player-ended",
+  "newchat-preset-new-clone", "newchat-preset-new-clones",
+  // (the presets' menu and its level further in: the rail behind them, not the menu)
+  "newchat-preset", "newchat-preset-others", "newchat-preset-others-none", "newchat-preset-theirs",
+    "newchat-preset-theirs-long", "player-audio", "player-ended",
   "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized",
   "service-stopped", "share-in", "share-in-files", "share-in-stations", "lock-security", "lock-upgrade", "screen-agent-driving",
   "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
@@ -101,7 +104,7 @@ let corners_tape_rail : Array[String] = [
   "settings-vault-waits", "settings-vault-words", "settings-vault-add", "settings-vault-editor", "settings-vault-recover",
   "settings-lock-prompt", "settings-add-people", "settings-workspace-mark", "settings-local-fonts",
   "settings-policy", "settings-policy-text", "settings-policy-option", "settings-security-join",
-  "settings-security-off", "settings-security-pending", "settings-stations-tasks", "place-stations-tasks", "settings-station-tasks", "settings-station-tasks-other", "settings-station-tasks-locked", "settings-stations-devices", "place-stations-devices", "settings-station-devices", "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts",
+  "settings-security-off", "settings-security-pending", "settings-security-upgrade-station", "settings-security-upgrade-station-not", "settings-security-upgrade-member", "settings-security-upgrade-device", "settings-security-upgrade-many", "settings-security-upgrade-ask", "settings-security-upgrade-other", "settings-security-upgrade-updating", "settings-stations-tasks", "place-stations-tasks", "settings-station-tasks", "settings-station-tasks-other", "settings-station-tasks-locked", "settings-stations-devices", "place-stations-devices", "settings-station-devices", "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts",
   "settings-fonts-code", "settings-decisions", "settings-completion", "settings-bars", "settings-about",
   "settings-changelog", "settings-prices", "settings-notify-off", "settings-notify-denied", "share-card-poster",
   "share-card-receipt", "share-card-senren-adv", "share-card-senren-affection", "share-card-senren-cg",

@@ -286,7 +286,7 @@ fn body_src(mode : String) -> Source {
 /// The nodes' key of each of chat view `v`'s entries `read` (chat_body_rows'; its Foot "foot", the list's room under
 /// its rows and no row of the nodes').
 fn body_keys(v : ChatView, read : Array[Entry]) -> Array[String] {
-  let keys = chat_body_rows({ sent: {}, sent_as: {} }, v, read, []).keys
+  let keys = chat_body_rows({ sent: {}, sent_as: {}, here: {} }, v, read, []).keys
   let out : Array[String] = []
   let mut j = 0
   for e in read {
@@ -419,13 +419,13 @@ fn body_both(mode : String, s : (String, Double, Double, Int), at : String, scal
   t.set_font_scale(scale)
   t.run_for(rest)
   if at != "end" {
-    // (its top's room the list's head and what covers its top (list_top, the chat's bar's room): at its top, its first
-    // row under it; else the row at its top as the old list had it, `put_y` under the list's window's top, a bring's
-    // offset being from under that cover)
+    // (its top's room the list's head (list_top, the chat's bar's room), what covers its top the bar alone (bar_foot):
+    // at its top, its first row under its head; else the row at its top as the old list had it, `put_y` under the
+    // list's window's top, a bring's offset being from under that cover)
     if put == "top" {
-      place.bring(keys0.iter().find_first(fn(k) { k != "top" }).unwrap(), offset=-put_y)
+      place.bring(keys0.iter().find_first(fn(k) { k != "top" }).unwrap(), offset=bar_foot - list_top - put_y)
     } else {
-      place.bring(put, offset=list_top - put_y)
+      place.bring(put, offset=bar_foot - put_y)
     }
     t.run_for(@ui.move_most_ms)
   }
@@ -463,7 +463,7 @@ fn body_both(mode : String, s : (String, Double, Double, Int), at : String, scal
 /// What each row of chat view `v`'s entries `read` is, by its key (chat_body_rows').
 fn body_entries(v : ChatView, read : Array[Entry]) -> Map[String, Entry] {
   let entries : Map[String, Entry] = Map([])
-  for k, r in chat_body_rows({ sent: {}, sent_as: {} }, v, read, []).rows {
+  for k, r in chat_body_rows({ sent: {}, sent_as: {}, here: {} }, v, read, []).rows {
     entries[k] = r.entry
   }
   entries
@@ -811,17 +811,13 @@ priv enum BodyHeld {
 fn body_held(which : BodyHeld) -> String {
   let lines = match which {
     HeldMain => [
-    "a code block pressed in 42 (markdown_node's): 1",
     "an HTML page it places, as high, not compared (P12): 6",
-    "its head's time pressed short (message_head_node's): 33",
     "its picture held under the list's top (c.stick): 43",
-    "where it went, narrow, route_line_down further down (meant): 7",
   ]
     HeldLarge => [
     "a pill or a capsule as high as its words at a larger size (meant): 2",
     "a screen's card's lines as high as their words at a larger size (meant): 1",
     "an HTML page it places, as high, not compared (P12): 1",
-    "where it went, narrow, route_line_down further down (meant): 1",
   ]
     // (its turn over no more compared with the old list, which came down there (the changes' sweep, turned on
     // purpose): one of the 7 counted before was of that step)
@@ -1291,8 +1287,8 @@ test "the page before read in over a chat's list as nodes at its top: what is re
   let t = body_new(src, s.1, s.2, s.3, view, entries, place~, made=fn(k, p) { views[k] = p })
   t.run_for(@ui.move_most_ms)
   let keys0 = body_keys(v0, read0)
-  // (at its very top: its first row under its head, the chat's bar's room, what covers the list's top: a bring's
-  // offset is from under it)
+  // (at its very top: its first row under its head, the chat's bar's room, as far as the list goes: a bring's offset
+  // is from under what covers the list's top, the bar)
   place.bring(keys0.iter().find_first(fn(k) { k != "top" }).unwrap())
   t.run_for(@ui.move_most_ms)
   let read_key = keys0.iter().find_first(fn(k) { k.has_prefix("m:") }).unwrap()

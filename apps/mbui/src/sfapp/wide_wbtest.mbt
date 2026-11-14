@@ -987,7 +987,7 @@ fn choices_in_ground(t : @ui.Tester) -> Unit raise {
 let chat_seen_ms : Double = 300.0
 
 ///|
-test "wide: a chat and a new chat switched by the sidebar: the composer goes between their places, a new chat left leaves by its own way, what comes in is there at once" {
+test "wide: a chat and a new chat switched by the sidebar: the composer goes between their places, the rest of the page the other's at once, the new chat left gone in that frame" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   // (the chat seen before the sidebar is tapped: its composer put there at once as it opened, at the run's first
@@ -1011,19 +1011,18 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   let (_, y1, _, h1) = composer_glass(t)
   assert_true(y1 + h1 < cy - 100.0, msg="in the page's middle: \{Repr((y1, h1))}")
   assert_eq(t.look_of("想让 agent 做什么？").map(fn(l) { l.2 }), Some(1.0))
-  // back to the chat by its row: the composer down to its foot, the new chat's scene fading where it is (its
-  // own way, as one become its chat leaves), the chat there at once under it
+  // back to the chat by its row: the composer down to its foot from its place in the page, the rest the chat's at
+  // once, the new chat's scene gone in that frame (another chat looked at: nothing of the new chat fades over it, its
+  // words over the chat's own as it went till 2026-11-14; the coordinator of the migration's ruling)
   t.tap_text("整理发布清单")
   t.draw()
   let back = t.time()
   assert_true(app.nav.top() is Chat(_))
+  assert_true(t.find("想让 agent 做什么？") is None, msg="the new chat's scene over the chat at \{t.time()}")
+  let (_, yb, _, hb) = composer_glass(t)
+  assert_true(yb + hb < cy - 100.0, msg="from its place in the page: \{Repr((yb, hb))}")
   t.run_for(new_leave_ms / 2.0)
-  match t.look_of("想让 agent 做什么？") {
-    Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="leaving: \{a}")
-    None => fail("the new chat gone at once")
-  }
-  t.run_for(back + new_leave_ms + 1.0 - t.time())
-  assert_true(t.find("想让 agent 做什么？") is None)
+  assert_true(t.find("想让 agent 做什么？") is None, msg="the new chat's scene over the chat at \{t.time()}")
   t.run_for(back + @ui.move_most_ms + 1.0 - t.time())
   let (_, y2, _, h2) = composer_glass(t)
   assert_true((y2 + h2 - (cy + ch)).abs() < 1.0, msg="at the chat's foot again: \{Repr((y2, h2))}")
@@ -2035,7 +2034,7 @@ test "wide: the workspace's page as on a phone: its name its title, who you are 
   assert_true(t.query(Button, label="添加成员") is Some(_))
   assert_true(t.find("管理员") is Some(_), msg="a role at its row's end")
   // the relays and the ways behind one row (workspace_page.mbt ws_ways_panel)
-  assert_true(t.find("连接方式") is Some(_))
+  assert_true(t.find("中继") is Some(_))
   assert_true(t.find("添加中继") is None)
   // a person pressed: what can be done about them, beside them
   assert_false(@sf.presenting())
@@ -2245,11 +2244,13 @@ test "wide: 用量: what it counts beside its title, the summary, the days split
   // (the chats' sidebar closing to the rail's bar meanwhile, as the web's)
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="说明") is Some(_), msg="what it counts")
-  // the summary, the days split by person or by model (picked over them), the chats; no accounts' list
+  // the period overview, the days split by person, model or account, the breakdown list; the summary on 累计
   assert_true(t.find("整理发布清单") is Some(_), msg="the chats: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("按人") is Some(_) && t.find("按模型") is Some(_) && t.find("按账号") is Some(_), msg="the split")
+  assert_true(t.find("花费明细") is Some(_), msg="breakdown")
+  t.tap_text("累计")
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("累计 token") is Some(_) && t.find("跨设备任务") is Some(_), msg="the summary")
-  assert_true(t.find("按人") is Some(_) && t.find("按模型") is Some(_) && t.find("按账号") is None, msg="the split")
-  assert_true(t.find("按对话") is None, msg="no list to pick")
 }
 
 ///|

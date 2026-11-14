@@ -444,7 +444,7 @@ pub fn way_tile_node(
   loc~ : SourceLoc,
 ) -> Unit {
   let lit = fn() { on() && action() == "" }
-  parent.box(made_for=loc, fn(t) {
+  @headless.toggle(made_for=loc, parent, Button, name, lit, fn(_) { press() }, fn(t, _) {
     t
     .grow(Is(1.0))
     .basis(Is(Some(0.0)))
@@ -468,9 +468,7 @@ pub fn way_tile_node(
         },
       )
     }))
-    .says(By(fn() { Some(@view.said(Button, label=name(), pressed=lit())) }))
     |> ignore
-    presses_node(t, press)
     // (its parts in its middle, its way to allow it across it)
     // its picture: a screen drawn small
     middle_of(t, fn(at) { at.box(fn(p) {
@@ -658,13 +656,11 @@ pub fn kind_row_node(
   ways : (@view.View) -> Unit,
   loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(made_for=loc, fn(head) {
+  @headless.disclosure(made_for=loc, parent, title, open, fn(_) { toggle() }, fn(head, _) {
     head
     .padding(Is((0.0, notify_kind_y, 0.0, notify_kind_y)))
     .gap(Is(notify_kind_lines))
-    .says(By(fn() { Some(@view.said(Button, label=title(), expanded=open())) }))
     |> ignore
-    presses_node(head, toggle)
     head.box(fn(top) {
       top.row(Is(true)).gap(Is(notify_kind_gap)).lines_up(Is(Some(Middle))) |> ignore
       top.box(fn(t) {

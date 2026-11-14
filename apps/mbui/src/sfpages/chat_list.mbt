@@ -135,6 +135,19 @@ pub fn chat_list(
   let list_box = c.box(style=list_style, id=list_box_id, tx=list_shift(key, frame_w, list_w), fn() {
     c.sized(list_w, c.height, fn() {
     let rows = fn() {
+    // a notice pressed to open or shut: held where it is (system_notice's notice_holds; the list by its id here, where
+    // it is built)
+    if notice_holds.length() > 0 {
+      for i, e in list {
+        match e {
+          Said(m) if notice_holds.contains(m.ts) => {
+            notice_holds.remove(m.ts)
+            c.list_hold_row(key, i)
+          }
+          _ => ()
+        }
+      }
+    }
     c.list(
       key,
       n,
@@ -865,6 +878,10 @@ let joined_gap : Double = 4.0
 /// The list's room over its first row (under the chat's bar: 45, and 24), under its last (24, over the composer's
 /// room), and where the unread line goes under its top (about four lines of what came before it in view: 4 × 23).
 let list_top : Double = 69.0
+
+///|
+/// The room under the chat's bar over the list's first row (list_top's 24): room, the bar's drawn over none of it.
+let list_room : Double = list_top - bar_foot
 
 ///|
 let list_foot : Double = 24.0

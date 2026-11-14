@@ -104,7 +104,7 @@ pub fn lower_role(a : String, b : String) -> String {
 
 ///|
 /// The caller's cryptography: `{sha256Hex(text), sigValid(sig, hash, origins, rpId, passkey), validKeyId(id),
-/// endpointProof(ws, base, endpoint, proof)}`.
+/// endpointProof(ws, base, endpoint, proof), taggedSigValid(key, sig, tag, digest)}`.
 #external
 pub type JsCrypto
 
@@ -121,6 +121,16 @@ extern "js" fn js_valid_key_id(c : JsCrypto, id : String) -> Bool = "(c, id) => 
 ///|
 extern "js" fn js_endpoint_proof(c : JsCrypto, ws : String, base : String, endpoint : String, proof : String) -> Bool =
   "(c, ws, base, endpoint, proof) => c.endpointProof(ws, base, endpoint, proof)"
+
+///|
+/// (a caller from before `taggedSigValid` was asked for proves nothing by it: false)
+extern "js" fn js_tagged_sig_valid(c : JsCrypto, key : String, sig : String, tag : String, digest : String) -> Bool =
+  "(c, key, sig, tag, digest) => typeof c.taggedSigValid === 'function' && c.taggedSigValid(key, sig, tag, digest) === true"
+
+///|
+impl @lock.Crypto for JsCrypto with tagged_sig_valid(self, key, sig, tag, digest) {
+  js_tagged_sig_valid(self, key, sig, tag, digest)
+}
 
 ///|
 impl @lock.Crypto for JsCrypto with sha256_hex(self, s) {
@@ -693,15 +703,35 @@ fn chains_of(chains : JsValue) -> Array[Array[Json]] raise @form.Invalid {
 /// those in force once that is decided (`roster_without`: whom a removal took out); none, the list.
 pub fn roster_js(ws : String, root : String, chains : JsValue, bodies : JsValue, without : JsValue, crypto : JsCrypto) -> JsValue {
   let cs = chains_of(chains) catch { @form.Invalid(why) => return refused(why) }
-  let left : Array[String] = []
-  if js_kind(without) == 4 {
-    for i in 0..<js_len(without) {
-      if js_kind(js_at(without, i)) == 3 {
-        left.push(js_str(js_at(without, i)))
+  roster_json(@lock.roster_without(ws, root, cs, bodies_of(bodies), texts_of(without), crypto))
+}
+
+///|
+/// `roster_js` of a workspace whose chain moved (`chain`, its active chain, the `moved` last: rules/src/lock/roster.mbt
+/// `roster_moved`), rooted in the log its `moved` names, with what the chain as it moved still says; `carried_keys`
+/// beside the rest, `[{key, sub}]`.
+pub fn roster_moved_js(ws : String, chain : JsValue, chains : JsValue, bodies : JsValue, without : JsValue, crypto : JsCrypto) -> JsValue {
+  let cs = chains_of(chains) catch { @form.Invalid(why) => return refused(why) }
+  let ch = entries_of(chain) catch { @form.Invalid(why) => return refused(why) }
+  roster_json(@lock.roster_moved(ws, ch, cs, bodies_of(bodies), texts_of(without), crypto))
+}
+
+///|
+/// The texts of a JS array (none of anything else).
+fn texts_of(v : JsValue) -> Array[String] {
+  let out : Array[String] = []
+  if js_kind(v) == 4 {
+    for i in 0..<js_len(v) {
+      if js_kind(js_at(v, i)) == 3 {
+        out.push(js_str(js_at(v, i)))
       }
     }
   }
-  let r = @lock.roster_without(ws, root, cs, bodies_of(bodies), left, crypto)
+  out
+}
+
+///|
+fn roster_json(r : @lock.Roster) -> JsValue {
   let s = Json::string(_)
   to_js(Json::object(Map([
     ("rooted", Json::boolean(r.rooted)),
@@ -733,6 +763,7 @@ pub fn roster_js(ws : String, root : String, chains : JsValue, bodies : JsValue,
     ("lacking", Json::array(r.lacking.map(s))),
     ("newest", opt_json(r.newest)),
     ("settings", r.settings.unwrap_or(Json::null())),
+    ("carried_keys", Json::array(r.carried_keys.map(fn(p) { Json::object(Map([("key", s(p.0)), ("sub", s(p.1))])) }))),
   ])))
 }
 
@@ -746,6 +777,24 @@ pub fn state4_js(ws : String, root : String, chains : JsValue, bodies : JsValue,
   let o = held(st.lock)
   js_put(o, "on", js_of_str(st.on))
   o
+}
+
+///|
+/// `state4_js` of a workspace whose chain moved (`chain`, its active chain, the `moved` last: rules/src/lock/state4.mbt
+/// `state4_moved`), rooted in the log its `moved` names, with what the chain as it moved still says.
+pub fn state4_moved_js(ws : String, chain : JsValue, chains : JsValue, bodies : JsValue, now : Double, crypto : JsCrypto) -> JsValue {
+  let cs = chains_of(chains) catch { @form.Invalid(why) => return refused(why) }
+  let ch = entries_of(chain) catch { @form.Invalid(why) => return refused(why) }
+  let st = @lock.state4_moved(ws, ch, cs, bodies_of(bodies), now, crypto)
+  let o = held(st.lock)
+  js_put(o, "on", js_of_str(st.on))
+  o
+}
+
+///|
+/// What a binding's signer signs after `bind_tag` and a NUL (`@lock.bind_digest`), and the tag: `{tag, digest}`.
+pub fn bind_digest_js(ws : String, sub : String, log : String, moved : String, crypto : JsCrypto) -> JsValue {
+  to_js(Json::object(Map([("tag", Json::string(@lock.bind_tag)), ("digest", Json::string(@lock.bind_digest(ws, sub, log, moved, crypto)))])))
 }
 
 ///|

@@ -500,6 +500,7 @@ fn view_forget() -> Unit {
   old_show_due.val = None
   view_handed.val = None
   view_point.val = None
+  view_over_words.val = false
   view_fingers[0] = -1
   view_fingers[1] = -1
   view_fingers[2] = 0
@@ -1030,6 +1031,12 @@ fn old_drawn(tree : @view.Tree) -> Array[(@view.Content, Double, Double, Double,
 /// places an old view otherwise than this pass built it for, the frame built again for that before it is drawn (drawn
 /// so, an old view built for the room it had would be drawn in the room it has now, till the next frame).
 fn view_told_as_built(c : Ctx) -> Unit {
+  // (the old views built: told the tree first, what waited for that (a list's set-out under an old view in its foot:
+  // Tree::old_views_built) taken as it is brought now)
+  match view_app.val {
+    Some(tree) => tree.old_views_built()
+    None => ()
+  }
   match view_app.val {
     Some(tree) if view_owes(tree) => {
       let was = view_island_said()
@@ -1039,6 +1046,16 @@ fn view_told_as_built(c : Ctx) -> Unit {
       }
     }
     _ => ()
+  }
+}
+
+///|
+/// A build of the old frame begun (a pass of it): told the window's tree (Tree::old_views_building), what it hosts
+/// built from here.
+fn view_old_building() -> Unit {
+  match view_app.val {
+    Some(tree) => tree.old_views_building()
+    None => ()
   }
 }
 
@@ -1130,64 +1147,83 @@ fn old_frame(c : Ctx) -> Unit {
       Some(o) => {
         // (laid out where its layout puts it, on no pixel it is not on, as the old frame lays out what it holds)
         let (id, _, _, w, h, _, ox, oy, _) = p
+        // (its node's height on a way said to keep what it holds to its foot (View::resizes `foot`): laid out whole at
+        // the height it comes to, as tall as what it holds, its bottom at its node's bottom, cut at its node's top: in
+        // a box of its node's size, from there)
+        let foot_by = match (view_app.val, o.natural) {
+          (Some(tree), Some(nat)) if !o.gives && tree.holds_to_foot(id) =>
+            match nat.untracked() {
+              Some(n) if n != h => h - n
+              _ => 0.0
+            }
+          _ => 0.0
+        }
         let (left, top) = (ox, oy)
-        let i = c.box(
-          // (one as tall as what it holds: as tall as that is laid out, whatever its node was given (its height its node's
-          // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
-          // (one that gives way: laid out in the height its node is given, as tall as what it holds asks all the same)
-          style=if o.natural is Some(_) && !o.gives {
-            style(w=Fixed(w), clip=!o.over)
-          } else {
-            style(w=Fixed(w), h=Fixed(h), clip=true)
-          },
-          left~,
-          top~,
-          fn() {
-            // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
-            o.part = c.id(o.key)
-            // (built for its own room: what it reads of the window's size is its node's)
-            // (as tall as what it holds: built for its width, its Ctx::height the window's (where it is built, not how
-            // tall it may be), never the height it is given, which is what it holds's)
-            let room_h = if o.natural is Some(_) { c.height } else { h }
-            // (as wide as what it holds: built for the most it may be, whatever it is now)
-            let room_w = match o.fits {
-              Some((most, _)) => most
-              None => w
-            }
-            o.room.val = (room_w, room_h)
-            // (how big its node is placed, for its build to give way to (old_given): told as it changes, built again)
-            if o.gives && o.given.untracked() != Some((w, h)) {
-              o.given.set(Some((w, h)))
-            }
-            let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
-            c.sized(room_w, room_h, fn() {
-              match o.natural {
-                // (as tall as what it holds at its width, in a box of its own: how tall that is laid out, its node's
-                // height, old_natural_after_layout; as wide as what it holds, `most` at most, no narrower than its node:
-                // how wide that is laid out, what its node is told)
-                Some(_) =>
-                  match o.fits {
-                    // (laid out in the room of the most it may be, at its start: as wide as what it holds there, no
-                    // narrower than its node; whatever its node is now)
-                    Some((most, _)) => {
-                      let most = dmax(w, most)
-                      c.box(style=style(w=Fixed(most), align=AStart), fn() {
-                        o.held_box = c.box(style=style(w=Hug, min_w=Fixed(w), max_w=Fixed(most)), fn() { put() })
-                      })
-                      |> ignore
-                    }
-                    // (one that gives way: in the height its node is given, all of it)
-                    None if o.gives => o.held_box = c.box(style=style(w=Fixed(w), h=Full), fn() { put() })
-                    None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
-                  }
-                None => {
-                  o.held_box = -1
-                  put()
-                }
+        // (what it holds placed at `x`, `y` of what it is built in: its node's place, or its foot's box's)
+        let place = fn(x : Double, y : Double) {
+          c.box(
+            // (one as tall as what it holds: as tall as that is laid out, whatever its node was given (its height its node's
+            // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
+            // (one that gives way: laid out in the height its node is given, as tall as what it holds asks all the same)
+            style=if o.natural is Some(_) && !o.gives {
+              style(w=Fixed(w), clip=!o.over)
+            } else {
+              style(w=Fixed(w), h=Fixed(h), clip=true)
+            },
+            left=x,
+            top=y,
+            fn() {
+              // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
+              o.part = c.id(o.key)
+              // (built for its own room: what it reads of the window's size is its node's)
+              // (as tall as what it holds: built for its width, its Ctx::height the window's (where it is built, not how
+              // tall it may be), never the height it is given, which is what it holds's)
+              let room_h = if o.natural is Some(_) { c.height } else { h }
+              // (as wide as what it holds: built for the most it may be, whatever it is now)
+              let room_w = match o.fits {
+                Some((most, _)) => most
+                None => w
               }
-            })
-          },
-        )
+              o.room.val = (room_w, room_h)
+              // (how big its node is placed, for its build to give way to (old_given): told as it changes, built again)
+              if o.gives && o.given.untracked() != Some((w, h)) {
+                o.given.set(Some((w, h)))
+              }
+              let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
+              c.sized(room_w, room_h, fn() {
+                match o.natural {
+                  // (as tall as what it holds at its width, in a box of its own: how tall that is laid out, its node's
+                  // height, old_natural_after_layout; as wide as what it holds, `most` at most, no narrower than its node:
+                  // how wide that is laid out, what its node is told)
+                  Some(_) =>
+                    match o.fits {
+                      // (laid out in the room of the most it may be, at its start: as wide as what it holds there, no
+                      // narrower than its node; whatever its node is now)
+                      Some((most, _)) => {
+                        let most = dmax(w, most)
+                        c.box(style=style(w=Fixed(most), align=AStart), fn() {
+                          o.held_box = c.box(style=style(w=Hug, min_w=Fixed(w), max_w=Fixed(most)), fn() { put() })
+                        })
+                        |> ignore
+                      }
+                      // (one that gives way: in the height its node is given, all of it)
+                      None if o.gives => o.held_box = c.box(style=style(w=Fixed(w), h=Full), fn() { put() })
+                      None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
+                    }
+                  None => {
+                    o.held_box = -1
+                    put()
+                  }
+                }
+              })
+            },
+          )
+        }
+        let i = if foot_by != 0.0 {
+          c.box(style=style(w=Fixed(w), h=Fixed(h), clip=true), left~, top~, fn() { place(0.0, foot_by) |> ignore })
+        } else {
+          place(left, top)
+        }
         // (moved to where it is drawn, from where it is laid out, as it is painted (Ctx::moved_by): what it holds, its
         // clip, where it takes a finger and where its words are, with it; read again as where it is placed changes
         // (old_placed_said), not as anything else of the tree's does: where the tree draws its node, on no pixel the tree
@@ -1237,6 +1273,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // what the frame took is what it paints)
   view_due.get() |> ignore
   view_due_at.val = ""
+  // (what waited for the old views to be built done by now, whatever this frame built: Tree::old_views_settled)
+  tree.old_views_settled()
   if view_owes(tree) {
     view_brought(tree, told=false)
   }
@@ -1381,6 +1419,68 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // `grouping` till then. Else drawn where the column has it, its column's offset moving it painted anew
   // (offsets_flat).)
   offsets_flat.clear()
+  // (a page's list's block on its way whole (View::scrolls_window's `comes_whole`, Tree::raised_blocks): what it draws
+  // moved, as the walk leaves its list, to after all the list draws (its keys under it, its pinned foot), cut as where
+  // it is; what holds it drawn as gone through, none of it kept or drawn whole as one meanwhile. None on a list with none:
+  // one look at an empty array. Not where the walk finds what is pressed: paint's alone)
+  let raised = if dr.mode == mode_hits { [] } else { tree.raised_blocks() }
+  // (the list being gone through: it, where the instances of each raised block of it gone through begin and end, in
+  // the walk's order, and the one being gone through now with where its instances begin. Every block of it on its way
+  // whole is moved, in that order, once the walk leaves the list (the coordinator of the migration, 2026-11-14: two
+  // sent close together, the first still on its way))
+  let lifting : Ref[(@view.NodeId, Array[(Int, Int)], (@view.NodeId, Int)?)?] = Ref(None)
+  let raise_holds = fn(id : @view.NodeId) {
+    !raised.is_empty() && raised.iter().any(fn(r) { r.1 == id || tree.holds_in_order(id, r.1) })
+  }
+  let lift_to = fn(next : @view.NodeId?) {
+    let held_by = fn(outer : @view.NodeId) {
+      match next {
+        Some(n) => tree.holds_in_order(outer, n)
+        None => false
+      }
+    }
+    match lifting.val {
+      Some((list, ranges, open)) => {
+        let open = match open {
+          Some((b, k0)) if !held_by(b) => {
+            if self.ninst > k0 {
+              ranges.push((k0, self.ninst))
+            }
+            None
+          }
+          o => o
+        }
+        if open is None && !held_by(list) {
+          if ranges.length() > 1 || (ranges.length() == 1 && self.ninst > ranges[0].1) {
+            self.raise_ranges(ranges)
+          }
+          lifting.val = None
+        } else {
+          lifting.val = Some((list, ranges, open))
+        }
+      }
+      None => ()
+    }
+    match next {
+      Some(n) if !raised.is_empty() && !(lifting.val is Some((_, _, Some(_)))) =>
+        match raised.iter().find_first(fn(r) { r.1 == n || tree.holds_in_order(r.1, n) }) {
+          Some((list, b)) => {
+            ride_spoil()
+            match list_riding.val {
+              Some(l) => l.spoiled = true
+              None => ()
+            }
+            match lifting.val {
+              Some((l, ranges, None)) if l == list => lifting.val = Some((l, ranges, Some((b, self.ninst))))
+              None => lifting.val = Some((list, [], Some((b, self.ninst))))
+              _ => ()
+            }
+          }
+          None => ()
+        }
+      _ => ()
+    }
+  }
   let grouping : Ref[@view.NodeId?] = Ref(None)
   let offsets = fn(c : @view.Content) -> Bool {
     let k = clip_top()
@@ -1397,6 +1497,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       fading.length() == 0 &&
       stretching.length() == 0 &&
       raising.val is None &&
+      !raise_holds(c.id) &&
       dr.mode == 0 &&
       !shooting.val &&
       groups_on() &&
@@ -1462,6 +1563,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     close_to(Some(c.id))
     raise_close(Some(c.id))
+    if !raised.is_empty() {
+      lift_to(Some(c.id))
+    }
     while fading.length() > 0 && !tree.holds_in_order(fading[fading.length() - 1].0, c.id) {
       fading.pop() |> ignore
     }
@@ -1509,7 +1613,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // all it holds passed over; else drawn, and kept as it ends where it can be drawn so again. So too what else holds
     // others, gone through again and again with nothing of it changed (ride_holder), in a row or in none, not in a list
     // drawn whole as one but in its rows; one found holding a row or an old view let be, never begun again)
-    if fading.length() == 0 && stretching.length() == 0 {
+    if fading.length() == 0 && stretching.length() == 0 && !raise_holds(c.id) {
       let row = ridings_rows.val == 0 &&
         ((ride_may(c, x, y) && tree.rides_scroll(c.id)) || island_rides(c))
       if row {
@@ -1756,6 +1860,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   }
   close_to(None)
   raise_close(None)
+  if !raised.is_empty() {
+    lift_to(None)
+  }
   if revealing is Some(_) {
     pop_clip()
   }
@@ -2368,7 +2475,31 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
     // (what of it is marked, under all of it and under what is picked of it: View::runs_marks, each part its ground and
     // where it says so a line at its foot, each line of it where that line is drawn)
     for m in c.runs_marks {
-      if m.from < m.to {
+      if m.from < m.to && m.round > 0.0 {
+        // (one ground a line, round at the mark's two ends: as an old view's passage picked, Ctx::paint_selection)
+        let lines : Array[(Double, Double, Double, Double)] = []
+        for r in lay.rects(m.from, m.to) {
+          let (x, y, w, h) = r
+          match lines.last() {
+            Some((lx, ly, lw, lh)) if y < ly + lh && y + h > ly => {
+              let x0 = dmin(lx, x)
+              let y0 = dmin(ly, y)
+              lines[lines.length() - 1] = (x0, y0, dmax(lx + lw, x + w) - x0, dmax(ly + lh, y + h) - y0)
+            }
+            _ => lines.push(r)
+          }
+        }
+        for k, rect in lines {
+          let dx = rich_shift_at(lay, rect.1 + rect.3 / 2.0, center_in)
+          if (m.ground & 0xFFL) != 0L {
+            self.emit_rect(rect.0 + dx, rect.1, rect.2, rect.3, 0.0, m.ground, 0.0, 0L, 1.0)
+            let r = dmin(m.round, dmin(rect.2, rect.3) / 2.0)
+            let first = if k == 0 { r } else { 0.0 }
+            let last = if k == lines.length() - 1 { r } else { 0.0 }
+            self.corners_each(self.ninst - 1, first, last, last, first)
+          }
+        }
+      } else if m.from < m.to {
         for rect in lay.rects(m.from, m.to) {
           let dx = rich_shift_at(lay, rect.1 + rect.3 / 2.0, center_in)
           if (m.ground & 0xFFL) != 0L {
@@ -4882,6 +5013,12 @@ fn shape_extent(s : Shape) -> (Double, Double) {
 let view_point : Ref[(Double, Double)?] = Ref(None)
 
 ///|
+/// Whether a mouse's pointer, as it was last said where it is, is over words of the window's tree picked with the
+/// pointer (tree_words_under), no press held: found at an input (view_pointed), as what it is over is.
+// kept across runs: put back as a run begins (view_forget)
+let view_over_words : Ref[Bool] = Ref(false)
+
+///|
 /// A pointer's event `kind` at (x, y): where a mouse points now (a press, a move, a release where it is), nowhere once it
 /// is gone from the window (7) or the hand is a finger. Said before the event is taken; what it points at is told once
 /// the tree has things as of the event (view_point_tell).
@@ -4902,6 +5039,12 @@ fn view_pointed() -> Unit {
   match view_app.val {
     Some(tree) => {
       tree.bring_to(view_moment())
+      // (over words of the tree's picked with the pointer, a press held nowhere: the pointer's shape over them,
+      // view_cursor_tell)
+      view_over_words.val = match (view_point.val, view_held.val) {
+        (Some((x, y)), None) => tree_words_under(x, y)
+        _ => false
+      }
       view_point_tell(tree)
     }
     None => ()
@@ -6106,18 +6249,25 @@ let view_shape_of : Ref[ShapeOf] = Ref(OfOld)
 /// the one it was pressed with); else of what the pointer is over (view_shape_of): a node's (Tree::cursor_of: what it
 /// says, an arrow said one never the hand of what lies under it), the old views', or the arrow. Told as the pointer is
 /// told where it is, as what a still pointer is over changes, as a press goes down or up, and as the old frame works
-/// its own out.
+/// its own out. Where what the pointer is over of the tree's shows the arrow and it is over words of the tree's picked
+/// with the pointer (view_over_words), the I-beam, as over an old view's (Ctx::show_cursor).
 fn view_cursor_tell() -> Unit {
   let kind = match (view_app.val, view_held.val) {
     (None, _) => desk.old_shape
     (Some(tree), Some(Dragging(id))) | (Some(tree), Some(Node(id))) => tree.cursor_of(id).code()
     (Some(_), Some(Old(_, _))) => desk.old_shape
-    (Some(tree), _) =>
-      match view_shape_of.val {
+    (Some(tree), _) => {
+      let k = match view_shape_of.val {
         OfNode(id) => tree.cursor_of(id).code()
         OfOld => desk.old_shape
         OfGround => Cursor::Arrow.code()
       }
+      if k == Cursor::Arrow.code() && !(view_shape_of.val is OfOld) && view_over_words.val {
+        Cursor::IBeam.code()
+      } else {
+        k
+      }
+    }
   }
   if kind != desk.shown {
     desk.shown = kind

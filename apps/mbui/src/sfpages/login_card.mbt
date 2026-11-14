@@ -16,16 +16,20 @@
 priv struct LoginsHere {
   pressed : @sf.LiveMap[String, Bool]
   fields : Map[String, @ui.Field]
+  /// each login's card as it last showed under way, by station and id: what it shows as it closes once ended (an old
+  /// view's, decision.mbt's message_decision)
+  last : Map[String, Json]
 }
 
 ///|
-let logins_here : LoginsHere = { pressed: @sf.LiveMap::new(), fields: {} }
+let logins_here : LoginsHere = { pressed: @sf.LiveMap::new(), fields: {}, last: {} }
 
 ///|
 /// As at the start (tests).
 pub fn login_cards_reset() -> Unit {
   logins_here.pressed.clear()
   logins_here.fields.clear()
+  logins_here.last.clear()
   st_logins_open.clear()
 }
 
@@ -42,9 +46,10 @@ fn login_of(core : Core, station : String, id : String) -> Json? {
 }
 
 ///|
-/// What the core is asked for login `id` of `station` (login_of's, its card's): its `machineLogin`.
+/// What the core is asked for login `id` of `station` (login_of's, its card's; its chat's as it opens, sfbase's
+/// chat_opens): its `machineLogin`.
 fn login_ask(station : String, id : String) -> (String, Map[String, Json]) {
-  ("machineLogin", { "station": Json::string(station), "id": Json::string(id) })
+  @sfbase.machine_login_ask(station, id)
 }
 
 ///|
@@ -57,7 +62,7 @@ fn logins_of(core : Core, station : String) -> Json? {
 ///|
 /// What the core is asked for station `station`'s logins (logins_of's, its page's 登录's): its `machineLogins`.
 fn logins_ask(station : String) -> (String, Map[String, Json]) {
-  ("machineLogins", { "station": Json::string(station) })
+  @sfbase.machine_logins_ask(station)
 }
 
 ///|
@@ -329,7 +334,8 @@ fn login_cancel_now(core : Core, station : String, id : String) -> Unit {
 ///|
 /// Login `id` of `station` as its card; one the core does not know (ended long ago) draws nothing, the message's words
 /// say it. `marked`: the one a link pointed to (its ground the accent, faint). `place`: where it is drawn (its chat, its
-/// station's page), each place's code field its own.
+/// station's page), each place's code field its own. `as_was`: the card as it last showed under way, drawn in place of
+/// what the core says now (closing once ended, login_card_last's).
 pub fn login_card(
   c : @ui.Ctx,
   core : Core,
@@ -337,14 +343,20 @@ pub fn login_card(
   id : String,
   marked? : Bool = false,
   place? : String = "chat",
+  as_was? : Json? = None,
 ) -> Unit {
-  let l = match login_of(core, station, id) {
-    Some(_) as v => v
-    None => return
-  }
+  let now = login_of(core, station, id)
   // signed in while its card is in view, felt as something done; failed, as something refused (feel.mbt)
-  @sfbase.felt_change(c, "login-done/" + station + "/" + id, text(l, "state") == "done", Confirm)
-  @sfbase.felt_change(c, "login-failed/" + station + "/" + id, text(l, "state") == "failed", Reject)
+  @sfbase.felt_change(c, "login-done/" + station + "/" + id, text(now, "state") == "done", Confirm)
+  @sfbase.felt_change(c, "login-failed/" + station + "/" + id, text(now, "state") == "failed", Reject)
+  let l = match as_was {
+    Some(_) => as_was
+    None =>
+      match now {
+        Some(_) => now
+        None => return
+      }
+  }
   // ended: one quiet line, failed in red; no card
   if !flag(l, "active") {
     let (words, failed) = login_ended(l)
@@ -685,6 +697,20 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?, place : St
     }
   })
   |> ignore
+}
+
+///|
+/// Login `id` of `station` as its card last showed under way (kept as it is drawn under way, for it to close as it
+/// was once ended: decision.mbt's), None where it never showed so here.
+fn login_card_last(station : String, id : String, l : Json?) -> Json? {
+  let key = station + "/" + id
+  match l {
+    Some(v) if flag(l, "active") => {
+      logins_here.last[key] = v
+      l
+    }
+    _ => logins_here.last.get(key)
+  }
 }
 
 // ── the card, made once ─────────────────────────────────────────────────

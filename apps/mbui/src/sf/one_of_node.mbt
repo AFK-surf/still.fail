@@ -26,112 +26,48 @@ pub fn one_of_node(
         select_node(p, value, options, choose, label~, disabled~)
         return
       }
-      p.box(fn(g) {
-        // (its rows' nodes by their values, for the focus the arrows move)
-        let rows : Map[String, @view.View] = Map([])
-        let live = fn() { !disabled() }
-        style_node(g, fn() { one_of_list })
-        g.says(By(fn() { Some(@view.said(RadioGroup, label=label())) })) |> ignore
-        // (a roving group, as @kit.radio_group's: ↑ ↓ to the one after and before, round from the ends, Home and End to
-        // the first and the last, each chosen and its focus as it comes; only while one of its rows has the focus)
-        g.on_key(fn(k) {
-          let keys = @signals.untracked(options).map(fn(o) { o.0 })
-          let n = keys.length()
-          let at = keys.search_by(fn(v) { rows.get(v).map(fn(r) { r.focused() }).unwrap_or(false) })
-          let to = match at {
-            None => None
-            Some(_) if k.mods != 0 || n == 0 || !@signals.untracked(live) => None
-            Some(i) =>
-              if k.code == @ui.key_code_down {
-                Some((i + 1) % n)
-              } else if k.code == @ui.key_code_up {
-                Some((i + n - 1) % n)
-              } else if k.code == @ui.key_code_home {
-                Some(0)
-              } else if k.code == @ui.key_code_end {
-                Some(n - 1)
-              } else {
-                None
+      @headless.radio_group(
+        p,
+        label,
+        value,
+        choose,
+        axis=Vertical,
+        disabled~,
+        fn(g, rg) {
+          style_node(g, fn() { one_of_list })
+          g.each(fn() { options().map(fn(o) { o.0 }) }, fn(v) { v }, fn(slot, v) {
+            let v = v.untracked()
+            let words = fn() {
+              match options().iter().find_first(fn(o) { o.0 == v }) {
+                Some(o) => o.1
+                None => ""
               }
-          }
-          match to {
-            Some(i) => {
-              let v = keys[i]
-              if v != @signals.untracked(value) {
-                choose(v)
-              }
-              match rows.get(v) {
-                Some(r) => r.ask_focus(visible=true) |> ignore
-                None => ()
-              }
-              true
             }
-            None => false
-          }
-        })
-        |> ignore
-        g.each(fn() { options().map(fn(o) { o.0 }) }, fn(v) { v }, fn(slot, v) {
-          let v = v.untracked()
-          let words = fn() {
-            match options().iter().find_first(fn(o) { o.0 == v }) {
-              Some(o) => o.1
-              None => ""
-            }
-          }
-          let on = fn() { value() == v }
-          // (Tab's stop: the chosen one, else the first)
-          let stop = fn() {
-            let all = options()
-            on() || (!all.iter().any(fn(o) { o.0 == value() }) && all.get(0).map(fn(o) { o.0 == v }).unwrap_or(false))
-          }
-          slot.box(fn(r) {
-            rows[v] = r
-            style_node(r, fn() { one_of_row.then(@ui.style(min_h=Fixed(theme().items.least))) })
-            r
-            // (one_of_row_hot's hover ground: a mouse over any of it, or it pressed)
-            .ground(By(fn() {
-              if live() && (hovered_in_node(r) || r.pressed()) {
-                @ui.tree_theme().color(Hover)
-              } else {
-                0L
-              }
-            }))
-            .alpha(By(fn() { if disabled() { one_of_disabled_alpha } else { 1.0 } }))
-            .presses(By(live))
-            .focusable(By(live), keys=@view.focus_space)
-            .tab_stop(By(stop))
-            .says(By(fn() { Some(@view.said(Radio, label=words(), check=if on() { On } else { Off })) }))
-            .on_press(fn() {
-              if @signals.untracked(live) && !@signals.untracked(on) {
-                choose(v)
-              }
+            rg.item(slot, fn() { v }, words, space_only=true, fn(r, item) {
+              let on = fn() { item.chosen() }
+              style_node(r, fn() { one_of_row.then(@ui.style(min_h=Fixed(theme().items.least))) })
+              r
+              // (one_of_row_hot's hover ground: a mouse over any of it, or it pressed)
+              .ground(By(fn() {
+                if !item.disabled() && (hovered_in_node(r) || item.pressed()) {
+                  @ui.tree_theme().color(Hover)
+                } else {
+                  0L
+                }
+              }))
+              .alpha(By(fn() { if item.disabled() { one_of_disabled_alpha } else { 1.0 } }))
+              |> ignore
+              words_node(r, words, fn() { theme().rows.title }) |> ignore
+              // (its words and its check apart: one_of_row's JBetween, what is left of the row between them)
+              r.box(fn(gap) { gap.grow(Is(1.0)) |> ignore }) |> ignore
+              r.show(on, at_once=true, fn(k) {
+                icon_node(k, "check", one_of_check, By(fn() { theme().p.accent })) |> ignore
+              })
             })
             |> ignore
-            let on_it = fn(d : @view.Drag) { r.finger_target(d.wx, d.wy) }
-            r.gesture(
-              @ui.touch_slop(),
-              tap=fn(d) {
-                if on_it(d) && @signals.untracked(live) && !@signals.untracked(on) {
-                  choose(v)
-                }
-              },
-              drag=fn(d) {
-                if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && @signals.untracked(live) && !@signals.untracked(on) {
-                  choose(v)
-                }
-              },
-            )
-            |> ignore
-            words_node(r, words, fn() { theme().rows.title }) |> ignore
-            // (its words and its check apart: one_of_row's JBetween, what is left of the row between them)
-            r.box(fn(gap) { gap.grow(Is(1.0)) |> ignore }) |> ignore
-            r.show(on, at_once=true, fn(k) {
-              icon_node(k, "check", one_of_check, By(fn() { theme().p.accent })) |> ignore
-            })
           })
-          |> ignore
-        })
-      })
+        },
+      )
       |> ignore
     })
   })

@@ -3143,8 +3143,10 @@ let sheet_row_gap : Double = 12.0
 let sheet_row_words_at : @ui.Style = @ui.style(w=grow)
 
 ///|
+/// A sheet's row's words: one line, cut short where the row has not the room for them, saying so (a long name in a
+/// menu's 编辑「X」 or 复制「X」为我的预设).
 // kept across runs: a value (no field of it changes)
-let sheet_row_words : @ui.TextStyle = @ui.text_style(wrap=false)
+let sheet_row_words : @ui.TextStyle = @ui.text_style(wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

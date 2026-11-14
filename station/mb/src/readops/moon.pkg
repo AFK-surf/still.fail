@@ -3,6 +3,7 @@ import {
   "station/wire",
   "station/sql",
   "station/cards",
+  "station/cc",
   "station/legacy",
   "station/letters",
   "station/jsjson",
@@ -12,4 +13,5 @@ import {
   "station/history",
   "station/recent",
   "moonbitlang/core/json",
+  "moonbitlang/core/cmp",
 }

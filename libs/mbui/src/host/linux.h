@@ -56,6 +56,25 @@ unsigned mb_stream_tex(int id);
 void mb_streams_upload(void);
 void mb_streams_lost(void);
 
+// ---- a video's frame as its decoder gave it (the streams', the players'): YUV planes, made a picture on the GPU ----
+// NV12 (Y, then U and V interleaved) or I420 (Y, U, V), w × h, each plane at `off` with rows `stride` bytes apart in
+// `data` (`size` bytes, the frame's own); its colours by the matrix (601, 709 or 2020) and range (full, else 16-235)
+// its caps said
+typedef struct {
+  int w, h, nv12, matrix, full;
+  size_t off[3];
+  int stride[3];
+  size_t size;
+  uint8_t *data;
+} mb_yuv;
+// (linux_render.c, the GL context current) frame `f` drawn into *tex as its RGBA picture, made or sized anew to the
+// frame (*tw × *th): the planes uploaded as they are and their colours worked out by a shader, nothing of it by the CPU
+void mb_yuv_draw(const mb_yuv *f, unsigned *tex, int *tw, int *th);
+// (linux_render.c) its picture as RGBA on the CPU, w × h (a frame grabbed as a picture: rare, never what is drawn)
+uint8_t *mb_yuv_rgba(const mb_yuv *f);
+// a new context: the converter's program and planes gone with the old one
+void mb_yuv_lost(void);
+
 // ---- the app (linux_app.c) ----
 // a frame asked for, from any thread
 void mb_app_wake(void);

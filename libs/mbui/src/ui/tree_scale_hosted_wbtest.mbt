@@ -955,7 +955,9 @@ test "a press's room in an old view hosted in a node drawn whole, half as big, w
       .scale(By(fn() { s.get() }), about=At(0.0, 0.0))
       |> ignore
       old(h, fn(c) {
-        c.box(dir=Row, w=Px(200.0), h=Px(44.0), fn() {
+        let row = c.id("row")
+        c.takes_presses(row)
+        c.box(dir=Row, w=Px(200.0), h=Px(44.0), id=row, fn() {
           for k in ["a", "b"] {
             let id = c.id(k)
             c.takes_presses(id)

@@ -1,7 +1,8 @@
 // What a post asks, under it in its chat on the desktop (still.fail web/src/Decisions.tsx MessageDecision,
 // DecisionOptions; Chat.tsx AskDismiss; Decisions.css.ts decision, options, settledLine; Chat.css.ts askDismiss): who
 // decides, then the options while it waits for the viewer (numbered, pressing one answers with it: decision.answer);
-// once settled, how it went in one quiet line. A login card stays as its login goes; an agent's request about a vault
+// once settled, how it went in one quiet line. A login card stays as its login goes, and goes as its options do once
+// it ended, its line in its place; an agent's request about a vault
 // item is answered on its own card. 忽略 lets go what no one has decided (decision.dismiss). Answered or let go, on
 // screen or not, what is under the post changes from that moment (sfbase's list_turns.mbt Turns::in_turn, `start`):
 // the options, 忽略 with them, fade out as their room closes, and the line saying how it went comes in their place, its
@@ -17,21 +18,65 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         Some(d) => !d.resolved && !d.dismissed
         None => true
       }
+      // (on the chat's station, or another of its workspace: the card's)
+      let station = @sfbase.card_login_station(here.station, card.station)
+      let l = login_of(core, station, card.login)
+      let active = flag(l, "active")
+      let was = login_card_last(station, card.login, l)
+      let key = "login/" + here.station + "/" + m.ts
       c.box(style=decision_box, fn() {
-        match card.assignee_text {
-          Some(a) if open => c.text(a, style=settled_line) |> ignore
-          _ => ()
-        }
-        // (on the chat's station, or another of its workspace: the card's)
-        let station = if card.station == "" {
-          here.station
-        } else {
-          match here.station.find("/") {
-            Some(i) => here.station.exact_view(end=i).to_owned() + "/" + card.station
-            None => card.station
+        let who = fn() {
+          match card.assignee_text {
+            Some(a) if open => c.text(a, style=settled_line) |> ignore
+            _ => ()
           }
         }
-        login_card(c, core, station, card.login)
+        if l is None {
+          // (none the core knows: the message's words say it, who is to finish it alone over 忽略)
+          who()
+        } else {
+          // the card under way; ended, it goes as an answered post's options go, who is to finish it with it, and
+          // its line comes in its place as how that went comes in theirs (under_post: faded out and smaller as its
+          // room closes, then the line fading in as its room opens), not one put in the other's place at once
+          c.box(style=decision_rooms, fn() {
+            under_post(
+              c,
+              key + "/card",
+              active,
+              exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
+              close=close_gap,
+              fn() {
+                c.box(style=decision_box, fn() {
+                  who()
+                  login_card(c, core, station, card.login, as_was=if active { None } else { was })
+                })
+                |> ignore
+              },
+            )
+            under_post(
+              c,
+              key + "/ended",
+              !active,
+              enter=@motion.trans(
+                fade=0.0,
+                spec=@motion.Snap(0.0),
+                fade_spec=@motion.tween(options_out_ms, ease=Leave, delay=options_out_ms),
+              ),
+              open=close_gap,
+              exit=@motion.trans(spec=@motion.Snap(0.0)),
+              close=@motion.Snap(0.0),
+              fn() {
+                // (as wide as its words, at the start)
+                c.box(style=settled_room, fn() {
+                  let (words, failed) = login_ended(l)
+                  c.text(words, style=if failed { lc_ended_failed } else { lc_ended }) |> ignore
+                })
+                |> ignore
+              },
+            )
+          })
+          |> ignore
+        }
         // (letting it go: under it while it is asked, as under a post with no card)
         ask_dismiss(c, src, here, m.seq, m.asked, false)
       })

@@ -89,6 +89,10 @@ export class LiveFromClaude {
         } else if (type === "thinking_delta") {
           const t = nonEmpty(d.thinking);
           if (t !== undefined) out.push({ kind: "delta", id: block.id, field: "text", text: t });
+          // Thinking the API leaves out of the stream (its display omitted, as Claude Code asks of newer models) comes
+          // as empty deltas, each saying about how many tokens were thought since the last: the only pace there is.
+          else if (typeof d.estimated_tokens === "number" && d.estimated_tokens > 0)
+            out.push({ kind: "delta", id: block.id, field: "text", text: "", tokens: d.estimated_tokens });
         } else if (type === "input_json_delta") {
           const partial = nonEmpty(d.partial_json);
           if (partial !== undefined) {

@@ -848,37 +848,31 @@ extern "js" fn pk_info(id : Int, i : Int) -> String =
 extern "js" fn pk_end(id : Int) -> Unit =
   #|(i) => { const H = globalThis.__mbhost; if (H && H.pickEnd) H.pickEnd(i) }
 
-// Files kept on the device (keep.mbt): a page keeps none.
+// Files kept on the device (keep.mbt): the browser's download (web/host.js H.keepBegin), every way alike.
 
 ///|
-fn kp_begin(_name : String, _mime : String, _way : Int) -> Int {
-  0
-}
+extern "js" fn kp_begin(name : String, mime : String, way : Int) -> Int =
+  #|(n, m, w) => { const H = globalThis.__mbhost; return H && H.keepBegin ? H.keepBegin(n, m, w) : 0 }
 
 ///|
-fn kp_append(_id : Int, _data : Bytes) -> Int {
-  0
-}
+extern "js" fn kp_append(id : Int, data : Bytes) -> Int =
+  #|(i, d) => globalThis.__mbhost.keepAppend(i, d)
 
 ///|
-fn kp_finish(_id : Int) -> Unit {
-
-}
-
-///|
-fn kp_state(_id : Int) -> Int {
-  -1
-}
+extern "js" fn kp_finish(id : Int) -> Unit =
+  #|(i) => globalThis.__mbhost.keepFinish(i)
 
 ///|
-fn kp_where(_id : Int) -> String {
-  ""
-}
+extern "js" fn kp_state(id : Int) -> Int =
+  #|(i) => { const H = globalThis.__mbhost; return H && H.keepState ? H.keepState(i) : -1 }
 
 ///|
-fn kp_end(_id : Int) -> Unit {
+extern "js" fn kp_where(id : Int) -> String =
+  #|(i) => globalThis.__mbhost.keepWhere(i)
 
-}
+///|
+extern "js" fn kp_end(id : Int) -> Unit =
+  #|(i) => { const H = globalThis.__mbhost; if (H && H.keepEnd) H.keepEnd(i) }
 
 // The gallery (gallery.mbt): a page has none.
 

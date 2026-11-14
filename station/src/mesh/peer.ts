@@ -36,6 +36,17 @@ export const RIG_TELLS: ReadonlySet<string> = new Set(["rig.hello", "rig.changed
 
 /// The workspace a peer is asked or heard in, if it is another station of it now; throws why not. Without one said,
 /// the first workspace of this station's (its home one first) the peer is in too.
+/// What a station is answered here while this machine waits for what a moved chain's state is made of (Cloud
+/// `waiting`): the lock's own methods, which bring it that; and on a rig (a station that only runs tasks) what its
+/// person signed for it (`rig.added`, kept as it checks against their own lock; `rig.proof`, shown), which is what a
+/// station takes it in by and only then brings it the logs and bodies (person-sync.ts): before a move it pinned the
+/// whole chain by the hash its enrollment named and needed nothing more (2026-11-14, the rigs' end to end run on a
+/// moved workspace: never taken, never told the state).
+export function heardWaiting(cloud: Cloud, method: unknown): boolean {
+  if (typeof method !== "string") return false;
+  return method.startsWith("lock.") || (cloud.state?.rig !== undefined && (method === "rig.added" || method === "rig.proof"));
+}
+
 export function member(cloud: Cloud, peer: string, workspace: string | null): string {
   if (!cloud.peersCurrent) throw new Error("workspace peer roster is not current; waiting for the control plane");
   const s = cloud.state;
@@ -162,16 +173,85 @@ function workspaceFor(cloud: Cloud, target: string, workspace: string | null, ou
 /// How long a request's answer is waited for.
 const ANSWER_MS = 30_000;
 /// A connection whose request was not answered in time is kept when its peer is heard within this (the answer is
-/// late, the connection fine), closed when not.
+/// late, the connection fine), closed when not. Asked three times within it (the addon's `answers`): a relay's round
+/// trip of over a second still answers.
 const HEARD_MS = 3_000;
+/// A request not answered this long after it went, with nothing heard on its connection since, has the connection asked
+/// whether its other end is still there (HEARD_MS more): one whose endpoint is gone (its station killed, or started
+/// again with another endpoint) is dropped then, its requests failed with PeerGone, not after ANSWER_MS. A cached
+/// connection to a station started again waited the whole 30 s, then QUIC's idle timeout (the drill, 2026-11-14).
+const CHECK_MS = 2_000;
+
+/// What a request fails with when its connection was found gone (its other end did not answer on it): it got no
+/// answer, and the station that was asked may not have had it. Not a live peer that was slow (that is the timeout's).
+export class PeerGone extends Error {
+  constructor() {
+    super("the other station's connection was gone: the request got no answer from it (asked again, it is dialed anew)");
+  }
+}
+
+/// What the station transport's caller is given: its requests, and `arrived` for each connection another station
+/// opens to this one (what this one keeps to it is asked whether it is still there: a station started again dials anew).
+export type StationCall = PeerCall & { arrived(conn: Connection): void };
+
+/// Anything received on `conn` (packets, else bytes); null where its addon says nothing.
+const received = (conn: Connection): number | null => {
+  const s = conn.stats?.();
+  return s === undefined ? null : (s.rxPackets ?? s.rxBytes);
+};
 
 /// How this station asks the others: one connection kept per peer, dialed once however many requests wait for it, and
 /// let go when it fails or its peer is no longer heard. `addr`: where a peer is (its id and still.fail's relays, found
-/// by them; tests give its sockets). `answerMs`: how long an answer is waited for (tests shorten it).
+/// by them; tests give its sockets). `answerMs`: how long an answer is waited for, `checkMs` before its connection is
+/// asked whether it is still there, `heardMs` how long that ask takes at most (tests shorten them).
 export function peerCall(
   endpoint: Endpoint, cloud: Cloud, addr: (id: string) => Addr = (id) => ({ id, relays: cloud.relays() }), outside?: Outside, answerMs = ANSWER_MS,
-): PeerCall {
+  timing: { checkMs?: number; heardMs?: number } = {},
+): StationCall {
+  const checkMs = timing.checkMs ?? CHECK_MS;
+  const heardMs = timing.heardMs ?? HEARD_MS;
   const connections = new Map<string, Connection>();
+  /// Whether a connection's other end is still there: one ask a connection at a time, however many wait on it. An addon
+  /// from before (no `answers`) counts as there.
+  const asking = new Map<Connection, Promise<boolean>>();
+  const there = (conn: Connection): Promise<boolean> => {
+    if (conn.isClosed()) return Promise.resolve(false);
+    if (conn.answers === undefined) return Promise.resolve(true);
+    let ask = asking.get(conn);
+    if (ask === undefined) {
+      ask = conn.answers(heardMs).catch(() => false).finally(() => asking.delete(conn));
+      asking.set(conn, ask);
+    }
+    return ask;
+  };
+  /// Connections found gone: what waited on them fails with PeerGone.
+  const found = new WeakSet<Connection>();
+  const drop = (target: string, conn: Connection) => {
+    if (connections.get(target) === conn) connections.delete(target);
+    if (conn.isClosed()) return;
+    found.add(conn);
+    log.info("mesh", "a station's connection is gone: closed", { peer: target.slice(0, 12) });
+    conn.close(0, "not answering");
+  };
+  /// Once `conn` is found gone while `answer` waits (CHECK_MS on with nothing heard since `before`): PeerGone. `stop`
+  /// once the answer came.
+  const watch = (target: string, conn: Connection, before: number | null) => {
+    let stop = () => {};
+    const gone = new Promise<never>((_, reject) => {
+      let over = false;
+      const timer = wall.after(checkMs, () => { // timer: a deadline (the connection asked whether it is there)
+        if (over || (before !== null && (received(conn) ?? before) > before)) return;
+        void there(conn).then((yes) => {
+          if (over || yes) return;
+          drop(target, conn);
+          reject(new PeerGone());
+        });
+      });
+      stop = () => { over = true; timer(); };
+    });
+    gone.catch(() => {});
+    return { gone, stop };
+  };
   // Each request dialed its own while none was open, and one that timed out dropped its connection for the next to
   // dial another, the old one left open with its requests still run: a station following dozens of tasks on a loaded
   // one dialed dozens at once, again after each timeout, and the loaded one answered all of them (2026-10-21, one station to
@@ -202,12 +282,12 @@ export function peerCall(
   /// After a request failed on `conn`: closed, or its peer not heard, it goes (the next request dials again).
   const letGo = async (target: string, conn: Connection) => {
     if (connections.get(target) !== conn) return;
-    const heard = !conn.isClosed() && conn.answers !== undefined && (await conn.answers(HEARD_MS).catch(() => false));
+    const heard = !conn.isClosed() && conn.answers !== undefined && (await there(conn));
     if (heard || connections.get(target) !== conn) return;
     connections.delete(target);
     conn.close(0, "not answering");
   };
-  return async (target, workspace, request) => {
+  const ask: PeerCall = async (target, workspace, request) => {
     if (target === "" && request?.method === "peers") {
       const listed = roster(cloud, workspace);
       const rigs = listed.workspace === "" ? [] : cloud.rigs(listed.workspace);
@@ -218,7 +298,13 @@ export function peerCall(
     // A rig the control plane names in a workspace in security mode, not signed for here yet: asked for what its
     // person signed for it (`rig.proof`, rigs/adds.ts), and for nothing else until that checks out.
     const proof = request?.method === "rig.proof" && workspace !== null && cloud.peersCurrent && cloud.rigsNamed(workspace).some((r) => r.id === target);
-    const ws = proof ? workspace : workspaceFor(cloud, target, workspace, outside);
+    // A joined workspace whose moved chain the plane offered this station, which pins none of it yet (mesh/moved-pin.ts):
+    // its stations as the plane lists them asked the lock's own methods alone, to bring the logs and bodies that would
+    // name this station; it is none of its memberships until it pins the chain (each station asked checks the asker
+    // itself, peer.ts `member`, by the state it holds).
+    const offered = workspace !== null && cloud.peersCurrent && cloud.movedOffered?.has(workspace) === true && typeof request?.method === "string" && request.method.startsWith("lock.")
+      && (cloud.state?.joined ?? []).some((j) => j.workspace === workspace && j.peers.some((p) => p?.id === target));
+    const ws = proof || offered ? workspace : workspaceFor(cloud, target, workspace, outside);
     let conn: Connection | null = null;
     let dial: Promise<Connection> | null = null;
     const late = "peer request timed out; execution may have happened — query the same task key";
@@ -232,15 +318,20 @@ export function peerCall(
       if (!conn.alpn().equals(PEER_BYTES_ALPN)) {
         if (body !== null) throw new NoBytes("that station takes files only in chunks (it is not updated yet)");
         const stream = await conn.openBi();
+        const before = received(conn);
         const bytes = Buffer.from(JSON.stringify({ workspace: ws, request }));
         if (bytes.length > MAX_MESSAGE) throw new Error("peer request too large");
         await stream.write(bytes);
         await stream.finish();
-        const answer = JSON.parse((await readAll(stream, MAX_MESSAGE)).toString("utf8"));
+        const watched = watch(target, conn, before);
+        const read = await Promise.race([readAll(stream, MAX_MESSAGE), watched.gone]).finally(watched.stop);
+        const answer = JSON.parse(read.toString("utf8"));
         if (typeof answer?.error === "string") throw new Refused(answer.error);
         return answer?.result ?? null;
       }
       const stream = await conn.openBi();
+      // (what was heard before the request went: anything after it says its other end is there)
+      const before = received(conn);
       const head = Buffer.from(JSON.stringify({ workspace: ws, request, ...(body === null ? {} : { bytes: true }) }) + "\n");
       if (head.length > MAX_MESSAGE) throw new Error("peer request too large");
       const reader = new Reader(stream, MAX_MESSAGE);
@@ -248,7 +339,8 @@ export function peerCall(
       if (body === null) {
         await stream.write(head);
         await stream.finish();
-        answer = await reader.line();
+        const watched = watch(target, conn, before);
+        answer = await Promise.race([reader.line(), watched.gone]).finally(watched.stop);
       } else {
         await within(IDLE_MS, stream.write(head), late);
         // A refusal can come before they all went (the other end read none of them): the rest is not sent.
@@ -257,7 +349,8 @@ export function peerCall(
         let sent = false;
         const sending = sendBytes(stream, body).then(() => void (sent = true));
         await Promise.race([sending, answered]);
-        answer = await within(answerMs, answered, late);
+        const watched = watch(target, conn, before);
+        answer = await within(answerMs, Promise.race([answered, watched.gone]), late).finally(watched.stop);
         if (!sent) {
           await stream.reset(STOPPED).catch(() => {});
           sending.catch(() => {});
@@ -276,12 +369,23 @@ export function peerCall(
       // Set inside `call` (which TypeScript does not follow).
       const failed = conn as Connection | null;
       const dialed = dial as Promise<Connection> | null;
+      // (its connection found gone, by this request or another: said so, whatever the stream failed with as it closed)
+      if (failed !== null && found.has(failed)) throw error instanceof PeerGone ? error : new PeerGone();
       if (!(error instanceof Refused) && !(error instanceof NoBytes) && failed !== null) void letGo(target, failed);
       // Not connected in time: the next request dials again rather than wait on this dial.
       if (failed === null && dialed !== null && dialing.get(target) === dialed) dialing.delete(target);
       throw error;
     }
   };
+  /// A station connected to this one: the connection kept to it, where it is not the same station's still (started
+  /// again: another endpoint, the one kept leading nowhere), is found gone and dropped, what waits on it failed at once.
+  const arrived = (conn: Connection) => {
+    const target = conn.remoteId();
+    const kept = connections.get(target);
+    if (kept === undefined || kept === conn || kept.isClosed()) return;
+    void there(kept).then((yes) => { if (!yes) drop(target, kept); });
+  };
+  return Object.assign(ask, { arrived });
 }
 
 /// Another station's connection: each of its requests answered by the remote tasks, while it belongs.
@@ -377,7 +481,7 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
         // (a workspace whose chain moved, this station waiting for its root's log or `open`: its chain's stations are
         // answered only the lock's own, which bring it what it lacks: Cloud `rosterOf`)
         const w = envelope.workspace && envelope.workspace !== cloud.home() ? envelope.workspace : null;
-        if (cloud.waiting(w) && !(typeof method === "string" && method.startsWith("lock."))) throw new Error(NOT_GIVEN);
+        if (cloud.waiting(w) && !heardWaiting(cloud, method)) throw new Error(NOT_GIVEN);
         result = typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace, peer)
           // The workspace's ways (mesh/ways.ts), kept level between its stations.
           : typeof method === "string" && method.startsWith("ways.") ? answerWays(waysOf(cloud), envelope.request, envelope.workspace ?? cloud.home() ?? "")

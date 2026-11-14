@@ -99,7 +99,17 @@ test("two stations come level in bodies in any order of arrival, each giving onl
     const bodies = [...w.alice.bodies.values()];
     s[0]!.takeBodies(null, first === 0 ? bodies : [...bodies].reverse());
     s[1]!.takeBodies(null, [dan.body, ...bodies.slice(3)]);
-    assert.equal(s[1]!.waiting(), true, "s1 has no open in force yet");
+    // (s1 holds no `open` of the root's yet: its state is the chain's as it moved, which still says the settings, the
+    // members and the stations s0 and s1 (rules/src/lock/state4.mbt `state4_moved`), so it is in force; before the carry
+    // it waited and gave nothing till s0's bodies brought it the `open`. Dan is not in it yet: the chain bound bob to no
+    // log, so bob's log says nothing there till alice's `member bob` (from s0) binds it)
+    assert.equal(s[1]!.waiting(), false, "s1 in force by the chain as it moved, no open of the root's yet");
+    assert.deepEqual([...s[1]!.locked()!.state!.members.keys()].sort(), ["alice", "bob", "carol"], "dan not yet: bob's log not bound to him");
+    // (each giving only what its state lets it: s1 gives s0, a station its state names, all it keeps; the third, which
+    // only the control plane lists, nothing)
+    const keeps1 = [...s[1]!.bodies(null).all().keys()].sort();
+    assert.deepEqual((answerLock(s[1]!, { method: "lock.bodies.kept" }, WS, w.stations[0]!.hex) as any).hashes.sort(), keeps1);
+    assert.deepEqual(answerLock(s[1]!, { method: "lock.bodies.kept" }, WS, w.stations[2]!.hex), { hashes: [] });
     const keyOf = (c: Cloud) => c.state!.station;
     const call = (from: Cloud) => async (peer: string, ws: string | null, request: unknown) => answerLock(s.find((x) => keyOf(x) === peer)!, request, ws ?? WS, keyOf(from));
     const order = first === 0 ? [0, 1] : [1, 0];
@@ -107,6 +117,7 @@ test("two stations come level in bodies in any order of arrival, each giving onl
     const all = [...w.alice.bodies.keys(), dan.h].sort();
     for (const c of s) assert.deepEqual([...c.bodies(null).all().keys()].sort(), all);
     for (const c of s) assert.deepEqual([...c.locked()!.state!.members.keys()].sort(), ["alice", "bob", "carol", "dan"]);
+    for (const c of s) assert.deepEqual(answerLock(c, { method: "lock.bodies.kept" }, WS, w.stations[2]!.hex), { hashes: [] }, "the third given none, level");
   }
 });
 

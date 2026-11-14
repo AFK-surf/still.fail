@@ -591,10 +591,11 @@ fn list_scroll(key : String) -> @view.Scroll {
 }
 
 ///|
-/// Whether a list as `view` says has the search at its top (sidebar.mbt's lines'): where the screen has no keys for ⌘K
-/// (touch's: the theme's), while it has rows to look in.
+/// Whether a list as `view` says has the search at its top (sidebar.mbt's lines'): out of view till the list is pulled
+/// down past its first row (Telegram's; asked 2026-11-14, a mouse's as a finger's, ⌘K beside it), while it has rows to
+/// look in; not where the system's glass has a search of its own (sfdesk's chats.mbt sidebar_glass).
 fn search_tucked(view : ChatsView?) -> Bool {
-  if @sf.theme().chat_list.keys || @sf.native_able() {
+  if @sf.native_able() {
     return false
   }
   match view {

@@ -82,16 +82,6 @@ fn said_msg(
 }
 
 ///|
-/// What a Tester draws (head_drawn's), what is drawn from `after` on (across) set `back` further back: what comes
-/// after a name given room of its own where the old view's had none.
-fn said_drawn_back(t : @ui.Tester, after : Double, back : Double) -> String {
-  let x = fn(at : Double) { if at >= after { at - back } else { at } }
-  t.words().map(fn(w) { "\{w.0}@\{x(w.1)},\{w.2} \{w.3}x\{w.4} a\{w.5}" }).join("\n") +
-  "\n" +
-  t.drawn_rects().map(fn(r) { "\{x(r.0)},\{r.1} \{r.2}x\{r.3} \{r.4}" }).join("\n")
-}
-
-///|
 /// The middle of where the words `s` of a paragraph in pieces are drawn, its first line's (a link's, a line's).
 fn said_piece(t : @ui.Tester, s : String) -> (Double, Double) {
   match t.run_rects(s).get(0) {
@@ -281,18 +271,9 @@ test "what a person wrote, made once as nodes, is drawn as the old view drew it:
       let old = said_old_row(w, c.1)
       old.run_for(@ui.move_most_ms)
       let was = head_drawn(old)
-      let (nx, _, nw, _) = old.rect_of("Ana").unwrap_or((0.0, 0.0, 0.0, 0.0))
       let t = said_new_row(w, fn() { c.1 })
       t.run_for(@ui.move_most_ms)
-      if c.1.by.from != "" {
-        // (a name pressed, shorter than a press's least room less the head's gap: what is after it that much further
-        // on, the rest as it was)
-        let further = @ui.room_least() - msg_head_gap - nw
-        assert_true(further > 0.0, msg=at)
-        assert_eq(said_drawn_back(t, nx + nw, further), was, msg=at)
-      } else {
-        assert_eq(head_drawn(t), was, msg=at)
-      }
+      assert_eq(head_drawn(t), was, msg=at)
       let faults = said_audit(t, if c.0.contains("long") { 1 } else { 0 })
       assert_true(faults.is_empty(), msg=at + ": " + faults.join(" | "))
     }
@@ -620,13 +601,14 @@ test "under the viewer's message, its time gives way to the runtime it waits for
 }
 
 ///|
-test "a name pressed shorter than a press's room has room of its own, its time after it so much further on: a keyboard and mouse's, a finger's" {
+test "a name pressed shorter than a press's room stands compactly with its time msg_head_gap after it: a keyboard and mouse's, a finger's" {
+  let msg_head_gap = 6.0
   for platform in [0, 2] {
     let t = said_new_row(760.0, fn() { said_msg(from=said_chat) }, platform~)
     t.run_for(@ui.move_most_ms)
     let (nx, _, nw, _) = t.rect_of("Ana").unwrap()
     let (tx, _, _, _) = t.rect_of("2 分钟前").unwrap()
-    assert_true((tx - (nx + @ui.room_least() - msg_head_gap + msg_head_gap)).abs() < 0.5, msg="platform \{platform}: \{Repr((nx, nw, tx))}")
+    assert_true((tx - (nx + nw + msg_head_gap)).abs() < 0.5, msg="platform \{platform}: \{Repr((nx, nw, tx))}")
     let faults = said_audit(t, 0)
     assert_true(faults.is_empty(), msg="platform \{platform}: " + faults.join(" | "))
   }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createHash } from "node:crypto";
-import { MD_READING, type MdStore, lineOf, markdown, mdKey, parse, plainOf } from "../src/markdown.ts";
+import { MD_READING, type MdStore, lineOf, markdown, mdKey, parse, plainOf, refreshMarkdown } from "../src/markdown.ts";
 import { wordsIn } from "./md-words.ts";
 
 /// The tree of `text` with its runs read out of it, as a client draws it.
@@ -161,6 +161,27 @@ test("markdown_is_read_once_on_the_device_where_its_tree_is_kept", () => {
   assert.notEqual(mdKey("ab"), mdKey("ba"));
 });
 
+test("a boxed formula kept by reading 9 is refreshed with its hollow frame", () => {
+  const text = "$$\n\\boxed{\\Pr(U\\perp V)=0}\n$$";
+  const old = structuredClone(parse(text));
+  const drawing = (old[0] as [string, { drawing: { width: number; height: number; rects: number[][] } }])[1].drawing;
+  drawing.rects = [[33.5, 33.5, drawing.width - 67, drawing.height - 67]];
+  const oldKey = mdKey(text).replace(/^\d+\./, "9.");
+  const kept = new Map([[oldKey, JSON.stringify(old)]]);
+  const requested: string[] = [];
+  const store: MdStore = {
+    has: (key) => kept.has(key), get: (key) => kept.get(key) ?? null,
+    put: (key, json, replaces) => { kept.set(key, json); if (replaces) kept.delete(replaces); },
+    refresh: (value) => requested.push(value),
+  };
+  assert.deepEqual(markdown(text, store), old, "the older tree can be shown while it is refreshed");
+  assert.deepEqual(requested, [text]);
+  refreshMarkdown(text, store, oldKey);
+  const current = (markdown(text, store)[0] as [string, { drawing: { rects: number[][] } }])[1].drawing;
+  assert.equal(current.rects.length, 4, "the cached black rectangle is replaced by four frame edges");
+  assert(kept.has(mdKey(text)) && !kept.has(oldKey));
+});
+
 test("markdown_kept_on_the_device_is_read_as_this_reading_reads_it_or_its_reading_says_otherwise", () => {
   // What these are read as, as a digest: changed, the trees kept on devices by cores before are not this reading's
   // (MD_READING one more in markdown.ts, so they are read afresh), and this with it.
@@ -169,13 +190,13 @@ test("markdown_kept_on_the_device_is_read_as_this_reading_reads_it_or_its_readin
     "- 一\n- 二\n  - 内\n\n1. 一\n\n2. 二\n\n- [x] 好了\n- [ ] 没好",
     "| 项 | 数 |\n|:--|--:|\n| 打开 | 1ms |\n| 读 | \\| 竖线 |",
     "```ts\nconst a: number = 1; // 注释\nexport function f() { return `x${a}`; }\n```\n\n```sh\necho \"$HOME\" && ls -la\n```\n\n```\nplain\n```",
-    "行内 $x^2 + y_1$ 和 \\(\\frac{a}{b}\\)，\n\n$$\n\\sum_{i=0}^{n} i = \\frac{n(n+1)}{2}\n$$\n\n\\[ e^{i\\pi} + 1 = 0 \\]\n\n价格 $5 和 $10",
+    "行内 $x^2 + y_1$ 和 \\(\\frac{a}{b}\\)，\n\n$$\n\\sum_{i=0}^{n} i = \\frac{n(n+1)}{2}\n$$\n\n\\[ e^{i\\pi} + 1 = 0 \\]\n\n$$\\boxed{\\Pr(U\\perp V)=0}$$\n\n价格 $5 和 $10",
     "<b>不要</b> 原样\n第二行  \n硬换行 &amp; &lt; &#x4e2d;\n\n![图](a.png \"标题\") [引用][r]\n\n[r]: https://r.dev",
     "前面**“强调。”**后面，*斜体。*继续，~~删除。~~继续。",
     "[对话](https://still.fail/o/ws1/st1/c-1) https://still.fail/w/ws1/s/st1/screen/desktop [https://github.com/a/b/pull/1](https://github.com/a/b/pull/1)",
   ];
   const digest = createHash("sha256").update(JSON.stringify(texts.map(parse))).digest("hex").slice(0, 16);
-  assert.equal(`${MD_READING}:${digest}`, "9:b80ce24d3a263643", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
+  assert.equal(`${MD_READING}:${digest}`, "10:c633e49572d2c2a1", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
 });
 
 test("a_link_or_picture_alone_on_its_line_is_a_paragraph_of_its_own_with_no_blank_line_round_it", () => {

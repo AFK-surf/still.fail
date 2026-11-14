@@ -140,6 +140,10 @@ export const TOPICS: Record<string, Spec> = {
   filePeek: { station: S, key: S, path: S, line: ["u32", "skip"] },
   messagePeek: { station: S, thread: ["u64", "req"], seq: ["u64", "req"] },
   newChat: { scope: S },
+  /// A preset whole, the person's own or someone else's (views/presets.ts), as its page shows and edits it.
+  preset: { scope: S, id: S },
+  /// Others' presets of a workspace, read as it is shown (a press: views/presets.ts).
+  otherPresets: { scope: S },
   shareIn: { scope: S, source: S, query: ["string", "def"] },
   pick: { station: S, of: S },
   chatJobs: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], compact: ["bool", "skipFalse"], summary: ["bool", "skipFalse"] },
@@ -153,6 +157,8 @@ export const TOPICS: Record<string, Spec> = {
   usage: { scope: S, days: ["u32", "skip"], split: ["string", "skip"], only: ["object", "skip"], day: ["string", "skip"] },
   fleet: { scope: S },
   railCard: { scope: S, place: S },
+  // The workspace's stations whose newer release waits for this person (views/station-updates.ts).
+  stationUpdates: { scope: S },
   settings: { scope: S },
   stationResources: { station: S },
   resources: { scope: S, station: ["string", "skip"] },
@@ -248,7 +254,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
 }
 
 const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "linkPreview", "filePeek", "messagePeek"]);
-const VIEWS = new Set(["chats", "chatRow", "stations", "station", "stationPart", "profiles", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEWS = new Set(["chats", "chatRow", "stations", "station", "stationPart", "profiles", "profile", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "stationUpdates", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.
 export function topicStation(topic: Topic): string | null {

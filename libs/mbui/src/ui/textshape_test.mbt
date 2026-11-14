@@ -100,3 +100,24 @@ test "brackets reading right to left are drawn mirrored" {
   let (lay2, _, _) = t2.rich_of("(").unwrap()
   assert_eq(lay2.keys[1], 0x28)
 }
+
+///|
+test "a Chinese face's marks are narrow among Latin letters, full width beside Han" {
+  // (the fake host as 思源黑体: a mark a whole em unless asked proportional; letters half an em, Han a whole one)
+  let t = one_rich("it\u{2019}s ok")
+  t.cjk_face_marks()
+  t.glyphs_moved_on()
+  t.frame()
+  let (lay, _, _) = t.rich_of("ok").unwrap()
+  // i, t, the apostrophe: half an em each
+  assert_eq(lay.adv[2], 5.0)
+  assert_eq(lay.xs[3], 15.0)
+  // Han beside the quotes: they stay a whole em; the Latin piece after it is cut off and set narrow
+  let t = one_rich("\u{4F60}\u{201C}A\u{201D} it\u{2019}s")
+  t.cjk_face_marks()
+  t.glyphs_moved_on()
+  t.frame()
+  let (lay, _, _) = t.rich_of("it").unwrap()
+  assert_eq(lay.starts, [0, 1, 2, 3, 4, 5, 6, 7, 8])
+  assert_eq(lay.adv, [10.0, 10.0, 5.0, 10.0, 5.0, 5.0, 5.0, 5.0, 5.0])
+}

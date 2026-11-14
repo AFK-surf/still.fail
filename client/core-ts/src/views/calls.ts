@@ -58,6 +58,7 @@ export class ViewCalls {
   readonly #views: Views;
   readonly #deliveries = new Map<string, Deferred.Deferred<unknown, CoreError>>();
   readonly #tails = new Map<string, Deferred.Deferred<unknown, CoreError>>();
+  readonly #archives = new Map<string, Deferred.Deferred<unknown, CoreError>>();
 
   constructor(inner: Inner, views: Views) {
     this.#inner = inner;
@@ -66,6 +67,22 @@ export class ViewCalls {
 
   get #local() {
     return this.#views.local;
+  }
+
+  /// A chat's archive writes reach its station in the order asked, including a restore from sending a message.
+  #archiveInOrder(station: string, thread: number | null, session: string, work: Effect.Effect<unknown, CoreError>): Effect.Effect<unknown, CoreError> {
+    return Effect.suspend(() => {
+      const key = JSON.stringify([station, thread === null ? ["session", session] : ["thread", thread]]);
+      const before = this.#archives.get(key);
+      const done = Deferred.makeUnsafe<unknown, CoreError>();
+      this.#archives.set(key, done);
+      return Effect.andThen(before ? Effect.ignore(Deferred.await(before)) : Effect.void, work).pipe(
+        Effect.onExit((exit) => Effect.sync(() => {
+          Deferred.doneUnsafe(done, exit);
+          if (this.#archives.get(key) === done) this.#archives.delete(key);
+        })),
+      );
+    });
   }
 
   /// The chat as its open view knows it; keep the session for older stations' restore route too.
@@ -85,8 +102,9 @@ export class ViewCalls {
     return Effect.gen({ self: this }, function* () {
       const op = yield* request("chat.archive", { station, thread, session, archived: false });
       const change = this.#local.changing(station, thread, session, {}, false);
-      const result = yield* Effect.result(this.#inner.stations.perform(op, ctx));
+      const result = yield* Effect.result(this.#archiveInOrder(station, thread, session, this.#inner.stations.perform(op, ctx)));
       this.#local.changed(change, result._tag === "Success", this.#inner.data.rowsRev(station));
+      if (result._tag === "Success") this.#inner.stations.checkRestores(station, { change });
       return yield* settle(result);
     });
   }
@@ -385,14 +403,14 @@ export class ViewCalls {
     };
     handlers.chatArchive = (_inner, call, progress, at, ctx) => {
       const c = call as Of<"chatArchive">;
+      const self = this;
       return Effect.gen(function* () {
         if (!("station" in c.op.target)) return yield* Effect.fail(CoreError.invalid(t("core-misc.params.station")));
         const station = c.op.target.station;
-        if (c.archived) local.archiving(station, c.thread, c.session, true);
         const change = local.changing(station, c.thread, c.session, {}, c.archived);
-        const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx));
-        if (c.archived) local.archiving(station, c.thread, c.session, false);
+        const result = yield* Effect.result(self.#archiveInOrder(station, c.thread, c.session, handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx)));
         local.changed(change, result._tag === "Success", inner.data.rowsRev(station));
+        if (!c.archived && result._tag === "Success") inner.stations.checkRestores(station, { change });
         return yield* settle(result);
       });
     };

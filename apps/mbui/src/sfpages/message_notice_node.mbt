@@ -35,7 +35,7 @@ fn notice_said_node(
 }
 
 ///|
-/// A notice's pill, its 取消 after it and its time under it (system_notice's notice_across) in `v`: notice_said_node's.
+/// A notice's pill and its time under it (system_notice's notice_across) in `v`: notice_said_node's.
 fn notice_body_node(
   v : @view.View,
   src : Source,
@@ -46,65 +46,30 @@ fn notice_body_node(
   pill_made : (@view.View) -> Unit,
 ) -> Unit {
   let open = fn() { opened.get(m().ts).unwrap_or(false) }
-  let retry = fn() { notice_after(m()) is Some(_) }
-  // its 取消 or 重试, as it was last offered: what it stays while it goes along the row
-  // (a plain cell, no signal: what binds through `after` reads `m` and changes with it already)
-  let last = Ref(("", @sf.t("common.cancel"), "session.cancelRetry"))
-  let after = fn() {
-    match notice_after(m()) {
-      Some(a) => {
-        last.val = a
-        a
-      }
-      None => last.val
-    }
-  }
   v.box(fn(across) {
     @sf.style_node(across, fn() { notice_across })
     across.box(fn(beside) {
       @sf.style_node(beside, fn() { notice_with_action })
       notice_pill_node(beside, src, here, m, open, opened, copied, pill_made)
-      // (its way along the row the framework's: from nothing to as wide as it is as a retry begins, and back as it
-      // ends, the pill, centred in the chat, moved aside by half as much)
-      beside.show(retry, along_row=true, fn(a) {
-        @sf.style_node(a, fn() { notice_action_room }, in_row=true)
-        a.box(fn(inner) {
-          @sf.style_node(inner, fn() { notice_action_in })
-          let on = fn() { [("station", here.station), ("key", after().0)] }
-          @sf.button_node(
-            inner,
-            fn() { after().1 },
-            fn() {
-              let now = @signals.untracked(m)
-              let (session, label, call) = @signals.untracked(after)
-              act(src, label, "", call, {
-                "station": Json::string(here.station),
-                "key": Json::string(session),
-                "thread": Json::number(now.thread),
-                "seq": Json::number(now.seq),
-              })
-            },
-            busy=fn() { core_doing(src, [after().2], on()) },
-            disabled=fn() { !retry() || src.read_only || (here.view)().offline },
-          )
-          |> ignore
-        })
-        |> ignore
-      })
     })
     |> ignore
-    across.show(open, fn(t) { message_time_node(t, here.tips, fn() { m().time }) })
+    // (its time under it while it is open: one against nothing said to leave, as a show said so would not (it holds
+    // its place unfaded, then lets it go at once): coming, its place opens and it is seen once that holds it whole;
+    // going, it fades where it is, its place closing after; no words of it cut (msg_part_leave_ms; the coordinator of
+    // the migration, 2026-11-14))
+    across.pick(open, leave=msg_part_leave_ms, fn(t, on) { if on { message_time_node(t, here.tips, fn() { m().time }) } })
   })
   |> ignore
 }
 
 ///|
-/// How a notice's words are drawn now (system_notice's): a chat's run changed, open, a line each (`Lines`), else on one
-/// line or what changed (`Short`); about a profile, its link at its end (`Linked`); else its Markdown, open or on one
-/// line (`Md`).
+/// How a notice's words are drawn now (system_notice's): a chat's run changed, open, a line each (`Lines`), else to
+/// another runtime or model each side after its mark (`Sides`), else on one line or what changed (`Short`); about a
+/// profile, its link at its end (`Linked`); else its Markdown, open or on one line (`Md`).
 #derive(Eq)
 priv enum NoticeWords {
   Lines
+  Sides
   Short
   Linked(Bool)
   Md(Bool)
@@ -114,7 +79,13 @@ priv enum NoticeWords {
 /// How notice `m`'s words are drawn, `open` or not (NoticeWords).
 fn notice_words_of(m : Message, open : Bool) -> NoticeWords {
   if m.notice_short != "" || m.notice_lines.length() > 0 {
-    if open && m.notice_lines.length() > 0 { Lines } else { Short }
+    if open && m.notice_lines.length() > 0 {
+      Lines
+    } else if m.notice_sides is Some(_) {
+      Sides
+    } else {
+      Short
+    }
   } else if m.profile != "" && m.notice_link >= 0 && m.notice_link <= m.notice_words.length() {
     Linked(open)
   } else {
@@ -123,11 +94,12 @@ fn notice_words_of(m : Message, open : Bool) -> NoticeWords {
 }
 
 ///|
-/// What a notice's pill ends in (system_notice's): · 安装 where the station lacks the chat's runtime, else · 上报 where
-/// the failure is reportable, else nothing.
+/// What a notice's pill ends in (system_notice's): · 安装 where the station lacks the chat's runtime, else its 取消, 重试
+/// or 重新分配账号 while offered (notice_after), else · 上报 where the failure is reportable, else nothing.
 #derive(Eq)
 priv enum NoticeEnd {
   Install
+  Act
   Report
   NoEnd
 }
@@ -169,7 +141,14 @@ fn notice_pill_node(
         let now = m()
         match now.install {
           Some(i) if i.action != "" => Install
-          _ => if now.reportable { Report } else { NoEnd }
+          _ =>
+            if notice_after(now) is Some(_) {
+              Act
+            } else if now.reportable {
+              Report
+            } else {
+              NoEnd
+            }
         }
       }
       line.pick(end, fn(e, which) {
@@ -178,6 +157,32 @@ fn notice_pill_node(
             let i = fn() { m().install.unwrap_or(mine_installed) }
             notice_action_node(e, fn() { i().action }, ink, fn() { install_busy(src, here.station, i()) }, fn() {
               install_runtime(src, here.station, @signals.untracked(i))
+            })
+          }
+          Act => {
+            // (as it was last offered while it goes)
+            let last = Ref(("", "", ""))
+            let after = fn() {
+              match notice_after(m()) {
+                Some(a) => {
+                  last.val = a
+                  a
+                }
+                None => last.val
+              }
+            }
+            let on = fn() { [("station", here.station), ("key", after().0)] }
+            notice_action_node(e, fn() { after().1 }, ink, fn() { src.read_only || (here.view)().offline || core_doing(src, [after().2], on()) }, fn() {
+              let now = @signals.untracked(m)
+              let (session, label, call) = @signals.untracked(after)
+              if !src.read_only && !(here.view)().offline {
+                act(src, label, "", call, {
+                  "station": Json::string(here.station),
+                  "key": Json::string(session),
+                  "thread": Json::number(now.thread),
+                  "seq": Json::number(now.seq),
+                })
+              }
             })
           }
           Report => notice_report_node(e, src, here, m, ink)
@@ -212,6 +217,30 @@ fn notice_words_node(v : @view.View, here : MessageNodeHere, m : () -> Message, 
       v.each(fn() { m().notice_lines.mapi(fn(i, l) { (i, l) }) }, fn(l) { l.0 }, fn(b, l) {
         @sf.words_node(b, fn() { l.get().1 }, fn() { style(true) }) |> ignore
       })
+    Sides =>
+      // (where the line has not the room for both, what it ran on left out and what it runs on now led by 换成:
+      // View::fits, View::drops)
+      v.box(fn(r) {
+        @sf.style_node(r, fn() { notice_sides }, in_row=true)
+        r.fits(Is(true)) |> ignore
+        let sides = fn() { m().notice_sides.unwrap_or(no_sides) }
+        let st = fn() { style(false) }
+        r.box(fn(lead) {
+          @sf.style_node(lead, fn() { notice_sides_part }, in_row=true)
+          lead.drops(Is(-1)) |> ignore
+          @sf.words_node(lead, fn() { sides().to }, st) |> ignore
+        })
+        |> ignore
+        r.box(fn(was) {
+          @sf.style_node(was, fn() { notice_sides_part }, in_row=true)
+          was.drops(Is(1)) |> ignore
+          notice_side_node(was, fn() { (sides().was_maker, sides().was_runtime) }, fn() { sides().was }, st, cuts=false)
+          @sf.words_node(was, fn() { "→" }, st) |> ignore
+        })
+        |> ignore
+        notice_side_node(r, fn() { (sides().now_maker, sides().now_runtime) }, fn() { sides().now }, st, cuts=true)
+      })
+      |> ignore
     Short =>
       v.box(fn(w) {
         w
@@ -267,6 +296,35 @@ fn notice_words_node(v : @view.View, here : MessageNodeHere, m : () -> Message, 
       |> ignore
     }
   }
+}
+
+///|
+/// A run's change with no sides (a notice's words that are none such: drawn as nothing).
+// kept across runs: a value (no field of it changes)
+let no_sides : RunSides = { was: "", now: "", to: "", was_maker: "", was_runtime: "", now_maker: "", now_runtime: "" }
+
+///|
+/// A side of a run's change (notice_words_node's `Sides`) in `v`: the mark of who made its model (`mark`: its maker,
+/// its runtime), then its words in `style`, cut short where the line has not the room where it `cuts`.
+fn notice_side_node(
+  v : @view.View,
+  mark : () -> (String, String),
+  words : () -> String,
+  style : () -> @ui.TextStyle,
+  cuts~ : Bool,
+) -> Unit {
+  let size = @ui.tree_theme().text_size(notice_size).0
+  v.pick(mark, fn(b, now) { @sf.maker_mark_node(b, now.0, now.1, size) |> ignore })
+  v.box(fn(w) {
+    w
+    .words(By(words))
+    .words_look(By(fn() { @ui.style_words(style()) }))
+    .ink(By(fn() { @ui.style_ink(style()) }))
+    .allow_ellipsis(Is(true))
+    .cuts(Is(cuts))
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|

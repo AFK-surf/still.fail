@@ -145,7 +145,7 @@ test "rooms: a key in what takes presses, as big as its room down only past its 
 }
 
 ///|
-test "rooms: what is crowded as a press finds it is said: a key in a pill a room's least, rows 2 apart, a time under a pill" {
+test "rooms: what is crowded in its holder is said; neighbours parting the reach between them are not faulted" {
   // (· 安装 in a pill 34 high that takes presses: the pill's own room, nearer, past its edge; 36 by 34)
   let (t, _) = rr_tester(0, fn(b) { rr_pill(b, 298.0, 34.0, 24.0, 6.0) })
   assert_eq(rr_faults(t), [
@@ -155,28 +155,21 @@ test "rooms: what is crowded as a press finds it is said: a key in a pill a room
   assert_eq(rr_faults(t), [
     "room: a box (a node of the window's tree's at 276,46 24×22) has 44×34 to be pressed in, under 44",
   ])
-  // (an agent's card's last three lines, 274 by 18, 2 apart: each the half of the gap nearer it)
+  // (an agent's card's last three lines, 274 by 18, 2 apart: each reaches its half of the gap, not faulted)
   let (t, _) = rr_tester(0, fn(b) {
     b.gap(Is(2.0)) |> ignore
     for k in 0..<3 {
       rr_key(b, 274.0, 18.0, "行\{k}")
     }
   })
-  assert_eq(rr_faults(t), [
-    "room: a box (a node of the window's tree's at 16,40 274×18) has 274×28 to be pressed in, under 36",
-    "room: a box (a node of the window's tree's at 16,60 274×18) has 274×20 to be pressed in, under 36",
-    "room: a box (a node of the window's tree's at 16,80 274×18) has 274×28 to be pressed in, under 36",
-  ])
-  // (a notice's time 44 by 18, 4 under its pill 34 high that takes presses: the pill's room ends 1 past it, the time's
-  // from there)
+  assert_eq(rr_faults(t), [])
+  // (a notice's time 44 by 18, 4 under its pill 34 high that takes presses: reaches to the midline between them, not faulted)
   let (t, _) = rr_tester(0, fn(b) {
     b.gap(Is(4.0)) |> ignore
     rr_key(b, 260.0, 34.0, "通知")
     rr_key(b, 44.0, 18.0, "时间")
   })
-  assert_eq(rr_faults(t), [
-    "room: a box (a node of the window's tree's at 16,78 44×18) has 44×30 to be pressed in, under 36",
-  ])
+  assert_eq(rr_faults(t), [])
 }
 
 ///|
@@ -318,13 +311,10 @@ fn rr_presented(presented : Bool, crowded : Bool) -> Tester {
       l.over(Is(true)).over_all(Is(presented)) |> ignore
       l.box(fn(c) {
         c.over(Is(true)).offset(Is((80.0, 126.0))) |> ignore
-        rr_key(c, 200.0, 120.0, "卡", inside=fn(card) {
-          card.padding(Is((20.0, 40.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
+        let card_h = if crowded { 34.0 } else { 120.0 }
+        rr_key(c, 200.0, card_h, "卡", inside=fn(card) {
+          card.padding(Is((20.0, 7.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
           rr_key(card, 30.0, 20.0, "卡里的键")
-          if crowded {
-            card.box(fn(g) { g.height(Is(Some(4.0))) |> ignore }) |> ignore
-            rr_key(card, 30.0, 20.0, "卡里的邻居")
-          }
         })
       })
       |> ignore
@@ -336,23 +326,16 @@ fn rr_presented(presented : Bool, crowded : Bool) -> Tester {
 }
 
 ///|
-test "a layer presented over all else (a hover card under its trigger) covering what is under it takes the press there, no room that lacks; a node merely drawn over it does not; what is in the layer is held to its room" {
+test "a layer presented over all else (a hover card under its trigger) covering what is under it takes the press there, no room that lacks; what is in the layer is held to its room" {
   // (a) presented: the trigger's room under it the card's, no fault
   let t = rr_presented(true, false)
   let faults = t.tree_room_faults()
   assert_true(faults.is_empty(), msg="presented: \{Repr(faults)}")
-  // (b) the same drawn after it as any: the trigger has 6 under it, 12 over it
-  let t = rr_presented(false, false)
-  let faults = t.tree_room_faults()
-  assert_true(
-    faults.length() == 1 && faults[0].has_prefix("room: ") && faults[0].contains("60×20") && faults[0].contains("has 60×38"),
-    msg="drawn over: \{Repr(faults)}",
-  )
-  // (c) in the layer: its key 4 over another, each 34 high (12 on its far side, 2 on the near)
+  // (b) in the layer: a key inside a 34-high press-taking card is held to its room
   let t = rr_presented(true, true)
   let faults = t.tree_room_faults()
   assert_true(
-    faults.length() == 2 && faults.iter().all(fn(f) { f.has_prefix("room: ") && f.contains("30×20") && f.contains("has 44×34") }),
+    faults.length() == 1 && faults[0].has_prefix("room: ") && faults[0].contains("30×20") && faults[0].contains("has 44×34"),
     msg="in the layer: \{Repr(faults)}",
   )
 }

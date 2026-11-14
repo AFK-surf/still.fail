@@ -3,6 +3,15 @@
 // workspace as every chat does). A workspace's presets are its agent home's presets.json; a chat opened with one keeps a
 // copy of it in its session workspace (`.stillfail-preset.json`), so a preset changed later changes none of the chats
 // already opened with it.
+//
+// A preset is its person's (`owner`), carried by that person's devices to every station of the workspace (the user,
+// 2026-11-14): a device keeps its person's records, reads each station's (GET /presets/kept), keeps the newer of each
+// (client/core-ts/src/preset-records.ts `newerRecord`) and brings a station what it lacks (PUT /presets/kept). The
+// stations do not bring them level with each other. A station keeps and gives what it is brought, as it was brought;
+// it changes a record itself only for an app from before (POST, PUT, DELETE /presets), counting the change (`rev`), a
+// deletion kept as a record of its own (`gone`) so that it is not brought back. Every live record it keeps in a
+// workspace is its agents' (chat_create `preset`) and opens a chat here, whoever's and wherever it was made; an app
+// from before is listed only those made here (`home`), so that one carried to three stations is not shown three times.
 import { type Dirent, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
@@ -11,9 +20,27 @@ import { randomBytes } from "node:crypto";
 import { protectedPlace } from "../drive/fs.ts";
 import { SKILL_HOMES } from "./agent-home.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
+import {
+  DIRS_MAX,
+  type GoneRecord,
+  INSTRUCTIONS_MAX,
+  type KeptRecord,
+  NAME_MAX,
+  type PresetRecord,
+  canonical,
+  goneKept,
+  isGone,
+  modelOf,
+  newerRecord,
+  recordOf,
+  recordsKept,
+  stationsOf,
+} from "../../../client/core-ts/src/preset-records.ts";
 
-/// A directory a preset works with: a path, and the repository it is a clone of (its origin), if one. `station`
-/// (its address) and `stationName`: another station of the workspace's it is on; none: the station the preset is on.
+/// A directory a preset works with: a path, and the repository it is a clone of (its origin), if one. `station`: the
+/// station it is on (its address: what a device carried says of every folder, what the app says of another station's);
+/// none: this station (one made here by an app from before). `stationName`: that station's name as an app from before
+/// said it (shown by those apps; not carried, the name is looked up where it is told).
 /// In a chat's copy, `elsewhere`: the station it is on by name, where that is not the chat's.
 export type PresetDir = { path: string; repo: string | null; station?: string; stationName?: string; elsewhere?: string; guides?: Guide[]; skills?: string[] };
 
@@ -49,7 +76,16 @@ export type Preset = {
   createdBy: string;
   createdAt: number;
   updatedAt: number;
+  /// The `sub` of the person it is of ("" on one from before, until their device says it).
+  owner: string;
+  /// How many times it was changed, from 1 (one from before: 1).
+  rev: number;
+  /// The id of the station it was made on (one from before: this station's).
+  home: string;
 };
+
+/// A preset deleted, as kept so that it is not brought back (preset-records.ts).
+export type PresetGone = GoneRecord;
 
 /// What a chat was opened with: the preset as it was then, each folder's `elsewhere` said where it is not the chat's
 /// station's.
@@ -80,9 +116,9 @@ export function presetRefusal(
 
 const FILE = "presets.json";
 const COPY = ".stillfail-preset.json";
-const NAME_MAX = 60;
-const INSTRUCTIONS_MAX = 20_000;
-const DIRS_MAX = 20;
+// (the deleted presets it keeps: preset-records.ts `goneKept`, so many of each owner's, the rule a device keeps too)
+/// The live presets a workspace's file keeps at most: one more a device brings is refused.
+export const LIVE_MOST = 1000;
 
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
@@ -98,45 +134,13 @@ function dirsOf(v: unknown): PresetDir[] {
   });
 }
 
-function modelOf(v: unknown): PresetModel | undefined {
-  if (typeof v !== "object" || v === null) return undefined;
-  const o = v as Record<string, unknown>;
-  const m = (str(o.model) ?? "").trim();
-  if (m === "") return undefined;
-  const out: PresetModel = { model: m };
-  const rt = (str(o.runtime) ?? "").trim();
-  if (rt !== "") out.runtime = rt;
-  const eff = (str(o.effort) ?? "").trim();
-  if (eff !== "") out.effort = eff;
-  if (typeof o.fast === "boolean") out.fast = o.fast;
-  if (typeof o.context === "number" && Number.isInteger(o.context) && o.context > 0) out.context = o.context;
-  const prof = (str(o.profile) ?? "").trim();
-  if (prof !== "") out.profile = prof;
-  if (Array.isArray(o.profiles)) {
-    const ps = [...new Set(o.profiles.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim()))];
-    if (ps.length > 0) out.profiles = ps;
-  }
-  return out;
-}
-
 function presetModelOf(o: Record<string, unknown>): PresetModel | undefined {
   return modelOf(o.model) ?? (typeof o.models === "object" && o.models !== null ? modelOf((o.models as Record<string, unknown>).lead) : undefined);
 }
 
-function stationsOf(o: Record<string, unknown>): { autoStation?: boolean; station?: string; stations?: string[] } {
-  if (Array.isArray(o.stations)) {
-    const list = [...new Set(o.stations.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim()))];
-    if (list.length === 1) return { station: list[0]! };
-    if (list.length > 1) return { stations: list };
-    return {};
-  }
-  const s = (str(o.station) ?? "").trim();
-  if (s !== "") return { station: s };
-  if (o.autoStation === true) return { autoStation: true };
-  return {};
-}
-
-function presetOf(v: any): Preset | null {
+/// A preset as presets.json says it, `me` this station's id: one from before (no `rev`) is changed once, made here, of
+/// nobody said yet.
+function presetOf(v: any, me: string): Preset | null {
   if (typeof v?.id !== "string" || typeof v?.name !== "string") return null;
   const st = stationsOf(v);
   const model = presetModelOf(v);
@@ -152,24 +156,44 @@ function presetOf(v: any): Preset | null {
     createdBy: str(v.createdBy) ?? "",
     createdAt: typeof v.createdAt === "number" ? v.createdAt : 0,
     updatedAt: typeof v.updatedAt === "number" ? v.updatedAt : 0,
+    owner: str(v.owner) ?? "",
+    rev: Number.isSafeInteger(v.rev) && v.rev >= 1 ? v.rev : 1,
+    home: str(v.home) || me,
   };
 }
 
-/// The presets of the workspace whose agent home is `home`, as written; none when there is no file yet.
-export function readPresets(home: string): Preset[] {
+function goneOf(v: any): PresetGone | null {
+  if (v?.gone !== true || typeof v?.id !== "string" || !Number.isSafeInteger(v?.rev)) return null;
+  return { id: v.id, owner: str(v.owner) ?? "", rev: v.rev, gone: true, updatedAt: typeof v.updatedAt === "number" ? v.updatedAt : 0 };
+}
+
+/// What a workspace's presets.json keeps: its live presets and its deleted ones.
+export type PresetsFile = { presets: Preset[]; gone: PresetGone[] };
+
+/// The presets of the workspace whose agent home is `home`, as written (one from before as presetOf reads it, the file
+/// not written for it); none when there is no file yet. `me`: this station's id.
+export function readPresetsFile(home: string, me = ""): PresetsFile {
   try {
     const raw = JSON.parse(readFileSync(join(home, FILE), "utf8"));
-    return (Array.isArray(raw?.presets) ? raw.presets : []).flatMap((p: unknown) => presetOf(p) ?? []);
+    const presets: Preset[] = (Array.isArray(raw?.presets) ? raw.presets : []).flatMap((p: unknown) => presetOf(p, me) ?? []);
+    const gone: PresetGone[] = (Array.isArray(raw?.gone) ? raw.gone : []).flatMap((g: unknown) => goneOf(g) ?? []);
+    return { presets, gone };
   } catch {
-    return [];
+    return { presets: [], gone: [] };
   }
 }
 
-function writePresets(home: string, presets: Preset[]): void {
+/// The live presets of the workspace whose agent home is `home` (readPresetsFile).
+export function readPresets(home: string, me = ""): Preset[] {
+  return readPresetsFile(home, me).presets;
+}
+
+function writePresets(home: string, presets: Preset[], gone: PresetGone[]): void {
   mkdirSync(home, { recursive: true });
   const path = join(home, FILE);
   const temp = `${path}.${randomBytes(4).toString("hex")}`;
-  writeFileSync(temp, `${JSON.stringify({ presets }, null, 2)}\n`);
+  // (the deleted ones beside the live, which is all a reader from before reads)
+  writeFileSync(temp, `${JSON.stringify({ presets, gone: goneKept(gone) }, null, 2)}\n`); // sync: read, changed and written in one step that must not be split
   renameSync(temp, path);
 }
 
@@ -283,56 +307,246 @@ export function repoName(url: string): string {
   return u;
 }
 
+/// Where the presets are: this station's id (null: none yet), the workspace a `ws` of the Presets' is (null for the
+/// home one: the home one's id), and the name this station knows another station of its workspaces by (null: none).
+export type PresetsPlace = {
+  station?: () => string | null;
+  workspace?: (ws: string | null) => string | null;
+  stationName?: (id: string) => string | null;
+};
+
+/// Who asks: their `sub` and email, as their credential says.
+export type Asker = { sub: string; email: string };
+
+/// What PUT /presets/kept answers: what this station keeps now of each id asked (in the order first asked), and each
+/// record not taken with why (`at`: its place in what was given).
+export type Carried = { records: KeptRecord[]; refused: { at: number; id: string | null; error: string }[]; changed: boolean };
+
+const sameEmail = (a: string, b: string) => a !== "" && a.toLowerCase() === b.toLowerCase();
+
 export class Presets {
   /// `home`: the agent home of each workspace (its presets.json is there); `now`: the station's clock.
   readonly home: (ws: string | null) => string;
   readonly now: () => number;
+  readonly place: PresetsPlace;
 
-  constructor(home: (ws: string | null) => string, now: () => number) {
+  constructor(home: (ws: string | null) => string, now: () => number, place: PresetsPlace = {}) {
     this.home = home;
     this.now = now;
+    this.place = place;
   }
 
+  /// This station's id ("" before it has one).
+  me(): string {
+    return this.place.station?.() ?? "";
+  }
+
+  /// Whether a folder's `station` (an address, or an id) is this station.
+  isHere(station: string): boolean {
+    const me = this.me();
+    return me !== "" && (station === me || station.endsWith(`/${me}`));
+  }
+
+  /// The name a folder's station is told by: as this station knows it, else as an app from before said it, else its id.
+  nameOf(station: string, said?: string): string {
+    const id = station.slice(station.lastIndexOf("/") + 1);
+    return this.place.stationName?.(id) || said || id;
+  }
+
+  /// This station's address in workspace `ws` (its id alone where the workspace is not known).
+  #address(ws: string | null): string {
+    const w = this.place.workspace?.(ws) ?? ws;
+    return w ? `${w}/${this.me()}` : this.me();
+  }
+
+  #file(ws: string | null): PresetsFile {
+    return readPresetsFile(this.home(ws), this.me());
+  }
+
+  /// Every live preset this station keeps in `ws`, whoever's and wherever made: what its agents and chats open with.
   list(ws: string | null): Preset[] {
-    return readPresets(this.home(ws));
+    return this.#file(ws).presets;
+  }
+
+  /// Those made here, as an app from before is listed them (GET /presets).
+  listed(ws: string | null): Preset[] {
+    const me = this.me();
+    return this.list(ws).filter((p) => p.home === me);
   }
 
   get(ws: string | null, id: string): Preset | null {
     return this.list(ws).find((p) => p.id === id) ?? null;
   }
 
-  add(ws: string | null, input: unknown, by: string): Preset {
+  /// A preset made by an app from before (POST /presets): `by` the email of who made it, `owner` their sub.
+  add(ws: string | null, input: unknown, by: string, owner = ""): Preset {
     const given = presetInput(input);
-    const all = this.list(ws);
+    const file = this.#file(ws);
     const now = this.now();
-    const preset: Preset = { id: `p-${randomBytes(5).toString("hex")}`, ...given, createdBy: by, createdAt: now, updatedAt: now };
-    writePresets(this.home(ws), [...all, preset]);
+    const preset: Preset = { id: `p-${randomBytes(5).toString("hex")}`, ...given, createdBy: by, createdAt: now, updatedAt: now, owner, rev: 1, home: this.me() };
+    writePresets(this.home(ws), [...file.presets, preset], file.gone);
     return preset;
   }
 
-  put(ws: string | null, id: string, input: unknown): Preset {
-    const all = this.list(ws);
+  /// Whose a preset is once `who` changes it: its owner, or, one from before of nobody said yet that they made, theirs.
+  #ownerAfter(prev: Preset, who: Asker | undefined): string {
+    if (prev.owner !== "" || who === undefined || who.sub === "") return prev.owner;
+    return sameEmail(prev.createdBy, who.email) ? who.sub : "";
+  }
+
+  /// A preset changed by an app from before (PUT /presets/:id): one change more.
+  put(ws: string | null, id: string, input: unknown, who?: Asker): Preset {
+    const file = this.#file(ws);
+    const all = file.presets;
     const at = all.findIndex((p) => p.id === id);
     if (at < 0) throw new NoPreset(id);
     const prev = all[at]!;
-    const preset: Preset = { id: prev.id, ...presetInput(input), createdBy: prev.createdBy, createdAt: prev.createdAt, updatedAt: this.now() };
+    const preset: Preset = {
+      id: prev.id, ...presetInput(input), createdBy: prev.createdBy, createdAt: prev.createdAt, updatedAt: this.now(),
+      owner: this.#ownerAfter(prev, who), rev: prev.rev + 1, home: prev.home,
+    };
     all[at] = preset;
-    writePresets(this.home(ws), all);
+    writePresets(this.home(ws), all, file.gone);
     return preset;
   }
 
-  delete(ws: string | null, id: string): void {
-    const all = this.list(ws);
-    if (!all.some((p) => p.id === id)) throw new NoPreset(id);
-    writePresets(this.home(ws), all.filter((p) => p.id !== id));
+  /// A preset deleted by an app from before (DELETE /presets/:id): kept deleted, one change more.
+  delete(ws: string | null, id: string, who?: Asker): void {
+    const file = this.#file(ws);
+    const prev = file.presets.find((p) => p.id === id);
+    if (prev === undefined) throw new NoPreset(id);
+    const gone: PresetGone = { id, owner: this.#ownerAfter(prev, who), rev: prev.rev + 1, gone: true, updatedAt: this.now() };
+    writePresets(this.home(ws), file.presets.filter((p) => p.id !== id), [...file.gone.filter((g) => g.id !== id), gone]);
   }
 
-  /// Keeps what a chat in `workspace` is opened with: preset `id` as it is now.
+  /// A preset as it is carried (preset-records.ts): every folder naming its station (this station's address where it
+  /// names none), nothing of it that is not of the record (an app's `stationName`).
+  record(ws: string | null, p: Preset): PresetRecord {
+    const here = this.#address(ws);
+    return {
+      id: p.id,
+      name: p.name,
+      dirs: p.dirs.map((d) => ({ path: d.path, repo: d.repo, station: d.station ?? here })),
+      instructions: p.instructions,
+      ...(p.autoStation ? { autoStation: true } : {}),
+      ...(p.station ? { station: p.station } : {}),
+      ...(p.stations ? { stations: p.stations } : {}),
+      ...(p.model ? { model: p.model } : {}),
+      createdBy: p.createdBy,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      owner: p.owner,
+      rev: p.rev,
+      home: p.home,
+    };
+  }
+
+  /// Every record of `ws` kept here, each the newer where an id is both live and deleted (a file put together by hand).
+  #records(ws: string | null): Map<string, KeptRecord> {
+    const file = this.#file(ws);
+    const out = new Map<string, KeptRecord>();
+    for (const r of [...file.presets.map((p) => this.record(ws, p)), ...file.gone]) {
+      const was = out.get(r.id);
+      out.set(r.id, was === undefined ? r : newerRecord(was, r));
+    }
+    return out;
+  }
+
+  /// Whether `r` is `who`'s: theirs by its owner, or one from before (no owner yet) that they made.
+  static theirs(r: KeptRecord, who: Asker): boolean {
+    if (who.sub === "") return false;
+    if (r.owner === who.sub) return true;
+    return r.owner === "" && !isGone(r) && sameEmail(r.createdBy, who.email);
+  }
+
+  /// What GET /presets/kept answers: `who`'s records kept here, deleted ones too; and every deletion of nobody said yet
+  /// (one of before deleted by an app from before by someone who did not make it: a few bytes each, `goneKept` of them),
+  /// which its maker's device takes as its own where it holds that preset (client/core-ts/src/presets-kept.ts `taken`).
+  kept(ws: string | null, who: Asker): KeptRecord[] {
+    return [...this.#records(ws).values()].filter((r) => Presets.theirs(r, who) || (isGone(r) && r.owner === "" && who.sub !== ""));
+  }
+
+  /// What GET /presets/others answers: everyone else's live records kept here.
+  others(ws: string | null, who: Asker): PresetRecord[] {
+    return [...this.#records(ws).values()].filter((r): r is PresetRecord => !isGone(r) && !Presets.theirs(r, who));
+  }
+
+  /// Records `who`'s device brings (PUT /presets/kept): each checked as both sides check one (recordOf), taken only
+  /// where it is theirs (its owner their sub; an id kept here only where that is theirs too, or a deletion of nobody
+  /// said) and newer than what is kept, as it was brought. Answers what is kept now of each id asked.
+  carry(ws: string | null, who: Asker, given: unknown[]): Carried {
+    const was = this.#records(ws);
+    const all = new Map(was);
+    const out: Carried = { records: [], refused: [], changed: false };
+    const asked: string[] = [];
+    let live = [...all.values()].filter((r) => !isGone(r)).length;
+    given.forEach((raw, at) => {
+      const id = typeof (raw as { id?: unknown } | null)?.id === "string" ? ((raw as { id: string }).id) : null;
+      let r: KeptRecord;
+      try {
+        r = recordOf(raw);
+      } catch (e) {
+        out.refused.push({ at, id, error: (e as Error).message });
+        return;
+      }
+      if (who.sub === "" || r.owner !== who.sub) {
+        out.refused.push({ at, id, error: "a record is taken only from its owner's devices (owner: their sub)" });
+        return;
+      }
+      const held = all.get(r.id);
+      if (held !== undefined && held.owner !== "" && held.owner !== who.sub) {
+        out.refused.push({ at, id, error: `preset ${r.id} is someone else's` });
+        return;
+      }
+      if (held !== undefined && held.owner === "" && !isGone(held) && !Presets.theirs(held, who)) {
+        out.refused.push({ at, id, error: `preset ${r.id} was made by someone else` });
+        return;
+      }
+      if (!asked.includes(r.id)) asked.push(r.id);
+      if (held !== undefined && (newerRecord(held, r) === held || canonical(held) === canonical(r))) return;
+      const nowLive = !isGone(r) && (held === undefined || isGone(held));
+      if (nowLive && live >= LIVE_MOST) {
+        out.refused.push({ at, id, error: `this station keeps ${LIVE_MOST} presets of a workspace at most` });
+        return;
+      }
+      if (nowLive) live++;
+      else if (isGone(r) && held !== undefined && !isGone(held)) live--;
+      all.set(r.id, r);
+    });
+    // What is kept as it is written (a deletion past what an owner's keep, `goneKept`, not): changed only where that
+    // differs from what was, so that a deletion dropped as it is taken is neither written nor told.
+    const before = recordsKept(Object.fromEntries(was));
+    const after = recordsKept(Object.fromEntries(all));
+    const ids = new Set([...Object.keys(before), ...Object.keys(after)]);
+    out.changed = [...ids].some((id) => before[id] !== after[id]);
+    if (out.changed) this.#write(ws, new Map(Object.entries(after)));
+    for (const id of asked) if (after[id] !== undefined) out.records.push(after[id]!);
+    return out;
+  }
+
+  /// `all` written as presets.json: what was kept as it was (this station's folders without `station`, as an app from
+  /// before reads them), what was brought as it was brought.
+  #write(ws: string | null, all: Map<string, KeptRecord>): void {
+    const file = this.#file(ws);
+    const before = new Map(file.presets.map((p) => [p.id, p]));
+    const presets: Preset[] = [];
+    const gone: PresetGone[] = [];
+    for (const r of all.values()) {
+      if (isGone(r)) gone.push(r);
+      else {
+        const held = before.get(r.id);
+        presets.push(held !== undefined && canonical(this.record(ws, held)) === canonical(r) ? held : r);
+      }
+    }
+    writePresets(this.home(ws), presets, gone);
+  }
+
+  /// Keeps what a chat in `workspace` is opened with: preset `id` as it is now. A folder this station is on is this
+  /// machine's; another station's is said to be there, by its name.
   keepFor(workspace: string, ws: string | null, id: string): PresetCopy {
     const p = this.get(ws, id);
     if (p === null) throw new NoPreset(id);
-    // (its other stations' folders said to be there)
-    const dirs = p.dirs.map(({ station, stationName, ...d }) => (station === undefined ? d : { ...d, elsewhere: stationName || station }));
+    const dirs = p.dirs.map(({ station, stationName, ...d }) => (station === undefined || this.isHere(station) ? d : { ...d, elsewhere: this.nameOf(station, stationName) }));
     return keepCopy(workspace, { id: p.id, name: p.name, dirs, instructions: p.instructions });
   }
 }
@@ -471,7 +685,8 @@ export type Candidate = { path: string; name: string; repo: string | null; chats
 /// cache and the repositories found on the machine (`found`, RepoIndex), the ones its chats made worktrees of first
 /// (most, then the latest), the rest by when they last changed; and those other presets name. Read off the main
 /// thread's way (a cache can hold many clones, each many worktrees).
-export async function candidates(reposDir: string, presets: Preset[], found: Candidate[] = []): Promise<Candidate[]> {
+/// `here`: whether a folder's station is this one (Presets `isHere`).
+export async function candidates(reposDir: string, presets: { dirs: PresetDir[]; updatedAt: number; [more: string]: unknown }[], found: Candidate[] = [], here: (station: string) => boolean = () => false): Promise<Candidate[]> {
   const list = async (dir: string) => readdir(dir).catch(() => [] as string[]);
   const cached = await Promise.all(
     (await list(reposDir)).map(async (name): Promise<Candidate | null> => {
@@ -509,7 +724,7 @@ export async function candidates(reposDir: string, presets: Preset[], found: Can
   }
   // A preset may also name another station's folders. Those are not candidates on this machine: treating them as
   // local both puts them in the wrong group and can make a later save try to validate a remote path here.
-  for (const p of presets) for (const d of p.dirs) if (!d.station && !out.has(d.repo ?? d.path)) out.set(d.repo ?? d.path, { path: d.path, name: basename(d.path), repo: d.repo, chats: 0, lastAt: p.updatedAt, where: shortPath(d.path) });
+  for (const p of presets) for (const d of p.dirs) if ((!d.station || here(d.station)) && !out.has(d.repo ?? d.path)) out.set(d.repo ?? d.path, { path: d.path, name: basename(d.path), repo: d.repo, chats: 0, lastAt: p.updatedAt, where: shortPath(d.path) });
   return [...out.values()].sort((a, b) => b.chats - a.chats || b.lastAt - a.lastAt || a.name.localeCompare(b.name));
 }
 

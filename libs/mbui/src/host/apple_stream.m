@@ -28,7 +28,11 @@
 #import <CoreVideo/CoreVideo.h>
 #import <ImageIO/ImageIO.h>
 #import <AVFoundation/AVFoundation.h>
+#if TARGET_OS_IPHONE
+#import <UIKit/UIKit.h>
+#endif
 #include <os/lock.h>
+#include <stdatomic.h>
 #include "avc.h"
 
 // (linked wherever this is, whatever the app's own link flags say)
@@ -215,6 +219,11 @@ static void let_go(MBStream *s, double ts) {
 static void show_frame(MBStream *s, MBStreamFrame *f);
 static void unroute(int32_t sid, int what);
 static void audio_stop(MBStream *s);
+static void audio_drop(MBStream *s);
+#if TARGET_OS_IPHONE
+// whether the app is in the background (told on the main thread, read on the audio queues: audio_play)
+static atomic_bool app_in_background;
+#endif
 
 // A frame fed from a route decoded (main thread): shown and acknowledged here while the route still goes to it, nothing
 // of the app's run; else said, as the app's are.
@@ -521,6 +530,19 @@ static void jpeg(MBStream *s, NSData *data, double ts) {
 
 int32_t mb_host_stream_open(void) {
   if (!streams) streams = [NSMutableDictionary new];
+#if TARGET_OS_IPHONE
+  static dispatch_once_t told;
+  dispatch_once(&told, ^{
+    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+    atomic_store(&app_in_background, UIApplication.sharedApplication.applicationState == UIApplicationStateBackground);
+    [center addObserverForName:UIApplicationDidEnterBackgroundNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
+      atomic_store(&app_in_background, true);
+    }];
+    [center addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
+      atomic_store(&app_in_background, false);
+    }];
+  });
+#endif
   MBStream *s = [MBStream new];
   s.sid = ++next_stream;
   s.queue = dispatch_queue_create("mbui.stream", DISPATCH_QUEUE_SERIAL);
@@ -753,7 +775,7 @@ void mb_host_stream_close(int32_t sid) {
     [s.decoded removeAllObjects];
   }
   unroute(sid, 3);
-  dispatch_async(s.audioQueue, ^{ audio_stop(s); });
+  dispatch_async(s.audioQueue, ^{ audio_drop(s); });
   s.display = nil;
   pointer_put(s);
   if (s.displayed) CVPixelBufferRelease(s.displayed);
@@ -866,6 +888,10 @@ int32_t mb_host_h264_here(void) { return 1; }
 // H.265 where this Mac or iPhone decodes it on its hardware (every Apple silicon Mac, iPhone 7 and later).
 int32_t mb_host_h265_here(void) { return VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC) ? 1 : 0; }
 
+// AV1 not decoded here yet (Windows' alone: win_stream.cpp): a stream's AV1 config is let go, its frames with it.
+int32_t mb_host_av1_here(void) { return 0; }
+void mb_host_stream_av1(int32_t sid, moonbit_bytes_t av1c, int32_t w, int32_t h) { (void)sid; (void)av1c; (void)w; (void)h; }
+
 // (VideoToolbox decodes here by itself, frame for frame: nothing for the framework to drive, @hostapi.stream_feeds)
 int32_t mb_host_stream_feeds(void) { return 0; }
 void mb_host_stream_codec(int32_t sid, moonbit_string_t cmd, moonbit_bytes_t data) {}
@@ -888,9 +914,44 @@ static void audio_stop(MBStream *s) {
   s.audioQueued = 0;
 }
 
-// (its audio queue) one 20 ms packet played after those queued
+// (its audio queue) the engine and its player let go, what is queued with them: the next packet makes them anew
+static void audio_drop(MBStream *s) {
+  @try {
+    [s.audioPlayer stop];
+    [s.audioEngine stop];
+  } @catch (NSException *e) {
+  }
+  s.audioPlayer = nil;
+  s.audioEngine = nil;
+  s.audioGeneration++;
+  s.audioQueued = 0;
+}
+
+static void audio_packet(MBStream *s, NSData *data);
+
+// (its audio queue) one 20 ms packet played after those queued.
+// An iPhone's app in the background is given no audio (it asks for none there), yet its engine still says it runs and
+// a stream's packets still come for the seconds the app runs on: the player, started again after what was queued ran
+// out, waits for the hardware and raises "player did not see an IO cycle.", which nothing caught (the app aborted: an
+// iPhone, twice on 2026-11-14). So in the background the sound is let go and its packets with it, and whatever
+// AVAudioEngine raises costs the sound queued, never the app.
 static void audio_play(MBStream *s, NSData *data) {
   if (s.closed || data.length != 3840) return;
+#if TARGET_OS_IPHONE
+  if (atomic_load(&app_in_background)) {
+    if (s.audioEngine) audio_drop(s);
+    return;
+  }
+#endif
+  @try {
+    audio_packet(s, data);
+  } @catch (NSException *e) {
+    NSLog(@"mbui stream: sound let go, made anew by the next packet: %@", e.reason);
+    audio_drop(s);
+  }
+}
+
+static void audio_packet(MBStream *s, NSData *data) {
   const uint8_t *bytes = data.bytes;
   AVAudioFormat *format = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:48000 channels:2];
   if (!s.audioEngine) {

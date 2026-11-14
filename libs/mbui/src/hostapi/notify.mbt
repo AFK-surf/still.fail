@@ -37,12 +37,15 @@ pub fn notice_cancel(tag : String) -> Unit {
 
 ///|
 /// What the system lets the app show: "granted", "denied", "ask" (not shown, and the system may never have been asked:
-/// Android 13 on, where the app knows whether it asked), or "unknown" (this host cannot tell).
+/// Android 13 on, where the app knows whether it asked), "default" (not shown, never answered, and asking shows the
+/// system's prompt whenever it is asked, a prompt put away leaving it so: a browser's), or "unknown" (this host cannot
+/// tell).
 pub fn notice_permission() -> String {
   match nt_state(0) {
     1 => "granted"
     2 => "denied"
     3 => "ask"
+    4 => "default"
     _ => "unknown"
   }
 }

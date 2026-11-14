@@ -11,7 +11,7 @@ import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, FailureReason, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_CODEX_UPDATE, GO_ON_AFTER_FAILED, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatCardChoices, formatInbound, formatWidgetModels, nameUntitled, readMemory, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_CODEX_UPDATE, GO_ON_AFTER_FAILED, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_UNANSWERED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatCardChoices, formatInbound, formatWidgetModels, nameUntitled, readMemory, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
@@ -59,8 +59,15 @@ const retrying = (turn: { outcome: string | null; declared: string | null; detai
 const AGAIN = ["network", "model", "other", "exited"];
 
 /// A turn that failed for one of `AGAIN`'s reasons and waits on nothing: its notice offers 重试.
-export const retryable = (turn: { outcome: string | null; declared: string | null; detail: string | null }) =>
+const failedAgain = (turn: { outcome: string | null; declared: string | null; detail: string | null }) =>
   turn.outcome === "failed" && turn.declared === null && AGAIN.some((reason) => (turn.detail ?? "").startsWith(`${reason}:`));
+
+/// A turn that completed in no state after the station stopped asking it again (`giveUp`): its notice (回复即可继续)
+/// offers 重试 too, as every notice that says a reply goes on does (the user, 2026-11-14).
+const givenUp = (turn: { outcome: string | null; declared: string | null }) => turn.outcome === "completed" && turn.declared === null;
+
+/// A turn its notice's 重试 takes up again.
+export const retryable = (turn: { outcome: string | null; declared: string | null; detail: string | null }) => failedAgain(turn) || givenUp(turn);
 
 /// How long it waits before trying again a turn the provider had no room for, the `n`th in a row (from 0): twice as long
 /// each time, ten minutes at most.
@@ -156,12 +163,17 @@ export type SessionDeps = {
   refillsAt?(key: string): number;
   /// A runtime failed to sign in on `profile`: it is checked again (the pool passes over one whose login is over).
   recheck?(profile: string): Promise<void>;
+  /// A turn on `profile` failed with words that name no limit: what its allowance, asked again, says it ran into
+  /// (accounts.ts `limitAfter`: a model's own limit by its name, null the account's, undefined none).
+  limitAfter?(profile: string, model: string | null): Promise<string | null | undefined>;
   mcpUrl(): string;
   reposDir(): string;
   /// Session `key`'s MEMORY.md: its workspace's (agent-home.ts `workspaceAgentHome`).
   memoryPath(key: string): string;
   /// What the deployment adds to every session's instructions (instructions.ts `readSiteInstructions`); none by default.
   siteInstructions?(): string;
+  /// This station's name (what its agents are told they run on); "" where it has none.
+  ownName?(): string;
   maxNudges(): number;
   /// The chat session `key` last heard from (its address), when it has no title and nobody is at work in it.
   untitled?(key: string): string | null;
@@ -621,7 +633,7 @@ export class SessionActor {
     });
   }
 
-  /// Takes up again the failed turn the notice the person pressed (重试) was about, as a reply would, going on where
+  /// Takes up again the failed (or given up on) turn the notice the person pressed (重试) was about, as a reply would, going on where
   /// it stopped. Only that notice's turn, while it is still the last and nothing runs or waits to be delivered: a
   /// delayed press after a reply, or on an older notice, does nothing.
   retryFailed(thread: number, seq: number): Promise<void> {
@@ -630,7 +642,38 @@ export class SessionActor {
       const last = this.deps.store.lastTurn(this.key);
       if (!last || !retryable(last) || last.about?.thread !== thread || last.about?.seq !== seq) return;
       log.info("session", "trying again a failed turn, as asked", { session: this.key });
-      await this.startTurn("resume", GO_ON_AFTER_FAILED);
+      await this.startTurn("resume", givenUp(last) ? GO_ON_AFTER_UNANSWERED : GO_ON_AFTER_FAILED);
+    });
+  }
+
+  /// 重新分配账号, pressed on the notice of a failure where the allowance asked again showed a limit (`LIMIT_SHOWN`):
+  /// only that notice's turn, while it is still the last and nothing runs or waits to be delivered. Its account, or
+  /// only its model there, is passed over as a spent one is, and it goes on on another; with none to take it (or kept
+  /// to its account), that is said with what to do, and it waits for the refill as a spent one does.
+  reassign(thread: number, seq: number): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.deps.held(this.key) || this.archived() || this.turn || this.codexUpdate || this.agent?.session.busy() || this.deps.store.hasPending(this.key)) return;
+      const store = this.deps.store;
+      const last = store.lastTurn(this.key);
+      const model = last?.outcome === "failed" ? shownLimitOf(last.detail) : undefined;
+      if (!last || model === undefined || last.about?.thread !== thread || last.about?.seq !== seq) return;
+      const row = store.getSession(this.key);
+      let moved: [string, string] | null = null;
+      try {
+        moved = this.deps.spend(this.key, this.profile ?? row?.profile ?? null, model);
+      } catch (error) {
+        log.warn("session", "could not move off a profile its allowance showed spent", { session: this.key, error: (error as Error).message });
+      }
+      if (moved) {
+        const agent = this.agent;
+        this.agent = null;
+        await this.endProcess(agent);
+        log.info("session", "its allowance showed a limit; going on on another profile, as asked", { session: this.key, from: moved[0], to: moved[1] });
+        this.refill = null;
+        return this.startTurn("resume", GO_ON_AFTER_SPENT);
+      }
+      await this.notice(`⚠️ ${t(row?.profilePinned ? "station.notice.reassignPinned" : "station.notice.reassignNone")}`, this.profile ?? row?.profile ?? null);
+      this.awaitRefill(this.deps.refillsAt?.(this.key) ?? this.now() + REFILL_FALLBACK_MS);
     });
   }
 
@@ -1338,7 +1381,7 @@ export class SessionActor {
       let agent = await this.ensureAgent();
       const row = store.getSession(this.key);
       // A session begun in a terminal and continued here: its first turn here says so, with how still.fail works.
-      const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key), await this.deps.linkSkills(row), this.deps.siteInstructions?.())) : null;
+      const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key), await this.deps.linkSkills(row), this.deps.siteInstructions?.(), this.deps.ownName?.())) : null;
       const lost = this.resumeLost;
       this.resumeLost = false;
       // What people chose on its cards without a message since it was last handed anything: before what it is handed.
@@ -1364,7 +1407,7 @@ export class SessionActor {
           try {
             const preset = row.cwd ? null : presetCopyOf(row.workspace);
             const memory = await this.deps.linkSkills(row);
-            await writeFile(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath(this.key), memory, this.deps.siteInstructions?.()) + (preset ? presetInstructions(preset) : ""));
+            await writeFile(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath(this.key), memory, this.deps.siteInstructions?.(), this.deps.ownName?.()) + (preset ? presetInstructions(preset) : ""));
           } catch {}
         }
         store.setToldNotes(this.key, latestNote());
@@ -1492,7 +1535,7 @@ export class SessionActor {
     // Its context cleared by hand (clear): no runtime session now, those before on record. A new one, told so; one
     // continued from a terminal is given still.fail's instructions as a new session is (no cache of its own to keep).
     const wasCleared = row.runtimeSessionId === null && (store.runtimeSessions?.(this.key).length ?? 0) > 0;
-    if (wasCleared && row.cwd) base.instructions = sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key), memory, this.deps.siteInstructions?.());
+    if (wasCleared && row.cwd) base.instructions = sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key), memory, this.deps.siteInstructions?.(), this.deps.ownName?.());
     // A runtime started where the station may not read exits at once with nothing to say why (macOS privacy protection
     // on a session continued in ~/Documents): told as it is instead. A directory someone named (one continued from a
     // terminal) is looked at as ops/places.ts does, never on this thread in a folder macOS protects (still.fail Helper
@@ -1647,6 +1690,15 @@ export class SessionActor {
   private async onTurnEnded(generation: number, outcome: TurnOutcome) {
     if (!this.isCurrent(generation)) return;
     if (this.compacting && !this.turn) return this.compacted(outcome);
+    // Words that name no limit may still be one: the allowance asked again says so, whatever the runtime's words.
+    let limit: string | null | undefined;
+    if (outcome.kind === "failed" && outcome.reason === "model" && this.turn && this.profile !== null && !this.stopRequested && this.deps.limitAfter) {
+      limit = await this.deps.limitAfter(this.profile, this.deps.store.getSession(this.key)?.model ?? null).catch(() => undefined);
+      if (!this.isCurrent(generation)) return;
+      // Not moved by itself (左子健, 2026-11-14: 「查了额度不要自动切，提示的时候带个重新分配账号的按钮」): its notice
+      // says what the allowance shows and offers 重新分配账号 (`reassign`).
+      if (limit !== undefined) log.info("session", "a failure its words did not name is where the allowance shows a limit", { session: this.key, model: limit ?? "" });
+    }
     const store = this.deps.store;
     this.idleSince = this.now();
     const turn = this.turn;
@@ -1662,7 +1714,7 @@ export class SessionActor {
     if (!overloaded) this.overloads = 0;
     const ends = retry ?? (turn ? endedIn(turn.declared, outcome.kind) : null);
     if (turn) {
-      const detail = outcome.kind === "failed" ? `${outcome.reason}: ${outcome.message}` : null;
+      const detail = outcome.kind !== "failed" ? null : limit !== undefined ? `${LIMIT_SHOWN}${limit ?? ""}: ${outcome.message}` : `${outcome.reason}: ${outcome.message}`;
       store.endTurn(turn.id, outcome.kind, detail, ends?.kind ?? null, ends?.kind === "waiting" ? ends.seconds : null);
       if (retry) store.setWaitFor(turn.id, t("station.wait.overloaded"), false);
     }
@@ -1781,7 +1833,8 @@ export class SessionActor {
       this.nudges = 0;
       // A sign-in that failed is its profile's, as is a refused request (its environment is where a proxy goes): the
       // notice points there.
-      const said = this.runtime === "codex" && turn?.codexRetried && codexTooOld(outcome.message)
+      const said = limit !== undefined ? limitShownNotice(limit, outcome.message)
+        : this.runtime === "codex" && turn?.codexRetried && codexTooOld(outcome.message)
         ? `⚠️ ${withSaid(t("station.notice.codexStillOld"), outcome.message)}` : failureNotice(outcome);
       await this.notice(said, outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null, null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
     } else if (outcome.kind === "aborted") {
@@ -2068,7 +2121,7 @@ export async function linkSkills(row: any, deps: Pick<SessionDeps, "memoryPath">
 }
 
 /// `memory`: its workspace's memory as `linkSkills` gave it.
-export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath" | "siteInstructions">, memory: string): OpenOptions {
+export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath" | "siteInstructions" | "ownName">, memory: string): OpenOptions {
   const skills = row.cwd ? undefined : join(dirname(deps.memoryPath(row.key)), "skills");
   // The model as this profile spells it (openai/gpt-6-astra on a router for gpt-6-astra).
   const model = row.model ? (profile.spelling?.(row.model) ?? row.model) : undefined;
@@ -2084,7 +2137,7 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
     ...(typeof row.context === "number" ? { context: row.context } : {}),
     ...(typeof row.fast === "boolean" ? { fast: row.fast } : {}),
     // A session continued from a terminal keeps the system prompt it began with (its cache holds).
-    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key), memory, deps.siteInstructions?.()) + (preset ? presetInstructions(preset) : ""),
+    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key), memory, deps.siteInstructions?.(), deps.ownName?.()) + (preset ? presetInstructions(preset) : ""),
     ...(skills !== undefined ? { skills } : {}),
     mcpToken: row.token,
     mcpUrl: deps.mcpUrl(),
@@ -2118,6 +2171,25 @@ function failureNotice(outcome: TurnOutcome): string {
   const key = outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "other" ? "failed" : outcome.reason;
   const why = outcome.reason === "model" || outcome.reason === "other" ? firstLine(outcome.message) : "";
   return `⚠️ ${withSaid(why === "" ? t(`station.notice.${key}`) : t(`station.notice.${key}Why`, { why }), outcome.message)}`;
+}
+
+/// How a turn's detail begins where its failure's words named no limit and its allowance asked again showed one: the
+/// model's name whose own limit it is, or nothing for the account's, then ": " and what failed said. Its notice offers
+/// 重新分配账号 (`reassign`), not 重试: on the same account it would fail again.
+export const LIMIT_SHOWN = "limit:";
+
+/// What a turn's detail says its allowance showed (`LIMIT_SHOWN`): the model's own limit by its name, null the
+/// account's, undefined none.
+export function shownLimitOf(detail: string | null): string | null | undefined {
+  if (detail === null || !detail.startsWith(LIMIT_SHOWN)) return undefined;
+  const end = detail.indexOf(": ", LIMIT_SHOWN.length);
+  const name = detail.slice(LIMIT_SHOWN.length, end < 0 ? undefined : end);
+  return name === "" ? null : name;
+}
+
+/// The notice of such a failure: what the allowance shows, and the press that moves it (`reassign`).
+function limitShownNotice(model: string | null, said: string): string {
+  return `⚠️ ${withSaid(model === null ? t("station.notice.limitShownAccount") : t("station.notice.limitShown", { model }), said)}`;
 }
 
 /// The first line of what failed said, short enough for a notice's line and a push.

@@ -114,10 +114,16 @@ pub fn view_beside(src : Source, r : ChatRef, tab : String) -> String {
 
 ///|
 /// An agent's history pressed (its mark in the bar), or the chat's files (its info's 文件): in front, closed; else
-/// opened in front.
+/// opened in front; an agent's history opened whole, once what it first shows is answered (history_side_open).
 pub fn side_toggle(src : Source, r : ChatRef, tab : String) -> Unit {
   let (tabs, front) = side_now(src, r)
-  side_change(src, r, if tabs.contains(tab) && front == tab { "close" } else { "open" }, Some(tab))
+  if tabs.contains(tab) && front == tab {
+    side_change(src, r, "close", Some(tab))
+  } else if side_history_tab(tab) {
+    history_side_open(src, r, tab, fn() { side_change(src, r, "open", Some(tab)) })
+  } else {
+    side_change(src, r, "open", Some(tab))
+  }
 }
 
 ///|

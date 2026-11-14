@@ -393,6 +393,7 @@ fn imax(a : Int, b : Int) -> Int {
 /// `trigger` (its id: the view's button, which opens it; `at`: by this rectangle instead); Down on the trigger opens
 /// it too, and the keyboard's opening focuses its first item. `scrim`: the page under it dimmed so (in and out over 200
 /// ms); it comes by `enter` and goes by `exit` (still.fail's small panel's by default: popover.mbt pop_in, pop_out);
+/// `show_exit` false lets a panel replacing the menu in the same place take it at once.
 /// `on_pick`: what choosing an item does, given its value, as it is chosen, outside any build. Whether it is open now,
 /// and what was chosen.
 pub fn dropdown_menu(
@@ -415,6 +416,7 @@ pub fn dropdown_menu(
   submenu? : Bool = false,
   enter? : @motion.Trans = pop_in,
   exit? : @motion.Trans = pop_out,
+  show_exit? : Bool = true,
   on_pick? : (String) -> Unit,
 ) -> Menu {
   install()
@@ -426,6 +428,8 @@ pub fn dropdown_menu(
   let pid = c.id(key + "/panel")
   let moved = @motion.presence(c, "\u{2}pop/" + key, now, initial=true, enter~, exit~)
   let shown = moved is Some(_)
+  // A panel replacing the menu in the same place can take it at once, while the menu's presence still closes.
+  let panel_shown = shown && (now || show_exit)
   // the scrim, if any, in and out over 200 ms: the layer stays until both the panel and it have gone (Android's
   // MenuHost), fading together (by its declared end; how far it is, as it is drawn)
   let dim = if scrim != 0L {
@@ -435,12 +439,12 @@ pub fn dropdown_menu(
   }
   let dimming = dim is Some(d) && !d.over(c)
   let mut chosen = None
-  if shown || dimming {
+  if panel_shown || dimming {
     // A menu opened by touch alongside a field leaves its input method in place. When opened by the keyboard, the
     // first choice takes focus as usual; a menu without an active field focuses its panel.
     let initial = if by_key { first_item(c, key, entries) } else if @ui.pointing() is Finger && c.field_focused() { 0 } else { pid }
     let o = c.overlay(key, modal=!submenu, anchor=trigger, return_focus=if submenu { trigger } else { 0 }, scrim~, initial_focus=initial, inert=!now, fn() {
-      guard moved is Some(shows) else { return }
+      guard panel_shown && moved is Some(shows) else { return }
       let out = menu_panel(
         c,
         key,
@@ -474,7 +478,7 @@ pub fn dropdown_menu(
       now = false
     }
   }
-  { open: now, chosen, shown: shown || dimming }
+  { open: now, chosen, shown: panel_shown || dimming }
 }
 
 ///|

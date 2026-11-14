@@ -7,6 +7,11 @@ import {
   "station/nodepath",
   "station/locate",
   "station/search",
+  "station/replica",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/encoding/hex",
+  "moonbitlang/core/cmp",
   "mbui/effect",
   "moonbitlang/core/json",
 }

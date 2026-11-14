@@ -20,7 +20,7 @@ import { MeshLive } from "./mesh/mesh.ts";
 import { AwakeLive } from "./ops/awake.ts";
 import { AgentsLive } from "./sessions/agents.ts";
 import { Browser } from "./browser/service.ts";
-import { dataDir, flag, ownData } from "./ops/files.ts";
+import { dataDir, flag, ownData, positionals } from "./ops/files.ts";
 import { setStationLang, stationLang, tr } from "./ops/i18n.ts";
 import { type Control, launcher } from "./ops/launcher.ts";
 import { hearErrors, hearLines, log } from "./ops/log.ts";
@@ -357,7 +357,7 @@ switch (command) {
     run();
     break;
   case "enroll": {
-    const [, origin, token] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
+    const [, origin, token] = positionals(args, VALUED);
     const provider = (flag(args, "--provider") ?? "stillfail") as Provider;
     const lock = flag(args, "--lock");
     // A rig (a station that only runs tasks): its person's own lock's hash, which the command that adds it names.
@@ -390,7 +390,7 @@ switch (command) {
   }
   // The workspace lock on this machine: what is pinned, or taking it away.
   case "lock": {
-    const [, what] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
+    const [, what] = positionals(args, VALUED);
     const workspace = flag(args, "--workspace");
     if ((what !== "status" && what !== "reset") || (workspace !== undefined && what !== "reset")) usage();
     console.log(lockCommand(data, what, workspace));

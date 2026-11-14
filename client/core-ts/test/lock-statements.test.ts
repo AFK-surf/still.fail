@@ -82,13 +82,17 @@ async function setUp(o: { root?: "me" | "alice"; mine?: "owner" | "member"; devi
   const root = o.root === "alice" ? alice : me;
   const bodies: unknown[] = [];
   bodies.push(say(root, "open", { ...SETTINGS, email: "a@x.com" }));
+  // (the chain's own list, the rig's genesis: s1 its owner, s2 a member, carried once it moved until a removal of each
+  // is said, rules `state4_moved`; the root says one of each but its own person, so what follows says the list alone)
+  bodies.push(say(root, "member.remove", { sub: "s2", cancels: [] }));
+  if (o.root === "alice") bodies.push(say(alice, "member.remove", { sub: "s1", cancels: [] }));
   if (o.root === "alice") bodies.push(say(alice, "member", { sub: "s1", email: "a@x.com", lock: gOf(me), role: o.mine ?? "owner" }));
   bodies.push(say(root, "member", { sub: "r2", email: "b@x.com", lock: gOf(bob), role: "admin" }));
   bodies.push(say(root, "station", { key: A }));
   bodies.push(say(bob, "member", { sub: "r3", email: "c@x.com", lock: gOf(xena), role: "member" }));
   // (w2, where `two`: rooted in s1's log too, B its station)
   const bodies2: unknown[] = [];
-  if (o.two) bodies2.push(say(me, "open", { ...SETTINGS, email: "a@x.com" }, "w2"), say(me, "station", { key: B }, "w2"));
+  if (o.two) bodies2.push(say(me, "open", { ...SETTINGS, email: "a@x.com" }, "w2"), say(me, "member.remove", { sub: "s2", cancels: [] }, "w2"), say(me, "station", { key: B }, "w2"));
   const g = grant();
   let mine: Signer | null = null;
   const r = await rig((signer) => ((mine = signer), { ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME), ...(o.two ? { w2: genesis("w2", signer, true, [{ key: B, name: "b" }], g.keys, ME) } : {}) }), (host) => {
@@ -250,6 +254,55 @@ test("a station taken in (C, which the workspace lists) and A taken out: C given
   assert.deepEqual([...inForceOf(w.inner, "ws").f.stations.keys()], [C]);
 });
 
+// The door a station keeping no lock pins one by, as before a move (`joinStation` brings it the whole chain): the chain
+// as it moved brought to C with the logs and bodies its state is made of once that state names it (station/src/mesh/
+// moved-pin.ts `pinBrought`). 2026-11-14, the locks' end to end, round 17 run moved: 「保护」 left the station unprotected.
+test("a station taken in after the move (C): the chain as it moved brought to it with the logs and bodies that name it", async () => {
+  const w = await setUp();
+  const inC = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.joinStation", { workspace: "ws", station: C }), catch: (e) => e as CoreError }));
+  assert.equal(inC.error, undefined, inC.error?.message);
+  const posted = w.st.asked.filter((a) => a.at === "ws/C" && a.method === "POST" && a.path === "/lock").map((a) => JSON.parse(a.body) as { entries?: Entry[]; logs?: Entry[][]; bodies?: unknown[] });
+  assert.equal(posted.length, 1, `brought once: ${JSON.stringify(w.st.asked.filter((a) => a.at === "ws/C").map((a) => `${a.method} ${a.path}`))}`);
+  assert.equal(posted[0]!.entries?.at(-1)?.kind, "moved", "the chain as it moved");
+  assert.ok((posted[0]!.logs?.length ?? 0) >= 2, "the logs");
+  assert.ok((posted[0]!.bodies ?? []).some((b) => (b as { kind?: string; key?: string }).kind === "station" && (b as { key?: string }).key === C), "the body that names it among the bodies");
+});
+
+// Not reached at the press: brought as that station is next read, nothing pressed again (the lead, 2026-11-14: as an
+// unmoved chain's `station` entry reaches its station whenever it is next read).
+test("a station taken in after the move, unreachable at the press: brought the chain, logs and bodies as it is next read, nothing pressed", async () => {
+  const w = await setUp();
+  // (C keeps no lock until a POST /lock reaches it; unreachable until `up`)
+  let up = false;
+  let pinned = false;
+  const posts: string[] = [];
+  const through = w.inner.stations.requests.call.bind(w.inner.stations.requests);
+  w.inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
+    if (addr.toString().endsWith(`/${C}`) && path.startsWith("/lock")) {
+      if (method === "POST" && path === "/lock") {
+        posts.push(up ? "reached" : "unreachable");
+        if (!up) return Effect.fail(new CoreError("station_offline", "not reached"));
+        pinned = true;
+        return Effect.succeed({ taken: 2, head: null });
+      }
+      if (!up) return Effect.fail(new CoreError("station_offline", "not reached"));
+      if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after=")) && !pinned) return Effect.succeed({ head: null, entries: [], takes: ["person"], serves: ["person", "devices", "told", "forks", "bodies", "logs"] });
+    }
+    return (through as (...x: unknown[]) => Effect.Effect<unknown, CoreError>)(addr, method, path, body, ...rest);
+  }) as typeof w.inner.stations.requests.call;
+  const asked = w.asked();
+  const inC = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.joinStation", { workspace: "ws", station: C }), catch: (e) => e as CoreError }));
+  assert.equal(inC.error, undefined, inC.error?.message);
+  assert.deepEqual(posts, ["unreachable"], "tried at the press");
+  up = true;
+  await w.run(read(w.inner, "ws"));
+  console.log(`C brought: ${posts.join(", ")}; asked ${w.asked() - asked}`);
+  assert.deepEqual(posts, ["unreachable", "reached"], "brought as it was next read");
+  assert.equal(w.asked() - asked, 1, "the person asked once, at the press");
+  await w.run(read(w.inner, "ws"));
+  assert.deepEqual(posts, ["unreachable", "reached"], "not brought again once taken");
+});
+
 test("off and on again by the root's person; another owner refused with lock_root_only, nobody asked", async () => {
   const w = await setUp();
   const off = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.disable", { workspace: "ws" }), catch: (e) => e as CoreError }));
@@ -312,6 +365,21 @@ test("an owner taking another member's app device off: refused in words that say
   const before = w.asked();
   const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.removeDevice", { workspace: "ws", device: theirs.id }), catch: (e) => e as CoreError }));
   assert.equal(out.error?.message, "此设备属于其他成员，只能由其本人移除；要让此成员不能再访问，请将其移出 workspace");
+  assert.equal(w.asked(), before, "nobody asked");
+  assert.deepEqual(w.said(), [], "nothing signed");
+});
+
+// An app device of the person's own renewed where the chain moved: its log lets it in with no expiry (the rules' state
+// says none for an app), so there is nothing to renew and nothing to refuse. Before, it was refused in the words for
+// another member's device (2026-11-14, the locks' end to end on main after #6102: "B lock.renew: 此设备属于其他成员…").
+test("renewing this person's own app device where the chain moved: done with nothing to do (an app does not run out there); not refused as another's, nobody asked, nothing signed", async () => {
+  const w = await setUp();
+  const mine = inForceOf(w.inner, "ws").f.devices.get(ME);
+  assert.equal(mine?.kind, "app", "this device's app in the state");
+  assert.equal(mine?.exp, undefined, "with no expiry");
+  const before = w.asked();
+  const out = await w.run(Effect.tryPromise({ try: () => w.r.ask("lock.renew", { workspace: "ws", device: ME }), catch: (e) => e as CoreError }));
+  assert.equal(out.error, undefined, out.error?.message);
   assert.equal(w.asked(), before, "nobody asked");
   assert.deepEqual(w.said(), [], "nothing signed");
 });

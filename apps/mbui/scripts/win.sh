@@ -25,19 +25,20 @@
 # (fail.still.desktop, .beta: its AppUserModelID, its pinned shortcuts'), its name (still.fail, youdid.wtf: its
 # userData, %APPDATA%\<name>, whose data, sign-in and sealed keys it takes: src/host/win_core.c), its links (stillfail,
 # stillfail-beta), MBUI_OWN; the beta's core a beta's.
-D="$(cd "$(dirname "$0")" && pwd)"
-. "$D/env.sh"
+AD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$AD/env.sh"
 # Every app build, including release variants, picks the same compiler before mbc looks up its objects.
-if [ "${1:-build}" = build ]; then . "$D/win-compiler.sh"; fi
+if [ -z "${MBUI_IN_WIN_SH:-}" ] && [ "${1:-build}" = build ]; then . "$AD/win-compiler.sh"; fi
 export APP=${APP:-stillfail}
-if [ "$APP" = stillfail ]; then
+if [ -z "${MBUI_IN_WIN_SH:-}" ] && [ "$APP" = stillfail ]; then
   engine=$(cd "$SF_SRC" && node scripts/native.ts path engine win32-x64) || exit 1
   shell=$(cd "$SF_SRC" && node scripts/native.ts path shell win32-x64) || exit 1
   # (the shell's import library too: the app asks the shell itself for a remote screen's frames, src/host/win_core.c)
   export LIB="$(cygpath -w "$engine");$(cygpath -w "$shell");$LIB"
   export CL="/I$(cygpath -w "$A/engine") /I$(cygpath -w "$MBUI_DIR/src/host") ${CL:-}"
+  export engine shell
 fi
-core() { HERMESC=$(cygpath -m "$engine/hermesc.exe") bash "$D/core.sh" hermes; }
+core() { HERMESC=$(cygpath -m "$engine/hermesc.exe") bash "$AD/core.sh" hermes; }
 # variant: what MBUI_VARIANT builds the app as: its id, its name, its program's name where it is put (the desktop app's
 # own program's in its place), the folder it is put in (%LOCALAPPDATA%\Programs\<dir>: the desktop app's installer's,
 # its package name), and its own environment beyond those
@@ -56,7 +57,7 @@ variant() {
 # res: the app's resources (out/win-res/app.res), for mbui's win.sh to link into it (MBUI_WIN_RES)
 res() {
   local n=${MBUI_BUILD:-$(git -C "$SF_SRC" rev-list --count HEAD 2>/dev/null || echo 1)}
-  local icon=$A/windows/AppIcon-$(sha256sum "$D/mac-icon.swift" | cut -c1-12).ico
+  local icon=$A/windows/AppIcon-$(sha256sum "$AD/mac-icon.swift" | cut -c1-12).ico
   [ -f "$icon" ] || { echo "win.sh: no $icon (scripts/mac-icon.swift changed: swift scripts/mac-icon.swift --ico $icon, on a Mac)" >&2; return 1; }
   local id name exe dir schemes extra r=$A/out/win-res
   variant || return 1
@@ -200,22 +201,27 @@ setup() {
   "$out/setup-bare.exe" --pack "$(cygpath -w "$to")" "$(cygpath -w "$out/setup.env")" "${w[@]}" || return 1
   echo "win.sh: $(basename "$to") $(wc -c < "$to") bytes ($name 0.1.$n)"
 }
-case "${1:-build}" in
-  core) core; exit $? ;;
-  put) put core; exit $? ;;
-  collate) collate; exit $? ;;
-  engine-sync) engine_sync; exit $? ;;
-  sealed) sealed; exit $? ;;
-  setup) setup; exit $? ;;
-  setup-bare) setup_bare; exit $? ;;
-esac
-if [ "$APP" = stillfail ] && [ "${1:-build}" = build ] && [ "${MBUI_WIN_CORE:-1}" != 0 ]; then
-  core || exit 1
-fi
-if [ "$APP" = stillfail ] && [ "${1:-build}" = build ]; then
-  res || exit 1
-fi
-bash "$MBUI_DIR/scripts/win.sh" "$@" || exit $?
-if [ "$APP" = stillfail ] && [ "${1:-build}" = build ]; then
-  if [ "${MBUI_WIN_CORE:-1}" != 0 ]; then put core; else put; fi
-fi
+app_prebuild() {
+  if [ "$APP" = stillfail ] && [ "${MBUI_WIN_CORE:-1}" != 0 ]; then core || exit 1; fi
+  if [ "$APP" = stillfail ]; then res || exit 1; fi
+}
+app_postbuild() {
+  if [ "$APP" = stillfail ]; then
+    if [ "${MBUI_WIN_CORE:-1}" != 0 ]; then put core || exit 1; else put || exit 1; fi
+  fi
+}
+app_cmd() {
+  case "$1" in
+    core) core ;;
+    put) put core ;;
+    collate) collate ;;
+    engine-sync) engine_sync ;;
+    sealed) sealed ;;
+    setup) setup ;;
+    setup-bare) setup_bare ;;
+    *) echo "win.sh: no command $1" >&2; exit 1 ;;
+  esac
+}
+[ -z "${MBUI_IN_WIN_SH:-}" ] || { return 0 2>/dev/null || exit 0; }
+export MBUI_IN_WIN_SH=1 MBUI_WIN_HOOK="$AD/win.sh"
+exec bash "$MBUI_DIR/scripts/win.sh" "$@"

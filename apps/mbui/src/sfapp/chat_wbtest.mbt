@@ -13,9 +13,10 @@ fn chat_tester(mode : String, w? : Double = 390.0) -> @ui.Tester {
 test "a chat opens at its end: its bar, its last messages, the composer's room under them" {
   let t = chat_tester("chat")
   assert_true(t.find("整理发布清单") is Some(_))
-  // (what the bar shows: its words seen, not those its row left out for the title and its agent, as a phone's is)
+  // (what the bar shows: its words seen, not those its row left out for the title and its agent)
   let bar = fn(t : @ui.Tester) { t.words().filter(fn(w) { w.2 < 100.0 && w.5 > 0.0 }).map(fn(w) { w.0 }) }
-  assert_true(!bar(t).contains("你") && !bar(t).contains("林"), msg="its people left out for its title: \{Repr(bar(t))}")
+  assert_true(bar(t).contains("你"), msg="its people with the room: \{Repr(bar(t))}")
+  assert_true(!bar(t).contains("林"), msg="lettered as it calls them: \{Repr(bar(t))}")
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   let (_, field_y) = t.find("发消息").unwrap()
@@ -28,10 +29,9 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   // no way to the newest at the newest
   assert_true(!readings.get("ws1/st1\u{1}s-c1").unwrap().jump)
   t.assert_idle()
-  // its people in the bar where it has the room, lettered as it calls them: the viewer 「你」, not their name
-  let wide = chat_tester("chat", w=480.0)
-  assert_true(bar(wide).contains("你"), msg="its people with the room: \{Repr(bar(wide))}")
-  assert_true(!bar(wide).contains("林"), msg="lettered as it calls them: \{Repr(bar(wide))}")
+  // its people left out for its title where the bar is narrower
+  let narrow = chat_tester("chat", w=350.0)
+  assert_true(!bar(narrow).contains("你") && !bar(narrow).contains("林"), msg="its people left out for its title: \{Repr(bar(narrow))}")
 }
 
 ///|
@@ -703,22 +703,46 @@ test "a message said just after the chat opened comes in with the list gliding a
   t.run_for(said_soon_ms)
   fix_clock_set(clock, clock.val + 1.0)
   t.draw()
-  let mut from : Double? = None
+  // (what is over it: the card of the newest message before it, where it is drawn)
+  let above = fn() { t.drawn_of("先不换").map(fn(d) { d.1 }) }
+  guard above() is Some(a0) else { fail("nothing over it drawn") }
+  // where its words are drawn seen (at an alpha over 0)
+  let seen = fn() {
+    t.words().iter().find_first(fn(w) { w.0 == words && w.5 > 0.0 }).map(fn(w) { w.2 })
+  }
+  // The list sets out in the frame after its cause, what is over it going up then; and from the first frame its words
+  // are seen they only go up, to where they rest. Till 2026-11-14 this said its words went up more than 20 from where
+  // they were first found (Tester::drawn_of, which reads no alpha): on the old page they were found at 676.88 in the
+  // cause's frame at alpha 0, 26.4 over their rest; seen (alpha over 0) they go up 10.2 there, 9.8 on the page made
+  // as nodes, which draws nothing of a row half open or less. So the 20 held only of words drawn unseen.
+  let mut a1 : Double? = None
+  let ys : Array[Double] = []
   let mut n = 0
-  while from is None && n < 60 {
+  while n < 60 {
     t.frame()
-    from = t.drawn_of(words).map(fn(d) { d.1 })
+    if n == 0 {
+      a1 = above()
+    }
+    match seen() {
+      Some(y) => ys.push(y)
+      None => ()
+    }
     n += 1
   }
-  guard from is Some(y0) else { fail("「\{words}」 never came in") }
+  assert_true(a1 is Some(a) && a < a0 - 0.01, msg="set out in the frame after its cause: \{a0} → \{Repr(a1)}")
+  guard ys.length() > 0 else { fail("「\{words}」 never seen") }
   let rest = t.rest_of("a list")
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
   t.run_for(@sf.enter_ms)
-  let (_, y1) = t.drawn_of(words).unwrap()
-  // (more than its rise in: the list went up after it)
-  assert_true(y0 - y1 > 20.0, msg="glided up after it: \{y0} → \{y1}")
+  guard seen() is Some(y1) else { fail("「\{words}」 not seen at rest") }
+  // (up only, within half a device pixel, to its rest: more than none of the way seen)
+  for i, y in ys {
+    let before = if i > 0 { ys[i - 1] } else { y }
+    assert_true(y <= before + 0.25 && y >= y1 - 0.25, msg="frame \{i}: \{Repr(ys)}, at rest \{y1}")
+  }
+  assert_true(ys[0] - y1 > 1.0, msg="seen going up after it: \{ys[0]} → \{y1}")
   fix_clock.val = None
 }
 
@@ -779,17 +803,21 @@ test "a notice opened keeps the size of its words" {
 test "a chat's run changed: what changed on a line, else what it runs on now; pressed, both runs whole" {
   // (the user, 2026-11-06: 默认按最小差异显示，点击查看完整信息，如果差异太大一行显示不了，就只显示变化后的信息)
   let t = chat_tester("chat-run-change")
-  assert_eq(t.lines_of("Opus 5.5 · 高 → Sonnet 5.5 · 中"), ["Opus 5.5 · 高 → Sonnet 5.5 · 中"])
-  // too long for a phone's line: what it runs on now alone
-  assert_eq(t.lines_of("Claude Code · Sonnet 5.5 · 中 · 标准 → Codex · GPT-6 Astra · 高 · Fast"), [
-    "换成 Codex · GPT-6 Astra · 高 · Fast",
-  ])
-  let (x, y) = t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中").unwrap()
+  // (the words drawn, each whole: what a row left out is of no size)
+  let shown = fn() { t.words().filter(fn(w) { w.3 > 0.0 }).map(fn(w) { w.0 }) }
+  let first = shown()
+  // each side after the mark of who made its model
+  assert_true(first.contains("Opus 5.5 · 高") && first.contains("Sonnet 5.5 · 中"), msg=first.join(" | "))
+  // too long for a phone's line: what it runs on now alone, whole, after 换成 and its mark
+  assert_true(!first.contains("Claude Code · Sonnet 5.5 · 中 · 标准"), msg=first.join(" | "))
+  assert_true(first.contains("换成") && first.contains("Codex · GPT-6 Astra · 高 · Fast"), msg=first.join(" | "))
+  assert_eq(t.lines_of("Codex · GPT-6 Astra · 高 · Fast"), ["Codex · GPT-6 Astra · 高 · Fast"])
+  let (x, y) = t.find("Opus 5.5 · 高").unwrap()
   t.tap(x, y)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("之前：Claude Code · Opus 5.5 · 高 · 自动 · lin@example.com") is Some(_))
   assert_true(t.find("现在：Claude Code · Sonnet 5.5 · 中 · 自动 · lin@example.com") is Some(_))
-  assert_true(t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中") is None)
+  assert_true(!shown().contains("→"))
 }
 
 ///|

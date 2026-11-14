@@ -46,6 +46,13 @@ extern "C" fn st_h265_here() -> Int = "mb_host_h265_here"
 extern "C" fn st_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit = "mb_host_stream_hevc"
 
 ///|
+extern "C" fn st_av1_here() -> Int = "mb_host_av1_here"
+
+///|
+#borrow(av1c)
+extern "C" fn st_av1(id : Int, av1c : Bytes, w : Int, h : Int) -> Unit = "mb_host_stream_av1"
+
+///|
 #borrow(data)
 extern "C" fn st_audio(id : Int, data : Bytes) -> Unit = "mb_host_stream_audio"
 

@@ -129,6 +129,8 @@ export type HubOptions = {
   workspaces?: () => string[];
   /// This station's id in its workspaces (null: none yet, outside any).
   station?: () => string | null;
+  /// The name this station knows another station of its workspaces by (its mark's, else its roster's); null: none.
+  stationName?: (id: string) => string | null;
   /// The runners alive on this machine now, by id (default: <data>/run/runners).
   runners?: () => string[];
   /// Another session being taken up: the launcher hears the station gets on with it (ops/launcher.ts `taking`).
@@ -265,7 +267,11 @@ export class Hub {
   /// The station's background jobs (made after the hub, which tells their agents).
   jobs: Jobs | null = null;
   /// Each workspace's presets, in its agent home (presets.ts).
-  readonly presets = new Presets((ws) => workspaceAgentHome(this.config().agentHome, ws, this.workspaces()[0] ?? null), () => this.now());
+  readonly presets = new Presets((ws) => workspaceAgentHome(this.config().agentHome, ws, this.workspaces()[0] ?? null), () => this.now(), {
+    station: () => this.station(),
+    workspace: (ws) => ws ?? this.workspaces()[0] ?? null,
+    stationName: (id) => this.options.stationName?.(id) ?? null,
+  });
   /// The repositories on the machine, offered as a preset's folders (presets.ts).
   readonly repoIndex = new RepoIndex({ roots: () => [homedir()], file: () => join(this.config().dataDir, "repo-index.json"), now: () => this.now(), besides: () => [this.config().dataDir] });
   /// Repositories cloned from git into the repository cache, for presets to name (clones.ts).
@@ -1116,6 +1122,14 @@ export class Hub {
     await this.actor(row).retryFailed(thread, seq);
   }
 
+  /// Moves the session whose failed turn this particular notice is about to another account (its 重新分配账号), if it
+  /// is still the last.
+  async reassign(key: string, thread: number, seq: number) {
+    const row = this.store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    await this.actor(row).reassign(thread, seq);
+  }
+
   /// Compacts the session's context between turns, as `-compact` in a thread would (SessionActor.compact): why not,
   /// when it cannot now.
   async compact(key: string): Promise<string | null> {
@@ -1463,9 +1477,14 @@ export class Hub {
       spend: (key, ranOn, model) => this.accounts.spend(key, ranOn, model),
       refillsAt: (key) => this.accounts.refillsAt(key),
       recheck: (profile) => this.accounts.recheck(profile),
+      limitAfter: (profile, model) => this.accounts.limitAfter(profile, model),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
       reposDir: () => this.reposDir(),
       siteInstructions: () => this.options.siteInstructions ?? "",
+      ownName: () => {
+        const me = this.options.station?.() ?? null;
+        return me === null ? "" : (this.options.stationName?.(me) ?? "");
+      },
       memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],
       maxNudges: () => this.config().maxNudges,
       untitled: (key) => (this.config().askToName ? untitledChat(this, key) : null),

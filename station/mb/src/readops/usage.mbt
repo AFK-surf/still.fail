@@ -186,18 +186,18 @@ fn big_of(v : Json?) -> Int64 raise {
   } else {
     (false, s)
   }
-  guard digits != "" && digits.iter().all(c => c >= '0' && c <= '9') else { fail("Cannot convert \{s} to a BigInt") }
+  guard digits != "" && digits.iter().all(c => c >= '0' && c <= '9') else { raise Failure("Cannot convert \{s} to a BigInt") }
   // Counted below zero, where an i64 reaches one further; beyond one the statements would not take it either.
   let mut n = 0L
   for c in digits {
     let d = (c.to_int() - '0'.to_int()).to_int64()
-    guard n >= (-9223372036854775807L - 1L + d) / 10L else { fail("\{s} is beyond what the statements take") }
+    guard n >= (-9223372036854775807L - 1L + d) / 10L else { raise Failure("\{s} is beyond what the statements take") }
     n = n * 10L - d
   }
   if neg {
     n
   } else {
-    guard n != -9223372036854775807L - 1L else { fail("\{s} is beyond what the statements take") }
+    guard n != -9223372036854775807L - 1L else { raise Failure("\{s} is beyond what the statements take") }
     -n
   }
 }

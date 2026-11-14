@@ -48,6 +48,7 @@ import { jobTools } from "../tools/jobs.ts";
 import { forwardTools } from "../tools/forward.ts";
 import { Forwards } from "../mesh/peer-forward.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
+import { stationMarksOf } from "../mesh/station-marks.ts";
 import { type Listing, McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { workspaceSizeTools } from "../tools/workspace-size.ts";
@@ -55,6 +56,7 @@ import { relayTools } from "../tools/relays.ts";
 import { waysOf } from "../mesh/ways.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
+import { MemorySync } from "../share/memory.ts";
 import { ChatShares } from "../xshare/index.ts";
 import { ChatShareIndexBuilder } from "../xshare/index-builder.ts";
 import { overview } from "../api/overview.ts";
@@ -308,6 +310,8 @@ export const AgentsLive = (control: Control) =>
         link: pageOf,
         workspaces: () => cloud.memberships().map((m) => m.workspace),
         station: () => cloud.state?.station ?? null,
+        // (a preset's folder on another station told by that station's name: its own mark's, else the roster's)
+        stationName: (id) => stationMarksOf(cloud).record(id)?.name ?? (nameOf(cloud, id) !== id ? nameOf(cloud, id) : null),
         cold,
         places,
       });
@@ -598,7 +602,8 @@ export const AgentsLive = (control: Control) =>
         agentHome: () => settings().agentHome,
         env: process.env as Record<string, string | undefined>,
         machineEmail: (runtime) => accounts.machineLogins().find((login) => login.runtime === runtime && login.loggedIn)?.email ?? null,
-        claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
+        // (lent: its renewal waited for LEND_BOUND_MS at most, then what it has lent, the renewal going on behind)
+        claudeToken: (p, rejected) => accounts.claudeToken(p, rejected, true),
         // In sandboxes no Codex here holds the refresh token: it is renewed here whenever it runs out.
         codexRenewRunning: async (id) => await codex.renewLogin(id),
         status: async (id) => { const h = await accounts.lentHealth(id); return { check: h.check ?? null, quota: h.quota ?? null }; },
@@ -610,6 +615,15 @@ export const AgentsLive = (control: Control) =>
       });
       remote.setShares((peer, request, workspace) => sharing!.handle(peer, request, workspace));
       sharing.start();
+      // The agents' memory, the same on every station of a workspace (share/memory.ts).
+      const memorySync = new MemorySync({
+        data, cloud,
+        ask: (station, workspace, request) => remote.ask(station, { workspace, ...request }),
+        agentHome: () => settings().agentHome,
+      });
+      remote.setMemory((peer, request, workspace) => memorySync.handle(peer, request, workspace));
+      memorySync.start();
+      yield* Effect.addFinalizer(() => Effect.promise(() => memorySync.stop()));
       xshare.start();
       const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, connectKinds, rootView: (p) => rootViewThrough(p, helperFiles), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
       // And the fields the station's parts add (parts.ts).

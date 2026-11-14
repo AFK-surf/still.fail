@@ -183,3 +183,47 @@ test "a node's shape said by a saying, said anew as a value or the node let go: 
   tree.event(view_moment(), fn() { there.set(false) })
   assert_false(shape.watched(), msg="the node let go: let go of then")
 }
+
+///|
+test "every shape a node says comes back as itself: the host told its own number, the Tester reading it back, its probe naming it" {
+  let on = fn(v : Bool) { @signals.signal(v, same=fn(a, b) { a == b }) }
+  let edge : @signals.Signal[Cursor?] = @signals.signal(Some(ResizeX), same=fn(a, b) { a == b })
+  let t = shaped_tester(edge, on(false), on(true))
+  let all : Array[Cursor] = [
+    Arrow, Hand, IBeam, ResizeX, ResizeY, Grab, Grabbing, Crosshair, NotAllowed, ResizeNWSE, ResizeNESW,
+  ]
+  let codes : Map[Int, Cursor] = Map([])
+  for c in all {
+    assert_false(codes.contains(c.code()), msg="\{c}'s number \{c.code()} another's too")
+    codes[c.code()] = c
+    edge.set(Some(c))
+    let said = t.probe_at(85.0, 20.0)
+    assert_eq(t.cursor(), c, msg="over the edge said \{c}")
+    assert_true(said.contains("cursor=\{c}\n"), msg="\{c} probed: \{said}")
+  }
+  assert_eq(Cursor::ResizeNWSE.to_string(), "ResizeNWSE")
+  assert_eq(Cursor::ResizeNESW.to_string(), "ResizeNESW")
+}
+
+///|
+test "the window's tree said to show no hand over what is pressed: the arrow over its button and an old view's, a shape said still its own; said again, the hand at once" {
+  let on = fn(v : Bool) { @signals.signal(v, same=fn(a, b) { a == b }) }
+  let edge : @signals.Signal[Cursor?] = @signals.signal(Some(Hand), same=fn(a, b) { a == b })
+  let t = shaped_tester(edge, on(false), on(true))
+  let tree = view_app.val.unwrap()
+  tree.hand_over_presses(false)
+  finger(1, 40.0, 20.0)
+  t.frames_owed()
+  assert_eq(t.cursor(), Arrow, msg="over the tree's button")
+  finger(1, 130.0, 20.0)
+  t.frames_owed()
+  assert_eq(t.cursor(), Arrow, msg="over the old view's button")
+  finger(1, 85.0, 20.0)
+  t.frames_owed()
+  assert_eq(t.cursor(), Hand, msg="over the edge said to be the hand: its own")
+  finger(1, 40.0, 20.0)
+  t.frames_owed()
+  assert_eq(t.cursor(), Arrow)
+  tree.hand_over_presses(true)
+  assert_eq(t.cursor(), Hand, msg="said again: the tree's button's hand at once, the pointer still, no frame")
+}

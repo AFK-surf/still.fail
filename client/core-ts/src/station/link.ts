@@ -204,6 +204,9 @@ export class Link {
   /// was, until the threads it found behind have their latest on the device. Before it has looked (`tallied`), what is
   /// behind is not known; null once caught up, or while it is not reached.
   catching: { tallied: boolean; behind: Set<number> } | null = null;
+  /// Whether its open jobs' list was answered on this link (sync.ts `#read` of `jobs`): only then is a job it has not
+  /// one it has none of (topics.ts `job`: gone), not one still to come.
+  jobsRead = false;
   /// Its last host reading is not one this core can read (a station newer than the app).
   hostUnreadable = false;
 

@@ -71,9 +71,13 @@ test "大屏, 中屏: each row of the chat's info does what it says and closes i
       ("图片、文件和链接", "chat.tabs.open", "tab", "things"),
       ("Station 文件", "chat.tabs.open", "tab", "files"),
     ]
+    // (one Tester a window: a row's press closes the info and changes nothing else of the chat, its call answered with
+    // nothing, the chat still on top; so the info opened again is the one a Tester made anew opens, and each row's
+    // press is held as one made there)
+    let calls : Array[Made] = []
+    let t = wide_bar_at(calls, nodes=true, w=win.1)
+    let was = app.nav.top()
     for row in rows {
-      let calls : Array[Made] = []
-      let t = wide_bar_at(calls, nodes=true, w=win.1)
       let b = pops_open(t, @sf.t("web-pages.chat.info"))
       assert_eq(@sfdesk.chat_pops_open(), (true, false), msg=win.0)
       guard wide_bar_dialog(t) is Some(d) else { fail("\{win.0}: no info") }
@@ -81,9 +85,12 @@ test "大屏, 中屏: each row of the chat's info does what it says and closes i
       guard pops_rows(t).iter().find_first(fn(s) { s.label == row.0 }) is Some(s) else {
         fail("\{win.0}: no \{row.0} in \{Repr(pops_rows(t).map(fn(s) { s.label }))}")
       }
+      let from = calls.length()
       wide_bar_tap(t, s.rect)
-      let made = calls.filter(fn(c) { c.name == row.1 && text(Some(c.params), row.2) == row.3 })
-      assert_eq(made.length(), 1, msg="\{win.0} \{row.0}: \{Repr(calls.map(fn(c) { c.name }))}")
+      let pressed = calls[from:].to_owned()
+      let made = pressed.filter(fn(c) { c.name == row.1 && text(Some(c.params), row.2) == row.3 })
+      assert_eq(made.length(), 1, msg="\{win.0} \{row.0}: \{Repr(pressed.map(fn(c) { c.name }))}")
+      assert_true(app.nav.top() == was, msg="\{win.0} \{row.0}: the chat still on top")
       assert_eq(@sfdesk.chat_pops_open(), (false, false), msg="\{win.0} \{row.0}: closed")
       assert_true(!@sf.presenting(), msg="\{win.0} \{row.0}: nothing left presented")
       assert_eq(pops_faults(t), [], msg=win.0)
@@ -142,9 +149,12 @@ test "大屏, 中屏: the bar's popovers close by Escape, a press outside and th
         ("a press outside", fn(t, _) { t.tap(win.1 / 2.0, 500.0) }),
         ("its button again", fn(t, b) { t.tap(b.0 + b.2 / 2.0, b.1 + b.3 / 2.0) }),
       ]
+      // (one Tester for the three ways, in turn: each closes the popover and leaves nothing else open or presented, so
+      // the popover opened again by its button is the one a Tester made anew opens; Escape first, the focus coming
+      // back to the button from where Tab left it)
+      let calls : Array[Made] = []
+      let t = wide_bar_at(calls, nodes=true, w=win.1, over=wide_bar_jobs("fail"))
       for way in ways {
-        let calls : Array[Made] = []
-        let t = wide_bar_at(calls, nodes=true, w=win.1, over=wide_bar_jobs("fail"))
         let label = @sf.t(which)
         let b = pops_open(t, label)
         assert_true(open(), msg="\{win.0} \{label}")
@@ -183,12 +193,20 @@ test "大屏, 中屏: the services' popover: a service opens 任务 beside the c
       ("在侧栏查看", "chat.tabs.open", false),
       ("全部 2 个 · 在侧栏查看", "chat.tabs.open", false),
     ]
+    // (one Tester for the four presses, in turn: each closes the popover or is closed by Escape after it, its call
+    // answered with nothing, so the popover opened again by its button is the one opened as the Tester was made, its
+    // job open in it (盯 CI's rows there to press: its 在侧栏查看))
+    let calls : Array[Made] = []
+    let t = pops_jobs_at(calls, win.1)
     for p in presses {
-      let calls : Array[Made] = []
-      let t = pops_jobs_at(calls, win.1)
+      if !@sfdesk.chat_pops_open().1 {
+        pops_open(t, @sf.t("web-pages.chat.services")) |> ignore
+      }
+      let from = calls.length()
       t.click(Button, label=p.0)
       t.run_for(@ui.move_most_ms)
-      assert_true(calls.iter().any(fn(c) { c.name == p.1 }), msg="\{win.0} \{p.0}: \{Repr(calls.map(fn(c) { c.name }))}")
+      let pressed = calls[from:].to_owned()
+      assert_true(pressed.iter().any(fn(c) { c.name == p.1 }), msg="\{win.0} \{p.0}: \{Repr(pressed.map(fn(c) { c.name }))}")
       assert_eq(@sfdesk.chat_pops_open().1, p.2, msg="\{win.0} \{p.0}: open after")
       if p.2 {
         t.key(@ui.key_escape)
@@ -232,17 +250,19 @@ test "大屏: the services' popover opened on a job, the job closed from outside
 ///|
 test "大屏, 中屏: 归档 on a chat keeping watch asks first, in the core's words; 取消 archives nothing, 归档 archives it" {
   for win in pops_windows {
+    // (one Tester for both, 取消 first: it archives nothing and closes the question, so 归档 pressed again asks it as a
+    // Tester made anew does)
+    let calls : Array[Made] = []
+    let t = wide_bar_at(
+      calls,
+      nodes=true,
+      w=win.1,
+      over=wide_bar_both(
+        wide_bar_chat_field("archivable", fn(_) { Json::boolean(true) }),
+        wide_bar_chat_field("watch", fn(_) { { "ask": "它还在盯着 CI，归档后就不盯了。" } }),
+      ),
+    )
     for say in ["取消", "归档"] {
-      let calls : Array[Made] = []
-      let t = wide_bar_at(
-        calls,
-        nodes=true,
-        w=win.1,
-        over=wide_bar_both(
-          wide_bar_chat_field("archivable", fn(_) { Json::boolean(true) }),
-          wide_bar_chat_field("watch", fn(_) { { "ask": "它还在盯着 CI，归档后就不盯了。" } }),
-        ),
-      )
       pops_open(t, @sf.t("web-pages.chat.archive")) |> ignore
       assert_true(t.find("它还在盯着 CI，归档后就不盯了。") is Some(_), msg=win.0)
       assert_true(t.find("归档「整理发布清单」？") is Some(_), msg=win.0)

@@ -717,6 +717,7 @@ common.report.done
 common.report.lead
 common.report.sends
 common.report.title
+common.reassignAccount
 common.retry
 common.save
 common.search
@@ -2705,7 +2706,13 @@ web-main.preset.cloneGo
 web-main.preset.cloning
 web-main.preset.cloneFailed
 web-main.preset.choose
+web-main.preset.others
+web-main.preset.othersNone
+web-main.preset.copyNamed
+web-main.preset.copyFailed
 web-pages.screen.debug.app
 web-pages.screen.device.back
 web-pages.screen.debug.paneHide
 web-pages.screen.debug.paneShow
+desktop.update.update
+web-pages.stationUpdates.app

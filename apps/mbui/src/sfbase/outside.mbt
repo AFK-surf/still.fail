@@ -52,7 +52,7 @@ fn outside_reset() -> Unit {
 /// it refers to: no mark in it (as the core read its field: refs.mbt), at once; else the core is asked first. Nothing
 /// is asked on a read-only run, whose send says it sends nothing.
 pub fn send_sharing(src : Source, key : String, station : String, words : String, send : () -> Unit) -> Unit {
-  if refs_marked(key) is Some(false) || src.read_only || !station.contains("/") {
+  if !words.contains("@[") || refs_marked(key) is Some(false) || src.read_only || !station.contains("/") {
     send()
     return
   }

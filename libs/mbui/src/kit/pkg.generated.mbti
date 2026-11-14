@@ -72,7 +72,7 @@ pub let disabled_alpha : Double
 
 pub fn doubled(Int64) -> Int64
 
-pub fn dropdown_menu(@ui.Ctx, String, Bool, Int32, Array[Entry], side? : @view.Side, along? : @view.Along, offset? : Double, label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit, heading_look? : (@ui.Ctx, String) -> Unit, rule_look? : (@ui.Ctx) -> Unit, at? : (Double, Double, Double, Double), scrim? : Int64, submenu? : Bool, enter? : @motion.Trans, exit? : @motion.Trans, on_pick? : (String) -> Unit) -> Menu
+pub fn dropdown_menu(@ui.Ctx, String, Bool, Int32, Array[Entry], side? : @view.Side, along? : @view.Along, offset? : Double, label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit, heading_look? : (@ui.Ctx, String) -> Unit, rule_look? : (@ui.Ctx) -> Unit, at? : (Double, Double, Double, Double), scrim? : Int64, submenu? : Bool, enter? : @motion.Trans, exit? : @motion.Trans, show_exit? : Bool, on_pick? : (String) -> Unit) -> Menu
 
 pub fn felt_tick(@ui.Ctx, String) -> Unit
 

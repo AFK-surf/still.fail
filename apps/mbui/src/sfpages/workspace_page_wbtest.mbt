@@ -14,7 +14,7 @@ test "the workspace, at each width and with either hand: its name, its people an
 }
 
 ///|
-test "the workspace's ways its devices reach its stations, at each width: one row saying how many are off; pressed, a panel with each on or off, Tailscale's turned off asks still.fail cloud (workspace.setWay)" {
+test "the workspace's ways its devices reach its stations, at each width: one row saying how many are off; pressed, a panel with custom relay input and still.fail's master switch (kept on while no custom relay is added)" {
   for case in page_cases {
     let (w, platform) = case
     let calls : Array[(String, Json)] = []
@@ -24,19 +24,15 @@ test "the workspace's ways its devices reach its stations, at each width: one ro
     let at = "\{w} platform \{platform}"
     // the page: the row alone, what is off said at its end
     assert_true(t.find("已关闭 1 项") is Some(_), msg=at)
-    assert_true(t.find("Tailscale") is None, msg=at)
-    t.tap_text("连接方式")
+    assert_true(t.find("直连") is None, msg=at)
+    t.tap_text("中继")
     t.run_for(@ui.move_most_ms)
     assert_true(@sf.presenting(), msg=at)
-    assert_true(t.find("北京") is Some(_), msg=at)
-    assert_eq(t.get(Switch, label="打洞").check, Some(Off), msg=at)
-    let (x, y, sw, sh) = t.get(Switch, label="Tailscale").rect
-    t.tap(x + sw / 2.0, y + sh / 2.0)
-    t.frame()
-    let asked = calls.filter(fn(c) { c.0 == "workspace.setWay" })
-    assert_eq(asked.length(), 1, msg=at)
-    assert_eq(text(Some(asked[0].1), "way"), "tailnet", msg=at)
-    assert_false(flag(Some(asked[0].1), "on"), msg=at)
+    assert_true(t.find("添加自定义中继后可关闭") is Some(_), msg=at)
+    assert_true(t.find("直连") is None, msg=at)
+    let sw = t.get(Switch, label="使用官方中继")
+    assert_eq(sw.check, Some(On), msg=at)
+    assert_true(sw.disabled, msg=at)
     @sf.presenters_reset()
   }
 }
@@ -268,27 +264,33 @@ test "a person's panel follows the workspace on every screen: their role set els
 }
 
 ///|
-test "the ways' panel, on every screen: a manager adds a relay (the panel closes for the asking) and takes one of the workspace's own away" {
+test "the ways' panel, on every screen: a manager adds a relay inline, turns still.fail's relays off and takes one of the workspace's own away" {
   let own = fn(v : Json?) {
     ws_with(v, "ways", fn(all) {
-      all.copy()..push({ "id": "https://relay.example.com/", "kind": "relay", "name": "", "own": true, "on": true })
+      all.copy()..push({ "id": "https://relay.example.com/", "kind": "relay", "name": "", "own": true, "by": "上海中继", "on": true })
     })
   }
   for screen in ws_screens {
     let at = screen.0
     let calls : Array[(String, Json)] = []
-    let t = ws_opened(screen, "连接方式", fn(s) { ws_changing(s, calls, ways=own) })
-    assert_true(t.find("still.fail 的中继") is Some(_), msg=at)
-    assert_true(t.find("此 workspace 的中继") is Some(_), msg=at)
-    assert_true(t.find("直连") is Some(_), msg=at)
+    let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, ways=own) })
+    assert_true(t.find("使用官方中继") is Some(_), msg=at)
+    assert_true(t.find("关闭后仅使用自定义中继") is Some(_), msg=at)
+    assert_true(t.query(TextField, label="添加中继") is Some(_), msg=at)
+    assert_true(t.find("直连") is None, msg=at)
     assert_true(t.find("relay.example.com/") is Some(_), msg=at)
-    assert_eq(t.get(Switch, label="Cloudflare").check, Some(On), msg=at)
-    assert_eq(t.get(Switch, label="局域网").check, Some(On), msg=at)
-    for w in ["Cloudflare", "北京", "局域网", "Tailscale", "打洞"] {
-      assert_false(t.get(Switch, label=w).disabled, msg="\{at}: \{w}")
-    }
+    assert_true(t.find("上海中继 添加") is Some(_), msg=at)
+    let sw = t.get(Switch, label="使用官方中继")
+    assert_eq(sw.check, Some(On), msg=at)
+    assert_false(sw.disabled, msg=at)
+    // turning off still.fail's relays asks for way="ours"
+    ws_press(t, Switch, "使用官方中继")
+    t.frame()
+    let way_calls = calls.filter(fn(c) { c.0 == "workspace.setWay" })
+    assert_eq(way_calls.length(), 1, msg=at)
+    assert_eq(text(Some(way_calls[0].1), "way"), "ours", msg=at)
+    assert_false(flag(Some(way_calls[0].1), "on"), msg=at)
     // its own taken away: the cloud asked for what is left
-    // (the panel's 移除 on the relay's line: the page's under it has one for one added)
     let (_, ry) = t.find("relay.example.com/").unwrap()
     let removes = t.all(Button, label="移除").filter(fn(b) { b.rect.1 <= ry && ry <= b.rect.1 + b.rect.3 })
     assert_eq(removes.length(), 1, msg=at)
@@ -298,80 +300,97 @@ test "the ways' panel, on every screen: a manager adds a relay (the panel closes
     let asked = calls.filter(fn(c) { c.0 == "workspace.setRelays" })
     assert_eq(asked.length(), 1, msg=at)
     assert_true(asked[0].1 is Object(m) && m.get("relays") is Some(Array([])), msg=at)
-    // another added: asked for a step further in, the panel closed for it
-    ws_press(t, Button, "添加中继")
-    t.run_for(@ui.move_most_ms)
-    assert_true(t.find("北京") is None, msg=at)
-    assert_true(t.find("添加中继") is Some(_), msg=at)
+    // another added inline, without closing the panel
+    assert_true(t.get(Button, label="添加").disabled, msg=at)
+    ws_press(t, TextField, "添加中继")
+    t.type_text("https://two.example.com")
+    t.frame()
+    assert_false(t.get(Button, label="添加").disabled, msg=at)
+    ws_press(t, Button, "添加")
+    t.frame()
+    assert_true(@sf.presenting(), msg=at)
+    let asked2 = calls.filter(fn(c) { c.0 == "workspace.setRelays" })
+    assert_eq(asked2.length(), 2, msg=at)
+    assert_true(
+      asked2[1].1 is Object(m2) && m2.get("relays") is Some(Array([String("https://relay.example.com/"), String("https://two.example.com")])),
+      msg=at,
+    )
     @sf.presenters_reset()
   }
 }
 
 ///|
-test "the ways' panel to one who is no manager: each way seen, none turned; no relay added" {
+test "the ways' panel to one who is no manager: still.fail's relays seen, none turned; no relay added" {
   let as_member = fn(v : Json?) { ws_said(v, "role", Json::string("member")) }
   for screen in ws_screens {
     let at = screen.0
     let calls : Array[(String, Json)] = []
-    let t = ws_opened(screen, "连接方式", fn(s) { ws_changing(s, calls, workspace=as_member) })
+    let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, workspace=as_member) })
     assert_true(@sf.presenting(), msg=at)
-    assert_true(t.find("北京") is Some(_), msg=at)
-    assert_true(t.find("此 workspace 的中继") is None, msg=at)
-    assert_true(t.query(Button, label="添加中继") is None, msg=at)
-    // (read out so: each switch disabled)
-    for w in ["Cloudflare", "北京", "局域网", "Tailscale", "打洞"] {
-      assert_true(t.get(Switch, label=w).disabled, msg="\{at}: \{w}")
-    }
-    ws_press(t, Switch, "Tailscale")
+    assert_true(t.find("Cloudflare、北京") is Some(_), msg=at)
+    assert_true(t.find("自定义中继") is None, msg=at)
+    assert_true(t.query(TextField, label="添加中继") is None, msg=at)
+    assert_true(t.query(Button, label="添加") is None, msg=at)
+    assert_true(t.get(Switch, label="使用官方中继").disabled, msg=at)
+    ws_press(t, Switch, "使用官方中继")
     t.run_for(@ui.move_most_ms)
     assert_eq(calls.filter(fn(c) { c.0 == "workspace.setWay" }).length(), 0, msg=at)
-    assert_eq(t.get(Switch, label="Tailscale").check, Some(On), msg=at)
+    assert_eq(t.get(Switch, label="使用官方中继").check, Some(On), msg=at)
     @sf.presenters_reset()
   }
 }
 
 ///|
-test "a way being set: its switches not turned meanwhile, as the core says they stand" {
+test "a way being set: its switch not turned meanwhile, as the core says it stands" {
   let calls : Array[(String, Json)] = []
+  let own = fn(v : Json?) {
+    ws_with(v, "ways", fn(all) {
+      all.copy()..push({ "id": "https://relay.example.com/", "kind": "relay", "name": "", "own": true, "on": true })
+    })
+  }
   let doing = fn() -> Json? {
-    Some({ "doing": [{ "call": "workspace.setWay", "params": { "workspace": "ws1", "way": "lan" }, "stage": "running" }] })
+    Some({ "doing": [{ "call": "workspace.setWay", "params": { "workspace": "ws1", "way": "ours" }, "stage": "running" }] })
   }
-  let t = ws_opened(ws_screens[0], "连接方式", fn(s) { ws_changing(s, calls, doing~) })
-  // (read out so: each switch disabled)
-  for w in ["Cloudflare", "北京", "局域网", "Tailscale", "打洞"] {
-    assert_true(t.get(Switch, label=w).disabled, msg=w)
-  }
-  ws_press(t, Switch, "Tailscale")
+  let t = ws_opened(ws_screens[0], "中继", fn(s) { ws_changing(s, calls, ways=own, doing~) })
+  assert_true(t.get(Switch, label="使用官方中继").disabled)
+  ws_press(t, Switch, "使用官方中继")
   t.run_for(@ui.move_most_ms)
   assert_eq(calls.filter(fn(c) { c.0 == "workspace.setWay" }).length(), 0)
-  assert_eq(t.get(Switch, label="Tailscale").check, Some(On))
-  assert_eq(t.get(Switch, label="打洞").check, Some(Off))
+  assert_eq(t.get(Switch, label="使用官方中继").check, Some(On))
   @sf.presenters_reset()
 }
 
 ///|
-test "the ways' panel follows the core on every screen: a way turned elsewhere shows so; the viewer no longer a manager, nothing of it turned or added" {
+test "the ways' panel follows the core on every screen: still.fail's relays turned off elsewhere shows so; the viewer no longer a manager, nothing of it turned or added" {
   for screen in ws_screens {
     let at = screen.0
     let calls : Array[(String, Json)] = []
     let now = @signals.signal(0)
     let ways = fn(v : Json?) {
       ws_with(v, "ways", fn(all) {
-        all.map(fn(w) { if now.get() >= 1 && text(Some(w), "id") == "lan" { ws_said(Some(w), "on", Json::boolean(false)).unwrap() } else { w } })
+        let next = all.map(fn(w) {
+          if now.get() >= 1 && text(Some(w), "kind") == "relay" && !flag(Some(w), "own") {
+            ws_said(Some(w), "on", Json::boolean(false)).unwrap()
+          } else {
+            w
+          }
+        })
+        next..push({ "id": "https://relay.example.com/", "kind": "relay", "name": "", "own": true, "on": true })
       })
     }
     let workspace = fn(v : Json?) { if now.get() >= 2 { ws_said(v, "role", Json::string("member")) } else { v } }
-    let t = ws_opened(screen, "连接方式", fn(s) { ws_changing(s, calls, workspace~, ways~) })
-    assert_eq(t.get(Switch, label="局域网").check, Some(On), msg=at)
-    assert_true(t.query(Button, label="添加中继") is Some(_), msg=at)
+    let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, workspace~, ways~) })
+    assert_eq(t.get(Switch, label="使用官方中继").check, Some(On), msg=at)
+    assert_true(t.query(TextField, label="添加中继") is Some(_), msg=at)
     now.set(1)
     t.run_for(@ui.move_most_ms)
-    assert_eq(t.get(Switch, label="局域网").check, Some(Off), msg=at)
+    assert_eq(t.get(Switch, label="使用官方中继").check, Some(Off), msg=at)
     now.set(2)
     t.run_for(@ui.move_most_ms)
     assert_true(@sf.presenting(), msg=at)
-    assert_true(t.query(Button, label="添加中继") is None, msg=at)
-    ws_press(t, Switch, "局域网")
+    assert_true(t.query(TextField, label="添加中继") is None, msg=at)
+    assert_true(t.query(Button, label="移除") is None, msg=at)
+    ws_press(t, Switch, "使用官方中继")
     t.run_for(@ui.move_most_ms)
     assert_eq(calls.filter(fn(c) { c.0 == "workspace.setWay" }).length(), 0, msg=at)
     @sf.presenters_reset()
@@ -389,7 +408,12 @@ fn ws_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
 }
 
 ///|
-test "where the two panels' words stand on every screen: each under the one before on the panel's words' line, notes under their titles, each switch at its row's end across its words" {
+test "where the two panels' words stand on every screen: each under the one before on the panel's words' line, notes under their titles, each control aligned with its row's first line" {
+  let own = fn(v : Json?) {
+    ws_with(v, "ways", fn(all) {
+      all.copy()..push({ "id": "https://relay.example.com/", "kind": "relay", "name": "", "own": true, "by": "上海中继", "on": true })
+    })
+  }
   for screen in ws_screens {
     let at = screen.0
     let calls : Array[(String, Json)] = []
@@ -404,23 +428,33 @@ test "where the two panels' words stand on every screen: each under the one befo
       assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{Repr(order[0])} beside \{Repr(order[k])}")
     }
     @sf.presenters_reset()
-    // the ways': the groups' labels and the ways' titles on one line, down in the core's order
-    let t = ws_opened(screen, "连接方式", fn(s) { ws_changing(s, calls) })
-    let order = ["still.fail 的中继", "Cloudflare", "北京", "此 workspace 的中继", "添加中继", "直连", "局域网", "在同一局域网时直连", "Tailscale", "打洞"].map(fn(
+    // the ways': the input at the top, then custom relays, then still.fail's relays, all on one left line
+    let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, ways=own) })
+    let (_, fy, _, fh) = t.get(TextField, label="添加中继").rect
+    let order = ["relay.example.com/", "上海中继 添加", "使用官方中继", "关闭后仅使用自定义中继"].map(fn(
       w,
     ) {
       ws_word(t, w)
     })
+    assert_true(order[0].1 >= fy + fh - 0.5, msg="\{at}: input \{fy}+\{fh} over \{Repr(order[0])}")
     for k in 1..<order.length() {
       assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{Repr(order[k - 1])} over \{Repr(order[k])}")
       assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{Repr(order[0])} beside \{Repr(order[k])}")
     }
-    // (局域网's switch after its title, across the middle of its title and its note)
-    let (title, note) = (ws_word(t, "局域网"), ws_word(t, "在同一局域网时直连"))
-    let (sx, sy, _, sh) = t.get(Switch, label="局域网").rect
+    // (each row's trailing control aligns with its first line and with the panel's right edge)
+    let (ax, _, aw, _) = t.get(Button, label="添加").rect
+    let r_title = ws_word(t, "relay.example.com/")
+    let (rx, ry, rw, rh) = t.get(Button, label="移除").rect
+    let r_mid = ry + rh / 2.0
+    assert_true((rx - ax).abs() < 0.5, msg="\{at}: remove left \{rx}, add left \{ax}")
+    assert_true((rw - aw).abs() < 0.5, msg="\{at}: remove width \{rw}, add width \{aw}")
+    assert_true((r_mid - (r_title.1 + r_title.3 / 2.0)).abs() < 1.0, msg="\{at}: remove middle \{r_mid}, \{Repr(r_title)}")
+    let (title, note) = (ws_word(t, "使用官方中继"), ws_word(t, "关闭后仅使用自定义中继"))
+    let (sx, sy, _, sh) = t.get(Switch, label="使用官方中继").rect
     let mid = sy + sh / 2.0
     assert_true(sx >= title.0 + title.2, msg="\{at}: switch at \{sx}, \{Repr(title)}")
-    assert_true(mid > title.1 && mid < note.1 + note.3, msg="\{at}: switch's middle \{mid}, \{Repr(title)}, \{Repr(note)}")
+    assert_true(sx >= note.0 + note.2, msg="\{at}: switch at \{sx}, \{Repr(note)}")
+    assert_true((mid - (title.1 + title.3 / 2.0)).abs() < 1.0, msg="\{at}: switch's middle \{mid}, \{Repr(title)}")
     @sf.presenters_reset()
     assert_eq(calls.length(), 0, msg=at)
   }

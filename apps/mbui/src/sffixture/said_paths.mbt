@@ -105,6 +105,9 @@ pub let said_paths : Map[String, Array[String]] = {
     "messages.*.notice.detail",
     "messages.*.notice.short",
     "messages.*.notice.lines.*",
+    "messages.*.notice.sides.was",
+    "messages.*.notice.sides.now",
+    "messages.*.notice.sides.to",
     "messages.*.blocked.detail",
     "messages.*.blocked.note",
     "messages.*.by.name",
@@ -235,6 +238,9 @@ pub let said_paths : Map[String, Array[String]] = {
     "chats.*.letters.*.notice.detail",
     "chats.*.letters.*.notice.short",
     "chats.*.letters.*.notice.lines.*",
+    "chats.*.letters.*.notice.sides.was",
+    "chats.*.letters.*.notice.sides.now",
+    "chats.*.letters.*.notice.sides.to",
     "chats.*.letters.*.blocked.detail",
     "chats.*.letters.*.blocked.note",
     "chats.*.letters.*.by.name",
@@ -675,7 +681,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "pending.*.text",
     "pending.*.stations.*",
     "pending.*.why",
-    "upgrade.lines.*",
+    "upgrade.lines.*.text",
     "rootText",
   ],
   "lockDraft": [
@@ -783,6 +789,11 @@ pub let said_paths : Map[String, Array[String]] = {
     "show.*.title",
     "show.*.body",
   ],
+  "otherPresets": [
+    "presets.*.name",
+    "presets.*.whose",
+    "presets.*.stationName",
+  ],
   "overview": [
     "automaticDecisions.recent.*.error",
     "automaticDecisions.policy.text",
@@ -860,6 +871,14 @@ pub let said_paths : Map[String, Array[String]] = {
     "combos.*.name",
     "combos.*.text",
     "makers.*.title",
+  ],
+  "preset": [
+    "name",
+    "dirs.*.path",
+    "dirs.*.stationName",
+    "instructions",
+    "whose",
+    "homeName",
   ],
   "presets": [
     "presets.*.name",
@@ -1161,6 +1180,10 @@ pub let said_paths : Map[String, Array[String]] = {
     "host.details.*.value",
     "way.path",
     "home",
+  ],
+  "stationUpdates": [
+    "items.*.name",
+    "items.*.detail",
   ],
   "stations": [
     "*.name",

@@ -37,8 +37,8 @@ try {
     assert.deepEqual({ id: answer.id, ...JSON.parse(answer.text) }, { id, ...expected });
     console.log(`checkpoint ${id}: ${answer.text}`);
   }
-  reader.stdin.write(`${JSON.stringify({ id: 3, op: "thread", args: {} })}\n`);
-  assert.deepEqual(await next(), { id: 3, status: 500, error: "no read thread" });
+  reader.stdin.write(`${JSON.stringify({ id: 3, op: "noSuchRead", args: {} })}\n`);
+  assert.deepEqual(await next(), { id: 3, status: 500, error: "no read noSuchRead" });
   reader.stdin.end();
   const code = await new Promise((resolve) => reader.on("exit", resolve));
   assert.equal(code, 0, "it ends with its input");

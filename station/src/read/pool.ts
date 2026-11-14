@@ -6,10 +6,11 @@
 // A reader is a V8 of its own (tens of MB), so they are started when reads come and let go once none has come for a
 // while: an idle station keeps none. One that dies (its heap is bounded) fails what it held and is replaced by the next
 // read.
-import { availableParallelism } from "node:os";
+import { availableParallelism, homedir } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import { catalog } from "../accounts/catalog.ts";
+import { tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
@@ -41,6 +42,7 @@ import { HttpError } from "./views.ts";
 import { MbReader, type ReaderLike, mbReaderBinary } from "./mb-reader.ts";
 import { wall } from "../ops/fibers.ts";
 import { roots as machineRoots } from "./machine.ts";
+import { platform } from "../platform/index.ts";
 import type { CardEditPage, CardMessagePage } from "../store/card-outbox.ts";
 
 /// How long a reader with nothing to do is kept.
@@ -111,12 +113,55 @@ function filling(op: string, args: unknown): boolean {
 /// of every Claude and Codex project there, 14 s on a station, 2026-11-03), each of the files on the disk rather than the
 /// database.
 const PAGES = new Set(["timeline", "machineSessions"]);
+/// A session's history, read by the MoonBit reader (station/mb src/history's transcripts.mbt) where its program is
+/// there, on the pages' readers still: both its pages and where its reading stands (`transcriptState`, its live view's
+/// start), so that each reads on from what the reader it was read in last keeps (`homes`). Given the words a Codex
+/// script's calls are said in, in the language its args name (sessions.ts `timeline` says them so).
+const HISTORY = new Set(["timeline", "transcriptState"]);
 /// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
 /// program is there; every other read is a worker's.
-const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList"]);
+const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage", "sessionPlace", "changed"]);
 /// The reads of this machine's own Claude Code and Codex sessions: the MoonBit reader is told where they are kept, from
 /// this process's environment (read/machine.ts `roots`), as the worker reads it.
 const MACHINE = new Set(["machineSessions", "machineSession"]);
+/// A file a session's message names (read/sessions.ts `sessionPlace`): the program is given what only this process
+/// knows (its HOME, its home directory, whether macOS's folder permissions apply), the words of its refusals in the
+/// language its args name, and the time (the git listings it keeps a minute, macOS's mounts two seconds).
+const placeOf = (args: unknown) => {
+  const lang = argsLang(args) ?? "zh";
+  return {
+    ...(args as object),
+    env: { home: process.env.HOME ?? "", homedir: homedir(), mac: platform.hasFolderPermissions },
+    words: { notFound: tr(lang, "station.files.notFound"), protected: tr(lang, "station.files.protected"), outside: tr(lang, "station.files.outside") },
+    now: wall.now(),
+  };
+};
+/// The reads that say who someone is in the station's words (read/views.ts `creator`, `authorNames`: the local page, its
+/// admin), and go by the time of day (a share used lately, a card answered lately): the MoonBit reader keeps no words
+/// and its clock is no wall's, so it is given these in the language asked, and the time as the read is asked.
+/// A thread's pages (`entries`, `letters`) are given the words of their refusals too; notices, a file's and an unnamed chat's.
+const WORDED = new Set(["sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage"]);
+const argsLang = (args: unknown): Ask["lang"] | undefined => {
+  const lang = (args as { lang?: unknown } | null)?.lang;
+  return lang === "zh" || lang === "en" ? lang : undefined;
+};
+const wordsIn = (op: string, lang: Ask["lang"]) => ({
+  localPage: tr(lang, "station.creator.localPage"), admin: tr(lang, "station.author.admin"),
+  ...(op === "entries" || op === "letters" ? {
+    notInteger: Object.fromEntries(["after", "before", "from", "to"].map((name) => [name, tr(lang, "station.admin.notInteger", { name })])),
+    fromAndTo: tr(lang, "station.admin.fromAndTo"),
+  } : {}),
+  ...(op === "turnNotices" || op === "saidNotices" ? { file: tr(lang, "station.notice.file"), untitled: tr(lang, "station.chat.untitled") } : {}),
+  ...(op === "usage" ? { priceNote: tr(lang, "station.usage.priceNote") } : {}),
+  ...(op === "outflowChats" || op === "openJobs" || op === "resourceChats" || op === "usage" ? { untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage") } : {}),
+  ...(op === "chats" || op === "chatRows" ? { untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage"), quotedOnly: tr(lang, "station.chat.quotedOnly") } : {}),
+});
+
+/// `changed`'s list's own args, given the words and the time its read is given (`WORDED`).
+const changedOf = (args: unknown, lang: Ask["lang"]) => {
+  const a = args as { op: string; args?: unknown };
+  return { ...a, args: { ...(a.args as object), words: wordsIn(a.op, lang), now: wall.now() } };
+};
 
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
@@ -198,7 +243,7 @@ export class Readers {
     // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/read/worker.js.
     const file = this.workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     // A reader's heap stays small: what it builds is answered and dropped.
-    const worker: ReaderLike = (line === this.log || line === this.moved) && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
+    const worker: ReaderLike = (line === this.log || line === this.moved || line === this.pages) && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
       : new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null, catalogVersion: 0 };
     const begun = wall.now();
@@ -626,12 +671,21 @@ export class Readers {
   private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     if (signal?.aborted) return Promise.reject(cancelled());
-    const line = op === CHECKPOINT ? this.log : this.mbReader !== null && MOVED.has(op) ? this.moved : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
+    const history = this.mbReader !== null && HISTORY.has(op);
+    const line = op === CHECKPOINT ? this.log : history ? this.pages : this.mbReader !== null && MOVED.has(op) ? this.moved : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
     const home = session !== null ? this.homes.get(session) : undefined;
-    const given = line === this.moved && MACHINE.has(op) ? { ...(args as object), roots: machineRoots() } : args;
+    const given = history ? { ...(args as object), words: { inScriptOutput: tr(argsLang(args) ?? "zh", "station.transcript.inScriptOutput") } }
+      : line !== this.moved ? args
+      : MACHINE.has(op) ? { ...(args as object), roots: machineRoots() }
+      : op === "sessionPlace" ? placeOf(args)
+      // (what of a list changed: the list read as its own read is, given its words; read/digest.ts `changedOf`)
+      : op === "changed" && WORDED.has((args as { op?: string }).op ?? "") ? changedOf(args, lang)
+      // (the usage page says its words in the language its args name, as read/ops-usage.ts reads it)
+      : WORDED.has(op) ? { ...(args as object), words: wordsIn(op, op === "usage" ? argsLang(args) ?? lang : lang), now: wall.now() }
+      : args;
     const ask: Ask = { id: this.next++, op, args: given, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
       let finished = false;
@@ -710,12 +764,11 @@ export class Readers {
     asked.ask.names = [...this.names];
     asked.ask.processes = [...this.processes()];
     asked.ask.clientKeys = [...this.clientKeys()];
-    if (!(slot.worker instanceof MbReader)) {
-      const current = catalog();
-      if (slot.catalogVersion !== current.version) {
-        asked.ask.catalog = current.models;
-        slot.catalogVersion = current.version;
-      }
+    // (the MoonBit reader's prices are the catalog's as well: read/usage.ts `price`)
+    const current = catalog();
+    if (slot.catalogVersion !== current.version) {
+      asked.ask.catalog = current.models;
+      slot.catalogVersion = current.version;
     }
     slot.worker.postMessage(asked.ask);
   }

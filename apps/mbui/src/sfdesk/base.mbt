@@ -55,7 +55,6 @@ using @sfbase {
   fresh_reset,
   new_fade,
   new_leave,
-  became_starts,
   arrangement_none,
   browse_topic,
   browse_where,

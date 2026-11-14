@@ -161,6 +161,76 @@
   // a file held (Picked.held) taken by whoever sends it up: its File, let go here
   H.heldFile = (h) => { const f = heldFiles.get(h); heldFiles.delete(h); return f || null; };
 
+  // ---- files kept on the device (src/hostapi/keep.mbt): the browser's download ----
+  // All three ways (1 Downloads, 2 Choose, 3 Photos) are the browser's download: where it goes, and whether it asks,
+  // is the browser's. Each part appended is a Blob of its own at once, which copies its bytes (what is given may be a
+  // view of the app's memory, used again after the call), so the browser holds them, not this page's heap; `finish`
+  // makes one Blob of them all and clicks an <a download> on its URL. Kept (1) once that click is made, where being the
+  // file's name: the browser tells a page neither where it put it nor whether it numbered the name. The URL is revoked
+  // as a later keep finishes a minute or more after its click (keptUrlMs), or as the page goes: never sooner (a
+  // download whose URL goes before the browser has read it is cancelled: FileSaver.js waits 40 s for Safari's sake;
+  // several files chosen finish frames apart), and on no timer (detlint's host-delay); till then the browser holds
+  // what was kept last. States: 0 keeping, 1 kept, 2 called off, 3 failed.
+  const keeps = new Map(), keptUrls = [], keptUrlMs = 60000;
+  let nextKeep = 1;
+  const revokeKept = (all) => {
+    for (let i = keptUrls.length - 1; i >= 0; i--) {
+      if (!all && performance.now() - keptUrls[i].at < keptUrlMs) continue;
+      try { URL.revokeObjectURL(keptUrls[i].url); } catch (e) { /* gone already */ }
+      keptUrls.splice(i, 1);
+    }
+  };
+  window.addEventListener('pagehide', () => revokeKept(true));
+  // (as the `download` attribute takes it: no folder, nothing unprintable, never empty)
+  const keepName = (name) => String(name || '').replace(/[\/\\]/g, '_').replace(/[\u0000-\u001f\u007f]/g, '').trim() || 'download';
+  H.keepBegin = (name, mime, way) => {
+    const id = nextKeep++;
+    keeps.set(id, { name: keepName(name), mime: String(mime || ''), way, parts: [], state: 0 });
+    return id;
+  };
+  H.keepAppend = (id, bytes) => {
+    const k = keeps.get(id);
+    if (!k || k.state !== 0 || k.finished) return 0;
+    try {
+      k.parts.push(new Blob([bytes]));
+      return 1;
+    } catch (e) {
+      k.state = 3;
+      k.parts = [];
+      H.requestFrame();
+      return 0;
+    }
+  };
+  H.keepFinish = (id) => {
+    const k = keeps.get(id);
+    if (!k || k.state !== 0 || k.finished) return;
+    k.finished = true;
+    revokeKept(false);
+    try {
+      const url = URL.createObjectURL(new Blob(k.parts, { type: k.mime || 'application/octet-stream' }));
+      keptUrls.push({ url, at: performance.now() });
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = k.name;
+      a.rel = 'noopener';
+      a.style.display = 'none';
+      // (in the document as it is clicked: an older Firefox clicked none that was not)
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      k.state = 1;
+    } catch (e) {
+      H.log('keep ' + k.name + ': ' + e);
+      k.state = 3;
+    }
+    k.parts = [];
+    H.requestFrame();
+  };
+  H.keepState = (id) => { const k = keeps.get(id); return k ? k.state : 3; };
+  H.keepWhere = (id) => { const k = keeps.get(id); return k && k.state === 1 ? k.name : ''; };
+  // forgotten; one not finished called off, its parts let go
+  H.keepEnd = (id) => { keeps.delete(id); };
+
   // ---- the page shown and in front (host_native.mbt set_app_state): 1 its tab shown, | 2 it has the focus ----
   H.setAppState = (f) => {
     let was = -1;
@@ -198,11 +268,13 @@
     } catch (e) { H.log('NOTICE ' + tag + '\t' + title + '\t' + body); }
   };
   H.noticeCancel = (tag) => { notices.get(tag)?.close(); notices.delete(tag); };
-  // 0 what the browser lets the page show (1 granted, 2 denied, 3 not asked); 1 ask (1: asked); 2 the answer (1 yes, 0
-  // no, -1 none yet); 3 its settings (none a page opens); 4 a badge on the app's icon (none)
+  // 0 what the browser lets the page show (1 granted, 2 denied, 4 default: never answered, and its prompt shown each
+  // time it is asked, a prompt put away leaving it so: hostapi's "default", never "ask", which the app must remember
+  // having asked); 1 ask (1: asked); 2 the answer (1 yes, 0 no or put away, -1 none yet); 3 its settings (none a page
+  // opens); 4 a badge on the app's icon (none)
   H.noticeState = (what) => {
     if (!canNotify()) return what === 2 ? -1 : 0;
-    if (what === 0) return Notification.permission === 'granted' ? 1 : Notification.permission === 'denied' ? 2 : 3;
+    if (what === 0) return Notification.permission === 'granted' ? 1 : Notification.permission === 'denied' ? 2 : 4;
     if (what === 1) {
       if (Notification.permission !== 'default') return 0;
       noticeAnswer = -1;
@@ -2014,11 +2086,38 @@
     if (style & 4) return 0;
     return faces.has(1) ? 1 : 0;
   };
-  // style: 1 slanted, 2 the code face
+  // style: 1 slanted, 2 the code face; 64 a CJK face's marks narrow among Latin letters (style.mbt
+  // style_proportional): the face loaded again with pwid (a canvas has no font-feature-settings), once asked for
   const font = (size, weight, style) => {
     const own = style & 2 ? MONO : style & 4 ? SERIF : FAMILY;
     const f = faceOf(style);
-    return `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${f ? `"mbface${f}", ${own}` : own}`;
+    const narrow = f && style & 64 && narrowFace(f) ? `"mbface${f}n", ` : '';
+    return `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${f ? `${narrow}"mbface${f}", ${own}` : own}`;
+  };
+  // each face's files as given (a URL or bytes, its weight), and which faces are loaded with pwid (true) or being
+  const faceFiles = new Map();
+  const narrowFaces = new Map();
+  const narrowFace = (face) => {
+    const had = narrowFaces.get(face);
+    if (had !== undefined) return had;
+    narrowFaces.set(face, false);
+    const files = faceFiles.get(face) || [];
+    Promise.all(files.map(([src, weight]) => {
+      const d = faceDescriptors(face, weight);
+      d.featureSettings = d.featureSettings ? `${d.featureSettings}, "pwid" 1` : '"pwid" 1';
+      const ff = new FontFace(`mbface${face}n`, src, d);
+      return ff.load().then(() => document.fonts.add(ff));
+    })).then(() => {
+      if (narrowFaces.get(face) !== false) return;
+      narrowFaces.set(face, true);
+      textChanged();
+      H.requestFrame();
+    }, () => {});
+    return false;
+  };
+  const faceFile = (face, src, weight) => {
+    if (!faceFiles.has(face)) faceFiles.set(face, []);
+    faceFiles.get(face).push([src, weight]);
   };
   // what was shaped and drawn before a face or the scale changed, forgotten (MoonBit drops its glyphs as the
   // generation moves on)
@@ -2037,6 +2136,7 @@
   H.faceAdd = (face, url, weight) => {
     if (!(face > 0 && face < 16) || typeof FontFace !== 'function') return false;
     const ff = new FontFace(`mbface${face}`, `url(${JSON.stringify(url)})`, faceDescriptors(face, weight));
+    faceFile(face, `url(${JSON.stringify(url)})`, weight);
     ff.load().then(() => {
       document.fonts.add(ff);
       faces.add(face);
@@ -2049,6 +2149,7 @@
   H.faceAddBytes = (face, data, weight) => {
     if (!(face > 0 && face < 16) || typeof FontFace !== 'function') return false;
     const ff = new FontFace(`mbface${face}`, data, faceDescriptors(face, weight));
+    faceFile(face, data, weight);
     ff.load().then(() => {
       document.fonts.add(ff);
       faces.add(face);
@@ -2058,8 +2159,13 @@
     return true;
   };
   H.faceClear = (face) => {
+    faceFiles.delete(face);
+    narrowFaces.delete(face);
     if (!faces.delete(face)) return;
-    for (const ff of [...document.fonts]) if (ff.family === `mbface${face}` || ff.family === `"mbface${face}"`) document.fonts.delete(ff);
+    for (const ff of [...document.fonts]) {
+      const fam = ff.family.replace(/"/g, '');
+      if (fam === `mbface${face}` || fam === `mbface${face}n`) document.fonts.delete(ff);
+    }
     textChanged();
   };
 
@@ -2507,7 +2613,7 @@
   }
 
   // the pointer's shape (@hostapi.set_cursor)
-  const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab', 'grabbing', 'crosshair', 'not-allowed'];
+  const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab', 'grabbing', 'crosshair', 'not-allowed', 'nwse-resize', 'nesw-resize'];
   // (the page's, which all that takes presses inherits)
   H.setCursor = (k) => { document.body.style.cursor = cursors[k] || 'default'; };
   H.clipboardSet = (s) => { navigator.clipboard?.writeText(s).catch(() => {}); };

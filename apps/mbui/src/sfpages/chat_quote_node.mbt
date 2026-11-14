@@ -51,7 +51,8 @@ fn chat_quote_take(src : Source, draft : String, rows : () -> ChatBodyRows) -> U
 }
 
 ///|
-/// Over chat `r`'s list in `v` (its rows `rows`, each of whose words are said of its key: chat_body_row's picked_of):
+/// Over chat `r`'s list in `v` (its rows `rows`, each message's words, from where they are read, said of its key:
+/// picked_of, so 全选 over a finger's pick takes all of that message's, @ui's finger_select_all):
 /// the pill 引用 over a mouse's pick within one message, quoting it into the chat's draft (writing_quote, its text
 /// trimmed, nothing where that is empty), what is picked let go then. One for each pick (its `made`). A finger's pick
 /// in what `v` holds is offered the same in the system's text menu (picked_menu), and the message's own items there

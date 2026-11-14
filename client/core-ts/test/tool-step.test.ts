@@ -1,6 +1,7 @@
 // A history step's call and what came back, read by what they are (src/tool-step.ts, `history.tool`).
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { agentsOf, told } from "../src/activity.ts";
 import { toolCall, toolResult } from "../src/tool-step.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { t } from "../src/i18n.ts";
@@ -113,5 +114,69 @@ test("a_client_asks_the_core_what_a_step_is", async () => {
   assert.equal(ok.call[0].kind, "markdown");
   assert.ok(Array.isArray(ok.call[0].md), "its Markdown read as everywhere");
   assert.deepEqual(ok.result, [{ kind: "output", text: "done" }]);
+
+  const sendCall = JSON.stringify({
+    to: "a036720bc24844903",
+    message: "All 4 review findings are valid (`src/sf/markdown.mbt`). Please fix all 4.",
+    summary: "Tell verifier all 4 findings are valid, ask to fix all",
+  });
+  const sendRes = JSON.stringify({
+    type: "message_sent",
+    recipient: "a036720bc24844903",
+    recipient_kind: "agent",
+  });
+  call(core, ui, 2, "history.tool", { name: "SendMessage", call: sendCall, result: sendRes, said: true });
+  await host.settle();
+  const sendOk = (answers(host.takeEmitted(), 2) as J).ok;
+  assert.equal(sendOk.call[0].kind, "markdown");
+  assert.equal(sendOk.call[0].target, "verifier");
+  assert.equal(sendOk.call[0].targetId, "a036720bc24844903");
+  assert.equal(sendOk.call[0].summary, "Tell verifier all 4 findings are valid, ask to fix all");
+  assert.ok(Array.isArray(sendOk.call[0].md), "dispatch message parsed as Markdown");
+  assert.deepEqual(sendOk.result, [
+    {
+      kind: "fields",
+      rows: [
+        { key: "type", value: "message_sent", form: "short" },
+        { key: "recipient", value: "verifier", form: "short" },
+        { key: "recipient_kind", value: "agent", form: "short" },
+      ],
+    },
+  ]);
+
+  const customCall = JSON.stringify({
+    id: "req_1",
+    summary: "Short natural language summary",
+    reason: "A longer explanation with `inline_code` that should render as a full-width Markdown block.",
+  });
+  call(core, ui, 3, "history.tool", { name: "custom_tool", call: customCall, result: null, said: false });
+  await host.settle();
+  const customOk = (answers(host.takeEmitted(), 3) as J).ok;
+  assert.equal(customOk.call[0].kind, "fields");
+  assert.equal(customOk.call[0].rows[0].form, "short");
+  assert.equal(customOk.call[0].rows[0].prose, undefined);
+  assert.equal(customOk.call[0].rows[1].form, "short");
+  assert.equal(customOk.call[0].rows[1].prose, true);
+  assert.equal(customOk.call[0].rows[2].form, "long");
+  assert.ok(Array.isArray(customOk.call[0].rows[2].md), "long field row carries parsed Markdown tree");
+
+  const agents = agentsOf([
+    {
+      kind: "tool_call",
+      callId: "call_1",
+      tool: "Agent",
+      text: JSON.stringify({ description: "Verify 4 findings on markdown.mbt", subagent_type: "research", prompt: "check" }),
+    },
+    {
+      kind: "tool_result",
+      callId: "call_1",
+      text: "Done.\nagentId: a036720bc24844903 (for SendMessage to continue this agent)",
+    },
+  ]);
+  assert.equal(agents.get("a036720bc24844903"), "Verify 4 findings on markdown.mbt");
+  assert.equal(
+    told("SendMessage", JSON.stringify({ to: "a036720bc24844903", message: "Please fix all 4." }), { agents }),
+    "向子 agent (Verify 4 findings on markdown.mbt) 发送消息：Please fix all 4.",
+  );
   core.close();
 });

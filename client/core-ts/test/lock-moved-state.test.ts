@@ -2,7 +2,7 @@
 // src/lock-keep.ts) held to the fourth round's model (test/lock-moved-check.ts says what is compared and how; where the
 // core is stricter on purpose, as the station is: "not on" and "no root" are `waiting`, naming nobody). Drawn worlds
 // (both of round three's variants, fault-free and with faults; as drawn, one body held back for good, two workspaces)
-// and the scripted ones (M2, M5 with its clocks, a revoked key's web device and `off`, M6, M7's four rows), every
+// and the scripted ones (M2, M5 with its clocks, a revoked key's web device and `off`, M6, M7's four rows, M8's two: the chain carried once moved, so nothing waits for an `open`), every
 // device keeper at each look. LOCK_MOVED_CORE_SEEDS (3), _STEPS (120), _SCRIPTED (1) give more.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -37,12 +37,12 @@ test("on the model's drawn worlds every device keeps the model keeper's logs, bo
   const o = sum(await drawn);
   told("drawn", o);
   assert.equal(o.differ.length, 0, "the core and the model differ (the first are printed above)");
-  assert.ok(refusedAll(o) > 0 && o.lacking > 0 && o.on > 0 && o.waiting > 0 && o.moved > 0, "not trivial worlds");
+  assert.ok(refusedAll(o) > 0 && o.lacking > 0 && o.on > 0 && o.moved > 0, "not trivial worlds");
 });
 
 test("on the model's scripted worlds too: bodies no one's, web devices by a device's clock, a revoked key, off and on again, the handover", async () => {
   const o = sum(await scripted);
   told("scripted", o);
   assert.equal(o.differ.length, 0, "the core and the model differ (the first are printed above)");
-  assert.ok(o.off > 0 && o.webs > 0 && o.moved > 0 && o.waiting > 0 && Object.keys(o.refused).length >= 3, "not trivial worlds");
+  assert.ok(o.off > 0 && o.webs > 0 && o.moved > 0 && Object.keys(o.refused).length >= 3, "not trivial worlds");
 });

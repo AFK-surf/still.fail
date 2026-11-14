@@ -78,6 +78,7 @@ import * as pairing from "./views/pair.ts";
 import * as vaultCalls from "./views/vault.ts";
 import * as waysCalls from "./views/ways-stations.ts";
 import * as stationMarkCalls from "./views/station-marks.ts";
+import * as presetCalls from "./views/presets.ts";
 import * as transferCalls from "./views/transfers.ts";
 import * as browseCalls from "./views/browse.ts";
 import * as downloads from "./views/downloads.ts";
@@ -141,6 +142,8 @@ export class Inner {
   meshNow: () => Mesh | null = () => null;
   attention!: Attention;
   choose!: Choose;
+  /// A person's presets and starred models as their devices carry them (views/presets.ts).
+  presets!: presetCalls.PresetViews;
   changelog!: Changelog;
   forms!: Forms;
   adb!: Adb;
@@ -271,6 +274,7 @@ export class Core {
       vaultCalls.install(inner);
       waysCalls.install(inner);
       stationMarkCalls.install(inner);
+      inner.presets = presetCalls.install(inner);
       transferCalls.install(inner);
       browseCalls.install(inner);
       downloads.install(inner);
@@ -334,7 +338,8 @@ export class Core {
           stations: personalStations(inner),
           asked: () => asked(inner),
         }),
-        tookOff: (sub, id, removal) => withBound(inner, sub, Effect.tap(removal, () => takeOffBound(inner, sub, id))),
+        // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
+        tookOff: (sub, id, removal) => Effect.andThen(vaultCalls.levelVaultsOf(inner, sub, id), withBound(inner, sub, Effect.tap(removal, () => takeOffBound(inner, sub, id)))),
         subOf: (workspace) => inner.workspaces.owner(workspace),
         subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),
         pair: {
@@ -400,7 +405,17 @@ export class Core {
       handlers.historyTool = (_i, call) => {
         const c = call as Extract<Call, { kind: "historyTool" }>;
         // Markdown read here for the clients that draw its tree (markdown.ts), as everywhere else.
-        const withMd = (parts: ToolPart[]) => parts.map((part) => (part.kind === "markdown" ? { ...part, md: markdown(part.text) } : part));
+        const withMd = (parts: ToolPart[]) =>
+          parts.map((part) => {
+            if (part.kind === "markdown") return { ...part, md: markdown(part.text) };
+            if (part.kind === "fields") {
+              return {
+                ...part,
+                rows: part.rows.map((r) => (r.form === "long" ? { ...r, md: markdown(r.value) } : r)),
+              };
+            }
+            return part;
+          });
         return Effect.sync(() => ({
           call: withMd(toolCall(c.name, c.call, c.said, t)),
           result: c.result === null ? null : withMd(toolResult(c.name, c.call, c.result, c.failed, t)),

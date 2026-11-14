@@ -43,6 +43,7 @@ using @sfbase {
   type Install,
   type LinkedChat,
   type Message,
+  type RunSides,
   type Outgoing,
   type Quote,
   type SendFlight,

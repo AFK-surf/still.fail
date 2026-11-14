@@ -3,11 +3,13 @@
 // bind and the bodies kept, by this station's clock (cloud/state.ts `locked`): members and roles, each bound log's
 // app devices, web devices until their `exp`, stations, settings; admission goes by it; off is a state and a later
 // `open` puts it on again; a statement whose body is not here is not in force and is said lacking; without the root's
-// log or its `open` nobody is let in; the chain changing branch to one without `moved` makes the folded chain the
-// state again. What reads the chain itself (its seq, head) still reads the chain's.
+// log nobody is let in; the chain changing branch to one without `moved` makes the folded chain the state again. Read
+// with the chain as it moved (D6, 2026-11-14: what the logs have not said yet of those it named, it still says), and a
+// workspace that moved under build 9040's rules (everything said in the logs) reads as it did, but for the web pages
+// that move shut out. What reads the chain itself (its seq, head) still reads the chain's.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { LockRefusal, entryHash, fold } from "../src/cloud/lock.ts";
+import { LockRefusal, entryHash, fold, state4, state4Moved } from "../src/cloud/lock.ts";
 import { NOT_GIVEN, personChainsOf } from "../src/cloud/state.ts";
 import { wall } from "../src/ops/fibers.ts";
 import { inLock, inLockBringing, lockHead, lockPartRoute, stillIn } from "../src/mesh/serve.ts";
@@ -126,7 +128,7 @@ test("off is a state: the lock answers as one turned off, nothing let go, and a 
   assert.notEqual(c.locked(), null);
 });
 
-test("a body lacking: its statement not in force, said lacking, in force once brought", () => {
+test("a body lacking: its statement not in force, said lacking, in force once brought; meanwhile the chain as it moved still says whom it named", () => {
   clock = NOW;
   const w = world();
   const said = handover(w);
@@ -134,14 +136,19 @@ test("a body lacking: its statement not in force, said lacking, in force once br
   personChainsOf(c).keep(w.alice.genesis, w.alice.entries, WS);
   for (const l of [w.bob, w.carol]) bring(c, l);
   c.takeBodies(null, [...w.alice.bodies.values()].filter((b) => b.kind !== "member" || b.sub !== "carol"));
-  assert.equal(c.locked()!.state!.members.has("carol"), false);
-  // (and what came after it in alice's log stands on it: not in force either, `prev`)
-  assert.equal(c.locked()!.state!.stations.size, 0);
+  // (carol by the chain as it moved, which bound her to no log: her app by its signer there; and what came after her
+  // admit in alice's log stands on it, not in force either, `prev`, but the chain's stations are the same two)
+  assert.equal(c.locked()!.state!.members.get("carol")?.role, "member");
+  assert.equal(c.locked()!.state!.persons.has("carol"), false);
+  assert.equal(c.locked()!.state!.devices.get(w.carol.app.base.hex)?.by, "chain");
+  assert.equal(c.locked()!.state!.stations.size, 2);
   assert.deepEqual(c.lacking(null), [said.carol.h]);
   const v = as("alice", w.alice.app, "owner");
   assert.deepEqual((lockPartRoute(c, "bodies", "GET", Buffer.alloc(0), v.viewer) as any)[1].lacking, [said.carol.h]);
   c.takeBodies(null, [said.carol.body]);
   assert.equal(c.locked()!.state!.members.get("carol")?.role, "member");
+  assert.equal(c.locked()!.state!.persons.get("carol"), w.carol.genesis, "bound by her log once her admit is in force");
+  assert.equal(c.locked()!.state!.devices.get(w.carol.app.base.hex)?.by, undefined);
   assert.equal(c.locked()!.state!.stations.size, 2);
   assert.deepEqual(c.lacking(null), []);
 });
@@ -166,21 +173,24 @@ test("without the root's log, or its open, nobody is let in, never by the folded
   assert.equal(inLock(c, bob, "admin", bob.viewer.device).viewer.role, "admin");
 });
 
-test("while it waits, a connection let in before is given no bodies and no logs; once on again, it is", () => {
+test("while it waits (the root's log not here), a connection let in before is given no bodies and no logs; once it is, it is; no `open` is waited for", () => {
   clock = NOW;
   const w = world();
   const said = handover(w);
   const c = station(w);
   for (const l of [w.bob, w.carol]) bring(c, l);
-  // alice's log and every body of hers but the open: no open in force, so it waits
-  personChainsOf(c).keep(w.alice.genesis, w.alice.entries, WS);
+  // every body of alice's but the open, her log not here: it waits
   c.takeBodies(null, [...w.alice.bodies.values()].filter((b) => b.kind !== "open"));
   assert.equal(c.waiting(), true);
-  assert.ok(c.bodies(null).all().size > 0);
   const v = as("alice", w.alice.app, "owner").viewer;
   const part = (p: string) => (lockPartRoute(c, p, "GET", Buffer.alloc(0), v) as any)[1];
   assert.deepEqual(part("bodies"), { bodies: [], lacking: [] }, "bodies to nobody while it waits");
   assert.deepEqual(part("logs"), { chains: [] }, "logs to nobody while it waits");
+  // her log, and so her statements but the open: on by the chain's settings (D6), no `open` waited for
+  personChainsOf(c).keep(w.alice.genesis, w.alice.entries, WS);
+  c.takeBodies(null, [...w.alice.bodies.values()].filter((b) => b.kind !== "open"));
+  assert.equal(c.waiting(), false);
+  assert.ok(c.bodies(null).all().size > 0);
   c.takeBodies(null, [said.open.body]);
   assert.equal(c.waiting(), false);
   assert.equal(part("bodies").bodies.length, c.bodies(null).all().size);
@@ -208,4 +218,34 @@ test("the chain changing branch to one without moved makes the folded chain the 
   assert.equal(c.chain()!.state!.moved, w.alice.genesis);
   assert.equal(c.locked()!.state!.devices.has(w.carol.app.base.hex), true);
   assert.equal(c.locked()!.state!.stations.size, 2);
+});
+
+test("a workspace that moved under build 9040's rules, everything said in its people's logs: the same state as those rules gave, but for a web page of the chain's that move shut out", () => {
+  clock = NOW;
+  const w = world();
+  const said = handover(w);
+  // after that move: alice takes carol out by her admit alone, makes bob a member (removal, admit) and takes station s1
+  // out by its statement alone, each naming what was in force then (none names the `moved`)
+  w.alice.say("member.remove", { sub: "carol", cancels: [said.carol.h] });
+  w.alice.say("member.remove", { sub: "bob", cancels: [said.bob.h] });
+  w.alice.say("member", { sub: "bob", email: "bob@x", lock: w.bob.genesis, role: "member" });
+  w.alice.say("station.remove", { key: w.stations[1]!.hex, cancels: [said.s1.h] });
+  const chains = [w.alice, w.bob, w.carol].map((l) => l.entries);
+  const bodies = [w.alice, w.bob, w.carol].flatMap((l) => [...l.bodies.values()]);
+  const said4 = (s: any) => ({ members: [...s.members].sort(), persons: [...s.persons].sort(), devices: [...s.devices.keys()].sort(), stations: [...s.stations.keys()].sort(), settings: [s.origins, s.rp_id] });
+  const old = state4(WS, w.alice.genesis, chains, bodies, NOW);
+  const now = state4Moved(WS, [w.first, w.moved], chains, bodies, NOW);
+  assert.equal(old.on, "on");
+  assert.equal(now.on, "on");
+  assert.deepEqual(said4(now.state), said4(old.state), "the same state: carol out, bob a member, s1 out");
+  assert.equal(now.state.members.has("carol"), false);
+  // the chain had a web page of bob's the old move shut out (another member's, not said again by his app): in now,
+  // until its exp there
+  const page = { id: ed().hex, sub: "bob", kind: "web", label: "bob's browser", exp: NOW + 86400 };
+  const g = signed({ ...w.first, body: { ...w.first.body, devices: [...(w.first.body as any).devices, page] } } as any, w.alice.app.signer);
+  const moved = signed({ v: 1, ws: WS, seq: 1, prev: entryHash(g), at: 1000, kind: "moved", body: { root: w.alice.genesis } }, w.alice.app.signer);
+  const paged = state4Moved(WS, [g, moved], chains, bodies, NOW);
+  assert.deepEqual([...paged.state.devices.keys()].sort(), [...old.state.devices.keys(), page.id].sort());
+  assert.equal(paged.state.devices.get(page.id)?.by, "chain");
+  assert.equal(state4Moved(WS, [g, moved], chains, bodies, NOW + 86400).state.devices.has(page.id), false, "out at its exp");
 });

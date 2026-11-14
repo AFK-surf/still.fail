@@ -223,6 +223,7 @@
   "core-misc.lock.upgrade.device": "Waiting for {name}'s device “{device}”: ask them to open Settings › Security on another trusted device and verify once; if that device is no longer used, ask them to remove it",
   "core-misc.lock.upgrade.deviceUnnamed": "Waiting for a device of {name}'s: ask them to open Settings › Security on another trusted device and verify once; if that device is no longer used, ask them to remove it",
   "core-misc.lock.upgrade.station": "Waiting for station {name}: update it to the latest version and keep it online; if it is no longer used, choose “Remove” on its page",
+  "core-misc.lock.upgrade.stationOther": "Waiting for station {name} of “{workspace}”: update it to the latest version and keep it online; if it is no longer used, choose “Remove” on its page",
   "core-misc.lock.upgrade.more": "and {n} more",
   "core-misc.lock.upgrade.ask": "Verify and finish the upgrade",
   "core-misc.lock.rootOnlyPage": "Security mode was turned on by {name}, and only they can turn it off or on again. If they cannot, run stillfail lock reset on the computer a station runs on",
@@ -355,5 +356,8 @@
   "core-misc.feedback.team": "The still.fail team",
   "core-misc.feedback.agent": "Agent",
   "core-misc.feedback.someone": "Someone",
-  "core-misc.feedback.heading": "The still.fail team replied on FB-{number}"
+  "core-misc.feedback.heading": "The still.fail team replied on FB-{number}",
+  "core-misc.presets.none": "This preset is gone, or not read yet: open the list of presets again and retry",
+  "core-misc.presets.notYours": "This preset is someone else's: look at it, open a chat with it, or copy it to make your own to change",
+  "core-misc.presets.signedOut": "No signed-in account reaches this workspace: sign in to change presets"
 }

@@ -12,32 +12,37 @@
 /// What a person wrote (person_words') in `v`, as `m` says it as it changes: in the face for what people wrote (the
 /// theme's `words`), in pieces as the core gave them, links in blue; a link tapped opens where it leads, held (or right
 /// clicked) its menu; the words `found` says in bold, marked where `found_at` says (found_marks: the one the find is
-/// at of them, -1 none; None not marked); each link's card while a mouse rests on it where `cards` says
+/// at of them, -1 none; None not marked), the passage `lit` says lit where they have it (passage_marks: a quote's that
+/// led here, as it flashes); each link's card while a mouse rests on it where `cards` says
 /// them (drawn in its layer: a chat's link_peeks, message_link_card). The words' node.
 fn person_words_node(
   v : @view.View,
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
   found_at? : () -> Int? = fn() { None },
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   cards? : (@sf.TipLayer, (@sf.LinkOf) -> @sf.LinkCard?),
 ) -> @view.View {
   let runs = fn() {
     let now = m()
     @sf.found_weight(@sfbase.person_runs(now.text, now.words, @sf.theme().p.accent, chat_title=chat_title_of(now)), found())
   }
-  // (what a find marks of them: found_marks)
-  let marks = fn() {
+  // (what a find marks of them: found_marks; and the passage lit where they have it: passage_marks)
+  let found_now = fn() {
     match found_at() {
       Some(at) => @sf.found_marks(runs(), found(), at)
       None => []
     }
   }
+  let marks = fn() { found_now() + @sf.passage_marks(runs(), lit()) }
   let shown : @signals.Signal[Array[(String, String, Int)]] = @signals.signal([])
   let links : Ref[@ui.RunsLinks?] = Ref(None)
   let words = v.box(fn(w) {
     w
     .words_runs(By(runs))
     .runs_marks(By(marks))
+    // (what a go-to brings before the eyes in them, where they have it: sought_part)
+    .sought(fn() { @sf.sought_part(runs(), found_now(), lit().0).map(fn(r) { @ui.runs_piece(w, r.0, r.1) }) })
     .words_look(By(fn() { @ui.style_words(@sf.theme().t.words) }))
     .runs_look(By(fn() { { ..@view.runs_plain, link: @sf.theme().p.blue, words: true } }))
     .ink(By(fn() { @ui.style_ink(@sf.theme().t.words) }))
@@ -87,11 +92,12 @@ fn mine_bubble_node(
   m : () -> Message,
   found : () -> Array[String],
   found_at : () -> Int?,
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   cards? : (@sf.TipLayer, (@sf.LinkOf) -> @sf.LinkCard?),
 ) -> Unit {
   v.box(fn(b) {
     @sf.style_node(b, fn() { bubble.then(@ui.style(max_w=Fixed(mine_most_of((here.width)())))) })
-    person_words_node(b, m, found~, found_at~, cards?) |> ignore
+    person_words_node(b, m, found~, found_at~, lit~, cards?) |> ignore
   })
   |> ignore
 }
@@ -122,6 +128,7 @@ fn mine_said_node(
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
   found_at? : () -> Int? = fn() { None },
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   share? : MessageShare? = None,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
   out? : () -> Outgoing? = fn() { None },
@@ -135,12 +142,12 @@ fn mine_said_node(
       // (what it quotes ahead of its files and words, in the order the composer held them: mine_message's; its place
       // the row's as it was made, what was sent from here its key's)
       let at = if @signals.untracked(said) { message_place(@signals.untracked(m)) } else { key }
-      message_quotes_node(col, src, here, fn() { m().quotes }, fn() { m().attachments }, true, at)
+      message_quotes_node(col, src, here, fn() { m().quotes }, fn() { m().attachments }, true, at, said=fn() { m().said })
       message_files_node(
         col,
         src,
         here.tips,
-        message_files_at(here),
+        message_files_at(here, fn() { m().said }),
         fn() {
           let now = m()
           beside_quotes(now.quotes, now.attachments)
@@ -150,6 +157,11 @@ fn mine_said_node(
         at + "/f",
       )
       col.show(fn() { m().text != "" }, fn(b) {
+        // (what is read in it starts here, its bubble's words: View::read_from)
+        b.read_from() |> ignore
+        // (and what is picked of it is of its key, its bubble's words alone: quoted by it, all of them taken by 全选,
+        // chat_quote_node)
+        @ui.picked_of(b, key, whole=true) |> ignore
         let cards = message_link_card(src, here.station, "", m)
         mine_bubble_node(
           b,
@@ -157,6 +169,7 @@ fn mine_said_node(
           m,
           fn() { if said() { found() } else { [] } },
           fn() { if said() { found_at() } else { None } },
+          lit=fn() { if said() { lit() } else { ("", 0L) } },
           cards=(here.tips, fn(l) { if said() { cards(l) } else { None } }),
         )
         // (offered once it is the chat's, by the message it is then)
@@ -282,6 +295,7 @@ fn person_said_node(
   m : () -> Message,
   found? : () -> Array[String] = fn() { [] },
   found_at? : () -> Int? = fn() { None },
+  lit? : () -> (String, Int64) = fn() { ("", 0L) },
   share? : MessageShare? = None,
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
 ) -> MessageRowNode {
@@ -303,15 +317,20 @@ fn person_said_node(
       fn(b) {
         // (what it quotes ahead of its words, its other files under them, as the old body's)
         let at = message_place(@signals.untracked(m))
-        message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, at)
+        message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, at, said=fn() { m().said })
         b.show(fn() { m().text != "" }, fn(w) {
-          person_words_node(w, m, found~, found_at~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
+          // (what is read in it starts here, its words under its head line: View::read_from)
+          w.read_from() |> ignore
+          // (and what is picked of it is of its key, its words alone, not its head line: quoted by it, all of them
+          // taken by 全选, chat_quote_node)
+          @ui.picked_of(w, key, whole=true) |> ignore
+          person_words_node(w, m, found~, found_at~, lit~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
         })
         message_files_node(
           b,
           src,
           here.tips,
-          message_files_at(here),
+          message_files_at(here, fn() { m().said }),
           fn() {
             let now = m()
             beside_quotes(now.quotes, now.attachments)
@@ -347,7 +366,8 @@ fn message_share_of(src : Source, here : MessageNodeHere, m : () -> Message) -> 
 }
 
 ///|
-/// Where a message's files are (MessageFilesAt) in the chat `here` is: its station, its session, its view as it changes.
-fn message_files_at(here : MessageNodeHere) -> MessageFilesAt {
-  { station: fn() { here.station }, session: fn() { here.session }, view: here.view }
+/// Where a message's files are (MessageFilesAt) in the chat `here` is: its station, its session, its view as it
+/// changes; whether the message was said while the chat shows (`said`).
+fn message_files_at(here : MessageNodeHere, said : () -> Bool) -> MessageFilesAt {
+  { station: fn() { here.station }, session: fn() { here.session }, view: here.view, said }
 }

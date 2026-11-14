@@ -37,11 +37,7 @@ fn update_in_row(c : @ui.Ctx, src : Source) -> Unit {
   let (label, tip, busy) = update_said()
   let offered = now is Offered(_, ..)
   @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, tip, busy, coming~, offered~, on_press=fn() {
-    if coming is Some(_) {
-      @sfbase.update_dialog(src)
-    } else {
-      update_go(src)
-    }
+    update_pressed(src)
   })
 }
 
@@ -133,3 +129,19 @@ let update_closed_inset : Double = 80.0
 /// 更新's box with the sidebar closed: its key's size.
 // kept across runs: a value (no field of it changes)
 let update_at : @ui.Style = @ui.css("row")
+
+///|
+/// The update key pressed: where the stations' newer releases wait too (sfpages station_updates.mbt), the dialog of
+/// both, the app's first (one key for both, the user, 2026-11-14: 「带 app 更新呢？」); else the app's own: while its
+/// build comes its dialog, else what the person's word does (update_go).
+fn update_pressed(src : Source) -> Unit {
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) if (src.asks_station_updates)() && @sfpages.station_updates_said(settings_core(src, w), w.id) != "" =>
+      @sfpages.station_updates_dialog(src, settings_core(src, w), w.id)
+    _ =>
+      match update_now() {
+        Coming(_, _) => @sfbase.update_dialog(src)
+        _ => update_go(src)
+      }
+  }
+}

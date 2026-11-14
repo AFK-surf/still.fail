@@ -44,14 +44,16 @@ yet and you can add one, add it.
 - What a structure makes or lets go down a column makes its way in or closes it on a Move, what is under it going with
   it (`View::comes`, flex's `come_*`): the framework's, not each page's (the user, 2026-11-09: 方案 A). A show in its
   opposite's place, or a pick, is one in the other's place, its way from as tall as that one was. A pick said `leave`
-  keeps what it showed over its place, fading out that long, and shows what it shows now once that is gone and its
-  place holds it whole, its place's way to a smaller one waiting for it: never both seen, no words cut by the way
-  (`src/view/pick_leave.mbt`; a video's capsule; the coordinator of the migration, 2026-11-11). Say `at_once=true`
-  only where one is in another's place the column does not see (an old view's drawn there, one sidebar for another),
-  and on what a row of a page's list shows only while it is the last of its run (its time line under it): gone in the
-  change by which a key comes after it, as the old page built the row again without it, the key setting out from what
-  that gives back (the coordinator of the migration, 2026-11-13; the list cannot tell a part's cause, and a fold stays
-  a fold);
+  keeps what it showed over its place, fading out that long, its place at least as big across as that till it is gone,
+  and shows what it shows now once that is gone and its place holds it whole, its place's way to a smaller one waiting
+  for it, of no way said with it, setting out then in the one way of what goes then; a side that makes nothing takes
+  no room and no gap at rest, as a show's that is not there: never both seen, no words cut or moved by the way
+  (`src/view/pick_leave.mbt`; a video's capsule; the coordinator of the migration, 2026-11-11 and 2026-11-14). Say
+  `at_once=true` only where one is in another's place the column does not see (an old view's drawn there, one sidebar
+  for another), and on what a row of a page's list shows only while it is the last of its run (its time line under
+  it): gone in the change by which a key comes after it, as the old page built the row again without it, the key
+  setting out from what that gives back (the coordinator of the migration, 2026-11-13; the list cannot tell a part's
+  cause, and a fold stays a fold);
   `leave` keeps a structure's coming and going its own; a page's list's blocks come and go at once as it scrolls;
   those its keys bring or take by data make their way as an each's rows do, one way with all else in its column then,
   where they are seen (at its foot what is above going up with them; scrolled up, what is read staying), each key its
@@ -70,15 +72,30 @@ yet and you can add one, add it.
   its room left under the last block: what comes at its foot takes that room first, what is over it up only by what it
   needs past it, and the room goes only as the hand scrolls it off (the user, 2026-11-12: a turn that ends with no
   answer must not carry what is read up and let it fall back; the coordinator of the migration, 2026-11-13;
-  `src/view/list_foot_room_test.mbt`); what is sent takes it up only: at its foot, in a change by which a key comes at
-  its foot, the stretch from the top of the last key that stays to the column's end is never shorter than it was then
-  while that change's ways go and rests as long as it came to, so what is over the key goes up only by what it needs
-  past all that change gives back under that key's top (the room there, the pinned foot's shrink, a part closing in
-  it, a marked key), never down; and the key coming there sets out from as tall as all that gives back, never taller
+  `src/view/list_foot_room_test.mbt`); a key its page says `comes_whole` (one's own words sent, where no flight
+  carries them), coming by data while the list is at its foot and follows it, makes its way as any key does, all else
+  where it would be, but what its block holds is drawn as at rest all the way: at full ink and its size from the
+  block's top, not cut to its room, over the rest of its list (its keys under it, its pinned foot), every such key on
+  its way, in their order (the paint's alone,
+  `Tree::raised_blocks`, ui's `view_paint` moving what it draws after its list's, cut as where it is; found by a press
+  and read out where it is laid); not at its foot, `at_once` or with motion reduced, as any key
+  (`src/view/list_key_whole_test.mbt`, `src/ui/list_key_whole_wbtest.mbt`; the coordinator of the migration,
+  2026-11-14); what is sent takes it up only: at its foot, in a change by which a key comes at
+  its foot, or comes before keys that stay under it there (an agent's line: at the foot for the one reading; the
+  coordinator of the migration, 2026-11-14), the stretch from the top of the last key that stays before it to the
+  column's end, whatever stays under it, is never shorter than it was then while that change's ways go and rests as
+  long as it came to, so what is over the key goes up only by what it needs past all that change gives back under that
+  key's top (the room there, the pinned foot's shrink, a part closing in it, a marked key), never down, and what stays
+  under it keeps its place against the column's end (`src/view/list_send_before_tail_test.mbt`); and the key coming
+  there sets out from as tall as all that gives back, never taller
   than itself, two or more in their order each up to its own height, in the one way they were said in, so what it
-  holds is at its resting place against that key from the first frame (`src/view/list_send_one_move_test.mbt`); a key
-  the page lets go, not marked, gone at or under that key (by its way or at once) is no such giving back, and that
-  change is as ever (the coordinator of the migration, 2026-11-13;
+  holds is at its resting place against that key from the first frame (`src/view/list_send_one_move_test.mbt`); where
+  an old view is hosted in its pinned foot (laid out only as the old frame is built), that set-out is worked out in the
+  first fill after the old view is built since the cause, at the cause's moment still (`Tree::old_views_built`,
+  `src/ui/list_foot_old_view_wbtest.mbt`, a bridge going with the composer made as nodes; the coordinator of the
+  migration, 2026-11-14: one motion, the composer's closing is the list's rise); a key the page lets go, not marked,
+  gone at or under that key (by its way or at once) is no such giving back, and that change is as ever (the
+  coordinator of the migration, 2026-11-13;
   `src/view/list_sent_up_test.mbt`); what a block holds makes its way in the list's one way, its held column's
   group, with what comes or goes down the list then (Tree::come_group_join); every list said `at_once` (keys there and
   gone at once, its blocks' insides each their own way) is a debt of 方案 A, counted (detlint's `list-comes-off`) and
@@ -121,7 +138,28 @@ yet and you can add one, add it.
   hands no number for either (the coordinator of the migration, 2026-11-12). A height change a handler declares
   (`View::resizes`) makes its way as what comes does, in its column's one way (in a list's foot the list's, the room
   under the last block following the foot as it shows), alone by its spec, nothing where it comes out as tall; one not
-  declared is at once; what draws a ground by how tall something shows is given that (`View::shown_by`).
+  declared is at once; what draws a ground by how tall something shows is given that (`View::shown_by`). Said `foot`,
+  what it holds keeps to its foot all the way, cut at its top (flex Style's `come_foot`; an old view hosted in it too):
+  a composer grows from its foot, what is over it going up with it as one (`src/view/list_foot_keeps_foot_test.mbt`;
+  the coordinator of the migration, 2026-11-14).
+- A page's list holds what is read where it is on the screen, in every frame (the owner's: what the reader has
+  before their eyes does not move): a block marks where what is read in it starts (`View::read_from`, a message's
+  words under its head line), and the list holds the first key whose marked start is at or under what covers its top
+  and over its pinned foot, by that start, kept while it shows till the hand moves the list or it is asked elsewhere;
+  what is over that start gives and takes its room upward, its own growth goes down (`src/view/list_read_from.mbt`).
+  A list that marks none is held by the block the top of what shows lies in, by its top, as before (the coordinator of
+  the migration, 2026-11-14). Following its foot, it follows it no further than a key's top its page names
+  (`ListPlace::follow_from`: a chat's answer read from its top), that top a margin under what covers the list's top: a
+  standing limit, which while it binds holds the list by that top and has it off its foot to every rule of its foot,
+  however near the foot, and stands till the hand takes the list, an ask, another named, or its key goes
+  (`src/view/list_follow_from_test.mbt`; the coordinator of the migration, 2026-11-14).
+- What a page asks of its list (`ListPlace`: a block brought to its top or its middle, back to its foot) is done only
+  in a pass that can do it as asked: one that cannot make the rows that show there, or that a way still going under
+  it would leave short, keeps the ask for the next pass. Asked back to its foot, the list ends at its foot as the foot
+  is when it gets there: where the end moves while it glides (a key measured or come, the pinned foot grown or shrunk),
+  it goes on to where the end is now, from where it is and as fast, never past it; there, it follows its foot where the
+  list does. The hand or another ask ends the glide (`src/view/list_to_end_lands_test.mbt`; the coordinator of the
+  migration, 2026-11-14).
 - A page's list (`View::scrolls_window`) is not made in a row of another: its rows are put on the host's grid by the
   list the tree's walk last came to, so the outer's after it would not be; it is a fault, said as the inner is made
   (`Tree::rows_list_nested_said`). One that needs it is given its own way then, paid only where it nests.
@@ -251,6 +289,16 @@ yet and you can add one, add it.
   binding's property alike. Only what is on a way not at its end then (its own, what holds it, a way in or out beside
   it in its column: `Tree::on_way_at`) is judged as ever: a step in the middle of a way (`src/view/answer_marked.mbt`;
   the coordinator of the migration, 2026-11-14).
+- Time nothing happens in is skipped, never walked (the user, 2026-11-14: 「无意义的时间直接跳过是这个项目第一天就开始强调的」).
+  A test that looks at every frame after a cause (`Tester::each_frame`) runs the clock on with the frames a host
+  draws (`Tester::run_shown`: the display's while the app asks for frames, none while it is at rest, one at what is
+  due and at its end), never the display's frames walked one by one through a rest: a frame nobody draws shows
+  nothing, and drawing them was most of what such a test cost a CI job (the coordinator of the migration, 2026-11-14).
+  A frame nothing asks for (no motion, no wake or timer due, nothing come from outside, no input, no step said, no
+  hook on each frame: `Tester::frame_unasked`) is not drawn on a host's run's way either (`set_frame_period`'s
+  run_for; a tape's `set_frame_times` draws each it had), nor by `Tester::frame_as_host`, which walks the display's
+  frames one at a time as an idle host has them, the clock only passing what is not drawn. `Tester::frame` draws each,
+  asked or not: a test walking a span by it (detlint's `frame-walk`) is counted, and that count only falls.
 - Motion is data: said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set

@@ -5,7 +5,8 @@
 // is here, the app takes it (`download.take`, once) whatever page shows, reads it a part at a time (`download.read`:
 // off the device, not from the station again) into
 // the system's downloads (@ui.keep_begin: never whole in memory), and once the host has answered says it is done, with
-// where the system put it (`download.done`: read back from there, that is the file's copy on the device).
+// where the system put it (`download.done`: where the core can read it back from there, that is the file's copy on the
+// device; the web's is only the file's name, which the core reads nothing from).
 
 ///|
 /// The ready ones being saved (by their id: taken, not taken again while the core's list still says ready), and how

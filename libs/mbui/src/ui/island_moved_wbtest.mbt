@@ -164,7 +164,9 @@ fn island_rooms(at : (Double, Double)) -> Array[String] {
       b.width(Is(Some(400.0))).height(Is(Some(200.0))).padding(Is((30.0, 10.0, 0.0, 0.0))) |> ignore
       old(b, fn(c) {
         c.box(w=Px(300.0), h=Px(150.0), align=AStart, fn() {
-          c.box(dir=Row, fn() {
+          let row = c.id("row")
+          c.takes_presses(row)
+          c.box(dir=Row, h=Px(20.0), id=row, fn() {
             for k in 0..<2 {
               let id = c.id("key \{k}")
               c.takes_presses(id)

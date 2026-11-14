@@ -554,6 +554,14 @@ export const routes = (tools: Tools): Route[] => {
               await a.hub.retryFailed(key, thread as number, seq as number);
               return ok({ ok: true });
             }
+            // A failure's notice where its allowance showed a limit pressed (重新分配账号): moved to another account.
+            case "reassign": {
+              session(s, key, r);
+              const { thread, seq } = input(r);
+              if (!Number.isSafeInteger(thread) || !Number.isSafeInteger(seq) || (thread as number) <= 0 || (seq as number) <= 0) throw new Refused(400, "invalid failure notice");
+              await a.hub.reassign(key, thread as number, seq as number);
+              return ok({ ok: true });
+            }
             case "evict":
               await a.hub.evict(key);
               return ok({ ok: true });
