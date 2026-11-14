@@ -397,7 +397,10 @@ for t in $targets; do
           # minutes on main 3ee6f477 (43540456308, attempt 1); the third's 270-440, its job 94-159 s; the second's
           # 276-473 and the fourth's 324-477 as reckoned. The first reckoned 600, the third 400: by the table some 160 s
           # of the first's pages go to the second (two programs), the third and the fourth, 787 s to 627)
-          *) specs="4,4,600,1 2,4,430,1 1,4,400,1 4,4,420,1" ;;
+          # (answers_still's five on the third since (some 200-220 s of its cores): the third reckoned 600. The first kept
+          # at 600 for its pages, which ran there 1.85 times their table's times: by the table its pages 627 s to 607,
+          # the third's 306 to 286, the second's 573 to 593, the fourth's 766 to 786)
+          *) specs="4,4,600,1 2,4,430,1 1,4,600,1 4,4,420,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
@@ -514,7 +517,11 @@ for t in $targets; do
       # runner each; reckoned in specs below: 31, 256, 91 and some 120 s of its cores)
       # (at 120 on the third since: on the first beside its pages and the packages' programs its runs were 560 s of its
       # cores, its job 4.2 min where it had been 2.5, the third's two 2.0 and 2.5, main af1435b8 43476543010)
-      "src/sfapp/answers_still_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "") echo 1 ;; 60 | 120) echo 3 ;; *) echo 4 ;; esac ;;
+      # (at the default rate on the third since: on the first, beside its pages on four programs, real_size's half and
+      # preview_tree's halves, twelve processes on its four cores, its pages ran 1.85 times their page-seconds.txt
+      # times where the other three's ran 0.6-0.9, app 1/4 286 s of its 5 minutes on mbui-picks-whole 43544698219
+      # after #6086, the third's 164 s with its pages on one program)
+      "src/sfapp/answers_still_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "" | 60 | 120) echo 3 ;; *) echo 4 ;; esac ;;
       "@pages "*) [ "$2" = 0 ] && echo 1 || echo "$2" ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
