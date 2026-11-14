@@ -416,9 +416,11 @@ if part ts; then
   if touches '^client/core-ts/(src|scripts)/'; then prep core deps client/core-ts; step "core writes on its own" after core node client/core-ts/scripts/writes.ts --check; fi
   # Nothing that answers the app reads a station's chats whole: the chat table is read by what a view shows.
   if touches '^client/core-ts/(src|scripts)/'; then step "core reads no chat list whole" after core node client/core-ts/scripts/whole-lists.ts --check; fi
-  # The core's base (the device's mesh, what runs a client) imports nothing of what still.fail does with it; and what
-  # is built into the apps with the core (the mbui app's core entry, the web's sources) imports its words through i18n.ts.
-  if touches '^client/core-ts/(src|scripts)/|^client/i18n/|^apps/mbui/core/|^web/src/'; then prep core deps client/core-ts; step "core base stands apart" after core node client/core-ts/scripts/base.ts --check; fi
+  # The core's base (the device's mesh, what runs a client) imports nothing of what still.fail does with it; what is
+  # built into the apps with the core (the mbui app's core entry, the web's sources) imports its words through i18n.ts;
+  # and no code file of the repository loads the base's own words without still.fail's over them (i18n.ts): any of
+  # them may come to, a station's too, so it is run for a change to any (it parses only the few that name such a file).
+  if touches '^client/core-ts/(src|scripts)/|^client/i18n/|^apps/mbui/core/|^web/src/|\.[cm]?[jt]sx?$'; then prep core deps client/core-ts; step "core base stands apart" after core node client/core-ts/scripts/base.ts --check; fi
 
 fi
 

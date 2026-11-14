@@ -1,36 +1,23 @@
 // The words people read, in their language: `t("key", { name })`. The base says its own words by it (the mesh's, an
-// error's, a moment's): those are the catalog files imported here and no others (scripts/base.ts `WORDS` holds this
-// file to them, and every key a base file says to being in them), so the base says them with nothing else loaded. A
-// program built on the base gives its own catalog (`words`) as its module is first run, so before anything of it asks
-// for a word (the still.fail core's: i18n.ts, the rest of client/i18n/catalog), and may say how every word is said
-// (`saidBy`: the still.fail core's product's name).
+// error's, a moment's), and those are its own: the two files beside this one (lang.zh.json, lang.en.json), which name
+// no program and nothing of one (the peer a link is to is "the server", what runs it "the app"), so the base says them
+// with nothing else loaded (scripts/base.ts `WORDS` holds this file to them, every key a base file says to being in
+// them, and them to each other). A program built on the base gives its own words (`words`) as its module is first run,
+// so before anything of it asks for one: more keys, and any of the base's said its way, in the base's place (the
+// still.fail core's: i18n.ts, the whole of client/i18n/catalog, where every key of the base's is written as still.fail
+// says it), and may say how every word is said (`saidBy`: the still.fail core's product's name).
 // A key a language lacks is said in Chinese; one neither has is shown as the key. `{name}` takes the value given as
 // `name`; words that change with a number (`{"one", "other"}`) are chosen by `n`.
-import zh_core_logic_format from "../../i18n/catalog/zh/core-logic.format.json" with { type: "json" };
-import zh_core_logic_mesh from "../../i18n/catalog/zh/core-logic.mesh.json" with { type: "json" };
-import zh_core_misc_call from "../../i18n/catalog/zh/core-misc.call.json" with { type: "json" };
-import zh_core_misc_error from "../../i18n/catalog/zh/core-misc.error.json" with { type: "json" };
-import zh_core_misc_host from "../../i18n/catalog/zh/core-misc.host.json" with { type: "json" };
-import zh_core_misc_secure from "../../i18n/catalog/zh/core-misc.secure.json" with { type: "json" };
-import zh_core_misc_wake from "../../i18n/catalog/zh/core-misc.wake.json" with { type: "json" };
-import en_core_logic_format from "../../i18n/catalog/en/core-logic.format.json" with { type: "json" };
-import en_core_logic_mesh from "../../i18n/catalog/en/core-logic.mesh.json" with { type: "json" };
-import en_core_misc_call from "../../i18n/catalog/en/core-misc.call.json" with { type: "json" };
-import en_core_misc_error from "../../i18n/catalog/en/core-misc.error.json" with { type: "json" };
-import en_core_misc_host from "../../i18n/catalog/en/core-misc.host.json" with { type: "json" };
-import en_core_misc_secure from "../../i18n/catalog/en/core-misc.secure.json" with { type: "json" };
-import en_core_misc_wake from "../../i18n/catalog/en/core-misc.wake.json" with { type: "json" };
+import en from "./lang.en.json" with { type: "json" };
+import zh from "./lang.zh.json" with { type: "json" };
 
 export type Lang = "zh" | "en";
 export type Words = Record<string, string | { one?: string; other?: string }>;
 
-const CATALOG: Record<Lang, Words> = {
-  zh: { ...zh_core_logic_format, ...zh_core_logic_mesh, ...zh_core_misc_call, ...zh_core_misc_error, ...zh_core_misc_host, ...zh_core_misc_secure, ...zh_core_misc_wake } as Words,
-  en: { ...en_core_logic_format, ...en_core_logic_mesh, ...en_core_misc_call, ...en_core_misc_error, ...en_core_misc_host, ...en_core_misc_secure, ...en_core_misc_wake } as Words,
-};
+const CATALOG: Record<Lang, Words> = { zh: { ...zh }, en: { ...en } };
 
-/// More words, each language's: a program's own catalog, given as its module is first run. A key is in one catalog
-/// alone (the still.fail core's: test/catalog.test.ts).
+/// A program's own words, each language's, given as its module is first run: its own keys, and a key of the base's
+/// (or one given before) said as it is given here from then on, in each language that gives it.
 export function words(more: Record<Lang, Words>): void {
   Object.assign(CATALOG.zh, more.zh);
   Object.assign(CATALOG.en, more.en);

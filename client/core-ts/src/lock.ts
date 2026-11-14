@@ -5,6 +5,9 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
+// (still.fail's words over the base's own, which error.ts says: scripts/base.ts; the vault's files, which load this
+// one, have them by it)
+import "./i18n.ts";
 import * as form from "./lock-form.ts";
 import { hex, sha256, utf8 } from "./util.ts";
 

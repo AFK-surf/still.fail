@@ -284,14 +284,20 @@ event stream, `src/sse.ts`) are the core's
 base: another program is built on it without still.fail's business (the owner, 2026-11-14), so a base file imports
 only base files and packages, as types too. `scripts/base.ts` holds it: its `BASE` names the files, and the set is
 closed: nothing of it reaches, through any number of imports, a file that is not of it (its `STILL` is empty and stays
-so). The base says its own words with nothing else loaded (`src/lang.ts`: the parts of the catalog that `WORDS` names,
-apart from the core's by a longer name, `client/i18n/catalog/zh/core-misc.wake.json`). What is still.fail's is given
+so). The base says its own words with nothing else loaded (`src/lang.ts`: the two files beside it, `src/lang.zh.json`
+and `src/lang.en.json`, the script's `WORDS`: every key a base file says, of no program, the peer "the server"), and
+a program gives its own in their place (`words`). still.fail's are its catalog's, where each of those keys is written
+as still.fail says it, in a part named by more of the key (`client/i18n/catalog/zh/core-misc.wake.json`): a change to
+what still.fail says goes there, and to the base's file only what any program would say. What is still.fail's is given
 to it, never imported by it nor named in it: what the core does with the mesh (`src/station/mesh-wire.ts`, its
 `MeshEnv` and a `CredentialSource`: a station's requests on its links, the cloud's credentials and the lock's claim,
 a lock's refusals, what an app's endpoint takes; its `STATION_MESH`: a station's protocol, what its hello says after
-the credential, its peers looked up, the key its stations' addresses are kept under), the rest of the catalog and the
-product's name (`src/i18n.ts`, the one file outside the base that imports `src/lang.ts`: what says a word imports
-it), the UIs' messages and the header that asks a request twice (`src/host.ts` `Host` and `HEDGE`; the base's
+the credential, its peers looked up, the key its stations' addresses are kept under), the catalog, whole, over the
+base's own words, and the product's name (`src/i18n.ts`, the one file outside the base that imports `src/lang.ts`: what
+says a word imports it, and so does, itself or through what it imports, every file that loads a base file which says
+one, so that nothing of still.fail's is run with the base's words: `src/host.ts`, `src/lock.ts` and
+`src/hosts/node-iroh.ts` import it for that alone), the UIs' messages and the header that asks a request twice
+(`src/host.ts` `Host` and `HEDGE`; the base's
 `src/host-of.ts` of them, whose `BaseHost` is all the mesh and the traces ask of a host: `src/mesh.ts`,
 `src/trace.ts` and what `src/wake.ts` and `src/error.ts` do for them take that, while `WakingHost` there wraps a
 program's whole host, `HostOf`, which is still.fail's, and is its user's choice), its traces' names, what its host is
@@ -299,8 +305,16 @@ called where no entry said, and its APIs' paths as a span shows them (`src/route
 (`src/hosts/node-iroh.ts`). A mesh made without `STATION_MESH` (another program's) dials the protocol it names,
 says its own hello, looks nothing up and, where it says so, goes through relays alone; what its peer answered the
 hello is on the link whole (`Link.admitted`). The script refuses still.fail's name in a base file as well, but where
-its `NAMED` lets it be (each text whole, as often as it says), which only falls; and `src/lang.ts` imported past
-`src/i18n.ts`, however spelt, by a file here, of `apps/mbui/core` or of `web/src`.
+its `NAMED` lets it be (each text whole, as often as it says), which only falls; `src/lang.ts` imported past
+`src/i18n.ts`, however spelt, by a file here, of `apps/mbui/core` or of `web/src`; and any code file git tracks in the
+repository (the station's too; TypeScript's and JavaScript's) that loads `src/lang.ts`, or a base file that loads it
+(by a static import, an `import("…")` or a `require("…")` of a string), without `src/i18n.ts` among its own static
+imports' files, but `test/base-words.test.ts` (its `ALONE`), which holds the base's words alone and then, with the
+catalog given, every key of theirs to the catalog's text. So `src/i18n.ts` has run once the load that brought such a
+file is over, and a word asked for after that is still.fail's. Not held, so not to be written: a word said as a file
+is loaded (its top-level code) where the file reaches `src/i18n.ts` only through a file still being loaded (an import
+cycle); a base file loaded by an `import(…)` or `require(…)` of what is no string, or by a name only a bundler or a
+tsconfig resolves (but `@core/`, `@stillfail/`); a file git does not track.
 
 ## Contracts made from here
 

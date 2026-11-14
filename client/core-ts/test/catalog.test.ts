@@ -1,7 +1,8 @@
 // The words' catalog (client/i18n/catalog/<lang>/<part>.json), as every reader of it needs it: each part in both
 // languages, every key Chinese has English has too, with the same `{names}`, and the other way round; a key in the
-// part its name starts with, and in that part alone (the base's words are parts of their own, named by more of their
-// keys: core-misc.wake.json beside core-misc.json, src/lang.ts); and the core saying every key of the parts it
+// part its name starts with, and in that part alone (the keys the base says are in parts of their own, named by more
+// of their keys: core-misc.wake.json beside core-misc.json; still.fail's text for them, given over the base's own
+// words, src/lang.ts, by src/i18n.ts: test/base-words.test.ts); and the core saying every key of the parts it
 // carries as it is written, whichever part it is in.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -79,7 +80,7 @@ test("the core says every key of the parts it carries as it is written", () => {
     }
   }
   assert.deepEqual(wrong, []);
-  // Every part has words, the base's among them (13 of the core's, 7 of the base's).
+  // Every part has words, those of the keys the base says among them (13 of the core's, 7 of those).
   assert.equal(carried("zh").length, 20);
   assert.ok(n > 14_000, String(n));
 });

@@ -2,6 +2,8 @@
 // `mesh.node`), which the client's endpoint shares, loaded by the base's hosts/node-addon.ts. Where it is:
 // STILLFAIL_MESH_NATIVE, beside the core's bundle (mesh.node), or where cargo built it in a checkout.
 import { fileURLToPath } from "node:url";
+// (still.fail's words over the base's own, which the addon's errors say: scripts/base.ts)
+import "../i18n.ts";
 import type { Iroh } from "../iroh.ts";
 import { type Addon, addonAt, addonIroh } from "./node-addon.ts";
 
