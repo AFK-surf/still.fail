@@ -1,7 +1,7 @@
 // An agent's execution history in the desktop's side panel, its head as the web's (still.fail web/src/History.tsx's head,
 // pages/ChatPage.tsx SessionHead, SessionDetails, HistorySummary; History.css.ts, ChatPage.css.ts): how it runs in one
 // control (the model, how hard it thinks, the account: model_triple.mbt), what needs seeing to beside it; at the
-// head's end 只看收发 and 详情. 详情 unfold under the head, open to begin with: what it has used (the large figures, a
+// head's end 只看收发 and 详情, a stop before them while it works (as on its card). 详情 unfold under the head, open to begin with: what it has used (the large figures, a
 // quiet line), then a line each, its mark leading: what runs it (Profile 详情), the station it runs on (what runs low
 // on it), its context (管理: compacted, or cleared, asked first), where its runtime keeps the session's transcript
 // (复制路径). All of it nodes of the window's tree, its steps under them sfpages' history_steps_node.mbt's.
@@ -54,6 +54,14 @@ fn history_head_node(v : @view.View, src : Source, r : ChatRef, key : String, ti
       h.box(fn(k) {
         @sf.style_node(k, fn() { @sf.keys_row() }, in_row=true)
         k.shrink(Is(0.0)) |> ignore
+        // stopping its turn while it works, the card's own (2026-11-14: 「右侧需要有一个停止按钮」)
+        k.show(
+          fn() {
+            let s = text(a(), "status")
+            s == "running" || s == "queued"
+          },
+          fn(x) { @sfpages.agent_card_stop_node(x, src, station, key, tips) },
+        )
         // 只看收发, its ground the picked one's while it is on
         let io = @sf.toggle_chip_node(
           k,
