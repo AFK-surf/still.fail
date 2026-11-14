@@ -25,12 +25,20 @@ let reveal_test_late : Double = 137.0
 ///|
 /// A picture node showing what `src` says (as it changes), from when `shown` says; and what of the window's tree is held
 /// now (its nodes, its bindings).
-fn reveal_tester(src : @signals.Signal[String], shown : @signals.Signal[Bool], held? : Bool = false) -> @ui.Tester {
+fn reveal_tester(
+  src : @signals.Signal[String],
+  shown : @signals.Signal[Bool],
+  held? : Bool = false,
+  comes? : Bool = true,
+) -> @ui.Tester {
   let t = @ui.Tester::new(
     fn(c) { @ui.old_views_here(c) },
     tree=fn(root) {
       root.show(fn() { shown.get() }, fn(v) {
-        image_reveal_node(v, fn() { src.get() }, fn() { "" }, reveal_test_w, reveal_test_h, held=fn() { held }) |> ignore
+        image_reveal_node(v, fn() { src.get() }, fn() { "" }, reveal_test_w, reveal_test_h, held=fn() { held }, comes=fn() {
+          comes
+        })
+        |> ignore
       })
       |> ignore
     },
@@ -176,5 +184,35 @@ test "a tall picture cut to its top: covering its box from its top, the part of 
   assert_eq((i[0], i[1], i[2], i[3]), (0.0, 0.0, w, h))
   // (as decoded: its part shown to a thousandth)
   assert_true(i[5] == 0.0 && (i[7] - part).abs() < 1.0e-3 && i[6] == 1.0, msg="\{Repr(i)}")
+  assert_eq(t.audit(), [])
+}
+
+///|
+test "a picture that does not come (of a message said before it was shown): waiting till its host says it is decoded, then whole from that moment, nothing laid over it" {
+  let held_now = {
+    let src = @signals.signal("quick.png")
+    let shown = @signals.signal(false)
+    let t = reveal_tester(src, shown, held=true)
+    shown.set(true)
+    t.run_for(reveal_ms + reveal_test_before)
+    reveal_held_now()
+  }
+  let src = @signals.signal("late.png")
+  let shown = @signals.signal(false)
+  let t = reveal_tester(src, shown, comes=false)
+  t.run_for(reveal_test_before)
+  let asked = t.time()
+  shown.set(true)
+  // (before it is told: what it waits on, nothing of it drawn)
+  t.run_for(reveal_test_late - reveal_test_hair)
+  assert_eq(reveal_drawn_w(t), 0.0)
+  // (a hair after: its own size, no frost, what it waited on gone: the same as one the device had)
+  t.run_for(asked + reveal_test_late + reveal_test_hair - t.time())
+  assert_true((reveal_drawn_w(t) - reveal_test_w).abs() < 0.01, msg="\{reveal_drawn_w(t)}")
+  assert_eq(t.drawn_glass().length(), 0)
+  t.run_for(reveal_test_mid)
+  assert_true((reveal_drawn_w(t) - reveal_test_w).abs() < 0.01)
+  assert_eq(t.drawn_glass().length(), 0)
+  assert_eq(reveal_held_now(), held_now)
   assert_eq(t.audit(), [])
 }

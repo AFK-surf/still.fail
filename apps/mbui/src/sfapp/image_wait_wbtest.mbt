@@ -8,9 +8,11 @@ test "a message's image waits with soft colours, and those colours do not change
   // what its station has given of it so far: nothing ("": asked), then its picture
   let key = Ref("")
   let src : Source = { ..fixture("chat"), file: fn(_, _, _) { key.val } }
+  // (said while the chat shows: the one kind of message whose picture is brushed in, image_reveal's `comes`)
   let m = message_of({
     "seq": 3,
     "ts": "3",
+    "said": true,
     "authorKind": "person",
     "author": "Mia",
     "text": "",

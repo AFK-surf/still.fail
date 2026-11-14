@@ -7,7 +7,8 @@
 ///|
 /// What a message quotes (`quotes`, of its `files`: the one each names in its card) in `v`, as they change: the
 /// viewer's (`mine`) at the column's end, as wide as the widest needs and at most as its bubble may be; anyone
-/// else's across the column. `at` names where its message is (message_place: its quotes' pictures `at/q:<i>`).
+/// else's across the column. `at` names where its message is (message_place: its quotes' pictures `at/q:<i>`); `said`
+/// its `said` (MessageFilesAt's).
 fn message_quotes_node(
   v : @view.View,
   src : Source,
@@ -16,8 +17,9 @@ fn message_quotes_node(
   files : () -> Array[Attachment],
   mine : Bool,
   at : String,
+  said? : () -> Bool = fn() { false },
 ) -> Unit {
-  let place : MessageFilesAt = { station: fn() { here.station }, session: fn() { here.session }, view: here.view }
+  let place = message_files_at(here, said)
   v.show(fn() { quotes().length() > 0 }, fn(s) {
     s.box(fn(cards) {
       @sf.style_node(cards, fn() {
