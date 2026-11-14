@@ -427,7 +427,12 @@ for t in $targets; do
           # first 1190 s of pages by the table and app 1/4 was cut at its 5 minutes, the others 179-204 s
           # (43577616575); main's own app 1/4 cut at 317 s the same hour (43577920185). The first reckoned 950: by the
           # table its pages 970 s, the second's 960, the third's 480, the fourth's 1020)
-          *) specs="4,4,950,1 2,4,430,1 1,4,1400,1 4,4,900,1" ;;
+          # (page-seconds.txt written again (#6210): the third's pages, 239 s by the table on its one program, ran
+          # 237-302 s beside its eleven other runs (829 s of its cores), app 3/4 the longest of the four on main and
+          # branches alike, 254-312 s (cut at its 5 minutes on main 02416d29 43580485463; reply-place 43588784943 298 s),
+          # the others 151-235. The third reckoned 1500: by the table its pages 172 s, the first's 637, the second's
+          # 795, the fourth's 705, each of those some 10-35 s of the table more, on their four and two)
+          *) specs="4,4,950,1 2,4,430,1 1,4,1500,1 4,4,900,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
