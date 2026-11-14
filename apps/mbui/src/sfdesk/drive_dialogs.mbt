@@ -9,9 +9,11 @@
 ///|
 /// The picker's state (the one open): the station it shows, the folder asked (None: the home), what it holds (and what
 /// it held last: its way stays while the next is read), why it could not be read, whether the station may not read it,
-/// the ask on its way (`asking`; `serial`: a later ask supersedes one on its way), the filter's line.
+/// the ask on its way (`asking`; `serial`: a later ask supersedes one on its way), the filter's line; and the station
+/// its choice names (`picked`: the one pressed from the press, the one shown once it is answered).
 priv struct Picker {
   station : @signals.Signal[String]
+  picked : @signals.Signal[String]
   at : @signals.Signal[String?]
   value : @signals.Signal[Json?]
   last : @signals.Signal[Json?]
@@ -26,6 +28,7 @@ priv struct Picker {
 // kept across runs: the picker's state (dialogs_reset puts it back)
 let dialogs : Picker = {
   station: @signals.signal("", same=fn(a, b) { a == b }),
+  picked: @signals.signal("", same=fn(a, b) { a == b }),
   at: @signals.signal(None, same=fn(a, b) { a == b }),
   value: @signals.signal(None, same=fn(a, b) { physical_equal(a, b) || (a is None && b is None) }),
   last: @signals.signal(None, same=fn(a, b) { physical_equal(a, b) || (a is None && b is None) }),
@@ -49,6 +52,7 @@ fn picker_close() -> Unit {
     dialogs.serial.set(dialogs.serial.untracked() + 1)
   }
   dialogs.station.set("")
+  dialogs.picked.set("")
   dialogs.at.set(None)
   dialogs.value.set(None)
   dialogs.last.set(None)
@@ -151,20 +155,21 @@ fn picker_open(src : Source, ws : String, s : DvStation, picked : (Favorite) -> 
 
 ///|
 /// The folders at `path` (the home where None) of `station` asked of it (`drive.folders`), a later ask superseding one
-/// on its way; what it held kept as the last (its way stays while the next is read), the filter emptied.
+/// on its way. Where the picker shows a folder already (a station picked, a step of the way, a folder's row, one just
+/// made), it stays as it is till the answer comes, the station's choice naming the one pressed; then the station, its
+/// way, its rows and the foot switch to it in one change, told as what the answer tells (nothing sets out by it), at the
+/// end of what is running (a frame being drawn shows it wholly as it was: sfbase's switch_answered), the filter
+/// emptied with it; what it held kept as the last (its way stays where the folder could not be read). As it opens it
+/// shows that it reads.
 fn picker_go(src : Source, station : String, path : String?) -> Unit {
   @signals.start_batch()
-  dialogs.station.set(station)
-  dialogs.at.set(path)
-  match dialogs.value.untracked() {
-    Some(v) => dialogs.last.set(Some(v))
-    None => ()
+  // (opening: nothing shown to keep)
+  if dialogs.station.untracked() == "" {
+    dialogs.station.set(station)
+    dialogs.at.set(path)
   }
-  dialogs.value.set(None)
-  dialogs.error.set("")
-  dialogs.denied.set(false)
+  dialogs.picked.set(station)
   dialogs.serial.set(dialogs.serial.untracked() + 1)
-  dialogs.filter.set("")
   dialogs.asking.set(true)
   @signals.end_batch()
   let serial = dialogs.serial.untracked()
@@ -177,17 +182,40 @@ fn picker_go(src : Source, station : String, path : String?) -> Unit {
     if serial != dialogs.serial.untracked() {
       return
     }
-    @signals.start_batch()
-    dialogs.asking.set(false)
-    match r {
-      Ok(v) => {
-        dialogs.value.set(Some(v))
-        dialogs.last.set(Some(v))
-        dialogs.denied.set(flag(Some(v), "unreadable"))
-      }
-      Err(e) => if text(Some(e), "code") == "permission" { dialogs.denied.set(true) } else { dialogs.error.set(dv_error(e)) }
-    }
-    @signals.end_batch()
+    @ui.after_frame(fn() {
+      // (superseded, or the picker closed, meanwhile)
+      guard serial == dialogs.serial.untracked() else { return }
+      @view.answering(fn() {
+        @signals.start_batch()
+        dialogs.station.set(station)
+        dialogs.at.set(path)
+        dialogs.asking.set(false)
+        dialogs.filter.set("")
+        match r {
+          Ok(v) => {
+            dialogs.value.set(Some(v))
+            dialogs.last.set(Some(v))
+            dialogs.error.set("")
+            dialogs.denied.set(flag(Some(v), "unreadable"))
+          }
+          Err(e) => {
+            match dialogs.value.untracked() {
+              Some(v) => dialogs.last.set(Some(v))
+              None => ()
+            }
+            dialogs.value.set(None)
+            if text(Some(e), "code") == "permission" {
+              dialogs.error.set("")
+              dialogs.denied.set(true)
+            } else {
+              dialogs.denied.set(false)
+              dialogs.error.set(dv_error(e))
+            }
+          }
+        }
+        @signals.end_batch()
+      })
+    })
   })
 }
 
@@ -445,7 +473,8 @@ fn picker_where(v : @view.View, src : Source, p : @sfbase.FolderPick) -> Unit {
     @sf.station_choice_node(
       line,
       fn() { p.stations },
-      fn() { dialogs.station.get() },
+      // (the one pressed from the press; what is under it the one shown till its home is answered)
+      fn() { dialogs.picked.get() },
       // (another station: at its home)
       fn(at) { picker_go(src, at, None) },
       title=@sf.t("android-misc.files.lendOn"),

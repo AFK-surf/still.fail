@@ -620,3 +620,186 @@ test "wide, the dialog's 添加目录 under a mouse is lit round, out past its t
   let tiles = t.boxes_held().filter(fn(b) { (b.w - preset_dir_mark_seen).abs() < 0.5 && (b.h - preset_dir_mark_seen).abs() < 0.5 && b.y > y && b.y + b.h < y + h })
   assert_true(tiles.length() >= 1 && (tiles[0].x - x - @sf.corner_inset).abs() < 0.5, msg="\{tiles.length()} tiles")
 }
+
+///|
+/// How late the made-up core answers the folder picker's asks as one of its presses is pressed (ms): at once, a frame
+/// late, and on to well past the 300 ms nothing may look like loading in.
+let picker_press_lates : Array[Double] = [0.0, 16.0, 120.0, 250.0, 400.0, 700.0]
+
+///|
+/// The folder picker of a new preset's dialog in screen `s`, walked to as a person goes (添加目录, 浏览文件夹…, the row
+/// 项目: newchat-preset-new-browse-repos) over its fixture whose core answers each call as late as `pace` says when it
+/// is asked (the walk answered at once), as a device's host draws it (check_looks off), at rest; the calls made to
+/// `calls`.
+fn picker_press_tester(s : Screen, pace : Ref[Double], calls : Array[Made]) -> @ui.Tester raise {
+  new_run()
+  let src = round_trip_by(preset_calls("newchat-preset-new-browse", calls), fn() { pace.val })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=s.w, h=s.h, platform=s.platform)
+  t.check_looks(false)
+  open_mode("newchat-preset-new")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  for label in ["添加目录", "浏览文件夹…", "项目"] {
+    press(t, label)
+    t.run_for(@ui.move_most_ms)
+  }
+  t.run_for(@ui.move_most_ms + 1000.0)
+  t.ways_set_out() |> ignore
+  t
+}
+
+///|
+/// The words drawn now, each where it is drawn (to a tenth of a point), but the stations' names and the stations'
+/// menu's title (the choice's own answer to the hand); those on the choice's line (`line`, its top and bottom: the way
+/// after the station's name, moved along by its name's width) by their place down alone; none of `skip` (the menu's own).
+fn picker_press_words(t : @ui.Tester, line : (Double, Double)?, skip? : Array[String] = []) -> Array[String] {
+  t
+  .words()
+  .filter(fn(w) { w.5 > 0.01 && !skip.contains(w.0) && !["Willow", "Maple"].contains(w.0) && !w.0.has_prefix("选择文件夹所在的 station") })
+  .map(fn(w) {
+    let y = (w.2 * 10.0).round() / 10.0
+    match line {
+      // (the foot's button by its words alone: it reshapes to them as they change, over button_reshape, a motion of
+      // the library's button not mended here: sf/button_node.mbt's moves_for)
+      _ if w.0.has_prefix("选择「") => "\{w.0} @foot"
+      Some((top, bottom)) if w.2 + w.4 / 2.0 >= top && w.2 + w.4 / 2.0 <= bottom => "\{w.0} @_,\{y}"
+      _ => "\{w.0} @\{(w.1 * 10.0).round() / 10.0},\{y}"
+    }
+  })
+}
+
+///|
+/// `press` done in the picker of `t` (one of its presses: a station picked in its menu, a step of its way, a folder's
+/// row), over a core answering `ms` late from the press: from the press till the picker is at rest it is drawn in two
+/// ways only: as it was at the press (but for the choice's own words, and on its line where `line` is said the way's
+/// place along it), till the folder pressed comes, then as it rests, from the frame it comes in; in every frame nothing
+/// sets out after the press's own moment, no bones, the choice naming `station`; the folders asked once from the press,
+/// of `station` at `path` ("" its home); at rest the picker shows `want`.
+fn picker_pressed(
+  t : @ui.Tester,
+  at : String,
+  calls : Array[Made],
+  press : () -> Unit raise,
+  line : (Double, Double)?,
+  skip : Array[String],
+  station : (String, String),
+  path : String,
+  want : Array[String],
+  ms : Double,
+) -> Unit raise {
+  let before = picker_press_words(t, line, skip~)
+  let bones_before = t.bones_drawn()
+  let calls_from = calls.length()
+  let start = t.time()
+  press()
+  let frames : Array[(Double, Array[String])] = []
+  let faults : Array[String] = []
+  let all_ways : Array[String] = []
+  let ways : Array[String] = []
+  let n = ((ms * 2.0 + @ui.move_most_ms * 2.0) / @ui.frame_period_default).ceil().to_int()
+  for i in 0..=n {
+    if i > 0 {
+      t.run_for(@ui.frame_period_default)
+    }
+    let now = t.time() - start
+    for w in t.ways_set_out() {
+      all_ways.push("\{w.kind} +\{(w.at - start).round()} ms \{w.made} \{w.part}")
+      if w.at > start + 0.5 {
+        ways.push("\{w.kind} +\{(w.at - start).round()} ms \{w.made} \{w.part}")
+      }
+    }
+    if t.bones_drawn() > bones_before {
+      faults.push("+\{now.round()} ms: \{t.bones_drawn()} bones drawn, \{bones_before} before the press")
+    }
+    // (as it is said, a menu over it closing or not)
+    let naming = "选择文件夹所在的 station: \{station.0}"
+    if !t.semantics().iter().any(fn(n) { n.role == @ui.Role::Button && n.label == naming }) {
+      faults.push("+\{now.round()} ms: the choice not naming \{station.0}")
+    }
+    frames.push((now, picker_press_words(t, line, skip~)))
+  }
+  let rest = picker_press_words(t, line, skip~)
+  // (as at the press till the folder comes, then as at rest from that frame on)
+  let mut came = -1.0
+  for f in frames {
+    if came < 0.0 && f.1 == rest {
+      came = f.0
+    } else if came < 0.0 && f.1 != before {
+      faults.push(
+        "+\{f.0.round()} ms: not as at the press: gone \{before.filter(fn(w) { !f.1.contains(w) }).iter().take(6).collect().join(" | ")}, new \{f.1.filter(fn(w) { !before.contains(w) }).iter().take(6).collect().join(" | ")}",
+      )
+    } else if came >= 0.0 && f.1 != rest {
+      faults.push(
+        "+\{f.0.round()} ms: not as at rest after it came: gone \{rest.filter(fn(w) { !f.1.contains(w) }).iter().take(6).collect().join(" | ")}, new \{f.1.filter(fn(w) { !rest.contains(w) }).iter().take(6).collect().join(" | ")}",
+      )
+    }
+  }
+  for f in faults.iter().take(6) {
+    println("PICKER_FAULT \{at} \{f}")
+  }
+  if faults.length() > 0 {
+    println("PICKER_FAULT \{at} all ways: \{all_ways.iter().take(8).collect().join(" | ")}")
+    match frames.get(0) {
+      Some(f) =>
+        println(
+          "PICKER_FAULT \{at} +0 vs rest: gone \{rest.filter(fn(w) { !f.1.contains(w) }).iter().take(8).collect().join(" | ")}, new \{f.1.filter(fn(w) { !rest.contains(w) }).iter().take(8).collect().join(" | ")}",
+        )
+      None => ()
+    }
+  }
+  println("PICKER_PRESS \{at}: come at +\{came.round()} ms, ways after the press \{Repr(ways)}")
+  assert_eq(faults, [], msg="\{at}: every frame from the press")
+  assert_eq(ways, [], msg="\{at}: ways set out after the press")
+  for w in want {
+    assert_true(shows(t, w), msg="\{at}: \{w} at rest: \{runs(t)}")
+  }
+  let asks = named(calls[calls_from:].to_owned(), "drive.folders")
+  assert_eq(asks.length(), 1, msg="\{at}: asked once: \{Repr(asks.map(fn(m) { m.params.stringify() }))}")
+  assert_eq(text(Some(asks[0].params), "station"), station.1, msg=at)
+  assert_eq(text(Some(asks[0].params), "path"), path, msg=at)
+}
+
+///|
+/// The folder picker's presses (sfdesk drive_dialogs.mbt picker_go), 中屏 by touch and 大屏 with a mouse, the picker
+/// walked to over a core answering at once and each press over one answering 0 to 700 ms late: in 项目 on Willow,
+/// Maple picked in the stations' menu (at its home: 文档, 项目, 下载), then the row 项目, then the way's step lin back to
+/// the home. Each: the picker as it was till the folder pressed is answered (the choice naming the station picked from
+/// the press), then the station, its way, its rows and the foot switched in one frame, nothing setting out, no bones.
+test "the folder picker's station, way and rows pressed: the picker as it was till the folder comes, then whole" {
+  for s in [daily_medium, daily_large] {
+    for ms in picker_press_lates {
+      let calls : Array[Made] = []
+      let pace = Ref(0.0)
+      let t = picker_press_tester(s, pace, calls)
+      let at = "\{s.name}, \{ms} ms"
+      assert_true(shows(t, "web-app"), msg="\{at}: in 项目: \{runs(t)}")
+      // Maple picked: its menu opened (no ask), then the press (the choice's line read before: under the menu it is
+      // not to be found)
+      let line = match t.query(Button, label="选择文件夹所在的 station: Willow") {
+        Some(c) => Some((c.rect.1, c.rect.1 + c.rect.3))
+        None => fail("\{at}: no choice")
+      }
+      let shut = t.words().map(fn(w) { w.0 })
+      press(t, "选择文件夹所在的 station: Willow")
+      t.run_for(@ui.move_most_ms)
+      guard t.query(MenuItemRadio, label="Maple") is Some(_) else { fail("\{at}: no Maple: \{runs(t)}") }
+      // (what the menu draws: words not drawn before it opened, its own answer as it closes)
+      let menu = t.words().map(fn(w) { w.0 }).filter(fn(w) { !shut.contains(w) })
+      if ms == 0.0 { println("PICKER_PRESS \{at}: the menu's own words \{menu.join(" | ")}") }
+      t.ways_set_out() |> ignore
+      pace.val = ms
+      picker_pressed(t, "\{at}, Maple", calls, fn() raise { t.click(MenuItemRadio, label="Maple") }, line, menu, ("Maple", "ws1/st2"), "", [
+          "文档", "项目", "下载",
+        ], ms)
+      assert_false(shows(t, "web-app"), msg="\{at}: Maple's home")
+      // a folder's row
+      picker_pressed(t, "\{at}, 项目", calls, fn() raise { t.click(Button, label="项目") }, None, [], ("Maple", "ws1/st2"), "/Users/lin/项目", [
+          "still.fail", "web-app", "素材",
+        ], ms)
+      // a step of the way back
+      picker_pressed(t, "\{at}, lin", calls, fn() raise { t.click(Link, label="lin") }, None, [], ("Maple", "ws1/st2"), "/Users/lin", [
+          "文档", "项目", "下载",
+        ], ms)
+    }
+  }
+}
