@@ -12905,12 +12905,21 @@ pub fn Tree::run_press_at(
 /// `f` done with what `read` gives (as it is now, then as of each change of it: at its cause's moment, committed as a
 /// structure's change is), whatever frames are drawn: what is to be done as a state comes to hold, said so, never found
 /// by watching it frame by frame. Not `at_start`: as of its changes alone, not as it is when said (a state's turning,
-/// not its holding). The node's: done no more once it is let go.
-pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit, at_start? : Bool = true) -> Unit {
+/// not its holding). The node's: done no more once it is let go. `loc`: where, what `f` reads outside the graph said
+/// to be read from there (@signals.reading_from: a Tester's check of what holds something read with nothing following
+/// it), kept nowhere on a device.
+#callsite(autofill(loc))
+pub fn[T : Eq] View::reacts(
+  self : View,
+  read : () -> T,
+  f : (T) -> Unit,
+  at_start? : Bool = true,
+  loc~ : SourceLoc,
+) -> Unit {
   // (made, and done each time, owned by the node's scope: what it makes let go with the node, its watch none of what
   // was running as it was said, whose running again would let it go)
   self.owning(fn() {
-    let stop = self.tree.structured(read, fn(v) { self.owning(fn() { f(v) }) }, at_start~)
+    let stop = self.tree.structured(read, fn(v) { self.owning(fn() { @signals.reading_from(loc, fn() { f(v) }) }) }, at_start~)
     self.owns(stop) |> ignore
   })
 }

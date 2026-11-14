@@ -27,9 +27,18 @@ pub fn[T] Kept::new() -> Kept[T] {
 ///|
 /// What `getter` makes for `key` from `src` (given what it made last): worked out the first time, and again only once
 /// what it read changed since; what reads it told only where that comes out otherwise than before, by `same` where
-/// given (else as signals compare).
-pub fn[T] Kept::read(self : Kept[T], src : Source, key : String, getter : (T?) -> T, same? : (T, T) -> Bool) -> T {
-  self.kept.read(src, key, getter, same?)
+/// given (else as signals compare). `loc`: where, the computed made said to be made there (a Tester's check names it:
+/// mbui's held_read.mbt).
+#callsite(autofill(loc))
+pub fn[T] Kept::read(
+  self : Kept[T],
+  src : Source,
+  key : String,
+  getter : (T?) -> T,
+  same? : (T, T) -> Bool,
+  loc~ : SourceLoc,
+) -> T {
+  self.kept.read(src, key, getter, same?, loc~)
 }
 
 ///|
@@ -102,7 +111,15 @@ priv struct SourceKeptOne[T] {
 }
 
 ///|
-fn[T] SourceKept::read(self : SourceKept[T], source : Source, key : String, getter : (T?) -> T, same? : (T, T) -> Bool) -> T {
+#callsite(autofill(loc))
+fn[T] SourceKept::read(
+  self : SourceKept[T],
+  source : Source,
+  key : String,
+  getter : (T?) -> T,
+  same? : (T, T) -> Bool,
+  loc~ : SourceLoc,
+) -> T {
   let entries = match self.kept.get(key) {
     Some(entries) => entries
     None => {
@@ -130,7 +147,7 @@ fn[T] SourceKept::read(self : SourceKept[T], source : Source, key : String, gett
         }
         kept_count.left = kept_count.made
       }
-      let made = { source, value: @signals.computed(getter, same?) }
+      let made = { source, value: @signals.computed(getter, same?, loc~) }
       entries.push(made)
       kept_count.made += 1
       if !self.listed {
@@ -255,10 +272,12 @@ pub fn[T] Derived::new(name : String, work : (Json, T?) -> T) -> Derived[T] {
 }
 
 ///|
-/// Topic `name` with `params` (Source.topic), and what `work` makes of its value: None while it has none.
-pub fn[T] Derived::read(self : Derived[T], src : Source, params : Map[String, Json]) -> (T?, Topic) {
+/// Topic `name` with `params` (Source.topic), and what `work` makes of its value: None while it has none. `loc` as
+/// Kept::read's.
+#callsite(autofill(loc))
+pub fn[T] Derived::read(self : Derived[T], src : Source, params : Map[String, Json], loc~ : SourceLoc) -> (T?, Topic) {
   let topic = src.topic(self.name, params).get().snapshot()
-  let value = self.kept.read(src, Json::object(params).stringify(), fn(was) {
+  let value = self.kept.read(src, Json::object(params).stringify(), loc~, fn(was) {
     match src.topic(self.name, params).get().value {
       Some(v) =>
         Some(

@@ -730,6 +730,15 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
   }
   if untracked && node.subs is None {
     unwatched(node)
+  } else if run.active_sub is None && node.subs is None && node.holds && !state.untracked_dispose &&
+    resting_reads.val == 0 {
+    // (not alien-signals': one that holds something (what it read reaches what is told as its last reader leaves, a
+    // resource: ReactiveNode's `holds`, known once its getter ran) read with nothing reading it and nothing following
+    // it keeps what it read linked for good, the resource held by no reader: told where a Tester asks (held_read_said))
+    match held_read_said.val {
+      Some(f) => f(state.made_at, read_from.val)
+      None => ()
+    }
   }
   value
 }
@@ -922,13 +931,49 @@ pub fn[T] Computed::watched(self : Computed[T]) -> Bool {
 }
 
 ///|
-/// What `f` makes, nothing it reads followed by what is reading now.
-pub fn[T] untracked(f : () -> T) -> T {
+/// What `f` makes, nothing it reads followed by what is reading now. `loc`: where, said to what a Tester is told of a
+/// computed holding something read so (held_read_said), kept nowhere on a device.
+#callsite(autofill(loc))
+pub fn[T] untracked(f : () -> T, loc~ : SourceLoc) -> T {
   let prev_sub = set_active_sub(None)
-  let v = f()
+  let v = if held_read_said.val is Some(_) { reading_from(loc, f) } else { f() }
   run.active_sub = prev_sub
   v
 }
+
+///|
+/// What `f` makes, read from `loc` (what reads outside the graph: a reaction's `then`, View::reacts), said to what a
+/// Tester is told of a computed holding something read with nothing following it (held_read_said); nothing kept
+/// where nothing is told.
+pub fn[T] reading_from(loc : SourceLoc, f : () -> T) -> T {
+  guard held_read_said.val is Some(_) else { return f() }
+  let was = read_from.val
+  read_from.val = Some(loc)
+  let v = f()
+  read_from.val = was
+  v
+}
+
+///|
+/// Not alien-signals': told, where it is set (a Tester: ui's held_read.mbt), of each computed that holds something
+/// (its reads reach a resource: ReactiveNode's `holds`) read with nothing reading it and nothing following it: where
+/// the computed was made, and where it was read from as far as is known (an `untracked`'s caller, a reaction's:
+/// reading_from). Such a read keeps what it read linked for good, and the resource with it, past whatever read it
+/// (#6239: a chat's subscription held past its page by its list's at-foot read so): the reader is to follow what it
+/// reads. Not told of a computed_scoped's (which lets go after such a read), nor of a watch's at rest (Watch::read: it
+/// reads anew as it wakes). None on a device.
+// kept across tests: set by each Tester as it is made
+pub let held_read_said : Ref[((SourceLoc, SourceLoc?) -> Unit)?] = Ref(None)
+
+///|
+/// Where what reads now outside the graph reads from (reading_from), while held_read_said is set.
+// kept across runs: put back as each read ends
+let read_from : Ref[SourceLoc?] = Ref(None)
+
+///|
+/// How deep in reads of watches at rest (Watch::read).
+// kept across runs: put back as each read ends
+let resting_reads : Ref[Int] = Ref(0)
 
 ///|
 /// The signal's value as `untracked(fn() { s.get() })` reads it, with no function made to read it in.
@@ -940,10 +985,12 @@ pub fn[T] Signal::untracked(self : Signal[T]) -> T {
 }
 
 ///|
-/// The computed's value as `untracked(fn() { c.get() })` reads it, with no function made to read it in.
-pub fn[T] Computed::untracked(self : Computed[T]) -> T {
+/// The computed's value as `untracked(fn() { c.get() })` reads it, with no function made to read it in. `loc` as
+/// untracked's.
+#callsite(autofill(loc))
+pub fn[T] Computed::untracked(self : Computed[T], loc~ : SourceLoc) -> T {
   let prev_sub = set_active_sub(None)
-  let v = self.get()
+  let v = if held_read_said.val is Some(_) { reading_from(loc, fn() { self.get() }) } else { self.get() }
   run.active_sub = prev_sub
   v
 }
@@ -1081,8 +1128,12 @@ pub fn watch(changed : () -> Unit) -> Watch {
 /// is let go as it reads anew (told: effect_in_watch).
 pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   // (at rest: read, nothing followed, till it wakes and reads anew)
+  // (the watch's own read: not a reader's fault, so not told, held_read_said)
   if self.own.resting {
-    return untracked(f)
+    resting_reads.val += 1
+    let v = untracked(f)
+    resting_reads.val -= 1
+    return v
   }
   let e = self.node
   if watch_reading.depth == 0 {
