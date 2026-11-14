@@ -16,7 +16,9 @@ of its workspace (`moon.work`); `effect` stays in mbui.
 - `src/wire`: what goes on a stream and how it is read, with no stream: lines, a request's head and a reply's, an
   event stream's text. Pure, with its tests.
 - `src/mesh`: the device side of the mesh on those two: the endpoint and its key, a link to a peer (hello, pings,
-  renewal), one for each scope its program names there, a request a stream, replies as they come, a link opened
+  renewal), one for each scope its program names there, a request a stream (its head with what its kind says, its
+  body whole or a step at a time and told of, its reply whole or as it comes, or the stream open both ways after
+  its head), the streams its peer opens, a link opened
   again, let go of by its program, its holder told as another takes its place; its pings measured, how its place
   is by them told as it changes, and a link that stops answering raced against a new one (`health.mbt`).
   `mesh.mbt`'s head says what of the TypeScript mesh (`client/core-ts/src/mesh.ts`) it leaves out.
@@ -79,7 +81,10 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   neither, by what came on the old one meanwhile, its probe never sent or answered late, two scopes at once, a
   link its peer ended while its ping was out (not raced, not dialled for), and the place let go of or the mesh
   closed at each of forty turns from the ping missed on and at each of twelve from the answer of the race's dial
-  on: `src/mesh/health_wbtest.mbt`), and how the page's
+  on: `src/mesh/health_wbtest.mbt`; what a link carries
+  beside the one whole request, and how each fails: a head with further fields, a body in steps, a reply read a
+  piece a call, a duplex, the streams the peer opens, the peer stopping a stream, a head too long, a wait given
+  up, the link let go of, ended or the mesh closed under them: `src/mesh/requests_wbtest.mbt`), and how the page's
   shell turns its runtime. The peer has no network under it: when it answers is the test's to say, a connection
   is lost by the test saying so, and what the transport counted (`conn.stats`) and whether the endpoint is on a
   relay are the test's words too. That peer is the test's script, not a
@@ -110,7 +115,11 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   build's key does: `scripts/native.ts`).
 - A peer's bytes are kept up to a bound, the caller's to say: a reply read whole (`Reply::rest`, `max_body`) and
   one block of an event stream (`Sse::new`, `max_event`), 16 MiB each unless said, past which each fails
-  (`too_long`, `TooLong`) and is let go of. What is longer is read as it comes (`Reply::take`).
+  (`too_long`, `TooLong`) and is let go of. What is longer is read as it comes (`Reply::take`, a duplex's reply,
+  `Inbound::take`), and that has no bound of bytes because it keeps none: a call is one read of the shell's (64 KiB
+  at most natively), nothing is read of the peer before it is asked for, and a reader that stops asking holds its
+  peer back by the transport's own window. What goes out waits the same way: a write ends once the stream took it,
+  and a body told of (`Link::request`'s `wrote`) has one step of 64 KiB waiting at most.
 - `shell.c` is POSIX's (pthread, `arc4random_buf`): no MSVC, and on Linux glibc 2.36 or later. It has been compiled
   and run on macOS on arm64 alone.
 
@@ -124,6 +133,16 @@ left is another part's:
   mesh says when it is done with a connection (`conn.close` with `forget`, `Mesh::open`), which a page's shell goes
   by; the Rust shell reads no such field. Letting them go there is that shell's to do, for the device base in
   TypeScript too, which holds them the same.
+- A write given up lets go of its stream: that is the mesh's intent (`Out::write` resets it), and both shells' only
+  once that write moves. `istream.write` holds the sending half while it writes, and `istream.reset` waits for it
+  (`client/shell/src/lib.rs`, `client/iroh-wasm/src/lib.rs`): given up because the peer is not reading, the write
+  stays, and the reset behind it, until the peer reads, stops the stream or the connection ends. The Rust shell's
+  and iroh-wasm's to mend, for the device base in TypeScript too.
+- A read that waits as its connection ends can be answered the stream's end by the Rust shell, not a failure (it
+  wakes the read as it lets go of the connection's streams). The mesh is told an end and has no length of its own
+  to hold a body to, so a reply cut so passes for whole (`requests_wbtest.mbt` scripts it): what a reply's head
+  says of its length is its program's to hold it to, until that shell answers a failure there. As in the device
+  base in TypeScript.
 - On js under Hermes, MoonBit's own `Array` costs the square of its length as it grows: a full one is copied into a
   `new Array(n)` from its last place down, which that engine takes badly (40,000 pushes 0.6 s, 80,000 2.7 s, where
   the engine's own `push` takes 3 and 6 ms; the hermes of React Native 0.81.4, 2026-11-14), and its `StringBuilder`
@@ -149,10 +168,19 @@ left is another part's:
 - A fiber's wait on the shell given up is not the shell's call given up: of its calls only a dial is
   (`Shell::give_up`), in a page too. A read let go of goes on, holding the stream's receiving half, and what it
   takes is lost to the next read. So a stream is never read again after a read of it was interrupted: it is reset
-  (`Reply::cancel`, `Link::ask`); and what must not be interrupted half way (an exchange on the control stream) is a
+  (`Reply::cancel`, `Link::sent`); and what must not be interrupted half way (an exchange on the control stream) is a
   fiber of the mesh's own scope that the others wait for with a `Deferred` (`Mesh::ping`; the probe of a link
   suspect, `Mesh::race`: what has a time is the wait, never the exchange, and an exchange whose wait is over
-  before its turn on the stream came is not begun).
+  before its turn on the stream came is not begun). A write let go of goes on too, and what of it went is not
+  known: the stream is let go of, both ways, by the write itself (`Out::write`), as a request given up before its
+  reply's head is (`Link::sent`). The wait for a stream to be opened (`conn.openBi`), let go of, would leave the
+  stream the shell then opens open for nobody: it is the mesh's own fiber, which resets the one that comes for an
+  asker gone (`Link::stream`). And the wait for a stream the peer opens (`conn.acceptBi`), let go of, would
+  take the next stream and keep it from everyone: it is the mesh's own fiber, one under way a link at most, whose
+  answer is kept on the link for whoever asks next (`Link::accept`); whoever waits for it waits for the link's end
+  beside it, which the close says of every link, since that fiber cut before its first step says nothing. A wait
+  that holds nothing is simply let go (`Out::stopped`, `Out::finish`). A new wait on the shell says which of these
+  it is, where it is written.
 - `catch` does not catch a fiber's interruption: what must be undone then is in a `defer`. And a fiber interrupted
   before its first step runs nothing, no `defer` either. So what others wait for from a fiber of the mesh's scope
   (an opening's end, a link's answer, its end) is not left to that fiber as the mesh closes: `Mesh::close` cuts them
@@ -179,8 +207,11 @@ left is another part's:
   new fiber of the scope is to complete for others is kept where the close finds it. And the close is whole once
   begun: what it waits on at the shell is where an interruption of its caller waits too
   (`@effect.uninterruptible`), after the telling.
-- What the mesh takes at a shell it lets go of there, for a page lives long: a stream by resetting it or reading it
-  to its end (one whose read failed is reset: `Reply::take`), a connection by closing it with `forget`, once its end
+- What the mesh takes at a shell it lets go of there, for a page lives long: a stream by resetting it, or by
+  reading it to its end and finishing it, which is when both shells let go of one (one whose read failed is reset:
+  `Reply::take`; a request's is finished as it is sent, so reading its reply to its end is all it takes; one open
+  both ways, a duplex's or one its peer opened, is its program's to finish or cancel, and read to its end alone it
+  stays until its connection ends), a connection by closing it with `forget`, once its end
   is kept (`Link::ended` answers from that, and nothing is asked of it after) or at once where an opening gave it
   up, an endpoint by closing it. A new op that takes a handle says when it goes, in both shells.
 - The times and the bytes are the TypeScript mesh's (`mesh.mbt`'s constants; `src/wire/wire_test.mbt`, line for
@@ -210,4 +241,22 @@ left is another part's:
     place nothing was told of yet tells whoever waits what it already was, and nothing tells them at the close.
   - The race asks `conn.stats` of both shells (`rxBytes`). The page's shell answers it since this, in JavaScript no
     compiler reads and no test here runs; where a shell does not answer, nothing is taken to have come.
+- Where a link's requests are not that mesh's (`link.mbt`; the head lines are, byte for byte: `wire_test.mbt` has
+  what Node printed for that mesh's own expressions): one call takes what its `request` and `ask` take
+  (`Link::request`'s `body`, `more`, `wrote`), and its `socket` is a `duplex` whose `more` says `socket`: what a
+  head says after its headers is its program's. `more` may not name `method`, `path` or `headers` (there it writes
+  over them unsaid). A link's refusal is said of every request on it (there of `request` alone). A write that
+  failed or was given up lets go of its stream (there the stream is its caller's to reset). `Out::finish` is
+  waited for (there it is sent off and its failure dropped), and asked once where it went. `Out::stopped` of a
+  stream let go of here is the mesh's own answer, asked then or waiting as it happens (the shells answer a wait on
+  a stream reset here only as its connection ends, so there it waits that long): none of one its program
+  cancelled, cut of one let go of for a read or a write that failed, where a stop the peer sent may be what failed
+  it. And it is asked before the stream is both read to its end and finished, after which the shells have none to
+  ask (there the shell's failure is the caller's): where the reply may already be read to its end, before
+  `finish`. A stream being opened for an asker gone is reset as it comes (there it stays). A number that is none
+  is written `null`, as JavaScript writes it. `Link::accept` is one wait at the shell at a time,
+  kept across askers (there each call is its own, and one given up takes the next stream with it). Not here: `tap`
+  (a screen's frames read by the shell and said to the app itself; the Rust shell's `istream.tap`, no page's): a
+  duplex's reply is read by its program. The page's shell answers `conn.acceptBi` and `istream.stopped` since
+  this, in JavaScript no compiler reads; no test here, and no flow of the messenger's, runs either.
 - A compiler warning is an error or off (`moon.mod`'s `warnings`, mbui's line).

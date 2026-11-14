@@ -1,7 +1,8 @@
 // What goes on a stream of a link and how what comes on one is read, with no stream: the bytes alone, so that they
 // are tested with nothing linked. A stream carries lines of JSON and what follows them:
 //   the control stream   a line each way at a time: `{"credential": …, …}` out, its answer back;
-//   a request's stream   a head line `{"method", "path", "headers"}` then its body out; a head line
+//   a request's stream   a head line `{"method", "path", "headers"}`, with what its kind says after those (an
+//                        ask's, a socket's, a duplex's: `more`), then its body out; a head line
 //                        `{"status", "headers"}` then its body back.
 // The lines are written as JavaScript's JSON.stringify writes them (client/core-ts/src/mesh.ts, whose bytes
 // these are held to: wire_test.mbt), and read as its peer's door writes them (station/src/mesh/wire.ts).
@@ -71,11 +72,38 @@ pub fn hello_line(
   if traceparent is Some(t) && t != "" {
     line["traceparent"] = Json::string(t)
   }
-  Json::object(line).stringify() + "\n"
+  written(Json::object(line)) + "\n"
 }
 
 ///|
-/// A request's head line; `more`: further fields of it, after its headers.
+/// `json` as JavaScript's JSON.stringify writes it. One thing MoonBit's own writes otherwise: a number that is none
+/// (NaN, an infinity) is `null` there.
+fn written(json : Json) -> String {
+  finite(json).stringify()
+}
+
+///|
+fn finite(json : Json) -> Json {
+  match json {
+    Number(n, ..) => if n.is_nan() || n.is_inf() { Json::null() } else { json }
+    Array(items) => Json::array(items.map(finite))
+    Object(fields) => {
+      let out : Map[String, Json] = Map([])
+      for k, v in fields {
+        out[k] = finite(v)
+      }
+      Json::object(out)
+    }
+    _ => json
+  }
+}
+
+///|
+/// A request's head line; `more`: further fields of it, after its headers. A header said twice keeps its first place
+/// and takes the later value, as a field of `more` that names one before it does (an object spread).
+///
+/// One thing JavaScript writes otherwise, and no head says: a header or a field named as a whole number ("2") is
+/// written there before every other, in ascending order; here where it was given.
 pub fn head_line(
   method_ : String,
   path : String,
@@ -96,7 +124,7 @@ pub fn head_line(
       line[k] = v
     }
   }
-  Json::object(line).stringify() + "\n"
+  written(Json::object(line)) + "\n"
 }
 
 ///|
