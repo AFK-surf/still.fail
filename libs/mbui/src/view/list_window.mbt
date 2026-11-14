@@ -576,6 +576,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // coordinator of the migration, 2026-11-14))
   let one_move_builds = Ref(0)
   let one_move_free = Ref(false)
+  // (and the stretch as the fill at the cause left it, the floor's then: what that change gives back is counted
+  // against it, never against the stretch a later fill holds, which counts the key's own way since)
+  let one_move_e0 : Ref[Double?] = Ref(None)
   let came_row : Map[K, View] = Map([])
   let floor_raise = fn() {
     if floor.val is Some((k, e)) {
@@ -841,6 +844,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           one_move_key.val = Some((was[j], ks[c:].to_owned(), self.tree.cause_now()))
           one_move_builds.val = self.tree.old_builds_begun
           one_move_free.val = false
+          one_move_e0.val = None
         }
       }
       if @signals.untracked(fn() { s.at_foot() }) {
@@ -2520,6 +2524,12 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           // (a row made, not measured yet: noted for the fill that measures it)
           ()
         } else if foot_waits {
+          if one_move_e0.val is None {
+            one_move_e0.val = match floor.val {
+              Some((fk, e)) if fk == lk => Some(e)
+              _ => None
+            }
+          }
           self.tree.old_built_waits.push(fn() {
             one_move_free.val = true
             laid_again()
@@ -2528,8 +2538,19 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           one_move_key.val = None
           came_row.clear()
           let all = places(laid.untracked())
+          let held_e0 = one_move_e0.val
+          one_move_e0.val = None
           match (floor.val, laid_at.get(lk)) {
             (Some((fk, e0)), Some(i)) if fk == lk && i < all.length() => {
+              // (waited for an old view's build: the floor put back to what it held at the cause, not what the fills
+              // since raised it to by the key's way set out from none meanwhile, which no frame drew)
+              let e0 = match held_e0 {
+                Some(e) => {
+                  floor.val = Some((fk, e))
+                  e
+                }
+                None => e0
+              }
               let mut given = e0 - all.h(i) - room_under() - s.tuck_room.untracked()
               let tree = self.tree
               let groups : Array[@flex.ComeGroup] = []
