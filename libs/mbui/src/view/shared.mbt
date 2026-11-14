@@ -72,7 +72,8 @@ priv struct Lift {
   mut ky : Double
   /// where it set out in the window, kept there (View::flies_in's): it goes from there to where it is drawn now, so
   /// what moves that place meanwhile (a list's way opening its room) is taken up on its own way, not added to it;
-  /// none: off that place by `d`, which goes with it (View::shared's)
+  /// none: off that place by `d`, which goes with it (View::shared's, and one whose node rides a way its page said:
+  /// Tree::rides_said_way)
   fixed : (Double, Double, Double, Double)?
   mut a : Double
   from : FromLook
@@ -230,6 +231,21 @@ fn Tree::incoming_now(self : Tree) -> Unit {
     self.fly_from(i.node, from, look, None, i.late) |> ignore
   }
 }
+///|
+/// Whether node `at` or what holds it is on a way its page said (Style's come_spec of a list key's `comes_way`, Tree's
+/// come_ways_lead): its place moves on that curve, which a flight in to it takes up by going with it.
+fn Tree::rides_said_way(self : Tree, at : Int) -> Bool {
+  let mut p = at
+  while p >= 0 {
+    let n = self.nodes[p]
+    if n.live && n.coming && (self.come_ways_lead.contains(p) || (n.list_key_way && n.flex.style.come_spec is Some(_))) {
+      return true
+    }
+    p = n.parent
+  }
+  false
+}
+
 ///|
 /// The id it is shared by (View::shared), none where it is not.
 pub fn View::shared_id(self : View) -> String? {
@@ -1036,7 +1052,9 @@ fn Tree::fly_from(
   let top = self.top_node_of(to.at)
   let f : Flying = { node: to, ghost: None, late, fades: false, start: at, dur: ms, along, top, stop: fn() {  } }
   self.flights.push(f)
-  let fixed = if stays is None { Some(from) } else { None }
+  // (one whose node comes on a way its page said (a list key's `comes_way`, the flight's own rise): off its node by
+  // where it set out, going with it, so that it and the list rise as one; any other from its fixed start)
+  let fixed = if stays is None && !self.rides_said_way(to.at) { Some(from) } else { None }
   self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, ky: 1.0, a: 1.0, from: look, stays, fixed })
   self.lifted_order()
   let stop_way = self.queued(fn() { self.drawn_said() }, fn(t) { self.flight_at(f, t) })

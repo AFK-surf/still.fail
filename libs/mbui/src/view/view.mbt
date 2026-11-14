@@ -666,6 +666,9 @@ struct Node {
   /// on its way whole (a page's list's key said `comes_whole`, View::scrolls_window): not cut to its room as it makes
   /// its way, nor what it holds; cut as what holds it cuts it
   mut come_uncut : Bool
+  // (on a way its list's page said of its key, View::scrolls_window `comes_way`: a flight in to it goes with it,
+  // shared.mbt's Tree::rides_said_way; let go with the way)
+  mut list_key_way : Bool
   /// it, and what it holds, take no press (View::presses)
   mut inert : Bool
   /// it is a modal layer while this holds (View::modal): what it does not hold takes no input
@@ -1801,6 +1804,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.come_wake = None
       n.clips_said = false
       n.come_uncut = false
+      n.list_key_way = false
       n.inert = false
       n.modal = false
       n.back_goes_on = false
@@ -1961,6 +1965,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         come_wake: None,
         clips_said: false,
         come_uncut: false,
+        list_key_way: false,
         inert: false,
         modal: false,
         back_goes_on: false,
@@ -8946,15 +8951,19 @@ fn View::comes(
     (None, Some(w)) if to > 0.0 => {
       tree.come_ways_said.remove(v.at)
       tree.come_ways_lead[v.at] = w
+      n.list_key_way = true
       Some(w)
     }
     // (said again in the same change, from elsewhere (as a send sets it out from what is given back): still its page's)
     (None, None) if to > 0.0 && n.coming && st.come_at == at =>
       match tree.come_ways_lead.get(v.at) {
         Some(w) => Some(w)
-        None => spec
+        None => if n.list_key_way { st.come_spec } else { spec }
       }
-    _ => spec
+    _ => {
+      n.list_key_way = false
+      spec
+    }
   }
   st.come_spec = spec
   st.come_foot = foot
@@ -9324,6 +9333,7 @@ fn come_done(tree : Tree, v : View, m : Node) -> Unit {
   let st = m.flex.style
   m.coming = false
   m.come_uncut = false
+  m.list_key_way = false
   st.come_grid = 0.0
   st.come_foot = false
   m.come_off = fn() {  }
