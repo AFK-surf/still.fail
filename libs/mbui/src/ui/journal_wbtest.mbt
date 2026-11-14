@@ -306,6 +306,28 @@ test "a hang says what the app showed as its interval was sealed, not what it sh
 }
 
 ///|
+test "a hang says how the app laid out what it showed and the window's size as its interval was sealed; none said, none" {
+  let (_, clock) = journal_start()
+  defer set_work_clock(None)
+  let told : Array[Hang] = []
+  hangs_told(Some(fn(h) { told.push(h) }))
+  view_event_said(fn() {  }, fn() { clock.val += 60.0 }, what="touch-up")
+  let none = told[0].json().stringify()
+  assert_false(none.contains("\"arranged\"") || none.contains("\"window_w\""), msg=none)
+  assert_false(told[0].said().contains("arranged=") || told[0].said().contains("window="), msg=told[0].said())
+  journal_arranged("Medium", 600.0, 900.0)
+  view_event_said(fn() {  }, fn() { clock.val += 60.0 }, what="touch-up")
+  // (told again as the window changes: the one said as the next is sealed)
+  journal_arranged("Large", 1280.4, 800.0)
+  assert_eq((told[1].arranged, told[1].window_w, told[1].window_h), ("Medium", 600.0, 900.0))
+  let j = told[1].json().stringify()
+  assert_true(j.contains("\"arranged\":\"Medium\"") && j.contains("\"window_w\":600") && j.contains("\"window_h\":900"), msg=j)
+  assert_true(told[1].said().contains(" arranged=Medium window=600x900 active="), msg=told[1].said())
+  view_event_said(fn() {  }, fn() { clock.val += 60.0 }, what="touch-up")
+  assert_true(told[2].said().contains(" arranged=Large window=1280x800 active="), msg=told[2].said())
+}
+
+///|
 test "the summary's counts by what was shown add up to its counts in all, and are counted from none once said" {
   let (t, clock) = journal_start()
   defer set_work_clock(None)

@@ -129,12 +129,15 @@ pub fn Way::go(
   self.mover.changed()
   // (who it is for the performance record: who sent it, not where to)
   self.mover.told_as("a Way", loc)
-  self.told.set(self.told.untracked() + 1)
+  // (set as by who sent it: what reads it, built again, says that place as why (ui's kept_nodes, the hang reports'
+  // `why`), not this line, which every Way's motion shared till 2026-11-14)
+  self.told.set(self.told.untracked() + 1, loc~)
 }
 
 ///|
-/// There at once, still: at any moment.
-pub fn Way::put(self : Way, v : Double) -> Unit {
+/// There at once, still: at any moment. `loc`: who put it, said as why what reads it is built again (Way::go).
+#callsite(autofill(loc))
+pub fn Way::put(self : Way, v : Double, loc~ : SourceLoc) -> Unit {
   // (there already, still: nothing said, nothing told)
   if self.from == v && self.to == v && self.dur <= 0.0 {
     return
@@ -146,7 +149,7 @@ pub fn Way::put(self : Way, v : Double) -> Unit {
   self.spec = Snap(0.0)
   self.start = 0.0
   self.dur = 0.0
-  self.told.set(self.told.untracked() + 1)
+  self.told.set(self.told.untracked() + 1, loc~)
 }
 
 ///|

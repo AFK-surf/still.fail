@@ -339,7 +339,7 @@ pub fn Way::get(Self) -> Double
 pub fn Way::go(Self, Double, Spec, at~ : Double, velocity? : Double, loc~ : SourceLoc) -> Unit
 pub fn Way::goes_at(Self, Double) -> Bool
 pub fn Way::new(Double) -> Self
-pub fn Way::put(Self, Double) -> Unit
+pub fn Way::put(Self, Double, loc~ : SourceLoc) -> Unit
 pub fn Way::said(Self) -> Unit
 pub fn Way::starts_at(Self) -> Double
 pub fn Way::target(Self) -> Double
