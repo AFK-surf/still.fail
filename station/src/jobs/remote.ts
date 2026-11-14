@@ -29,7 +29,8 @@ import { type Cloud, UNPROTECTED } from "../cloud/state.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
 import { detailed, summary } from "./load.ts";
-import { type Inbox, MESH_WAIT_MS, NoBytes, type PeerCall, PeerBus, Refused, bytesOf, withBytes } from "../mesh/bus.ts";
+import { type Inbox, MESH_WAIT_MS, NoBytes, NoLink, type PeerCall, PeerBus, Refused, bytesOf, withBytes } from "../mesh/bus.ts";
+import { version as runningVersion } from "../ops/version.ts";
 import { fileBytes, readBytes, stopBytes, writeBytes } from "../mesh/files.ts";
 import { Bulk, LINK, PACKED, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
 import { DEFAULT_LIMIT, WorkspaceReader } from "./workspace-size.ts";
@@ -92,6 +93,8 @@ export type RemoteOptions = {
   removeMirror?: (path: string) => Promise<void>;
   /// How a closed session's task directory is removed (tests hold it to come between).
   removeTask?: (path: string) => Promise<void>;
+  /// This station's version as `describe` says it (ops/version.ts; tests say theirs).
+  version?: string;
   /// The last completed cleanup of files brought back. Tests can keep this across station restarts in memory.
   backTidy?: { read: () => Promise<number | null>; write: (at: number) => Promise<void> };
 };
@@ -116,10 +119,32 @@ const READS = new Set(["task.get", "task.gets", "task.log", "task.list", "sessio
 /// The tasks a source asks about at once (`task.gets`), at most.
 export const GETS_MAX = 200;
 
-/// station_list asks every station of the workspace at once and lists one that has not answered within this as offline.
+/// station_list asks every station of the workspace at once and lists one that has not answered within this as
+/// unanswered: not as offline, which it does not know (2026-11-14: one up and updating itself, asked by a station whose
+/// relay was at 8 s, was listed offline and its person told so).
 export const LIST_WAIT_MS = 2000;
+/// station_list {station} waits this long for the one station asked before it says it did not answer.
+export const LIST_ALONE_WAIT_MS = 10_000;
 /// A station asked how busy it is (`describe`'s `load`) says it does not know when measuring takes longer than this.
 export const LOAD_WAIT_MS = 1000;
+
+/// What station_list says of a station asked `describe` (`got`, null when it did not answer within LIST_WAIT_MS), its
+/// version as the roster has it being `seen`: offline only where no link to it would open (NoLink); otherwise it
+/// did not answer, which says nothing of whether it is up. Its version is the one it says itself; the roster's copy,
+/// what still.fail cloud listed when it last told this station its stations (it is not told again as a station
+/// updates), is `version_seen`, never its version now. One from before says none in `describe`: it keeps the copy.
+function heard(got: { ok: Json } | { error: Error } | null, seen: Json): Json {
+  const copy = typeof seen === "string" ? { version_seen: seen } : {};
+  if (got === null) return { ...copy, unanswered: `did not answer within ${LIST_WAIT_MS / 1000} s; not known to be offline: ask it alone` };
+  if ("error" in got) {
+    const { error } = got;
+    if (error instanceof Refused) return { ...copy, refused: error.message };
+    if (error instanceof NoLink) return { ...copy, offline: error.message };
+    return { ...copy, unanswered: `${error.message}; not known to be offline: ask it alone` };
+  }
+  const says = field(got.ok, "version");
+  return { ...(typeof says === "string" ? { version: says } : copy), load: summary(field(got.ok, "load")) };
+}
 
 const text = (v: Json, key: string): string => (v !== null && typeof v === "object" && typeof v[key] === "string" ? v[key] : "");
 const field = (v: Json, key: string): Json => (v !== null && typeof v === "object" && !Array.isArray(v) && key in v ? v[key] : null);
@@ -413,6 +438,7 @@ export class Remote {
   private diskFree: (path: string) => number;
   private removeMirror: (path: string) => Promise<void>;
   private described: ((peer: string, workspace: string) => Json) | null = null;
+  private version: string;
   private rigs: ((workspace: string, session: string, rig: Json, described: Json | null) => Promise<Json>) | null = null;
   /// This station's sandboxes (config.json's `sandboxes`, agents/sandbox.ts): stations of a kind of their own for
   /// station_task, named `sandbox:<name>`, whose tasks this station takes itself and runs there.
@@ -421,6 +447,7 @@ export class Remote {
 
   constructor(options: RemoteOptions) {
     this.data = options.data;
+    this.version = options.version ?? runningVersion();
     this.store = options.store;
     this.workspaceReader = new WorkspaceReader(() => this.store.now());
     this.jobs = options.jobs;
@@ -1279,14 +1306,14 @@ export class Remote {
 
   /// `describe`'s answer: what this station takes, and how busy it is (`load`, LOAD_WAIT_MS at most).
   private async describe(peer = "", workspace = ""): Promise<Json> {
-    const answer: Json = { protocol: 1, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, sync: 1, smallTasks: 1, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
+    const answer: Json = { protocol: 1, version: this.version, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, sync: 1, smallTasks: 1, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
     if (this.load !== null) answer.load = await this.measuredLoad();
     return this.described === null ? answer : { ...answer, ...this.described(peer, workspace) };
   }
 
   /// station_list: the stations of `workspace`, each asked how busy it is at once (this one answers itself); one that
-  /// has not answered within LIST_WAIT_MS is listed as offline, one that refused says why, one safe mode leaves out
-  /// (the roster's `unprotected`) after them, not asked, saying why it cannot be called.
+  /// has not answered within LIST_WAIT_MS is listed unanswered, one that refused says why, one safe mode leaves out
+  /// (the roster's `unprotected`) after them, not asked, saying why it cannot be called. Each says its version itself.
   private async listStations(workspace: string, session: string): Promise<Json> {
     const { unprotected, ...roster } = (await this.ask("", { method: "peers", workspace })) ?? {};
     const own = this.ownId();
@@ -1296,11 +1323,10 @@ export class Remote {
       stations.map(async (entry: Json) => {
         const id = text(entry, "id");
         if (id === "") return entry;
-        if (id === own) return { ...entry, here: true, load: summary((await this.describe()).load ?? null) };
+        const { version: seen, ...rest } = entry;
+        if (id === own) return { ...rest, here: true, version: this.version, load: summary((await this.describe()).load ?? null) };
         const got = await this.bounded(this.ask(id, { method: "describe", workspace }), LIST_WAIT_MS);
-        if (got === null) return { ...entry, offline: `did not answer within ${LIST_WAIT_MS / 1000} s` };
-        if ("error" in got) return got.error instanceof Refused ? { ...entry, refused: got.error.message } : { ...entry, offline: got.error.message };
-        return { ...entry, load: summary(field(got.ok, "load")) };
+        return { ...rest, ...heard(got, seen) };
       }),
     );
     // Its stations that only run tasks (rigs: rigs/module.ts says whose each is and who may use it) after the whole
@@ -1315,9 +1341,7 @@ export class Remote {
       rigs.map(async (rig: Json) => {
         const entry = { id: text(rig, "id"), name: text(rig, "name") };
         const got = await this.bounded(this.ask(entry.id, { method: "describe", workspace }), LIST_WAIT_MS);
-        if (got === null) return { ...entry, ...(await said(workspace, session, rig, null)), offline: `did not answer within ${LIST_WAIT_MS / 1000} s` };
-        if ("error" in got) return { ...entry, ...(await said(workspace, session, rig, null)), ...(got.error instanceof Refused ? { refused: got.error.message } : { offline: got.error.message }) };
-        return { ...entry, ...(await said(workspace, session, rig, got.ok)), load: summary(field(got.ok, "load")) };
+        return { ...entry, ...(await said(workspace, session, rig, got !== null && "ok" in got ? got.ok : null)), ...heard(got, field(rig, "version")) };
       }),
     );
     const { rigs: _, rigsWaiting: __, ...rest } = roster as Record<string, Json>;
@@ -2283,7 +2307,12 @@ export class Remote {
     const station = await this.stationNamed(workspace, text(args, "station"));
     if (tool === "station_list") {
       if (station === "") return this.listStations(workspace, session);
-      return detailed(station === this.ownId() ? await this.describe() : await this.ask(station, { method: "describe", workspace }));
+      if (station === this.ownId()) return detailed(await this.describe());
+      // Waited for longer than in the list: one starting or updating itself has its time to answer.
+      const got = await this.bounded(this.ask(station, { method: "describe", workspace }), LIST_ALONE_WAIT_MS);
+      if (got === null) return { id: station, unanswered: `did not answer within ${LIST_ALONE_WAIT_MS / 1000} s; not known to be offline (it may be starting or updating): ask again in a minute` };
+      if ("error" in got) throw got.error;
+      return detailed(got.ok);
     }
     const key = text(args, "key");
     const action = tool === "station_task" ? text(args, "action") : "";

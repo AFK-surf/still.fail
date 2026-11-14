@@ -7,6 +7,10 @@ import type { Json } from "../store/store.ts";
 /// The answer of a peer that refused a request (its `{"error": …}`): final, unlike a request that did not get through.
 export class Refused extends Error {}
 
+/// A request to a station no link to which would open (mesh/peer.ts, its dial failed): the one failure that says it is
+/// not there now. A request that went and got no answer in time says nothing of it (it may be slow, or starting).
+export class NoLink extends Error {}
+
 /// Bytes that follow a request's or an answer's head on its stream (`stillfail/station/2`, mesh/peer.ts): a file as it
 /// is read, at the pace the other end takes it. A request or an answer carries them under this symbol, so they go
 /// along with it through every part that hands it on, and never into its JSON. A request's are read by the part that
