@@ -27,6 +27,9 @@ concurrency:
 permissions:
   contents: read
 env:
+  # Farview's client, which the app draws a chat's Farview tab with (apps/mbui/scripts/farview.sh: a private repository,
+  # read by its deploy key)
+  FARVIEW_DEPLOY_KEY: ${{ secrets.FARVIEW_DEPLOY_KEY }}
   # The native parts a branch's checks and builds use (the Linux station parts are built and published from main; the
   # Linux check's mesh addon and runner are built on a branch that changed them). The Apple shell (shell-apple), the macOS one, on a
   # branch that changed it (#1365 went to main untried and failed there).
@@ -387,6 +390,8 @@ jobs:
     uses: ./.github/workflows/mbui-check.yml
     # (at the default rate alone: the rates run on main after the merge, mbui-check.yml's head)
     permissions: { contents: read, actions: read }
+    # (its FARVIEW_DEPLOY_KEY: the app's Farview client)
+    secrets: inherit
     with: { rates: "no" }
 
   # A branch: what main would deploy, built and bundled beside the check (not after it: the build is most of the run);

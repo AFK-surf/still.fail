@@ -5,3 +5,4 @@ out/
 /engine/target/
 # made from screens/text-mac.textrec by moon (src/sfscreens/moon.pkg: pre-build)
 /src/sfscreens/text_mac.mbt
+/deps/

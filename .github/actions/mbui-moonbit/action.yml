@@ -117,3 +117,10 @@ runs:
           libs/mbui/tools/_build/native/release/build/apk/apk.exe
           libs/mbui/tools/_build/native/release/build/apk/apk.exe.src
         key: mbui-tool-apk-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.apk }}
+    # Farview's client at the commit apps/mbui/farview.pin names (apps/mbui/scripts/farview.sh), where this checkout has
+    # the app: the job's FARVIEW_DEPLOY_KEY (its workflow's env, from the repository's secret); none (a fork's run), the
+    # app does not build, and what does not build it goes on
+    - shell: bash
+      run: |
+        f="$GITHUB_WORKSPACE/apps/mbui/scripts/farview.sh"
+        if [ -f "$f" ]; then sh "$f" || echo "::warning::Farview's client not fetched: the app does not build here"; fi

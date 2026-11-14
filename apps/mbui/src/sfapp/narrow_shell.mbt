@@ -691,6 +691,19 @@ fn narrow_made_as(
       made_at("history/" + r.station + "/" + key, place, fn(p, _core, _here, frame, _stint, _acts, serial) {
         history_node(p, src, r, key, entry, frame, serial)
       })
+    // a chat's Farview tab, drawn here (sfpages' farview_tab_node): the bar back, the tab's name, the tab
+    Screen(at) if @sfpages.farview_screen(at.screen) =>
+      made("farview/" + at.station + "/" + at.screen, fn(p, _core, _here, frame, _stint, _acts) {
+        p.grow(Is(1.0)).min_height(Is(Some(0.0))).padding(By(fn() { (0.0, 0.0, 0.0, frame().foot) })) |> ignore
+        @sf.nav_bar_node(
+          p,
+          fn() { frame().back.unwrap_or(tr("common.back")) },
+          fn() { if at.title != "" { at.title } else { @sf.t("core-views.screen.kind.browser") } },
+          fn() { @sfbase.go_back() |> ignore },
+          top=fn() { frame().top },
+        )
+        @sfpages.farview_tab_node(p, src, at.station, at.screen)
+      })
     Setting(Profile(address, id)) =>
       made("profile/" + address + "/" + id, fn(p, core, here, frame, stint, _acts) {
         @sfpages.profile_node(p, core, here, address, id, on_back=core.pop, frame~, stint~)

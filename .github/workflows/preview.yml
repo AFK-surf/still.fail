@@ -52,6 +52,10 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 permissions:
   contents: read
+env:
+  # Farview's client, which the app draws a chat's Farview tab with (apps/mbui/scripts/farview.sh: a private repository,
+  # read by its deploy key)
+  FARVIEW_DEPLOY_KEY: ${{ secrets.FARVIEW_DEPLOY_KEY }}
 jobs:
   # Which packages main's push makes: those whose app changed since the build their feed names (beta.sh changed: its
   # code, not its tests, docs, scripts or CI; a push of those alone is no new package, 2026-10-21). iOS has no

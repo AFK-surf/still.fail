@@ -23,7 +23,17 @@ fn side_history_tab(front : String) -> Bool {
 /// Whether `front` is one the window's tree shows under the panel's bar rather than the panel's old view: an agent's
 /// history, a file in the viewer.
 fn side_node_tab(front : String) -> Bool {
-  side_history_tab(front) || @sfbase.view_tab_file(front) is Some(_)
+  side_history_tab(front) || @sfbase.view_tab_file(front) is Some(_) || side_farview_tab(front) is Some(_)
+}
+
+///|
+/// The station and the screen of `front` where it is a Farview tab, which this app draws itself (sfpages'
+/// farview_tab_node).
+fn side_farview_tab(front : String) -> (String, String)? {
+  match station_tab(front) {
+    Some(("screen", station, screen)) if @sfpages.farview_screen(screen) => Some((station, screen))
+    _ => None
+  }
 }
 
 ///|
@@ -221,6 +231,8 @@ fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLay
           |> ignore
         } else if @sfbase.view_tab_file(agent) is Some(_) {
           side_view_node(q, src, r, agent, island)
+        } else if side_farview_tab(agent) is Some((station, screen)) {
+          side_farview_node(q, src, r, agent, station, screen, island)
         } else {
           side_history_node(q, src, r, agent, tips, island)
         }
@@ -339,6 +351,37 @@ fn side_edge_node(n : @view.View, src : Source, r : ChatRef, tips : @sf.TipLayer
     g.over(Is(true)) |> ignore
     @sf.edge_look_node(g, fn() { false }, fn() { e.pointed() || e.focus_shown() || held.get() }, fn() { held.get() })
     |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Farview tab `tab` in chat `r`'s panel, in node `q` (as large as the panel): the panel's bar as an agent's history
+/// has it (side_bar_row, as `island` hosts one), then the tab drawn here the rest (sfpages' farview_tab_node).
+fn side_farview_node(
+  q : @view.View,
+  src : Source,
+  r : ChatRef,
+  tab : String,
+  station : String,
+  screen : String,
+  island : (@view.View, (@ui.Ctx) -> Unit, Bool) -> @view.View,
+) -> Unit {
+  island(
+    q,
+    fn(c) {
+      match view_of_chat(src, r).0 {
+        Some(view) => c.box(style=history_top_box, fn() { side_bar_row(c, src, r, view, side_shown(src, r).0, tab) }) |> ignore
+        None => ()
+      }
+    },
+    true,
+  )
+  .shrink(Is(0.0))
+  |> ignore
+  q.box(fn(s) {
+    s.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    @sfpages.farview_tab_node(s, src, station, screen)
   })
   |> ignore
 }

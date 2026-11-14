@@ -27,6 +27,10 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 permissions:
   contents: read
+env:
+  # Farview's client, which the app draws a chat's Farview tab with (apps/mbui/scripts/farview.sh: a private repository,
+  # read by its deploy key)
+  FARVIEW_DEPLOY_KEY: ${{ secrets.FARVIEW_DEPLOY_KEY }}
 jobs:
   # A branch's push runs them only when it changed the renderers' own code (their packages, the film tool, their
   # scripts, this workflow): every push touching mbui ran both on the CI Mac, two of its runners' work in all, and the
