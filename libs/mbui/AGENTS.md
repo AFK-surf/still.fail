@@ -80,7 +80,9 @@ yet and you can add one, add it.
   `Tree::raised_blocks`, ui's `view_paint` moving what it draws after its list's, cut as where it is; found by a press
   and read out where it is laid); not at its foot, `at_once` or with motion reduced, as any key
   (`src/view/list_key_whole_test.mbt`, `src/ui/list_key_whole_wbtest.mbt`; the coordinator of the migration,
-  2026-11-14); what is sent takes it up only: at its foot, in a change by which a key comes at
+  2026-11-14); a key coming by data whose page says how it comes (`comes_way`: a length and a curve, one's own words
+  sent on their flight's rise) sets the list's one way of that moment on that curve, all of it, not a Move (flex's
+  ComeGroup `spec`; `src/view/list_comes_way_test.mbt`; the coordinator of the migration, 2026-11-14); what is sent takes it up only: at its foot, in a change by which a key comes at
   its foot, or comes before keys that stay under it there (an agent's line: at the foot for the one reading; the
   coordinator of the migration, 2026-11-14), the stretch from the top of the last key that stays before it to the
   column's end, whatever stays under it, is never shorter than it was then while that change's ways go and rests as

@@ -771,6 +771,10 @@ pub struct Tree {
   /// fades over them, each with the moment it waits till: left out of their column's one way of that moment
   /// (Tree::come_group_settle) where it goes to a smaller place from rest; noted only till the pick's change is made
   priv pick_waits : Map[Int, Double]
+  // (a list key's way its page said (View::scrolls_window `comes_way`), by its node, till the each sets it off in the same
+  // change (View::comes); and those set off so, till their group is said (Tree::come_group_settle): its way the group's)
+  priv come_ways_said : Map[Int, (Double, (Double) -> Double)]
+  priv come_ways_lead : Map[Int, (Double, (Double) -> Double)]
   /// the places of the page's lists' feet (View::scrolls_window's `foot`, pinned on the list's own node, not under
   /// its held column), each with the held column whose one way what comes or goes or resizes in it goes in
   /// (Tree::come_group_join), where the list's blocks' insides join it
@@ -1355,6 +1359,8 @@ pub fn Tree::new(
     come_groups: {},
     list_inner: {},
     pick_waits: {},
+    come_ways_said: {},
+    come_ways_lead: {},
     list_feet: {},
     list_raised: {},
     old_builds_begun: 0,
@@ -8934,7 +8940,16 @@ fn View::comes(
   // (from nothing or to nothing, or turned back on such a way: what a box taking no room holding nothing opens or
   // closes its padding by (flex's come_fill, Style's gone_empty); not one in another's place, from as tall as that was)
   st.come_fill = to <= 0.0 || from <= 0.0 || (n.coming && st.come_fill) || fill
-  // (a structure's way a Move, whatever a height change declared said before; a height change declared its own)
+  // (a structure's way a Move, whatever a height change declared said before; a height change declared its own; a list
+  // key's its page said, which leads its group's: View::scrolls_window `comes_way`)
+  let spec = match (spec, tree.come_ways_said.get(v.at)) {
+    (None, Some(w)) if to > 0.0 => {
+      tree.come_ways_said.remove(v.at)
+      tree.come_ways_lead[v.at] = w
+      Some(w)
+    }
+    _ => spec
+  }
   st.come_spec = spec
   st.come_foot = foot
   st.come_from = from
@@ -9242,6 +9257,19 @@ fn Tree::come_group_settle(
       }
     }
     _ => ()
+  }
+  // (a way a list's page said of a key coming in it: the group's, all of it on that curve that long (flex's ComeGroup
+  // `spec`))
+  for w in live {
+    match self.come_ways_lead.get(w.at) {
+      Some(said) => {
+        self.come_ways_lead.remove(w.at)
+        if w.live() is Some(m) && m.flex.style.come_spec is Some(_) {
+          g.spec = Some(said)
+        }
+      }
+      None => ()
+    }
   }
   // (one alone goes its own way, as it always did)
   if live.length() + under_way.length() < 2 {
