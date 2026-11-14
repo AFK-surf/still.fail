@@ -444,7 +444,11 @@ for t in $targets; do
           # and preview_tree's halves, where the fourth's ran 149, 0.23, and the second's and third's jobs 142 and 153
           # (app-deal-third-2's push, 2026-11-14). The first reckoned 1150 and the fourth 800: by the table the first's
           # pages 462 s, the second's 710, the third's 188, the fourth's 759)
-          *) specs="4,4,1150,1 2,4,700,1 1,4,1620,1 4,4,800,1" ;;
+          # (dealt so, the fourth's job was 199-268 s on main 152b19b5 43615169071 and branches after #6295, its pages
+          # 245-275 beside send_steady's three; the first's 132-197 and the third's 142-183. The fourth reckoned 900,
+          # the first 1060 and the third 1590: by the table the first's pages 523 s, the second's 711, the third's 205,
+          # the fourth's 682)
+          *) specs="4,4,1060,1 2,4,700,1 1,4,1590,1 4,4,900,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
