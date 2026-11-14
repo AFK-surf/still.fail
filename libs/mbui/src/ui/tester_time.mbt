@@ -315,7 +315,7 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
 /// between frames, a message posted that no frame took (Tester::rest_why says which). Where run_for draws the frames
 /// on its way (MBUI_TEST_FPS): none while it asks none.
 fn Tester::asks_frames(self : Tester) -> Bool {
-  !g().frame_rest || self.fake.wants || posted_left() != ""
+  !g().frame_unasked || self.fake.wants || posted_left() != ""
 }
 
 ///|
@@ -596,6 +596,16 @@ fn Ctx::at_rest(self : Ctx) -> Bool {
   !paint_left() &&
   self.waited_at() < 0.0 &&
   fx.val.unsettled() == ""
+}
+
+///|
+/// Whether the frame being ended asks for none after it, as a host is asked: Ctx::at_rest but for a wake owed, which
+/// is a moment a host is woken at (Tester::next_due draws a frame there), not a frame asked for. A pending wake taken
+/// as asking had run_for at a rate draw every frame till it was due: the scroll bar's hiding after a scroll, 1601 of
+/// chat_nodes_read_stays_composer_wbtest's 7103 frames at 120 a second (the list line, #6261; the migration's lead,
+/// 2026-11-14), where an idle host draws none (Tester::frame_unasked).
+fn Ctx::asks_no_frame(self : Ctx) -> Bool {
+  self.frame_by is None && !self.motion_left && !self.wants_frame && !paint_left() && fx.val.unsettled() == ""
 }
 
 ///|

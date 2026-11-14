@@ -908,6 +908,7 @@ pub struct Ctx {
   mut wake_at : Double
   mut wake_waited : Double
   mut frame_rest : Bool
+  mut frame_unasked : Bool
   mut frame_by : SourceLoc?
   mut wake_by : SourceLoc?
   mut page_in_hand : Bool
