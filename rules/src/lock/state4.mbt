@@ -80,8 +80,7 @@ fn carry_of(cr : Carried, sub : String, lock : String, logs : Map[String, (Perso
     }
   }
   let out : Carry = { apps: [], webs: [], sayless: Map([]) }
-  for _, d in cr.chain.devices {
-    guard d.sub == sub else { continue }
+  for d in cr.devices_of.get(sub).unwrap_or([]) {
     if d.kind == "app" && d.own && d.sign_key is Some(k) {
       if put.contains(d.id) {
         out.sayless[d.id] = (k, cr.chain.sign_keys.get(d.id).unwrap_or([k]))

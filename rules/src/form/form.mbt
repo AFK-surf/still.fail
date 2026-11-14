@@ -17,49 +17,71 @@ let max_safe : Double = 9007199254740991.0
 /// JSON with object keys sorted (by UTF-16 code unit, as JS sorts them) and no space: only integers, strings,
 /// booleans, null, arrays and objects. Strings are written as JSON.stringify writes them.
 pub fn canonical(v : Json) -> String raise Invalid {
-  let b = StringBuilder()
-  write(b, v)
-  b.to_string()
+  text(v)
 }
 
 ///|
-fn write(b : StringBuilder, v : Json) -> Unit raise Invalid {
+/// `v` written: each array's and object's parts made apart and put together by halves (`joined`). A builder in JS
+/// appends by making the whole text so far again (a string concatenation), so an entry written piece by piece into
+/// one took time growing with the square of its length where strings are not ropes: Hermes, 2026-11-15, 88% of the
+/// 47 s a 1000-member chain's moved state took on a phone's engine was its genesis's text.
+fn text(v : Json) -> String raise Invalid {
   match v {
-    Null => b.write_string("null")
-    True => b.write_string("true")
-    False => b.write_string("false")
+    Null => "null"
+    True => "true"
+    False => "false"
     Number(n, ..) => {
       if !(n == n.floor() && n.abs() <= max_safe) {
         raise Invalid("lock entries hold integers only")
       }
-      b.write_string(n.to_int64().to_string())
+      n.to_int64().to_string()
     }
-    String(s) => quote(b, s)
+    String(s) => quoted(s)
     Array(xs) => {
-      b.write_char('[')
+      let parts : Array[String] = []
       for i, x in xs {
         if i > 0 {
-          b.write_char(',')
+          parts.push(",")
         }
-        write(b, x)
+        parts.push(text(x))
       }
-      b.write_char(']')
+      "[" + joined(parts, 0, parts.length()) + "]"
     }
     Object(m) => {
       let keys = m.keys().collect()
       keys.sort_by(code_units)
-      b.write_char('{')
+      let parts : Array[String] = []
       for i, k in keys {
         if i > 0 {
-          b.write_char(',')
+          parts.push(",")
         }
-        quote(b, k)
-        b.write_char(':')
-        write(b, m.get(k).unwrap())
+        parts.push(quoted(k))
+        parts.push(":")
+        parts.push(text(m.get(k).unwrap()))
       }
-      b.write_char('}')
+      "{" + joined(parts, 0, parts.length()) + "}"
     }
   }
+}
+
+///|
+/// `parts[from:to]` one after another, put together by halves: each character is copied once a level, not once a part.
+fn joined(parts : Array[String], from : Int, to : Int) -> String {
+  if to - from == 0 {
+    ""
+  } else if to - from == 1 {
+    parts[from]
+  } else {
+    let mid = from + (to - from) / 2
+    joined(parts, from, mid) + joined(parts, mid, to)
+  }
+}
+
+///|
+fn quoted(s : String) -> String {
+  let b = StringBuilder()
+  quote(b, s)
+  b.to_string()
 }
 
 ///|

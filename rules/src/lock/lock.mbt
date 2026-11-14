@@ -382,11 +382,35 @@ fn sig_of(e : Json) -> Json {
 // ── the chain ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 ///|
+/// How many map entries the rules copied since this module loaded: the work of making a state of another, which a
+/// whole chain's reading must not repeat for each entry (station/test/rules-fold.test.ts counts it).
+pub let copied : Ref[Int] = { val: 0 }
+
+///|
+/// `prev` with its maps copied, at the next seq with head `hash`.
+fn copied_from(prev : LockState, hash : String) -> LockState {
+  {
+    ..prev,
+    seq: prev.seq + 1.0,
+    head: hash,
+    members: copy(prev.members),
+    devices: copy(prev.devices),
+    sign_keys: copy(prev.sign_keys),
+    passkeys: copy(prev.passkeys),
+    signed: copy(prev.signed),
+    stations: copy(prev.stations),
+    gateways: copy(prev.gateways),
+    persons: copy(prev.persons),
+  }
+}
+
+///|
 fn[K : Hash + Eq, V] copy(m : Map[K, V]) -> Map[K, V] {
   let out : Map[K, V] = Map([])
   for k, v in m {
     out[k] = v
   }
+  copied.val += m.length()
   out
 }
 
@@ -482,8 +506,18 @@ fn safe_num(v : Json?) -> Double? {
 
 ///|
 /// The lock with one more entry; raises why the entry does not follow. `now`: the station's time (unix seconds), for
-/// signing devices that ran out; none for entries taken before (kept in lock.json).
+/// signing devices that ran out; none for entries taken before (kept in lock.json). `prev` stays as it was: the fork
+/// choice applies to one parent's state for each of its children, and a station keeps the state it applied to.
 pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockState raise LockError {
+  step(prev, e, now, c, false)
+}
+
+///|
+/// `apply`'s one statement of the rules. `in_place`: the caller holds `prev` alone and lets it go (`fold`), so the
+/// entry is taken into its maps rather than into copies of them; a refusal then leaves them part-changed, which only
+/// such a caller sees, and it gives up the state with the refusal. An entry that takes no effect (its signer's device
+/// put in under its name by someone else) has its checks made on copies either way, so `prev` stays as it was.
+fn step(prev : LockState, e : Json, now : Double?, c : &Crypto, in_place : Bool) -> LockState raise LockError {
   let v = Some(e)
   if prev.moved is Some(_) {
     refuse("the lock moved to a person's own log: nothing follows it here")
@@ -512,18 +546,10 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
   if !c.sig_valid(sig_of(e), hash, prev.origins, prev.rp_id, by.passkey) {
     refuse("signature invalid")
   }
-  let s : LockState = {
-    ..prev,
-    seq: prev.seq + 1.0,
-    head: hash,
-    members: copy(prev.members),
-    devices: copy(prev.devices),
-    sign_keys: copy(prev.sign_keys),
-    passkeys: copy(prev.passkeys),
-    signed: copy(prev.signed),
-    stations: copy(prev.stations),
-    gateways: copy(prev.gateways),
-    persons: copy(prev.persons),
+  let s : LockState = if in_place && @role.takes_effect(by.own) {
+    { ..prev, seq: prev.seq + 1.0, head: hash }
+  } else {
+    copied_from(prev, hash)
   }
   let b = match field(v, "body") {
     None | Some(Null) => Some(Json::object(Map([])))
@@ -676,9 +702,10 @@ pub fn fold(entries : Array[Json], now : Double?, c : &Crypto) -> LockState rais
   if entries.length() == 0 {
     refuse("no lock")
   }
+  // (the state the genesis makes is this fold's alone, nobody else's: each entry is taken into it, not into a copy)
   let mut s = genesis(entries[0], c)
   for i in 1..<entries.length() {
-    s = apply(s, entries[i], now, c)
+    s = step(s, entries[i], now, c, true)
   }
   s
 }
