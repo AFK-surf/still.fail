@@ -11,7 +11,8 @@ import { learn } from "../accounts/catalog.ts";
 import { cardEditPage, cardMessagePage } from "../store/card-outbox.ts";
 
 export type Ask = { id: number; op: string; args: any; lang: Lang; names: [string, string][]; processes: [string, string][]; clientKeys: [string, string][]; catalog?: Record<string, unknown> };
-export type Answer = { id: number; text?: string; status?: number; error?: string; prepareUpJobs?: string; prepareWorkspaceUpJobs?: boolean };
+/// `body`: the text as its bytes, as the MoonBit reader gives it (mb-reader.ts `Said`).
+export type Answer = { id: number; text?: string; body?: Buffer; status?: number; error?: string; prepareUpJobs?: string; prepareWorkspaceUpJobs?: boolean };
 /// Said once, as a reader is ready: how long it took from its first line (its code read in) to its store opened.
 export type Ready = { ready: { loadedMs: number; openedMs: number } };
 

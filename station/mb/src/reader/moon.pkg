@@ -35,6 +35,7 @@ import {
   "station/jsjson",
   "moonbitlang/core/string",
   "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
 }
 
 pkgtype(kind: "executable")

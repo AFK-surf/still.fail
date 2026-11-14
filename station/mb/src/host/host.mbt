@@ -106,6 +106,13 @@ pub fn Host::say(self : Host, text : String) -> Unit {
 }
 
 ///|
+/// Writes `bytes` to stdout as they are (after a line that says how many: what reads them knows).
+pub fn Host::out(self : Host, bytes : Bytes) -> Unit {
+  ignore(self)
+  ignore(out_ffi(bytes))
+}
+
+///|
 /// Writes `text` and a newline to stderr, for the station's log.
 pub fn note(text : String) -> Unit {
   eprintln(text)

@@ -38,6 +38,69 @@ export interface ReaderLike {
   getHeapStatistics(): Promise<{ used_heap_size: number }>;
 }
 
+/// What a program says on its stdout: a line of JSON at a time, each told whole as it ends; a line that says `bytes` has
+/// that many bytes after it, its body, told with it as `body` as they are (the reader's answer: main.mbt `say_answer`),
+/// never decoded or unescaped here. A line is ended by its `\n` alone (readline also took U+2028 and U+2029 for ends).
+export class Said {
+  #carry: Buffer[] = [];
+  #size = 0;
+  /// The head waiting for its body, and how many bytes of it are still to come.
+  #head: Record<string, unknown> | null = null;
+  #wanted = 0;
+  readonly #tell: (said: unknown) => void;
+  constructor(tell: (said: unknown) => void) { this.#tell = tell; }
+
+  push(bytes: Buffer) {
+    let at = 0;
+    while (at < bytes.length) {
+      if (this.#head !== null) {
+        const take = Math.min(this.#wanted - this.#size, bytes.length - at);
+        this.#carry.push(bytes.subarray(at, at + take));
+        this.#size += take;
+        at += take;
+        if (this.#size < this.#wanted) return;
+        const head = this.#head;
+        const body = this.#carry.length === 1 ? this.#carry[0]! : Buffer.concat(this.#carry, this.#size);
+        this.#head = null;
+        this.#carry = [];
+        this.#size = 0;
+        this.#tell({ ...head, body });
+        continue;
+      }
+      const end = bytes.indexOf(10, at);
+      if (end < 0) {
+        this.#carry.push(bytes.subarray(at));
+        this.#size += bytes.length - at;
+        return;
+      }
+      this.#carry.push(bytes.subarray(at, end));
+      const line = (this.#carry.length === 1 ? this.#carry[0]! : Buffer.concat(this.#carry)).toString();
+      this.#carry = [];
+      this.#size = 0;
+      at = end + 1;
+      if (line === "") continue;
+      let head: unknown;
+      try { head = JSON.parse(line); }
+      catch {
+        log.warn("readers", "a MoonBit program said what is not JSON", { line: line.slice(0, 200) });
+        continue;
+      }
+      const wanted = (head as { bytes?: unknown } | null)?.bytes;
+      if (typeof wanted === "number" && Number.isInteger(wanted) && wanted >= 0) {
+        const { bytes: _, ...rest } = head as Record<string, unknown>;
+        this.#head = rest;
+        this.#wanted = wanted;
+        if (wanted === 0) {
+          this.#head = null;
+          this.#tell({ ...rest, body: Buffer.alloc(0) });
+        }
+        continue;
+      }
+      this.#tell(head);
+    }
+  }
+}
+
 /// The program's process, a line of JSON each way: told its lines as "message"s, its end as "exit".
 export class MbProcess extends EventEmitter {
   readonly #child: ChildProcess;
@@ -46,12 +109,8 @@ export class MbProcess extends EventEmitter {
   constructor(binary: string, args: string[]) {
     super();
     this.#child = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
-    createInterface({ input: this.#child.stdout! }).on("line", (line) => {
-      let answer: unknown;
-      try { answer = JSON.parse(line); }
-      catch { return void log.warn("readers", "a MoonBit reader said what is not JSON", { line: line.slice(0, 200) }); }
-      this.emit("message", answer);
-    });
+    const said = new Said((answer) => this.emit("message", answer));
+    this.#child.stdout!.on("data", (bytes: Buffer) => said.push(bytes));
     createInterface({ input: this.#child.stderr! }).on("line", (line) => log.warn("readers", "a MoonBit reader said", { line }));
     // (a failed write is the process gone, told by its exit)
     this.#child.stdin!.on("error", () => {});
