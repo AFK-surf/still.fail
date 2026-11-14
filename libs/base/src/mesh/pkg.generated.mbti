@@ -19,7 +19,11 @@ pub let onto_max_ms : Int32
 
 pub let ping_timeout_ms : Int32
 
+pub let probe_ms : Int32
+
 pub let renew_ms : Int32
+
+pub let retire_ms : Int32
 
 pub fn said(Error) -> String
 
@@ -64,6 +68,7 @@ pub fn Link::ended(Self) -> Closed?
 pub async fn Link::exchange(Self, String) -> @json.Json
 pub fn Link::path(Self) -> String?
 pub fn Link::paths(Self) -> Array[@json.Json]
+pub fn Link::pings(Self) -> Pings
 pub async fn Link::request(Self, String, String, headers? : Array[(String, String)], body? : Bytes) -> Reply
 pub fn Link::usable(Self) -> Bool
 pub fn Link::via(Self) -> String?
@@ -75,9 +80,12 @@ pub async fn Mesh::close(Self) -> Unit
 pub fn Mesh::current(Self, String, scope? : String) -> Link?
 pub fn Mesh::device_id(Self) -> String
 pub fn Mesh::drop_link(Self, String, scope? : String, reason? : String) -> Unit
+pub async fn Mesh::health_change(Self, String, Bool, scope? : String) -> Bool
+pub fn Mesh::healthy(Self, String, scope? : String) -> Bool
 pub async fn Mesh::link(Self, String, async (String, Bool) -> Presented, scope? : String) -> Link
 pub async fn Mesh::make(@shell.Shell, Store, Options) -> Self
 pub async fn Mesh::replaced(Self, Link) -> Unit
+pub fn Mesh::standing(Self, String, scope? : String) -> Bool
 
 pub(all) struct Options {
   alpn : String
@@ -85,6 +93,14 @@ pub(all) struct Options {
   relay_only : Bool
   says : Map[String, @json.Json]?
   refusal : ((@json.Json, String) -> Error?)?
+}
+
+pub(all) struct Pings {
+  samples : Int32
+  srtt : Double
+  dev : Double
+  missed : Int32
+  answered_ms : Int32?
 }
 
 pub(all) struct Presented {

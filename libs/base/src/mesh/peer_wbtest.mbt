@@ -178,23 +178,27 @@ test "three pings in a row not answered: the link is let go at the third, and it
   let mesh = stood.mesh()
   let source = Source::new()
   let link = stood.opened(mesh, source.gives())
-  stood.rt.advance(tick_ms)
-  assert_eq(link.missed, 0)
-  // The peer goes quiet. The next ping is sent at 10 s and is missed 3 s after;
+  // The peer answers a ping in 1.5 s: no quicker than half a ping's time, so that a ping of it missed is no cause
+  // to race a new link beside it at once (health_wbtest.mbt has those), and what lets it go is three missed.
+  far.takes = ping_timeout_ms / 2
+  stood.rt.advance(tick_ms + ping_timeout_ms / 2)
+  assert_eq((link.missed, link.pings().answered_ms), (0, Some(1500)))
+  // The peer goes quiet. The next ping is sent a tick after that answer (11.5 s) and is missed 3 s after;
   far.quiet = true
   stood.rt.advance(tick_ms + ping_timeout_ms - 1)
   assert_eq(link.missed, 0)
   stood.rt.advance(1)
   assert_eq(link.missed, 1)
-  // a tick after that verdict (18 s) it is still not answered, so no other is sent, and that is one more missed;
+  // a tick after that verdict (19.5 s) it is still not answered, so no other is sent, and that is one more missed;
   stood.rt.advance(tick_ms)
   assert_eq(link.missed, 2)
   assert_eq(far.heard.length(), 3)
-  // and a tick after (23 s) the third: 13 s after the first unanswered ping was sent.
+  // and a tick after (24.5 s) the third: 13 s after the first unanswered ping was sent.
   stood.rt.advance(tick_ms - 1)
   assert_true(link.usable())
   assert_true(physical_equal(stood.opened(mesh, source.gives()), link))
   far.quiet = false
+  far.takes = 0
   stood.rt.advance(1)
   assert_eq(link.missed, 3)
   assert_true(!link.usable())
@@ -203,14 +207,14 @@ test "three pings in a row not answered: the link is let go at the third, and it
   guard link.ended() is Some(why) else { fail("a link let go says it has not ended") }
   assert_eq((why.kind, why.words()), ("local", say("closed")))
   // Dialled anew in that turn, nobody asking: connection 4, its hello the next credential of the same source.
-  assert_eq(far.dials, [0L, 23000L])
+  assert_eq(far.dials, [0L, 24500L])
   assert_eq(
     far.heard.join("\n"),
     (
       #|0 2 {"credential":"c1"}
       #|5000 2 {"credential":"c1"}
-      #|10000 2 {"credential":"c1"}
-      #|23000 4 {"credential":"c2"}
+      #|11500 2 {"credential":"c1"}
+      #|24500 4 {"credential":"c2"}
     ),
   )
   assert_eq(source.asked, ["kept", "kept"])
@@ -219,7 +223,7 @@ test "three pings in a row not answered: the link is let go at the third, and it
   assert_eq(far.dials.length(), 2)
   // And the new one is pinged in its turn.
   stood.rt.advance(tick_ms)
-  assert_eq(far.heard[4], "28000 4 {\"credential\":\"c2\"}")
+  assert_eq(far.heard[4], "29500 4 {\"credential\":\"c2\"}")
 }
 
 ///|

@@ -17,8 +17,9 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   event stream's text. Pure, with its tests.
 - `src/mesh`: the device side of the mesh on those two: the endpoint and its key, a link to a peer (hello, pings,
   renewal), one for each scope its program names there, a request a stream, replies as they come, a link opened
-  again, let go of by its program, its holder told as another takes its place. `mesh.mbt`'s head says what of the
-  TypeScript mesh (`client/core-ts/src/mesh.ts`) it leaves out.
+  again, let go of by its program, its holder told as another takes its place; its pings measured, how its place
+  is by them told as it changes, and a link that stops answering raced against a new one (`health.mbt`).
+  `mesh.mbt`'s head says what of the TypeScript mesh (`client/core-ts/src/mesh.ts`) it leaves out.
 
 ## It knows no program
 
@@ -73,7 +74,15 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   three of them missed, its credential's renewal and a refusal of one, its end by the peer, its peer dialled again:
   `src/mesh/peer_wbtest.mbt`; links by scope and peer on that peer: one peer in two scopes, the link there is now,
   one let go of by its program, its holder told as it is replaced, and what each looks at again after it waited:
-  `src/mesh/scope_wbtest.mbt`), and how the page's shell turns its runtime. That peer is the test's script, not a
+  `src/mesh/scope_wbtest.mbt`; its pings' round trips against numbers worked out by hand, how a place is and each
+  change of it told once, and the race of a link suspect: won by the new link, by the old one's answer, by
+  neither, by what came on the old one meanwhile, its probe never sent or answered late, two scopes at once, a
+  link its peer ended while its ping was out (not raced, not dialled for), and the place let go of or the mesh
+  closed at each of forty turns from the ping missed on and at each of twelve from the answer of the race's dial
+  on: `src/mesh/health_wbtest.mbt`), and how the page's
+  shell turns its runtime. The peer has no network under it: when it answers is the test's to say, a connection
+  is lost by the test saying so, and what the transport counted (`conn.stats`) and whether the endpoint is on a
+  relay are the test's words too. That peer is the test's script, not a
   door: no test in this repository opens a link to a real peer; `shell.c` is compiled by the native step (moon
   makes a package's stub with its tests, into an archive nothing there calls) and run by none; and the rest of the
   JavaScript in `shell_js.mbt` (`extern "js"`, written out in MoonBit: what it does with iroh and its handles) is
@@ -141,7 +150,9 @@ left is another part's:
   (`Shell::give_up`), in a page too. A read let go of goes on, holding the stream's receiving half, and what it
   takes is lost to the next read. So a stream is never read again after a read of it was interrupted: it is reset
   (`Reply::cancel`, `Link::ask`); and what must not be interrupted half way (an exchange on the control stream) is a
-  fiber of the mesh's own scope that the others wait for with a `Deferred` (`Mesh::ping`).
+  fiber of the mesh's own scope that the others wait for with a `Deferred` (`Mesh::ping`; the probe of a link
+  suspect, `Mesh::race`: what has a time is the wait, never the exchange, and an exchange whose wait is over
+  before its turn on the stream came is not begun).
 - `catch` does not catch a fiber's interruption: what must be undone then is in a `defer`. And a fiber interrupted
   before its first step runs nothing, no `defer` either. So what others wait for from a fiber of the mesh's scope
   (an opening's end, a link's answer, its end) is not left to that fiber as the mesh closes: `Mesh::close` cuts them
@@ -158,7 +169,13 @@ left is another part's:
   `scope_wbtest.mbt`'s last case). What waits to be told `links` changed looks again as it is told
   (`Mesh::replaced`: the change may be another place's), and the close tells it too; it is not told which, so a
   holder that asks for the link again as it is told dials anew after its program's `drop_link` as well: a program
-  rid of a link stops its holders first. A `Deferred` a
+  rid of a link stops its holders first. A race (`racing`, health.mbt) is held to the same: it is its place's from
+  the step its link is found suspect, before its fiber took a step; while it is there its old link is the one at
+  its place, since whatever puts another there or takes it out ends the race in that step (`Mesh::end_race`:
+  `drop_link`, `Mesh::dial`) or is its own verdict; a new link it opened has a place in the step it wins
+  (`Mesh::switch`) or is closed; and the pings' own verdict leaves a link that is raced to the race. A link that
+  ended while its ping was out (its peer closed it) is neither raced nor dialled for: its end is told
+  (`Link::closed`), and its program asks again or does not, as in that mesh, whose ways are its usable links. A `Deferred` a
   new fiber of the scope is to complete for others is kept where the close finds it. And the close is whole once
   begun: what it waits on at the shell is where an interruption of its caller waits too
   (`@effect.uninterruptible`), after the telling.
@@ -173,4 +190,24 @@ left is another part's:
   and its pings' alike. The base takes no word of a program's for its own: what it closes itself says its own
   (`closed`, `credential refused`, `opening ended`), and a link its program lets go of says what the program gives
   (`Mesh::drop_link`), `closed` where it gives none.
+- Where the race of a link suspect is not that mesh's (`Mesh::race`; numbers and conditions are: a ping missed
+  after one answered in under 1.5 s, a probe of 5 s, the old link closed 10 s after another took its place):
+  - Its probe is never given up half way. That mesh interrupts the exchange as its 5 s run out, its line sent or
+    not, and may keep the link (something came on it meanwhile), whose control stream is then one answer behind:
+    each line after reads the answer to the one before. Here the exchange is the mesh's own fiber: its time run out
+    while it waited its turn behind the ping, nothing is sent (as there); run out with its line sent, its answer is
+    read when it comes, so a link kept reads its answers in their order. The lines a peer is sent are the same, and
+    their order; when one goes is not: the ping due while such a probe is still out waits its turn behind it, and
+    goes as the probe's answer comes (there it goes at its tick, and reads that answer for its own).
+  - A link whose third ping is missed while it is raced is the race's to decide. That mesh lets it go and dials
+    anew then, a second dial beside the race's, whose link is closed as it opens. Here one dial is made: the
+    race's; where neither answers the link is let go and nothing is dialled until it is asked for, as there
+    where the race ends before the third miss.
+  - Something having come on the old link keeps it only while it has not ended: there the bytes of the peer's own
+    close count as the link being there after all, and the new link is closed for one that is gone.
+  - Where the old link is kept, the new one's dial is given up at once (there it is left to finish, and closed).
+  - A place's health is told only as it changes, and as the mesh closes (whoever waits fails as closed): there a
+    place nothing was told of yet tells whoever waits what it already was, and nothing tells them at the close.
+  - The race asks `conn.stats` of both shells (`rxBytes`). The page's shell answers it since this, in JavaScript no
+    compiler reads and no test here runs; where a shell does not answer, nothing is taken to have come.
 - A compiler warning is an error or off (`moon.mod`'s `warnings`, mbui's line).
