@@ -258,3 +258,41 @@ test("one skill each station kept on since it was copied: merged, each line once
     await w.done();
   }
 });
+
+test("a skill kept apart is named for the station that made it, once, wherever it went first; its own files go with it", async () => {
+  const D = "d".repeat(64);
+  NAMES[D] = "MBA";
+  const w = world([A, C, D]);
+  try {
+    write(w.at(A), "skills/stillfail/SKILL.md", `---\nname: stillfail\ndescription: 项目记忆：still.fail\n---\n${"- 项目的事。\n".repeat(50)}`);
+    write(w.at(C), "skills/stillfail/SKILL.md", "---\nname: stillfail\ndescription: 发布机\n---\n本机的发布配置在同目录 host。\n");
+    write(w.at(C), "skills/stillfail/host", "mini\n");
+    chmodSync(join(w.at(C).home, "skills/stillfail/host"), 0o600);
+    // MBA has none: it takes Mini1's first, then meets ccvm's.
+    await w.level(D, C, A, D, C, A);
+    for (const s of [w.at(A), w.at(C), w.at(D)]) {
+      assert.match(read(s, "skills/stillfail/SKILL.md")!, /项目记忆/);
+      assert.match(read(s, "skills/stillfail-Mini1/SKILL.md")!, /本机的发布配置/);
+      assert.equal(existsSync(join(s.home, "skills", "stillfail-MBA")), false);
+    }
+    assert.equal(read(w.at(C), "skills/stillfail-Mini1/host"), "mini\n");
+    assert.equal(read(w.at(C), "skills/stillfail/host"), null);
+    assert.equal(read(w.at(A), "skills/stillfail-Mini1/host"), null);
+  } finally {
+    await w.done();
+  }
+});
+
+test("a station from before 0.1.9133, answering as it answers what it does not know, is passed over", async () => {
+  const w = world([A, B]);
+  try {
+    w.at(B).sync.handle = async () => {
+      throw new Error("session and task key are required (at most 256 / 128 bytes)");
+    };
+    write(w.at(A), "MEMORY.md", "- one\n");
+    await w.level(A);
+    assert.equal(read(w.at(A), "MEMORY.md"), "- one\n");
+  } finally {
+    await w.done();
+  }
+});

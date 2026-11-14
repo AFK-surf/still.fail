@@ -157,7 +157,8 @@ export type MemoryDeps = {
 };
 
 /// A station from before the memory was shared: nothing to bring level with it.
-const before = (e: unknown) => /unsupported peer method|unknown memory method/i.test((e as Error)?.message ?? "");
+/// (Before 0.1.9133 a station answers a method it does not know as a task's request it lacks the keys of.)
+const before = (e: unknown) => /unsupported peer method|unknown memory method|session and task key are required/i.test((e as Error)?.message ?? "");
 
 export class MemorySync {
   readonly #deps: MemoryDeps;
@@ -467,7 +468,8 @@ export class MemorySync {
       const size = (files: [string, Rec][]) => files.reduce((n, [, r]) => n + r.size, 0);
       const [sm, st] = [size(mine), size(their)];
       const mineAside = sm !== st ? sm < st : me < ts.by;
-      const owner = mineAside ? me : ts.by;
+      // Named for the station that made it, not the one keeping it (a station that took another's copy first).
+      const owner = (mineAside ? ms : ts).by;
       const aside = `${name}-${stationTag(this.#nameOf(ws, owner))}`;
       if (!portableName(aside) || BUILTIN.has(aside)) continue;
       const moved: [string, Rec, Buffer][] = [];
@@ -486,11 +488,40 @@ export class MemorySync {
       if (mineAside) {
         // Its own moved aside: gone from under the name with no record of it, for the other's to come in as new.
         for (const [path, r] of mine) if (await this.#write(ws, path, { ...r, hash: "" }, null)) delete kept.files[path];
+        await this.#moveRest(ws, name, aside);
       } else for (const [path] of their) delete theirs[path];
       log.info("memory", "two skills of one name kept apart", { workspace: ws, skill: name, aside });
       changed = true;
     }
     return changed;
+  }
+
+  /// What is left of skill `name` here once its shared files moved aside (a file only its owner reads, which never
+  /// leaves this machine): moved beside them, where the skill says it is.
+  async #moveRest(ws: string, name: string, aside: string): Promise<void> {
+    const from = join(this.#home(ws), "skills", name);
+    const to = join(this.#home(ws), "skills", aside);
+    const walk = async (rel: string): Promise<void> => {
+      let entries: Dirent[] = [];
+      try {
+        entries = await readdir(join(from, rel), { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of entries) {
+        const sub = rel === "" ? e.name : join(rel, e.name);
+        if (e.isDirectory()) await walk(sub);
+        else if (e.isFile()) {
+          try {
+            await lstat(join(to, sub));
+            continue;
+          } catch {}
+          await mkdir(dirname(join(to, sub)), { recursive: true });
+          await rename(join(from, sub), join(to, sub)).catch((err) => log.warn("memory", "a file of a skill kept apart not moved beside it", { skill: name, file: sub, error: (err as Error).message }));
+        }
+      }
+    };
+    await walk("");
   }
 
   // ── between the stations ──
