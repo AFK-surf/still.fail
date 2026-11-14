@@ -276,7 +276,7 @@ fn has_legacy_closed(db : @sql.Db) -> Bool raise {
     return false
   }
   guard one(db, "SELECT version FROM legacy_closed_meta WHERE id=1", []) is Some(r) && field(r, "version") == Json::number(1.0) else {
-    fail("legacy closed-card lookup has an unsupported version")
+    raise Failure("legacy closed-card lookup has an unsupported version")
   }
   true
 }
@@ -303,7 +303,7 @@ fn has_legacy_people(db : @sql.Db) -> Bool raise {
     return false
   }
   guard one(db, "SELECT version FROM legacy_people_time_meta WHERE id=1", []) is Some(r) && field(r, "version") == Json::number(1.0) else {
-    fail("legacy people-time lookup has an unsupported version")
+    raise Failure("legacy people-time lookup has an unsupported version")
   }
   true
 }
@@ -331,7 +331,7 @@ fn people_pending(threads : Array[Json]) -> Refused {
 ///|
 /// store.ts `smallPeople`.
 fn small_people(db : @sql.Db, thread : Json, since : Json) -> Map[String, Json] raise {
-  guard one(db, small_people_has_sql, [thread, since]) is Some(row) else { fail("no sample") }
+  guard one(db, small_people_has_sql, [thread, since]) is Some(row) else { raise Failure("no sample") }
   if num(field(row, "seen")) >= sample_limit {
     raise people_pending([thread])
   }

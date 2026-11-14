@@ -77,7 +77,7 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions"].contains(
     op,
   )
 }
@@ -128,6 +128,8 @@ fn Reader::read(self : Reader, op : String, ask : Json) -> Json raise {
     "chatMarks" => @readops.chat_marks(db, self.host, self.data, self.sep, ask)
     "entries" => @readops.thread_entries(db, self.host, self.data, self.sep, ask)
     "letters" => @readops.thread_letters(db, self.host, self.data, self.sep, ask)
+    "summary" => @readops.session_summary(db, self.host, self.data, self.sep, ask)
+    "sessions" => @readops.session_list(db, self.host, self.data, self.sep, ask)
     _ => fail("no read \{op}")
   }
 }

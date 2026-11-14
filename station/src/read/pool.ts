@@ -114,7 +114,7 @@ function filling(op: string, args: unknown): boolean {
 const PAGES = new Set(["timeline", "machineSessions"]);
 /// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
 /// program is there; every other read is a worker's.
-const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters"]);
+const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions"]);
 /// The reads of this machine's own Claude Code and Codex sessions: the MoonBit reader is told where they are kept, from
 /// this process's environment (read/machine.ts `roots`), as the worker reads it.
 const MACHINE = new Set(["machineSessions", "machineSession"]);
@@ -122,7 +122,7 @@ const MACHINE = new Set(["machineSessions", "machineSession"]);
 /// admin), and go by the time of day (a share used lately, a card answered lately): the MoonBit reader keeps no words
 /// and its clock is no wall's, so it is given these in the language asked, and the time as the read is asked.
 /// A thread's pages (`entries`, `letters`) are given the words of their refusals too.
-const WORDED = new Set(["sharedOf", "sharedChats", "chatMarks", "entries", "letters"]);
+const WORDED = new Set(["sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions"]);
 const wordsIn = (op: string, lang: Ask["lang"]) => ({
   localPage: tr(lang, "station.creator.localPage"), admin: tr(lang, "station.author.admin"),
   ...(op === "entries" || op === "letters" ? {
