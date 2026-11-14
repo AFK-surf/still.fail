@@ -21,6 +21,8 @@ export const SERVED_ROUTES = [
   "GET /admin/api/chats",
   "GET /admin/api/sessions", "GET /admin/api/sessions/*", "GET /admin/api/sessions/*/timeline",
   "GET /admin/api/threads", "GET /admin/api/threads/*", "GET /admin/api/threads/*/entries", "GET /admin/api/threads/*/letters",
+  // (several of those in one: admin.ts `batch`, all answered there or the batch given Node)
+  "POST /admin/api/batch",
 ];
 /// How many of the program answer at once (each one read at a time, as a reader of the pool's).
 const SERVERS = 2;
