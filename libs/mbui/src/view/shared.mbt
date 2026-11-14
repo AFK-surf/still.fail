@@ -165,6 +165,58 @@ pub fn View::shared(
   self
 }
 
+
+///|
+/// One made in a change that flies in from what is none of the window's tree (View::flies_in): the node, and where it
+/// sets out given where it is laid out as that change is committed (its place and size in the window).
+priv struct Incoming {
+  node : NodeId
+  from : ((Double, Double, Double, Double)) -> (Double, Double, Double, Double)?
+}
+
+///|
+/// Made in the change being committed, it flies, as that change is committed whole, from what is none of the window's
+/// tree (an old view's words, a text field's: nothing of it here to let go of, so no old copy) to where that change
+/// lays it out: from where `from` says, given that place and size in the window (None: no flight, there at once),
+/// looking there as a thing with no ground and no edge would, its corners and ink its own, coming to its own look on
+/// the way; one thing moving, never faded, drawn over the rest of its layer all the way, as one View::shared pairs
+/// (the head of this file). `flight` is the way, @motion's shared, a Move. Made outside a change it is there at once.
+#callsite(autofill(loc))
+pub fn View::flies_in(
+  self : View,
+  flight : Flight,
+  from : ((Double, Double, Double, Double)) -> (Double, Double, Double, Double)?,
+  loc~ : SourceLoc,
+) -> View {
+  ignore(loc)
+  guard self.live() is Some(n) && self.tree.in_change() else { return self }
+  n.share_flight = Some(flight)
+  self.tree.incoming.push({ node: { at: self.at, gen: self.gen }, from })
+  self.tree.pairs_due()
+  self
+}
+
+///|
+/// Those made in the change committed now that fly in from outside the tree (View::flies_in), each set flying from
+/// where it says, given where it is laid out now; one let go of meanwhile, or no longer in the window's tree, none.
+fn Tree::incoming_now(self : Tree) -> Unit {
+  let all = self.incoming.copy()
+  self.incoming.clear()
+  for i in all {
+    guard self.alive_id(i.node) && self.attached(i.node.at) else { continue }
+    let n = self.nodes[i.node.at]
+    let to = self.handle(i.node.at).laid_window_now()
+    guard (i.from)(to) is Some(from) else { continue }
+    let (a, b, c, d) = corners_of(n.look)
+    let look : FromLook = {
+      ground: n.look.ground & 0xFFFFFF00L,
+      edge: (0.0, n.look.edge.1 & 0xFFFFFF00L),
+      corners: (a, b, c, d),
+      ink: n.look.ink,
+    }
+    self.fly_from(i.node, from, look, None) |> ignore
+  }
+}
 ///|
 /// The id it is shared by (View::shared), none where it is not.
 pub fn View::shared_id(self : View) -> String? {
@@ -757,6 +809,8 @@ fn Tree::pairs_now(self : Tree) -> Unit {
   for h in let_go {
     self.handle(h.at).let_go()
   }
+  // (what flies in from outside the tree, made in it: View::flies_in)
+  self.incoming_now()
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
@@ -928,6 +982,20 @@ fn Tree::fly_stays(
   look : FromLook,
   stays : StaysEnd,
 ) -> Bool {
+  self.fly_from(to, from, look, Some(stays))
+}
+
+///|
+/// Node `to` set flying from `from` (where it sets out, how it looks there) to its place, one thing moving: not faded,
+/// no old copy, `stays` its end that stays where there is one (View::shared's; none: View::flies_in's). Whether it
+/// flies (not, at once: as with motion reduced, or as far as nothing).
+fn Tree::fly_from(
+  self : Tree,
+  to : NodeId,
+  from : (Double, Double, Double, Double),
+  look : FromLook,
+  stays : StaysEnd?,
+) -> Bool {
   guard self.alive_id(to) && self.nodes[to.at].share_flight is Some(flight) else { return false }
   let to_v = self.handle(to.at)
   let (tx, ty, tw, th) = to_v.laid_window_now()
@@ -947,7 +1015,7 @@ fn Tree::fly_stays(
   let top = self.top_node_of(to.at)
   let f : Flying = { node: to, ghost: None, fades: false, start: at, dur: ms, along, top, stop: fn() {  } }
   self.flights.push(f)
-  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 1.0, from: look, stays: Some(stays) })
+  self.nodes[to.at].lift = Some({ follow: to.at, top, d: dd, k: 1.0, a: 1.0, from: look, stays }) 
   self.lifted_order()
   let stop_way = self.queued(fn() { self.drawn_said() }, fn(t) { self.flight_at(f, t) })
   let stop_end = to_v.at_moment(at + ms, fn() { self.flight_over(f) })

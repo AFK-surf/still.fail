@@ -1313,6 +1313,9 @@ let place_corner_side : Double = 9.0
 /// The viewer's bubble's sides.
 let bubble_side : Double = 14.0
 
+///|
+/// How far a bubble's words are in from its top (`bubble`'s py, S2).
+let bubble_top : Double = 8.0
 
 ///|
 /// A message's spinner, small (Spinner inline).

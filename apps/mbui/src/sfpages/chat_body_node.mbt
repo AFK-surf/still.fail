@@ -482,8 +482,9 @@ fn chat_body_node(
       // the coordinator of the migration, 2026-11-13: mbui's View::scrolls_window `leaves_room`)
       leaves_room=fn(k) { k.has_prefix("act:") },
       // (the viewer's own words sent from here: in the list whole from the press, at their size and full ink, over the
-      // composer they leave, their room opening on the list's one way: no flight on this page; mbui's
-      // View::scrolls_window `comes_whole`, the coordinator of the migration, 2026-11-14)
+      // composer they leave, their room opening on the list's one way, their bubble flying from the field
+      // (mine_bubble_node's flies_from); mbui's View::scrolls_window `comes_whole`, the coordinator of the migration,
+      // 2026-11-14; the flight, the owner, 2026-11-15: 「没有飞行动效」)
       comes_whole=fn(k) { kept.here.contains(k) },
       // (what shows held by what is read: not by the row saying the page before comes, which what comes in is put in
       // under, going on down with what shows)

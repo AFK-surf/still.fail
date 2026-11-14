@@ -2165,11 +2165,10 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   // its words take off from the field as they are (before it is emptied), the composer held as it is laid out for them
   // till they let go of it (theirs: composer_held_lines); on its way to another shape (a line more just typed), it
   // slows to rest from as fast as it went as they are sent (composer_view's @motion.stop_for), its room with it.
-  // On a chat's page made as nodes no flight is started, till the flights' step: nothing there lets one go (its list is
-  // no old list: flight_placed, flight_frame), so the composer was held as tall as the words took in it for good; with
-  // none, it is back at its one line in the press's frame, which its list takes as its foot giving back room in the
-  // change its sent key comes. The flights' step starts the flight on nodes again, and must then either let go in the
-  // sent key's change or have the list keep the room till it lets go.
+  // On a chat's page made as nodes no old flight is started (nothing there lets one go: its list is no old list,
+  // flight_placed, flight_frame): the composer is back at its one line in the press's frame, which its list takes as its
+  // foot giving back room in the change its sent key comes, and the row's bubble flies from where the words stood
+  // (sent_from_said, message_words_node's mine_bubble_node: mbui's View::flies_in).
   if !@signals.untracked(fn() { @sfbase.chat_page_nodes.get() }) {
     let room = composer_room(c, w.key)
     // its quotes fly too, each from its card, and its files that are up, each from its tile
@@ -2190,6 +2189,13 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
       marks~,
       runs~,
     )
+  } else if !@ui.reduced_motion() {
+    // (on a chat's page made as nodes its bubble flies from where its words stand in the field now: View::flies_in, as
+    // its row is made in the list; the field an old view's, so where they stand is told it: sent_from_said)
+    match w.field.words_at() {
+      Some(((x, y), _)) => @sfbase.sent_from_said(row, x, y)
+      None => ()
+    }
   }
   // At the end, the new row and its neighbours move together with the flight. When reading above it, glide there
   // instead of putting the list at the end in a single frame.

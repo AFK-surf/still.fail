@@ -1230,6 +1230,8 @@ pub struct Tree {
   priv shared_stays : Map[String, Array[Int]]
   priv departures : Array[Departure]
   priv arrivals : Array[NodeId]
+  /// those made in that change that fly in from what is none of the tree (View::flies_in), each with where from
+  priv incoming : Array[Incoming]
   priv mut pairs_asked : Bool
   /// the pictures asked for in a change or a frame's layout (View::image_ask), each by the node that asked: asked of
   /// what hosts the tree as that ends, where that node still stands (Tree::change_ended, Tree::brought)
@@ -1530,6 +1532,7 @@ pub fn Tree::new(
     shared_stays: {},
     departures: [],
     arrivals: [],
+    incoming: [],
     pairs_asked: false,
     images_wanted: [],
     flights: [],
