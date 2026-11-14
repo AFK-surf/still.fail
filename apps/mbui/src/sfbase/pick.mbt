@@ -282,32 +282,25 @@ pub fn pickable(
   }
   // a mouse picks words as a browser's selection (Ctx::selectable): what of this message it holds is told the pill,
   // whose message it is with it; no long press then
-  // (wrong by the rule, known: a row's build writes `pk` and tells `picked` for what is built elsewhere to read, and
-  // reads where the last frame drew it, which has every message row shown built every frame while a mouse's selection
-  // stands; it goes once the message rows are nodes of the window's tree, a selection let go a handler's there)
+  // (wrong by the rule, known: a row's build writes `pk` and tells `picked` for what is built elsewhere to read;
+  // selection_in has every message row shown built every frame while a mouse's selection stands. It goes once the
+  // message rows are nodes of the window's tree, a selection let go a handler's there.)
   if mouse {
-    match c.selection_box() {
-      Some((sx, sy, sw, sh)) =>
-        match c.rect_of(id) {
-          Some((x, y, w, h)) if sx >= x - 1.0 && sy >= y - 1.0 && sx + sw <= x + w + 1.0 && sy + sh <= y + h + 1.0 => {
-            // (a selection the mouse began anew (Ctx::selection_made: its press's number), or none of this message's
-            // before: picked anew)
-            let anew = pk.ts != ts || c.selection_made() != pick_mouse_made.val
-            pick_mouse_made.val = c.selection_made()
-            pk.ts = ts
-            pk.source_ts = source_ts
-            pk.author = author
-            pk.role = role
-            pk.share = share
-            pk.link = link
-            // (told once; built again, the same)
-            if anew {
-              pick_told_new(ts, -1, -1)
-            }
-          }
-          _ => ()
-        }
-      None => ()
+    if c.selection_in(box) {
+      // (a selection the mouse began anew (Ctx::selection_made: its press's number), or none of this message's
+      // before: picked anew)
+      let anew = pk.ts != ts || c.selection_made() != pick_mouse_made.val
+      pick_mouse_made.val = c.selection_made()
+      pk.ts = ts
+      pk.source_ts = source_ts
+      pk.author = author
+      pk.role = role
+      pk.share = share
+      pk.link = link
+      // (told once; built again, the same)
+      if anew {
+        pick_told_new(ts, -1, -1)
+      }
     }
     // right clicked: its turn offered the window's right click menu (sfdesk's context_menu.mbt); not where something
     // in it has a menu of its own (a file's: the innermost asker's, Ctx::menu_asked); its row's key the message's

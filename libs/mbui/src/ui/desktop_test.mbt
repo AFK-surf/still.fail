@@ -327,6 +327,41 @@ test "desktop: words of a selectable paragraph are picked by a drag and copied; 
 }
 
 ///|
+test "a pointer pick belongs to a box only if all its selected paragraphs are in that box" {
+  let in_boxes : Ref[Array[Bool]] = Ref([])
+  let t = @ui.Tester::new(fn(c) {
+    c.mouse_drags_lists(false)
+    c.selectable(fn() {
+      c.column(w=Fill(1.0), fn() {
+        let a = c.box(fn() {
+          c.rich([@ui.plain("first paragraph")], size=15.0) |> ignore
+          c.rich([@ui.plain("second paragraph")], size=15.0) |> ignore
+        })
+        let b = c.box(fn() { c.rich([@ui.plain("another message")], size=15.0) |> ignore })
+        in_boxes.val = [c.selection_in(a), c.selection_in(b)]
+      }) |> ignore
+    })
+  }, w=400.0, h=300.0)
+  assert_eq(in_boxes.val, [false, false])
+  let (ax, ay, _, ah) = t.run_rects("first paragraph")[0]
+  let (bx, by, bw, bh) = t.run_rects("second paragraph")[0]
+  let (cx, cy, cw, ch) = t.run_rects("another message")[0]
+  t.drag(ax + 1.0, ay + ah / 2.0, bx + bw - 1.0, by + bh / 2.0)
+  t.frame()
+  assert_true(t.ctx().selected_text().contains("second paragraph"), msg=t.ctx().selected_text())
+  assert_eq(in_boxes.val, [true, false])
+  t.run_for(@ui.double_click_ms)
+  t.drag(ax + 1.0, ay + ah / 2.0, cx + cw - 1.0, cy + ch / 2.0)
+  t.frame()
+  assert_true(t.ctx().selected_text().contains("another message"), msg=t.ctx().selected_text())
+  assert_eq(in_boxes.val, [false, false], msg=t.ctx().selected_text())
+  t.run_for(@ui.double_click_ms)
+  t.drag(cx + 1.0, cy + ch / 2.0, cx + cw - 1.0, cy + ch / 2.0)
+  t.frame()
+  assert_eq(in_boxes.val, [false, true])
+}
+
+///|
 /// Three selectable paragraphs, one under the other (a message's), and one that is not.
 fn three_paragraphs() -> @ui.Tester {
   @ui.Tester::new(
