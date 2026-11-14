@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [091c3fbca](https://github.com/AFK-surf/monoid/commit/091c3fbca1a1d664aebdd0961efd26a4b8ce5267) mbui: the said sweep measures figures as a real fa | 1.99 | 2.72 | 11.59 | 31.22 | 41.66 | 27.83 | 53.38 | 96.58 | 111.63 |
 | [68c30ffb0](https://github.com/AFK-surf/monoid/commit/68c30ffb04cbc742b79143474d3b381e5eaddb73) mbui: the said sweep stretches what a mode puts up | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.68 | 111.51 |
 | [46264c4bd](https://github.com/AFK-surf/monoid/commit/46264c4bd112fcc4e9205ec2d379e58ede045047) Fix chat attachment download names on Windows (#61 | 1.99 | 2.72 | 11.59 | 31.21 | 41.66 | 27.83 | 53.38 | 96.8 | 108.04 |
 | [aa42b5526](https://github.com/AFK-surf/monoid/commit/aa42b552681f71171a0850116f1ff34b5c5349c0) app: one's own message's states under it leave on  | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.78 | 109.45 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [af1435b8b](https://github.com/AFK-surf/monoid/commit/af1435b8b340455e766882dadb33639772390ef2) app tests: answers_still in three runs; app 4/4 at | 1.98 | 2.69 | 11.48 | 31.07 | 41.31 | 27.7 | 53.08 | 95.65 | 108.08 |
 | [34cf511f1](https://github.com/AFK-surf/monoid/commit/34cf511f1a6f8cb11487133f623df2b5491bf3f6) station, core: a handover waits for a member's app | 1.98 | 2.69 | 11.48 | 31.07 | 41.31 | 27.69 | 53.08 | 95.96 | 113.81 |
 | [f653dbf14](https://github.com/AFK-surf/monoid/commit/f653dbf1469116310a30b12715bc6e4d64ba1ba9) test: the lock's test rigs hand a device nothing a | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.65 | 120.4 |
-| [ed9727a1e](https://github.com/AFK-surf/monoid/commit/ed9727a1ec8e87888480d7b2a01ac2bdc6c8cf14) mbui: account rows say name, plan and allowance; m | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.95 | 108.32 |
