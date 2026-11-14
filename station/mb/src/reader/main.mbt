@@ -65,10 +65,14 @@ fn Reader::answer(self : Reader, line : String) -> Json {
     { "op": String(op), .. } if moved(op) =>
       try {
         @readops.prepare_up_jobs.val = None
+        @readops.prepare_workspace_up_jobs.val = false
         let answer : Map[String, Json] = { "id": id, "text": Json::string(self.read(op, ask).stringify()) }
         // (an old session whose up jobs' lookup the pool is to prepare now: read/worker.ts `prepareUpJobs`)
         if @readops.prepare_up_jobs.val is Some(session) {
           answer["prepareUpJobs"] = Json::string(session)
+        }
+        if @readops.prepare_workspace_up_jobs.val {
+          answer["prepareWorkspaceUpJobs"] = true
         }
         Json::object(answer)
       } catch {
@@ -83,7 +87,7 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats"].contains(
     op,
   )
 }
@@ -144,6 +148,8 @@ fn Reader::read(self : Reader, op : String, ask : Json) -> Json raise {
     "chats" => @readops.viewer_chat_list(db, self.host, self.data, self.sep, ask)
     "chatRows" => @readops.viewer_chat_rows(db, self.host, self.data, self.sep, ask)
     "outflowChats" => @readops.outflow_chats(db, self.host, self.data, self.sep, ask)
+    "openJobs" => @readops.open_jobs(db, self.host, self.data, self.sep, ask)
+    "resourceChats" => @readops.resource_chats(db, self.host, self.data, self.sep, ask)
     _ => fail("no read \{op}")
   }
 }
