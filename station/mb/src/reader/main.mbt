@@ -87,7 +87,7 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters", "summary", "sessions", "session", "threads", "thread", "turnNotices", "saidNotices", "chats", "chatRows", "outflowChats", "openJobs", "resourceChats", "usage", "outflowUsage"].contains(
     op,
   )
 }
@@ -103,6 +103,10 @@ fn Reader::read(self : Reader, op : String, ask : Json) -> Json raise {
       self.reading = Some(db)
       db
     }
+  }
+  // read/worker.ts `learn`: the model catalog as the pool gives it when it changed
+  if ask.value("catalog") is Some(models) {
+    @readops.learn_catalog(models)
   }
   db.exec("BEGIN")
   defer (db.exec("COMMIT") catch { _ => () })
@@ -150,6 +154,8 @@ fn Reader::read(self : Reader, op : String, ask : Json) -> Json raise {
     "outflowChats" => @readops.outflow_chats(db, self.host, self.data, self.sep, ask)
     "openJobs" => @readops.open_jobs(db, self.host, self.data, self.sep, ask)
     "resourceChats" => @readops.resource_chats(db, self.host, self.data, self.sep, ask)
+    "usage" => @readops.usage_page(db, self.host, self.data, self.sep, ask)
+    "outflowUsage" => @readops.outflow_usage(db, self.host, self.data, self.sep, ask)
     _ => fail("no read \{op}")
   }
 }
