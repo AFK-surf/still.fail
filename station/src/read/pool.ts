@@ -114,15 +114,22 @@ function filling(op: string, args: unknown): boolean {
 const PAGES = new Set(["timeline", "machineSessions"]);
 /// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
 /// program is there; every other read is a worker's.
-const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks"]);
+const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile", "memory", "machineSessions", "machineSession", "sessionsAtWork", "policyChecks", "recentConnectPeople", "usageTurns", "usageCalls", "outflowMessages", "archiveLook", "recentChatList", "searchChatList", "threadList", "sharedOf", "sharedChats", "chatMarks", "entries", "letters"]);
 /// The reads of this machine's own Claude Code and Codex sessions: the MoonBit reader is told where they are kept, from
 /// this process's environment (read/machine.ts `roots`), as the worker reads it.
 const MACHINE = new Set(["machineSessions", "machineSession"]);
 /// The reads that say who someone is in the station's words (read/views.ts `creator`, `authorNames`: the local page, its
 /// admin), and go by the time of day (a share used lately, a card answered lately): the MoonBit reader keeps no words
 /// and its clock is no wall's, so it is given these in the language asked, and the time as the read is asked.
-const WORDED = new Set(["sharedOf", "sharedChats", "chatMarks"]);
-const wordsIn = (lang: Ask["lang"]) => ({ localPage: tr(lang, "station.creator.localPage"), admin: tr(lang, "station.author.admin") });
+/// A thread's pages (`entries`, `letters`) are given the words of their refusals too.
+const WORDED = new Set(["sharedOf", "sharedChats", "chatMarks", "entries", "letters"]);
+const wordsIn = (op: string, lang: Ask["lang"]) => ({
+  localPage: tr(lang, "station.creator.localPage"), admin: tr(lang, "station.author.admin"),
+  ...(op === "entries" || op === "letters" ? {
+    notInteger: Object.fromEntries(["after", "before", "from", "to"].map((name) => [name, tr(lang, "station.admin.notInteger", { name })])),
+    fromAndTo: tr(lang, "station.admin.fromAndTo"),
+  } : {}),
+});
 
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
@@ -639,7 +646,7 @@ export class Readers {
     const home = session !== null ? this.homes.get(session) : undefined;
     const given = line !== this.moved ? args
       : MACHINE.has(op) ? { ...(args as object), roots: machineRoots() }
-      : WORDED.has(op) ? { ...(args as object), words: wordsIn(lang), now: wall.now() }
+      : WORDED.has(op) ? { ...(args as object), words: wordsIn(op, lang), now: wall.now() }
       : args;
     const ask: Ask = { id: this.next++, op, args: given, lang, names: [], processes: [], clientKeys: [] };
     return new Promise((resolve, reject) => {
