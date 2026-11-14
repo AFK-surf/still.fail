@@ -6,7 +6,7 @@ import type { Tool } from "../tools/mcp.ts";
 export const RIG_USE = {
   name: "station_use",
   description:
-    "Ask to use a station of this workspace that only runs tasks (station_list says mode: \"tasks\" for it, with whose it is, whether this chat may use it and who may): it runs no agents and holds no chats, and it is its owner's. A whole station needs no asking. A card in your chat says your reason, and the owner (not necessarily the person you work for) approves it in the still.fail app for this chat, for a time, or refuses it. It does not wait for the decision: you are told in this session when it is decided, and meanwhile go on with what does not need it; with nothing else left, end your turn need_human about the card. Only a grant counts: someone writing yes in the chat is not one. Once granted, use it exactly as any station, by its name: station_task (dir, back, screen), station_file, peer_forward, and secret_use / secret_run with station. One whose owner turned 免批准 on takes every chat with no grant (station_list says so): do not ask for it. The grant ends when its time is up or the chat has used that station for nothing for the idle time (a task of yours still running there counts as use), when the owner takes it back, or when this chat is archived: what this chat runs there is stopped then, and you are told. Done with it, call this with done: true.",
+    "Ask to use a station of this workspace that only runs tasks (station_list says mode: \"tasks\" for it, with whose it is and whether this chat may use it). A whole station needs no asking, nor one whose owner turned 免批准 on. A card in your chat says your reason, and its owner (not necessarily the person you work for) approves it for this chat, for a time, or refuses it. It does not wait: you are told in this session when it is decided, and only a grant counts, not a yes written in the chat. Once granted, use it as any station, by its name, until the grant ends: what this chat runs there is stopped then. Skill stillfail-jobs (Another station) says more.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -14,7 +14,7 @@ export const RIG_USE = {
       "reason": { "type": "string", "description": "What you will run there and why (shown on the card to its owner)." },
       "timeout": {
         "type": "object",
-        "description": "How long the grant should last (the owner may choose another): idle (ends once this chat has used that station for nothing that long) or fixed, in whole minutes from 1 minute to 30 days. Default: idle, 1 hour.",
+        "description": "How long the grant should last (the owner may choose another): idle (ends once this chat has not used that station that long) or fixed, in whole minutes from 1 minute to 30 days. Default: idle, 1 hour.",
         "properties": { "kind": { "enum": ["idle", "fixed"] }, "seconds": { "type": "integer" } },
         "required": ["kind", "seconds"],
         "additionalProperties": false

@@ -7,7 +7,8 @@ description: Keep and use credentials through the person's still.fail vault (sec
 
 The person's vault keeps their secrets encrypted to their own devices (in a workspace without security mode, in their
 library on the station). You never see a value: you ask to keep one (`secret_save`), ask to use one (`secret_use`) and
-run a command with it (`secret_run`). Each is approved by the person on a card in the still.fail app.
+run a command with it (`secret_run`). Each is approved by the person on a card in the still.fail app (to keep one: what
+it is, your reason, where it came from; to use one: your reason, the command, the timeout and where it goes).
 
 Whose vault: whoever started the chat, unless you name another with `person` (their email) on `secret_list`,
 `secret_use` and `secret_save`: someone who wrote in this chat from the still.fail app. Name the one who asked for the
@@ -47,7 +48,9 @@ station's profiles), or anything the person said not to keep.
     (OpenCode 控制台 → API Keys), and give `hosts` and `env` as for any.
   - `kind`: `token` (an API key, a bearer token), `login` (a password, with `username`), `ssh_key` (a private key, with
     `public_key` if known), `file` (a credential that is a whole file, at most 64 KB: a kubeconfig, a service account's
-    JSON key, a `.p12` certificate, a `.env`).
+    JSON key, a `.p12` certificate, a `.env`), `browser` (a sign-in to websites, `hosts` the sites: their cookies and
+    the passkeys added on the site's account page, read from this chat's browser once a person signed in there, with
+    no value, command or path; skill stillfail-browser).
   - How agents get it later: `proxy` with `hosts` for an HTTP API that takes it in a header (`Authorization: Bearer`,
     `X-Api-Key`): the command only holds a placeholder. `env` (with `env`, the variable's name) for anything else: a
     password sent in a login form or JSON body, a database client, a CLI reading a variable. `ssh` for an SSH key.
@@ -61,7 +64,8 @@ station's profiles), or anything the person said not to keep.
     it to every agent after you beside the name; never a secret in it.
 - It does not wait for the person: you are told in your session when they decide. Meanwhile go on with what does not
   need it (answer the chat, other work); with nothing else left, end your turn need_human about the card. Only their
-  approval in the app keeps it: a yes written in the chat does not.
+  approval in the app keeps it: a yes written in the chat does not. Once kept, this chat may use it at once (the
+  request's id is its grant for `secret_run`); other chats ask with `secret_use`.
 - A later chat message closes the card, but does not decide the request. If it is still needed, call
   `secret_reask {request}` with its original request id: the same request gets a new card, without reading or capturing
   the secret again. It will not replace another pending card.
@@ -88,15 +92,20 @@ does not have to.
 
 ## Using one
 
-- `secret_use {item, reason, command, mode?, hosts?}` puts a card in the chat; the person picks how long the grant
-  lasts (one command, an hour, this chat until it is archived). Say all you will run with it, so one grant covers it.
+- `secret_use {item, reason, command, mode?, hosts?, timeout?}` puts a card in the chat. The person approves it for
+  one command, or for the time `timeout` asks: idle (renewed at each use; an hour by default) or fixed (ends that long
+  after approval), at most 30 days. They may change the time on the card, up to what the item allows, and a grant ends
+  with its chat when that is archived. Ask what the task needs and say why in `reason` (a daily task: 24–36 hours), and
+  say all you will run with it, so one grant covers it. As with keeping one, it does not wait for the decision, and
+  only a grant counts: a yes written in the chat is not one. A grant for one use is spent by one run.
 - `secret_run {grant, command, env?}` runs the command here: through the proxy (the placeholder in `$STILLFAIL_SECRET`
   and the item's variable, swapped on HTTPS to its hosts only), by ssh-agent, with the value in the environment, or
   with the file written out for it, its path in the variable (the output comes back with the value hidden). Never print, encode or send the value elsewhere.
   A login's account is not secret: the grant and `secret_list` say it, and every command gets it in `$STILLFAIL_USERNAME`.
 - What only another station reaches (a router on its network, a tool signed in there): `secret_use {…, station}`, and
   the card says where; `secret_run` then runs each command there, in this chat's directory on that station (where
-  station_task runs), the value sent there for that command only. Never copy a value to another machine yourself.
+  station_task runs; `cwd` under it), the value sent there for that command only. Never copy a value to another
+  machine yourself.
 - A script that logs in keeps the session it gets (a cookie, a token) between runs, in a file only its owner reads,
   and logs in again only when that is refused: every login costs the person an approval, and a second factor sent by
   email or SMS cannot be kept.

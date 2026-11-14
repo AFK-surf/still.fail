@@ -21,7 +21,7 @@ const KEYS: Record<string, "Enter" | "Backspace" | "Up" | "Down" | "Left" | "Rig
 export const LOGIN = {
   name: "login",
   description:
-    "Log this station in to a command-line tool, when a command fails because it is not logged in (not logged in, 401, an expired token) or a person asks for it. command: the tool's own login command (gh auth login, gcloud auth login, npm login, az login --use-device-code, gh auth refresh -s workflow…), with its browser or device-code option where it has one (skill stillfail-login says which, for common CLIs). You drive the command: the answer shows its screen (the page and code hidden) and what it waits for; answer its prompts yourself with id and input (text) or key (enter, up, down, tab, ctrl-c…), taking the tool's defaults or what the task needs; if you truly cannot decide, ask the person in the chat as a normal question. Never type a password or token: a prompt that asks for one is refused; use the tool's browser or device-code login instead, or tell the person it cannot be done this way. Where it asks whether to also set up git credentials or keep the token in a keychain (or has a flag for it), take the answer that leaves the OS keychain alone (gh: --insecure-storage keeps its token in its own file): nobody here can answer a keychain dialog. Where its screen says the page gives a code to paste back here and it waits for it (copy the code and paste it below, enter the verification code), you never type it: login {id, paste: true} gives the card a field where the person enters it. Once the answer says the person's browser step is ready (a code or a page), chat_post with card {\"type\": \"login\", \"login\": \"<id>\"} (with \"station\": the key the answer gives, for another station's) and a sentence saying who should log in to what on this station and why, without the link (the card opens the page); end need_human. In Slack or Feishu, post the link alone. Nobody is ever asked to run a command. The login is machine-wide: every chat's agent on this station uses it. When it ends you get a station notice and the card closes. id alone: how it stands now; id with cancel: true: end it.",
+    "Log this station in to a command-line tool, when a command fails because it is not logged in (401, an expired token) or a person asks for it. command: the tool's own login command, with its browser or device-code option where it has one (skill stillfail-login says which for common CLIs, and what to avoid). You drive the command: each answer shows its screen and says what to do next (a prompt to answer with id and input or key, the login card to post for the person's browser step). Never type a password or token (a prompt that asks for one is refused), and take the answers that leave the OS keychain alone: nobody here can answer its dialog. The login is machine-wide: every chat's agent on this station uses it.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -48,11 +48,11 @@ export const LOGIN = {
       },
       "paste": {
         "type": "boolean",
-        "description": "With id: true when its screen says the page it gave hands out a code to paste back here (copy the code and paste it below, enter the verification code): the login card gets a field for the person to enter it, typed at its prompt with Enter. false takes the field away. Only after a page to open (step open); never for a password or token."
+        "description": "With id: true when its screen says the page it gave hands out a code to paste back here (copy the code and paste it below, enter the verification code): the login card gets a field for the person to enter it; you never type it. false takes the field away. Only after a page to open; never for a password or token."
       },
       "station": {
         "type": "string",
-        "description": "Another station of the workspace to log in, by its name or id (station_list lists them): the command runs there, and id, input, key, paste and cancel act on that station's login (give station with them too). Left out: this station."
+        "description": "Another station of the workspace to log in, by its name or id: the command runs there; give station with id, input, key, paste and cancel too. Left out: this station."
       }
     },
     "additionalProperties": false

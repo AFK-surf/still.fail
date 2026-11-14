@@ -1,6 +1,6 @@
 // The agents' tools for background jobs: job_start, job_list, job_log, job_stop,
-// run as the session whose token the MCP request carries. Names, descriptions and input schemas as the Rust's, word for
-// word (test/jobs-tools.test.ts reads them from it).
+// run as the session whose token the MCP request carries. Names and parameters as the Rust's; the descriptions are
+// held short (test/tools-weight.test.ts), the details in src/skills/stillfail-jobs.md.
 import { type Jobs, LOG_LINES, named, tail } from "../jobs/jobs.ts";
 import { joinPath } from "../ops/paths.ts";
 import type { Places } from "../ops/places.ts";
@@ -8,7 +8,7 @@ import type { JobRow } from "../store/store.ts";
 import type { Tool } from "./mcp.ts";
 
 export const JOB_START_DESCRIPTION =
-  "Start a background job: a shell command the station runs apart from your turns, with its output kept in a log. You are told when it ends, and whatever it says on the way: inside the job, `stillfail-job notify <words>` sends you a message (use it for milestones or problems in a long run). Give a port for a web service: it is kept up (started again if it ends), gets PORT in its environment, and the workspace's members can open it through the returned link (post the link where people should see it). Jobs keep running across your turns and across restarts of the station (one that did not survive, say the machine restarted, is started again). For keeping watch over something for a long while (a CI run, a deploy, a metric, a review queue), set watch: while the watch runs, its chat is a watching chat, found under the chat list's 监控中 filter and never archived for being idle; when you then end your turn waiting, you are not asked again when the wait is over, only when the watch says something (`stillfail-job notify`), ends, or someone writes. Watch with a loop that checks and notifies on changes. A check that fails (a command erroring or timing out, an empty answer) is news too: count the failures and notify while they go on, never hide them (2>/dev/null, || true) in a loop that then waits forever. Leave its output in the job's log, not redirected to a file of its own, so people can see each check. Name the chat for it: give your next chat_post in a still.fail chat a title that says what it watches (e.g. 「监控 · PR #482 的 CI」); a chat with a watch running may be renamed so at once.";
+  "Start a background job: a shell command the station runs apart from your turns, with its output kept in a log, for work that outlives a turn. You are told when it ends; inside it, `stillfail-job notify <words>` sends you a message on the way (milestones, problems). With port it is a web service: kept up (started again if it ends), given PORT in its environment, and opened by the workspace's members through the link returned (post it where people should see it). With watch it keeps watch over something for a long while (a CI run, a deploy, a metric, a review queue): its chat shows as watching and is not archived for being idle. Skill stillfail-jobs says the rest: waiting on a job, how a watch checks and notifies, services.";
 
 const text = (args: Record<string, unknown>, key: string): string => (typeof args[key] === "string" ? (args[key] as string) : "");
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
@@ -39,7 +39,7 @@ export function jobTools(jobs: Jobs, workspace: (session: string) => string | nu
           name: { type: "string", description: "A short name for it." },
           cwd: { type: "string", description: "Where it runs; default this session's workspace." },
           port: { type: "integer", minimum: 1024, maximum: 65535, description: "For a web service: the port it listens on (127.0.0.1 is enough)." },
-          watch: { type: "boolean", description: "It keeps watch for a long while (see above). Not with a port." },
+          watch: { type: "boolean", description: "It keeps watch for a long while. Not with a port." },
         },
         required: ["command"],
         additionalProperties: false,

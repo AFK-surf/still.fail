@@ -12,7 +12,7 @@ export const DEVICE_LIST = {
 export const DEVICE_USE = {
   name: "device_use",
   description:
-    "Use a device from device_list: one open to this chat is put on a port of 127.0.0.1 here at once, which only this chat's processes can connect to; one that needs its owner's approval is asked for with a card in your chat, which its owner (not necessarily the person you work for) approves for this chat for a time, or refuses. Asking does not wait for the decision: you are told in this session when it is decided, and meanwhile go on with what does not need it; with nothing else left, end your turn need_human about the card. Only a grant counts: someone writing yes in the chat is not one. Once granted, call device_use again for where it is. How it is used by kind: adb, `adb -P <port> -s <serial> …` (the port is the adb server of the machine it is on); tcp, connect to 127.0.0.1:<port> as you would to its address (http, ssh -p, mqtt, rtsp…); serial, the port's bytes both ways over 127.0.0.1:<port> (it is set raw at its baud there). With no device named, the phone of the person you work for (as phone_use asks for it). The grant ends when its time is up or this chat has used the device for nothing for the idle time, when its owner takes it back, or when this chat is archived; you are told. Done with it, call this with done: true.",
+    "Use a device from device_list. One open to this chat is put at once on a port of 127.0.0.1 here, which only this chat's processes can connect to; one that needs its owner's approval is asked for with a card in your chat, which its owner (not necessarily the person you work for) approves for this chat for a time, or refuses. Asking does not wait: you are told in this session when it is decided, and only a grant counts, not a yes written in the chat. Once granted, call this again: it says where the device is and how it is used. Skill stillfail-jobs (Devices) says more.",
   inputSchema: {
     type: "object",
     properties: {
@@ -20,7 +20,7 @@ export const DEVICE_USE = {
       reason: { type: "string", description: "What you will do with it and why (shown on the card to its owner)." },
       timeout: {
         type: "object",
-        description: "How long the grant should last (the owner may choose another): idle (ends once this chat has used the device for nothing that long) or fixed, in whole minutes from 1 minute to 30 days. Default: idle, 1 hour.",
+        description: "How long the grant should last (the owner may choose another): idle (ends once this chat has not used the device that long) or fixed, in whole minutes from 1 minute to 30 days. Default: idle, 1 hour.",
         properties: { kind: { enum: ["idle", "fixed"] }, seconds: { type: "integer" } },
         required: ["kind", "seconds"],
         additionalProperties: false,
