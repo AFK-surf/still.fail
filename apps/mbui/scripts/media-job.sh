@@ -24,7 +24,18 @@ if [ -n "$prepare" ] && [ ! -s "$prepare" ]; then
 fi
 # The key includes the checked-out and edited app/framework sources, never the scene file. A missing key is an error on
 # the destination: another version's renderer must not silently stand in for the code this job was made from.
-key=$(node "$repo/scripts/native.ts" key "$part" darwin-arm64)
+# A station task's mirror has the sources but no Git metadata, which native.ts needs to hash its inputs: a snapshot
+# made for the key and taken away (the same blobs give the same key as media-dev-build.sh's own snapshot).
+if [ -e "$repo/.git" ]; then
+  key=$(node "$repo/scripts/native.ts" key "$part" darwin-arm64)
+else
+  trap 'rm -rf "$repo/.git"' EXIT
+  (cd "$repo" && git init -q && git add -A && git -c user.name='Media snapshot' -c user.email='media-snapshot@localhost' \
+    -c core.hooksPath=/dev/null -c commit.gpgsign=false commit -qm 'Snapshot for media rendering')
+  key=$(cd "$repo" && node scripts/native.ts key "$part" darwin-arm64)
+  rm -rf "$repo/.git"
+  trap - EXIT
+fi
 mkdir -p "$(dirname "$job")"
 mkdir "$job" || { echo "media-job: job directory already exists: $job" >&2; exit 2; }
 mkdir "$job/scripts"

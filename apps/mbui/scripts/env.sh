@@ -2,6 +2,12 @@
 # toolchain setup (mbui's scripts/env.sh: MBUI_TOOLS, else MoonBit on PATH); then, for mbui's scripts, this module as
 # the app's (MBUI_APP_MOD) and this checkout as still.fail's sources the core is built from (SF_SRC).
 A=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# (still.fail's build station keeps its MoonBit at ~/stillfail-ci/mbui/tools, and a station task's shell has no moon on
+# PATH: taken when nothing else is, so a picture's renderer builds there without being told; CI sets up its own)
+if [ -z "${MBUI_TOOLS:-}" ] && [ -z "${GITHUB_ACTIONS:-}" ] && ! command -v moon > /dev/null \
+  && [ -d "$HOME/stillfail-ci/mbui/tools/moon" ]; then
+  export MBUI_TOOLS=$HOME/stillfail-ci/mbui/tools
+fi
 MBUI_DIR=$(sh "$A/scripts/mbui.sh") || { echo "apps/mbui: no mbui (scripts/mbui.sh)" >&2; exit 1; }
 . "$MBUI_DIR/scripts/env.sh"
 export MBUI_DIR
