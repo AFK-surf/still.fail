@@ -24,13 +24,14 @@ const host = (url: string): string => (URL.canParse(url) ? new URL(url).host || 
 /// each: `by`, by URL) and what it turned off.
 export function waysView(relays: string[], names: Record<string, unknown>, own: string[], off: string[], by: Record<string, string> = {}): WaysView {
   const isOff = (id: string) => off.some((o) => same(o, id));
+  const oursOff = off.includes("ours");
   const named = (url: string) => {
     const n = Object.entries(names).find(([u]) => same(u, url))?.[1];
     return typeof n === "string" && n !== "" ? n : host(url);
   };
   const ours = relays.filter((r, i) => relays.findIndex((o) => same(o, r)) === i);
   const ways: WayRow[] = [
-    ...ours.map((url): WayRow => ({ id: url, kind: "relay", name: named(url), own: false, on: !isOff(url) })),
+    ...ours.map((url): WayRow => ({ id: url, kind: "relay", name: named(url), own: false, on: !oursOff && !isOff(url) })),
     ...own.filter((u) => !ours.some((o) => same(o, u))).map((url): WayRow => {
       const who = Object.entries(by).find(([u]) => same(u, url))?.[1];
       return { id: url, kind: "relay", name: host(url), own: true, ...(who ? { by: who } : {}), on: !isOff(url) };

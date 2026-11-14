@@ -35,8 +35,8 @@ export type WaysView = { relays: OwnRelay[]; off: string[]; at: number; station:
 
 /// At most this many relays of a workspace's own (as cloud/src/relays.ts `MAX_RELAYS` was).
 export const MAX_OWN_RELAYS = 4;
-/// The ways to a station that are no relay, which a workspace may turn off as it may a relay.
-export const WAY_KINDS = ["lan", "tailnet", "direct"] as const;
+/// The ways to a station that are no single relay, which a workspace may turn off as it may a relay (`ours`: all of still.fail's relays).
+export const WAY_KINDS = ["lan", "tailnet", "direct", "ours"] as const;
 
 /// A relay's URL as compared: its normal form without a trailing slash.
 export const sameUrl = (url: string): string => (URL.canParse(url) ? new URL(url).href : url).replace(/\/+$/, "");
@@ -179,42 +179,65 @@ export function addRelay(ways: Ways, ws: string, raw: string, by: string | null)
   });
 }
 
+/// When removing custom relays would leave every relay off (still.fail's were turned off while custom relays were
+/// there), still.fail's come back on so the workspace is never left without a relay.
+function keepRelayOn(ours: string[], relays: OwnRelay[], off: string[]): string[] {
+  if (ours.length === 0) return off;
+  const all = [...ours, ...relays.map((r) => r.url)];
+  const isRelayOff = (u: string) => off.some((w) => sameUrl(w) === sameUrl(u)) || (off.includes("ours") && ours.some((o) => sameUrl(o) === sameUrl(u)));
+  return all.every(isRelayOff) ? off.filter((w) => w !== "ours" && !ours.some((o) => sameUrl(o) === sameUrl(w))) : off;
+}
+
 /// `url` taken out of `ws`'s own relays, and out of the ways turned off.
 export function removeRelay(ways: Ways, ws: string, raw: string): WaysRecord {
   const url = relayUrl(raw, true) ?? String(raw);
   if (!ways.view(ws).relays.some((r) => sameUrl(r.url) === sameUrl(url))) throw new WaysRefusal("not one of this workspace's own relays");
-  return ways.change(ws, (now) => ({ relays: now.relays.filter((r) => sameUrl(r.url) !== sameUrl(url)), off: now.off.filter((w) => sameUrl(w) !== sameUrl(url)) }));
+  const ours = stillFails(ways.cloud);
+  return ways.change(ws, (now) => {
+    const relays = now.relays.filter((r) => sameUrl(r.url) !== sameUrl(url));
+    const off = keepRelayOn(ours, relays, now.off.filter((w) => sameUrl(w) !== sameUrl(url)));
+    return { relays, off };
+  });
 }
 
 /// The whole list of `ws`'s own relays set at once (the app's 连接方式): who added those already there kept, the new ones
 /// `by`; those gone taken out of the ways turned off.
 export function setRelays(ways: Ways, ws: string, raws: unknown[], by: string | null): WaysRecord {
   const urls: string[] = [];
+  const ours = stillFails(ways.cloud);
   for (const raw of raws) {
     const url = relayUrl(raw, insecure(ways.cloud));
     if (url === null) throw new WaysRefusal("not a relay's URL: https://host[:port][/path], with no account, query or fragment");
-    if (!stillFails(ways.cloud).some((u) => sameUrl(u) === sameUrl(url)) && !urls.some((u) => sameUrl(u) === sameUrl(url))) urls.push(url);
+    if (!ours.some((u) => sameUrl(u) === sameUrl(url)) && !urls.some((u) => sameUrl(u) === sameUrl(url))) urls.push(url);
   }
   if (urls.length > MAX_OWN_RELAYS) throw new WaysRefusal(`a workspace has at most ${MAX_OWN_RELAYS} relays of its own`);
-  return ways.change(ws, (now) => ({
-    relays: urls.map((url) => now.relays.find((r) => sameUrl(r.url) === sameUrl(url)) ?? (by ? { url, by } : { url })),
-    off: now.off.filter((w) => !URL.canParse(w) || urls.some((u) => sameUrl(u) === sameUrl(w)) || stillFails(ways.cloud).some((u) => sameUrl(u) === sameUrl(w))),
-  }));
+  return ways.change(ws, (now) => {
+    const relays = urls.map((url) => now.relays.find((r) => sameUrl(r.url) === sameUrl(url)) ?? (by ? { url, by } : { url }));
+    const off = keepRelayOn(
+      ours,
+      relays,
+      now.off.filter((w) => !URL.canParse(w) || urls.some((u) => sameUrl(u) === sameUrl(w)) || ours.some((u) => sameUrl(u) === sameUrl(w))),
+    );
+    return { relays, off };
+  });
 }
 
-/// One way turned on or off for `ws`'s devices: a relay (still.fail's or its own) or a kind of way. A relay stays on: the
-/// web app goes through relays alone, and a device that never reached a station yet knows of no other way there.
+/// One way turned on or off for `ws`'s devices: a relay (still.fail's or its own) or a kind of way (`ours` for all of
+/// still.fail's relays). A relay stays on: the web app goes through relays alone, and a device that never reached a
+/// station yet knows of no other way there.
 export function setWay(ways: Ways, ws: string, way: string, on: boolean): WaysRecord {
+  const ours = stillFails(ways.cloud);
   const own = ways.view(ws).relays.map((r) => r.url);
-  const relays = [...stillFails(ways.cloud), ...own];
+  const relays = [...ours, ...own];
   const isKind = (WAY_KINDS as readonly string[]).includes(way);
   const relay = isKind ? null : relays.find((u) => sameUrl(u) === sameUrl(way)) ?? null;
-  if (!isKind && relay === null) throw new WaysRefusal("no such way: a relay of the workspace's, or lan, tailnet, direct");
+  if (!isKind && relay === null) throw new WaysRefusal("no such way: a relay of the workspace's, or ours, lan, tailnet, direct");
   const id = relay ?? way;
   return ways.change(ws, (now) => {
-    const off = now.off.filter((w) => (isKind ? w !== id : sameUrl(w) !== sameUrl(id)));
+    const off = now.off.filter((w) => (id === "ours" ? w !== "ours" && !ours.some((o) => sameUrl(o) === sameUrl(w)) : isKind ? w !== id : sameUrl(w) !== sameUrl(id)));
     if (!on) off.push(id);
-    if (relays.every((u) => off.some((w) => sameUrl(w) === sameUrl(u)))) throw new WaysRefusal("the last relay stays on: the web app and a device new to the workspace reach its stations by relays alone");
+    const isRelayOff = (u: string) => off.some((w) => sameUrl(w) === sameUrl(u)) || (off.includes("ours") && ours.some((o) => sameUrl(o) === sameUrl(u)));
+    if (relays.every(isRelayOff)) throw new WaysRefusal("the last relay stays on: the web app and a device new to the workspace reach its stations by relays alone");
     return { ...now, off };
   });
 }

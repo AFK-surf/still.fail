@@ -648,15 +648,14 @@ fn ws_member_panel(core : Core, here : Here, m : Json, name : String, from : @sf
 }
 
 ///|
-/// How the workspace's members' devices reach its stations (cloud setWay), by the row that opened it: still.fail's
-/// relays, each on or off; the workspace's own, each removed, another added (closed for the asking, a step further in);
-/// the ways straight to a station (its LAN, Tailscale, a path punched through), each on or off. Its managers' to change;
-/// the others see them. A panel of nodes of the window's tree, made once as it opens, each row made as the core lists
-/// its way and bound to what the core says now (`here`'s workspace, its `workspaceWays`): what a change brings back
-/// shows at once, the viewer no longer a manager turns nothing of it. A switch shows the core's word for its way, turned
-/// in its handler; while a way is being set, a spinner before each switch and none turned.
+/// How the workspace's members' devices reach its stations (cloud setWay, setRelays), by the row that opened it: the
+/// workspace's own relays first (each removed, another added right in the panel), then still.fail's relays as one master
+/// switch (turned off only while the workspace has a relay of its own). Its managers' to change; the others see them.
+/// A panel of nodes of the window's tree, made once as it opens and bound to what the core says now (`here`'s workspace,
+/// its `workspaceWays`): what a change brings back shows at once, the viewer no longer a manager turns nothing of it.
 fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
-  @sf.panel_nodes(@sf.t("android-settings.ways.title"), from~, form=true, description=@sf.t("android-settings.ways.lead"), fn(v, close) {
+  let new_relay = @ui.Field::new()
+  @sf.panel_nodes(@sf.t("android-settings.ways.title"), from~, form=true, description=@sf.t("android-settings.ways.lead"), fn(v, _close) {
     let view = fn() { workspace_view(core, here).value }
     let manager = fn() {
       let role = text(view(), "role")
@@ -664,41 +663,22 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
     }
     let ws = fn() { text(view(), "id") }
     let ways = fn() { items((core.topic)("workspaceWays", { "workspace": str(ws()) }).get().value, "ways") }
+    let ours_ways = fn() { ways().filter(fn(w) { text(Some(w), "kind") == "relay" && !flag(Some(w), "own") }) }
     let relays = fn() { ways().filter(fn(w) { flag(Some(w), "own") }).map(fn(w) { text(Some(w), "id") }) }
+    let ours_on = fn() { relays().is_empty() || ours_ways().iter().any(fn(w) { flag(Some(w), "on") }) }
+    let ours_note = fn() {
+      if !manager() {
+        ours_ways().map(fn(w) { text(Some(w), "name") }).filter(fn(n) { n != "" }).join("、")
+      } else if relays().is_empty() {
+        @sf.t("android-settings.ways.oursNeedOwn")
+      } else {
+        @sf.t("android-settings.ways.oursNote")
+      }
+    }
     let busy = fn() { is_doing(core, ["workspace.setWay"], [("workspace", ws())]) }
     let setting = fn() { is_doing(core, ["workspace.setRelays"], [("workspace", ws())]) }
     let id = fn(w : Json) { text(Some(w), "id") }
-    // (each way's row in a box of no padding of its own: a row coming or going makes its way whole, its padding with it)
-    let turn = fn(row : @view.View, w : @signals.Signal[Json], title : () -> String, note : () -> String) {
-      row.box(fn(b) {
-        ws_way_row_node(b, title, note, fn(e) {
-          e.show(busy, fn(s) { @sf.spinner_node(s, size=@sf.spinner_size) |> ignore })
-          @sf.switch_node(
-            e,
-            fn() { flag(Some(w.get()), "on") },
-            fn(on) {
-              @settings.act(
-                core,
-                @sf.t("android-settings.ways.setWhat"),
-                "workspace.setWay",
-                obj([("workspace", str(@signals.untracked(ws))), ("way", str(id(@signals.untracked(fn() { w.get() })))), ("on", Json::boolean(on)), ("account", str(here.sub))]),
-              )
-            },
-            title,
-            disabled=fn() { !manager() || busy() },
-          )
-        })
-      })
-      |> ignore
-    }
     let host = fn(url : String) { url.replace(old="https://", new="").replace(old="http://", new="") }
-    // still.fail's relays
-    ws_way_label_node(v, fn() { @sf.t("android-settings.ways.ours", args=[("app", "still.fail")]) })
-    v.each(fn() { ways().filter(fn(w) { text(Some(w), "kind") == "relay" && !flag(Some(w), "own") }) }, id, fn(row, w) {
-      turn(row, w, fn() { text(Some(w.get()), "name") }, fn() { "" })
-    })
-    // its own: removed, added (one not wanted is taken away, not turned off)
-    v.show(fn() { manager() || relays().length() > 0 }, fn(l) { ws_way_label_node(l, fn() { @sf.t("android-settings.ways.own") }) })
     // (who added each, as its stations keep it: an agent's chat, a person)
     let added_by = fn(url : String) {
       match ways().filter(fn(w) { id(w) == url }).get(0) {
@@ -709,112 +689,136 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
         None => ""
       }
     }
-    v.each(relays, fn(url) { url }, fn(row, url) {
-      row.box(fn(b) {
-        ws_way_row_node(b, fn() { host(url.get()) }, fn() { added_by(url.get()) }, fn(e) {
-          e.show(manager, fn(k) {
-            @sf.button_node(
-              k,
-              fn() { @sf.t("android-settings.members.remove") },
-              fn() {
-                let url = @signals.untracked(fn() { url.get() })
-                let all = @signals.untracked(relays)
-                @settings.act(
-                  core,
-                  @sf.t("android-settings.relays.removeWhat"),
-                  "workspace.setRelays",
-                  obj([("workspace", str(@signals.untracked(ws))), ("relays", Json::array(all.filter(fn(r) { r != url }).map(str))), ("account", str(here.sub))]),
-                  done=@sf.t("android-settings.relays.removed"),
-                )
-              },
-              tone=Ghost,
+    let can_add = fn() { !setting() && !new_relay.text().trim(chars=" \t\n").is_empty() }
+    let add_relay = fn() {
+      guard @signals.untracked(can_add) else { return }
+      let line = @signals.untracked(fn() { new_relay.text().trim(chars=" \t\n").to_owned() })
+      new_relay.set("")
+      let next = @signals.untracked(relays).copy()
+      next.push(line)
+      @settings.act(
+        core,
+        @sf.t("android-settings.relays.add"),
+        "workspace.setRelays",
+        obj([("workspace", str(@signals.untracked(ws))), ("relays", Json::array(next.map(str))), ("account", str(here.sub))]),
+        done=@sf.t("android-settings.relays.added"),
+      )
+    }
+    v.box(fn(body) {
+      @sf.style_node(body, fn() { ws_way_body })
+      // add a custom relay at the top of the panel
+      body.show(fn() { manager() && relays().length() < 4 }, fn(a) {
+        a.box(fn(row) {
+          @sf.style_node(row, fn() { @sf.panel_words_in_node(row).then(ws_way_add_row) })
+          row.box(fn(f) {
+            @sf.style_node(f, fn() { ws_way_add_input }, in_row=true)
+            @sf.input_node(
+              f,
+              new_relay,
+              placeholder="https://relay.example.com",
+              label=@sf.t("android-settings.relays.add"),
               disabled=setting,
+              submitted=fn(_) { add_relay() },
             )
             |> ignore
           })
-        })
-      })
-      |> ignore
-    })
-    // (a row of its own, its words on the line the others' are, in the link's ink; pressed while nothing is being set)
-    v.show(manager, fn(a) {
-      a.box(fn(row) {
-        @sf.style_node(row, fn() { @sf.panel_words_in_node(row).then(ws_way_line) })
-        let words = fn() { @sf.t(if setting() { "common.saving" } else { "android-settings.relays.add" }) }
-        @sf.presses_node(row, fn() {
-          guard !@signals.untracked(setting) else { return }
-          let ws = @signals.untracked(ws)
-          let relays = @signals.untracked(relays)
-          close()
-          ask(
-            @sf.t("android-settings.relays.add"),
-            "",
-            "https://relay.example.com",
-            @sf.t("android-settings.relays.addAction"),
-            hint=@sf.t("android-settings.relays.hint"),
-            fn(line) {
-              let next = relays.copy()
-              next.push(line)
-              @settings.act(
-                core,
-                @sf.t("android-settings.relays.add"),
-                "workspace.setRelays",
-                obj([("workspace", str(ws)), ("relays", Json::array(next.map(str))), ("account", str(here.sub))]),
-                done=@sf.t("android-settings.relays.added"),
-              )
-            },
+          |> ignore
+          @sf.button_node(
+            row,
+            fn() { @sf.t("android-settings.relays.addAction") },
+            add_relay,
+            tone=Primary,
+            busy=setting,
+            disabled=fn() { !can_add() },
           )
+          |> ignore
         })
-        row.says(By(fn() { Some(@view.said(Button, label=words())) })) |> ignore
-        @sf.words_node(row, words, fn() { ws_way_link }) |> ignore
+        |> ignore
       })
-      |> ignore
+      // its own relays: each removed right in the panel (one not wanted is taken away, not turned off)
+      body.each(relays, fn(url) { url }, fn(row, url) {
+        row.box(fn(b) {
+          ws_way_row_node(b, fn() { host(url.get()) }, fn() { added_by(url.get()) }, fn(e) {
+            e.show(manager, fn(k) {
+              @sf.button_node(
+                k,
+                fn() { @sf.t("android-settings.members.remove") },
+                fn() {
+                  let url = @signals.untracked(fn() { url.get() })
+                  let all = @signals.untracked(relays)
+                  @settings.act(
+                    core,
+                    @sf.t("android-settings.relays.removeWhat"),
+                    "workspace.setRelays",
+                    obj([("workspace", str(@signals.untracked(ws))), ("relays", Json::array(all.filter(fn(r) { r != url }).map(str))), ("account", str(here.sub))]),
+                    done=@sf.t("android-settings.relays.removed"),
+                  )
+                },
+                tone=Plain,
+                disabled=setting,
+              )
+              |> ignore
+            })
+          })
+        })
+        |> ignore
+      })
+      // still.fail's relays: one switch for all of them, what it does under it
+      let title = fn() { @sf.t("android-settings.ways.ours") }
+      ws_way_row_node(body, title, ours_note, last=true, fn(e) {
+        e.show(busy, fn(s) { @sf.spinner_node(s, size=@sf.spinner_size) |> ignore })
+        @sf.switch_node(
+          e,
+          ours_on,
+          fn(on) {
+            @settings.act(
+              core,
+              @sf.t("android-settings.ways.setWhat"),
+              "workspace.setWay",
+              obj([("workspace", str(@signals.untracked(ws))), ("way", str("ours")), ("on", Json::boolean(on)), ("account", str(here.sub))]),
+            )
+          },
+          title,
+          disabled=fn() { !manager() || busy() || relays().is_empty() },
+        )
+      })
     })
-    // straight to a station
-    ws_way_label_node(v, fn() { @sf.t("android-settings.ways.straight") })
-    v.each(fn() { ways().filter(fn(w) { ws_way_straight(text(Some(w), "kind")) is Some(_) }) }, id, fn(row, w) {
-      let kind = @signals.untracked(fn() { text(Some(w.get()), "kind") })
-      let (title, note) = ws_way_straight(kind).unwrap()
-      turn(row, w, fn() { @sf.t(title) }, fn() { @sf.t(note) })
-    })
-    // (room under the last: its switch out of the panel's corner, not set in it)
-    v.box(fn(e) { @sf.style_node(e, fn() { ws_way_end }) }) |> ignore
+    |> ignore
   })
 }
 
 ///|
-/// A way straight to a station by its `kind`: the keys of its title and of its note (its LAN, Tailscale, a path punched
-/// through); none for another kind.
-fn ws_way_straight(kind : String) -> (String, String)? {
-  match kind {
-    "lan" => Some(("android-settings.ways.lan", "android-settings.ways.lanNote"))
-    "tailnet" => Some(("android-settings.ways.tailnet", "android-settings.ways.tailnetNote"))
-    "direct" => Some(("android-settings.ways.direct", "android-settings.ways.directNote"))
-    _ => None
-  }
-}
-
-///|
 /// A row of the ways' panel in `parent`: its title, `note` under it (none where it says ""), what `end` makes at its end
-/// (a switch, a button); on the panel's words' line, as its description and its groups' labels are. Each as it is said
-/// now.
-fn ws_way_row_node(parent : @view.View, title : () -> String, note : () -> String, end : (@view.View) -> Unit) -> Unit {
+/// (a switch, a button) aligned with its first line (`title`); on the panel's words' line, as its description and its
+/// groups' labels are. Each as it is said now.
+fn ws_way_row_node(
+  parent : @view.View,
+  title : () -> String,
+  note : () -> String,
+  end : (@view.View) -> Unit,
+  last? : Bool = false,
+) -> Unit {
   parent.box(fn(r) {
-    @sf.style_node(r, fn() { @sf.panel_words_in_node(r).then(ws_way_line) })
+    let line = if last { ws_way_last_line } else { ws_way_line }
+    @sf.style_node(r, fn() { @sf.panel_words_in_node(r).then(line) })
     r.box(fn(w) {
       @sf.style_node(w, fn() { ws_way_words }, in_row=true)
       @sf.words_node(w, title, fn() { ws_way_title }) |> ignore
-      w.show(fn() { note() != "" }, fn(n) { @sf.words_node(n, note, fn() { @sf.meta }) |> ignore })
+      w.show(fn() { note() != "" }, fn(n) { @sf.words_node(n, note, fn() { @sf.meta.then(@sf.in_lines) }) |> ignore })
     })
     |> ignore
-    end(r)
+    r.box(fn(e) {
+      @sf.style_node(e, fn() { ws_way_end_line }, in_row=true)
+      end(e)
+    })
+    |> ignore
   })
   |> ignore
 }
 
 ///|
-/// A group's label in the ways' panel in `parent` (still.fail's relays, its own, straight to a station): quiet, on the
-/// words' line, `words` as they are said now.
+/// A group's label in a panel in `parent` (station_retire_panel's): quiet, on the words' line, `words` as they are said
+/// now.
 fn ws_way_label_node(parent : @view.View, words : () -> String) -> Unit {
   parent.box(fn(l) {
     @sf.style_node(l, fn() { @sf.panel_words_in_node(l).then(ws_way_label_at) })
@@ -825,7 +829,19 @@ fn ws_way_label_node(parent : @view.View, words : () -> String) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter py=S1_5")
+let ws_way_body : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_line : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart py=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_last_line : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart pt=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_end_line : @ui.Style = @ui.css("row gap=S2 align=ACenter h=S5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -837,15 +853,15 @@ let ws_way_label_at : @ui.Style = @ui.css("pt=S4 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_end : @ui.Style = @ui.css("h=S3")
+let ws_way_add_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter pt=S1_5 pb=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_add_input : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let ws_way_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg)
-
-///|
-// kept across runs: a value (no field of it changes)
-let ws_way_link : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=AccentText)
 
 ///|
 let ws_avatar : Double = 28.0

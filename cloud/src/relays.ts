@@ -51,11 +51,12 @@ export function parseRelays(kept: unknown): string[] {
 export const WAY_KINDS = ["lan", "tailnet", "direct"] as const;
 
 /** Every way a workspace's devices may reach its stations: still.fail's relays, its own, then the kinds that are no
- * relay; each on unless among `off`. */
+ * relay; each on unless among `off` (`ours` turns off all of still.fail's relays). */
 export function waysOf(env: RelayEnv, own: string[], off: string[]): WayView[] {
   const isOff = (id: string) => off.some((o) => sameUrl(o) === sameUrl(id));
+  const oursOff = off.includes("ours");
   return [
-    ...relayUrls(env).map((url): WayView => ({ id: url, kind: "relay", ...(env.RELAY_NAMES?.[url] ? { name: env.RELAY_NAMES[url] } : {}), on: !isOff(url) })),
+    ...relayUrls(env).map((url): WayView => ({ id: url, kind: "relay", ...(env.RELAY_NAMES?.[url] ? { name: env.RELAY_NAMES[url] } : {}), on: !oursOff && !isOff(url) })),
     ...own.map((url): WayView => ({ id: url, kind: "relay", own: true, on: !isOff(url) })),
     ...WAY_KINDS.map((kind): WayView => ({ id: kind, kind, on: !off.includes(kind) })),
   ];

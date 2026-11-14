@@ -1168,22 +1168,25 @@ export class Mesh {
   /// is not known here.
   #waysFor(addr: string): string[] {
     const relays = this.relaysFor(addr);
-    if (this.relays.some((r) => this.#isOff(addr, r))) return relays;
+    if (this.#isOff(addr, "ours") || this.relays.some((r) => this.#isOff(addr, r))) return relays;
     return [...relays, ...this.entries.filter((e) => !relays.some((r) => sameRelay(r, e)))];
   }
 
-  /// Whether the station's workspace turned `way` off (a relay, or a kind of way: LAN, TAILNET, DIRECT). A mesh through
-  /// relays alone (`MeshEnv.relayOnly`) has the ways at an address off for every station.
+  /// Whether the station's workspace turned `way` off (a relay, or a kind of way: LAN, TAILNET, DIRECT, or `ours` for
+  /// all of still.fail's relays). A mesh through relays alone (`MeshEnv.relayOnly`) has the ways at an address off for
+  /// every station.
   #isOff(addr: string, way: string): boolean {
     if (this.#env.relayOnly === true && (way === LAN || way === TAILNET)) return true;
-    return (this.#off.get(addr) ?? []).some((o) => o === way || sameRelay(o, way));
+    const off = this.#off.get(addr) ?? [];
+    if (off.includes("ours") && (way === "ours" || this.relays.some((o) => sameRelay(o, way)))) return true;
+    return off.some((o) => o === way || sameRelay(o, way));
   }
 
   /// Whether the station is dialled on the main endpoint: not while its workspace turned off any relay it is at home on
   /// (still.fail's; which one it is on is iroh's to choose, and the station's answers come there) or the paths iroh
   /// punches through, which the main endpoint alone goes on. Each relay left is reached on its own endpoint then.
   #mainOn(addr: string): boolean {
-    return !this.#isOff(addr, DIRECT) && !this.relays.some((r) => this.#isOff(addr, r));
+    return !this.#isOff(addr, DIRECT) && !this.#isOff(addr, "ours") && !this.relays.some((r) => this.#isOff(addr, r));
   }
 
   /// Whether a way open to the station goes a way its workspace turned off.

@@ -63,6 +63,13 @@ test("what is refused: no relay URL, still.fail's own, a fifth, one not there, t
   // A relay taken away goes from those off too.
   removeRelay(s.ways, WS, "https://1.test");
   assert.deepEqual(s.ways.view(WS).off, [...OURS, "https://2.test", "https://3.test", "lan"]);
+  // Turning off `ours` turns off all of still.fail's relays at once; taking away the last custom relay turns them back on.
+  setWay(s.ways, WS, "ours", false);
+  assert.deepEqual(s.ways.view(WS).off, ["https://2.test", "https://3.test", "lan", "ours"]);
+  assert.throws(() => setWay(s.ways, WS, "https://4.test", false), /last relay stays on/);
+  setRelays(s.ways, WS, [], null);
+  assert.deepEqual(s.ways.view(WS).off, ["lan"], "still.fail's relays come back on when the last custom relay is removed");
+  assert.throws(() => setWay(s.ways, WS, "ours", false), /last relay stays on/);
 });
 
 test("the whole list set from the app: who added those already there is kept", () => {
