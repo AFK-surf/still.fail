@@ -1,6 +1,7 @@
 // Pending vault requests: filled a bounded batch at a time from old requests and maintained with each change.
 // Creating an ordinary SQLite index over the old table would scan and sort the entire history at station startup.
 import type { DatabaseSync } from "node:sqlite";
+import { installSchema } from "./schema-install.ts";
 import { backfillVaultMembers, vaultMembersComplete } from "./member-index.ts";
 
 // `save` follows JavaScript truthiness: a plain-library request or a save is decided by its owner, a use of a vault
@@ -139,15 +140,7 @@ export const PENDING_SEED = `SELECT r.id, r.body FROM vault_pending_lookup p
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? AND p.id > ? ORDER BY p.id LIMIT ?`;
 export const PENDING_BACKFILL_AFTER = "SELECT id FROM vault_requests WHERE ws = ? AND id > ? ORDER BY id LIMIT ?";
 export function initializePendingIndex(db: DatabaseSync): void {
-  db.exec("SAVEPOINT vault_pending_schema");
-  try {
-    db.exec(SCHEMA);
-    db.exec("RELEASE vault_pending_schema");
-  } catch (error) {
-    db.exec("ROLLBACK TO vault_pending_schema");
-    db.exec("RELEASE vault_pending_schema");
-    throw error;
-  }
+  installSchema(db, "vault_pending_schema", SCHEMA);
 }
 
 export function pendingIndexComplete(db: DatabaseSync, ws: string): boolean {

@@ -371,6 +371,14 @@ if part ts; then
     } | grep -nE '\b(access|appendFile|chmod|chown|close|copyFile|cp|exists|fchmod|fchown|fdatasync|fstat|fsync|ftruncate|futimes|lchown|link|lstat|lutimes|mkdir|mkdtemp|open|opendir|read|readdir|readFile|readlink|readv|realpath|rename|rm|rmdir|stat|statfs|symlink|truncate|unlink|utimes|write|writeFile|writev|exec|execFile|spawn|gzip|gunzip|deflate|deflateRaw|inflate|inflateRaw|unzip|brotliCompress|brotliDecompress|zstdCompress|zstdDecompress)Sync(\.native)?\(' \
       | grep -v 'sync:' > "$tmp/syncs" || true
     step "the station's main thread waits on nothing (in what this adds)" sh -c "! grep . '$tmp/syncs'"
+    # A database the process serving writes as the next one starts beside it (a handover): what a change adds opens no
+    # SQLite connection without a busy timeout, and begins no transaction but BEGIN IMMEDIATE outside one already open:
+    # a deferred BEGIN or a SAVEPOINT begun outside a transaction that reads and then writes is refused the write at once,
+    # with no busy timeout waited ("database is locked": a station's next process stopped by itself, 2026-11-14). One that
+    # only reads, or one of its own (":memory:", a file no other connection opens), says so on its line with "deferred:".
+    added 'station/src/*.ts' | grep -nE 'new DatabaseSync\(' | grep -vE 'timeout|":memory:"|deferred:' > "$tmp/sqlite" || true
+    added 'station/src/*.ts' | grep -nE 'exec\(["`](BEGIN( DEFERRED)?["`;]|SAVEPOINT )' | grep -v 'deferred:' >> "$tmp/sqlite" || true
+    step "a starting process waits its turn for the database (in what this adds)" sh -c "! grep . '$tmp/sqlite'"
   fi
   # No way into a station from outside (AGENTS.md): every socket a station listens on is this machine's own, and says
   # so on its line (127.0.0.1; the fd the launcher holds, a Unix socket's path); the mesh's endpoint is bound by

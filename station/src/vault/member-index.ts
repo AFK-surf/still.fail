@@ -1,6 +1,7 @@
 // The current members of each vault, for finding a member's vaults without reading everyone else's.
 // Old vaults are filled in small transactions; triggers keep versions written on either side of the cursor current.
 import type { DatabaseSync } from "node:sqlite";
+import { installSchema } from "./schema-install.ts";
 
 // Old databases may contain unreadable vault bodies. Keep those separate so they neither stop another vault's
 // preparation nor silently change the old request-list behavior when one of them is actually referenced.
@@ -134,15 +135,7 @@ END;
 `;
 
 export function initializeVaultMembers(db: DatabaseSync): void {
-  db.exec("SAVEPOINT vault_member_schema");
-  try {
-    db.exec(SCHEMA);
-    db.exec("RELEASE vault_member_schema");
-  } catch (error) {
-    db.exec("ROLLBACK TO vault_member_schema");
-    db.exec("RELEASE vault_member_schema");
-    throw error;
-  }
+  installSchema(db, "vault_member_schema", SCHEMA);
 }
 
 export function vaultMembersComplete(db: DatabaseSync, ws: string): boolean {
