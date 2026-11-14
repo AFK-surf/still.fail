@@ -202,6 +202,9 @@ type Part = {
   /// Where the chain moved: the stations whose refusal said this device is left out of the state in force there
   /// (station/src/mesh/serve.ts `leftOf`), each with the devices it said to ask (a hint: whom it dials lets nobody in).
   left: Map<string, string[]>;
+  /// Of those, whether each said the list names an app device of this device's person (its `apps`; a station from
+  /// before says nothing): a web page none of whose person's apps is named can be let in by nobody (`needsAppIn`).
+  leftApps: Map<string, boolean>;
   /// Where the chain moved: this device's try was approved here this run (views/pair.ts `prove`), so a station that
   /// refuses it still may not have taken what let it in yet, and is tried again shortly, as one behind is (`refused`).
   approved: boolean;
@@ -345,7 +348,7 @@ export function live<D extends { exp?: unknown }>(d: D | undefined, at: number):
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ force: null, refused: new Map(), left: new Map(), approved: false, behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null, turn: Semaphore.makeUnsafe(1), forks: new Set(), shown: new Set(), carried: new Set(), handled: new Set(), tries: new Map(), again: new Map(), delivering: { running: false, again: false } }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ force: null, refused: new Map(), left: new Map(), leftApps: new Map(), approved: false, behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null, turn: Semaphore.makeUnsafe(1), forks: new Set(), shown: new Set(), carried: new Set(), handled: new Set(), tries: new Map(), again: new Map(), delivering: { running: false, again: false } }));
 
 /// This device's base key known: kept for every workspace.
 const knowBase = (inner: Inner, ws: string, base: string) => {
@@ -1227,12 +1230,16 @@ function heardOut(inner: Inner, ws: string, raw: unknown): void {
 function heardLeft(inner: Inner, ws: string, station: string, raw: unknown): void {
   const p = part(inner, ws);
   const ids = isObject(raw) ? arr(raw.approvers).filter((x): x is string => typeof x === "string" && /^[0-9a-f]{64}$/.test(x)).slice(0, LEFT_MOST) : null;
+  const apps = ids !== null && typeof (raw as J).apps === "boolean" ? (raw as J).apps as boolean : undefined;
   const was = p.left.get(station);
+  const appsWere = p.leftApps.get(station);
+  if (apps === undefined) p.leftApps.delete(station);
+  else p.leftApps.set(station, apps);
   if (ids === null) {
     if (was === undefined) return;
     p.left.delete(station);
   } else {
-    if (was !== undefined && was.join() === ids.join()) return;
+    if (was !== undefined && was.join() === ids.join() && appsWere === apps) return;
     p.left.set(station, ids);
   }
   touch(inner, ws);
@@ -1258,6 +1265,17 @@ export function leftIn(inner: Inner, ws: string): string[] | null {
   const p = inner.workspaces.get(ws)?.own.get("lock") as Part | undefined;
   if (!p || p.left.size === 0 || !movedHere(inner, ws)) return null;
   return [...new Set([...p.left.values()].flat())];
+}
+
+/// Whether this web page, left out of moved workspace `ws` (`leftIn`, the state not given it), is one nobody can let in:
+/// its stations said the list names no app device of its person's (their refusal's `apps`, station/src/mesh/serve.ts
+/// `leftOf`), and only their own app approves a web page there (views/pair.ts `movedPlace`), so it asks nobody and says
+/// to install an app first (the owner, 2026-11-13: 「开了安全模式那就需要 app」). A station from before says nothing:
+/// as before, able to ask.
+export function needsAppIn(inner: Inner, ws: string): boolean {
+  if (inner.host.appKeys === true || leftIn(inner, ws) === null || inForceOf(inner, ws).said !== "waiting") return false;
+  const said = [...part(inner, ws).leftApps.values()];
+  return said.length > 0 && !said.includes(true);
 }
 
 /// Who took this device's person out of moved workspace `ws`, and when (unix seconds), by what is kept here: of the
@@ -2444,7 +2462,9 @@ export function lockView(inner: Inner, ws: string): J {
   // was turned on were; or its key since lost): it may be made one that signs, approved face to face as a new one is.
   const unsigned = locked && mine !== undefined && mine.kind === "app" && inner.host.appKeys === true && signers.has(inner) && !signs;
   if (unsigned && typeof mine.sign_key === "string") recover(inner, mine.sign_key);
-  const pair = locked && !waits && (mine === undefined || unsigned) ? pairs.mine(inner, own && sub !== null ? personOf(sub) : ws) : null;
+  // A web page left out whose person has no app in the list: nobody could approve it (`needsAppIn`), so it asks nobody.
+  const needsApp = needsAppIn(inner, ws);
+  const pair = locked && !waits && !needsApp && (mine === undefined || unsigned) ? pairs.mine(inner, own && sub !== null ? personOf(sub) : ws) : null;
   // The devices its try dials here, as people know them (which machine, a phone or a computer), the most lately used
   // first, those showing a code before them: the person opens still.fail on one of those (2026-11-05: "到底是哪个设备会
   // 弹出来呀？", a web page of theirs, or an app not approved, shows nothing). Each a row of the page's list, its name
@@ -2485,7 +2505,7 @@ export function lockView(inner: Inner, ws: string): J {
       device: base, code: base ? shortCode(base) : null, kind: inner.host.appKeys ? "app" : "web",
       confirmed: mine !== undefined, daysLeft: typeof mine?.exp === "number" ? daysLeft(mine.exp - at) : null,
       // Not in the lock: it waits to be confirmed, and asks by hand.
-      waiting: locked && !waits && base !== null && mine === undefined,
+      waiting: locked && !waits && !needsApp && base !== null && mine === undefined,
       ...(unsigned ? { unsigned: true } : {}),
       // (its person's own lock is what it joins: the pair below is that one's)
       ...(own && (mine === undefined || unsigned) ? { ownLock: true } : {}),
@@ -2493,6 +2513,8 @@ export function lockView(inner: Inner, ws: string): J {
       pair,
       // Its person taken out of a moved workspace: by whom and when, and whom to ask (`outText`).
       ...(out !== null ? { outText: out } : {}),
+      // A web page left out that nobody could approve: to install an app first (`needsAppIn`).
+      ...(needsApp ? { needsAppText: t("core-misc.lock.needsApp") } : {}),
     },
     signers: [...f.devices.values()].filter((d) => typeof d.sign_key === "string").length,
     members,

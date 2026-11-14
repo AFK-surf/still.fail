@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, approvedHere, asked, baseOf, leftIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
+import { Lock, approvedHere, asked, baseOf, leftIn, needsAppIn, deviceText, fold, held, inForceOf, live, lockSeen, movedHere, movedWorks, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, refusedAgain, sayAdmit, signerKnown, signerLoading, signerOf, stateOf, unnote, view, withBound, notedRole, roleText } from "./lock.ts";
 import type { Said } from "../lock-statements.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -631,8 +631,9 @@ function drop(y: Trying): void {
 /// the devices that may approve it in them: its person's own that sign, and the owners' and admins' while the person
 /// has none that signs (their first; as the checked lock says, where it checks out: views/pair.ts `placesFor`).
 /// `approvers`: those of each workspace.
-function waitingIn(inner: Inner, base: string): { workspaces: string[]; approvers: Map<string, string[]> } {
+function waitingIn(inner: Inner, base: string): { workspaces: string[]; approvers: Map<string, string[]>; needsApp: string[] } {
   const workspaces: string[] = [];
+  const needsApp: string[] = [];
   const approvers = new Map<string, string[]>();
   const signer = signerOf(inner);
   for (const [ws, sub] of inner.workspaces.owned()) {
@@ -659,6 +660,12 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
       if (inner.host.appKeys === true && personal.standing(sub) !== "none" && personal.standing(sub) !== "member") continue;
       workspaces.push(ws);
       const left = force.said === "waiting" ? leftIn(inner, ws) : null;
+      // (a web page nobody could approve there asks nobody, views/lock.ts `needsAppIn`)
+      if (left !== null && needsAppIn(inner, ws)) {
+        workspaces.pop();
+        needsApp.push(ws);
+        continue;
+      }
       if (left !== null) {
         approvers.set(ws, left.filter((id) => id !== base));
         continue;
@@ -687,7 +694,7 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
     }
     approvers.set(ws, here);
   }
-  return { workspaces, approvers };
+  return { workspaces, approvers, needsApp };
 }
 
 /// The log of its person's own an app brings to the moved workspaces it waits in (`admitOf` on the device it meets
@@ -743,9 +750,12 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
     // first, as the person presses to ask, its lock read of them. Nothing tells a refused device that its person's log
     // said it meanwhile (their app, personal-lock.ts `#addWebs`), and nothing tries it on a timer; where one lets it in
     // now there is nothing to ask there, and the page, as before meanwhile (not confirmed, able to ask), is in.
-    const left = waitingIn(inner, base).workspaces.filter((ws) => leftIn(inner, ws) !== null);
+    const was = waitingIn(inner, base);
+    const left = [...was.workspaces, ...was.needsApp].filter((ws) => leftIn(inner, ws) !== null);
     yield* Effect.forEach(left, (ws) => Effect.ignore(Effect.andThen(Effect.sync(() => refusedAgain(inner, ws)), read(inner, ws)), { log: "Unhandled", message: "left out: tried again" }), { concurrency: "unbounded", discard: true });
-    const { workspaces, approvers } = waitingIn(inner, base);
+    const { workspaces, approvers, needsApp } = waitingIn(inner, base);
+    // (a web page whose person has no app in the list: nobody could approve it, so it says to install one first)
+    if (workspaces.length === 0 && needsApp.length > 0) return yield* Effect.fail(new CoreError("lock_needs_app", t("core-misc.lock.needsApp")));
     if (workspaces.length === 0 && left.length > 0) return null;
     if (workspaces.length === 0) return yield* Effect.fail(CoreError.invalid("this device waits in no workspace"));
     const y = trying(inner, workspaces);

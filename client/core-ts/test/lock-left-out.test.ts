@@ -40,8 +40,9 @@ type J = any;
 /// What a trusted device answers once the code is confirmed (it signs what lets the new one in first), by its base id.
 type Approver = { where: (hello: J) => string[]; approve: (hello: J) => J };
 
-/// `named`: s1 a member by X's log. `web`: this core a web page. `waiting`: the station given no root's log.
-async function setUp(o: { named?: boolean; web?: boolean; waiting?: boolean } = {}) {
+/// `named`: s1 a member by X's log (`noApp`: a log no station was given, so naming no app of s1's). `web`: this core a
+/// web page. `waiting`: the station given no root's log. `older`: a station from before its refusal said `apps`.
+async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const alice = new Log("r1"), bob = new Log("r2"), x = new Log("s1");
@@ -76,7 +77,7 @@ async function setUp(o: { named?: boolean; web?: boolean; waiting?: boolean } = 
   c.takeLock([first, moved], null, true);
   // (as each member's app device brings them, POST /lock/person)
   const bring = (l: Log) => void brought(c, l, true, "ws");
-  for (const l of o.waiting ? [bob] : o.named ? [alice, bob, x] : [alice, bob]) bring(l);
+  for (const l of o.waiting ? [bob] : o.named && !o.noApp ? [alice, bob, x] : [alice, bob]) bring(l);
   const viewer = viewerOf("s1", { base }, "member", "ws");
   /// What the station does to each of its asks: `lie`, a device its refusals name to ask in place of those it would.
   const st = { lie: null as string | null, refusals: [] as J[], admitted: 0 };
@@ -91,6 +92,7 @@ async function setUp(o: { named?: boolean; web?: boolean; waiting?: boolean } = 
       if (!(e instanceof LockRefusal)) throw e;
       const refusal = refusalOf(c, said, viewer.device, e, undefined, "s1") as J;
       if (st.lie !== null && refusal.left !== undefined) refusal.left = { approvers: [st.lie] };
+      if (o.older && refusal.left !== undefined) delete refusal.left.apps;
       st.refusals.push(refusal);
       return hooks.lockRefused?.(inner, "ws", A, refusal.lock, refusal) ?? new CoreError("lock_unconfirmed", e.message);
     }
@@ -215,7 +217,7 @@ test("a newcomer approved before a station took its `member` statement (2026-11-
 test("a member's new web page: it asks that member's own app, `web` said, in", async () => {
   const w = await setUp({ named: true, web: true });
   const before = await w.page();
-  assert.deepEqual(w.st.refusals.at(-1)?.left, { approvers: [w.x.app.base.hex] }, "told to ask X");
+  assert.deepEqual(w.st.refusals.at(-1)?.left, { approvers: [w.x.app.base.hex], apps: true }, "told to ask X");
   assert.deepEqual([before.me.confirmed, before.me.waiting], [false, true], "not confirmed, able to ask");
   w.approvers.set(w.x.app.base.hex, {
     where: () => ["ws"],
@@ -295,4 +297,43 @@ test("a station only waiting for the root's log: as today, nothing listed, nothi
   assert.equal(w.st.refusals.some((x) => x.left !== undefined), false, "nobody told left out");
   assert.deepEqual([v.me.confirmed, v.me.waiting, v.me.pair ?? null], [false, false, null]);
   assert.equal(subs(v), "");
+});
+
+/// What a web page nobody could approve says (the `lock` topic's `me.needsAppText`, and `lock.pair`'s refusal).
+const NEEDS_APP = "此 workspace 的安全模式要求每位成员至少有一台客户端。请安装桌面或手机客户端并登录，由管理员批准后，再用客户端批准此网页版";
+
+for (const [what, o] of [["a member the list names with no app", { named: true, noApp: true }], ["someone the list does not name", {}]] as const) {
+  test(`a web page of ${what}: told to install an app, not offered to ask, and asking is refused with the same words; nothing dialled`, async () => {
+    const w = await setUp({ ...o, web: true });
+    const v = await w.page();
+    assert.equal(w.st.refusals.at(-1)?.left?.apps, false, "the station said no app of s1's");
+    assert.deepEqual([v.me.confirmed, v.me.waiting, v.me.pair ?? null, v.me.needsAppText ?? null], [false, false, null, NEEDS_APP]);
+    // (the upgrade's warning of before is not said once moved)
+    assert.equal(v.appText, undefined);
+    const asked = await w.ask("lock.pair", { workspace: "ws" });
+    assert.equal(asked.error?.message, NEEDS_APP);
+    assert.deepEqual(w.dialled, [], "nobody dialled");
+    assert.equal((await w.page()).me.needsAppText, NEEDS_APP);
+  });
+}
+
+test("a web page whose person's app the list names: no such words, able to ask (that app)", async () => {
+  const w = await setUp({ named: true, web: true });
+  const v = await w.page();
+  assert.deepEqual([v.me.waiting, v.me.needsAppText ?? null], [true, null]);
+});
+
+// What a station from before leaves it to, as every station did until `apps` (the page with no words, able to ask): the
+// owners' and admins' apps it dials answer a web page not their person's `not_here`, showing nothing (views/pair.ts
+// `movedPlace`, `serveTrusted`), so the page lists them as where a code would show and none ever does.
+test("a web page of someone with no app, told by a station from before (no `apps`): as before, able to ask; the owners' apps it dials show it no code, and its try lists them showing none", async () => {
+  const w = await setUp({ web: true, older: true });
+  const v = await w.page();
+  assert.deepEqual([v.me.waiting, v.me.needsAppText ?? null], [true, null], "able to ask, as before");
+  const asked = await w.ask("lock.pair", { workspace: "ws" });
+  assert.equal(asked.error, undefined, asked.error?.message);
+  await w.r.host.time.pass(120_000);
+  const after = await w.page();
+  assert.deepEqual(new Set(w.dialled), new Set([w.alice.app.base.hex, w.bob.app.base.hex]), "the owners' and admins' apps dialled");
+  assert.deepEqual([after.me.confirmed, after.me.pair?.state, (after.me.pair?.approvers as J[]).map((a) => a.showing)], [false, "none", [false, false]]);
 });
