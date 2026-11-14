@@ -273,7 +273,7 @@ fn chats_pane_node(
   // another, View::scrolls_window's reused): as its chat is now, the last it was where it is gone from the list (its
   // archive's 撤销 offered in its line, made again as that is scrolled back to))
   let row_line = fn(line : @view.View, key : () -> String) {
-    let open = motion.line_node(line, key)
+    motion.line_node(line, key) |> ignore
     let name = fn() { key().exact_view(start=2).to_owned() }
     let found = match @signals.untracked(fn() { item_of(name()) }) {
       Some(i) => Some(i)
@@ -298,16 +298,6 @@ fn chats_pane_node(
     // (gone from the list: leaving as its room closes, drawn as it was, no longer pressed nor found; archived from it,
     // its line kept, the row's own node showing its tray there, till that is over and its room closes so)
     line.show(fn() { !motion.going_now(key()) || motion.undo_line(key()) }, leave=row_size_ms, fn(r) {
-      // (its tray's line closing: held at its top, the room's foot coming up over it (line_node), half of what has
-      // closed back down from the middle the room lays it out in)
-      r
-      .shift(By(fn() {
-        match open() {
-          Some(p) if motion.undo_line(key()) => (0.0, (1.0 - p) / 2.0)
-          _ => (0.0, 0.0)
-        }
-      }))
-      |> ignore
       chat_row_node(
         r,
         src,
@@ -888,9 +878,9 @@ fn RowsMotion::gone_item(self : RowsMotion, key : String) -> ChatItem? {
 ///|
 /// Line `key`'s (its key as it is now) node `line` coming or going (ListRows::enter, leave): its room opening or closing from its cause's
 /// moment over row_size_ms, what it holds in the middle of it, as big as it is open and faded in from row_gone_at, cut
-/// softly at both ends. A row archived from it (its tray there: undo_lines) is a recess the list closes over: its room
-/// closes as a row's does, what it holds neither shrunk nor faded, cut hard at the room's foot (kept at its top by
-/// what holds it: row_line). How open it is (None: neither coming nor going).
+/// softly at both ends: a row archived from it too, its tray's line closing as its 撤销 is over (undo_lines; the user,
+/// 2026-11-14: shrunk and faded as any row gone, not a recess cut hard at its foot). How open it is (None: neither
+/// coming nor going).
 fn RowsMotion::line_node(self : RowsMotion, line : @view.View, key : () -> String) -> () -> Double? {
   let way = @sf.EdgeWay::new(1.0)
   let state = fn() {
@@ -910,18 +900,16 @@ fn RowsMotion::line_node(self : RowsMotion, line : @view.View, key : () -> Strin
       None => None
     }
   }
-  let recess = fn() { self.undo_line(key()) }
   line
   .opens(By(open))
-  .cuts_softly(By(fn() { open() is Some(_) && !recess() }))
-  .clips(By(fn() { open() is Some(_) && recess() }))
+  .cuts_softly(By(fn() { open() is Some(_) }))
   .alpha(By(fn() {
     match open() {
-      Some(p) if !recess() => dmax(0.0, (p - @ui.row_gone_at) / (1.0 - @ui.row_gone_at))
-      _ => 1.0
+      Some(p) => dmax(0.0, (p - @ui.row_gone_at) / (1.0 - @ui.row_gone_at))
+      None => 1.0
     }
   }))
-  .scale(By(fn() { if recess() { 1.0 } else { open().unwrap_or(1.0) } }))
+  .scale(By(fn() { open().unwrap_or(1.0) }))
   |> ignore
   open
 }
