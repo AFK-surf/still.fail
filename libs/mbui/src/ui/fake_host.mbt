@@ -1977,6 +1977,11 @@ impl @hostapi.Host for FakeHost with st_hevc(self, id, hvcc, w, h) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with st_av1(self, id, av1c, w, h) {
+  fake_fed(self, id, "av1 \{w}x\{h} av1c=\{av1c.length()}")
+}
+
+///|
 impl @hostapi.Host for FakeHost with st_frame(self, id, data, key, ts) {
   fake_fed(self, id, "frame key=\{key != 0} ts=\{ts} bytes=\{data.length()}")
 }
@@ -2091,6 +2096,16 @@ impl @hostapi.Host for FakeHost with st_h264_here(self) {
 /// Whether it decodes H.265 (Tester::set_h265).
 impl @hostapi.Host for FakeHost with st_h265_here(self) {
   if self.h265_here {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+/// Whether it decodes AV1 (Tester::set_av1).
+impl @hostapi.Host for FakeHost with st_av1_here(self) {
+  if self.av1_here {
     1
   } else {
     0

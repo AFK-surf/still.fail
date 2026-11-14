@@ -35,6 +35,8 @@ pub fn app_visible() -> Bool
 
 pub fn arc(Double, Double, Double, from~ : Double, sweep~ : Double) -> Array[(Double, Double)]
 
+pub fn av1_here() -> Bool
+
 pub fn badge_shown() -> Bool
 
 pub let bench_app : Int32
@@ -2404,6 +2406,7 @@ pub struct Stream {
   // private fields
 }
 pub fn Stream::audio(Self, Bytes) -> Unit
+pub fn Stream::av1(Self, Bytes, Int32, Int32) -> Unit
 pub fn Stream::close(Self) -> Unit
 pub fn Stream::direct_count(Self) -> (Int32, Int32)
 pub fn Stream::frame(Self, Bytes, Bool, Double) -> Unit
@@ -2736,6 +2739,7 @@ pub fn Tester::set_env(Self, String, String) -> Unit
 pub fn Tester::set_font_scale(Self, Double) -> Unit
 pub fn Tester::set_frame_period(Self, Double) -> Unit
 pub fn Tester::set_frame_times(Self, Array[Double]) -> Unit
+pub fn Tester::set_av1(Self, Bool) -> Unit
 pub fn Tester::set_h265(Self, Bool) -> Unit
 pub fn Tester::set_ime_inset(Self, Double) -> Unit
 pub fn Tester::set_keyboard(Self, Bool) -> Unit

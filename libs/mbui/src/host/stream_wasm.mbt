@@ -73,6 +73,17 @@ fn st_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit {
 }
 
 ///|
+fn st_av1_here() -> Int = "mbhost" "mb_host_av1_here"
+
+///|
+fn mbw_mb_host_stream_av1(id : Int, av1c : Int, w : Int, h : Int) = "mbhost" "mb_host_stream_av1"
+
+///|
+fn st_av1(id : Int, av1c : Bytes, w : Int, h : Int) -> Unit {
+  mbw_mb_host_stream_av1(id, @wasmrt.bytes_addr(av1c), w, h)
+}
+
+///|
 fn mbw_mb_host_stream_audio(id : Int, data : Int) = "mbhost" "mb_host_stream_audio"
 
 ///|

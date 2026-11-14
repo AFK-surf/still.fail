@@ -511,6 +511,7 @@ pub fn Tester::new(
     h264,
     audio_here: false,
     h265_here: false,
+    av1_here: false,
     stream_feeds: false,
     stream_layers: false,
     stream_layers_srgb: false,

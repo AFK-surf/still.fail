@@ -50,6 +50,12 @@ fn st_h265_here() -> Int { 0 }
 fn st_hevc(_id : Int, _hvcc : Bytes, _w : Int, _h : Int) -> Unit { () }
 
 ///|
+fn st_av1_here() -> Int { 0 }
+
+///|
+fn st_av1(_id : Int, _av1c : Bytes, _w : Int, _h : Int) -> Unit { () }
+
+///|
 fn st_audio(_id : Int, _data : Bytes) -> Unit { () }
 
 ///|

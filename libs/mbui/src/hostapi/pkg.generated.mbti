@@ -29,6 +29,8 @@ pub fn atlas_size(Bool) -> Int32
 
 pub fn autofill() -> Bool
 
+pub fn av1_here() -> Bool
+
 pub fn autofill_ask(String) -> Bool
 
 pub fn autofill_end() -> Unit
@@ -412,6 +414,8 @@ pub fn sideways() -> Bool
 pub fn stream_audio(Int32, Bytes) -> Unit
 
 pub fn stream_audio_here() -> Bool
+
+pub fn stream_av1(Int32, Bytes, Int32, Int32) -> Unit
 
 pub fn stream_close(Int32) -> Unit
 
@@ -996,6 +1000,8 @@ pub(open) trait Host {
   fn st_direct(Self, Int32, Double, Double, Int32) -> Unit = _
   fn st_h265_here(Self) -> Int32 = _
   fn st_hevc(Self, Int32, Bytes, Int32, Int32) -> Unit = _
+  fn st_av1_here(Self) -> Int32 = _
+  fn st_av1(Self, Int32, Bytes, Int32, Int32) -> Unit = _
   fn st_open(Self) -> Int32 = _
   fn st_h264(Self, Int32, Bytes, Int32, Int32) -> Unit = _
   fn st_frame(Self, Int32, Bytes, Int32, Double) -> Unit = _
