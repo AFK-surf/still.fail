@@ -159,7 +159,7 @@ fn take_chars(s : String, n : Int) -> String {
 
 ///|
 /// views.ts `answeredView`, with who answered.
-fn answered_view(known : Known, a : Answer) -> Json raise {
+fn answered_view(known : Known, a : Answer, by? : Bool = true) -> Json raise {
   let q = (k : String) => a.question.value(k).unwrap_or(Json::null())
   let v : Map[String, Json] = { "seq": q("n"), "text": q("text"), "askedAt": q("createdAt"), "answeredAt": a.at, "card": a.card }
   if a.answer is Null {
@@ -172,14 +172,22 @@ fn answered_view(known : Known, a : Answer) -> Json raise {
     }
     v["quoted"] = Json::boolean(quoted)
   }
-  v["by"] = known.creator(a.by)
+  if by {
+    v["by"] = known.creator(a.by)
+  }
   Json::object(v)
 }
 
 ///|
-/// views.ts `cardView` of a chat's card as `pendingCard` finds it, as the shared row has it (no one's let go).
-fn card_view(db : @sql.Db, thread : Json, names : Names) -> Json raise {
-  guard review_pending_card(db, { "thread": thread }) is Array([m, card]) else { return Json::null() }
+/// views.ts `cardView`: a chat's card still waiting, as `pendingCard` finds it (`kept` none) or as kept (`kept`: its
+/// entry, null when none waits), `dismissed` when the viewer let it go (`dismissed`: theirs, "thread:n").
+fn card_view(db : @sql.Db, thread : Json, names : Names, dismissed? : Set[String] = Set::new(), kept? : Json) -> Json raise {
+  let pending = match kept {
+    None => review_pending_card(db, { "thread": thread })
+    Some(Null) => return Json::null()
+    Some(n) => card_at(db, thread, n)
+  }
+  guard pending is Array([m, card]) else { return Json::null() }
   let message = match message_view(db, m, names) {
     Object(o) => Map::from_array(o.to_array())
     _ => Map([])
@@ -195,12 +203,16 @@ fn card_view(db : @sql.Db, thread : Json, names : Names) -> Json raise {
       before.push(message_view(db, b, names))
     }
   }
-  { "seq": seq, "card": card, "message": Json::object(message), "before": Json::array(before) }
+  let v : Map[String, Json] = { "seq": seq, "card": card, "message": Json::object(message), "before": Json::array(before) }
+  if dismissed.contains("\{js_text(thread)}:\{js_text(seq)}") {
+    v["dismissed"] = true
+  }
+  Json::object(v)
 }
 
 ///|
 /// views.ts `needView`: what one of a chat's agents needs a person for without a card.
-fn need_view(db : @sql.Db, thread : Json, agents : Array[Json], names : Names) -> Json raise {
+fn need_view(db : @sql.Db, thread : Json, agents : Array[Json], names : Names, dismissed? : Set[String] = Set::new()) -> Json raise {
   let turn = agents.iter().map(a => a.value("lastTurn").unwrap_or(Json::null())).find_first(t => match t.value("ending") {
     Some(String(e)) => e == "need_help" || e == "need_decision"
     _ => t.value("declared") == Some(Json::string("block"))
@@ -218,7 +230,11 @@ fn need_view(db : @sql.Db, thread : Json, agents : Array[Json], names : Names) -
   let to = if is_integer(ended) { ended } else { as_integer(Json::string(i64_max)) }
   guard asking_message(db, thread, seq, from, to) is Some((m, earlier)) else { return Json::null() }
   let before = earlier.map(b => message_view(db, b, names)) catch { e => raise e }
-  { "seq": m.value("n").unwrap_or(Json::null()), "message": message_view(db, m, names), "before": Json::array(before) }
+  let v : Map[String, Json] = { "seq": m.value("n").unwrap_or(Json::null()), "message": message_view(db, m, names), "before": Json::array(before) }
+  if dismissed.contains("\{js_text(thread)}:\{js_text(m.value("n").unwrap_or(Json::null()))}") {
+    v["dismissed"] = true
+  }
+  Json::object(v)
 }
 
 ///|

@@ -1,10 +1,11 @@
 // The chat list as the station makes it for everyone (`sharedOf`, and `sharedChats`: what a viewer's workspace sees of
-// it) by the MoonBit reader (station/mb src/readops/shared.mbt; read/pool.ts MOVED) as the worker reads it, on the
-// same database: chats of several agents, one archived beside them, a card waiting and its options, one answered, one
+// it) and what a viewer's own of it is (`chatMarks`) by the MoonBit reader (station/mb src/readops/shared.mbt,
+// chatmarks.mbt; read/pool.ts MOVED) as the worker reads them, on the same database: chats of several agents, one archived beside them, a card waiting and its options, one answered, one
 // closed, one withdrawn, a need without a card, a message that only quotes, the local page's; a Slack thread its agent
 // came from, named by the station's names book, with its people; agents with no chat, named or by their thread; a
 // watch, a chat opened and one shared, the archive review's marks, process states, client keys and the cloud's names;
-// whole and of some sessions and threads, in either language, and with the edits' index gone.
+// a viewer's let-go card, kept, hidden, muted and read chats, pins and Slack self; whole and of some sessions and
+// threads, in either language, with the cards kept from before they were kept, and with the edits' index gone.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -82,7 +83,7 @@ test("the MoonBit reader reads the shared chat list as the worker does", { skip:
   const twice = chat("twice", "Twice", ["t1"]);
   say(twice, "agent", "t1", "one", { card: options });
   say(twice, "agent", "t1", "two", { card: options });
-  say(twice, "person", "p@x", "two it is");
+  say(twice, "person", "slack:team:U1", "two it is");
   // A Slack thread an agent came from (s1 has no chat of its own), its people by the names book.
   const slack = store.openThread("slack:T1", "C1", "1000.1", null, null).id;
   store.joinThread(slack, "s1", "team");
@@ -97,6 +98,14 @@ test("the MoonBit reader reads the shared chat list as the worker does", { skip:
   db.prepare("INSERT INTO opened_chats(child_station,child,parent_station,parent,key,title,created_at) VALUES ('','a3','','a1','k3',NULL,3)").run();
   db.prepare("INSERT INTO opened_chats(child_station,child,parent_station,parent,key,title,created_at) VALUES ('st2','far','','a1','k2',NULL,2)").run();
   db.prepare("INSERT INTO chat_shares(session,shared,write,by,at) VALUES ('a1',?,1,'p@x',?)").run(JSON.stringify([{ workspace: "w2", name: "Two", used: now }, { workspace: "w3", used: 1 }]), now);
+  // What is the viewers' own.
+  db.prepare("INSERT INTO dismissed (viewer, thread, n, at) VALUES ('p@x', ?, ?, 1)").run(both, last);
+  db.prepare("INSERT INTO kept_chats (viewer, thread) VALUES ('p@x', ?)").run(quoted);
+  db.prepare("INSERT INTO hidden_chats (viewer, thread) VALUES ('p@x', ?)").run(need);
+  db.prepare("INSERT INTO muted_chats (viewer, thread) VALUES ('q@x', ?)").run(both);
+  db.prepare("INSERT INTO reads (viewer, thread, n, at) VALUES ('p@x', ?, 2, 1)").run(both);
+  db.prepare("INSERT INTO pins (viewer, session, at) VALUES ('p@x', 'a1', 5)").run();
+  db.prepare("INSERT INTO identities (viewer, slack_user, at) VALUES ('p@x', 'U1', 1)").run();
   const readers = (mb: string | null) => {
     const r = new Readers(data, 1);
     r.mbReader = mb;
@@ -119,6 +128,10 @@ test("the MoonBit reader reads the shared chat list as the worker does", { skip:
         out.push(await read(r, "sharedChats", { viewer, sessions: null, threads: null }, lang));
         out.push(await read(r, "sharedChats", { viewer, sessions: ["s1"], threads: [slack] }, lang));
       }
+      for (const viewer of [{ email: "p@x", workspace: "w", home: true }, { email: "Q@X", workspace: "w" }, { email: "u@x", workspace: "x", home: false }]) {
+        out.push(await read(r, "chatMarks", { viewer, scope: null }, lang));
+        out.push(await read(r, "chatMarks", { viewer, scope: { sessions: ["a1", "a3", "gone"], threads: [need, twice] } }, lang));
+      }
     }
     return out;
   };
@@ -129,8 +142,14 @@ test("the MoonBit reader reads the shared chat list as the worker does", { skip:
     for (const sign of ["\"decision\":", "\"answeredBy\":", "\"closed\":true", "\"quoted\":true", "\"need\":", "\"quotedOnly\":true", "\"name\":\"Una\"",
       "\"channelName\":\"general\"", "\"teamName\":\"Team One\"", "\"authorName\":\"Pat\"", "\"watch\":", "\"opener\":", "\"opened\":", "\"xshare\":",
       "\"archiveRecommended\":true", "\"archiveCheck\":", "\"process\":\"running\"", "\"clientKey\":\"ck-1\"", "\"title\":\"Lone\"", "\"authorModel\":\"opus\"",
-      "\"authorRuntime\":", "\"said\":{", "\"via\":\"local\"", "\"picture\":\"https://p/una.png\"", "\"via\":\"feishu\"", "\"authorName\":\"blank\""])
+      "\"authorRuntime\":", "\"said\":{", "\"via\":\"local\"", "\"picture\":\"https://p/una.png\"", "\"via\":\"feishu\"", "\"authorName\":\"blank\"", "\"dismissed\":true", "\"selves\":[\"U1\"]", "\"team\":\"Team One\"", "\"fs\":\"Co\"", "\"hidden\":[", "\"muted\":[", "\"pins\":{\"a1\":5}"])
       assert.ok(said.includes(sign), sign);
+    // A chat whose card the store no longer keeps waiting: none shown, whatever its posts say.
+    db.prepare("DELETE FROM pending_cards WHERE thread = ?").run(both);
+    assert.deepEqual(await all(program), await all(worker));
+    // Cards posted before the store kept them: each found as it was before.
+    db.exec("UPDATE pending_cards_from SET entry = 1000000000; DELETE FROM pending_cards");
+    assert.deepEqual(await all(program), await all(worker));
     // A store whose chats' unread boundaries are not kept (one from before): found among the messages near the latest.
     db.exec("UPDATE thread_state SET said_other_known = 0; DELETE FROM said_state_guard");
     assert.deepEqual(await all(program), await all(worker));
