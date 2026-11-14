@@ -666,7 +666,15 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
     let ours_ways = fn() { ways().filter(fn(w) { text(Some(w), "kind") == "relay" && !flag(Some(w), "own") }) }
     let relays = fn() { ways().filter(fn(w) { flag(Some(w), "own") }).map(fn(w) { text(Some(w), "id") }) }
     let ours_on = fn() { relays().is_empty() || ours_ways().iter().any(fn(w) { flag(Some(w), "on") }) }
-    let ours_note = fn() { ours_ways().map(fn(w) { text(Some(w), "name") }).filter(fn(n) { n != "" }).join("、") }
+    let ours_note = fn() {
+      if !manager() {
+        ours_ways().map(fn(w) { text(Some(w), "name") }).filter(fn(n) { n != "" }).join("、")
+      } else if relays().is_empty() {
+        @sf.t("android-settings.ways.oursNeedOwn")
+      } else {
+        @sf.t("android-settings.ways.oursNote")
+      }
+    }
     let busy = fn() { is_doing(core, ["workspace.setWay"], [("workspace", ws())]) }
     let setting = fn() { is_doing(core, ["workspace.setRelays"], [("workspace", ws())]) }
     let id = fn(w : Json) { text(Some(w), "id") }
@@ -699,7 +707,6 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
     v.box(fn(body) {
       // its own: removed, added right in the panel (one not wanted is taken away, not turned off)
       body.show(fn() { manager() || relays().length() > 0 }, fn(sec) {
-        @sf.style_node(sec, fn() { ws_way_own_sec })
         ws_way_label_node(sec, fn() { @sf.t("android-settings.ways.own") })
         sec.each(relays, fn(url) { url }, fn(row, url) {
           row.box(fn(b) {
@@ -755,9 +762,14 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
           })
           |> ignore
         })
+        sec.box(fn(d) {
+          @sf.style_node(d, fn() { @sf.panel_words_in_node(d).then(ws_way_rule_box) })
+          d.box(fn(line) { @sf.style_node(line, fn() { ws_way_rule }) }) |> ignore
+        })
+        |> ignore
       })
-      // still.fail's relays: one switch for all of them, its nodes named under it
-      let title = fn() { @sf.t("android-settings.ways.ours", args=[("app", "still.fail")]) }
+      // still.fail's relays: one switch for all of them, what it does under it
+      let title = fn() { @sf.t("android-settings.ways.ours") }
       ws_way_row_node(body, title, ours_note, fn(e) {
         e.show(busy, fn(s) { @sf.spinner_node(s, size=@sf.spinner_size) |> ignore })
         @sf.switch_node(
@@ -829,7 +841,11 @@ let ws_way_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_own_sec : @ui.Style = @ui.css("pb=S2")
+let ws_way_rule_box : @ui.Style = @ui.css("w=Full py=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ws_way_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)

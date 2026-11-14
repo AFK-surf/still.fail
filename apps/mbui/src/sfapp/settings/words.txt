@@ -615,6 +615,8 @@ android-settings.ways.lan
 android-settings.ways.lanNote
 android-settings.ways.lead
 android-settings.ways.ours
+android-settings.ways.oursNeedOwn
+android-settings.ways.oursNote
 android-settings.ways.own
 android-settings.ways.setWhat
 android-settings.ways.tailnet

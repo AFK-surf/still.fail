@@ -28,9 +28,9 @@ test "the workspace's ways its devices reach its stations, at each width: one ro
     t.tap_text("中继")
     t.run_for(@ui.move_most_ms)
     assert_true(@sf.presenting(), msg=at)
-    assert_true(t.find("Cloudflare、北京") is Some(_), msg=at)
+    assert_true(t.find("添加自定义中继后可关闭") is Some(_), msg=at)
     assert_true(t.find("直连") is None, msg=at)
-    let sw = t.get(Switch, label="still.fail 的中继")
+    let sw = t.get(Switch, label="使用官方中继")
     assert_eq(sw.check, Some(On), msg=at)
     assert_true(sw.disabled, msg=at)
     @sf.presenters_reset()
@@ -274,17 +274,17 @@ test "the ways' panel, on every screen: a manager adds a relay inline, turns sti
     let at = screen.0
     let calls : Array[(String, Json)] = []
     let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, ways=own) })
-    assert_true(t.find("still.fail 的中继") is Some(_), msg=at)
-    assert_true(t.find("Cloudflare、北京") is Some(_), msg=at)
-    assert_true(t.find("此 workspace 的中继") is Some(_), msg=at)
+    assert_true(t.find("使用官方中继") is Some(_), msg=at)
+    assert_true(t.find("关闭后仅使用自定义中继") is Some(_), msg=at)
+    assert_true(t.find("自定义中继") is Some(_), msg=at)
     assert_true(t.find("直连") is None, msg=at)
     assert_true(t.find("relay.example.com/") is Some(_), msg=at)
     assert_true(t.find("上海中继 添加") is Some(_), msg=at)
-    let sw = t.get(Switch, label="still.fail 的中继")
+    let sw = t.get(Switch, label="使用官方中继")
     assert_eq(sw.check, Some(On), msg=at)
     assert_false(sw.disabled, msg=at)
     // turning off still.fail's relays asks for way="ours"
-    ws_press(t, Switch, "still.fail 的中继")
+    ws_press(t, Switch, "使用官方中继")
     t.frame()
     let way_calls = calls.filter(fn(c) { c.0 == "workspace.setWay" })
     assert_eq(way_calls.length(), 1, msg=at)
@@ -328,14 +328,14 @@ test "the ways' panel to one who is no manager: still.fail's relays seen, none t
     let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, workspace=as_member) })
     assert_true(@sf.presenting(), msg=at)
     assert_true(t.find("Cloudflare、北京") is Some(_), msg=at)
-    assert_true(t.find("此 workspace 的中继") is None, msg=at)
+    assert_true(t.find("自定义中继") is None, msg=at)
     assert_true(t.query(TextField, label="添加中继") is None, msg=at)
     assert_true(t.query(Button, label="添加") is None, msg=at)
-    assert_true(t.get(Switch, label="still.fail 的中继").disabled, msg=at)
-    ws_press(t, Switch, "still.fail 的中继")
+    assert_true(t.get(Switch, label="使用官方中继").disabled, msg=at)
+    ws_press(t, Switch, "使用官方中继")
     t.run_for(@ui.move_most_ms)
     assert_eq(calls.filter(fn(c) { c.0 == "workspace.setWay" }).length(), 0, msg=at)
-    assert_eq(t.get(Switch, label="still.fail 的中继").check, Some(On), msg=at)
+    assert_eq(t.get(Switch, label="使用官方中继").check, Some(On), msg=at)
     @sf.presenters_reset()
   }
 }
@@ -352,11 +352,11 @@ test "a way being set: its switch not turned meanwhile, as the core says it stan
     Some({ "doing": [{ "call": "workspace.setWay", "params": { "workspace": "ws1", "way": "ours" }, "stage": "running" }] })
   }
   let t = ws_opened(ws_screens[0], "中继", fn(s) { ws_changing(s, calls, ways=own, doing~) })
-  assert_true(t.get(Switch, label="still.fail 的中继").disabled)
-  ws_press(t, Switch, "still.fail 的中继")
+  assert_true(t.get(Switch, label="使用官方中继").disabled)
+  ws_press(t, Switch, "使用官方中继")
   t.run_for(@ui.move_most_ms)
   assert_eq(calls.filter(fn(c) { c.0 == "workspace.setWay" }).length(), 0)
-  assert_eq(t.get(Switch, label="still.fail 的中继").check, Some(On))
+  assert_eq(t.get(Switch, label="使用官方中继").check, Some(On))
   @sf.presenters_reset()
 }
 
@@ -380,17 +380,17 @@ test "the ways' panel follows the core on every screen: still.fail's relays turn
     }
     let workspace = fn(v : Json?) { if now.get() >= 2 { ws_said(v, "role", Json::string("member")) } else { v } }
     let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, workspace~, ways~) })
-    assert_eq(t.get(Switch, label="still.fail 的中继").check, Some(On), msg=at)
+    assert_eq(t.get(Switch, label="使用官方中继").check, Some(On), msg=at)
     assert_true(t.query(TextField, label="添加中继") is Some(_), msg=at)
     now.set(1)
     t.run_for(@ui.move_most_ms)
-    assert_eq(t.get(Switch, label="still.fail 的中继").check, Some(Off), msg=at)
+    assert_eq(t.get(Switch, label="使用官方中继").check, Some(Off), msg=at)
     now.set(2)
     t.run_for(@ui.move_most_ms)
     assert_true(@sf.presenting(), msg=at)
     assert_true(t.query(TextField, label="添加中继") is None, msg=at)
     assert_true(t.query(Button, label="移除") is None, msg=at)
-    ws_press(t, Switch, "still.fail 的中继")
+    ws_press(t, Switch, "使用官方中继")
     t.run_for(@ui.move_most_ms)
     assert_eq(calls.filter(fn(c) { c.0 == "workspace.setWay" }).length(), 0, msg=at)
     @sf.presenters_reset()
@@ -430,7 +430,7 @@ test "where the two panels' words stand on every screen: each under the one befo
     @sf.presenters_reset()
     // the ways': custom relays first, then still.fail's relays, all on one left line
     let t = ws_opened(screen, "中继", fn(s) { ws_changing(s, calls, ways=own) })
-    let order = ["此 workspace 的中继", "relay.example.com/", "上海中继 添加", "still.fail 的中继", "Cloudflare、北京"].map(fn(
+    let order = ["自定义中继", "relay.example.com/", "上海中继 添加", "使用官方中继", "关闭后仅使用自定义中继"].map(fn(
       w,
     ) {
       ws_word(t, w)
@@ -444,8 +444,8 @@ test "where the two panels' words stand on every screen: each under the one befo
     let (_, ry, _, rh) = t.get(Button, label="移除").rect
     let r_mid = ry + rh / 2.0
     assert_true((r_mid - (r_title.1 + r_title.3 / 2.0)).abs() < 1.0, msg="\{at}: remove middle \{r_mid}, \{Repr(r_title)}")
-    let (title, note) = (ws_word(t, "still.fail 的中继"), ws_word(t, "Cloudflare、北京"))
-    let (sx, sy, _, sh) = t.get(Switch, label="still.fail 的中继").rect
+    let (title, note) = (ws_word(t, "使用官方中继"), ws_word(t, "关闭后仅使用自定义中继"))
+    let (sx, sy, _, sh) = t.get(Switch, label="使用官方中继").rect
     let mid = sy + sh / 2.0
     assert_true(sx >= title.0 + title.2, msg="\{at}: switch at \{sx}, \{Repr(title)}")
     assert_true(sx >= note.0 + note.2, msg="\{at}: switch at \{sx}, \{Repr(note)}")
