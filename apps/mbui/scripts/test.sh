@@ -242,7 +242,7 @@ for t in $targets; do
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
       src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:2 src/sfapp/send_steady_wbtest.mbt:@1@2
       src/sfapp/chat_page_nodes_wbtest.mbt:2 src/sfapp/answers_still_wbtest.mbt:@2@3@4@5
-      src/sfapp/switches_still_wbtest.mbt:32)
+      src/sfapp/switches_still_wbtest.mbt:@2@4@6@8@10@12@14@16@18@20@22@24@26@28@30@32@34@36@38@40@42@44@46@48@50@52@54@56@58@60@70@80@90@100@110@120@130@140@150@160@170@180@190@200@210@220@230@240@250@260@270@280@290@300@310)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -520,11 +520,12 @@ for t in $targets; do
       # 54-124 s, main 85413543 42736997391, station-conversations-survive 42739107408, 2026-11-10)
       "src/sfapp/preview_tree_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "" | 60) echo 1 ;; *) echo 4 ;; esac ;;
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
-      # (switches_still's thirty-two, every screen's switches pressed over a core answering late, on four runners of
-      # their own, every fourth of them on each (APP_PART), eight side by side on its four cores: main's alone, after a
-      # merge (mbui-check.yml's switches). Its screens' time is not even along the file: in twelve runs by count, three
-      # a runner, one run of tests 26-53 took 263 s alone and its runner's first part was cut at its 5 minutes, main
-      # ba25bbd6 43547208033, 2026-11-14)
+      # (switches_still's runs, every screen's switches pressed over a core answering late, on four runners of their own,
+      # every fourth of them on each (APP_PART), side by side on its four cores: main's alone, after a merge
+      # (mbui-check.yml's switches). Its screens' time is not even along the file: its tests 10-50 (the chats') were
+      # 188-289 s a run of ten where the others' were 13-157, so each runner's longest run set its job, 3.3-4.9 min of
+      # its 5, main 66c9984f 43559748540, 2026-11-14: cut by two tests to the 60th, by ten after, so each runner's
+      # cores share the work as it comes. No more runners for it (the owner: 「不要一慢就拆」, 「分片会排队」))
       "src/sfapp/switches_still_wbtest.mbt "*) echo switches ;;
       # (send_steady's three on the fourth, beside its pages on its four cores: the deal reckons them there)
       "src/sfapp/send_steady_wbtest.mbt "*) echo 4 ;;
