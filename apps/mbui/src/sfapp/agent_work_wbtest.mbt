@@ -677,3 +677,39 @@ test "its panel on a wide window by the keyboard: the mark with the focus, Enter
   }
   aw_audited(t, before, "keyboard", open=false)
 }
+
+///|
+test "the history's tiles: 6-char numbers ($1,911, 430.5K) on a 360dp row shrink to fit cleanly with names level at 1.0x and 1.3x" {
+  let card : Json = {
+    "cost": "$1,911",
+    "cache": { "text": "99%" },
+    "context": { "percent": 0, "text": "430.5K", "unknown": true },
+  }
+  for scale in [1.0, words_large_scale] {
+    new_run()
+    let t = @ui.Tester::new(
+      fn(_) {  },
+      tree=fn(root) {
+        root.padding(Is((24.0, 24.0, 24.0, 24.0))) |> ignore
+        agent_tiles_node(root, fn() { Some(card) }, 14.0)
+      },
+      w=360.0,
+      h=400.0,
+      platform=2,
+      scale~,
+    )
+    assert_eq(t.squeeze_faults(), [], msg="scale=\{scale}")
+    let words = t.words()
+    for want in ["$1,911", "99%", "430.5K"] {
+      assert_true(words.any(fn(w) { w.0 == want && w.5 > 0.5 }), msg="scale=\{scale}: missing \{want}")
+    }
+    let name_y = fn(s : String) {
+      match words.iter().find_first(fn(w) { w.0 == s && w.5 > 0.5 }) {
+        Some(w) => w.2
+        None => -1.0
+      }
+    }
+    assert_eq(name_y("费用估算"), name_y("缓存命中"), msg="scale=\{scale}: names not level: words=\{Repr(words)}")
+    assert_eq(name_y("缓存命中"), name_y("上下文"), msg="scale=\{scale}: names not level: words=\{Repr(words)}")
+  }
+}

@@ -270,9 +270,23 @@ fn since_words(src : Source, a : Json?) -> String {
 /// level's colour. None while none is known.
 fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
   v.show(at_once=true, fn() { agent_tiles_known(card()) }, fn(o) {
-    o.box(fn(r) {
+    let cost = fn() { text(card(), "cost") }
+    let cache = fn() { field(card(), "cache") }
+    let context = fn() { field(card(), "context") }
+    o.padding(Is((0.0, top, 0.0, 0.0))) |> ignore
+    o.by_room(fn(r, given) {
       @sf.style_node(r, fn() { tiles_row })
-      r.padding(Is((0.0, top, 0.0, 0.0))) |> ignore
+      let tile_room = fn() {
+        let n = (if cost() != "" { 1 } else { 0 }) +
+          (if cache() is Some(Object(_)) { 1 } else { 0 }) +
+          (if context() is Some(Object(_)) { 1 } else { 0 })
+        let w = given.width()
+        if n > 0 && w > 0.0 {
+          dmax(0.0, (w - 8.0 * Double::from_int(n - 1)) / Double::from_int(n) - 2.0 * @sf.text_in)
+        } else {
+          0.0
+        }
+      }
       let tile = fn(p : @view.View, figure : () -> String, name : () -> String, level : () -> String) {
         p.box(fn(t) {
           t
@@ -292,7 +306,7 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
             .lies_along(Is(Middle))
             |> ignore
             @sf.words_node(f, figure, fn() {
-              let big = if figure().length() > 6 { tile_figure_small } else { tile_figure }
+              let big = history_tile_figure_style(f, figure(), tile_room())
               match level() {
                 "red" => big.then(@ui.text_style(color=Danger))
                 "amber" => big.then(@ui.text_style(color=WarnInk))
@@ -306,9 +320,6 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
         })
         |> ignore
       }
-      let cost = fn() { text(card(), "cost") }
-      let cache = fn() { field(card(), "cache") }
-      let context = fn() { field(card(), "context") }
       // (each tile's share of the row: what shows it takes it)
       let across = fn(p : @view.View) { p.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore }
       r.show(at_once=true, fn() { cost() != "" }, fn(p) {
@@ -340,14 +351,60 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
 }
 
 ///|
-/// A tile's figure: the heading's size (22), 600, on its line (30); 16 where it is longer than six characters, in the
-/// middle of a box as high as the heading's line.
+fn history_tile_figure_style(f : @view.View, fig : String, room : Double) -> @ui.TextStyle {
+  if room <= 0.0 {
+    return if fig.length() > 6 { tile_figure_xl } else { tile_figure }
+  }
+  f.words_redone() |> ignore
+  let th = @ui.tree_theme()
+  let fits = fn(sz : @ui.TextSize) {
+    @sf.node_words_w(fig, @sf.node_sp(f, th.text_size(sz).0), weight=600) <= room - 1.0
+  }
+  if fig.length() <= 6 && fits(Heading) {
+    return tile_figure
+  }
+  if fits(Xl) { return tile_figure_xl }
+  if fits(Lg) { return tile_figure_lg }
+  if fits(Base) { return tile_figure_base }
+  if fits(Sm) { return tile_figure_sm }
+  if fits(Xs) { return tile_figure_xs }
+  if fits(Xs2) { return tile_figure_xs2 }
+  tile_figure_xs3
+}
+
+///|
+/// A tile's figure: the heading's size (22), 600, on its line (30); at most 20 (Xl) where it is longer than six
+/// characters, and shrinking along the theme's scale to fit its tile's inner width so numbers never truncate.
 // kept across runs: a value (no field of it changes)
 let tile_figure : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tile_figure_small : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
+let tile_figure_xl : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_figure_lg : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_figure_base : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_figure_sm : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_figure_xs : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_figure_xs2 : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_figure_xs3 : @ui.TextStyle = @ui.text_style(size=Xs3, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// A tile's name under its figure: caption size, muted, allowed to wrap at large font sizes.
