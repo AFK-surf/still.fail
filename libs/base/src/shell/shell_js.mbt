@@ -6,8 +6,13 @@
 //
 //   op                 on a page
 //   storage.get/set    localStorage, the key `<dir>:<key>`, the value in hex (a file a key natively)
-//   iroh.bind          the module's `bind({secretKey, relayUrls})`: through relays alone whatever is asked (a browser
-//                      has no UDP: `relayOnly` is always so), and nothing looked up (`lookup` never)
+//   iroh.bind          the module's `bind({secretKey, relayUrls})`, with `relayEntries` where any are said (each
+//                      `{entry, relay}`): through relays alone whatever is asked (a browser has no UDP: `relayOnly`
+//                      is always so), nothing looked up (`lookup` never), and no connection taken (`alpns` is not
+//                      read: iroh-wasm binds with none)
+//   iroh.setRelayEntries   the endpoint's `setRelayEntries(entries)`, each `{entry, relay}`; of one closed, nothing
+//   iroh.accept        none: a page takes no connection. Asked, it fails as every op a page has not, which the
+//                      mesh says to whoever asked for one (`Mesh::incoming`)
 //   iroh.connect       `endpoint.connect(addr, alpn, [], givenUp)`; `fetch.cancel` of its call resolves `givenUp`,
 //                      which drops the handshake, and it is answered "cancelled" as natively
 //   iroh.endpointId, iroh.relayStatus, iroh.close      the endpoint's `id`, `relayStatus`, `close`
@@ -90,7 +95,7 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|        return [{}];
   #|      case "iroh.bind": {
   #|        const module = await load();
-  #|        return [{ id: keep({ endpoint: await module.bind({ secretKey: bytes ?? none, relayUrls: a.relayUrls ?? [] }) }) }];
+  #|        return [{ id: keep({ endpoint: await module.bind({ secretKey: bytes ?? none, relayUrls: a.relayUrls ?? [], ...(a.relayEntries ? { relayEntries: a.relayEntries } : {}) }) }) }];
   #|      }
   #|      case "iroh.connect": {
   #|        if (h?.endpoint === undefined) throw new Error("not an endpoint");
@@ -120,6 +125,9 @@ extern "js" fn page_start(prefix : String, iroh : String, answered : (Int, Int, 
   #|          dials.delete(id);
   #|        }
   #|      }
+  #|      case "iroh.setRelayEntries":
+  #|        if (h?.endpoint !== undefined) await h.endpoint.setRelayEntries(a.entries ?? []);
+  #|        return [{}];
   #|      case "iroh.networkChange":
   #|        if (h?.endpoint !== undefined) await h.endpoint.networkChange();
   #|        return [{}];

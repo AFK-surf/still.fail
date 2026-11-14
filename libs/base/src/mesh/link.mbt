@@ -67,6 +67,8 @@ fn Stream::reset(self : Stream) -> Unit {
 priv struct Lines {
   stream : Stream
   carry : @wire.Carry
+  /// How long a line may be.
+  most : Int
 }
 
 ///|
@@ -76,7 +78,7 @@ async fn Lines::next(self : Lines) -> String? {
     if self.carry.line() is Some(line) {
       return Some(line)
     }
-    if self.carry.length() > max_head {
+    if self.carry.length() > self.most {
       raise failed("head_too_long")
     }
     let chunk = self.stream.read() catch { e => raise cut(e) }
@@ -457,7 +459,7 @@ async fn Link::sent(self : Link, head : String, body : Bytes, finish : Bool, wro
   } catch {
     e => raise cut(e)
   }
-  let lines : Lines = { stream, carry: @wire.Carry::new() }
+  let lines : Lines = { stream, carry: @wire.Carry::new(), most: max_head }
   guard lines.next() is Some(line) else { raise failed("no_reply") }
   match @wire.reply_head(line) {
     Unreadable(why) => raise MeshError(code="mesh", message=say("reply_unreadable"), cause=why)
@@ -630,6 +632,8 @@ pub async fn Out::stopped(self : Out) -> Int? {
 pub struct Inbound {
   out : Out
   priv stream : Stream
+  /// What came with a line read off it first (`Incoming::first`) and was not taken yet.
+  priv mut carry : Bytes?
   priv mut done : Bool
   priv mut gone : Bool
   /// As a reply's: done as it is let go of, whether for something that failed.
@@ -637,9 +641,32 @@ pub struct Inbound {
 }
 
 ///|
+/// A stream its peer opened, as its program's to read and answer; `carry`: what was read of it already and is
+/// its program's.
+fn inbound_of(stream : Stream, carry : Bytes?) -> Inbound {
+  let inbound : Ref[Inbound?] = Ref(None)
+  let went : @effect.Deferred[Bool] = @effect.Deferred::new()
+  let out : Out = {
+    stream,
+    let_go: () => if inbound.val is Some(inbound) { inbound.let_go(true) },
+    is_gone: () => inbound.val is Some(inbound) && inbound.gone,
+    went,
+    is_read: () => inbound.val is Some(inbound) && inbound.done,
+    finished: false,
+  }
+  let taken : Inbound = { out, stream, carry, done: false, gone: false, went }
+  inbound.val = Some(taken)
+  taken
+}
+
+///|
 /// The next of what the peer sent on it; None once it ended. As a reply's (`Reply::take`): one whose `take` is given
 /// up while it waits is to be cancelled, not taken again; one whose `take` failed is let go of here, and has ended.
 pub async fn Inbound::take(self : Inbound) -> Bytes? {
+  if self.carry is Some(carry) {
+    self.carry = None
+    return Some(carry)
+  }
   if self.done {
     return None
   }
@@ -666,6 +693,7 @@ pub fn Inbound::cancel(self : Inbound) -> Unit {
 fn Inbound::let_go(self : Inbound, broke : Bool) -> Unit {
   self.done = true
   self.gone = true
+  self.carry = None
   ignore(self.went.succeed(broke))
   self.stream.reset()
 }
@@ -711,20 +739,7 @@ pub async fn Link::accept(self : Link) -> Inbound? {
     guard next is Some(id) else { return None }
     // (taken: the next asker's wait is another)
     self.coming = None
-    let stream : Stream = { shell: self.shell, id }
-    let inbound : Ref[Inbound?] = Ref(None)
-    let went : @effect.Deferred[Bool] = @effect.Deferred::new()
-    let out : Out = {
-      stream,
-      let_go: () => if inbound.val is Some(inbound) { inbound.let_go(true) },
-      is_gone: () => inbound.val is Some(inbound) && inbound.gone,
-      went,
-      is_read: () => inbound.val is Some(inbound) && inbound.done,
-      finished: false,
-    }
-    let taken : Inbound = { out, stream, done: false, gone: false, went }
-    inbound.val = Some(taken)
-    Some(taken)
+    Some(inbound_of({ shell: self.shell, id }, None))
   })
 }
 

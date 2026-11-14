@@ -15,6 +15,8 @@ pub let connect_timeout_ms : Int32
 
 pub let device_key : String
 
+pub let first_ms : Int32
+
 pub let max_body : Int32
 
 pub let onto_max_ms : Int32
@@ -54,6 +56,13 @@ pub fn Backoff::new(first? : Int32, most? : Int32) -> Self
 pub async fn Backoff::pause(Self) -> Unit
 pub fn Backoff::reset(Self) -> Unit
 
+pub(all) struct Binding {
+  lookup : Bool
+  takes : Array[String]
+  entries : Array[RelayEntry]
+}
+pub fn Binding::none() -> Self
+
 pub(all) struct Closed {
   kind : String
   reason : String
@@ -66,6 +75,15 @@ pub struct Inbound {
 }
 pub fn Inbound::cancel(Self) -> Unit
 pub async fn Inbound::take(Self) -> Bytes?
+
+pub struct Incoming {
+  peer : String
+  alpn : String
+  // private fields
+}
+pub fn Incoming::close(Self, reason? : String) -> Unit
+pub async fn Incoming::closed(Self) -> Closed
+pub async fn Incoming::first(Self, within? : Int32, most? : Int32) -> (String, Inbound)
 
 pub struct Link {
   peer : String
@@ -95,9 +113,11 @@ pub fn Mesh::device_id(Self) -> String
 pub fn Mesh::drop_link(Self, String, scope? : String, reason? : String) -> Unit
 pub async fn Mesh::health_change(Self, String, Bool, scope? : String) -> Bool
 pub fn Mesh::healthy(Self, String, scope? : String) -> Bool
+pub async fn Mesh::incoming(Self) -> Incoming?
 pub async fn Mesh::link(Self, String, async (String, Bool) -> Presented, scope? : String) -> Link
-pub async fn Mesh::make(@shell.Shell, Store, Options) -> Self
+pub async fn Mesh::make(@shell.Shell, Store, Options, binding? : Binding) -> Self
 pub async fn Mesh::replaced(Self, Link) -> Unit
+pub fn Mesh::retune(Self, Array[String], entries? : Array[RelayEntry], reason? : String) -> Unit
 pub fn Mesh::standing(Self, String, scope? : String) -> Bool
 pub fn Mesh::wake(Self) -> Unit
 
@@ -127,6 +147,12 @@ pub(all) struct Pings {
 pub(all) struct Presented {
   credential : String
   also : Map[String, @json.Json]?
+}
+
+#derive(Eq)
+pub(all) struct RelayEntry {
+  entry : String
+  relay : String
 }
 
 pub struct Reply {

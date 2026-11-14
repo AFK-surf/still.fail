@@ -21,7 +21,9 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   its head), the streams its peer opens, a link opened
   again, let go of by its program, its holder told as another takes its place; its pings measured, how its place
   is by them told as it changes, and a link that stops answering raced against a new one (`health.mbt`); what its
-  program's word that its connections are suspect does, and the endpoint bound anew where stuck (`wake.mbt`).
+  program's word that its connections are suspect does, and the endpoint bound anew where stuck (`wake.mbt`); what
+  the endpoint is bound with beside its relays, the relays told again, and a connection a peer dials to it, which
+  is never a link (`bind.mbt`).
   `mesh.mbt`'s head says what of the TypeScript mesh (`client/core-ts/src/mesh.ts`) it leaves out.
 
 ## It knows no program
@@ -31,7 +33,9 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   program needs of it the program gives: its protocol, its credential and what its hello says (`Options`,
   `Mesh::link`), what it tells its links to one peer apart by (`Mesh::link`'s `scope`: a string of the program's
   own, which the base never reads; a program with one scope says none), what a peer is told a link was let go for
-  (`Mesh::drop_link`'s `reason`), where its shell keeps files, where its page serves iroh from (`Shell::start`),
+  (`Mesh::drop_link`'s `reason`), what its endpoint is bound with beside its relays (`Binding`: whether peers are
+  looked up, the protocols it takes connections on, which entry leads to which of its relays, worked out by the
+  program), where its shell keeps files, where its page serves iroh from (`Shell::start`),
   and what it links: the shell's static library and iroh's wasm are still.fail's by name, and no file here names
   either.
 - `scripts/mb-base.ts` holds it (`scripts/check.sh`): what the packages import, in every import block of a
@@ -92,10 +96,16 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   connection open, which is bound as what is under way ends, two places asked for in turn for ten minutes;
   whoever waits to dial told as its place is let go of, as the mesh closes, as an opening, a link's answer or a
   race leaves the endpoint; three askers of one place and one dial; the mesh closed at each of its waits, and
-  what of the shell's answers it waits for: `src/mesh/wake_wbtest.mbt`), and how the page's
-  shell turns its runtime. The peer has no network under it: when it answers is the test's to say, a connection
-  is lost by the test saying so, and what the transport counted (`conn.stats`) and whether the endpoint is on a
-  relay are the test's words too. That peer is the test's script, not a
+  what of the shell's answers it waits for: `src/mesh/wake_wbtest.mbt`; what an endpoint is bound with, said or
+  not; its relays told again: the same, their entries alone (one telling at a time, a refusal of ones told
+  over), others with nothing on the endpoint, with links and a connection taken on it, with a link that waits to
+  dial, while the shell binds, a bind that fails, the mesh closed meanwhile; and a connection a peer dials:
+  handed to one asker, its first line held to a time and a length, an asker gone, the endpoint bound anew with
+  the wait out or as one comes, in either order, the mesh closed at each turn: `src/mesh/bind_wbtest.mbt`), and
+  how the page's shell turns its runtime. The peer has no network under it: when it answers is the test's to say,
+  a connection is lost by the test saying so, and what the transport counted (`conn.stats`), whether the
+  endpoint is on a relay, and a peer dialling the endpoint (the answer to `iroh.accept`) are the test's words
+  too. That peer is the test's script, not a
   door: no test in this repository opens a link to a real peer; `shell.c` is compiled by the native step (moon
   makes a package's stub with its tests, into an archive nothing there calls) and run by none; and the rest of the
   JavaScript in `shell_js.mbt` (`extern "js"`, written out in MoonBit: what it does with iroh and its handles) is
@@ -128,6 +138,17 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   at most natively), nothing is read of the peer before it is asked for, and a reader that stops asking holds its
   peer back by the transport's own window. What goes out waits the same way: a write ends once the stream took it,
   and a body told of (`Link::request`'s `wrote`) has one step of 64 KiB waiting at most.
+- A connection a peer dials to the endpoint (`Mesh::incoming`, only on an endpoint bound to take a protocol:
+  `Binding.takes`) is the one thing here that a peer nobody knows starts, and is never a link: nothing of `links`,
+  `current`, the pings or a credential knows it. What is kept for such a peer: by the mesh, one connection the
+  shell brought that no asker took yet, and each one taken (its handle, its place in `incomings`) until its end is
+  told, the endpoint is bound on other relays (`Mesh::retune`) or the mesh closes; of what it sends, `most` bytes
+  and one read of the shell's while its first line is waited for (`Incoming::first`: 64 KiB unless said), and it
+  has 30 s (`first_ms`, unless said) from that being asked to open its first stream and end that line, or is
+  closed. After that line the stream is its program's, read a piece a call as any (`Inbound`). Not bounded here,
+  and its program's to bound: how long a connection taken stays (one never asked its first line, or kept after
+  it: `Incoming::close`; while one is there an endpoint taken for stuck is not bound anew), and how many it holds
+  at once. And the shell's: see "Known, and left".
 - `shell.c` is POSIX's (pthread, `arc4random_buf`): no MSVC, and on Linux glibc 2.36 or later. It has been compiled
   and run on macOS on arm64 alone.
 
@@ -143,7 +164,14 @@ left is another part's:
   TypeScript too, which holds them the same. An endpoint bound anew (`Mesh::rebind`) leaves one such entry each
   time, and that is no rare time: every dial that runs out of time unconnected leaves the endpoint taken for
   stuck, so a peer that does not answer, asked for again and again, binds it anew at each try (5 s apart at the
-  soonest), as in the device base in TypeScript.
+  soonest), as in the device base in TypeScript. The same each time its relays are told again as others
+  (`Mesh::retune`).
+- Natively the Rust shell takes every connection dialled to an endpoint that takes a protocol, from the first
+  time one is asked for (`iroh.accept`): each handshake is done by itself, and those nobody asked for yet wait in
+  a queue with no bound (`client/shell/src/lib.rs`, `Accepted`). The mesh asks for one at a time, the next only
+  as its program asks (`Mesh::incoming`), so a program that stops asking leaves what peers dial open there until
+  the endpoint closes. The device base in TypeScript takes each as it comes and hands it to its program at once,
+  which bounds nothing either. That shell's to bound.
 - A write given up lets go of its stream: that is the mesh's intent (`Out::write` resets it), and both shells' only
   once that write moves. `istream.write` holds the sending half while it writes, and `istream.reset` waits for it
   (`client/shell/src/lib.rs`, `client/iroh-wasm/src/lib.rs`): given up because the peer is not reading, the write
@@ -190,7 +218,12 @@ left is another part's:
   take the next stream and keep it from everyone: it is the mesh's own fiber, one under way a link at most, whose
   answer is kept on the link for whoever asks next (`Link::accept`); whoever waits for it waits for the link's end
   beside it, which the close says of every link, since that fiber cut before its first step says nothing. A wait
-  that holds nothing is simply let go (`Out::stopped`, `Out::finish`). A new wait on the shell says which of these
+  that holds nothing is simply let go (`Out::stopped`, `Out::finish`). The wait for a connection a peer dials
+  (`iroh.accept`), let go of, would take the next connection for nobody: it is the mesh's own fiber, one under
+  way at most, whose answer is kept on the mesh for whoever asks next (`Mesh::await_coming`); whoever waits for
+  it is told by the close, which lets go of the wait (`Mesh::forget_coming`), since that fiber cut says nothing.
+  And a connection's first line (`Incoming::first`) is read in its asker's own fiber, which may be cut: then, and
+  whenever it fails, the connection is closed, so the read that goes on is of nothing anyone reads again. A new wait on the shell says which of these
   it is, where it is written.
 - `catch` does not catch a fiber's interruption: what must be undone then is in a `defer`. And a fiber interrupted
   before its first step runs nothing, no `defer` either. So what others wait for from a fiber of the mesh's scope
@@ -244,6 +277,21 @@ left is another part's:
   as the mesh closes. A review found the endpoint never bound while two places were asked for in turn, each
   one's dial keeping it from the other's (2026-11-14). With a connection open on it, it is dialled on as it
   is, as in that mesh.
+- A connection a peer dialled that its program took is on the endpoint too (`incomings`, counted in `idle`, and
+  as a connection open in `settling`). The one wait that is asked of an endpoint and outlives it is the wait for
+  such a connection (`iroh.accept`): it is let go of in the step the endpoint is changed (`Mesh::forget_coming`:
+  no more the one the mesh keeps, whoever waits on it told to look again, a connection it brought and nobody
+  took closed), and both that wait's fiber, as the shell answers it, and its asker, as it wakes, look whether it
+  is still the one kept before they take what it brought; an asker woken while the endpoint is being bound anew
+  waits to be told that ended first (`held`, at no place), since a connection taken then would be on an endpoint
+  that goes for having nothing on it. Where its relays are told again as others (`Mesh::retune`) the mesh makes
+  the endpoint idle itself: everything on it is let go of in that one step (`Mesh::rehome`), the bind begun in
+  the same step, which waits for their ends to be told first; told yet others while the shell binds, it binds
+  once more before anyone goes on. What was told and the endpoint is not on yet is kept (`retuned`), and is as
+  an endpoint taken for stuck to whoever asks for a link: bound by the next that finds nothing on it, nothing
+  new dialled on it while what is on it ends by itself. The entries alone are told the endpoint as it is, one
+  telling at a time, each looking again, as its turn comes and as the shell answers, whether those are still
+  the ones wanted and that still the endpoint.
 - What the mesh takes at a shell it lets go of there, for a page lives long: a stream by resetting it, or by
   reading it to its end and finishing it, which is when both shells let go of one (one whose read failed is reset:
   `Reply::take`; a request's is finished as it is sent, so reading its reply to its end is all it takes; one open
@@ -321,4 +369,31 @@ left is another part's:
     flow of the messenger's, runs it. An endpoint bound a second time in a page (`iroh.bind` again, then
     `iroh.close` of the first) is run by no test here either, and is no rare path: any page that asks again for
     a peer that did not answer takes it.
+- Where what the endpoint is bound with, its relays told again and the connections it takes are not that mesh's
+  (`bind.mbt`; `make`, `#bind`, `retune`, `#accepting` there; what a bind is asked is, key for key):
+  - **Relays told again as others, with links on the endpoint.** There the endpoint is bound anew at once and the
+    one before closed with its links on it: their peers are told what the transport says of an endpoint closed,
+    the links stay in its table until asked for again, and where the bind fails they are kept. Here every link is
+    let go of first, as `drop_link` does (its peer told the reason its program gives, `closed` unless said; its
+    holders told), then, as their ends are told, the endpoint is bound; where that bind fails the links are gone
+    all the same, and the endpoint stays on the relays of before until a link finds nothing on it, 5 s later at
+    the soonest (there it is never tried again). The same where the shell cannot be told the entries.
+  - Told what it has is by the strings (there as URLs: one written two ways is one). A relay written another
+    way is another here, and binds anew.
+  - Which entry leads to which relay is its program's to say (`RelayEntry`): there the mesh is given the entries
+    and a table of their relays and works it out, dropping an entry that is among the relays or whose relay is
+    not the endpoint's. The entries as ways of their own to dial through are the ways', not here yet.
+  - The entries are told one telling at a time, and ones told over before their turn are never asked (there each
+    telling is sent off as it is told, in no order the shell holds to).
+  - A connection a peer dials is asked for by its program, one at a time (`Mesh::incoming`), and its first stream
+    and first line are held to 30 s and 64 KiB (`Incoming::first`): there every connection is handed to its
+    program as it comes, which waits for its first stream with no time. One taken counts as on the endpoint:
+    an endpoint taken for stuck is not bound anew under it (there it is, no link being open, and the connection
+    ends with the endpoint). Of a connection taken, only its first stream is given: further streams of its
+    peer's, streams opened on it from here, its paths, are not here; nor is a peer dialled on another protocol
+    with no credential (that mesh's `endpoint()`, the other side of what its program takes).
+  - The page's shell binds with `relayEntries` where any are said and answers `iroh.setRelayEntries` since this,
+    in JavaScript no compiler reads and no test here runs; `iroh.accept` it has not (iroh-wasm takes no
+    connection), and `Mesh::incoming` on a page fails saying so (`host`). No flow of the messenger's runs any of
+    the three, nor a second bind in a page.
 - A compiler warning is an error or off (`moon.mod`'s `warnings`, mbui's line).
