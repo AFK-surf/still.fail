@@ -2848,6 +2848,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         if (movedHere(inner, c.workspace) && carriedOwn(inner, c.workspace, param("device")) !== null) {
           const d = carriedOwn(inner, c.workspace, param("device"))!;
           const name = deviceText({ kind: "app", label: d.label });
+          // (the vaults read first, while the device is still in: views/vault.ts `levelVaults`)
+          yield* levelVaultsOf(inner, d.sub);
           // (the vaults of theirs that held a key for it keyed anew at once, in every moved workspace their log binds, as
           // `takeOffBound` does: `tookOutMoved`)
           result = yield* Effect.tap(inner.adb.personal().removeCarried(d.sub, param("device"), d.label, actText({ act: "removeDevice", name })), () =>
@@ -2857,7 +2859,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
             }));
           break;
         }
-        result = movedHere(inner, c.workspace) ? yield* webMoved(inner, sub, c.workspace, param("device"), "web.remove") : yield* lock.append("device.remove", { id: param("device") });
+        // (on the chain, the vaults read first while the device is still in: views/vault.ts `levelVaults`)
+        result = movedHere(inner, c.workspace) ? yield* webMoved(inner, sub, c.workspace, param("device"), "web.remove") : yield* Effect.andThen(levelVaults(inner, c.workspace), lock.append("device.remove", { id: param("device") }));
         break;
       }
       case "disable": {
@@ -3035,7 +3038,8 @@ export function roster(inner: Inner, sub: string, ws: string, what: Roster): Eff
     if ("station" in what) return f.stations.has(what.station) ? yield* lock.append("station.remove", { key: what.station }) : null;
     const member = f.members.get(what.member);
     if ("gone" in what) {
-      if (member !== undefined) return yield* lock.append("member.remove", { sub: what.member });
+      // (the vaults read first, while the member is still in: views/vault.ts `levelVaults`)
+      if (member !== undefined) return yield* Effect.andThen(levelVaults(inner, ws), lock.append("member.remove", { sub: what.member }));
       // Only pending (added here while no station was up): that adding dropped, never having taken effect; signed after
       // it, a removal would mean nothing, and the adding would take effect once a station is next up.
       const items = pendingHeld(inner, ws);

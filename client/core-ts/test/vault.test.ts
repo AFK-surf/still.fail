@@ -32,7 +32,7 @@ import {
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
-import { BOX_KEY, BOX_PUB, UNLOCK_MS, droppedIn, tookOut, waitingAs, waitingChecks } from "../src/views/vault.ts";
+import { BOX_KEY, BOX_PUB, UNLOCK_MS, droppedIn, levelVaults, tookOut, waitingAs, waitingChecks } from "../src/views/vault.ts";
 import { handOver, inForceOf, pendingHeld, read as readLock, roster } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
 import { withoutMesh } from "./lock-rig.ts";
@@ -1193,6 +1193,61 @@ test("a device taken out of the lock that held a vault's key: the owner's device
   assert.equal(JSON.parse(new TextDecoder().decode(decrypt(fresh, item.ct, itemContext("ws", id, item.id, 1, 1)))).fields.value, "ghp_x", "written again under the new key");
   assert.equal(vaults().vaults.length, 1, "shown still");
   assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+  r.core.close();
+});
+
+// The same race on a chain that has not moved (every workspace while chains are held from moving, and the path a removal
+// went by before a move): the phone's next version at the station, not read here, as the phone is taken out. Read first
+// (`levelVaults`, as views/lock.ts runs it before a removal it signs), it is taken while the phone is in and keyed anew
+// from; not read, the station's refusal of the keying anew has it read again, and the chain as it stood checks it.
+async function phoneWroteUnread() {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  const old = r.st.vaults.get(id)!;
+  assert.ok(old.keys.some((k) => k.cert.device === r.phone.hex), "the phone given the key");
+  // (the phone writes the vault's next version, as it does giving a key: told to no one here)
+  const { sig: _, ...rest } = old;
+  const phones = sign({ ...rest, seq: old.seq + 1, at: old.at + 1 }, TAG.vault, r.phone);
+  r.st.vaults.set(id, phones);
+  const takeOut = async () => {
+    stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+    grow(r, "device.remove", { id: r.phone.hex });
+    for (let n = 0; n < 2; n++) {
+      await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+      await r.host.time.pass(500, 10);
+    }
+    r.take();
+  };
+  return { r, id, old, phones, takeOut };
+}
+
+test("a chain not moved: the phone's version not read here as the phone is taken out, the vaults read first: taken while the phone is in, keyed anew from it, nothing written past", async () => {
+  const { r, id, old, phones, takeOut } = await phoneWroteUnread();
+  await r.core.inner.runner.run(levelVaults(r.core.inner, "ws"));
+  await takeOut();
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], "keyed anew from the phone's version, without it");
+  assert.equal(droppedIn(r.core.inner, "ws", id), 0, "nothing written past");
+  r.core.close();
+});
+
+// (on a chain the version is checked against the chain as it stood, a prefix vouching for it, `waitingAs`: read again
+// on the station's refusal, it is taken and keyed anew from, nothing written past; before, the keying anew was refused
+// for good, the station holding the phone's version)
+test("a chain not moved: the phone's version not read here as the phone is taken out, not read first: read again on the station's refusal, taken by the chain as it stood, keyed anew from it", async () => {
+  const { r, id, old, phones, takeOut } = await phoneWroteUnread();
+  await takeOut();
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [phones.seq + 1, old.epoch + 1, ["ab".repeat(32)]], `keyed anew from the phone's version (station at seq ${v.seq})`);
+  assert.equal(droppedIn(r.core.inner, "ws", id), 0, "nothing written past");
+  assert.equal((await r.ask("vault.open", { item: [...r.st.items.keys()][0] })).plain.fields.value, "ghp_x", "its item opened");
   r.core.close();
 });
 
