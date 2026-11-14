@@ -749,7 +749,7 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
         row.box(fn(b) {
           ws_way_row_node(b, fn() { host(url.get()) }, fn() { added_by(url.get()) }, fn(e) {
             e.show(manager, fn(k) {
-              @sf.row_end_button_node(
+              @sf.button_node(
                 k,
                 fn() { @sf.t("android-settings.members.remove") },
                 fn() {
@@ -763,6 +763,7 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
                     done=@sf.t("android-settings.relays.removed"),
                   )
                 },
+                tone=Plain,
                 disabled=setting,
               )
               |> ignore
@@ -845,11 +846,11 @@ let ws_way_body_narrow : @ui.Style = @ui.css("w=Full pt=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_line : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart py=S1_5")
+let ws_way_line : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart py=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_last_line : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart pt=S1_5")
+let ws_way_last_line : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart pt=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -865,11 +866,11 @@ let ws_way_label_at : @ui.Style = @ui.css("pt=S4 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_add_row_wide : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter pb=S2_5")
+let ws_way_add_row_wide : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter pb=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_way_add_row_narrow : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter pt=S3_5 pb=S2_5")
+let ws_way_add_row_narrow : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter pt=S3_5 pb=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)

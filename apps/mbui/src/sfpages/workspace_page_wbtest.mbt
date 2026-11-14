@@ -441,10 +441,13 @@ test "where the two panels' words stand on every screen: each under the one befo
       assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{Repr(order[k - 1])} over \{Repr(order[k])}")
       assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{Repr(order[0])} beside \{Repr(order[k])}")
     }
-    // (each row's trailing control aligns with its first line, never centered across title + note)
+    // (each row's trailing control aligns with its first line and with the panel's right edge)
+    let (ax, _, aw, _) = t.get(Button, label="添加").rect
     let r_title = ws_word(t, "relay.example.com/")
-    let (_, ry, _, rh) = t.get(Button, label="移除").rect
+    let (rx, ry, rw, rh) = t.get(Button, label="移除").rect
     let r_mid = ry + rh / 2.0
+    assert_true((rx - ax).abs() < 0.5, msg="\{at}: remove left \{rx}, add left \{ax}")
+    assert_true((rw - aw).abs() < 0.5, msg="\{at}: remove width \{rw}, add width \{aw}")
     assert_true((r_mid - (r_title.1 + r_title.3 / 2.0)).abs() < 1.0, msg="\{at}: remove middle \{r_mid}, \{Repr(r_title)}")
     let (title, note) = (ws_word(t, "使用官方中继"), ws_word(t, "关闭后仅使用自定义中继"))
     let (sx, sy, _, sh) = t.get(Switch, label="使用官方中继").rect
