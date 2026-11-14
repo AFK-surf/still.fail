@@ -569,14 +569,16 @@ fn chat_body_node(
     None
   }
   let newest_was : Ref[String?] = Ref(@signals.untracked(newest).map(fn(n) { n.0 }))
+  // (whether the list is at its foot read with the newest, by this watch, as the same change gives both: read untracked
+  // as it was told, the list's at-foot was worked out with nothing following it, and so held what it read, the
+  // chat's subscription with it, past the page)
   v.reacts(
-    newest,
-    fn(now) {
+    fn() { (newest(), scroll.at_foot_now()) },
+    fn(now_at) {
+      let (now, at_foot) = now_at
       let was = newest_was.val
       newest_was.val = now.map(fn(n) { n.0 })
-      guard now is Some((k, own, true)) && was is Some(w) && w != k && @signals.untracked(fn() { scroll.at_foot_now() }) else {
-        return
-      }
+      guard now is Some((k, own, true)) && was is Some(w) && w != k && at_foot else { return }
       if own {
         place.follow_from(None)
       } else {
