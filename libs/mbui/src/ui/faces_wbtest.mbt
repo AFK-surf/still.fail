@@ -112,3 +112,34 @@ test "faces: words laid out while a face given is on its way are laid out again 
   t.draw()
   assert_eq(words_shaped_in.untracked(), shaped + 1)
 }
+
+///|
+test "faces: ASCII measured as a real face measures it once the test gives its advances, the code face and the rest as ever" {
+  let t = Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(dir=Row, fn() { c.text("$8", size=10.0, wrap=false) |> ignore }) |> ignore
+      c.box(dir=Row, fn() { c.text("$9", size=10.0, wrap=false, weight=700) |> ignore }) |> ignore
+      c.box(dir=Row, fn() { c.text("中", size=10.0, wrap=false) |> ignore }) |> ignore
+      c.box(dir=Row, fn() { c.rich([span("$7", mono=true)]) |> ignore }) |> ignore
+    })
+    |> ignore
+  })
+  // (in thousandths of a point, so a miss says both)
+  let w = fn(s : String) { (t.rect_of(s).unwrap().2 * 1000.0).round() }
+  // as ever: half an em a letter
+  assert_eq(w("$8"), 10000.0)
+  let mono0 = w("$7")
+  let regular = FixedArray::make(95, 0.5)
+  let bold = FixedArray::make(95, 0.5)
+  regular['$'.to_int() - 32] = 0.6
+  regular['8'.to_int() - 32] = 0.58
+  bold['$'.to_int() - 32] = 0.65
+  bold['9'.to_int() - 32] = 0.62
+  t.latin_advances(regular, bold)
+  t.draw()
+  // (what was laid out before laid out again at the widths given; bold by its own table, no bold extra on it)
+  assert_eq(w("$8"), 11800.0)
+  assert_eq(w("$9"), 12700.0)
+  assert_eq(w("中"), 10000.0)
+  assert_eq(w("$7"), mono0)
+}

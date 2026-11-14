@@ -114,3 +114,58 @@ test "said_stretch: a figure made what leaf makes of it, the rest as it was" {
   let expected : Json = { "cost": "$8,888", "note": "x" }
   assert_eq(out, expected)
 }
+
+///|
+/// Each printable ASCII letter's advance in ems (U+0020 to U+007E), the widest of the faces the app's words are set in
+/// on a device: what still.fail offers (LXGW WenKai, Inter, Noto Sans SC) and the systems' (SF, Roboto, Arial),
+/// read from their hmtx (2026-11-14; LXGW WenKai 1.530 Regular, SF at wght 400, Arial, Noto Sans CJK SC Regular, Inter
+/// 4.0 at wght 400, Roboto 2.138 Regular). The fake host's half an em is narrower than every one of them for a
+/// figure: a digit 0.6 and more, `%` 0.8 to 0.98, `$` 0.6 to 0.64.
+let real_latin : FixedArray[Double] = [
+  0.350, 0.350, 0.474, 0.633, 0.642, 0.982, 0.700, 0.350, 0.365, 0.365, 0.501, 0.662, 0.350, 0.460, 0.350, 0.413, 0.631,
+  0.600, 0.610, 0.618, 0.646, 0.608, 0.620, 0.600, 0.619, 0.620, 0.350, 0.350, 0.662, 0.662, 0.662, 0.600, 1.015, 0.690,
+  0.667, 0.730, 0.728, 0.667, 0.611, 0.778, 0.743, 0.304, 0.571, 0.672, 0.565, 0.903, 0.753, 0.778, 0.667, 0.778, 0.722,
+  0.667, 0.646, 0.744, 0.690, 0.985, 0.682, 0.679, 0.629, 0.365, 0.411, 0.365, 0.604, 0.559, 0.606, 0.575, 0.618, 0.571,
+  0.620, 0.583, 0.370, 0.613, 0.607, 0.275, 0.301, 0.552, 0.284, 0.926, 0.610, 0.606, 0.620, 0.620, 0.430, 0.528, 0.377,
+  0.607, 0.562, 0.818, 0.546, 0.562, 0.552, 0.426, 0.350, 0.426, 0.680,
+]
+
+///|
+/// The same at weight 600 and more: LXGW WenKai 1.530 Medium (its heaviest), SF and Inter at wght 700, Arial Bold,
+/// Roboto Bold.
+let real_latin_bold : FixedArray[Double] = [
+  0.350, 0.350, 0.551, 0.649, 0.655, 1.016, 0.722, 0.350, 0.382, 0.382, 0.559, 0.679, 0.350, 0.468, 0.350, 0.388, 0.674,
+  0.600, 0.629, 0.646, 0.676, 0.639, 0.652, 0.600, 0.651, 0.652, 0.350, 0.350, 0.679, 0.679, 0.679, 0.611, 1.016, 0.747,
+  0.722, 0.740, 0.728, 0.667, 0.611, 0.778, 0.747, 0.304, 0.584, 0.722, 0.611, 0.932, 0.762, 0.778, 0.667, 0.778, 0.722,
+  0.667, 0.667, 0.732, 0.747, 1.038, 0.738, 0.731, 0.664, 0.382, 0.422, 0.382, 0.647, 0.576, 0.500, 0.581, 0.630, 0.588,
+  0.630, 0.596, 0.398, 0.632, 0.623, 0.278, 0.301, 0.580, 0.278, 0.913, 0.623, 0.613, 0.630, 0.630, 0.430, 0.560, 0.366,
+  0.623, 0.600, 0.850, 0.580, 0.602, 0.573, 0.469, 0.372, 0.469, 0.679,
+]
+
+///|
+/// The figures again, each at its widest, measured as the widest real face measures them (real_latin): the agent's
+/// tiles fitted `$1,911` in the fake host's half ems and cut it short on a phone set in LXGW WenKai (the owner's
+/// screenshot, 2026-11-14), each digit 0.6 of an em there.
+test "figures: none cut short at its widest, measured as a real face measures it" {
+  let wrong : Array[String] = []
+  for win in corner_windows {
+    if !squeeze_windows.contains(win.0) {
+      continue
+    }
+    for mode in said_modes {
+      let t = screen_in(mode, win, "zh", said=true, latin=Some((real_latin, real_latin_bold)), motion_judged=false)
+      // (cut with the words still whole in the draw list, as an old view's words are where they say nothing of it: the
+      // squeeze's fault naming the figure; a device's host draws them cut, `$1,9…`)
+      let cut = figures_cut(t) +
+        t
+        .squeeze_faults()
+        .filter(fn(f) { @sffixture.widest_paths.values().any(fn(ps) { ps.iter().any(fn(p) { f.contains(p.1) }) }) })
+      if cut.length() > 0 {
+        wrong.push("\{win.0}-zh \{mode}:\n  " + cut.join("\n  "))
+      }
+    }
+  }
+  if wrong.length() > 0 {
+    fail(wrong.join("\n"))
+  }
+}
