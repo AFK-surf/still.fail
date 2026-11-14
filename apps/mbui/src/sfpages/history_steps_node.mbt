@@ -447,17 +447,8 @@ fn ev_node(
     }
   }
   steps_box_node(v, h_ev, fn(e) {
-    if rail || rail_last {
-      e.box(fn(o) {
-        o.over(Is(true)) |> ignore
-        o.box(fn(room) {
-          @sf.style_node(room, fn() { if rail_last { h_rail_room_last } else { h_rail_room } })
-          steps_box_node(room, h_rail, fn(_) {  })
-        })
-        |> ignore
-      })
-      |> ignore
-    }
+    ignore(rail)
+    ignore(rail_last)
     ignore(row)
     e.box(fn(i) {
       @sf.style_node(i, fn() { h_icon })
@@ -593,26 +584,28 @@ fn item_node(
     "post" => {
       let ends = text(content, "ends")
       let failed = flag(content, "failed")
-      ev_node(v, "send", "", if failed { "red" } else { "accent" }, rail=ends != "", rail_last=ends == "" && rail, fn(b) {
-        steps_box_node(b, h_label, fn(l) {
-          label_wraps(l)
-          steps_words(l, fn() { @sf.t("web-main.history.sentTo") }, h_label_words)
-          match field(content, "place") {
-            Some(Object(_)) as p => place_node(l, station, p)
-            _ =>
-              steps_box_node(l, h_place, fn(pl) {
-                @sf.drawable_node(pl, "slack", 12.0) |> ignore
-                steps_words(pl, fn() { "Slack" }, h_place_words)
-              })
-          }
-          if flag(content, "block") && ends == "" {
-            @sf.badge_node(l, fn() { "Block" }, tone=Blue) |> ignore
-          }
-          if failed {
-            @sf.badge_node(l, fn() { @sf.t("web-main.history.sendFailed") }, tone=Red) |> ignore
-          }
+      steps_box_node(v, h_ev_stack, fn(ev) {
+        ev_node(ev, "send", "", if failed { "red" } else { "accent" }, rail=ends != "", rail_last=ends == "" && rail, fn(b) {
+          steps_box_node(b, h_label, fn(l) {
+            label_wraps(l)
+            steps_words(l, fn() { @sf.t("web-main.history.sentTo") }, h_label_words)
+            match field(content, "place") {
+              Some(Object(_)) as p => place_node(l, station, p)
+              _ =>
+                steps_box_node(l, h_place, fn(pl) {
+                  @sf.drawable_node(pl, "slack", 12.0) |> ignore
+                  steps_words(pl, fn() { "Slack" }, h_place_words)
+                })
+            }
+            if flag(content, "block") && ends == "" {
+              @sf.badge_node(l, fn() { "Block" }, tone=Blue) |> ignore
+            }
+            if failed {
+              @sf.badge_node(l, fn() { @sf.t("web-main.history.sendFailed") }, tone=Red) |> ignore
+            }
+          })
         })
-        steps_box_node(b, if failed { h_card_failed } else { h_card }, fn(card) {
+        steps_box_node(ev, if failed { h_card_failed } else { h_card }, fn(card) {
           card.edge(By(fn() { (1.0, @ui.tree_theme().color(if failed { Danger } else { Line })) })) |> ignore
           let words = text(content, "text")
           fold_node(card, ik + "/post", post_lines, md_line, fn(f) { md_node(f, words, field(content, "md")) })
@@ -838,38 +831,40 @@ fn received_node(
 ) -> Unit {
   let notice = text(m, "notice")
   let job = notice == "job"
-  ev_node(v, "received", "", "", rail~, rail_last~, fn(b) {
-    steps_box_node(b, h_label, fn(l) {
-      label_wraps(l)
-      steps_words(l, fn() {
-        @sf.t(if job { "web-main.history.jobMessage.before" } else { "web-main.history.message.before" })
-      }, h_label_words)
-      let from = field(m, "from")
-      let user = text(from, "slackUser")
-      if user != "" {
-        slack_name_node(l, src, station, user, text(from, "name"), flag(from, "bound"), tips)
-      } else {
-        steps_words(l, fn() { if notice == "stillfail" { @sf.product() } else { text(from, "name") } }, h_strong)
-      }
-      steps_words(l, fn() {
-        @sf.t(if job { "web-main.history.jobMessage.after" } else { "web-main.history.message.after" })
-      }, h_label_words)
-      match field(m, "place") {
-        Some(Object(_)) as p =>
-          // (the dot going on with its place, never left at a line's end)
-          steps_box_node(l, h_label_place, fn(dp) {
-            dp.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-            steps_words(dp, fn() { "·" }, h_label_words)
-            place_node(dp, station, p)
-          })
-        _ => ()
-      }
+  steps_box_node(v, h_ev_stack, fn(ev) {
+    ev_node(ev, "received", "", "", rail~, rail_last~, fn(b) {
+      steps_box_node(b, h_label, fn(l) {
+        label_wraps(l)
+        steps_words(l, fn() {
+          @sf.t(if job { "web-main.history.jobMessage.before" } else { "web-main.history.message.before" })
+        }, h_label_words)
+        let from = field(m, "from")
+        let user = text(from, "slackUser")
+        if user != "" {
+          slack_name_node(l, src, station, user, text(from, "name"), flag(from, "bound"), tips)
+        } else {
+          steps_words(l, fn() { if notice == "stillfail" { @sf.product() } else { text(from, "name") } }, h_strong)
+        }
+        steps_words(l, fn() {
+          @sf.t(if job { "web-main.history.jobMessage.after" } else { "web-main.history.message.after" })
+        }, h_label_words)
+        match field(m, "place") {
+          Some(Object(_)) as p =>
+            // (the dot going on with its place, never left at a line's end)
+            steps_box_node(l, h_label_place, fn(dp) {
+              dp.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+              steps_words(dp, fn() { "·" }, h_label_words)
+              place_node(dp, station, p)
+            })
+          _ => ()
+        }
+      })
     })
     let words = text(m, "text")
     match field(m, "md") {
-      Some(Array(_)) as md => fold_node(b, key, words_lines, md_line, fn(f) { md_node(f, words, md) })
+      Some(Array(_)) as md => fold_node(ev, key, words_lines, md_line, fn(f) { md_node(f, words, md) })
       _ =>
-        fold_node(b, key, words_lines, words_line, fn(f) {
+        fold_node(ev, key, words_lines, words_line, fn(f) {
           if job {
             steps_run(f, fn() { words }, h_output, mono=true)
           } else {
@@ -1186,17 +1181,7 @@ fn group_node(
   let rows = items(g, "rows")
   let calls = rows.iter().any(fn(r) { text(Some(r), "kind") == "step" })
   steps_box_node(v, h_group, fn(gv) {
-    if rail {
-      gv.box(fn(o) {
-        o.over(Is(true)) |> ignore
-        o.box(fn(room) {
-          @sf.style_node(room, fn() { h_rail_room_last })
-          steps_box_node(room, h_rail, fn(_) {  })
-        })
-        |> ignore
-      })
-      |> ignore
-    }
+    ignore(rail)
     gv.box(fn(h) {
       @sf.style_node(h, fn() { h_group_head })
       let hot = fn() { @sf.lit_node(h) }
@@ -1307,6 +1292,26 @@ fn step_label(name : String) -> String {
 }
 
 ///|
+/// Whether `s` is an opaque hex/UUID identifier that should not be shown as a human-readable hint.
+fn is_opaque_id(s : String) -> Bool {
+  let v = s.trim().to_owned()
+  if v.length() < 8 {
+    return false
+  }
+  let mut has_digit = false
+  for ch in v {
+    let is_hex = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F') || ch == '-'
+    if !is_hex {
+      return false
+    }
+    if ch >= '0' && ch <= '9' {
+      has_digit = true
+    }
+  }
+  has_digit
+}
+
+///|
 /// Fallback summary extracted from a step's raw JSON call when `said` was not populated on the step item.
 fn step_call_summary(call : String) -> (String, String) {
   let trimmed = call.trim().to_owned()
@@ -1324,11 +1329,14 @@ fn step_call_summary(call : String) -> (String, String) {
     }
   }
   let mut hint = ""
-  for k in ["to", "recipient", "Recipient", "subagent_type", "TypeName", "path", "file_path", "Path", "pattern", "query", "message", "prompt"] {
+  for k in ["_target", "recipient_name", "to", "recipient", "Recipient", "subagent_type", "TypeName", "path", "file_path", "Path", "pattern", "query", "message", "prompt"] {
     match m.get(k) {
-      Some(String(s)) if s.trim().to_owned() != "" => {
-        hint = first_line(s.trim().to_owned())
-        break
+      Some(String(s)) => {
+        let v = s.trim().to_owned()
+        if v != "" && !is_opaque_id(v) {
+          hint = first_line(v)
+          break
+        }
       }
       _ => ()
     }
@@ -1911,6 +1919,8 @@ fn tool_part_node(
       let words = text(part, "text")
       let md = field(part, "md")
       let target = text(part, "target")
+      let target_id = text(part, "targetId")
+      let nav_target = if target_id != "" { target_id } else { target }
       let summary = text(part, "summary")
       if target != "" || summary != "" {
         steps_box_node(v, tool_dispatch_card, fn(card) {
@@ -1922,7 +1932,7 @@ fn tool_part_node(
                   @sf.style_node(badge, fn() { tool_dispatch_badge })
                   steps_pressed(
                     badge,
-                    fn() { jump_to_dispatch_target(src, station, key, rk, target) },
+                    fn() { jump_to_dispatch_target(src, station, key, rk, nav_target) },
                     label=fn() { "→ " + target },
                   )
                   @sf.icon_node(badge, "agent", 12.0, By(fn() { @sf.theme().p.accent })) |> ignore
@@ -2376,17 +2386,9 @@ let h_main : @ui.Style = @ui.css("w=Full gap=S2_5")
 let h_ev : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 
 ///|
-/// The turn's rail: 1 wide, 9.5 in, from under its mark (20) down past the event to the next one's (10 more).
+/// A full-width event stack (header line with icon on top, full-width message/card below).
 // kept across runs: a value (no field of it changes)
-let h_rail_room : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.history_rail_in).then(@sf.outset_bottom(10.0))
-
-///|
-// kept across runs: a value (no field of it changes)
-let h_rail_room_last : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.history_rail_in).then(@sf.outset_bottom(10.0))
-
-///|
-// kept across runs: a value (no field of it changes)
-let h_rail : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
+let h_ev_stack : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
 /// An event's mark (hIcon): 20 square, on whatever it stands on: the turn's rail runs from under it, so nothing of it
@@ -2602,9 +2604,9 @@ let h_group_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 let h_group_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
-/// Its calls, opened (hSteps): aligned with the step icon column (20), 2 apart, 2 under its line.
+/// Its calls, opened (hSteps): full width aligned with the left edge, 2 apart, 2 under its line.
 // kept across runs: a value (no field of it changes)
-let h_steps : @ui.Style = @ui.css("w=Full pl=S5 pt=S0_5 gap=SPx")
+let h_steps : @ui.Style = @ui.css("w=Full pt=S0_5 gap=SPx")
 
 ///|
 /// A call's line (hStep summary): 4 by 6 in, round 8, 8 apart, 12; the pointer's ground on it.
@@ -2613,7 +2615,7 @@ let h_step : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1 px=S1_5 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}")
+let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1 px=S1_5 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}").then(@sf.outset(6.0))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2636,14 +2638,13 @@ let h_step_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=f
 let h_step_meta_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
-/// A step's or thought's words (hStepBody: 4 by 6 in, 8 under, 12); a thought alone (hThinking: 2 over, 6 under and at
-/// its start, muted).
+/// A step's or thought's words (hStepBody: 4 over, 8 under, 12); a thought alone (hThinking: 2 over, 6 under, muted).
 // kept across runs: a value (no field of it changes)
-let h_step_body : @ui.Style = @ui.css("w=Full pt=S1 px=S1_5 pb=S2")
+let h_step_body : @ui.Style = @ui.css("w=Full pt=S1 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_thinking : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1_5 pl=S1_5")
+let h_thinking : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2668,10 +2669,10 @@ let h_phase_now : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false
 let h_phase_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
-/// A call opened: 2 over, 2 in at the sides, 6 under, the call and what came back 6 apart; each a section, its
+/// A call opened: 2 over, 6 under, the call and what came back 6 apart; each a section, its
 /// parts 6 apart (what came back 4).
 // kept across runs: a value (no field of it changes)
-let tool_body_box : @ui.Style = @ui.css("w=Full pt=S0_5 px=S0_5 pb=S1_5 gap=S1_5")
+let tool_body_box : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

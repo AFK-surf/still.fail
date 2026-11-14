@@ -1,6 +1,7 @@
 // A history step's call and what came back, read by what they are (src/tool-step.ts, `history.tool`).
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { agentsOf, told } from "../src/activity.ts";
 import { toolCall, toolResult } from "../src/tool-step.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { t } from "../src/i18n.ts";
@@ -128,7 +129,8 @@ test("a_client_asks_the_core_what_a_step_is", async () => {
   await host.settle();
   const sendOk = (answers(host.takeEmitted(), 2) as J).ok;
   assert.equal(sendOk.call[0].kind, "markdown");
-  assert.equal(sendOk.call[0].target, "a036720bc24844903");
+  assert.equal(sendOk.call[0].target, "verifier");
+  assert.equal(sendOk.call[0].targetId, "a036720bc24844903");
   assert.equal(sendOk.call[0].summary, "Tell verifier all 4 findings are valid, ask to fix all");
   assert.ok(Array.isArray(sendOk.call[0].md), "dispatch message parsed as Markdown");
   assert.deepEqual(sendOk.result, [
@@ -136,7 +138,7 @@ test("a_client_asks_the_core_what_a_step_is", async () => {
       kind: "fields",
       rows: [
         { key: "type", value: "message_sent", form: "short" },
-        { key: "recipient", value: "a036720bc24844903", form: "short" },
+        { key: "recipient", value: "verifier", form: "short" },
         { key: "recipient_kind", value: "agent", form: "short" },
       ],
     },
@@ -157,5 +159,24 @@ test("a_client_asks_the_core_what_a_step_is", async () => {
   assert.equal(customOk.call[0].rows[1].prose, true);
   assert.equal(customOk.call[0].rows[2].form, "long");
   assert.ok(Array.isArray(customOk.call[0].rows[2].md), "long field row carries parsed Markdown tree");
+
+  const agents = agentsOf([
+    {
+      kind: "tool_call",
+      callId: "call_1",
+      tool: "Agent",
+      text: JSON.stringify({ description: "Verify 4 findings on markdown.mbt", subagent_type: "research", prompt: "check" }),
+    },
+    {
+      kind: "tool_result",
+      callId: "call_1",
+      text: "Done.\nagentId: a036720bc24844903 (for SendMessage to continue this agent)",
+    },
+  ]);
+  assert.equal(agents.get("a036720bc24844903"), "Verify 4 findings on markdown.mbt");
+  assert.equal(
+    told("SendMessage", JSON.stringify({ to: "a036720bc24844903", message: "Please fix all 4." }), { agents }),
+    "向子 agent (Verify 4 findings on markdown.mbt) 发送消息：Please fix all 4.",
+  );
   core.close();
 });

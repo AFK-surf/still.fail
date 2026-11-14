@@ -1,7 +1,7 @@
 // What an agent at work is doing, as a chat shows it: one line, the thing it does now. From a `live`
 // topic's value into `activity`: `{ now: { key, text } }`.
 import { t } from "./i18n.ts";
-import { cleanCommand, cleanPath, closeCut as close, summaryCommand } from "./tool-step.ts";
+import { cleanCommand, cleanPath, closeCut as close, isOpaqueId, summaryCommand } from "./tool-step.ts";
 import { get } from "./util.ts";
 
 /// A tool's name without its MCP prefix or ACP "Run " prefix.
@@ -202,9 +202,14 @@ function cutShort(json: string): Record<string, J> | null {
 
 const firstLine = (s: string) => (s.split(/\r?\n/).find((l) => l.trim() !== "") ?? "").trim();
 
-/// What a call's words need beyond its input: the workspace's stations' names by id, and what the tasks prepared on
-/// them earlier in the transcript run, by `<station>/<key>` (tasksOf).
-export type Known = { stations?: ReadonlyMap<string, string>; tasks?: ReadonlyMap<string, string> };
+/// What a call's words need beyond its input: the workspace's stations' names by id, what the tasks prepared on
+/// them earlier in the transcript run, by `<station>/<key>` (tasksOf), and the sub-agents or chats named earlier in the
+/// transcript or workspace, by id (agentsOf).
+export type Known = {
+  stations?: ReadonlyMap<string, string>;
+  tasks?: ReadonlyMap<string, string>;
+  agents?: ReadonlyMap<string, string>;
+};
 
 /// The line of a command that says what it does: not `exec 2>&1`, `set -e`, a comment or a shebang.
 function commandLine(command: string): string {
@@ -212,16 +217,20 @@ function commandLine(command: string): string {
   return summaryCommand(lines.join("\n"));
 }
 
-function shortChatRef(raw: string): string {
+function shortChatRef(raw: string, agents?: ReadonlyMap<string, string>): string {
   const s = raw.trim();
   if (!s) return "";
   const urlPart = s.includes("/chats/") ? (s.split("/chats/").pop() ?? s) : s;
+  let decoded = urlPart;
   try {
-    const decoded = decodeURIComponent(urlPart).replace(/^chat:/, "");
-    return decoded.length > 28 ? `${decoded.slice(0, 24)}…` : decoded;
+    decoded = decodeURIComponent(urlPart).replace(/^chat:/, "");
   } catch {
-    return urlPart.length > 28 ? `${urlPart.slice(0, 24)}…` : urlPart;
+    decoded = urlPart;
   }
+  const named = agents?.get(s) ?? agents?.get(urlPart) ?? agents?.get(decoded);
+  if (named) return named;
+  if (isOpaqueId(decoded) || isOpaqueId(s)) return "";
+  return decoded.length > 28 ? `${decoded.slice(0, 24)}…` : decoded;
 }
 
 /// What a station task runs, in a few words: the name it was given, else its command.
@@ -239,6 +248,65 @@ export function tasksOf(timeline: J[]): Map<string, string> {
     if (a?.action !== "prepare" || typeof a.station !== "string" || typeof a.key !== "string") continue;
     const what = taskOf(a);
     if (what) out.set(`${a.station}/${a.key}`, what);
+  }
+  return out;
+}
+
+/// The sub-agents and chats a transcript or workspace knows by id (`agentId`, `conversationId`, `c-...` session key):
+/// mapped to the human-readable name/description given when they were spawned or opened.
+export function agentsOf(timeline: J[], threads?: J[]): Map<string, string> {
+  const out = new Map<string, string>();
+  if (Array.isArray(threads)) {
+    for (const th of threads) {
+      const title = typeof th?.title === "string" ? firstLine(th.title) : typeof th?.name === "string" ? firstLine(th.name) : "";
+      if (!title || isOpaqueId(title)) continue;
+      for (const k of [th?.key, th?.session, th?.id, th?.address]) {
+        if (typeof k === "string" && k.trim() !== "") {
+          out.set(k.trim(), title);
+          out.set(k.trim().replace(/^chat:/, ""), title);
+        }
+      }
+    }
+  }
+  const byCallId = new Map<string, string>();
+  let lastLabel = "";
+  for (const e of timeline) {
+    if (e?.kind === "tool_call" && typeof e.tool === "string" && typeof e.text === "string") {
+      const name = toolName(e.tool);
+      if (!["Agent", "Task", "spawn_agent", "subagent", "invoke_subagent", "chat_create", "swarm"].includes(name)) continue;
+      const a = args(e.text);
+      if (!a) continue;
+      const cand = [a.name, a.Role, a.role, a.title, a.description, a.subagent_type, a.TypeName, a.task_name].find(
+        (v) => typeof v === "string" && v.trim() !== "" && !isOpaqueId(v.trim()),
+      );
+      if (typeof cand === "string") {
+        const label = firstLine(cand);
+        lastLabel = label;
+        if (typeof e.callId === "string" && e.callId) byCallId.set(e.callId, label);
+        for (const idField of [a.agent_id, a.id, a.chat]) {
+          if (typeof idField === "string" && idField.trim() !== "") out.set(idField.trim(), label);
+        }
+      }
+    } else if (e?.kind === "tool_result" && typeof e.text === "string") {
+      const label = (typeof e.callId === "string" ? byCallId.get(e.callId) : undefined) ?? lastLabel;
+      if (!label) continue;
+      const aid = /\b(?:agentId|agent_id|conversationId|Conversation ID|task_id)["'\s:=]+["']?([A-Za-z0-9_-]{6,})/i.exec(e.text)?.[1];
+      if (aid) out.set(aid, label);
+      const chatKey = /\/chats\/(c-[A-Za-z0-9_-]+)/.exec(e.text)?.[1];
+      if (chatKey) out.set(chatKey, label);
+    } else if (e?.kind === "user" && typeof e.text === "string" && e.text.includes("<task-notification>")) {
+      const re = /<task-notification>([\s\S]*?)<\/task-notification>/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(e.text)) !== null) {
+        const block = m[1] ?? "";
+        const tid = /<task-id>([^<]+)<\/task-id>/.exec(block)?.[1]?.trim();
+        const sum = /<summary>([\s\S]*?)<\/summary>/.exec(block)?.[1]?.trim() ?? "";
+        const said = /^Agent "([\s\S]*)" (?:completed|failed|finished|was stopped)/.exec(sum)?.[1]?.trim();
+        if (tid && said && !isOpaqueId(said)) {
+          out.set(tid, firstLine(said));
+        }
+      }
+    }
   }
   return out;
 }
@@ -285,7 +353,7 @@ export function told(tool: string, input: string, known: Known = {}): string | n
     return null;
   }
   if (name === "chat_read" || name === "chat_history" || name === "session_history" || name === "session_send" || name === "chat_archive" || name === "chat_leave") {
-    const ref = shortChatRef(typeof a.chat === "string" ? a.chat : typeof a.to === "string" ? a.to : "");
+    const ref = shortChatRef(typeof a.chat === "string" ? a.chat : typeof a.to === "string" ? a.to : "", known.agents);
     if (name === "chat_history") return ref ? `读取对话历史 ${ref}` : "读取对话历史";
     if (name === "chat_read") return ref ? `读取对话 ${ref}` : "读取对话";
     if (name === "session_history") return ref ? `读取执行历史 ${ref}` : "读取执行历史";
@@ -405,8 +473,8 @@ export function told(tool: string, input: string, known: Known = {}): string | n
       : "";
     const snippet = msg ? `：${msg.length > 36 ? `${msg.slice(0, 36)}…` : msg}` : "";
     if (!to || to === "main") return `向主 agent 发送结果${snippet}`;
-    const shortTo = to.length > 16 ? to.slice(0, 8) : to;
-    return `向子 agent (${shortTo}) 发送消息${snippet}`;
+    const namedTo = known.agents?.get(to) ?? (isOpaqueId(to) ? "" : to);
+    return namedTo ? `向子 agent (${namedTo}) 发送消息${snippet}` : `向子 agent 发送消息${snippet}`;
   }
   if (name === "followup_task") {
     const tname = typeof a.task_name === "string" && a.task_name ? ` ${a.task_name}` : "";

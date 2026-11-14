@@ -166,7 +166,11 @@ export function brief(e: TimelineEntry): TimelineEntry {
       const v = JSON.parse(e.text);
       if (isObj(v) && typeof v.ok === "boolean") text = JSON.stringify(isStr(v.ts) ? { ok: v.ok, ts: v.ts } : { ok: v.ok });
     } catch {
-      // Not Slack's answer: nothing of it.
+      // Not Slack's answer: keep a spawned sub-agent's id if present so later SendMessage calls can name it.
+    }
+    if (text === "") {
+      const aid = /\b(?:agentId|agent_id|conversationId)["'\s:=]+["']?([A-Za-z0-9_-]{6,})/.exec(e.text);
+      if (aid?.[1]) text = `agentId: ${aid[1]}`;
     }
     return { ...e, text, brief: true };
   }

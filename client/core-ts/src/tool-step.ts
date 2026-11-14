@@ -14,8 +14,8 @@ export type ToolPart =
   | { kind: "path"; path: string; extra?: string }
   /** Lines: ` ` the same, `-` taken out, `+` put in, `@` a file's or a hunk's header. */
   | { kind: "diff"; rows: [string, string][] }
-  /** Words as Markdown, optionally with dispatch card metadata (`target` recipient/agent and `summary`). */
-  | { kind: "markdown"; text: string; target?: string; summary?: string }
+  /** Words as Markdown, optionally with dispatch card metadata (`target` recipient/agent, `targetId` for navigation, and `summary`). */
+  | { kind: "markdown"; text: string; target?: string; targetId?: string; summary?: string }
   /** A list of things to do: completed, in_progress, or anything else. */
   | { kind: "plan"; items: { text: string; status: string }[] }
   /** Fields one to a row: short in a line (`prose`: natural-language text), long as a Markdown block, nested data as JSON. */
@@ -249,6 +249,122 @@ const DISPATCH_TOOLS = new Set([
   "chat_create",
 ]);
 
+const ID_FIELD_KEYS = new Set([
+  "to",
+  "recipient",
+  "Recipient",
+  "agent_id",
+  "agentId",
+  "conversationId",
+]);
+
+const SKIP_RECIPIENT_WORDS = new Set([
+  "the",
+  "all",
+  "our",
+  "this",
+  "that",
+  "user",
+  "them",
+  "him",
+  "her",
+  "it",
+  "me",
+  "us",
+  "about",
+  "how",
+  "why",
+  "what",
+  "when",
+  "where",
+  "whether",
+  "if",
+]);
+
+/** Whether `s` is an opaque internal identifier (hex hash, UUID, or raw session key) rather than a human-readable name. */
+export function isOpaqueId(s: string): boolean {
+  const v = s.trim();
+  if (!v) return false;
+  if (/^[0-9a-f]{8,}$/i.test(v)) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return true;
+  if (/^(?:agent|task|subagent|call|toolu|msg|req|r|s|c)[-_][0-9a-f]{8,}$/i.test(v)) return true;
+  if (/\/chats\/c-[0-9a-f]{8,}/i.test(v)) return true;
+  return false;
+}
+
+/** Infers a human-readable recipient name from a dispatch summary when only an opaque ID was passed in `to`. */
+function inferRecipientFromSummary(summary: string | undefined): string | undefined {
+  if (!summary) return undefined;
+  const s = summary.trim();
+  const en = /^(?:Tell|Ask|Message|Reply to|Send to|Notify|Instruct|Update|Ping)\s+(?:the\s+)?([A-Za-z][A-Za-z0-9_-]{1,24})(?:\s+(?:sub-?agent|agent|worker))?\b/i.exec(s);
+  if (en?.[1] && !SKIP_RECIPIENT_WORDS.has(en[1].toLowerCase()) && !isOpaqueId(en[1])) {
+    return en[1];
+  }
+  const zh = /^(?:让|通知|告诉|向|给|回复|发给)\s*([^\s，,。：:]{2,16}?)(?:\s*(?:发送|发消息|汇报|继续|去|把|修|查|看))/.exec(s);
+  if (zh?.[1] && !isOpaqueId(zh[1])) {
+    return zh[1];
+  }
+  return undefined;
+}
+
+export function resolveDispatchTarget(
+  name: string,
+  a: Args,
+  summary?: string,
+): { target?: string; targetId?: string } {
+  const rawId =
+    str(a._targetId) ??
+    str(a.to) ??
+    str(a.recipient) ??
+    str(a.Recipient) ??
+    str(a.agent_id) ??
+    str(a.chat);
+  const rawCandidate =
+    str(a._target) ??
+    str(a.recipient_name) ??
+    str(a.to) ??
+    str(a.recipient) ??
+    str(a.Recipient) ??
+    str(a.agent_id) ??
+    str(a.subagent_type) ??
+    str(a.TypeName) ??
+    str(a.task_name) ??
+    str(a.chat) ??
+    str(a.name);
+  if (rawCandidate === undefined || rawCandidate.trim() === "") {
+    return {};
+  }
+  if (!isOpaqueId(rawCandidate)) {
+    return {
+      target: rawCandidate,
+      ...(rawId && rawId !== rawCandidate ? { targetId: rawId } : {}),
+    };
+  }
+  const named = [
+    a._target,
+    a.recipient_name,
+    a.name,
+    a.subagent_type,
+    a.TypeName,
+    a.task_name,
+    a.Role,
+    a.role,
+  ]
+    .map(str)
+    .find((s) => s !== undefined && s.trim() !== "" && !isOpaqueId(s) && s !== summary);
+  const inferred = named ?? inferRecipientFromSummary(summary);
+  const isChat =
+    name === "session_send" ||
+    name === "chat_create" ||
+    rawCandidate.includes("/chats/") ||
+    /^c-[0-9a-f]{8,}/i.test(rawCandidate.trim());
+  const fallback = isChat ? (name === "chat_create" ? "新对话" : "其他对话") : "子 Agent";
+  return {
+    target: inferred ?? fallback,
+    targetId: rawId ?? rawCandidate,
+  };
+}
+
 function isLongFieldText(key: string, value: string): boolean {
   if (value.includes("\n") || value.length > 90) return true;
   if (LONG_TEXT_KEYS.has(key) && value.length > 40) return true;
@@ -257,18 +373,22 @@ function isLongFieldText(key: string, value: string): boolean {
 }
 
 /** Fields one to a row: short ones inline, long text as a full-width Markdown block, nested data as compact JSON. */
-function fields(a: Args, skip: string[], say: Say): ToolPart {
+function fields(a: Args, skip: string[], say: Say, resolvedTarget?: string): ToolPart {
   const fieldSkip = skip.filter((k) => k !== "description" && k !== "summary");
-  const rows = Object.entries(a).filter(([k, v]) => !fieldSkip.includes(k) && v !== null && v !== undefined && v !== "");
+  const rows = Object.entries(a).filter(([k, v]) => !k.startsWith("_") && !fieldSkip.includes(k) && v !== null && v !== undefined && v !== "");
   if (!rows.length) return { kind: "none", text: say("web-main.tool.noArgs") };
   return {
     kind: "fields",
     rows: rows.map(([k, v]) => {
       if (typeof v === "string") {
-        const long = isLongFieldText(k, v);
+        const displayVal =
+          ID_FIELD_KEYS.has(k) && isOpaqueId(v)
+            ? resolvedTarget ?? (/\/chats\/|^c-[0-9a-f]{8,}/i.test(v.trim()) ? "其他对话" : "子 Agent")
+            : v;
+        const long = isLongFieldText(k, displayVal);
         return long
-          ? { key: k, value: v, form: "long" as const }
-          : { key: k, value: v, form: "short" as const, ...(PROSE_FIELD_KEYS.has(k) ? { prose: true as const } : {}) };
+          ? { key: k, value: displayVal, form: "long" as const }
+          : { key: k, value: displayVal, form: "short" as const, ...(PROSE_FIELD_KEYS.has(k) ? { prose: true as const } : {}) };
       }
       if (typeof v === "object") {
         return { key: k, value: JSON.stringify(v, null, 2), form: "json" as const };
@@ -318,24 +438,18 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
     (DISPATCH_TOOLS.has(name) ||
       ((a.prompt !== undefined || a.Prompt !== undefined) && dispatchBody.length > 200))
   ) {
-    const target =
-      str(a.to) ??
-      str(a.recipient) ??
-      str(a.Recipient) ??
-      str(a.agent_id) ??
-      str(a.subagent_type) ??
-      str(a.TypeName) ??
-      str(a.task_name) ??
-      str(a.chat) ??
-      str(a.name);
     const summary =
       str(a.summary) ??
       str(a.description) ??
       str(a.Role) ??
       str(a.role) ??
       str(a.title);
+    const { target, targetId } = resolveDispatchTarget(name, a, summary);
     const consumed = [
       ...skip,
+      "_target",
+      "_targetId",
+      "recipient_name",
       "prompt",
       "Prompt",
       "message",
@@ -365,6 +479,7 @@ export function toolCall(name: string, call: string, said: boolean, say: Say): T
         kind: "markdown",
         text: dispatchBody,
         ...(target ? { target } : {}),
+        ...(targetId && targetId !== target ? { targetId } : {}),
         ...(summary ? { summary } : {}),
       },
     ];
@@ -498,13 +613,21 @@ export function toolResult(name: string, call: string, result: string, failed: b
   }
   const rawBody = stripped.trim() !== "" ? stripped : result;
   const parsedRaw = failed ? undefined : parse(rawBody);
-  const unwrapped =
+  const unwrappedRaw =
     Array.isArray(parsedRaw) &&
     parsedRaw.length > 0 &&
     parsedRaw.every((item) => isArgs(item) && item.type === "text" && typeof item.text === "string")
       ? parsedRaw.map((item) => (item as { text: string }).text).join("\n")
       : rawBody;
+  const unwrapped = unwrappedRaw
+    .replace(/\n*agentId:\s*[A-Za-z0-9_-]+(?:\s*\([^)\n]*\))?\s*$/i, "")
+    .replace(/\n*<usage>[\s\S]*?<\/usage>\s*$/i, "");
+  const resolvedTarget = isArgs(args)
+    ? resolveDispatchTarget(name, args, str(args.summary) ?? str(args.description) ?? str(args.Role) ?? str(args.title)).target
+    : undefined;
   const parsed = failed ? undefined : parse(unwrapped);
-  if (parsed !== undefined) return [isArgs(parsed) ? fields(parsed, [], say) : { kind: "json", text: JSON.stringify(parsed, null, 2) }];
+  if (parsed !== undefined) {
+    return [isArgs(parsed) ? fields(parsed, [], say, resolvedTarget) : { kind: "json", text: JSON.stringify(parsed, null, 2) }];
+  }
   return [output(unwrapped, failed)];
 }

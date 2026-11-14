@@ -1,7 +1,7 @@
 // An agent's execution history as the clients show it: what actually ran, put together here so every
 // client draws the same thing. Messages in and out, state marks and the agent's own words are boundaries; the tool
 // calls and thinking between two boundaries fold into one group, named by its latest call (shapes: HistoryView).
-import { args, doing, epochMs, importantCall, kindOf, type Known, tasksOf, told, toolName } from "./activity.ts";
+import { agentsOf, args, doing, epochMs, importantCall, kindOf, type Known, tasksOf, told, toolName } from "./activity.ts";
 import * as format from "./format.ts";
 import * as brand from "./brand.ts";
 import { t } from "./i18n.ts";
@@ -9,7 +9,7 @@ import { lineOf, markdown, type MdStore } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
 import { isStationAuthor } from "./titles.ts";
-import { cleanCommand, cleanPath, closeCut, summaryCommand } from "./tool-step.ts";
+import { cleanCommand, cleanPath, closeCut, isOpaqueId, summaryCommand } from "./tool-step.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -143,9 +143,15 @@ export function hint(text: string, tool = ""): string {
           "Recipient",
           "recipient",
         ];
-  const key = keys.find((k) => a[k] !== undefined && a[k] !== null && a[k] !== "");
+  const ID_HINT_KEYS = new Set(["to", "Recipient", "recipient", "agent_id", "agentId", "conversationId"]);
+  const key = keys.find((k) => {
+    const v = a[k];
+    if (v === undefined || v === null || v === "") return false;
+    if (ID_HINT_KEYS.has(k) && typeof v === "string" && isOpaqueId(v)) return false;
+    return true;
+  });
   const fallbackKey = key === undefined
-    ? Object.keys(a).find((k) => k !== "toolSummary" && (typeof a[k] === "string" && a[k].trim() !== ""))
+    ? Object.keys(a).find((k) => k !== "toolSummary" && !k.startsWith("_") && typeof a[k] === "string" && a[k].trim() !== "" && !isOpaqueId(a[k]))
     : undefined;
   const activeKey = key ?? fallbackKey;
   const value = activeKey !== undefined ? a[activeKey] : undefined;
@@ -544,7 +550,7 @@ export function presentHistory(live: J, cx: Context): J {
 
   const items: [Item, number, number][] = [];
   const { steps, stepAt } = pair(timeline);
-  const known: Known = { stations: cx.stations, tasks: tasksOf(timeline) };
+  const known: Known = { stations: cx.stations, tasks: tasksOf(timeline), agents: agentsOf(timeline, cx.threads) };
   let grouping = false;
   let groupSteps = 0;
   let groupPhase: "explore" | "act" | null = null;
@@ -1087,6 +1093,30 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
         stepHint = dirName;
       }
     }
+    let enrichedCall = callText;
+    if (known.agents && known.agents.size > 0) {
+      const a = args(callText);
+      if (a) {
+        const rawTarget = [a.to, a.recipient, a.Recipient, a.agent_id, a.agentId, a.conversationId, a.chat].find(
+          (v): v is string => typeof v === "string" && v.trim() !== "",
+        )?.trim();
+        if (rawTarget) {
+          const direct = known.agents.get(rawTarget);
+          const session = rawTarget.includes("/chats/") ? rawTarget.slice(rawTarget.indexOf("/chats/") + 7) : rawTarget;
+          const mapped = direct ?? known.agents.get(session);
+          if (mapped && a._target === undefined) {
+            try {
+              const parsed = JSON.parse(callText);
+              if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                enrichedCall = JSON.stringify({ ...parsed, _target: mapped, _targetId: rawTarget });
+              }
+            } catch {
+              // keep callText if cut short
+            }
+          }
+        }
+      }
+    }
     const firstCall = st.firstEntry ?? st.call;
     return {
       said,
@@ -1094,7 +1124,7 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: K
       hint: stepHint,
       meta,
       failed: isFailed,
-      call: callText,
+      call: enrichedCall,
       result: result === null ? null : (result.text ?? ""),
       entries: st.result !== null ? [base + firstCall, base + st.result] : [base + firstCall],
       brief: call?.brief === true || result?.brief === true,
@@ -1366,7 +1396,7 @@ export function activity(live: J, stations?: ReadonlyMap<string, string>): J {
   });
   let call: [string, string, boolean] | null = null;
   let replying = false;
-  const known: Known = { stations, tasks: tasksOf(timeline) };
+  const known: Known = { stations, tasks: tasksOf(timeline), agents: agentsOf(timeline) };
   for (const st of pair(timeline).steps) {
     const e = timeline[st.call];
     if (st.unwrapped || st.call < turn || st.result !== null || e?.subagent === true) continue;

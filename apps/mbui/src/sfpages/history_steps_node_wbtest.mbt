@@ -310,7 +310,8 @@ test "history tool step renders dispatch card, full-width stacked long fields, a
     "call": [
       {
         "kind": "markdown",
-        "target": "a036720bc24844903",
+        "target": "verifier",
+        "targetId": "a036720bc24844903",
         "summary": Json::string(sum),
         "text": Json::string(msg),
         "md": [["p", ["All 4 review findings are valid (", ["code", "src/sf/markdown.mbt"], "). Please fix all 4."]]],
@@ -321,7 +322,7 @@ test "history tool step renders dispatch card, full-width stacked long fields, a
         "kind": "fields",
         "rows": [
           { "key": "type", "value": "message_sent", "form": "short" },
-          { "key": "recipient", "value": "a036720bc24844903", "form": "short" },
+          { "key": "recipient", "value": "verifier", "form": "short" },
           { "key": "recipient_kind", "value": "agent", "form": "short" },
         ],
       },
@@ -352,7 +353,7 @@ test "history tool step renders dispatch card, full-width stacked long fields, a
     )
     t.draw()
     assert_true(t.rect_of("代理") is Some(_), msg="SendMessage shows 代理 badge")
-    assert_true(t.rect_of("→ a036720bc24844903") is Some(_), msg="dispatch card shows target badge")
+    assert_true(t.rect_of("→ verifier") is Some(_), msg="dispatch card shows resolved target badge")
     assert_true(t.rect_of("返回") is Some(_), msg="result section header is shown")
     assert_true(t.rect_of("message_sent") is Some(_), msg="result fields are shown")
     assert_true(t.rect_of("recipient_kind") is Some(_), msg="recipient_kind is shown")
