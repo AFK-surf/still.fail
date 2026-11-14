@@ -139,7 +139,9 @@ test "大屏, a mouse picks across two list items of one message and quotes the 
   guard pill_over(t, by) is Some(_) else {
     fail("no 引用 over list items: box=\{Repr(t.ctx().selection_box())}, picked=\{Repr(@sfbase.picked.get())}")
   }
-  assert_eq(t.audit().filter(fn(f) { !before.contains(f) }), [])
+  // (each fault as it was before, whatever the frame's nodes are numbered now)
+  let was = before.map(aw_plain)
+  assert_eq(t.audit().filter(fn(f) { !was.contains(aw_plain(f)) }), [])
   // The same passage picked upwards has the pill at the other end.
   t.run_for(@ui.double_click_ms)
   mouse_dragged(t, bx + bw - 1.0, by + bh / 2.0, ax + 1.0, ay + ah / 2.0)

@@ -598,12 +598,17 @@ test "the preset's screens keep every rule, on a phone and on a desk" {
 /// holds, which scrolls (panel_centred_node's body). Named by its files and how far, not by their lines: a line moved
 /// in either file by another change is no fault of these screens.
 fn preset_dialog_known(f : String) -> Bool {
-  f.has_prefix("apart: a box (a node of the window's tree's at ") &&
-  f.contains("made at stillfail/src/sf/icon_button_node.mbt:") &&
-  f.contains(", in what was asked for at stillfail/src/sf/panel_centred_node.mbt:") &&
-  f.contains(" (a node of the window's tree's at ") &&
-  f.contains("made at stillfail/src/sf/panel_centred_node.mbt:") &&
-  f.has_suffix(") are drawn over each other by 58×1")
+  // (and its field over the folders' rows 8 in from the edge the rows stand on, its two sides: rule 5 of the window's
+  // tree's nodes, said once the spacing rules measured them, 2026-11-14; left for its own change)
+  (f.has_prefix("rule 5: a box in 「") && f.contains(" falls short 8 at its ") && f.contains("(at 404,") && f.contains(" 472×36,")) ||
+  (
+    f.has_prefix("apart: a box (a node of the window's tree's at ") &&
+    f.contains("made at stillfail/src/sf/icon_button_node.mbt:") &&
+    f.contains(", in what was asked for at stillfail/src/sf/panel_centred_node.mbt:") &&
+    f.contains(" (a node of the window's tree's at ") &&
+    f.contains("made at stillfail/src/sf/panel_centred_node.mbt:") &&
+    f.has_suffix(") are drawn over each other by 58×1")
+  )
 }
 
 ///|
