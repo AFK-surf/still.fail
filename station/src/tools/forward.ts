@@ -5,7 +5,7 @@ import type { Forwards } from "../mesh/peer-forward.ts";
 import type { Tool } from "./mcp.ts";
 
 export const PEER_FORWARD_DESCRIPTION =
-  "Forward a TCP port of another station of this workspace to this machine, like `ssh -L`: a listener on 127.0.0.1 here whose connections reach localhost:<port> on that station, bytes passed as they are. For what a browser or a non-HTTP client uses (web pages and dev servers, databases, a Chrome's DevTools port); a program that only calls an HTTP API with a base URL needs no forward: $STILLFAIL_PEER_HTTP/<station>/<port>. A forward is this session's: it closes when this chat is archived or deleted, when the job given as job ends, after 30 minutes with no connection, or when this station restarts (open it again). With no arguments, lists this session's forwards. Skill stillfail-jobs (Another station's services) says more.";
+  "Forward a TCP port of another station of this workspace to this machine, like `ssh -L`: a listener on 127.0.0.1 here whose connections reach localhost:<port> on that station, bytes passed as they are. For what a browser or a non-HTTP client uses (web pages and dev servers, databases, a Chrome's DevTools port); a program that only calls an HTTP API with a base URL needs no forward: $STILLFAIL_PEER_HTTP/<station>/<port>. A forward is this session's: it closes when this chat is archived or deleted, after 30 minutes with no connection, or when this station restarts (open it again). With no arguments, lists this session's forwards. Skill stillfail-jobs (Another station's services) says more.";
 
 /// The tool, on the station's forwards.
 export function forwardTools(forwards: Forwards): Tool[] {

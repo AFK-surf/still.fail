@@ -2,6 +2,12 @@
 // every session's context, so it is held under ceilings here (station/AGENTS.md, Agents). A declaration is what its
 // factory gives, whatever it is given, so the list is made of every factory src/sessions/agents.ts and the parts'
 // modules call, with nothing behind them: no tool is run.
+//
+// That the list is the station's is held by reading the source (the first test): the factories called where tools are
+// given, how many times a part gives tools, in any file of src/, and every tool's name written as tools are declared
+// (`name: "…"`, then its description). What it cannot see: a tool given through a factory or a `parts.tools(` already
+// there, or spread into the list of src/sessions/agents.ts as a constant, whose name is not such a literal (a name
+// computed, its description said before its name); and what the endpoint makes of the list itself (station_tool).
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
@@ -31,8 +37,8 @@ const FACTORIES = [
   "chatTools", "archiveTools", "remoteTools", "workspaceSizeTools", "jobTools", "screenTools", "permissionTools", "computerTools", "forwardTools", "relayTools",
   "phoneTools", "adbTools", "browserTools", "deviceTools", "feedbackTools", "feishuTools", "loginTools", "rigTools", "searchTools", "vaultTools",
 ];
-/// How many times the parts' modules give tools (`parts.tools(`): one a factory above but adb's, which also gives
-/// phone_send by itself.
+/// How many times the parts give tools (`parts.tools(`, anywhere in src/): one a factory above but adb's, which also
+/// gives phone_send by itself.
 const PARTS_GIVE = 11;
 
 /// Every tool a station declares to a session, where it declares the most (a stable station of still.fail cloud, which
@@ -65,8 +71,8 @@ function stationTools(): Tool[] {
   ];
 }
 
-// The ceilings, in bytes: what the list weighed once it was slimmed (2026-11-14: 60,284 in all, from 80,230; the core
-// ones 13,894, from 22,140; chat_post the heaviest at 4,665, from 8,125), each rounded up to the next thousand.
+// The ceilings, in bytes: what the list weighed once it was slimmed (2026-11-14: 60,925 in all, from 80,230; the core
+// ones 13,951, from 22,140; chat_post the heaviest at 4,705, from 8,125), each rounded up to the next thousand.
 // TOOLS_WEIGHT_TABLE=1 prints every tool's.
 const TOTAL = 61_000;
 const CORE_TOTAL = 14_000;
@@ -74,7 +80,7 @@ const HEAVIEST = 5_000;
 // One tool's input schema, as compact JSON. Not a rounding: Codex 0.169.0 strips every description from an MCP tool's
 // input schema once it is over 5,000 bytes (measured 2026-11-14 with the station's list against a fake model endpoint:
 // the cut is between 4,980 and 5,010 bytes). chat_post's was 7,113 then and reached Codex's models as 1,167 bytes with
-// none of its 25 parameter descriptions; it is 4,272 now. Never raise this past what Codex keeps.
+// none of its 25 parameter descriptions; it is 4,312 now. Never raise this past what Codex keeps.
 const SCHEMA = 4_500;
 
 /// What to do about a ceiling passed, said to whoever passed it.
@@ -83,20 +89,20 @@ const TOLD = "Shorten it: a description says what the tool does and when to use 
 const schemaBytes = (t: Tool) => Buffer.byteLength(JSON.stringify(t.inputSchema));
 const table = (tools: readonly Tool[]) => [...tools].sort((a, b) => weight(b) - weight(a)).map((t) => `${String(weight(t)).padStart(6)}  ${t.name}`).join("\n");
 
-test("the list here is made of every factory the station gives its sessions' tools by", () => {
+test("the list here is the station's: every factory its tools are given by, and every tool the source declares", () => {
   const src = new URL("../src/", import.meta.url);
-  const modules = readdirSync(src, { withFileTypes: true }).filter((d) => d.isDirectory()).flatMap((d) => {
-    try {
-      return [readFileSync(new URL(`${d.name}/module.ts`, src), "utf8")];
-    } catch {
-      return [];
-    }
-  });
-  const called = new Set([...modules, readFileSync(new URL("sessions/agents.ts", src), "utf8")].flatMap((text) => [...text.matchAll(/\b([A-Za-z]+Tools)\(/g)].map((m) => m[1]!)));
+  const files = (readdirSync(src, { recursive: true }) as string[]).filter((f) => f.endsWith(".ts")).map((f) => f.replaceAll("\\", "/"));
+  const texts = new Map(files.map((f) => [f, readFileSync(new URL(f, src), "utf8")]));
+  const givesIn = (text: string) => text.split("parts.tools(").length - 1;
+  // The factories called where tools are given: the agents' own list, and any file a part gives tools in.
+  const called = new Set([...texts].filter(([f, text]) => f === "sessions/agents.ts" || givesIn(text) > 0).flatMap(([, text]) => [...text.matchAll(/\b([A-Za-z]+Tools)\(/g)].map((m) => m[1]!)));
   called.delete("allTools");
   assert.deepEqual([...called].sort(), [...FACTORIES].sort(), "a factory of tools was added or taken away: make stationTools() in this test of the same ones, so that its tools are weighed");
-  const gives = modules.reduce((n, text) => n + text.split("parts.tools(").length - 1, 0);
+  const gives = [...texts.values()].reduce((n, text) => n + givesIn(text), 0);
   assert.equal(gives, PARTS_GIVE, "a part gives tools somewhere new (parts.tools): add them to stationTools() in this test, so that they are weighed");
+  // Every tool the source declares is weighed, and nothing else: one added inside a list already given is seen here.
+  const declared = new Set([...texts.values()].flatMap((text) => [...text.matchAll(/\bname: "([a-z][a-z_]*)",\s*description\b/g)].map((m) => m[1]!)));
+  assert.deepEqual([...declared].sort(), stationTools().map((t) => t.name).sort(), "the tools src/ declares (name, then description) are not those this test weighs: add the new one to stationTools() here, or take out the one that went");
 });
 
 test("the tools a station declares stay under their ceilings: the whole list, the core ones, the heaviest, a schema", (t) => {

@@ -1,4 +1,5 @@
-// Read a skill found by workspace search, using the same workspace-scoped catalog as search and GET /memory.
+// Read a skill by its name (one found by workspace search, or one a tool or the instructions name: the station's own
+// are in every workspace's catalog), using the same workspace-scoped catalog as search and GET /memory.
 import { memory } from "../read/memory.ts";
 import type { Tool } from "../tools/mcp.ts";
 import { wall } from "../ops/fibers.ts";
@@ -30,11 +31,11 @@ export async function skillForPeer(data: string, request: any, workspace: string
 export function skillTools(deps: SearchDeps): Tool[] {
   return [{
     name: "skill_read",
-    description: "Read a skill found by search in full, on this station or another station of the same workspace, by its exact name and station from the search result. With file, one of the Markdown reference files the reply lists. It only reads this workspace's skill catalog: nothing is installed, shared or run. A station from before skill.read refuses, and says so.",
+    description: "Read a skill in full by its exact name: one a tool's description or your instructions name, when you do not have its file, or one found by search, with its station where that is another station of the workspace. With file, one of the Markdown reference files the reply lists. It only reads this workspace's skill catalog: nothing is installed, shared or run.",
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "The exact skill name from search." },
+        name: { type: "string", description: "The skill's exact name." },
         station: { type: "string", description: "The station's id or unique name from search. Omit for this station." },
         file: { type: "string", description: "A Markdown filename listed by this skill (default SKILL.md)." },
       },

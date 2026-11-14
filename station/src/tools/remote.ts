@@ -21,7 +21,7 @@ export const STATION_TOOLS: { name: string; description: string; inputSchema: un
       properties: {
         station: { type: "string" },
         key: { type: "string" },
-        action: { enum: ["prepare", "start", "get", "log", "stop", "release", "list", "mirrors", "clean"], description: "get, log (lines) and stop address the task of key. release, on a task some of whose results could not be saved, lets another task use its mirror: keep them with station_file first. list, mirrors and clean need only station." },
+        action: { enum: ["prepare", "start", "get", "log", "stop", "release", "list", "mirrors", "clean"], description: "get, log (lines) and stop address the task of key. release, on a task some of whose results could not be saved, lets another task use its mirror: keep them with station_file first. list and mirrors need only station; clean, station and mirror." },
         mirror: { type: "string", description: "Name returned by action mirrors; action clean removes this one mirror." },
         command: { type: "string" },
         name: { type: "string" },

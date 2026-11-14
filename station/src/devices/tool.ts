@@ -20,7 +20,7 @@ export const DEVICE_USE = {
       reason: { type: "string", description: "What you will do with it and why (shown on the card to its owner)." },
       timeout: {
         type: "object",
-        description: "How long the grant should last (the owner may choose another): idle (ends once this chat has not used the device that long) or fixed, in whole minutes up to 30 days. Default: idle, 1 hour.",
+        description: "How long the grant should last (the owner may choose another): idle (ends once this chat has not used the device that long) or fixed, in whole minutes from 1 minute to 30 days. Default: idle, 1 hour.",
         properties: { kind: { enum: ["idle", "fixed"] }, seconds: { type: "integer" } },
         required: ["kind", "seconds"],
         additionalProperties: false,

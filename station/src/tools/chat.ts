@@ -73,7 +73,7 @@ export const CHAT_POST = {
       },
       "card": {
         "type": "object",
-        "description": "What people answer this message with, in the chat and in their 待处理: options, text (a value they type) or login (one the login tool started). It does not end your turn: end need_human. A person's next message closes it, a decision or not: ask again with a new card if it is still needed.",
+        "description": "What people answer this message with, in the chat and in their 待处理: options, text (a value they type) or login (one the login tool started). It does not end your turn: end need_human. A newer card replaces the previous one. A person's next message closes it, a decision or not: ask again with a new card if it is still needed.",
         "properties": {
           "type": {
             "type": "string",

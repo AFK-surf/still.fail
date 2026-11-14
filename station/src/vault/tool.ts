@@ -13,7 +13,7 @@ import type { Tool } from "../tools/mcp.ts";
 
 const text = (args: Record<string, unknown>, key: string): string => (typeof args[key] === "string" ? (args[key] as string) : "");
 /// The person a request is for, as the agent names them (tool `person`); none: whoever started the chat.
-const PERSON = { type: "string", description: "Whose vault it is, and who approves the card: the email of someone who wrote in this chat from the still.fail app. Default: whoever started the chat." };
+const PERSON = { type: "string", description: "Whose vault it is, and who approves the card: the email of someone who wrote in this chat from the still.fail app. Default: whoever started the chat. Name the one who asked when that is someone else, or when the chat began in Slack and they now write from still.fail." };
 const personOf = (args: Record<string, unknown>) => (text(args, "person").trim() ? { person: text(args, "person").trim() } : {});
 const strings = (v: unknown): string[] | undefined => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : undefined);
 
@@ -35,7 +35,7 @@ export const SECRET_RUN_DESCRIPTION =
   "Run a shell command (sh -c, in your workspace) with a grant from secret_use. By proxy: the grant's placeholder (in the item's variable, or env, and in STILLFAIL_SECRET) is swapped for the value in the command's HTTPS requests to the granted hosts only. By ssh: SSH_AUTH_SOCK holds the key. By env: the value is in the variable. By file: the file is written out for this command alone, its path in the variable (and STILLFAIL_SECRET). A login's account is in STILLFAIL_USERNAME. The output comes back with the value hidden: you never get the value, and must not try to (no printing, encoding or sending it elsewhere). A grant for one use is spent by one run.";
 
 export const SECRET_SAVE_DESCRIPTION =
-  "Ask to keep a credential in the vault of the person you work for: a password, token, API key, SSH key or credential file you need again, or a sign-in to a website (kind browser). They approve it on a card in your chat; agents use it later only through secret_use, each use approved. Prefer command over value. With neither, nor path, they type it in on the card, never shown to you: say in reason where they get it. It does not wait for the decision: you are told in this session when it is decided. Kept, this chat may use it at once (the request's id is its grant for secret_run). Skill stillfail-vault says when to offer it and how each kind is kept.";
+  "Ask to keep a credential in the vault of the person you work for: a password, token, API key, SSH key or credential file you need again, or a sign-in to a website (kind browser). A card goes to them in your chat and they approve it in the still.fail app; agents use it later only through secret_use, each use approved. Prefer command over value. With neither, nor path, they type it in on the card, never shown to you: say in reason where they get it. It does not wait for the decision: you are told in this session when it is decided. Kept, this chat may use it at once (the request's id is its grant for secret_run). Skill stillfail-vault says when to offer it and how each kind is kept.";
 
 export const SECRET_DESCRIBE_DESCRIPTION =
   "Ask to rename one of secret_list's secrets or to change its about (what it is and how it is used, shown to agents with its name), when they do not say plainly what it is (a name made from a host, a step written nowhere). A card shows its owner the name and about as they are and as they would be; once they approve it in the still.fail app the item says so. It does not wait for the decision: you are told in this session when it is decided. Give at least one of name and about; never a secret in about.";
@@ -47,7 +47,7 @@ export const SECRET_CANCEL_DESCRIPTION =
   "Withdraw a request of this chat's own (secret_use, secret_save, secret_describe, secret_delete) that nobody decided yet, once it is no longer needed (you got the credential another way, the person asked for something else, you asked twice): its card in the chat closes saying so and it leaves the person's waiting requests in the app's 密钥. Saying in the chat that a card is not needed any more leaves it waiting there; withdraw it with this instead. A request already decided is not changed.";
 
 export const SIGN_IN_DESCRIPTION =
-  "Get this chat's browser signed in to a website (github.com): the one way to ask for it. A sign-in the person you work for keeps in their vault for the site is asked for on a card; with none kept, first open the site's sign-in page in this chat's browser (the `browser` tool), then call this: a card has them sign in, and you never see what they typed. It does not wait: you are told in this session when the page has left its sign-in, and what to do then (done, stuck). Never ask for a password or a code in the chat, and do not post the tab's screen for a sign-in yourself. Skill stillfail-browser (Sign-ins) says the rest: passkeys, a sign-in that ran out.";
+  "Get this chat's browser signed in to a website: the one way to ask for it. A sign-in the person you work for keeps in their vault for the site is asked for on a card; with none kept, first open the site's sign-in page in this chat's browser (the `browser` tool), then call this: a card has them sign in, and you never see what they typed. It does not wait: you are told in this session when the page has left its sign-in, and what to do then (done, stuck). Never ask for a password or a code in the chat, and do not post the tab's screen for a sign-in yourself. Skill stillfail-browser (Sign-ins) says the rest: passkeys, a sign-in that ran out.";
 
 export function vaultTools(secrets: Secrets, workspace: (session: string) => string | null, signIns?: SignIns): Tool[] {
   return [
@@ -65,7 +65,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
           done: { type: "boolean", description: "You looked after being told the page left its sign-in: it is signed in." },
           stuck: { type: "string", description: "You looked: it is not signed in yet; what is left for the person to do there, in their language." },
           name: { type: "string", description: "With done: what it is kept by, as secret_save's name; default <site> 登录态." },
-          about: { type: "string", description: "With done: what it is for and how it is used (how its site is reached, what to open), as secret_save's about." },
+          about: { type: "string", description: "With done: what it is for and how it is used (how its site is reached, what to open), in the person's language; never a secret." },
         },
         required: ["site"],
         additionalProperties: false,

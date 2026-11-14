@@ -15,7 +15,7 @@ export const BROWSER = {
   inputSchema: {
     type: "object",
     properties: {
-      action: { type: "string", enum: ["endpoint", "tabs", "status", "stop"], description: "endpoint (default), tabs, status or stop" },
+      action: { type: "string", enum: ["endpoint", "tabs", "status", "stop"], description: "Default endpoint." },
     },
     additionalProperties: false,
   },

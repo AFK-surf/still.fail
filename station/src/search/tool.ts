@@ -81,7 +81,7 @@ export function searchTools(deps: SearchDeps): Tool[] {
     {
       name: "search",
       description:
-        "Search everything in this workspace, on all its stations at once: chats (titles, archived ones too), every message, agents' execution histories, services and tasks, skills and memory, profiles, and the files on each station's machine (names and what they say). Words are matched anywhere in the text, case aside; every word must match. Results are grouped by station and kind, with chat links to give people or read with chat_read and session_history; a skill found is read in full with skill_read.",
+        "Search everything in this workspace, on all its stations at once: chats (titles, archived ones too), every message, agents' execution histories, services and tasks, skills and memory, profiles, and the files on each station's machine (names and what they say). Words are matched anywhere in the text, case aside; every word must match. Results are grouped by station and kind, with chat links to give people or read with chat_read and session_history; a skill found is read in full with skill_read. Skill stillfail-chats says more.",
       inputSchema: {
         type: "object",
         properties: {
