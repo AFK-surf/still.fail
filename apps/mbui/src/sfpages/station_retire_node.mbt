@@ -1,7 +1,8 @@
 // A station retired from a workspace (the core's copies.ts `retire`, `taking`; the station's replica/retire.ts): its
 // chats moved onto another station of it that the one who manages it picks, then the station taken out (the user,
 // 2026-11-13: 「要允许用户选择目标迁移 station」). Rarely done and not undone, so it is no row always in sight: its ⋯
-// has 迁走聊天并移出… over 移出 while it may be (`canRetire`) and is online. That opens one panel showing what goes and
+// has 迁走聊天并移出… over 移出 while it may be (`canRetire`) and is online, once offered again (switched off for now:
+// `station_retire_offered`). That opens one panel showing what goes and
 // what stays as the station counts and names them (`copies.retirePreview`), not a paragraph about it (the owner,
 // 2026-11-14: 「字太多了，应该用更结构化更所见即所得的方式设计 UI」), the station to move to chosen in it. While it goes,
 // and while a station takes a retired one's chats in, it is a state of the station, not of its backups: one section at
@@ -135,10 +136,18 @@ fn station_moving_shown(s : Json?) -> Bool {
 }
 
 ///|
-/// Its ⋯'s 迁走聊天并移出… (station_menu_items'), for one who manages it, while it is online and may be retired
-/// (`canRetire`); None otherwise.
+/// Whether its ⋯ offers 迁走聊天并移出… at all. Off (左子健, 2026-11-14: 「我怀疑这个功能根本不能给用户用」, after its
+/// first real use; the station refuses starting one too, station/src/replica/module.ts `RETIRE_STARTS`): 迁移 and the
+/// panel stay for a retirement already under way. On again once the fixes have passed their drill.
+let station_retire_offered : Bool = false
+
+///|
+/// Its ⋯'s 迁走聊天并移出… (station_menu_items'), for one who manages it, while it is offered at all
+/// (`station_retire_offered`), it is online and may be retired (`canRetire`); None otherwise.
 fn station_retire_item(core : Core, here : Here, s : Json?) -> @sf.MenuItem? {
-  guard flag(s, "online") && flag(field(field(s, "overview"), "copies"), "canRetire") else { return None }
+  guard station_retire_offered && flag(s, "online") && flag(field(field(s, "overview"), "copies"), "canRetire") else {
+    return None
+  }
   Some(@sf.menu_item_of(@sf.t("web-pages.stations.retire.menu"), icon="move", fn() { station_retire_start(core, here, s) }))
 }
 

@@ -21,6 +21,13 @@ import { WorkerRunner } from "./runner.ts";
 
 type Json = any;
 
+/// Whether a person (POST /retire) or an agent (station_retire start, hand_over) may start retiring a station here. Off
+/// (左子健, 2026-11-14: 「我怀疑这个功能根本不能给用户用」, after its first real use filled a disk, paused chats for 18
+/// minutes, left files out of place and posted into 193 Slack threads): starting is refused in words; what a station
+/// already retired or taking another's chats does, the preview, status, cancel, again and the mesh's methods are as
+/// they were. This goes once the fixes have passed their drill.
+const RETIRE_STARTS = false;
+
 export const CopiesLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const { data } = yield* Paths;
@@ -150,6 +157,7 @@ export const CopiesLive = Layer.effectDiscard(
       cards: chatCards(hub as Json),
       notify: (session, text) => hub.notify(session, text),
       now: () => wall.now(),
+      starts: RETIRE_STARTS,
     });
     const asked = asks;
     parts.cardChoice("retire", { may: (viewer, card, at) => asked.may(viewer, card, at), chosen: (viewer, card, option, at) => asked.chosen(viewer, card, option, at) });
@@ -177,6 +185,6 @@ export const CopiesLive = Layer.effectDiscard(
       void retire.start().catch((e) => log.warn("retire", "the retirement did not go on", { error: (e as Error).message }));
     });
     parts.overview("copies", (viewer) => ({ ...(copies.overview(viewer.workspace, managesStation(viewer)) as object), ...(retire.overview(viewer.workspace) as object) }));
-    parts.routes(routes({ copies, retire }));
+    parts.routes(routes({ copies, retire, starts: RETIRE_STARTS }));
   }),
 );

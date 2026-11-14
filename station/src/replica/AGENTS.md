@@ -82,5 +82,8 @@ below, sends them along).
   the workspace (parts.ts `cardChoice`, checked by the route that closes it, never by the agent); it waits at `sent`
   for the second. The asking session is told each step (`#toDriver`), on the station the chats went to once its own
   moved. The panel in the app goes on from `sent` by itself, as before.
+- Starting a retirement is switched off (左子健, 2026-11-14, after its first real use: 「我怀疑这个功能根本不能给用户用」):
+  POST /retire and station_retire's start and hand_over are refused (module.ts `RETIRE_STARTS`), the rest as above; it is
+  switched on again once the fixes have passed a drill.
 - Not here, by the owner's decision (2026-11-09): reading a chat from a copy while its station is away, going on with a
   chat on another station while both are up, signed heads, a lock entry for a replacement.
