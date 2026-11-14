@@ -170,65 +170,63 @@ fn ks_bubble_end(w : String) -> Double? {
 }
 
 ///|
-test "a chat's page made with its inside nodes, on 小屏 and 大屏: the reply coming over the agent's line grows from its start: the left edge of what it draws where it rests in every frame of its way, its first glyph between that edge and where it rests" {
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: the reply coming over the agent's line comes out of its picture: nothing of its words before the picture has folded and floated, then its head and glyphs in, never cut, whole at rest" {
+  // (till 2026-11-14 it grew from its start, its left edge where it rests all the way: the page before an agent's
+  // message came out of its picture at work (message_agent_node's agent_out_steps); the coordinator of the migration)
   for screen in cr_screens {
     let t = cr_open(screen, (fix_deliver_ms, 1400.0, 1000.0), on_pixels=true)
     let sent = t.time()
     cr_send(t, cr_sent)
-    let gap = sent + fix_deliver_ms + 1400.0 - 50.0 - t.time()
+    let comes = sent + fix_deliver_ms + 1400.0
+    let out = comes + @sfbase.Pose::Fold.ms() + @sfbase.Pose::Float.ms()
+    let gap = comes - 50.0 - t.time()
     if gap > 0.0 {
       t.run_for(gap)
     }
-    let seen = []
-    let from = t.time()
-    while t.time() < from + @ui.move_most_ms {
-      seen.push((t.time() - from, ks_reply_start(t)))
+    let mut ways = 0
+    while t.time() < out + @ui.move_most_ms {
+      let drawn = ks_reply_start(t) is Some(_)
+      assert_false(drawn && t.time() < out - 0.001, msg="\{screen.0}, \{t.time() - comes} ms: its words drawn before its picture glided (\{out - comes} ms)")
+      match ks_cut_inked([cr_reply], cr_foot_top(t), 0.0) {
+        Some(w) => fail("\{screen.0}, \{t.time() - comes} ms: \{w}")
+        None => ()
+      }
+      if drawn {
+        ways = ways + 1
+      }
       t.run_for(cr_look_ms)
     }
-    t.run_for(@ui.move_most_ms)
-    let (glyph, edge, _) = match ks_reply_start(t) {
-      Some(s) => s
-      None => fail("\{screen.0}: the reply not drawn at rest")
-    }
-    let mut ways = 0
-    for s in seen {
-      guard s.1 is Some((g, e, share)) else { continue }
-      ways = ways + 1
-      assert_true((e - edge).abs() <= 0.5, msg="\{screen.0}, +\{s.0} ms: the left edge of what it draws at \{e}, \{edge} at rest")
-      // (its first glyph, as far in from that edge as it is at rest times the share it is drawn at: off where it rests
-      // by no more than that distance's rest times 1 less that share; on 小屏, where the two are one, where it rests)
-      let most = (glyph - edge) * (1.0 - share)
-      assert_true(
-        g >= e - 0.5 && g <= glyph + 0.5 && glyph - g <= most + 0.5,
-        msg="\{screen.0}, +\{s.0} ms: its first glyph at \{g}, \{glyph} at rest, the edge at \{e}, drawn at \{share}",
-      )
-    }
-    assert_true(ways > 0, msg="\{screen.0}: the reply not drawn on its way")
+    t.run_for(@ui.move_most_ms + @sfbase.emit_out_ms_most)
+    assert_true(ks_reply_start(t) is Some(_), msg="\{screen.0}: the reply not drawn at rest")
+    assert_true(ways > 0, msg="\{screen.0}: the reply not drawn as it came out")
   }
 }
 
 ///|
-test "a chat's page made with its inside nodes, on 小屏 and 大屏: the first message sent grows from its end: its bubble's right edge where it rests in every frame of its way" {
+test "a chat's page made with its inside nodes, on 小屏 and 大屏: the first message sent flies from the field: drawn where its words were typed in the press's frame, whole and never cut all the way, at its place at rest" {
+  // (till 2026-11-14 it grew from its end, its bubble's right edge where it rests all the way: the page before words
+  // sent flew from the field (View::flies_in); the coordinator of the migration)
   for screen in cr_screens {
     let t = cr_open(screen, (fix_deliver_ms, 1.0e7, 1.0e7), on_pixels=true)
-    cr_send(t, cr_sent)
-    let seen = []
+    guard composer_field(t) is Some((fx, fy0, fw, fh0)) else { fail("\{screen.0}: no composer's field") }
+    t.tap(fx + fw / 2.0, fy0 + fh0 / 2.0)
+    t.type_text(cr_sent)
+    guard composer_field(t) is Some((_, fy, _, fh)) else { fail("\{screen.0}: no composer's field") }
+    tap_send(t)
+    t.frame()
     let from = t.time()
-    while t.time() < from + @ui.move_most_ms {
-      seen.push((t.time() - from, ks_bubble_end(cr_sent)))
+    match t.drawn_of(cr_sent) {
+      Some((_, y)) => assert_true(y >= fy - 0.5 && y <= fy + fh + 0.5, msg="\{screen.0}: drawn at \{y} as sent, the field \{fy}..\{fy + fh}")
+      None => fail("\{screen.0}: not drawn as sent")
+    }
+    while t.time() < from + @ui.move_most_ms + @sfbase.flight_desk_ms {
+      assert_true(t.drawn_of(cr_sent) is Some(_), msg="\{screen.0}, +\{t.time() - from} ms: not drawn on its way")
+      match ks_cut_inked([cr_sent], None, 0.0) {
+        Some(w) => fail("\{screen.0}, +\{t.time() - from} ms: \{w}")
+        None => ()
+      }
       t.run_for(cr_look_ms)
     }
-    t.run_for(@ui.move_most_ms)
-    let rest = match ks_bubble_end(cr_sent) {
-      Some(e) => e
-      None => fail("\{screen.0}: the sent message not drawn at rest")
-    }
-    let mut ways = 0
-    for s in seen {
-      guard s.1 is Some(e) else { continue }
-      ways = ways + 1
-      assert_true((e - rest).abs() <= 0.5, msg="\{screen.0}, +\{s.0} ms: its bubble's right edge at \{e}, \{rest} at rest")
-    }
-    assert_true(ways > 0, msg="\{screen.0}: the sent message not drawn on its way")
+    assert_true(ks_bubble_end(cr_sent) is Some(_), msg="\{screen.0}: the sent message not drawn at rest")
   }
 }
