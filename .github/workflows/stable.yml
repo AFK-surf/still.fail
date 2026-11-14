@@ -374,7 +374,10 @@ jobs:
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           # The key the release is signed with (scripts/release-sign.ts): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-        run: sh .github/release.sh --stable station
+        # The native parts it fetches by the usual route: the direct one (STILLFAIL_DIRECT_DNS, setup-mac) trickled each
+        # part for 300 s from mini1 and cut four attempts at 10 minutes, the usual route sending one in 20 s (0.1.8947,
+        # 43616763857). A release runs its base's scripts/native.ts, which gives up a slow route only from #6329 on.
+        run: STILLFAIL_DIRECT_DNS= sh .github/release.sh --stable station
 
   # The official site, still.fail, from the same revision: the pipeline deploys only youdid.wtf's (site-beta), and a
   # stable release that left it out kept still.fail at 2026-10-01's for two weeks (no Windows download on it).
