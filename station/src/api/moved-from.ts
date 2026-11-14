@@ -19,5 +19,6 @@ export const MOVED_FROM_BUILD = 9144;
 // the lead's, 2026-11-14: after a move the root's person is a member like any other, `~root`). A core of a release
 // before it reads such a removal as nothing, so it would make another state: it is told to update (mesh/serve.ts
 // `movedTooOld`) only in a workspace whose state in force has the root's person out of `~root` (`Cloud.rootOut`), and
-// nowhere else is anyone told anything. Set at push to the build after the commit that brings it.
-export const ROOT_OUT_FROM_BUILD = 9999999;
+// nowhere else is anyone told anything. 9246: main's build 9231 (b3989e2e32) as this change was made ready, and 15 more
+// for what merges before it: never below the build of the commit that brings it.
+export const ROOT_OUT_FROM_BUILD = 9246;
