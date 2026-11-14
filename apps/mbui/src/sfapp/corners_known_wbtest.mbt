@@ -144,8 +144,11 @@ let corners_outgrown_known : Map[String, Int] = Map([])
 /// 2026-10-30: what can be pressed is one height) on every screen in every window (corners_wbtest.mbt), by window,
 /// language and screen: the bar it may only fall from, counted as the rule first ran (2026-11-14). A screen not listed
 /// has none. Listed: 连接's 继续 (a connect's session waiting to go on) in the wide windows, its button 36 and the
-/// icon's button beside it 32.
+/// icon's button beside it 32. And 屏幕's page on a phone, its address field 36 beside 后退's 40: an old view hosted in
+/// the window's tree, not measured till the spacing rules took the tree's nodes in each after its parent (2026-11-14).
 let corners_heights_known : Map[String, Int] = Map([
+  ("phone-zh screen-pages", 1),
+  ("phone-en screen-pages", 1),
   ("wide-zh settings-connects", 1),
   ("wide-win-zh settings-connects", 1),
   ("wide-en settings-connects", 1),
