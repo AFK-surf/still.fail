@@ -15,6 +15,8 @@
 //     closed meanwhile (one account's requests a minute, the cloud's 120).
 //   21 the cloud frozen and the stations apart: X off at the first, one state at both once the second is back; S
 //     started anew let in by both.
+//   22 alice's new app N after P went: refused by both, its page joining her own log, no admin named; it asks from the
+//     page that waits, A shows the code, nothing asked on N; given A's vault, nothing done on A.
 // Chains are handed over by themselves on every build from HAND_OVER_FROM (client/core-ts src/lock-handover.ts; the
 // user, 2026-11-14: 无感迁移, no date, no switch), so by default nothing calls `lock.handOver`: P's joining alice's own
 // lock face to face, the ask for something else that A answers, is moved from round 19's start to where the call was
@@ -45,6 +47,8 @@ const gDev = new Device("G", "gina", { page: true });
 const tDev = new Device("T", "gina");
 const sDev = new Device("S", "hank");
 const yDev = new Device("Y", "frank", { page: true });
+// alice's new app after P was taken off (round 22)
+const nDev = new Device("N");
 const fifthData = `${process.env.E2E_STATION}/data`;
 const sixthData = `${process.env.E2E_STATION}-b/data`;
 try {
@@ -295,12 +299,16 @@ try {
   // an owner from here on, as an owner's acts mean the same whoever's they are)
   const xBase = await baseOf(xDev);
   await xDev.close();
-  await check("hank, added by frank (an owner) as a member after the move: his first app S approved by frank's app Q face to face, one ask on Q, a member at both stations, let in by both", async () => {
+  // (S begins hank's own log as it asks, its key made then: nobody asked on it, as before a move; views/pair.ts `ownLogFor`,
+  // 2026-11-14: it was asked 「批准你的新设备」, the approver's words)
+  await check("hank, added by frank (an owner) as a member after the move: his first app S approved by frank's app Q face to face, one ask on Q and none on S, a member at both stations, let in by both", async () => {
     await qDev.call("workspace.addMembers", { account: qDev.sub, workspace: three, role: "member", emails: ["hank@example.test"] });
     await sDev.signIn();
+    const sFrom = sDev.asked();
     const asked = await asksOf(qDev, () => approvedInThree(sDev, false, qDev));
     log(`  Q asked: ${asked.join("; ") || "nothing"}`);
     if (asked.length !== 1) throw new Error(`Q asked ${asked.length} times`);
+    if (sDev.asked() !== sFrom) throw new Error(`S asked the person: ${sDev.askedWhat(sFrom).join("; ")}`);
     await atBoth("hank a member", (s) => memberAt(s, sDev.sub) === "member");
     await sDev.personal((p) => p.standing === "member", 90_000);
   });
@@ -365,13 +373,15 @@ try {
     await atBoth("Y off", (s) => !s.includes(`DEVICE ${yId.slice(0, 12)} `));
     for (const id of both()) log(`  Y sees ${id === fifthId ? "the first" : "the second"}: ${short(await inThree(yDev, id, (s) => s.state !== "online" && s.state !== "connecting"))}`);
   });
-  await check("P taken off alice's own lock by A: refused by both; A's vault waits, keyed anew as A next opens it", async () => {
+  // (the vault keyed anew without P as part of its removal, the box key read then if it must be, as before a move:
+  // views/lock.ts `takeOffBound`; 2026-11-14, left waiting for A's next opening, it was shown to no device begun anew)
+  await check("P taken off alice's own lock by A: refused by both; A's vault keyed anew without it as part of the removal", async () => {
     const pBase = await baseOf(pDev);
     const held = (await vDev.until({ topic: "vaults", workspace: three }, (v) => (v?.vaults ?? []).find((x: J) => x.id === threeVaults.get(vDev)!.vault && x.keyed), 60_000)).devices as number;
     await vDev.call("lock.removeDevice", { workspace: three, device: pBase });
     await atBoth("P off", (s) => !s.includes(`DEVICE ${pBase.slice(0, 12)} `));
     for (const id of both()) await inThree(pDev, id, (s) => s.state !== "online" && s.state !== "connecting");
-    const v = await vDev.until({ topic: "vaults", workspace: three }, (v) => (v?.vaults ?? []).find((x: J) => x.id === threeVaults.get(vDev)!.vault), 30_000);
+    const v = await vDev.until({ topic: "vaults", workspace: three }, (v) => (v?.vaults ?? []).find((x: J) => x.id === threeVaults.get(vDev)!.vault && x.keyed && x.devices < held && !x.waits), 30_000);
     log(`  A's vault as P went: ${JSON.stringify({ keyed: v.keyed, devices: v.devices, waits: v.waits ?? null })}`);
     const copies = vDev.answers.filter((x) => thirdId !== "" && x.station.includes(thirdId) && x.path.includes("copy=1")).length;
     log(`  third first: ${thirdId !== "" && thirdId < fifthId && thirdId < sixthId ? "yes" : "no"}, copies: ${copies}`);
@@ -460,9 +470,51 @@ try {
   } finally {
     stationDo("cloud-thaw");
   }
+  // ── round 22: a new app of alice's after one was taken off (P, round 20), as a person's next phone: refused by both, its
+  // page says it joins her own log and its refusal names her own trusted devices (no admin: after a move only her apps
+  // put it on her log, views/lock.ts `offOwnLock`); it asks from the page that waits, A shows the code; let in by both
+  // and given A's vault, which was keyed anew without P as P went, nothing done on A but the approval (2026-11-14: a
+  // vault left waiting was shown to no device begun anew, 条目不存在, and setting one up made an empty 个人) ──
+  await nDev.signIn();
+  await check("N, alice's new app after P went, refused by both; its page says it joins her own log, its refusal names her trusted devices and no admin", async () => {
+    for (const id of both()) {
+      const s = await inThree(nDev, id, (s) => s.state !== "online" && s.state !== "connecting" && s.cause === "lock");
+      log(`  N sees ${id === fifthId ? "the first" : "the second"}: ${short(s)}`);
+      if (/管理员|admin/i.test(String(s.message))) throw new Error(`its refusal names an admin: ${s.message}`);
+    }
+    await nDev.lock(three, (l) => l.me?.waiting && l.me?.ownLock, 60_000);
+  });
+  await must("N asks from the page that waits, A shows the code: N on alice's own lock, let in by both, nothing asked on N, A asked once", async () => {
+    const nFrom = nDev.asked();
+    const asked = await asksOf(vDev, async () => {
+      const shown = vDev.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
+      await nDev.call("lock.pair", { workspace: three });
+      const p = await shown;
+      await nDev.lock(three, (l) => l.me?.pair?.state === "code", 60_000);
+      await nDev.call("lock.pairCode", { workspace: three, code: p.code });
+      await nDev.personal((p) => p.standing === "member", 90_000);
+    });
+    log(`  A asked: ${asked.join("; ") || "nothing"}`);
+    if (asked.length !== 1) throw new Error(`A asked ${asked.length} times`);
+    if (nDev.asked() !== nFrom) throw new Error(`N asked the person: ${nDev.askedWhat(nFrom).join("; ")}`);
+    for (const id of both()) await inThree(nDev, id, (s) => s.state === "online");
+  });
+  await check("N given A's vault (keyed anew without P as P went) and opens its item, nothing done on A", async () => {
+    const v = threeVaults.get(vDev)!;
+    const aFrom = vDev.asked();
+    // (as its page has it: confirmed and signing once it has read the state in force; meanwhile the vault says it syncs
+    // the list, vault_lock_waiting)
+    await nDev.lock(three, (l) => l.signs && l.me?.confirmed, 90_000);
+    await nDev.until({ topic: "vaults", workspace: three }, (x) => x?.canSign, 90_000);
+    await nDev.call("vault.setup", { workspace: three });
+    await nDev.until({ topic: "vaults", workspace: three }, (x) => (x?.vaults ?? []).find((y: J) => y.id === v.vault && y.keyed), 90_000);
+    const o = await nDev.call("vault.open", { workspace: three, item: v.item });
+    if (o?.plain?.fields?.value !== v.secret) throw new Error(`N opened: ${JSON.stringify(o)?.slice(0, 300)}`);
+    if (vDev.asked() !== aFrom) throw new Error(`A asked the person: ${vDev.askedWhat(aFrom).join("; ")}`);
+  });
 } catch (e) {
   fail("the run", e);
 }
 log(failures() === 0 ? "ALL PASSED" : `${failures()} FAILED`);
-await within(Promise.all([vDev, pDev, xDev, qDev, rDev, sDev, yDev, gDev, tDev].map((x) => x.close())), 5000);
+await within(Promise.all([vDev, pDev, xDev, qDev, rDev, sDev, yDev, gDev, tDev, nDev].map((x) => x.close())), 5000);
 process.exit(failures() === 0 ? 0 : 1);
