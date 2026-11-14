@@ -236,6 +236,7 @@
   "core-misc.lock.unconfirmedNoCode": "This device isn't approved for “{name}” yet: on a trusted device of yours in “{name}”, or as one of its admins, open Settings › Security and approve it",
   "core-misc.lock.offOwnLock": "This device isn't approved for “{name}” yet: send an approval request on this device, and enter the code your trusted device shows",
   "core-misc.lock.behind": "The station hasn't received this device's approval yet; retrying shortly",
+  "core-misc.lock.waitsStations": "Waiting for station {stations} to come online: once it is, send the approval request from this device again",
   "core-misc.lock.notSigner": "This device isn't trusted, so it can't change security mode: make it a trusted device in Settings › Security first",
   "core-misc.lock.othersDevice": "This device is another member's: only they can remove it. To stop this member reaching the workspace, remove them from it",
   "core-misc.lock.notOwn": "This device was put in security mode under your name by someone else, so it signs nothing: remove it in Settings › Security and approve it again from a device of your own",

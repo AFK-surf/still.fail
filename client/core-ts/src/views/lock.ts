@@ -1176,6 +1176,7 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   heardRefused(inner, ws, told?.person);
   heardTail(inner, ws, told?.entries);
   heardOut(inner, ws, told?.out);
+  heardOwnOnPage(inner, ws, told?.person);
   heardLeft(inner, ws, station, told?.left);
   const h = held(inner, ws);
   const base = p.base ?? bases.get(inner) ?? null;
@@ -1216,6 +1217,19 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown, tol
   p.refused.set(station, h?.head?.hash ?? null);
   touch(inner, ws);
   return unconfirmed(inner, ws);
+}
+
+/// A web page refused where the chain moved takes its person's own log as the refusal tells it (`person`, as an app
+/// takes it on its own lock, `heardRefused`): a page holds no lock of its person's own, and that log is where it was
+/// taken off (`web.remove`). Else it kept the log as it was given it while in, the state it made still naming it, and
+/// was told for good that the station had not heard of its approval yet (`core-misc.lock.behind`), its page confirmed,
+/// 30 days left (2026-11-14, the locks' end to end, round 16: W taken out on 设置 › 安全).
+function heardOwnOnPage(inner: Inner, ws: string, raw: unknown): void {
+  if (inner.host.appKeys === true || !movedHere(inner, ws) || !Array.isArray(raw)) return;
+  if (keepLogs(inner, ws, raw)) {
+    touch(inner, ws);
+    keepSafe(inner, ws);
+  }
 }
 
 /// What took this device out of a moved workspace, as a station's refusal tells it (station/src/mesh/serve.ts
@@ -1316,10 +1330,16 @@ function outText(inner: Inner, ws: string): string | null {
   return t("core-misc.lock.out", { name, time: format.dateClock(ms, inner.host.utcOffsetMin(ms)) });
 }
 
-/// Why a station is not asked now: it refused this device and the lock has not moved on since.
+/// Why a station is not asked now: it refused this device and the lock has not moved on since. Where the chain moved
+/// it never moves on (what lets a device in is said in its people's logs, which one left out is not given, and nothing
+/// of it reaches the cloud), so a station of the same lock that refused it is asked again at its link's own retry, its
+/// backoff and cap (station/link.ts), as a station that is down is: else a device let in by a statement it is not given
+/// came in only as the person opened the app again or pressed, which a move must not add (the lead, 2026-11-14; the
+/// locks' end to end, round 12: bob's second app, after he was made a member again, never asked again).
 function waiting(inner: Inner, ws: string, station: string): CoreError | null {
   const p = inner.workspaces.get(ws)?.own.get("lock") as Part | undefined;
   if (!p || !p.refused.has(station)) return null;
+  if (movedHere(inner, ws) && keeps(inner, ws, station)) return null;
   if (p.refused.get(station) !== (held(inner, ws)?.head?.hash ?? null)) {
     p.refused.delete(station);
     return null;
@@ -2149,6 +2169,23 @@ function personShownOf(inner: Inner) {
 /// as it comes, a late one too: `answered` is whether every station of theirs the control plane saw in SEEN_SECS did,
 /// and one at least. A lock of theirs kept only by a station that did not answer would get a second one begun beside
 /// it; one the control plane has not seen for a month is not waited for.
+
+/// The stations of `sub`'s workspaces seen lately that have not answered a read of their own lock this run, by name:
+/// what holds back a lock of theirs begun with nobody asked (`answered` below), said to them while it does
+/// (views/pair.ts `ownLogFor`).
+export function stationsUnanswered(inner: Inner, sub: string): string[] {
+  const heard = answeredOf.get(inner)?.get(sub) ?? new Set<string>();
+  const at = now(inner);
+  const names: string[] = [];
+  for (const [ws, owner] of inner.workspaces.owned()) {
+    if (owner !== sub) continue;
+    for (const s of arr(get(view(inner, ws), "stations"))) {
+      if (typeof s?.id === "string" && typeof s.last_seen === "number" && at - s.last_seen <= SEEN_SECS && !heard.has(s.id)) names.push(str(s.name) || s.id.slice(0, 8));
+    }
+  }
+  return [...new Set(names)];
+}
+
 export function personalStations(inner: Inner): NonNullable<PersonalEnv["stations"]> {
   const heardOf = (sub: string): Set<string> => {
     let m = answeredOf.get(inner);
