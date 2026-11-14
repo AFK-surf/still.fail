@@ -8,6 +8,7 @@ import type { Call } from "./core/calls.ts";
 import * as ops from "./ops.ts";
 import { Priority } from "./sync/scheduler.ts";
 import { asCoreError } from "./error.ts";
+import { carryAll, whoIn } from "./views/presets.ts";
 import { arr as arrU, get as getU } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -16,7 +17,15 @@ const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 
 export function installChoose(inner: Inner): Choose {
-  const choose = new Choose({ store: inner.store, data: inner.data, now: () => inner.host.nowMs(), agent: (station, key) => inner.views.agent(station, key) });
+  const choose = new Choose({
+    store: inner.store,
+    data: inner.data,
+    now: () => inner.host.nowMs(),
+    agent: (station, key) => inner.views.agent(station, key),
+    who: (scope) => whoIn(inner, scope),
+    othersFound: (scope, id) => inner.presets?.othersFound(scope, id),
+    starsChanged: (scope) => carryAll(inner, scope, "stars"),
+  });
   inner.router.owners.push(choose);
   // A profile its station has not checked since it started is checked, once a run.
   const checked = new Set<string>();

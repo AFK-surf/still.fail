@@ -28,10 +28,12 @@ import {
   NAME_MAX,
   type PresetRecord,
   canonical,
+  goneKept,
   isGone,
   modelOf,
   newerRecord,
   recordOf,
+  recordsKept,
   stationsOf,
 } from "../../../client/core-ts/src/preset-records.ts";
 
@@ -114,10 +116,7 @@ export function presetRefusal(
 
 const FILE = "presets.json";
 const COPY = ".stillfail-preset.json";
-/// The deleted presets a workspace's file keeps at most, the latest: a deletion is forgotten only after this many
-/// later ones, and only a device or a station that held the preset live all that while (a person's presets are made by
-/// hand, tens of them) could bring it back then.
-export const GONE_MOST = 500;
+// (the deleted presets it keeps: preset-records.ts `goneKept`, so many of each owner's, the rule a device keeps too)
 /// The live presets a workspace's file keeps at most: one more a device brings is refused.
 export const LIVE_MOST = 1000;
 
@@ -189,21 +188,12 @@ export function readPresets(home: string, me = ""): Preset[] {
   return readPresetsFile(home, me).presets;
 }
 
-/// The latest GONE_MOST of `gone`, by when each was deleted (then the higher `rev`, then the id: the same whatever their
-/// order).
-function latestGone(gone: PresetGone[]): PresetGone[] {
-  if (gone.length <= GONE_MOST) return gone;
-  const order = (a: PresetGone, b: PresetGone) => b.updatedAt - a.updatedAt || b.rev - a.rev || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-  const kept = new Set([...gone].sort(order).slice(0, GONE_MOST));
-  return gone.filter((g) => kept.has(g));
-}
-
 function writePresets(home: string, presets: Preset[], gone: PresetGone[]): void {
   mkdirSync(home, { recursive: true });
   const path = join(home, FILE);
   const temp = `${path}.${randomBytes(4).toString("hex")}`;
   // (the deleted ones beside the live, which is all a reader from before reads)
-  writeFileSync(temp, `${JSON.stringify({ presets, gone: latestGone(gone) }, null, 2)}\n`); // sync: read, changed and written in one step that must not be split
+  writeFileSync(temp, `${JSON.stringify({ presets, gone: goneKept(gone) }, null, 2)}\n`); // sync: read, changed and written in one step that must not be split
   renameSync(temp, path);
 }
 
@@ -469,9 +459,11 @@ export class Presets {
     return r.owner === "" && !isGone(r) && sameEmail(r.createdBy, who.email);
   }
 
-  /// What GET /presets/kept answers: `who`'s records kept here, deleted ones too.
+  /// What GET /presets/kept answers: `who`'s records kept here, deleted ones too; and every deletion of nobody said yet
+  /// (one of before deleted by an app from before by someone who did not make it: a few bytes each, `goneKept` of them),
+  /// which its maker's device takes as its own where it holds that preset (client/core-ts/src/presets-kept.ts `taken`).
   kept(ws: string | null, who: Asker): KeptRecord[] {
-    return [...this.#records(ws).values()].filter((r) => Presets.theirs(r, who));
+    return [...this.#records(ws).values()].filter((r) => Presets.theirs(r, who) || (isGone(r) && r.owner === "" && who.sub !== ""));
   }
 
   /// What GET /presets/others answers: everyone else's live records kept here.
@@ -483,7 +475,8 @@ export class Presets {
   /// where it is theirs (its owner their sub; an id kept here only where that is theirs too, or a deletion of nobody
   /// said) and newer than what is kept, as it was brought. Answers what is kept now of each id asked.
   carry(ws: string | null, who: Asker, given: unknown[]): Carried {
-    const all = this.#records(ws);
+    const was = this.#records(ws);
+    const all = new Map(was);
     const out: Carried = { records: [], refused: [], changed: false };
     const asked: string[] = [];
     let live = [...all.values()].filter((r) => !isGone(r)).length;
@@ -500,29 +493,34 @@ export class Presets {
         out.refused.push({ at, id, error: "a record is taken only from its owner's devices (owner: their sub)" });
         return;
       }
-      const was = all.get(r.id);
-      if (was !== undefined && was.owner !== "" && was.owner !== who.sub) {
+      const held = all.get(r.id);
+      if (held !== undefined && held.owner !== "" && held.owner !== who.sub) {
         out.refused.push({ at, id, error: `preset ${r.id} is someone else's` });
         return;
       }
-      if (was !== undefined && was.owner === "" && !isGone(was) && !Presets.theirs(was, who)) {
+      if (held !== undefined && held.owner === "" && !isGone(held) && !Presets.theirs(held, who)) {
         out.refused.push({ at, id, error: `preset ${r.id} was made by someone else` });
         return;
       }
       if (!asked.includes(r.id)) asked.push(r.id);
-      if (was !== undefined && (newerRecord(was, r) === was || canonical(was) === canonical(r))) return;
-      const nowLive = !isGone(r) && (was === undefined || isGone(was));
+      if (held !== undefined && (newerRecord(held, r) === held || canonical(held) === canonical(r))) return;
+      const nowLive = !isGone(r) && (held === undefined || isGone(held));
       if (nowLive && live >= LIVE_MOST) {
         out.refused.push({ at, id, error: `this station keeps ${LIVE_MOST} presets of a workspace at most` });
         return;
       }
       if (nowLive) live++;
-      else if (isGone(r) && was !== undefined && !isGone(was)) live--;
+      else if (isGone(r) && held !== undefined && !isGone(held)) live--;
       all.set(r.id, r);
-      out.changed = true;
     });
-    if (out.changed) this.#write(ws, all);
-    for (const id of asked) out.records.push(all.get(id)!);
+    // What is kept as it is written (a deletion past what an owner's keep, `goneKept`, not): changed only where that
+    // differs from what was, so that a deletion dropped as it is taken is neither written nor told.
+    const before = recordsKept(Object.fromEntries(was));
+    const after = recordsKept(Object.fromEntries(all));
+    const ids = new Set([...Object.keys(before), ...Object.keys(after)]);
+    out.changed = [...ids].some((id) => before[id] !== after[id]);
+    if (out.changed) this.#write(ws, new Map(Object.entries(after)));
+    for (const id of asked) if (after[id] !== undefined) out.records.push(after[id]!);
     return out;
   }
 

@@ -1,7 +1,11 @@
 // Presets: what a chat starts knowing, chosen on the new chat's page beside where it runs and what it
-// runs on (the core's `newChat` view: the station's presets, the one picked and its name; `newChat.pick {preset}`). Its
-// control opens a menu of them (不用预设 and each preset, the one picked checked; 编辑 the one picked, 新预设), or, while
-// the workspace has none, the new one's dialog at once. A preset is made or changed in a dialog of nodes: its folders
+// runs on (the core's `newChat` view: the person's own presets, the one picked and its name; `newChat.pick {preset}`).
+// A person sees their own; the other members' are one press further in (the user, 2026-11-14: 「用户默认只能看到自己的
+// 预设，想要查看别人的预设需要额外操作」): looked at, opened a chat with and copied into one's own, never edited or
+// deleted here (the lead, 2026-11-14). Its control opens a menu of them (不用预设 and each of one's own, the one picked
+// checked, someone else's picked among them with whose it is; 编辑 the one picked or, someone else's, 复制「X」为我的预设;
+// 新预设; 其他成员的预设, a level further in, asked of the core at that press). A preset is made or changed in a dialog
+// of nodes (what it is read of the core's `preset`): its folders
 // first (each a row with its ×; 添加目录 a step further in: the folders the stations found, searched by name, 浏览文件夹…
 // the folder picker a step further still, 从 Git 克隆… a repository cloned onto a station, its row 正在克隆… till it is
 // there), its name (the first folder's till one is typed), what people want of its chats.
@@ -19,7 +23,6 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
   // (its name as the core says it with the page)
   let name = if picked == "" { "" } else { text(v, "presetName") }
   let label = if name == "" { @sf.t("web-main.preset.label") } else { name }
-  let asked = take_asked("preset")
   if take_asked("preset-new") {
     preset_dialog(src, w, address, "", items(v, "stations"))
   }
@@ -50,13 +53,13 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
     ])
   }
   let from = c.id("new/preset")
-  // (none at all yet: the new one's dialog, not a menu whose one choice is 不用预设)
-  let open = fn() {
-    if items(v, "presets").length() == 0 {
-      preset_dialog(src, w, address, "", items(v, "stations"))
-    } else {
-      preset_menu(src, w, address, v, picked, @sf.Of(from))
-    }
+  // (none of one's own yet: still a menu, its 新预设 and 其他成员的预设, never one whose one choice is 不用预设)
+  let open = fn() { preset_menu_open(src, w, address, v, @sf.Of(from)) }
+  // (the other members' presets, a fixture's screen: their menu, as a press on 其他成员的预设 opens it; and the menu
+  // with someone else's picked, opened once whose it is is answered: neither opened as a view builds, press_wait)
+  // (said again by each build of the frame, taken by the last: what an earlier build said is let go, Ctx::after_build)
+  if new_chat_state.asked == "preset-others" {
+    c.after_build("preset-others", fn() { if take_asked("preset-others") { preset_others_open(src, w, v, @sf.Of(from)) } })
   }
   // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
   let marks = items(v, "presetMarks")
@@ -85,31 +88,181 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
       open()
     }
   })
-  // (asked from elsewhere: opened as it is seen)
-  if asked {
-    open()
+  // (asked from elsewhere: opened as it is seen, once the frame is built)
+  if new_chat_state.asked == "preset" {
+    c.after_build("preset-open", fn() { if take_asked("preset") { open() } })
   }
 }
 
 ///|
-/// The station's presets as a menu (the model's and the station's picks' look): 不用预设 and each preset, the one
-/// picked checked; under a line, 编辑 the one picked and 新预设.
-fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, picked : String, from : @sf.Beside) -> Unit {
-  let pick = fn(id : String, at : String) { fn() { @sfbase.pick_new(src, w.id, { "preset": Json::string(id), "presetStation": Json::string(at) }) } }
+/// Whether the preset picked (`v`'s `preset`) is the person's own: none picked, or among their own (`presets`). One
+/// that is not is someone else's, picked from 其他成员的预设.
+fn preset_picked_own(v : Json?) -> Bool {
+  let picked = text(v, "preset")
+  picked == "" || items(v, "presets").iter().any(fn(p) { text(Some(p), "id") == picked })
+}
+
+///|
+/// What the preset `id` of workspace `scope` is asked by, whole (the core's `preset`: whose it is, its folders).
+fn preset_asked(scope : String, id : String) -> Map[String, Json] {
+  { "scope": Json::string(scope), "id": Json::string(id) }
+}
+
+///|
+/// The presets' menu opened by a press on the control: at once where the one picked is the person's own or none is;
+/// someone else's, once whose it is is answered (its `preset`, asked at the press and let go of as the menu opens:
+/// the page holds no topic for it), the screen as it was meanwhile (press_wait). Answered with an error (nothing on
+/// the device has it any more), the menu by its name alone.
+fn preset_menu_open(src : Source, w : Workspace, address : String, v : Json?, from : @sf.Beside) -> Unit {
+  if preset_picked_own(v) {
+    preset_menu(src, w, address, v, "", from)
+    return
+  }
+  let (answered, leases) = @sfbase.asked_now(src, [("preset", preset_asked(w.id, text(v, "preset")))])
+  let let_go = fn() { leases.each(fn(l) { l.cancel() }) }
+  @sfbase.press_wait(answered, fn() {
+    let one = match @signals.untracked(fn() { leases[0].follow() }) {
+      Some(t) => t.value
+      None => None
+    }
+    let_go()
+    preset_menu(src, w, address, v, text(one, "whose"), from)
+  }, let_go~)
+  |> ignore
+}
+
+///|
+/// The person's presets as a menu (the model's and the station's picks' look): 不用预设 and each of their own, the one
+/// picked checked, and someone else's where that is the one picked, checked, whose it is after its name (`whose`: ""
+/// where that was not said), so what is picked is always in sight; under a line, for the one picked 编辑「X」 (one's
+/// own) or 复制「X」为我的预设 (someone else's), 新预设, and 其他成员的预设, a level further in. With none of their own and
+/// none picked, no 不用预设 (its one choice would be the one there) and no line.
+fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, whose : String, from : @sf.Beside) -> Unit {
+  let picked = text(v, "preset")
   let all = items(v, "presets")
-  let menu : Array[@sf.MenuItem?] = [Some(@sf.menu_item_of(@sf.t("web-main.preset.none"), pick("", ""), chosen=picked == ""))]
+  let own = preset_picked_own(v)
+  let menu : Array[@sf.MenuItem?] = []
+  if picked != "" || all.length() > 0 {
+    menu.push(Some(@sf.menu_item_of(@sf.t("web-main.preset.none"), preset_pick(src, w, "", ""), chosen=picked == "")))
+  }
   for p in all {
     let one = Some(p)
     let id = text(one, "id")
     let at = text(one, "station")
-    menu.push(Some(@sf.menu_item_of(preset_menu_label(all, p), pick(id, at), chosen=id == picked && at == text(v, "presetStation"))))
+    menu.push(Some(@sf.menu_item_of(preset_menu_label(all, p), preset_pick(src, w, id, at), chosen=id == picked && at == text(v, "presetStation"))))
   }
-  menu.push(None)
+  if !own {
+    menu.push(
+      Some(
+        @sf.menu_item_of(
+          preset_whose_label(text(v, "presetName"), whose),
+          preset_pick(src, w, picked, text(v, "presetStation")),
+          chosen=true,
+        ),
+      ),
+    )
+  }
+  if menu.length() > 0 {
+    menu.push(None)
+  }
   if picked != "" {
-    menu.push(Some(preset_edit_item(src, w, address, v, picked)))
+    menu.push(Some(if own { preset_edit_item(src, w, address, v, picked) } else { preset_copy_item(src, w, address, v) }))
   }
   menu.push(Some(@sf.menu_item_of(@sf.t("web-main.preset.newRow"), fn() { preset_dialog(src, w, address, "", items(v, "stations")) }, icon="plus")))
+  menu.push(Some(@sf.menu_item_of(@sf.t("web-main.preset.others"), fn() { preset_others_open(src, w, v, from) }, icon="users")))
   @sf.menu(menu, from~, title=@sf.t("web-main.preset.label"))
+}
+
+///|
+/// Preset `id` of station `at` picked for the workspace's new chats ("" none).
+fn preset_pick(src : Source, w : Workspace, id : String, at : String) -> () -> Unit {
+  fn() { @sfbase.pick_new(src, w.id, { "preset": Json::string(id), "presetStation": Json::string(at) }) }
+}
+
+///|
+/// Someone else's preset as a menu names it: its name, whose it is after it (the member's name; its name alone where
+/// that was not said).
+fn preset_whose_label(name : String, whose : String) -> String {
+  if whose == "" {
+    name
+  } else {
+    name + " · " + whose
+  }
+}
+
+///|
+/// 其他成员的预设, a level further in from the presets' menu (the presenters' own: a menu a menu's item opens), or a
+/// menu of its own where nothing was chosen in one (a fixture's screen): the other members' presets, asked of the core
+/// at the press (`otherPresets`, read of the stations reached then) and opened once all of them have answered
+/// (`reading` over), whole, the screen as it was meanwhile (press_wait); each by its name, whose it is after it, as the
+/// core orders them, the one picked checked; none, one line saying so. Picked, it is the new chat's and the menu
+/// closes. What was asked is held while it shows, let go of as it goes or something is picked in it.
+fn preset_others_open(src : Source, w : Workspace, v : Json?, from : @sf.Beside) -> Unit {
+  let lease = src.lease_topic("otherPresets", { "scope": Json::string(w.id) })
+  let let_go = fn() { lease.cancel() }
+  let ready = fn() {
+    match lease.follow() {
+      Some(t) => t.error is Some(_) || (t.value is Some(_) && !flag(t.value, "reading"))
+      // (let go of: nothing to wait for)
+      None => true
+    }
+  }
+  @sfbase.press_wait(ready, fn() {
+    let said = @signals.untracked(fn() { lease.follow() })
+    let menu : Array[@sf.MenuItem?] = []
+    match said {
+      Some({ error: Some(e), .. }) =>
+        menu.push(Some(@sf.menu_item_of(error_words(e), fn() {  }, disabled=true)))
+      Some({ value, .. }) => {
+        let picked = text(v, "preset")
+        for p in items(value, "presets") {
+          let one = Some(p)
+          let id = text(one, "id")
+          let at = text(one, "station")
+          let pick = preset_pick(src, w, id, at)
+          menu.push(
+            Some(
+              @sf.menu_item_of(
+                preset_whose_label(text(one, "name"), text(one, "whose")),
+                fn() {
+                  let_go()
+                  pick()
+                },
+                chosen=id == picked,
+              ),
+            ),
+          )
+        }
+        if menu.length() == 0 {
+          menu.push(Some(@sf.menu_item_of(@sf.t("web-main.preset.othersNone"), fn() {  }, disabled=true)))
+        }
+      }
+      None => ()
+    }
+    @sf.menu(menu, from~, title=@sf.t("web-main.preset.others"), gone=let_go)
+  }, let_go~)
+  |> ignore
+}
+
+///|
+/// 复制「X」为我的预设, in place of 编辑 for someone else's preset picked: copied into the person's own (`preset.copy`, made on
+/// the page's station `address`), the copy picked, and its dialog opened so it can be changed. Not copied, said why
+/// and that it can be pressed again.
+fn preset_copy_item(src : Source, w : Workspace, address : String, v : Json?) -> @sf.MenuItem {
+  let picked = text(v, "preset")
+  let stations = items(v, "stations")
+  @sf.menu_item_of(@sf.t("web-main.preset.copyNamed", args=[("name", text(v, "presetName"))]), fn() {
+    (src.call)("preset.copy", Json::object({ "station": Json::string(address), "id": Json::string(picked) }), fn(r) {
+      match r {
+        Ok(made) => {
+          let id = text(Some(made), "id")
+          @sfbase.pick_new(src, w.id, { "preset": Json::string(id), "presetStation": Json::string(address) })
+          preset_dialog(src, w, address, id, stations)
+        }
+        Err(e) => toast_later(@sf.t("web-main.preset.copyFailed", args=[("error", error_words(e))]))
+      }
+    })
+  }, icon="copy")
 }
 
 ///|
@@ -139,13 +292,13 @@ fn preset_edit_item(src : Source, w : Workspace, address : String, v : Json?, pi
 
 ///|
 /// What a control the picked preset holds fixed (its model, its station) opens as it is pressed: a menu saying so in
-/// its title (`title`), and the two ways to change it, 编辑 the preset and 不用预设 (the user, 2026-11-14: a press that
-/// did nothing looked broken).
+/// its title (`title`), and the two ways to change it, 编辑 the preset (复制「X」为我的预设 for someone else's, never edited
+/// here) and 不用预设 (the user, 2026-11-14: a press that did nothing looked broken).
 fn preset_fixed_menu(src : Source, w : Workspace, address : String, v : Json?, title : String, from : @sf.Beside) -> Unit {
   let picked = text(v, "preset")
   @sf.menu(
     [
-      Some(preset_edit_item(src, w, address, v, picked)),
+      Some(if preset_picked_own(v) { preset_edit_item(src, w, address, v, picked) } else { preset_copy_item(src, w, address, v) }),
       Some(@sf.menu_item_of(@sf.t("web-main.preset.none"), fn() {
         @sfbase.pick_new(src, w.id, { "preset": Json::string(""), "presetStation": Json::string("") })
       }, icon="close")),
@@ -156,7 +309,8 @@ fn preset_fixed_menu(src : Source, w : Workspace, address : String, v : Json?, t
 }
 
 ///|
-/// The station's presets and the folders it offers for one (the `presets` topic), read as they are shown.
+/// The folders a station offers for a preset and the clones under way there (the `presets` topic's `candidates` and
+/// `clones`), read as they are shown. Not the presets: a person's own are the core's `newChat.presets` and `preset`.
 fn presets_of(src : Source, address : String) -> Json? {
   src.topic("presets", { "station": Json::string(address) }).get().value
 }
@@ -254,19 +408,38 @@ fn preset_dialog(
   let title = if id == "" { @sf.t("web-main.preset.new") } else { @sf.t("web-main.preset.edit") }
   @sf.panel_nodes(
     title,
-    fn(v, close) { preset_fields(v, src, address, id, stations, e, close) },
+    fn(v, close) { preset_fields(v, src, w.id, address, id, stations, e, close) },
     from=Unanchored,
     foot=fn(v, close) { preset_foot(v, src, w, address, id, e, close) },
   )
 }
 
 ///|
-/// The preset `id` of `address` as the station's presets say it (None while they are read, or for a new one).
-fn preset_was(src : Source, address : String, id : String) -> Json? {
+/// The preset `id` of workspace `scope` whole, as the core has it (`preset`: the person's own as the device holds it,
+/// wherever it was made; None while it is read, where nothing has it, or for a new one).
+fn preset_was(src : Source, scope : String, id : String) -> Json? {
   if id == "" {
     return None
   }
-  items(presets_of(src, address), "presets").iter().find_first(fn(p) { text(Some(p), "id") == id })
+  src.topic("preset", preset_asked(scope, id)).get().value
+}
+
+///|
+/// A folder of a preset as the core says it (`preset`'s `dirs`: each with its station) as the dialog holds it (dir_key):
+/// one of `address`'s by its path and repository alone, another station's with its station and that station's name.
+fn preset_dir_held(d : Json, address : String) -> Json {
+  let one = Some(d)
+  let repo = if text(one, "repo") == "" { Json::null() } else { Json::string(text(one, "repo")) }
+  if text(one, "station") == "" || text(one, "station") == address {
+    Json::object({ "path": Json::string(text(one, "path")), "repo": repo })
+  } else {
+    Json::object({
+      "path": Json::string(text(one, "path")),
+      "repo": repo,
+      "station": Json::string(text(one, "station")),
+      "stationName": Json::string(text(one, "stationName")),
+    })
+  }
 }
 
 ///|
@@ -293,20 +466,21 @@ fn preset_then(src : Source, address : String, stations : Array[Json], e : Prese
 fn preset_fields(
   v : @view.View,
   src : Source,
+  scope : String,
   address : String,
   id : String,
   stations : Array[Json],
   e : PresetEditing,
   close : () -> Unit,
 ) -> Unit {
-  // (one changed: what it is, once the station's presets are read)
-  v.reacts(fn() { !e.filled.get() && preset_was(src, address, id) is Some(_) }, fn(ready) {
+  // (one changed: what it is, once the core has said it)
+  v.reacts(fn() { !e.filled.get() && preset_was(src, scope, id) is Some(_) }, fn(ready) {
     guard ready else { return }
-    guard @signals.untracked(fn() { preset_was(src, address, id) }) is Some(p) else { return }
+    guard @signals.untracked(fn() { preset_was(src, scope, id) }) is Some(p) else { return }
     e.filled.set(true)
     e.name.set(text(Some(p), "name"))
     e.instructions.set(text(Some(p), "instructions"))
-    e.dirs.set(items(Some(p), "dirs"))
+    e.dirs.set(items(Some(p), "dirs").map(fn(d) { preset_dir_held(d, address) }))
     e.auto_station.set(flag(Some(p), "autoStation"))
     e.station.set(text(Some(p), "station"))
     e.stations.set(items(Some(p), "stations").filter_map(fn(s) { if s is String(str) && str != "" { Some(str) } else { None } }))

@@ -1460,6 +1460,9 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
       } else {
         Some(fix_presets_of(text(Some(Json::object(params)), "station")))
       }
+    // (a preset whole, and the other members': the new chat's preset menu's and its dialog's)
+    "preset" => fix_preset_one(text(Some(Json::object(params)), "id"))
+    "otherPresets" => Some(fix_other_presets())
     "newChat" | "pick" => fixture_new_topic(f, name)
     // none left up long, as the core answers it (the first page waits for it); decide_fixture.mbt's modes say theirs
     "longJobs" if !decide_mode(f.mode) => Some({ "groups": [], "lit": false, "ids": [] })

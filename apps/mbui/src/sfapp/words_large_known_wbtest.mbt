@@ -88,7 +88,6 @@ let words_large_known : Map[String, Int] = {
     ("phone-en settings-kept", 1),
     ("phone-en settings-kept-many", 1),
     ("phone-en settings-vault-words", 14),
-    ("phone-en settings-vault-add", 1),
     ("phone-en settings-stations-tasks", 1),
     ("phone-en place-stations-tasks", 1),
     ("phone-en settings-stations-devices", 1),

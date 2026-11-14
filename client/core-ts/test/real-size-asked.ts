@@ -13,7 +13,7 @@ import { isObject } from "../src/util.ts";
 import {
   CHANGELOG_DEVICE, CHANGELOG_SEEN, CHAT, PEOPLE, CHAT_MESSAGES, DRIVE, LETTERS_COUNT, JOB, JOB_LOG_LINES, OPENS, OTHER_WORKSPACE, OUTLINED, PEEKS, SEARCH, UP, VAULT_ITEM, cardCame, changelogFeed, changelogReleased,
   chatArchived, chatRenamed, devicesAdded, devicesSaid, driveAdded, fixture, hostReading, jobLogOf, jobsMoved, lettersHeld, listedOf, liveStepped, lockApproved, memberJoined, messageAdded, more,
-  netOf, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, overviewMoved, presetsChanged, quotaChanged, records, resourcesOf, screensMoved, screensOf, sessionMade, thingSaid, transcriptOf,
+  netOf, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, overviewMoved, othersPresetsChanged, othersPresetsOf, presetRecordsChanged, presetsChanged, quotaChanged, records, resourcesOf, screensMoved, screensOf, sessionMade, thingSaid, transcriptOf,
   usageRead, vaultAdded, vaultUsed, ownPendingOf, STATIONS,
 } from "./real-size.ts";
 import { logged } from "../src/log-lines.ts";
@@ -30,6 +30,7 @@ import type { FakeHost } from "../src/testing.ts";
 import { lockView } from "../src/views/lock.ts";
 import { joinable, memberships } from "../src/views/memberships.ts";
 import { itemsView, usesView, vaultsView } from "../src/views/vault.ts";
+import { PresetViews } from "../src/views/presets.ts";
 import type { Views } from "../src/views/views.ts";
 import { waysView } from "../src/views/ways.ts";
 import * as xshare from "../src/views/xshare.ts";
@@ -137,6 +138,8 @@ export const ASKED: Record<string, Record<string, unknown> & { topic: string }> 
   // request's; a file a message names, a picture's peek and a text's; a message of another chat a link names; a job
   // (sfdesk/service_tab.mbt), the soak with all the notices its station shows.
   "presets": { topic: "presets", station },
+  // (others' presets, asked at a press: views/presets.ts, read of the stations as it is shown)
+  "otherPresets": { topic: "otherPresets", scope: "ws" },
   "linkPreview page": { topic: "linkPreview", station, url: PEEKS.page },
   "linkPreview pull": { topic: "linkPreview", station, url: PEEKS.pull },
   "filePeek picture": { topic: "filePeek", station, key, path: PEEKS.picture },
@@ -180,7 +183,8 @@ function innerOf(parts: { host: FakeHost; store: Store; data: Data; views?: View
   return {
     host: parts.host, store: parts.store, runner: parts.store.runner, data: parts.data, views: parts.views, workspaces,
     accounts: { list: () => [{ sub: "s1", email: "me@x.com", name: "左子健" }] },
-    stations: { seen: { read: () => {} }, link: () => ({ state: { state: "online" } }) },
+    // (no station is asked here: what they said is set, as the sync would)
+    stations: { seen: { read: () => {} }, link: () => ({ state: { state: "online" } }), reachable: () => false },
     provider: { kind: "stillfail" }, adb: { personal: () => personal }, meshNow: () => null,
   } as unknown as Inner;
 }
@@ -290,6 +294,7 @@ export async function held(long = false, on: { host?: FakeHost; cold?: boolean }
     return inners.get(parts.data)!;
   };
   let changelog: Changelog | null = null;
+  let presetViews: PresetViews | null = null;
   const t = setup({
     host: on.host,
     all: true,
@@ -317,7 +322,9 @@ export async function held(long = false, on: { host?: FakeHost; cold?: boolean }
       });
       const d = devices;
       changelog = new Changelog(host, store, data);
+      presetViews = new PresetViews(inner);
       return [
+        presetViews,
         new Choose({ store, data, now: () => host.nowMs(), agent: (s, k) => views.agent(s, k) }),
         changelog,
         { owns: (topic: Topic) => topic.topic === "devices", compute: (topic: Topic) => ({ ok: d.value(String(topic.workspace)) }) },
@@ -349,7 +356,7 @@ export async function held(long = false, on: { host?: FakeHost; cold?: boolean }
       for (const [topic, value] of [...fixture(base, chat), ...more(base)]) if (!holds(topic)) t.set(topic, value);
       for (const [i, station] of UP.entries()) devices!.heard(station, "devices", devicesSaid(base, i));
     };
-    return { t, base, chat, first: new Map<string, J>(), during: async (_f: () => void, _ms: number) => new Map<string, J[]>(), notices: notices!, devices: devices!, screensAre, setLive, names };
+    return { t, base, chat, first: new Map<string, J>(), during: async (_f: () => void, _ms: number) => new Map<string, J[]>(), notices: notices!, devices: devices!, presets: presetViews!, screensAre, setLive, names };
   }
   names.forEach((name, i) => t.store.subscribe(1, i + 1, topicOf(name), true));
   // Set as the topics are watched, and again once the views watch what they found they are made of (a value set of a
@@ -359,6 +366,8 @@ export async function held(long = false, on: { host?: FakeHost; cold?: boolean }
     t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), outlinedLog(base));
     for (const key of CHAT.keys) t.data.putItems("transcript", CHAT.station, key, key === CHAT.keys[0] ? transcriptOf(base) : []);
     for (const [i, station] of UP.entries()) devices!.heard(station, "devices", devicesSaid(base, i));
+    // (others' presets as Maple gave them at the press that showed them)
+    presetViews!.heard("ws", station, othersPresetsOf(base));
     await t.host.time.pass(100);
   }
   noticesHeard(notices!, UP.map((station) => [station, (t.data.shared({ topic: "chatRows", station }) as J[]) ?? []]));
@@ -388,7 +397,7 @@ export async function held(long = false, on: { host?: FakeHost; cold?: boolean }
     }
     return out;
   };
-  return { t, base, chat, first, during, notices: notices!, devices: devices!, screensAre, setLive: () => {}, names };
+  return { t, base, chat, first, during, notices: notices!, devices: devices!, presets: presetViews!, screensAre, setLive: () => {}, names };
 }
 
 export type Held = Awaited<ReturnType<typeof held>>;
@@ -527,6 +536,11 @@ export const CAUSES: Record<string, Cause> = {
   off: { run: ({ t, base }) => t.set(overview(station), overviewMoved(base, t.host.nowMs(), "off")) },
   // A preset of Maple's changed on another device (its `presets` event, read again).
   preset: { run: ({ t, base }) => t.set({ topic: "presets", station }, presetsChanged(base, t.host.nowMs())) },
+  // One of the person's presets changed on another device of theirs, carried here as a station told it
+  // (views/presets.ts `carry`: the device's records written).
+  carried: { run: ({ t, base }) => t.data.put("presetRecords", "ws", presetRecordsChanged(base, t.host.nowMs())) },
+  // Others' presets read again as Maple told `presets` while they are shown: one of them changed.
+  others: { run: ({ t, base, presets }) => presets.heard("ws", station, othersPresetsChanged(base, t.host.nowMs())) },
   // A build more out: the changelog read again (changelog.ts `read`: kept, and both of its ways told).
   release: {
     run: ({ t, base }) => {

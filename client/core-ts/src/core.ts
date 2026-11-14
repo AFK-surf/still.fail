@@ -78,6 +78,7 @@ import * as pairing from "./views/pair.ts";
 import * as vaultCalls from "./views/vault.ts";
 import * as waysCalls from "./views/ways-stations.ts";
 import * as stationMarkCalls from "./views/station-marks.ts";
+import * as presetCalls from "./views/presets.ts";
 import * as transferCalls from "./views/transfers.ts";
 import * as browseCalls from "./views/browse.ts";
 import * as downloads from "./views/downloads.ts";
@@ -141,6 +142,8 @@ export class Inner {
   meshNow: () => Mesh | null = () => null;
   attention!: Attention;
   choose!: Choose;
+  /// A person's presets and starred models as their devices carry them (views/presets.ts).
+  presets!: presetCalls.PresetViews;
   changelog!: Changelog;
   forms!: Forms;
   adb!: Adb;
@@ -271,6 +274,7 @@ export class Core {
       vaultCalls.install(inner);
       waysCalls.install(inner);
       stationMarkCalls.install(inner);
+      inner.presets = presetCalls.install(inner);
       transferCalls.install(inner);
       browseCalls.install(inner);
       downloads.install(inner);

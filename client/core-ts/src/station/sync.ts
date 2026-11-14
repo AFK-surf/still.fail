@@ -200,7 +200,9 @@ export class StationsSync {
   onTold: (address: string, id: number, entries: unknown[]) => void = () => {};
   /// What other parts read of a station whenever it is read again (its stream opened afresh), each a task of its own
   /// (the vault's: views/vault.ts); and hear of its events they know.
-  readonly also: { read(address: string): Effect.Effect<void, CoreError>; event(address: string, name: string, data: unknown): void; resume?: boolean }[] = [];
+  /// `resume`: read whole again as its stream comes back resumed; `resumed`: what it asks then, where it says (a part
+  /// that owes the station something: views/presets.ts), instead.
+  readonly also: { read(address: string): Effect.Effect<void, CoreError>; event(address: string, name: string, data: unknown): void; resume?: boolean; resumed?(address: string): Effect.Effect<void, CoreError> }[] = [];
 
   constructor(core: Inner, wire: StationWire) {
     this.#core = core;
@@ -300,7 +302,12 @@ export class StationsSync {
     if (memory?.fresh(logins.HELD) !== true) this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address));
     // A part's kept data may have been written by an older core or station. A resumed stream only tells what changed
     // since its cursor; parts that need a fresh whole read ask for one after an absence.
-    if (how.away || how.restored) for (const [i, part] of this.also.entries()) if (part.resume) this.#enqueue(address, `also/${i}`, Priority.background, part.read(address));
+    if (how.away || how.restored) {
+      for (const [i, part] of this.also.entries()) {
+        if (part.resumed) this.#enqueue(address, `also/${i}`, Priority.background, part.resumed(address));
+        else if (part.resume) this.#enqueue(address, `also/${i}`, Priority.background, part.read(address));
+      }
+    }
     if (how.restored) this.#historyStart(address);
   }
 
@@ -1603,6 +1610,8 @@ export class StationsSync {
       // found after they were asked for): read again where shown or held.
       case "presets":
         if (this.#core.store.inUse({ topic: "presets", station: address }) || this.#links.get(address)?.memory.has(PRESETS)) this.presetsShown(address);
+        // (and the person's records carried again: views/presets.ts)
+        for (const part of this.also) part.event(address, name, data);
         return;
       // A login's terminal as it changes (while one is shown).
       case "login-screen": {
