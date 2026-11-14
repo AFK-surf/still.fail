@@ -34,6 +34,8 @@ export const SERVED_ROUTES = [
   "PUT /admin/api/threads/*/keep", "DELETE /admin/api/threads/*/keep", "PUT /admin/api/sessions/*/pin", "DELETE /admin/api/sessions/*/pin",
   // (a person's message in words alone: written there, delivered by Node; any other kind Node's: `say`)
   "POST /admin/api/threads/*/messages",
+  // (names given by hand, and a card the member will not take up: marks.ts)
+  "POST /admin/api/sessions/*/title", "PUT /admin/api/threads/*/title", "PUT /admin/api/threads/*/dismissed",
 ];
 /// How many of the program answer at once (each one read at a time, as a reader of the pool's).
 const SERVERS = 2;
@@ -64,8 +66,9 @@ export class Served {
   } | undefined;
   /// What settles each claim's key once its answer is here, by the claim's number.
   readonly #claims = new Map<number, (answer: Handled | null) => void>();
-  /// What the program wrote (a device's marks), told the store's followers (store.ts `told`).
-  changed: ((changes: any[]) => void) | undefined;
+  /// What the program wrote (a device's marks), told the store's followers (store.ts `told`); `titled`, the chats it
+  /// named by hand (store.ts `retitled`).
+  changed: ((changes: any[], titled: number[]) => void) | undefined;
 
   /// `answer`: a request of a connection's member given back, answered as serve.ts answers one; `built`: the build a
   /// connection's device says.
@@ -104,7 +107,7 @@ export class Served {
         if (viewer !== null) this.#built(viewer, typeof said.build.build === "number" ? said.build.build : null);
       }
       else if (typeof said?.fallback === "number") void (said.stream === true ? this.#relay(server, said) : this.#fallback(server, said));
-      else if (Array.isArray(said?.changes)) this.changed?.(said.changes);
+      else if (Array.isArray(said?.changes)) this.changed?.(said.changes, Array.isArray(said.titled) ? said.titled : []);
       else if (typeof said?.claim === "number") void this.#claim(server, said);
       else if (said?.said !== undefined) this.#said(said);
       else if (typeof said?.stop === "number") this.#streaming.get(child)?.get(said.stop)?.();
@@ -130,6 +133,7 @@ export class Served {
       untitled: tr(lang, "station.chat.untitled"), directMessage: tr(lang, "station.chat.directMessage"),
       quotedOnly: tr(lang, "station.chat.quotedOnly"), updateApp: tr(lang, "station.admin.updateApp"), badN: tr(lang, "station.admin.badN"),
       postOnlyStillfail: tr(lang, "station.admin.postOnlyStillfail"), emptyMessage: tr(lang, "station.admin.emptyMessage"),
+      renameOnlyStillfail: tr(lang, "station.admin.renameOnlyStillfail"), nothingWaiting: tr(lang, "station.admin.nothingWaiting"),
       notInteger: Object.fromEntries(["after", "before", "from", "to"].map((name) => [name, tr(lang, "station.admin.notInteger", { name })])),
       fromAndTo: tr(lang, "station.admin.fromAndTo"), inScriptOutput: tr(lang, "station.transcript.inScriptOutput"),
     }]));

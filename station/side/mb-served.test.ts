@@ -287,7 +287,9 @@ test("a routed request is answered by the MoonBit program as the admin API answe
       await ms.finish();
       const got = await readAll(ms);
       const at3 = got.indexOf(10);
-      return { status: JSON.parse(got.subarray(0, at3).toString()).status, body: JSON.parse(got.subarray(at3 + 1).toString()) };
+      const head = JSON.parse(got.subarray(0, at3).toString());
+      const bytes = got.subarray(at3 + 1);
+      return { status: head.status, body: JSON.parse((head.headers?.["content-encoding"] === "zstd" ? zstdDecompressSync(bytes) : bytes).toString()) };
     };
     assert.deepEqual(await put("PUT", `/threads/${thread}/read`, { n: 7 }), { status: 200, body: { viewer: "p@x", thread, n: 7 } });
     assert.deepEqual(await put("PUT", `/threads/${thread}/read`, { n: 3 }), { status: 200, body: { viewer: "p@x", thread, n: 7 } });
@@ -306,6 +308,33 @@ test("a routed request is answered by the MoonBit program as the admin API answe
     assert.deepEqual(await put("PUT", `/threads/${hidden}/read`, { n: 1 }), { status: 404, body: { error: `unknown thread ${hidden}` } });
     assert.deepEqual(told.map((c) => c.type), ["read", "read", "hidden", "muted", "dismissed", "dismissed", "pins", "pins"]);
     assert.deepEqual(told[3], { type: "muted", viewer: "p@x", thread, muted: true });
+    // names given by hand: a session's with its own chat, a chat's answered as it is read; the chats told named
+    told.length = 0;
+    const titled: number[] = [];
+    served.changed = (changes, named) => (told.push(...changes), titled.push(...named));
+    const home = store.openThreadOf("ember", "CHAT", "ch", "Home", null, "s1").id;
+    assert.deepEqual(await put("POST", "/sessions/s1/title", { title: `  ${"名".repeat(85)} ` }), { status: 200, body: { ok: true } });
+    assert.equal(store.getSession("s1")!.title, "名".repeat(80));
+    assert.equal(store.getThread(home)!.title, "名".repeat(80));
+    assert.deepEqual(await put("POST", "/sessions/s2/title", { title: "  " }), { status: 200, body: { ok: true } });
+    assert.equal(store.getSession("s2")!.title, null);
+    assert.deepEqual(await put("POST", "/sessions/none/title", { title: "x" }), { status: 404, body: { error: "unknown session none" } });
+    const renamed = await put("PUT", `/threads/${thread}/title`, { title: " Renamed " });
+    assert.equal(store.getThread(thread)!.title, "Renamed");
+    assert.deepEqual(renamed, await put("GET", `/threads/${thread}`));
+    assert.equal(renamed.body.title, "Renamed");
+    const slack = store.openThread("slack", "C1", "1.0", "Slack", null).id;
+    assert.deepEqual(await put("PUT", `/threads/${slack}/title`, { title: "x" }), { status: 400, body: { error: tr("en", "station.admin.renameOnlyStillfail") } });
+    assert.deepEqual(titled, [home, thread]);
+    // a card the member will not take up: an agent's post, or one with a card; a person's is nothing waiting
+    const [asks] = store.insertMessage({ ...newMessage(thread, "100", "agent", "s0", "asks"), at: 1000 } as ReturnType<typeof newMessage>);
+    const agent = { n: asks };
+    assert.deepEqual(await put("PUT", `/threads/${thread}/dismissed`, { n: agent.n }), { status: 200, body: { dismissed: { thread, n: agent.n } } });
+    assert.ok(store.dismissed("p@x").has(`${thread}:${agent.n}`));
+    assert.deepEqual(await put("PUT", `/threads/${thread}/dismissed`, { n: 1 }), { status: 404, body: { error: tr("en", "station.admin.nothingWaiting") } });
+    assert.deepEqual(await put("PUT", `/threads/${thread}/dismissed`, { n: 0 }), { status: 400, body: { error: tr("en", "station.admin.badN") } });
+    assert.deepEqual(told.map((c) => c.type), ["session", "thread", "session", "thread", "dismissed"]);
+    assert.deepEqual(told.at(-1), { type: "dismissed", viewer: "p@x", card: { thread, n: agent.n } });
   }
   // a person's message in words alone (routes/hub.ts, sessions/lifecycle.ts `say`): claimed of Node, written there as
   // store.ts writes one, told Node; a keyed one asked again given its first answer; one with more, Node's

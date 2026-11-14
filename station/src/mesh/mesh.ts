@@ -173,7 +173,10 @@ export const MeshLive = Layer.effectDiscard(
           (served) => Effect.promise(() => served.close()),
         );
         members.served = served;
-        served.changed = (changes) => store?.told(changes);
+        served.changed = (changes, titled) => {
+          for (const thread of titled) store?.retitled(thread);
+          store?.told(changes);
+        };
         served.says = { claim: (viewer, path, key, lang) => admin.claimSay(viewer, path, key, lang), said: (thread, n, text, row) => admin.saidElsewhere(thread, n, text, row) };
         yield* Effect.forkScoped(Effect.promise(async () => {
           try {
