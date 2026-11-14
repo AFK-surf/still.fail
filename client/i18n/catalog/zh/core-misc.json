@@ -229,8 +229,6 @@
   "core-misc.lock.rootOnlyPage": "安全模式由 {name} 开启，只有其本人可以关闭或重新开启。其本人无法操作时，可在 station 所在的电脑上运行 stillfail lock reset",
   "core-misc.lock.rootOnly": "只有 {name} 可以关闭或重新开启安全模式。其本人无法操作时，可在 station 所在的电脑上运行 stillfail lock reset",
   "core-misc.lock.out": "{name} 于 {time} 将你移出了此 workspace 的安全模式。需要继续使用的话，请联系 {name} 或其他管理员重新添加",
-  "core-misc.lock.appSoon": "安全模式即将要求每位成员至少有一台客户端。请安装桌面或手机客户端并登录，否则此网页版届时将无法访问此 workspace",
-  "core-misc.lock.webOnly": "仅使用网页版，需安装客户端",
   "core-misc.lock.needsApp": "此 workspace 的安全模式要求每位成员至少有一台客户端。请安装桌面或手机客户端并登录，由管理员批准后，再用客户端批准此网页版",
   "core-misc.lock.unconfirmed": "此设备尚未获准访问「{name}」：请在你在「{name}」中的受信任设备上，或请其管理员，打开「设置 › 安全」验证安全码 {code}",
   "core-misc.lock.unconfirmedNoCode": "此设备尚未获准访问「{name}」：请在你在「{name}」中的受信任设备上，或请其管理员，打开「设置 › 安全」批准",

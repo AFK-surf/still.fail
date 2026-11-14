@@ -36,6 +36,8 @@ mock.method(wall, "now", () => clock());
 const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
 /// The code the trusted devices here show (as typed on the new device).
 const CODE = "246810";
+/// How long the page `webOnly` puts on the chain runs, in days.
+const WEB_DAYS = 10;
 type J = any;
 /// What a trusted device answers once the code is confirmed (it signs what lets the new one in first), by its base id.
 type Approver = { where: (hello: J) => string[]; approve: (hello: J) => J };
@@ -46,7 +48,9 @@ type Approver = { where: (hello: J) => string[]; approve: (hello: J) => J };
 /// state carries them by the chain alone).
 /// `rootLost`: s1 the root's person, its log (x's) the root, every device of it lost; r1 an owner by its admit; this
 /// core s1's new app.
-async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean; personHeld?: boolean; carried?: boolean; unread?: boolean; rootLost?: boolean } = {}) {
+/// `webOnly`: s1 a member the chain names with this web page alone (no app, no log of theirs anywhere), put on the chain
+/// by alice's app before the move with ten days to run (`WEB_DAYS`): the state carries it by the chain until its `exp`.
+async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiting?: boolean; older?: boolean; personHeld?: boolean; carried?: boolean; unread?: boolean; rootLost?: boolean; webOnly?: boolean } = {}) {
   const g = grant();
   const settings = { origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: g.keys };
   const alice = new Log("r1"), bob = new Log("r2"), x = new Log("s1");
@@ -60,11 +64,15 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   const app = (l: Log) => ({ id: l.app.base.hex, sub: l.sub, kind: "app", label: `${l.sub}'s app`, sign_key: l.app.signer.id });
   const body = {
     owner: root.sub, ...settings, passkeys: [], stations: [{ key: A, name: "a" }], gateways: [],
-    members: [{ sub: "r1", email: "r1@x.com", role: "owner" }, { sub: "r2", email: "r2@x.com", role: "admin" }, ...(o.named || o.carried || o.rootLost ? [{ sub: "s1", email: "s1@x.com", role: o.rootLost ? "owner" : "member" }] : [])],
+    members: [{ sub: "r1", email: "r1@x.com", role: "owner" }, { sub: "r2", email: "r2@x.com", role: "admin" }, ...(o.named || o.carried || o.rootLost || o.webOnly ? [{ sub: "s1", email: "s1@x.com", role: o.rootLost ? "owner" : "member" }] : [])],
     devices: [app(alice), app(bob), ...(o.named || o.carried || o.rootLost ? [app(x)] : [])],
   };
   const first = signed({ v: 1, ws: "ws", seq: 0, prev: null, at: 1000, kind: "genesis", body }, root.app.signer);
-  const moved = signed({ v: 1, ws: "ws", seq: 1, prev: stationHash(first), at: 1000, kind: "moved", body: { root: root.genesis } }, root.app.signer);
+  // (`webOnly`: the page approved on the chain at the rig's first moment, FakeHost's start)
+  const START = Date.UTC(2026, 9, 6, 9, 0, 0) / 1000;
+  const onChain = o.webOnly ? [signed({ v: 1, ws: "ws", seq: 1, prev: stationHash(first), at: START, kind: "device", body: { id: base.hex, sub: "s1", kind: "web", label: "s1's browser", exp: START + WEB_DAYS * 86400 } }, root.app.signer)] : [];
+  const before = [first, ...onChain];
+  const moved = signed({ v: 1, ws: "ws", seq: before.length, prev: stationHash(before.at(-1)!), at: Math.max(1000, before.at(-1)!.at), kind: "moved", body: { root: root.genesis } }, root.app.signer);
   const r = await rig(() => ({ ws: first as unknown as Entry }), (host) => {
     if (o.web) host.appKeys = false;
   }, [A], [A], undefined, [], { role: o.rootLost ? "owner" : "member", ...(o.unread ? { lock: null } : {}) });
@@ -73,7 +81,7 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   // (`unread`: it keeps s1's, as it does for an app from before, read before any station answered)
   stationReplies(r.host, (req) => (req.url.endsWith("/v1/me/personal-lock") ? (req.method === "GET" ? { entries: o.unread ? x.entries : [] } : { ok: true }) : r.cloud.reply(req)));
   // (`unread`: the cloud's copy not moved yet either, so no read of it holds the chain as it moved)
-  r.cloud.chains.set("ws", (o.unread ? [first] : [first, moved]) as unknown as Entry[]);
+  r.cloud.chains.set("ws", (o.unread ? before : [...before, moved]) as unknown as Entry[]);
   const inner = r.core.inner;
   // (`rootLost`: an app new on this machine, with no signer yet until it asks to be let in, as a newcomer's)
   if (o.rootLost) {
@@ -87,8 +95,8 @@ async function setUp(o: { named?: boolean; noApp?: boolean; web?: boolean; waiti
   const data = mkdtempSync(join(tmpdir(), "lock-left-out-"));
   writeState(data, { origin: "https://stillfail.test", station: A, workspace: "ws", workspace_name: "W", name: "a", relay_url: "", relay_urls: [], grant_keys: g.keys, peers: [{ id: A, name: "a" }], revocations: [] } as never);
   const c = new Cloud(data, false);
-  c.takeLock([first]);
-  c.takeLock([first, moved], null, true);
+  c.takeLock(before);
+  c.takeLock([...before, moved], null, true);
   // (as each member's app device brings them, POST /lock/person)
   const bring = (l: Log) => void brought(c, l, true, "ws");
   for (const l of o.waiting ? [bob] : (o.named && !o.noApp) || o.rootLost ? [alice, bob, x] : [alice, bob]) bring(l);
@@ -436,6 +444,24 @@ for (const [what, o] of [["a member the list names with no app", { named: true, 
     assert.equal((await w.page()).me.needsAppText, NEEDS_APP);
   });
 }
+
+// A member with only a web page, their workspace upgraded by itself (nothing held for them: client/core-ts/AGENTS.md):
+// the page is carried by the chain until its `exp`; then it is one nobody can approve there, and says so, as one left
+// out from the start does.
+test("a web page carried by the chain, its person no app: in until its exp, saying nothing; then told to install an app, not offered to ask, asking refused; nothing dialled", async () => {
+  const w = await setUp({ webOnly: true, web: true });
+  const v = await w.page();
+  assert.deepEqual([v.me.confirmed, v.me.waiting, v.me.needsAppText ?? null, v.appText ?? null], [true, false, null, null], `in, nothing said (${w.why()})`);
+  w.r.host.advance((WEB_DAYS * 86400 + 60) * 1000);
+  await w.run(Effect.ignore(read(w.inner, "ws")));
+  const after = await w.page();
+  assert.equal(w.st.refusals.at(-1)?.left?.apps, false, `refused at its exp, the station saying no app of s1's (${w.why()})`);
+  assert.deepEqual([after.me.confirmed, after.me.waiting, after.me.pair ?? null, after.me.needsAppText ?? null], [false, false, null, NEEDS_APP]);
+  const asked = await w.ask("lock.pair", { workspace: "ws" });
+  assert.equal(asked.error?.code, "lock_needs_app");
+  assert.equal(asked.error?.message, NEEDS_APP);
+  assert.deepEqual(w.dialled, [], "nobody dialled");
+});
 
 test("a web page whose person's app the list names: no such words, able to ask (that app)", async () => {
   const w = await setUp({ named: true, web: true });

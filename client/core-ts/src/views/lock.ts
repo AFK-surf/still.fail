@@ -1350,13 +1350,18 @@ export function leftAppsIn(inner: Inner, ws: string): boolean {
   return [...part(inner, ws).leftApps.values()].includes(true);
 }
 
-/// Whether this web page, left out of moved workspace `ws` (`leftIn`, the state not given it), is one nobody can let in:
-/// its stations said the list names no app device of its person's (their refusal's `apps`, station/src/mesh/serve.ts
-/// `leftOf`), and only their own app approves a web page there (views/pair.ts `movedPlace`), so it asks nobody and says
-/// to install an app first (the owner, 2026-11-13: 「开了安全模式那就需要 app」). A station from before says nothing:
-/// as before, able to ask.
+/// Whether this web page, left out of moved workspace `ws` (`leftIn`), is one nobody can let in: its stations said the
+/// list names no app device of its person's (their refusal's `apps`, station/src/mesh/serve.ts `leftOf`), and only their
+/// own app approves a web page there (views/pair.ts `movedPlace`), so it asks nobody and says to install an app first
+/// (the owner, 2026-11-13: 「开了安全模式那就需要 app」). Left out from the start (the state not given it) or after it
+/// was in: a page the chain carried until its `exp` (a member with only a web page, whose workspace moved with nothing
+/// held for them, 2026-11-15) holds the state it was given then, which names it no more (`live`), and a stale `left`
+/// of a page in again says nothing. A station from before says nothing: as before, able to ask.
 export function needsAppIn(inner: Inner, ws: string): boolean {
-  if (inner.host.appKeys === true || leftIn(inner, ws) === null || inForceOf(inner, ws).said !== "waiting") return false;
+  if (inner.host.appKeys === true || leftIn(inner, ws) === null) return false;
+  const force = inForceOf(inner, ws);
+  const base = part(inner, ws).base ?? bases.get(inner) ?? null;
+  if (force.said !== "waiting" && base !== null && live(force.f.devices.get(base), now(inner)) !== undefined) return false;
   const said = [...part(inner, ws).leftApps.values()];
   return said.length > 0 && !said.includes(true);
 }
@@ -2586,19 +2591,12 @@ export function lockView(inner: Inner, ws: string): J {
   const stations = arr(get(v, "stations")).map((s) => ({
     id: s.id, name: s.name, version: s.version ?? null, online: s.online !== false, protected: f.stations.has(s.id) && keeps(inner, ws, s.id),
   }));
-  // Safe mode on and its chain not moved, whatever the switch: the members with a web page on it and no app (the owner,
-  // 2026-11-13: 「开了安全模式那就需要 app」; once moved a web page is approved by its person's own app alone). Said
-  // before the move, so that they have the days before it to install one: to the member on that page (`appText`), and
-  // beside them to owners and admins.
-  const webOnly = locked && !movedHere(inner, ws) ? webOnlyIn(f.devices.values(), at) : null;
   // (those added who have not signed in yet are the workspace page's, `added`: no one here to show devices of)
   const members = [...f.members].filter(([s]) => !isPending(s)).map(([s, m]) => ({
     sub: s, email: m.email, name: str(get(people.get(s), "name")) ?? "", role: m.role, you: s === sub,
     nameText: str(get(people.get(s), "name")) || m.email, roleText: roleText(m.role),
     groups: byApp([...f.devices.values()].filter((d) => d.sub === s).map(device)),
-    ...(manages && webOnly?.has(s) ? { appText: t("core-misc.lock.webOnly") } : {}),
   }));
-  const appText = webOnly !== null && sub !== null && !inner.host.appKeys && mine?.kind === "web" && webOnly.has(sub) ? t("core-misc.lock.appSoon") : null;
   const renew = members.flatMap((m) => (m.you ? m.groups.flatMap((g) => g.devices).filter((d) => d.renewSoon) : []));
   const dismissed = get(get(inner.data.shared({ topic: "prefs" }), "lockNotice"), ws) === true;
   // An app in the lock that does not sign with its key (let in before it kept one, as the devices there when the lock
@@ -2686,22 +2684,7 @@ export function lockView(inner: Inner, ws: string): J {
     // it is off, the button that turns it on again (`lock.open`).
     ...(rootText !== null ? { rootText } : {}),
     ...(onAgain ? { onAgainText: t("core-misc.lock.reason.enable") } : {}),
-    // This web page's person has no app in safe mode, which its upgrade will need (`webOnlyIn`).
-    ...(appText !== null ? { appText } : {}),
   };
-}
-
-/// Of a chain's devices, the people with a web page on it and no app: those the upgrade of safe mode would leave
-/// with no device of theirs to approve a web page by (their first app comes in as a newcomer's, approved by an owner's
-/// or admin's).
-function webOnlyIn(devices: Iterable<J>, at: number): Set<string> {
-  const web = new Set<string>(), app = new Set<string>();
-  for (const d of devices) {
-    if (live(d, at) === undefined || typeof d.sub !== "string") continue;
-    (d.kind === "web" ? web : app).add(d.sub);
-  }
-  for (const s of app) web.delete(s);
-  return web;
 }
 
 /// A workspace's `lock` topic's `pending`: what this device did in the workspace's lock that no station took yet, then
@@ -3347,10 +3330,11 @@ function rootOutServed(inner: Inner, ws: string): boolean {
 /// for the tests): this device itself, by the build it says to the stations (`ownBuild`, `0.1.0` where it says none),
 /// not able (`ableBuild`: it moves the chain, and a station of a moved workspace tells a device under MOVED_FROM_BUILD to
 /// update, station/src/mesh/serve.ts `movedTooOld`; the lead, 2026-11-14: builds between this code's and
-/// MOVED_FROM_BUILD have it and must move nothing); and, for now (each lifted by its own change,
-/// client/core-ts/AGENTS.md), a web page whose person has no app on the chain (`webOnlyIn`: carried until its `exp`, then
-/// nobody can approve it again there and the page that tells them to install an app is not drawn yet), or more than
-/// HAND_OVER_MEMBERS_MOST members bound to a log (a moved state reads each one's log, `LOGS_MOST` a workspace). The
+/// MOVED_FROM_BUILD have it and must move nothing); and, for now (lifted by its own change, client/core-ts/AGENTS.md),
+/// more than HAND_OVER_MEMBERS_MOST members bound to a log (a moved state reads each one's log, `LOGS_MOST` a
+/// workspace). A member with only a web page holds nothing back (the owner, 2026-11-13: 「开了安全模式那就需要 app」, web
+/// pages not waited for): the chain as it moved carries their page until its `exp`, after which it is one nobody can
+/// approve there and says to install an app (`needsAppIn`), their first app coming in as a newcomer's. The
 /// handover writes nothing in anyone's log (no `writer`, no bound on the root's log's length). No other app device is
 /// waited for (the user, 2026-11-14, of a phone of his own not used any more that held his workspace for seven days:
 /// 「用户要是有个设备离线不用了要等 7 天？」; his first word of it had been 「不要等设备全更新」): one on a build that does
@@ -3370,7 +3354,6 @@ function heldBack(inner: Inner, ws: string, _sub: string, entries: readonly Entr
   const out: string[] = [];
   if (!ableBuild(buildOf(ownBuild() || "0.1.0") ?? -1)) out.push("own build");
   if (!forNow) return out;
-  if (webOnlyIn(f.devices.values(), at).size > 0) out.push("web only");
   if (f.persons.size > HAND_OVER_MEMBERS_MOST) out.push("members");
   return out;
 }
