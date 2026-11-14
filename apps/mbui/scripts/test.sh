@@ -364,7 +364,12 @@ for t in $targets; do
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
           # (the second's and the fourth's on three runners each at 120, twelve programs (mbui-check.yml's app-rates
           # says why): by the table every runner's pages 180 s a program where they were 246)
-          120) specs="4,4,500,1 12,12,26,1 2,8,930,1 12,12,400,1" ;;
+          # (the first's pages at 120 ran 1.9-2.0 times their table's times (852-890 s of 449: flight_under_bar 114 of
+          # 46, usage_wide_made 75-91 of 7) beside the packages' programs, some processes each on its four cores, where
+          # the fourth's part 1/3 ran 0.8-1.0: app 1/4 at 120 fps 223-275 s of its 5 minutes on main ec512e53 43542799229,
+          # 93c11f44 43543602427, 64ef3c14 43546815737, the second's and fourth's parts 102-197. Reckoned 800: by the
+          # table its pages 400 s to 242, the second's twelve programs +120, the fourth's +18, the third's +20)
+          120) specs="4,4,800,1 12,12,26,1 2,8,930,1 12,12,400,1" ;;
           # (the first's other runs at 24 and 7, the packages' programs, 105-133 s and 85-106 beside its pages, not the
           # 46 and 43 they were reckoned at: its job 235-266 s of its 5 minutes on main's runs of 2026-11-12, a3e59ea9
           # 43157398527, 36b56f21 43159426488, c9f8f144 43159891701; reckoned 300 of its cores, the third's 900 so that
