@@ -5,7 +5,7 @@
 // turn's end told once.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -16,6 +16,7 @@ import { dshRoute, profileEnv, profileRuntimes } from "../src/agents/profiles.ts
 import type { AgentSession, OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { allLeft } from "../src/agents/runner.ts";
 import { learn } from "../src/accounts/catalog.ts";
+import { Said, stationLang, tr } from "../src/ops/i18n.ts";
 import { readTimeline, transcriptPath } from "../src/read/transcript.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -114,9 +115,10 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     const byId = Object.fromEntries(run.patch.map((p: { id: string }) => [p.id, p]));
     // dsh's ACP server off, the station's driver in, by its path.
     assert.deepEqual(byId.acp, { id: "acp", disabled: true });
-    // The station's tools by dsh's own MCP client, the session's token read from the environment (not in the file).
+    // The station's tools by dsh's own MCP client, the session's token read from the environment (not in the file); the
+    // driver told which entry they are (it opens no session before that one is up: test/dsh-bridge.test.ts).
     assert.deepEqual(run.patch.find((p: { insert?: unknown }) => p.insert).insert, [
-      { id: "stillfail-bridge", name: BRIDGE },
+      { id: "stillfail-bridge", name: BRIDGE, config: { tools: "stillfail-tools" } },
       {
         id: "stillfail-tools", name: "@deepseek-ai/dsh-mcp-client",
         config: { transport: "streamable-http", serverName: "stillfail", url: o.mcpUrl, headers: { Authorization: "!!js 'Bearer ' + process.env.STILLFAIL_MCP_TOKEN" }, failOnStartupError: true },
@@ -261,6 +263,21 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     await assert.rejects(session.prompt("x"), /closed/);
   });
 
+  test("an open dsh refuses for the station's tools is said in the station's words, with what to do, not as the network's", async () => {
+    const d = driver();
+    const o = options();
+    writeFileSync(`${o.dump}.notools`, "");
+    const refused = await d.open(o, () => {}).then(() => null, (error: unknown) => error);
+    // The station's own words (what a chat is told as they are): never classified by the reason under them, which
+    // read as the model provider's connection.
+    assert.ok(refused instanceof Said, String(refused));
+    assert.equal(refused.message, tr(stationLang(), "station.dsh.noTools"));
+    // The process it started is not left running: the same driver opens the next session.
+    rmSync(`${o.dump}.notools`);
+    const next = await d.open(o, () => {});
+    await next.dispose();
+  });
+
   test("a session is resumed by its id in a new process; one dsh does not have is refused before it starts", async () => {
     const d = driver();
     const o = options();
@@ -297,7 +314,10 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
       };
       const agent = { session: { id: "s1" }, ...(process.env.FAKE_OLD ? {} : { model }) };
       const handle = (op, options) => (said({ [op]: options.agentOptions ?? null }), { agent, dispose: async () => {} });
-      apply({ on() {}, agents: { resume: async (o) => handle("resume", o), create: async (o) => handle("create", o) } });
+      // The station's tools up already (what the plugin does until they are: test/dsh-bridge.test.ts).
+      const up = { state: 2, await: async () => up };
+      const loader = { await: async () => {}, entries: () => [{ options: { id: "stillfail-tools" }, fiber: up }] };
+      apply({ on() {}, loader, agents: { resume: async (o) => handle("resume", o), create: async (o) => handle("create", o) } }, { tools: "stillfail-tools" });
       process.stdout.on("data", (d) => said({ answer: JSON.parse(String(d)) }));
     `;
     const run = (open: Record<string, unknown>, env: Record<string, string> = {}) => {

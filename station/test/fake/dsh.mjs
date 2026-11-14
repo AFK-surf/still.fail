@@ -11,6 +11,7 @@
 //                 made; the end once FAKE_DUMP.<name>.b is (what the test lets happen when, not a time)
 // A steer with no turn running starts one (as dsh does). FAKE_DUMP: its argv, env and patch are appended there as a JSON
 // line (a value dsh evaluates as "!!js <its code>"), and every line of stdin to FAKE_DUMP.stdin. Its version (`--version`) is FAKE_DUMP.version's, else 0.2.0.
+// Where FAKE_DUMP.notools is, `open` is refused as the driver plugin refuses one whose station's tools dsh did not mount.
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
@@ -124,6 +125,7 @@ async function handle(msg) {
   const { id, op } = msg;
   const answer = (more = {}) => say({ id, ...more });
   if (op === "open") {
+    if (dump && fs.existsSync(`${dump}.notools`)) return answer({ error: "the station's tools could not be mounted (fetch failed: connect ECONNREFUSED 127.0.0.1:4750)", lacks: "tools" });
     if (msg.resume) {
       const dir = fs.readdirSync(root).map((d) => path.join(root, d, msg.resume)).find((d) => fs.existsSync(d));
       if (!dir) return answer({ error: `session ${msg.resume} not found` });
