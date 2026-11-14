@@ -2706,8 +2706,7 @@ async function handRig() {
   const st = lockStation(r);
   st.keepLog(own);
   st.keepLog(s2log);
-  // (s2's app seen asking the station on an unnumbered build, able: a handover waits for each app device it lets in to
-  // run one that takes a moved workspace, src/lock-handover.ts `devicesWaited`)
+  // (s2's app seen asking the station on an unnumbered build, as an app let in is)
   deviceBuildsOf(st.c).saw(r.other.hex, 0, Math.floor(r.host.nowMs() / 1000));
   const seen: string[] = [];
   stationReplies(r.host, (req) => {

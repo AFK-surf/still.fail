@@ -25,7 +25,7 @@ import { wall } from "../../../station/src/ops/fibers.ts";
 import { inLock, lockPartRoute, lockRoute, movedTooOld, sawBuild } from "../../../station/src/mesh/serve.ts";
 import { deviceBuildsOf } from "../../../station/src/mesh/device-builds.ts";
 import { buildOf } from "../../../station/src/api/oldest.ts";
-import { HAND_OVER_FROM, devicesWaited } from "../src/lock-handover.ts";
+import { HAND_OVER_FROM } from "../src/lock-handover.ts";
 import { MOVED_FROM_BUILD } from "../../../station/src/api/moved-from.ts";
 import { type Dev, type Key, Log, bring, dev, ed, signed, viewerOf } from "../../../station/test/lock-moved-world.ts";
 import { d4Diff, d4Old } from "../../../station/test/lock-roster4-model.ts";
@@ -574,9 +574,10 @@ for (const wins of ["bob", "this device"] as const) {
 // HAND_OVER_FROM (the device's clock here past it, no `handOverAuto`): what holds a workspace back is what uses it.
 const DAY = 86400;
 
-// What each station saw each app device run (station/src/mesh/device-builds.ts) holds a handover back, saying nothing
-// to anyone: a device seen on a build before MOVED_FROM_BUILD, or never seen while a station began keeping them less
-// than IDLE_SECS ago; and for now a web-only member or more than 200 members.
+// No app device but the one that moves the chain holds a handover back (the user, 2026-11-14: a phone of his own he no
+// longer used held his workspace for seven days, nothing saying why; 「用户要是有个设备离线不用了要等 7 天？」): one on a
+// build under MOVED_FROM_BUILD, or never seen, is told to update by a station of the moved workspace as it next asks
+// (station/src/mesh/serve.ts `movedTooOld`). For now a web-only member or more than 200 members still hold one back.
 /// A member's app device asking every station of `ws` with the build `build` (the station's own code: admitted by its
 /// lock, its build kept by its id there, serve.ts `sawBuild`).
 const asks = (w: Awaited<ReturnType<typeof setUp>>, sub: string, d: { base: Key }, role: string, build: string) => {
@@ -586,14 +587,6 @@ const asks = (w: Awaited<ReturnType<typeof setUp>>, sub: string, d: { base: Key 
   }
 };
 const OLD = MOVED_FROM_BUILD - 1;
-
-test("devicesWaited: seen on a build under MOVED_FROM_BUILD lately waited, on it or an unnumbered build not, none said waited; never seen waited while a station's since is within seven days or no station said one, not after", () => {
-  const now = 10 * DAY;
-  const seen = { since: { A: now - DAY }, devices: { a: { build: OLD, at: now - DAY }, b: { build: MOVED_FROM_BUILD, at: now }, c: { build: 0, at: now }, d: { build: -1, at: now }, e: { build: OLD, at: now - 8 * DAY } } };
-  assert.deepEqual(devicesWaited(["a", "b", "c", "d", "e", "f"], seen, ["A"], now), ["a", "d", "f"]);
-  assert.deepEqual(devicesWaited(["f"], seen, ["A"], now + 7 * DAY), [], "never seen, the station's since seven days back");
-  assert.deepEqual(devicesWaited(["f"], seen, ["B"], now + 30 * DAY), ["f"], "never seen, no station of those said a since");
-});
 
 test("on: the genesis's person's device hands over by itself as the lock is read, nobody asked, the chain's list in force", async () => {
   const w = await setUp();
@@ -606,24 +599,23 @@ test("on: the genesis's person's device hands over by itself as the lock is read
   await asTheChain(w, before, [["r2", w.bob.app, "admin"]]);
 });
 
-test("an app device seen on a build under MOVED_FROM_BUILD: nothing moved, no line; it asks on MOVED_FROM_BUILD: moved by itself", async () => {
+test("an app device seen on a build under MOVED_FROM_BUILD today: not waited for, moved by itself; that device is told to update at the workspace's stations, and is in once it has", async () => {
   const w = await setUp({ builds: { r2: `0.1.${OLD}` } });
-  assert.deepEqual(handOverState(w.inner, "ws"), { held: [`device ${w.bob.app.base.hex}`] });
+  assert.equal(handOverState(w.inner, "ws"), null, "nothing holds it back");
   assert.equal(lockView(w.inner, "ws").upgrade, undefined, "no line");
   await w.run(read(w.inner, "ws"));
-  assert.deepEqual(movedAt(w), [null, null], "nothing moved");
-  const call = await w.hand();
-  assert.equal(call.error?.code, "lock_not_ready", "lock.handOver answered as a handover waiting");
-  assert.equal(call.error?.message, TITLE, "in the page's words of an upgrade not done, nothing named");
-  asks(w, "r2", w.bob.app, "admin", `0.1.${MOVED_FROM_BUILD}`);
   await w.run(read(w.inner, "ws"));
-  await w.run(read(w.inner, "ws"));
-  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved");
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved, the device on the old build not waited for");
+  for (const c of Object.values(w.stations)) {
+    const a = admitted("r2", w.bob.app, "admin");
+    assert.equal(movedTooOld(c, a.viewer as never, OLD), true, "told to update there");
+    assert.equal(movedTooOld(c, a.viewer as never, MOVED_FROM_BUILD), false, "in once it has");
+  }
   silent(w);
 });
 
-// The device that moves the chain is held to the build it says to the stations as every other app device is to what
-// they saw (views/lock.ts `heldBack`; the lead, 2026-11-14): on a release under MOVED_FROM_BUILD it moves nothing, as a
+// The device that moves the chain is held to the build it says to the stations (views/lock.ts `heldBack`; the lead,
+// 2026-11-14): on a release under MOVED_FROM_BUILD it moves nothing, as a
 // station of a moved workspace would tell it to update the moment it did (serve.ts `movedTooOld`). Every other app
 // device of the chain on an able build here, so this device's own build is all that holds it.
 test("this device on a release under MOVED_FROM_BUILD, every other device able: nothing moved, lock.handOver waits; on MOVED_FROM_BUILD: moved by itself", async () => {
@@ -648,13 +640,12 @@ test("this device on a release under MOVED_FROM_BUILD, every other device able: 
   }
 });
 
-test("an app device never seen: waited for; once the stations kept builds seven days, moved; it comes back on a build under MOVED_FROM_BUILD: told to update there", async () => {
+test("an app device no station has seen (one not used any more): not waited for, moved at once; it comes back on a build under MOVED_FROM_BUILD: told to update there", async () => {
   const w = await setUp({ builds: { r3: null } });
-  assert.deepEqual(handOverState(w.inner, "ws"), { held: [`device ${w.xena.app.base.hex}`] });
-  w.r.host.advance(7 * DAY * 1000);
+  assert.equal(handOverState(w.inner, "ws"), null, "nothing holds it back");
   await w.run(read(w.inner, "ws"));
   await w.run(read(w.inner, "ws"));
-  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved");
+  assert.deepEqual(movedAt(w), [w.gMe, w.gMe], "moved with no day waited");
   for (const c of Object.values(w.stations)) {
     const a = admitted("r3", w.xena.app, "member");
     assert.equal(movedTooOld(c, a.viewer as never, OLD), true, "too old for the moved workspace");
@@ -972,8 +963,8 @@ test("an unbound owner takes a member out: one ask, bound in it, the member out 
 // A member the chain bound to no log who has no log of their own at all, at their app's first read of the moved chain
 // (the lead, 2026-11-14). Whom it stands for: a member with another app on the chain that never said the key of a lock
 // of one's own (a stale laptop, or one that seals nothing), while which their app in hand begins none (views/lock.ts
-// `ownLockOnce`'s `waiting`) and which holds no move back; and an app not seen since before own logs for IDLE_SECS,
-// which the move does not wait for. An app of today that is let in alone begins its person's log by itself before any
+// `ownLockOnce`'s `waiting`) and which holds no move back; and an app not opened since before own logs, which no move
+// waits for. An app of today that is let in alone begins its person's log by itself before any
 // move (`ownLockOnce`), so this is not that one. What they do for themselves on their own devices begins their log in
 // that act's one ask, as views/pair.ts `ownLogFor` begins a newcomer's, binds them to it (`bind`) and then does it
 // (personal-lock.ts `seedFor`): nobody else involved, nothing asked more than before the move. (locks-moved.ts round
