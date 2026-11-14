@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [36f402305](https://github.com/AFK-surf/monoid/commit/36f402305c526312a39418485154718de78cf114) Letters go by their chat's name in an agent's prom | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.5 | 109.04 |
 | [fd28048c8](https://github.com/AFK-surf/monoid/commit/fd28048c844aaa0989ab874a8508cfd90ac76f9f) mbui: the first headless component, a button, its  | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.57 | 114.37 |
 | [4cbff594b](https://github.com/AFK-surf/monoid/commit/4cbff594ba9559cab9eb5c0d5141b41be09e7027) lock: a workspace hands itself over once everythin | 1.99 | 2.72 | 11.59 | 31.21 | 41.67 | 27.83 | 53.38 | 96.63 | 117.11 |
 | [7b3640858](https://github.com/AFK-surf/monoid/commit/7b3640858fa10fb1eb1a710c951205aa4b2dc92d) mbui: a height on its way under a page's list on a | 1.99 | 2.72 | 11.59 | 31.2 | 41.67 | 27.81 | 53.38 | 96.54 | 111.03 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [e5c9cd7ec](https://github.com/AFK-surf/monoid/commit/e5c9cd7ec832482cc1a59cdeecccc05d55117308) app: a chat's picture opened and read whole shows  | 1.97 | 2.69 | 11.42 | 31.01 | 40.98 | 27.64 | 52.8 | 95.98 | 108.71 |
 | [a465f1084](https://github.com/AFK-surf/monoid/commit/a465f1084f03e274152f6fc4b2bdef3301ac3de0) natives: a download with nothing coming for 15 s g | 1.97 | 2.69 | 11.42 | 31.01 | 40.97 | 27.63 | 52.78 | 96.04 | 115.5 |
 | [bd1d2fba1](https://github.com/AFK-surf/monoid/commit/bd1d2fba1fd2fade1c56fc3203562d4ab262f744) fix(mbui): a film closed shows its player till the | 1.97 | 2.69 | 11.41 | 31.01 | 40.97 | 27.63 | 52.78 | 95.77 | 116.71 |
-| [ba8f65307](https://github.com/AFK-surf/monoid/commit/ba8f6530794f19441770da4aae46ca32d5996bf4) test(mbui): the answers' sweeps' jolts at 60 and 1 | 1.97 | 2.69 | 11.41 | 31.01 | 40.97 | 27.63 | 52.78 | 96.36 | 106.94 |
