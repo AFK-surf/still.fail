@@ -440,7 +440,11 @@ for t in $targets; do
           # (dealt so, the third's job was 132-170 s on main 2c8f3745 43607717744 and branches after, the first's
           # 212-243 and the fourth's 227-261: too many taken from the third. Reckoned 1580: by the table its pages 188 s,
           # the first's 598, the second's 690, the fourth's 643)
-          *) specs="4,4,950,1 2,4,650,1 1,4,1580,1 4,4,900,1" ;;
+          # (dealt so, the first's pages ran 235 s, some 0.39 s for each of the table's beside real_size's half (195 s)
+          # and preview_tree's halves, where the fourth's ran 149, 0.23, and the second's and third's jobs 142 and 153
+          # (app-deal-third-2's push, 2026-11-14). The first reckoned 1150 and the fourth 800: by the table the first's
+          # pages 462 s, the second's 710, the third's 188, the fourth's 759)
+          *) specs="4,4,1150,1 2,4,700,1 1,4,1620,1 4,4,800,1" ;;
         esac
         g1=() g2=() g3=() g4=()
         while read -r g f; do
