@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d64201f31](https://github.com/AFK-surf/monoid/commit/d64201f311356a3b2a8fad873a5cdb82149c52ae) mbui: a height declared to go its way keeps what i | 1.99 | 2.72 | 11.61 | 31.24 | 41.76 | 27.85 | 53.46 | 96.58 | 111.75 |
 | [4ef52f094](https://github.com/AFK-surf/monoid/commit/4ef52f094ff4238961172ac22e3d97282acc3dff) mbui: reuse execution history row views and keep l | 1.99 | 2.72 | 11.61 | 31.24 | 41.75 | 27.85 | 53.46 | 96.57 | 114.87 |
 | [43cbcf4f9](https://github.com/AFK-surf/monoid/commit/43cbcf4f9c64c0044fd1e8635913cd52aa50da41) station: the chat list made for everyone read by t | 1.99 | 2.72 | 11.6 | 31.22 | 41.68 | 27.84 | 53.39 | 96.6 | 109.97 |
 | [8b1493184](https://github.com/AFK-surf/monoid/commit/8b149318444271e2e544a1e60b3afa2db08ad4a3) mbui: main's switches check's runs cut so each run | 1.99 | 2.72 | 11.6 | 31.22 | 41.68 | 27.84 | 53.39 | 96.47 | 111.64 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [db745eb1c](https://github.com/AFK-surf/monoid/commit/db745eb1c246f7127cd098e990b115989b07e22f) fix(station): a renewal refused leaves the connect | 1.98 | 2.7 | 11.5 | 31.1 | 41.38 | 27.72 | 53.13 | 95.91 | 109.69 |
 | [7b3ed8a90](https://github.com/AFK-surf/monoid/commit/7b3ed8a905df5a97bc7e3a7a073bd35d578d72a1) core: a member's web page a chain names is said on | 1.98 | 2.7 | 11.5 | 31.1 | 41.37 | 27.72 | 53.13 | 95.98 | 106.97 |
 | [48279ee2b](https://github.com/AFK-surf/monoid/commit/48279ee2b1e475c0296ac16a494ba6e71ebb2eb0) mbui on its own: libs/mbui, knowing no app; still. | 1.98 | 2.7 | 11.5 | 31.09 | 41.37 | 27.71 | 53.13 | 95.7 | 108.32 |
-| [60c0f75f7](https://github.com/AFK-surf/monoid/commit/60c0f75f746c2888f76df292f7791d3ab7f7d87f) Browser and remote screens as a browser: tabs, an  | 1.98 | 2.7 | 11.49 | 31.09 | 41.37 | 27.71 | 53.13 | 95.9 | 112.49 |
