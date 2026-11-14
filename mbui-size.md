@@ -6,6 +6,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [afe35b6d3](https://github.com/AFK-surf/monoid/commit/afe35b6d34e7fdaf1df11e75f0deddbc184821d1) Offer 重试 on a turn given up on for want of a state | 2 | 2.73 | 11.66 | 31.29 | 41.9 | 27.9 | 53.59 | 96.58 | 118.11 |
 | [1fa2fedb3](https://github.com/AFK-surf/monoid/commit/1fa2fedb3d3957539191d63faa17128cb223d84b) app tests: read stays looks at the frames a device | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
 | [55f0408a5](https://github.com/AFK-surf/monoid/commit/55f0408a520a311251ae8938e17726627a8e5091) mbui: route pointer-only hover through tree hit-te | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
 | [d86610867](https://github.com/AFK-surf/monoid/commit/d86610867679cb0172c5b5e535abcac3822fbb33) app: an old message's picture there at once, and a | 2 | 2.73 | 11.66 | 31.29 | 41.89 | 27.9 | 53.58 | 96.57 | 106.8 |
@@ -45,12 +46,12 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [d53e54908](https://github.com/AFK-surf/monoid/commit/d53e54908b54d27778233e54e1b9c16fbecd0e77) station, core, app: an agent assists a station's r | 1.99 | 2.72 | 11.59 | 31.2 | 41.65 | 27.81 | 53.36 | 96.63 | 114.47 |
 | [3ee6f477a](https://github.com/AFK-surf/monoid/commit/3ee6f477a9ecbf33555410466e907673d9ac1107) mbui: a key of a page's list on its way grows from | 1.99 | 2.72 | 11.58 | 31.19 | 41.65 | 27.81 | 53.36 | 96.42 | 102.72 |
 | [c3432a641](https://github.com/AFK-surf/monoid/commit/c3432a641c2f7c96a0e1b7ac423f3dc2f0679620) vault: agents ask to delete an item (secret_delete | 1.99 | 2.71 | 11.58 | 31.19 | 41.65 | 27.81 | 53.36 | 96.6 | 110.87 |
-| [90eae7989](https://github.com/AFK-surf/monoid/commit/90eae798919e13ce9ea8b8586b4f26a109ea58f9) core: the base says words of its own, of no progra | 1.99 | 2.71 | 11.58 | 31.19 | 41.64 | 27.8 | 53.36 | 96.55 | 111.28 |
 
 ## Minimal framework baseline (`libs/mbui` `demo`)
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [afe35b6d3](https://github.com/AFK-surf/monoid/commit/afe35b6d34e7fdaf1df11e75f0deddbc184821d1) Offer 重试 on a turn given up on for want of a state | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
 | [1fa2fedb3](https://github.com/AFK-surf/monoid/commit/1fa2fedb3d3957539191d63faa17128cb223d84b) app tests: read stays looks at the frames a device | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.36 |
 | [55f0408a5](https://github.com/AFK-surf/monoid/commit/55f0408a520a311251ae8938e17726627a8e5091) mbui: route pointer-only hover through tree hit-te | 0.4 | 0.52 | 1.95 | 3.08 | 4.44 | 1.44 | 3.78 | 57.26 |
 | [d86610867](https://github.com/AFK-surf/monoid/commit/d86610867679cb0172c5b5e535abcac3822fbb33) app: an old message's picture there at once, and a | 0.4 | 0.52 | 1.95 | 3.07 | 4.43 | 1.44 | 3.78 | 57.35 |
