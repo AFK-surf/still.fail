@@ -45,6 +45,10 @@
 //    same kind of node, the same ground and corner, as wide in a column or as tall in a row: rows, cards, sections)
 //    stand equally apart: each pair of them next to each other as far apart as the most of those pairs are. What
 //    lays them out spread (JBetween) is not asked.
+// 9. A block that shows its edges (a ground or an edge of its own, not the colour of what it stands on) never meets or
+//    runs over another such block, or words or a drawing outside it, whatever boxes lay them out (rule 3 across boxes:
+//    2026-11-14, a terminal's 只看/控制 laid in a row of its own right on the terminal's card in the next; a message's
+//    words right on a file's card held in a box with no ground, #6285; neither one box's children, as rule 3 asks).
 // 6. What a box shows next to each other (in one column or one row, the box laying them out from its start, its end
 //    or its middle, not spread) stands a step of the spacing scale apart, or touches (the scale is
 //    style_tokens.mbt's space_scale(), said once): a gap worked out off it (a margin of 7, 13 left between two blocks)
@@ -78,7 +82,12 @@ let gap_slack : Double = 0.5
 pub fn Tester::gap_faults(self : Tester) -> Array[String] {
   self.reads_own()
   ignore(self)
-  g().gap_faults()
+  let c = g()
+  // (the window's tree's nodes put among the frame's as the corner rule has them (Ctx::with_tree_nodes): a page made
+  // as nodes is held to every rule as an old view's is; till 2026-11-14 rules 2 to 8 saw the old view's alone)
+  let out = c.with_tree_nodes(fn() { c.gap_rules() })
+  c.tree_lit_apart_faults(out)
+  out
 }
 
 ///|
@@ -295,7 +304,23 @@ fn Ctx::shown_whole(self : Ctx) -> (Array[Bool], Array[Int]) {
   let n = self.count
   let whole = Array::make(n, false)
   let layer = Array::make(n, -1)
-  for i in 0..<n {
+  // (each after its parent: the window's tree's nodes come after the old view's (Ctx::with_tree_nodes), an old view's
+  // box held by one of them after it in the pool)
+  let order : Array[Int] = []
+  let placed = Array::make(n, false)
+  for s in 0..<n {
+    let path : Array[Int] = []
+    let mut k = s
+    while k >= 0 && k < n && !placed[k] {
+      path.push(k)
+      placed[k] = true
+      k = self.nodes[k].parent
+    }
+    while path.pop() is Some(k) {
+      order.push(k)
+    }
+  }
+  for i in order {
     let b = self.nodes[i]
     let p = b.parent
     let inside = b.x >= -gap_slack &&
@@ -324,7 +349,7 @@ fn Ctx::shown_whole(self : Ctx) -> (Array[Bool], Array[Int]) {
 }
 
 ///|
-fn Ctx::gap_faults(self : Ctx) -> Array[String] {
+fn Ctx::gap_rules(self : Ctx) -> Array[String] {
   let out : Array[String] = []
   let n = self.count
   let pictures = self.pictures()
@@ -494,6 +519,9 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       }
     }
   }
+  // 9. blocks that show their edges never meet, whatever boxes hold them (rule 3's, across boxes: a control's ground
+  // laid in a row of its own on a page, right on the card under it in the next)
+  self.gap_meet_faults(whole, layer, pictures, out)
   // 4. what a box with a ground holds, in from its edges and as far from both sides: each content's box, the nearest
   // grounded one round it
   let held : Map[Int, Array[Int]] = Map([])
@@ -913,7 +941,6 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       }
     }
   }
-  self.tree_lit_apart_faults(out)
   out
 }
 
@@ -1223,5 +1250,100 @@ fn Ctx::lit_reach_in(self : Ctx, ground : Int, i : Int) -> Double {
     self.lit_reach
   } else {
     d
+  }
+}
+
+///|
+/// Whether node `i` shows its edges as a block: a ground or an edge of its own, not a line, that differs from the ground
+/// it stands on (the nearest one round it in its layer: a head the page's colour shows none).
+fn Ctx::gap_block_edges(self : Ctx, i : Int, layer : Array[Int]) -> Bool {
+  let b = self.nodes[i]
+  if !b.grounded() || dmin(b.fw, b.fh) < gap_line {
+    return false
+  }
+  if b.border_w > 0.0 && (b.border_c & 0xFFL) != 0L {
+    return true
+  }
+  let mut q = b.parent
+  while q >= 0 && layer[q] == layer[i] {
+    let a = self.nodes[q]
+    if a.grounded() {
+      return a.bg != b.bg
+    }
+    q = a.parent
+  }
+  true
+}
+
+///|
+/// Rule 9 (see the file's head): two blocks that show their edges (Ctx::gap_block_edges), in one layer, neither in the
+/// other, never meet (0 between them) nor run over each other, wherever they are laid out (two of one box are rule
+/// 3's); nor does such a block and words or a drawing outside it.
+/// Not held to it: what a picture draws, and a block pulled over the one before it on purpose (a margin below 0).
+fn Ctx::gap_meet_faults(
+  self : Ctx,
+  whole : Array[Bool],
+  layer : Array[Int],
+  pictures : Set[Int],
+  out : Array[String],
+) -> Unit {
+  let blocks : Array[Int] = []
+  for i in 0..<self.count {
+    let b = self.nodes[i]
+    if whole[i] &&
+      b.kind == kind_box &&
+      b.mar_l >= 0.0 &&
+      b.mar_t >= 0.0 &&
+      self.gap_block_edges(i, layer) &&
+      !self.in_picture(i, pictures) {
+      blocks.push(i)
+    }
+  }
+  let within = fn(i : Int, o : Int) {
+    let mut q = self.nodes[i].parent
+    while q >= 0 && q != o {
+      q = self.nodes[q].parent
+    }
+    q == o
+  }
+  for x in 0..<blocks.length() {
+    for y in (x + 1)..<blocks.length() {
+      let (a, b) = (blocks[x], blocks[y])
+      let (na, nb) = (self.nodes[a], self.nodes[b])
+      if layer[a] != layer[b] || na.parent == nb.parent || within(a, b) || within(b, a) {
+        continue
+      }
+      match gap_between((na.x, na.y, na.x + na.fw, na.y + na.fh), (nb.x, nb.y, nb.x + nb.fw, nb.y + nb.fh)) {
+        Some((d, _)) if d < gap_slack => {
+          let how = if d < -gap_slack { "run \{-d} over each other" } else { "meet" }
+          out.push("rule 9: \{self.named(a)} and \{self.named(b)} \{how}")
+        }
+        _ => ()
+      }
+    }
+  }
+  // (and what else shows, words or a drawing, outside each such block: a message's words right on a file's card under
+  // them, the card in a box of its own with no ground)
+  for a in blocks {
+    let na = self.nodes[a]
+    let ra = (na.x, na.y, na.x + na.fw, na.y + na.fh)
+    for k in 0..<self.count {
+      let nk = self.nodes[k]
+      if !whole[k] ||
+        layer[k] != layer[a] ||
+        (nk.kind == kind_box && nk.grounded()) ||
+        !nk.gap_content() ||
+        within(k, a) ||
+        self.in_picture(k, pictures) {
+        continue
+      }
+      match gap_between(ra, self.gap_drawn(k)) {
+        Some((d, _)) if d < gap_slack => {
+          let how = if d < -gap_slack { "run \{-d} over each other" } else { "meet" }
+          out.push("rule 9: \{self.named(a)} and \{self.named(k)} \{how}")
+        }
+        _ => ()
+      }
+    }
   }
 }
