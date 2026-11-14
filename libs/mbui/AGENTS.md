@@ -44,14 +44,16 @@ yet and you can add one, add it.
 - What a structure makes or lets go down a column makes its way in or closes it on a Move, what is under it going with
   it (`View::comes`, flex's `come_*`): the framework's, not each page's (the user, 2026-11-09: 方案 A). A show in its
   opposite's place, or a pick, is one in the other's place, its way from as tall as that one was. A pick said `leave`
-  keeps what it showed over its place, fading out that long, and shows what it shows now once that is gone and its
-  place holds it whole, its place's way to a smaller one waiting for it: never both seen, no words cut by the way
-  (`src/view/pick_leave.mbt`; a video's capsule; the coordinator of the migration, 2026-11-11). Say `at_once=true`
-  only where one is in another's place the column does not see (an old view's drawn there, one sidebar for another),
-  and on what a row of a page's list shows only while it is the last of its run (its time line under it): gone in the
-  change by which a key comes after it, as the old page built the row again without it, the key setting out from what
-  that gives back (the coordinator of the migration, 2026-11-13; the list cannot tell a part's cause, and a fold stays
-  a fold);
+  keeps what it showed over its place, fading out that long, its place at least as big across as that till it is gone,
+  and shows what it shows now once that is gone and its place holds it whole, its place's way to a smaller one waiting
+  for it, of no way said with it, setting out then in the one way of what goes then; a side that makes nothing takes
+  no room and no gap at rest, as a show's that is not there: never both seen, no words cut or moved by the way
+  (`src/view/pick_leave.mbt`; a video's capsule; the coordinator of the migration, 2026-11-11 and 2026-11-14). Say
+  `at_once=true` only where one is in another's place the column does not see (an old view's drawn there, one sidebar
+  for another), and on what a row of a page's list shows only while it is the last of its run (its time line under
+  it): gone in the change by which a key comes after it, as the old page built the row again without it, the key
+  setting out from what that gives back (the coordinator of the migration, 2026-11-13; the list cannot tell a part's
+  cause, and a fold stays a fold);
   `leave` keeps a structure's coming and going its own; a page's list's blocks come and go at once as it scrolls;
   those its keys bring or take by data make their way as an each's rows do, one way with all else in its column then,
   where they are seen (at its foot what is above going up with them; scrolled up, what is read staying), each key its
