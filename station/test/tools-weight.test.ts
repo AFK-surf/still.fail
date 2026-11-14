@@ -28,6 +28,7 @@ import { CORE, type Tool, weight } from "../src/tools/mcp.ts";
 import { permissionTools } from "../src/tools/permissions.ts";
 import { relayTools } from "../src/tools/relays.ts";
 import { remoteTools } from "../src/tools/remote.ts";
+import { retireTools } from "../src/tools/retire.ts";
 import { screenTools } from "../src/tools/screen.ts";
 import { workspaceSizeTools } from "../src/tools/workspace-size.ts";
 import { vaultTools } from "../src/vault/tool.ts";
@@ -35,11 +36,11 @@ import { vaultTools } from "../src/vault/tool.ts";
 /// The factories the list below is made of, by the names their callers call them by.
 const FACTORIES = [
   "chatTools", "archiveTools", "remoteTools", "workspaceSizeTools", "jobTools", "screenTools", "permissionTools", "computerTools", "forwardTools", "relayTools",
-  "phoneTools", "adbTools", "browserTools", "deviceTools", "feedbackTools", "feishuTools", "loginTools", "rigTools", "searchTools", "vaultTools",
+  "phoneTools", "adbTools", "browserTools", "deviceTools", "feedbackTools", "feishuTools", "loginTools", "retireTools", "rigTools", "searchTools", "vaultTools",
 ];
 /// How many times the parts give tools (`parts.tools(`, anywhere in src/): one a factory above but adb's, which also
 /// gives phone_send by itself.
-const PARTS_GIVE = 11;
+const PARTS_GIVE = 12;
 
 /// Every tool a station declares to a session, where it declares the most (a stable station of still.fail cloud, which
 /// has the feedback tools too): those of src/sessions/agents.ts, then the parts' (their modules' `parts.tools(…)`), each
@@ -65,6 +66,7 @@ function stationTools(): Tool[] {
     ...feedbackTools(none, () => null, () => null),
     ...feishuTools(() => undefined, () => false),
     ...loginTools(none),
+    ...retireTools(none),
     ...rigTools(none),
     ...searchTools(none),
     ...vaultTools(none, () => null, none),
@@ -72,9 +74,10 @@ function stationTools(): Tool[] {
 }
 
 // The ceilings, in bytes: what the list weighed once it was slimmed (2026-11-14: 60,925 in all, from 80,230; the core
-// ones 13,951, from 22,140; chat_post the heaviest at 4,705, from 8,125), each rounded up to the next thousand.
+// ones 13,951, from 22,140; chat_post the heaviest at 4,705, from 8,125), each rounded up to the next thousand. The
+// whole list's is 63,000 and not 61,000 for station_retire (1,827), which came the same day (#6084): 62,752 with it.
 // TOOLS_WEIGHT_TABLE=1 prints every tool's.
-const TOTAL = 61_000;
+const TOTAL = 63_000;
 const CORE_TOTAL = 14_000;
 const HEAVIEST = 5_000;
 // One tool's input schema, as compact JSON. Not a rounding: Codex 0.169.0 strips every description from an MCP tool's
