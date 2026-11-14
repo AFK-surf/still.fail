@@ -542,7 +542,12 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     // chat opened is the page chosen)
     root.reacts(fn() { src.topic("prefs", {}).get().value }, @sfbase.chat_page_from_prefs)
     // (the window's keys as the core's prefs keep them on this device, changed as they are: settings' keymap.mbt)
-    root.keymap(By(fn() { @settings.keymap_of(src.topic("prefs", {}).get().value) })) |> ignore
+    // (and a Farview tab's page's caret's keys, where it has the keyboard: fvclient's stage)
+    root.keymap(By(fn() {
+      let m = @settings.keymap_of(src.topic("prefs", {}).get().value)
+      { ..m, bindings: [..@stage.page_keys(), ..m.bindings] }
+    }))
+    |> ignore
     // (the window's height, what a chat list's and a chat's first window are worked out of wherever they are first
     // asked: sfbase's first_window, chat_first_window; said before any page of nodes is made, as it asks; none before
     // the first frame gives it, what was known kept till then)
