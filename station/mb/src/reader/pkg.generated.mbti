@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub async fn serve_agents(@host.Host) -> Unit
+
 pub async fn serve_reads(@host.Host, Reader, String) -> Unit
 
 // Errors

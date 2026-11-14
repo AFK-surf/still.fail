@@ -85,7 +85,11 @@
   tools say, goes through its serial queue. Input is a prompt when idle, a steer during a turn, else queued.
 - Runtimes are drivers behind one seam (`src/agents/runtime.ts`): Claude Code a `claude -p` process per session;
   Codex one app-server per account, a thread per session, whose per-session settings go in `thread/start`'s config,
-  never the process's environment; the others in `src/agents/`. A driver owns its child's stdin.
+  never the process's environment; the others in `src/agents/`. A driver owns its child's stdin. Claude Code's output
+  is read by the MoonBit program (`src/agents/mb-agents.ts`, `mb/src/reader/agents.mbt`, its frames `mb/src/claude`)
+  where it is built, off the station's thread: Node starts and ends the processes and is told the events, each line
+  acknowledged to its runner once Node took them; a handover holds its reading first (`freeze`, hub.ts `handOver`).
+  `test/claude-here.test.ts` runs the driver's tests with it read here, as where the program is not.
 - Their tools are the station's MCP endpoint (`src/tools/`, HTTP on 127.0.0.1, a bearer token per session). What they
   read of how to work is `src/agents/instructions.ts` and the skills in `src/skills/`. A change to the instructions, a
   tool's parameters or its rules adds a note at the end of `src/agents/migrations.ts` (the next number, a sentence),

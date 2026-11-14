@@ -34,6 +34,8 @@ import {
   "station/front",
   "station/jsjson",
   "station/jscase",
+  "station/claude",
+  "moonbitlang/core/encoding/base64",
   "moonbitlang/core/string",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",

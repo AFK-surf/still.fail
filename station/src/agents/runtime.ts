@@ -218,6 +218,10 @@ export interface AgentDriver {
   shutdown(): Promise<void>;
   /// Lets go of every process without ending them (handover).
   detach(): void;
+  /// Holds what is read of its processes for a handover (one read off the station's thread: agents/mb-agents.ts), and
+  /// lets it be read on where the handover did not happen.
+  freeze?(): Promise<void>;
+  thaw?(): void;
 }
 
 /// A random UUID (v4), as runtimes take for session ids.

@@ -509,6 +509,19 @@ export class Hub {
       this.release("drain");
       throw error;
     }
+    // What the MoonBit program reads of the processes (agents/mb-agents.ts) held from here: what it said before is
+    // taken in too, and the snapshots say where each stands then.
+    const frozen = [...this.drivers.values()].filter((d) => d.freeze !== undefined);
+    if (frozen.length > 0) {
+      try {
+        await Promise.all(frozen.map((d) => d.freeze!()));
+        await this.settled(limitMs);
+      } catch (error) {
+        for (const d of frozen) d.thaw?.();
+        this.release("drain");
+        throw error;
+      }
+    }
     // Settled: leave incoming events waiting for old preparation unacknowledged for the next station.
     this.incoming.abort();
     // Snapshotted at once, before anything else is taken in.
