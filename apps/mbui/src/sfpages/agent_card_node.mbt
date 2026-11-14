@@ -424,8 +424,8 @@ fn agent_card_seconds(v : @view.View, src : Source, since : () -> (Double, Doubl
 
 ///|
 /// Stopping its turn, for it alone (agent_card_stop's) in `p`: its icon in the red on the red's ground, a circle, what
-/// it does in its tip; a spinner in its place while asked.
-fn agent_card_stop_node(p : @view.View, src : Source, station : String, key : String, tips : @sf.TipLayer) -> Unit {
+/// it does in its tip; a spinner in its place while asked. The card's, and the head of its history in the side panel.
+pub fn agent_card_stop_node(p : @view.View, src : Source, station : String, key : String, tips : @sf.TipLayer) -> Unit {
   let skey = "stop/" + station + "/" + key
   let label = fn() { @sf.t("web-pages.chat.stopTurn") }
   p.box(fn(b) {

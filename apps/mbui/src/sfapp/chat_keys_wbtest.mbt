@@ -84,6 +84,32 @@ test "⌘. stops each of the chat's agents at work (session.stop by its key), an
 }
 
 ///|
+test "the head of an agent's history beside the chat stops its turn while it works (session.stop by its key); at rest it has no stop" {
+  let in_panel = fn(t : @ui.Tester) {
+    t.all(Button, label="停止当前任务").filter(fn(b) { b.rect.0 > 800.0 })
+  }
+  for status in ["running", "queued"] {
+    let calls : Array[Made] = []
+    let t = keyed_chat(calls, status~, mode="chat-history-side")
+    t.frame()
+    t.frame()
+    let stops = in_panel(t)
+    assert_eq(stops.length(), 1, msg=status)
+    let (x, y, w, h) = stops[0].rect
+    t.tap(x + w / 2.0, y + h / 2.0)
+    t.draw()
+    let made = named(calls, "session.stop")
+    assert_eq(made.length(), 1, msg=status)
+    assert_eq(text(Some(made[0].params), "key"), "s-c1")
+  }
+  let calls : Array[Made] = []
+  let t = keyed_chat(calls, mode="chat-history-side")
+  t.frame()
+  t.frame()
+  assert_eq(in_panel(t).length(), 0)
+}
+
+///|
 test "⌘⇧H opens the chat's first agent's history beside it; again, with it in front, closes the panel" {
   let calls : Array[Made] = []
   let t = keyed_chat(calls)
