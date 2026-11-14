@@ -71,3 +71,25 @@ test "a message's image the device had comes as it is once decoded, not brushed 
   t.run_for(reveal_ms / 2.0)
   assert_eq(t.drawn_glass().length(), 0)
 }
+
+///|
+test "a message's image of a message not new while the chat shows: what it waits on till decoded, then whole at once, never brushed in" {
+  new_run()
+  let t = @ui.Tester::new(
+    fn(c) { @sfpages.image_reveal(c, "pic", 300.0, 200.0, FitCover, "", comes=false) },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    images=[("pic", 600, 400)],
+  )
+  t.frame()
+  // decoded by the next frame: whole from then, its size its own, nothing laid over it
+  t.frame()
+  let pics = t.drawn_images().filter(fn(i) { i[8] > 0.0 })
+  assert_eq(pics.length(), 1)
+  assert_eq((pics[0][2], pics[0][3]), (300.0, 200.0))
+  assert_eq(t.drawn_glass().length(), 0)
+  t.run_for(reveal_ms / 2.0)
+  assert_eq(t.drawn_glass().length(), 0)
+  assert_eq(t.drawn_images().filter(fn(i) { i[8] > 0.0 }).length(), 1)
+}

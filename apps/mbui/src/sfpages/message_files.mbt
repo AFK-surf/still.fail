@@ -13,18 +13,21 @@ priv struct MediaPicture {
   hash : String
   sent : Bool
   held : Bool
+  /// of a message the core says was said while the chat shows (Message's `said`): only then brushed in once decoded
+  comes : Bool
   unreached : Bool
 }
 
 ///|
 /// A picture picked here, before there is a message's attachment for it.
 fn local_media(key : String, kind : String) -> MediaPicture {
-  { kind, key, hash: "", sent: true, held: true, unreached: false }
+  { kind, key, hash: "", sent: true, held: true, comes: false, unreached: false }
 }
 
 ///|
-/// Resolve a message's picture or video still once, in the same order for its message and for a quote of it.
-fn message_media(c : @ui.Ctx, src : Source, station : String, owner : String, a : Attachment) -> MediaPicture {
+/// Resolve a message's picture or video still once, in the same order for its message and for a quote of it; `said`:
+/// its message's `said` (only a picture of a message new while the chat shows is brushed in).
+fn message_media(c : @ui.Ctx, src : Source, station : String, owner : String, a : Attachment, said? : Bool = false) -> MediaPicture {
   let kind = file_kind(a.name)
   let sent = sent_picture(station, a)
   let uploading = a.upload != "" && a.path == @sfbase.upload_path(a.upload)
@@ -48,6 +51,7 @@ fn message_media(c : @ui.Ctx, src : Source, station : String, owner : String, a 
   {
     kind, key, hash: a.thumbhash, sent: sent is Some(_),
     held: kind == "image" && sent is None && src.images.held(id),
+    comes: said,
     unreached: kind == "image" && key == "!" && sent is None && src.images.unreached(id),
   }
 }
@@ -68,7 +72,7 @@ fn media_content(c : @ui.Ctx, p : MediaPicture, w : Double, h : Double, fit : @u
       c.text(@sf.t(if p.unreached { "web-main.file.loadAgain" } else { "web-main.file.noPreview" }), style=no_preview_words) |> ignore
     }) |> ignore
   } else if p.key != "" && !p.sent {
-    image_reveal(c, p.key, w, h, fit, p.hash, radius~, held=p.held)
+    image_reveal(c, p.key, w, h, fit, p.hash, radius~, held=p.held, comes=p.comes)
   } else if p.key != "" {
     c.image(p.key, w=Px(w), h=Px(h), fit~, radius~, bg=0L, fade=false) |> ignore
   } else {
@@ -109,7 +113,8 @@ fn file_flight_key(key : String, files : Array[String], flying : Array[String]) 
 }
 
 ///|
-/// A message's files (Files), at the column's end when it is the viewer's (`mine`).
+/// A message's files (Files), at the column's end when it is the viewer's (`mine`); `said`: the message's `said` (its
+/// pictures brushed in once decoded only then: image_reveal).
 pub fn message_files(
   c : @ui.Ctx,
   src : Source,
@@ -117,6 +122,7 @@ pub fn message_files(
   list : Array[Attachment],
   mine : Bool,
   by? : (String, String, String)? = None,
+  said? : Bool = false,
   landing_key? : String = "",
   corner? : Double = @sf.message_file_corner,
   at? : String = "",
@@ -181,7 +187,7 @@ pub fn message_files(
             @sfbase.file_key(a)
           }
           let media = match file_kind(a.name) {
-            "image" | "video" => Some(message_media(c, src, here.station, owner_of(here, a), a))
+            "image" | "video" => Some(message_media(c, src, here.station, owner_of(here, a), a, said~))
             _ => None
           }
           let item = c.box(style=@ui.style(w=Fixed(widths[i] + hung)), fn() { file_item(c, src, here, a, widths[i], by~, landing_key=key, media~, corner~, at~) })
@@ -379,11 +385,11 @@ fn thumb_ratio(hash : String) -> Double? {
 
 ///|
 /// One of a message's files (FileItem), `w` wide.
-fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner, at? : String = "") -> Unit {
+fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner, at? : String = "", said? : Bool = false) -> Unit {
   match picturing.val {
     // (in a picture of the chat being shared: to tick, publish.mbt)
     Some((seq, taking)) => publish_file(c, src, here, seq, taking, a, w, by~)
-    None => file_drawn(c, src, here, a, w, by~, landing_key~, media~, corner~, at~)
+    None => file_drawn(c, src, here, a, w, by~, landing_key~, media~, corner~, at~, said~)
   }
 }
 
@@ -419,12 +425,12 @@ fn download_option(src : Source, here : MessageHere, a : Attachment, owner : Str
 
 ///|
 /// A message's file as the chat draws it, by its kind.
-fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner, at? : String = "") -> Unit {
+fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner, at? : String = "", said? : Bool = false) -> Unit {
   match file_kind(a.name) {
     "image" | "video" => {
       let p = match media {
         Some(p) => p
-        None => message_media(c, src, here.station, owner_of(here, a), a)
+        None => message_media(c, src, here.station, owner_of(here, a), a, said~)
       }
       if p.kind == "image" {
         image_item(c, src, here, a, w, p, by~, corner~, at~)
@@ -818,7 +824,10 @@ fn reveal_px(c : @ui.Ctx, w : Double, h : Double) -> Double {
 /// change too many). It is brushed in from its top (an edge half its height deep going down
 /// it), blurred to sharp and from 1.04 its size to its own (1100 ms, the ease out), what it waited on fading out behind
 /// it (300 ms, from 800). One already decoded as it is first shown, or one the device had (`held`: kept here, not
-/// brought from its station, a decode away), comes as it is.
+/// brought from its station, a decode away), comes as it is. Only one of a message new while the chat shows (`comes`:
+/// its message's `said`) is brushed in; any other waits as it does and is drawn whole the frame it is decoded, what it
+/// waited on gone then: what was said before it was shown is simply there (sf/motion.mbt's head). `comes` is read the
+/// frame it is decoded, and one decoded once is never brushed in again (made again, shown again under a page gone).
 pub fn image_reveal(
   c : @ui.Ctx,
   key : String,
@@ -828,6 +837,7 @@ pub fn image_reveal(
   hash : String,
   radius? : Double = @sf.message_file_corner,
   held? : Bool = false,
+  comes? : Bool = true,
 ) -> Unit {
   let ready = c.image_ready(key, reveal_px(c, w, h))
   let way = match reveals.get(key) {
@@ -840,6 +850,11 @@ pub fn image_reveal(
   }
   // its way in, said once as it is first seen decoded
   let p = match way {
+    // (decoded now, its message not new while the chat shows: whole at once, never brushed in)
+    Some(a) if ready && !comes && a.target() == 0.0 => {
+      reveals[key] = None
+      1.0
+    }
     Some(a) if ready => {
       if a.target() == 0.0 {
         a.animate(c, 1.0, @motion.tween(reveal_ms, ease=Linear))

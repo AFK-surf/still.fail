@@ -87,7 +87,7 @@ fn agent_said_node(
       None,
       fn(b) {
         // (what it quotes ahead of its words, as the old body's)
-        message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, message_place(@signals.untracked(m)))
+        message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, message_place(@signals.untracked(m)), said=fn() { m().said })
         // (its words, or the card in their place: one in the other's place as the post says)
         b.pick(fn() { agent_card_kind(m()) == "" }, fn(p, words) {
           // (what is read in it starts here, its words or the card in their place, under its head line and what it
@@ -141,7 +141,7 @@ fn agent_prose_node(
   screens? : @sf.ScreensNode,
   shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
 ) -> Unit {
-  let place : MessageFilesAt = { station: fn() { here.station }, session: fn() { here.session }, view: here.view }
+  let place = message_files_at(here, fn() { m().said })
   let at = message_place(@signals.untracked(m)) + "/f"
   let by = fn() -> (String, String, String)? {
     let now = m()

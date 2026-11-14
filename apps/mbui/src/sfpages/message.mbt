@@ -158,7 +158,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
     fn() { message_name(c, src, here, "m:" + m.ts, m.by.name, agent, m.by.from) },
     None,
     fn() {
-      quotes(c, src, here, m.quotes, m.attachments, at=message_place(m))
+      quotes(c, src, here, m.quotes, m.attachments, at=message_place(m), said=m.said)
       let files = beside_quotes(m.quotes, m.attachments)
       if m.author_kind == "person" {
         if m.text != "" {
@@ -166,7 +166,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
             person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, link_to=link_to_in(m)), chat_title=chat_title_of(m), runs=m.words)
           })
         }
-        message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)), at=message_place(m) + "/f")
+        message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)), at=message_place(m) + "/f", said=m.said)
       } else {
         picking(here, c, src, m.ts, m.seq, m.by.name, if m.author_kind == "agent" { "agent" } else { "person" }, m.text, fn() {
           prose_with_files(c, src, here, m, files)
@@ -189,8 +189,8 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
 /// that its agents have yet to take it, or its time.
 fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> Unit {
   c.box(style=mine_column, fn() {
-    quotes(c, src, here, m.quotes, m.attachments, mine=true, at=message_place(m))
-    message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)), at=message_place(m) + "/f")
+    quotes(c, src, here, m.quotes, m.attachments, mine=true, at=message_place(m), said=m.said)
+    message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)), at=message_place(m) + "/f", said=m.said)
     if m.text != "" {
       mine_bubble(c, src, here, m.text, "m:" + m.ts, m.ts, m.seq, if m.outgoing == "" { m.ts } else { "o:" + m.outgoing }, found=marked_of(here, m.ts), peek=link_peeks(c, src, here, chats=m.chats, link_to=link_to_in(m)), chat_title=chat_title_of(m), runs=m.words)
     }
@@ -688,7 +688,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           Some(a) if is_viz(a.name) && picturing.val is Some((seq, taking)) && publish_viz_drawn(seq, taking, a) =>
             Some({
               draw: fn() {
-                publish_viz(c, src, here, seq, taking, a, fn() { message_files(c, src, here, [a], false, by=Some(by), at~) })
+                publish_viz(c, src, here, seq, taking, a, fn() { message_files(c, src, here, [a], false, by=Some(by), at~, said=m.said) })
               },
               image: None,
             })
@@ -703,7 +703,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                   owner_of(here, a),
                   m.ts,
                   a,
-                  fn() { message_files(c, src, here, [a], false, by=Some(by), at~) },
+                  fn() { message_files(c, src, here, [a], false, by=Some(by), at~, said=m.said) },
                   @sf.theme().p.subtle,
                 )
               },
@@ -711,8 +711,8 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
             })
           Some(a) =>
             Some({
-              draw: fn() { message_files(c, src, here, [a], false, by=Some(by), at~) },
-              image: image_ratio(a).map(fn(r) { (r, fn(w) { file_item(c, src, here, a, w, by=Some(by), at~) }) }),
+              draw: fn() { message_files(c, src, here, [a], false, by=Some(by), at~, said=m.said) },
+              image: image_ratio(a).map(fn(r) { (r, fn(w) { file_item(c, src, here, a, w, by=Some(by), at~, said=m.said) }) }),
             })
           None => None
         }
@@ -737,7 +737,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     )
     |> ignore
   }
-  message_files(c, src, here, rest, false, by=Some(by), at~)
+  message_files(c, src, here, rest, false, by=Some(by), at~, said=m.said)
 }
 
 ///|
@@ -1078,7 +1078,7 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, key : String, b : I
 ///|
 /// Quotes as sent (Quotes): each a card of its own ahead of the message, its own picture in it (a preview mark's
 /// screenshot: the file of `files` it names); pressed, the list goes to the message it quotes. Sent from the composer,
-/// each flies there from its card in it (sfbase's flight.mbt).
+/// each flies there from its card in it (sfbase's flight.mbt). `said`: its message's (a picture brushed in only then).
 pub fn quotes(
   c : @ui.Ctx,
   src : Source,
@@ -1087,6 +1087,7 @@ pub fn quotes(
   files : Array[Attachment],
   mine? : Bool = false,
   at? : String = "",
+  said? : Bool = false,
 ) -> Unit {
   if quotes.length() == 0 {
     return
@@ -1121,7 +1122,7 @@ pub fn quotes(
         words_width?,
         // (its own box, as the message's files have theirs: at most as wide as the card has room; its corner concentric
         // with the card's)
-        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false, landing_key=@sfbase.quote_picture_key(i), corner=@sf.quote_picture_corner, at=if at == "" { "" } else { at + "/q:" + i.to_string() }) } }),
+        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false, landing_key=@sfbase.quote_picture_key(i), corner=@sf.quote_picture_corner, at=if at == "" { "" } else { at + "/q:" + i.to_string() }, said~) } }),
       )
       // sent from the composer: it flies here from its card there
       match flight {

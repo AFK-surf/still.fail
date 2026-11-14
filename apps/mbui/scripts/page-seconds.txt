@@ -58,12 +58,15 @@ chat_keys_wbtest.mbt 4 8 18 6
 chat_line_room_wbtest.mbt 76 31 78 18
 chat_made_nodes_wbtest.mbt 2 9 27 4
 chat_neighbour_wbtest.mbt 0 1 2 1
+chat_nodes_old_at_once_wbtest.mbt 33 36 42 21
 chat_nodes_read_stays_before_wbtest.mbt 62 42 82 29
 chat_nodes_read_stays_before_wide_120_wbtest.mbt 99 80 167 52
 chat_nodes_read_stays_before_wide_400_wbtest.mbt 99 84 170 54
 chat_nodes_read_stays_before_wide_wbtest.mbt 106 78 162 50
 chat_nodes_read_stays_rows_wbtest.mbt 31 19 34 11
 chat_nodes_read_stays_wbtest.mbt 36 24 51 16
+chat_old_at_once_help_wbtest.mbt 0 0 0 0
+chat_old_at_once_wbtest.mbt 30 30 66 30
 chat_older_wbtest.mbt 25 14 19 11
 chat_open_wbtest.mbt 1 4 2 1
 chat_page_nodes_wbtest.mbt 96 82 62 43
