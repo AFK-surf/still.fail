@@ -29,8 +29,9 @@ export type Tool = {
 
 export type Reply = { status: number; body?: unknown };
 
-/// A tool as tools/list declares it.
-const declared = (t: Tool) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema });
+/// A tool as tools/list declares it; `_meta` only where its session's runtime reads one (`Listing.loaded`).
+export type Declared = { name: string; description: string; inputSchema: unknown; _meta?: Readonly<Record<string, unknown>> };
+const declared = (t: Tool): Declared => ({ name: t.name, description: t.description, inputSchema: t.inputSchema });
 /// What a tool's declaration weighs: its bytes as JSON, as a runtime that budgets its tools measures them closely enough.
 export const weight = (t: Tool) => Buffer.byteLength(JSON.stringify(declared(t)));
 
@@ -48,7 +49,7 @@ export type Listing = {
   /// The `_meta` by which it declares a tool to its model from the first request, for one that otherwise keeps a
   /// server's tools back until its model searches for them: put on the EVERY_TURN tools alone, so that a turn does not
   /// begin with a search for what it must call, and the rest stay as cheap as that runtime made them.
-  loaded?: Record<string, unknown>;
+  loaded?: Readonly<Record<string, unknown>>;
 };
 
 /// The tool that reaches those a budget left undeclared.
@@ -135,10 +136,10 @@ export class McpEndpoint {
   /// The tools a session is declared: all of them, or those within its runtime's budget and INDIRECT for the rest;
   /// the EVERY_TURN ones with its runtime's `loaded`, whose bytes its budget counts. A runtime that needs nothing is
   /// declared them byte for byte as before there was any of this: some validate or weigh what they are given.
-  private listed(session: string): unknown[] {
+  private listed(session: string): Declared[] {
     const all = this.tools();
     const { budget, loaded } = this.listing?.(session) ?? {};
-    const say = (t: Tool) => (loaded !== undefined && EVERY_TURN.includes(t.name) ? { ...declared(t), _meta: loaded } : declared(t));
+    const say = (t: Tool): Declared => (loaded !== undefined && EVERY_TURN.includes(t.name) ? { ...declared(t), _meta: loaded } : declared(t));
     if (budget === undefined) return all.map(say);
     const marks = all.reduce((n, t) => n + Buffer.byteLength(JSON.stringify(say(t))) - weight(t), 0);
     const { declared: fit, indirect } = fitted(all, budget - marks);

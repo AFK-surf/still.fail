@@ -74,6 +74,8 @@ test("a parameter newer than the session's tool list, sent as text, is read as i
   assert.deepEqual(seen, [{ reason: "true", done: true, seconds: 30 }, { done: false }, { done: true, seconds: "soon" }]);
 });
 
+// A tool of `all` as a list with no mark declares it.
+const unmarked = (all: Tool[], name: string) => { const t = all.find((x) => x.name === name)!; return { name: t.name, description: t.description, inputSchema: t.inputSchema }; };
 // A tool of about `bytes` bytes declared, as the station's are (chat_post the largest).
 const sized = (name: string, bytes: number): Tool => ({ name, description: `${name}. ${"x".repeat(Math.max(0, bytes - 80))}`, inputSchema: { type: "object" }, run: async (_key, args) => `${name} ran ${JSON.stringify(args)}` });
 // The station's tools as Antigravity CLI dropped them on 2026-11-12: 42, 73 KB, chat_post 8 KB the largest.
@@ -135,7 +137,14 @@ test("a budget counts the marks of the tools it declares loaded", async () => {
   const marked = await list({ budget, loaded: CLAUDE_TOOL_LOADED });
   assert.deepEqual(marked.filter((t) => "_meta" in t).map((t) => t.name), EVERY_TURN);
   assert.ok(bytes(marked) <= budget, `declared ${bytes(marked)} B of ${budget}`);
-  assert.equal(marked.at(-1).name, INDIRECT);
+  // And gives up no more than the marks' own bytes: the list is what fits in the budget less exactly those.
+  const marks = EVERY_TURN.reduce((n, name) => n + Buffer.byteLength(JSON.stringify({ ...unmarked(all, name), _meta: CLAUDE_TOOL_LOADED })) - Buffer.byteLength(JSON.stringify(unmarked(all, name))), 0);
+  assert.equal(marks, 2 * Buffer.byteLength(`,"_meta":${JSON.stringify(CLAUDE_TOOL_LOADED)}`));
+  const { declared, indirect } = fitted(all, budget - marks);
+  assert.deepEqual(marked.map((t) => t.name), [...declared.map((t) => t.name), INDIRECT]);
+  assert.deepEqual(marked.at(-1).inputSchema.properties.name.enum, indirect.map((t) => t.name));
+  // The whole budget would have declared more here: the marks cost a tool, and only that.
+  assert.notDeepEqual(fitted(all, budget).indirect.map((t) => t.name), indirect.map((t) => t.name));
 });
 
 test("station_tool reads an undeclared tool's parameters, runs it as any call, and is refused as it is", async () => {

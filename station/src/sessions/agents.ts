@@ -18,6 +18,7 @@ import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
 import { HermesDriver } from "../agents/hermes.ts";
 import { AGY_TOOL_BUDGET, AgyDriver } from "../agents/agy.ts";
+import { type RuntimeKind, runtimeKind } from "../agents/runtime.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
@@ -92,10 +93,10 @@ const encode = encodeURIComponent;
 
 /// What a runtime needs of its sessions' list of tools (tools/mcp.ts `Listing`), each by what was measured of it
 /// (agents/agy.ts, agents/claude.ts); one not named here is declared every tool as it is.
-const LISTINGS = new Map<string, Listing>([
-  ["agy", { budget: AGY_TOOL_BUDGET }],
-  ["claude", { loaded: CLAUDE_TOOL_LOADED }],
-]);
+const LISTINGS: Partial<Record<RuntimeKind, Listing>> = {
+  agy: { budget: AGY_TOOL_BUDGET },
+  claude: { loaded: CLAUDE_TOOL_LOADED },
+};
 
 /// How often the old sandbox-name lookup is looked for, to take it down (hub.ts `sweepSandboxes`).
 const SWEEP_MS = 3 * 60_000;
@@ -565,7 +566,10 @@ export const AgentsLive = (control: Control) =>
         (token) => store.sessionKeyByToken(token) ?? undefined,
         () => [...tools, ...parts.allTools()],
         (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL),
-        (session) => LISTINGS.get(store.getSession(session)?.runtime ?? ""),
+        (session) => {
+          const runtime = runtimeKind(store.getSession(session)?.runtime);
+          return runtime === undefined ? undefined : LISTINGS[runtime];
+        },
       );
 
       let taken = false;
