@@ -249,6 +249,13 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
     }
     return
   }
+  // (how far apart the frames on its way are: a rate's (MBUI_TEST_FPS); or, where the test asks for the frames a host
+  // draws (Tester::run_shown), the display's own, a rate's only where it is closer: the frames a device draws)
+  let between = if self.shown && !(self.between > 0.0 && self.between < self.period) {
+    self.period
+  } else {
+    self.between
+  }
   // what the last frame left owed (a tell answered at once, a host's answer posted, an input's frame after) drawn at
   // its moment first, as a host draws it at its next frame: not at the end of the run
   if end > self.fake.time + 1.0e-9 {
@@ -260,8 +267,8 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
     // at any frame rate or none, and the last frame is the end's
     // (frames on the way only while the app asks for them, as a host draws them: something moving, a frame asked
     // for; at rest, none till what is due)
-    let mut next = if self.between > 0.0 && self.asks_frames() {
-      dmin(self.between_after(self.fake.time), end)
+    let mut next = if between > 0.0 && self.asks_frames() {
+      dmin(self.between_after(self.fake.time, between), end)
     } else {
       end
     }
@@ -278,7 +285,9 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
       next = due
     }
     // (one of the rate's own, on the way: neither the end nor what is due)
-    self.on_way = next < end && !(due > self.fake.time + 1.0e-9 && next == due)
+    // (the display's own frames, drawn on the way for a test that asked for them at no rate, are no rate's: judged as
+    // those a test walks itself)
+    self.on_way = self.between > 0.0 && next < end && !(due > self.fake.time + 1.0e-9 && next == due)
     self.frame_at(next)
     // what that frame left owed (a host's answer posted, an input's frame after, a layout read back) drawn at its
     // moment, as Tester::draw draws it: what it sets off goes on from there, not from the next due moment
@@ -305,13 +314,28 @@ fn Tester::asks_frames(self : Tester) -> Bool {
 ///|
 /// The first of run_for's frames on its way after `t` (MBUI_TEST_FPS): `between` apart, counted from the Tester's
 /// origin, as the display's are.
-fn Tester::between_after(self : Tester, t : Double) -> Double {
-  let hair = grid_hair * self.between
-  let mut k = ((t - self.origin) / self.between).floor() - 1.0
-  while grid_moment(self.origin, k, self.between) <= t + hair {
+fn Tester::between_after(self : Tester, t : Double, between : Double) -> Double {
+  let hair = grid_hair * between
+  let mut k = ((t - self.origin) / between).floor() - 1.0
+  while grid_moment(self.origin, k, between) <= t + hair {
     k = k + 1.0
   }
-  grid_moment(self.origin, k, self.between)
+  grid_moment(self.origin, k, between)
+}
+
+///|
+/// `ms` on the frames' clock as run_for, with the frames a host draws on its way: each of the display's frames while
+/// the app asks for frames (something moving, a frame asked for, a message posted), none while it is at rest, till
+/// what is due (a wake, a motion's end, what the outside says next: Tester::between_frames' `due`) or the end. At
+/// the default rate as at a rate (MBUI_TEST_FPS, whose frames between they are where they are closer than the
+/// display's). For a test that looks at every frame a device draws after a cause (Tester::each_frame): a frame
+/// nobody draws shows nothing (the coordinator of the migration, 2026-11-14), and walking the display's frames one by
+/// one through a rest draws them all. With a host's own frames (set_frame_times, set_frame_period) it is run_for.
+pub fn Tester::run_shown(self : Tester, ms : Double) -> Unit {
+  let was = self.shown
+  self.shown = true
+  self.run_for(ms)
+  self.shown = was
 }
 
 ///|
