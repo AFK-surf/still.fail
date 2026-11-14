@@ -230,7 +230,8 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
 /// (Ctx::corners_after_layout), on every frame an old view builds: only what holds an old view and what lies as it does,
 /// as the tree keeps them while none of it changed (Tree::laid_held_hosted), their nodes here the last call's again
 /// (tree_laid_spare), each as a new one; `fresh` (a Tester's look at it, tester_corners.mbt): each worked out anew
-/// (Tree::laid_held_toward, Node::new), nothing kept touched.
+/// (Tree::laid_held_toward, Node::new), nothing kept touched. Drawn (none of those), the nodes the last such call's
+/// again too (tree_drawn_spare).
 /// `facts`: each besides as it is said to be laid out and its words as drawn (Ctx::tree_facts,
 /// Ctx::tree_words_facts), for the squeeze (Ctx::tree_squeeze_said); none of it else. Which a scroller holds and moves
 /// (tree_scroll_held_at: sizes steady's, and what the corner rule takes for scrolled) is said as well. Which of the
@@ -250,11 +251,13 @@ fn[T] Ctx::with_tree_nodes(
   let count = self.count
   let kept : Array[Node] = []
   let reparented : Array[(Int, Int)] = []
-  // (each of the tree's here: in the laid form one of the last call's again, each as a new one; else, or fresh, new)
-  let spare = laid && !fresh
+  // (each of the tree's here: one of the last call's of the same form again, each as a new one (Node::reset_new); fresh,
+  // or with the squeeze's facts, new)
+  let spare = !fresh && !(facts && !laid)
+  let pool = if laid { tree_laid_spare } else { tree_drawn_spare }
   let node_new = fn() -> Node {
     if spare {
-      match tree_laid_spare.pop() {
+      match pool.pop() {
         Some(n) => {
           n.reset_new()
           n
@@ -284,12 +287,14 @@ fn[T] Ctx::with_tree_nodes(
   // lies laid out where that does, as big (a ground laid beside it as a layer, Ctx::layer_grounds); what else of the
   // tree there is no container of any of theirs, and what it works out of the tree's own nodes is let go with them;
   // as the tree keeps it while none of it changed, read only)
+  // (how big each is drawn, where not as laid out: worked out by the walk, not again for each one, Tree::drawn_scale)
+  let scales : Array[Double] = []
   let held = if laid && fresh {
     tree.laid_held_toward(fn(c) { c.hosted })
   } else if laid {
     tree.laid_held_hosted()
   } else {
-    tree.drawn_held()
+    tree.drawn_held(scales~)
   }
   // (what each draws as it is drawn, and how big: what the squeeze reads of its words, View::shorter's and its scale)
   let contents : Map[Int, (@view.Content, Double)] = Map([])
@@ -361,7 +366,7 @@ fn[T] Ctx::with_tree_nodes(
     let i = add(n)
     // (how big it is drawn, where not as laid out: corner_scale_at)
     if !laid {
-      let s = tree.drawn_scale(d.id)
+      let s = scales[k]
       if s != 1.0 {
         corner_scale_at[i] = s
       }
@@ -450,7 +455,7 @@ fn[T] Ctx::with_tree_nodes(
     // (the tree's put there: kept for the next call, where they were the last call's again; those put past the end
     // stay the frame's, as any made there)
     if spare {
-      tree_laid_spare.push(self.nodes[count + k])
+      pool.push(self.nodes[count + k])
     }
     self.nodes[count + k] = n
   }
@@ -472,6 +477,13 @@ fn[T] Ctx::with_tree_nodes(
 /// and let go again each frame an old view builds.
 // kept across runs: only ever nodes no frame holds, each reset as it is taken
 let tree_laid_spare : Array[Node] = []
+
+///|
+/// The nodes Ctx::with_tree_nodes put the window's tree's in where it is drawn (not `laid`, `fresh` or with `facts`),
+/// given back as the call ends, for the next such call to put them in again, each as a new one (Node::reset_new): the
+/// sizes steady's and the corner rule's of every frame, no node made anew for each of the tree's each time.
+// kept across runs: filled and emptied round each asking of the frame with the tree's nodes
+let tree_drawn_spare : Array[Node] = []
 
 ///|
 /// Every box in the frame just built drawn with corners not all alike (a ground, a border, a clip; with `lit`, the
