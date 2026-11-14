@@ -345,6 +345,43 @@ fn rows_room(v : Double, g : Double) -> Double {
 }
 
 ///|
+/// Where a size `size` down a page's list's rows is laid on a host's grid of `g` pixels a point (Style's rows_grid),
+/// on its way from `from` to `goal` (either NaN: at rest, or on no way): as far along between its two rests as laid (each
+/// put up, as a row at rest is) as it is between `from` and `goal`, then put on the grid toward where it goes, never past
+/// its rest as laid: growing, up; closing, down. So a row on its way comes to its rest in whole pixels one way with no
+/// last step as its way ends, on the grid or off it, and two of one change on one curve sum to whole pixels that go one
+/// way. At rest, up. What lays a row of a rows_grid column out (layout_flex) and what reads one there (a page's list's
+/// counts of its keys on their way, the share of a key's block that shows); a height on its way inside a row is laid on
+/// the grid where it is worked out instead (Style's come_grid, come_tall_on).
+pub fn rows_on_way(size : Double, from : Double, goal : Double, g : Double) -> Double {
+  if g <= 0.0 {
+    return size
+  }
+  let up = fn(v : Double) { (v * g - 0.000001).ceil() / g }
+  if !known(from) || !known(goal) || (goal - from).abs() < 0.000001 {
+    return up(size)
+  }
+  let (lf, lg) = (up(from), up(goal))
+  let laid = lf + (lg - lf) * ((size - from) / (goal - from))
+  if goal > from {
+    fmin((laid * g - 0.000001).ceil() / g, lg)
+  } else {
+    fmax((laid * g + 0.000001).floor() / g, lg)
+  }
+}
+
+///|
+/// rows_on_way of item style `s`, `size` tall: between its rests as laid while it is on a way of its own down a column
+/// (Style's come_*, before its way's end), else up.
+fn row_on_grid(s : Style, size : Double, g : Double) -> Double {
+  if known(s.come_now) && known(s.come_ends) && known(s.come_goal) && s.come_now < s.come_ends && !s.come_across {
+    rows_on_way(size, s.come_from, s.come_goal, g)
+  } else {
+    rows_on_way(size, undef, undef, g)
+  }
+}
+
+///|
 /// Whether a container laid out in the current compute() has an absolutely
 /// positioned child: without one, layout_static_absolute has nothing to
 /// place.
@@ -1699,9 +1736,10 @@ fn layout_flex(
         // (a page's list's rows on a host's pixels: each as tall as whole pixels before what is left is worked out, as it
         // is laid (below), so a row that grows is given what is left of whole-pixel rows, not of rows a fraction short
         // that are then put up a pixel over it (a key on its way pushing all over it down by one; a short list's rows past
-        // its foot at rest). Two or more that grow each put up as theirs is: one pixel each at most; no list has two)
+        // its foot at rest). Two or more that grow each put up as theirs is: one pixel each at most; no list has two. One
+        // on its way, between its rests as laid: rows_on_way)
         let hyp = if rows_g > 0.0 {
-          let h = (f.unsafe_get(k * ITEM + HYP) * rows_g - 0.000001).ceil() / rows_g
+          let h = row_on_grid(flow.unsafe_get(at.unsafe_get(k)).style, f.unsafe_get(k * ITEM + HYP), rows_g)
           f.unsafe_set(k * ITEM + HYP, h)
           h
         } else {
@@ -1766,12 +1804,14 @@ fn layout_flex(
           f.unsafe_set(k * ITEM + MAIN, f.unsafe_get(k * ITEM + HYP))
         }
       }
-      // (a page's list's rows on a host's pixels: each as tall as whole pixels, Style's rows_grid)
-      let g = s.rows_grid
-      if g > 0.0 && !row {
+      // (a page's list's rows on a host's pixels: each as tall as whole pixels, Style's rows_grid, as laid above where
+      // nothing flexed it; else on its way between its rests as laid, rows_on_way)
+      if rows_g > 0.0 {
         for k in ln.start..<ln.end {
           let m = f.unsafe_get(k * ITEM + MAIN)
-          f.unsafe_set(k * ITEM + MAIN, (m * g - 0.000001).ceil() / g)
+          if m != f.unsafe_get(k * ITEM + HYP) {
+            f.unsafe_set(k * ITEM + MAIN, row_on_grid(flow.unsafe_get(at.unsafe_get(k)).style, m, rows_g))
+          }
         }
       }
       let mut used = gaps

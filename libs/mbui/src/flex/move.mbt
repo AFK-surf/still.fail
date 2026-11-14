@@ -658,14 +658,24 @@ fn come_height(s : Style, natural : Double) -> Double {
 
 ///|
 /// How tall item `s` is `t` ms into its way to `goal`, its way under way (come_height's, come_tall_at's): its group's
-/// share or its own way, never less than nothing.
+/// share or its own way, never less than nothing; on a host's grid where it says one (Style's come_grid), toward where it
+/// goes and never past its rest: closing, put down and no less than `goal`; growing, put up and no more. What a way turned
+/// back sets out from (come_state) is as it is.
 fn come_tall_on(s : Style, goal : Double, t : Double) -> Double {
   let (tall, _) = match (s.come_group, s.come_spec) {
     (Some(g), _) if g.set => come_group_way(g, s, goal, t)
     (_, Some(spec)) => come_spec_way(s, spec, goal, t)
     _ => come_way_by(s.come_from, s.come_v, goal, plan_of(s, goal), t, turn?=come_style_turn(s, plan_of(s, goal)))
   }
-  fmax(tall, 0.0)
+  let tall = fmax(tall, 0.0)
+  let g = s.come_grid
+  if g <= 0.0 || !known(goal) {
+    tall
+  } else if goal < s.come_from {
+    fmax((tall * g + 0.000001).floor() / g, goal)
+  } else {
+    fmin((tall * g - 0.000001).ceil() / g, goal)
+  }
 }
 
 ///|
