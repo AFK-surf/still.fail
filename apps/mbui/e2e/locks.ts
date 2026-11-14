@@ -24,7 +24,8 @@
 //   11 round 7's second station taken out of the first workspace: out of its lock too;
 //   12 bob made a member again: his first device approved by the owner once more, his own lock bound again, his other
 //     device on it let in; then every device of his lost: a new one finds none to approve it, says so (his own lock
-//     begun anew), the owner takes him out and makes him a member again and approves it as his first;
+//     begun anew), the owner takes him out and makes him a member again and approves it as his first; his old vault
+//     not readable there, his recovery words tried, nobody else asked (round 24 of locks-moved.ts beside it);
 //   13 carol, a member whose three devices are apps from before (they seal nothing): the first approved by the owner,
 //     each next by the one before, no lock of her own; two apps updated say their keys in the workspace's lock and
 //     nobody begins; the first updated begins her own lock with the three on it, the others take it, it is bound,
@@ -689,6 +690,7 @@ try {
   // system's), his devices refused ──
   let bobVault = "";
   let bobItem = "";
+  let bobWords = "";
   const bobSecret = `ghp_bob_${Date.now()}`;
   const bobOpens = async (x: Device) => {
     const o = await x.call("vault.open", { workspace, item: bobItem });
@@ -717,7 +719,9 @@ try {
     if (h.asked() !== 0) throw new Error(`H's sealer asked the person ${h.asked()} times: ${h.askedWhat().join("; ")}`);
   });
   await must("H sets up the vault, keeps an item in a vault of bob's own, opens it", async () => {
-    await h.call("vault.setup", { workspace });
+    const set = await h.call("vault.setup", { workspace });
+    // (bob's recovery words, shown as his first device is set up: round 12 tries them on his device of a lock begun anew)
+    bobWords = typeof set?.words === "string" ? set.words : "";
     await h.until({ topic: "vaults", workspace }, (v) => v?.setUp, 60_000);
     bobVault = (await h.call("vault.create", { workspace, name: "bob", station: station.split("/")[1] })).id;
     bobItem = (await h.call("vault.putItem", {
@@ -939,9 +943,18 @@ try {
     log(`  I let in after ${Date.now() - t1} ms`);
     await i.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
   });
+  // (his vault of round 8, keyed for H and I, as alice's in round 24 of locks-moved.ts is for A and N: H opens its item
+  // before his devices go)
+  await check("before bob's devices go: H opens the item of his vault", async () => {
+    await bobOpens(h);
+    const held = (await h.until({ topic: "vaults", workspace }, (v) => (v?.vaults ?? []).find((x: J) => x.id === bobVault && x.keyed), 60_000)).devices as number;
+    log(`  bob's vault before: ${held} devices hold its key`);
+  });
   await h.close();
   await i.close();
   await k.signIn();
+  // (what everyone else has asked so far: in what follows only B, approving K, and K are asked anything)
+  const othersAt12 = [a, c, d, e, f, g, h, i, j].map((x) => [x, x.asked()] as const);
   await must("K, a new device of bob's, every other gone: refused, and none of his found to approve it", async () => {
     log(`  K sees the first: ${short(await k.stationState(workspace, (s) => s.cause === "lock", 90_000))}`);
     await k.lock(workspace, (l) => l.me?.waiting && l.me?.ownLock, 60_000);
@@ -968,6 +981,38 @@ try {
   });
   await check("the lock bob began anew bound in the workspace's lock (the station's: two persons)", async () => {
     await persons(2);
+  });
+  // (his vaults on the device of a lock begun anew, as round 24 of locks-moved.ts does for alice, the same lines printed:
+  // no device of his in the lock holds his old vault's key, so it is not readable on K and nobody else is asked)
+  await check("K's vaults once let in: bob's old vault not shown and its item refused; vault.setup, vault.recover with his words; nobody else asked", async () => {
+    const kSet = k.asked();
+    await k.until({ topic: "vaults", workspace }, (x) => x?.canSign, 90_000);
+    const set = await k.call("vault.setup", { workspace });
+    log(`  K's vault.setup: ${JSON.stringify({ made: set?.made ?? null, words: typeof set?.words === "string" })}`);
+    const shown = (await k.until({ topic: "vaults", workspace }, (x) => x, 10_000)).vaults as J[];
+    log(`  K's vaults: ${JSON.stringify(shown.map((y) => ({ old: y.id === bobVault, mine: y.mine, keyed: y.keyed, devices: y.devices, items: y.items, waits: y.waits ?? null })))}`);
+    if (shown.some((y) => y.id === bobVault)) throw new Error("bob's old vault shown on K");
+    const old = await k.call("vault.open", { workspace, item: bobItem }).then((o) => o, (x) => x as Error);
+    log(`  K's vault.open of his old item: ${old instanceof Error ? old.message.slice(0, 200) : "opened"}`);
+    if (!(old instanceof Error)) throw new Error(`K opened his old item: ${JSON.stringify(old)?.slice(0, 200)}`);
+    const rec = bobWords === "" ? null : await k.call("vault.recover", { workspace, words: bobWords }).then((r) => r as J, (x) => x as Error);
+    log(`  K's vault.recover with bob's words of round 8: ${rec === null ? "no words kept" : rec instanceof Error ? rec.message.slice(0, 200) : JSON.stringify(rec)}`);
+    log(`  K asked for its vaults: ${k.askedWhat(kSet).join("; ") || "nothing"}`);
+    if (moved) {
+      // (moved: as round 24 of locks-moved.ts, a vault of his own made, keyed for K alone; his words key nothing)
+      if (typeof set?.made !== "string") throw new Error(`moved: no vault of his own made: ${JSON.stringify(set)?.slice(0, 300)}`);
+      const mine = await k.until({ topic: "vaults", workspace }, (x) => (x?.vaults ?? []).find((y: J) => y.id === set.made && y.keyed), 60_000);
+      if (mine.devices !== 1) throw new Error(`moved: his new vault keyed for ${mine.devices} devices`);
+    } else {
+      // How an unmoved chain is today (2026-11-15): the chain before his removal took his old vault, so it still counts
+      // as waiting to be keyed anew (views/vault.ts `waitingAs` by the chain's prefix): setup makes him no vault of his
+      // own, and his words unseal its key but answer `vault_waiting`, keying nothing (`rekeyGone` needs a device of his
+      // holding a key of it). Moved (round 24 of locks-moved.ts), nothing of the state that took it is kept on a device
+      // begun anew: setup makes a new vault keyed for it alone, and his words answer {recovered: 0}.
+      if (set?.made !== null && set?.made !== undefined) throw new Error(`unmoved: a vault of his own made: ${JSON.stringify(set)?.slice(0, 300)}`);
+      if (!(rec instanceof Error) || !/vault_waiting/.test(rec.message)) throw new Error(`unmoved: his words not answered vault_waiting: ${rec instanceof Error ? rec.message.slice(0, 200) : JSON.stringify(rec)}`);
+    }
+    for (const [x, n] of othersAt12) if (x.asked() !== n) throw new Error(`${x.name} asked the person: ${x.askedWhat(n).join("; ")}`);
   });
   await check("H, a device from before the loss, started again: refused", async () => {
     await h.restart();
