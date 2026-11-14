@@ -1,0 +1,367 @@
+// What chat_nodes_read_stays_wbtest and chat_nodes_read_stays_composer_wbtest share: the long chat's made-up core
+// under a run (late, gated, told longer, carded), the page opened as nodes on a screen, what is read of it (the
+// message read, the end, the composer's ground) and how a read is held over every frame of a cause (chat_nodes_read_stays_wbtest's
+// head says the principle).
+
+///|
+/// Half a device pixel, in points (the Tester draws 2 pixels a point).
+let rs_still : Double = 0.25
+
+///|
+/// How long after a cause the list is looked at, past how late the core is: what it sets off and the glide after.
+let rs_watch_ms : Double = @ui.move_most_ms * 4.0
+
+///|
+/// The long chat's made-up core under a run, and what the run changes of what it says: its calls held as late as
+/// `late` (all of them while `gate` is shut, set off `late` after it opens), answered between frames; its agent at
+/// work; messages told longer (`grown`, their seqs) and given a card (`carded`, by seq: whether answered); `told` bumped
+/// as any of them changes, the chat's version with it. What each frame looks at (`look`), and the test's clock as the
+/// last frame drew (`now`).
+priv struct RsCore {
+  l : LongChat
+  mut now : Double
+  mut late : Double
+  gate : Ref[Bool]
+  held : Array[(Double, () -> Unit)]
+  told : @signals.Signal[Int]
+  working : Ref[Bool]
+  grown : Array[Int]
+  carded : Map[Int, Bool]
+  mut look : (() -> Unit)?
+}
+
+///|
+/// What is said further of message `n` once it is told longer.
+let rs_more : String = "补充一下：签名那一步要先在钥匙串里解锁证书，上传前再核对一次版本号和构建号，两边对不上的话商店会拒收，这次就是卡在这里。"
+
+///|
+/// The long chat's value as `k` changes it.
+fn rs_value(k : RsCore, v : Map[String, Json]) -> Map[String, Json] {
+  let out = v.copy()
+  if k.working.val {
+    out["agents"] = Json::array(
+      items(Some(Json::object(v)), "agents").map(fn(a) {
+        guard a is Object(m) else { return a }
+        let m = m.copy()
+        m["status"] = Json::string("running")
+        m["since"] = Json::number(1.0e9)
+        Json::object(m)
+      }),
+    )
+  }
+  if k.grown.length() > 0 || k.carded.length() > 0 {
+    out["messages"] = Json::array(
+      items(Some(Json::object(v)), "messages").map(fn(j) {
+        guard j is Object(was) else { return j }
+        let seq = number(Some(j), "seq").to_int()
+        let m = was.copy()
+        if k.grown.contains(seq) {
+          let words = long_words(seq) + rs_more
+          m["text"] = Json::string(words)
+          m["words"] = Json::array([{ "text": Json::string(words) }])
+          m["md"] = [["p", [[0, Json::number(words.length().to_double())]]]]
+        }
+        match k.carded.get(seq) {
+          Some(answered) => {
+            m["ending"] = Json::string("need_decision")
+            m["card"] = {
+              "type": "options",
+              "assigneeText": "等 林 决定",
+              "options": [
+                { "label": "先不换", "detail": "这次只改列表，截图下次再说" },
+                { "label": "一起换", "detail": "把首页和聊天页的截图都更新", "recommended": true },
+              ],
+            }
+            m["decision"] = { "resolved": Json::boolean(answered) }
+            m["asked"] = Json::boolean(!answered)
+          }
+          None => ()
+        }
+        Json::object(m)
+      }),
+    )
+  }
+  out
+}
+
+///|
+/// The long chat's source under `k`: its value as `k` says, every call held as `k` says.
+fn rs_source(k : RsCore) -> Source {
+  let base = long_source(k.l)
+  {
+    ..base,
+    topic_read: fn(name, params) {
+      let got = (base.topic_read)(name, params)
+      guard name == "chat" && got.value is Some(Object(v)) else { return got }
+      let n = k.told.get()
+      { ..got, value: Some(Json::object(rs_value(k, v))), version: got.version + n * 1000000 }
+    },
+    call: fn(name, params, done) {
+      let go = fn() { (base.call)(name, params, done) }
+      if k.gate.val || k.late > 0.0 {
+        k.held.push((k.now + k.late, go))
+      } else {
+        go()
+      }
+    },
+  }
+}
+
+///|
+/// What `k` holds that is due now, answered (between frames, as the core's come), and the long chat's own answers.
+fn rs_answer(k : RsCore) -> Unit {
+  if !k.gate.val {
+    let due : Array[() -> Unit] = []
+    let kept : Array[(Double, () -> Unit)] = []
+    for h in k.held {
+      if h.0 <= k.now + 1.0e-6 {
+        due.push(h.1)
+      } else {
+        kept.push(h)
+      }
+    }
+    k.held.clear()
+    for h in kept {
+      k.held.push(h)
+    }
+    if due.length() > 0 {
+      @ui.came_from_outside()
+      for f in due {
+        f()
+      }
+    }
+  }
+  long_answered(k.l)
+}
+
+///|
+/// The long chat opened on screen `s` with its page made as nodes, at its end and at rest, the core answering at once.
+fn rs_open(s : (String, Double, Double, Int)) -> (@ui.Tester, Source, RsCore) {
+  let (_, w, h, platform) = s
+  new_run()
+  @sf.presenters_reset()
+  @sfbase.chat_page_nodes.set(true)
+  let k : RsCore = {
+    l: long_chat(),
+    now: 0.0,
+    late: 0.0,
+    gate: Ref(false),
+    held: [],
+    told: @signals.signal(0),
+    working: Ref(false),
+    grown: [],
+    carded: Map([]),
+    look: None,
+  }
+  let src = rs_source(k)
+  open_chat(long_ref)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, begun=fn() {
+    @sfbase.window_tall.val = h
+  })
+  t.each_frame(
+    Some(fn() {
+      k.now = t.time()
+      rs_answer(k)
+      match k.look {
+        Some(f) => f()
+        None => ()
+      }
+    }),
+  )
+  rs_run(t, long_opened_ms)
+  (t, src, k)
+}
+
+///|
+/// `ms` of the display's frames (and at a rate those between).
+fn rs_run(t : @ui.Tester, ms : Double) -> Unit {
+  let from = t.time()
+  while t.time() - from < ms - 1.0e-6 {
+    t.run_for(@ui.frame_period_default)
+  }
+}
+
+///|
+/// A stroke reading up by `d` (a finger dragging down on 小屏, the wheel on 大屏), from the middle of the list.
+fn rs_up(t : @ui.Tester, s : (String, Double, Double, Int), d : Double) -> Unit {
+  let (_, w, h, platform) = s
+  if platform == 2 {
+    t.drag(w / 2.0, h * 0.3, w / 2.0, h * 0.3 + d)
+  } else {
+    t.move_to(w * 0.6, h / 2.0)
+    t.wheel(w * 0.6, h / 2.0, -d)
+  }
+}
+
+///|
+/// Read up about a screen from the end and come to rest, what that asks of the core answered at once.
+fn rs_read_up(t : @ui.Tester, s : (String, Double, Double, Int)) -> Unit {
+  rs_up(t, s, s.2 * 0.4)
+  rs_run(t, long_rest_ms)
+  rs_up(t, s, s.2 * 0.4)
+  rs_run(t, long_rest_ms * 2.0)
+}
+
+///|
+/// The composer's ground: of the wide glass drawn, the one reaching lowest (x, top, width).
+fn rs_ground(t : @ui.Tester) -> (Double, Double, Double)? {
+  let mut at : (Double, Double, Double, Double)? = None
+  for g in t.drawn_glass() {
+    let (x, y, w, h, _, _) = g
+    if w > 150.0 {
+      match at {
+        Some((_, ay, _, ah)) if ay + ah > y + h || (ay + ah == y + h && ay <= y) => ()
+        _ => at = Some((x, y, w, h))
+      }
+    }
+  }
+  at.map(fn(a) { (a.0, a.1, a.2) })
+}
+
+///|
+/// The first message of the long chat wholly in sight under the page's head and over the composer: its number and the
+/// top of its words.
+fn rs_read(t : @ui.Tester, k : RsCore, s : (String, Double, Double, Int)) -> (Int, Double)? {
+  let bottom = match rs_ground(t) {
+    Some((_, y, _)) => y
+    None => s.2
+  }
+  for n in k.l.first.get()..=k.l.last.get() {
+    match t.rect_of("第\{n}条：") {
+      Some((_, y, _, h)) if y >= s.2 * 0.12 && y + h <= bottom => return Some((n, y))
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+/// Where message `n`'s words start now, if drawn.
+fn rs_top(t : @ui.Tester, n : Int) -> Double? {
+  t.rect_of("第\{n}条：").map(fn(r) { r.1 })
+}
+
+///|
+/// At the list's end: how far the composer's ground stands under the lowest words drawn over it across its width.
+fn rs_end_gap(t : @ui.Tester) -> Double? {
+  guard rs_ground(t) is Some((gx, gy, gw)) else { return None }
+  let mut low : Double? = None
+  for wd in t.words() {
+    let (_, x, y, _, h, a) = wd
+    if a > 0.0 && x >= gx && x < gx + gw && y >= 0.0 && y + h <= gy + 0.5 {
+      if low is None || low.unwrap() < y + h {
+        low = Some(y + h)
+      }
+    }
+  }
+  low.map(fn(b) { gy - b })
+}
+
+///|
+/// A number in tenths, for what a break says.
+fn rs_n(x : Double) -> String {
+  let r = if x >= 0.0 { (x * 10.0 + 0.5).to_int() } else { (x * 10.0 - 0.5).to_int() }
+  (r.to_double() / 10.0).to_string()
+}
+
+///|
+/// What `read` gives held over every frame from `cause` (done between frames, before the first looked at) to
+/// `rs_watch_ms` past the core's lateness: None where it held within half a device pixel of what it gave before, else
+/// what moved, how far at most and when (ms after the cause), and where it is at rest.
+fn rs_held(
+  t : @ui.Tester,
+  k : RsCore,
+  what : String,
+  read : () -> Double?,
+  cause : () -> Unit,
+) -> String? {
+  guard read() is Some(was) else { return Some("\{what}: nothing read before the cause") }
+  let seen : Array[(Double, Double?)] = []
+  let start = t.time()
+  k.look = Some(fn() { seen.push((t.time() - start, read())) })
+  cause()
+  rs_run(t, k.late + rs_watch_ms)
+  k.look = None
+  let mut most = 0.0
+  let mut most_at = 0.0
+  let mut first_at : Double? = None
+  let mut gone : Double? = None
+  let mut off = 0
+  for f in seen {
+    match f.1 {
+      None => if gone is None { gone = Some(f.0) }
+      Some(y) => {
+        let d = y - was
+        if d.abs() > rs_still {
+          off += 1
+          if first_at is None {
+            first_at = Some(f.0)
+          }
+          if d.abs() > most.abs() {
+            most = d
+            most_at = f.0
+          }
+        }
+      }
+    }
+  }
+  let rest = match seen.last() {
+    Some((_, Some(y))) => rs_n(y - was)
+    _ => "gone"
+  }
+  match (first_at, gone) {
+    (None, None) => {
+      println("READ-STAYS holds: \{what} (\{seen.length()} frames)")
+      None
+    }
+    _ => {
+      let moved = match first_at {
+        Some(at) => " moved \{rs_n(most)} at most at +\{rs_n(most_at)} ms (first at +\{rs_n(at)} ms)"
+        None => ""
+      }
+      let lost = match gone {
+        Some(at) => " not drawn from +\{rs_n(at)} ms"
+        None => ""
+      }
+      // (where it was at some of the frames after the cause: ms after it, how far from where it was)
+      let path : Array[String] = []
+      for i in [0, 1, 2, 3, 5, 8, 12, 20, 30, 45, 60, 90] {
+        if i < seen.length() {
+          let (at, y) = seen[i]
+          path.push("+\{rs_n(at)}:" + y.map(fn(y) { rs_n(y - was) }).unwrap_or("none"))
+        }
+      }
+      let said = "\{what}:\{moved}\{lost}, off in \{off} of \{seen.length()} frames, at rest \{rest}; " +
+        path.join(" ")
+      println("READ-STAYS breaks: " + said)
+      Some(said)
+    }
+  }
+}
+
+///|
+/// The message read (rs_read's) held as `cause` happens, said as `what` (its number put after it).
+fn rs_read_held(
+  t : @ui.Tester,
+  k : RsCore,
+  s : (String, Double, Double, Int),
+  what : String,
+  cause : () -> Unit,
+) -> String? {
+  guard rs_read(t, k, s) is Some((n, _)) else { return Some("\{what}: no message wholly in sight read up") }
+  rs_held(t, k, "\{what} (第\{n}条 read)", fn() { rs_top(t, n) }, cause)
+}
+
+///|
+/// The end (rs_end_gap's) held as `cause` happens, said as `what`.
+fn rs_end_held(t : @ui.Tester, k : RsCore, what : String, cause : () -> Unit) -> String? {
+  rs_held(t, k, "\{what} (at the end)", fn() { rs_end_gap(t) }, cause)
+}
+
+///|
+fn rs_push(out : Array[String], said : String?) -> Unit {
+  match said {
+    Some(s) => out.push(s)
+    None => ()
+  }
+}

@@ -1346,8 +1346,10 @@ void mb_host_set_cursor(int32_t kind) {
   static int now = -1;
   if (!area || kind == now) return;
   now = kind;
-  static const char *names[] = {"default", "pointer", "text", "ew-resize", "ns-resize", "move"};
-  gtk_widget_set_cursor_from_name(area, names[kind >= 0 && kind < 6 ? kind : 0]);
+  static const char *names[] = {"default", "pointer", "text", "ew-resize", "ns-resize", "move", "grabbing",
+                                "crosshair", "not-allowed", "nwse-resize", "nesw-resize"};
+  int count = (int)(sizeof names / sizeof names[0]);
+  gtk_widget_set_cursor_from_name(area, names[kind >= 0 && kind < count ? kind : 0]);
 }
 
 moonbit_string_t mb_host_env(moonbit_string_t name) {

@@ -531,8 +531,8 @@ fn[P] Nav::page_built(
 /// forgotten with it, its time on top, the page it was put on from, its widgets' ids its own), as what the page is now
 /// (what it became in place) and as `key` changes (asked as it is built: Nav::under its own); none of the stack's back
 /// (the made page's node has it: Nav::backs_over). One left the stack but kept shown in place (Nav::flat_keep) built
-/// as before. `natural`, `gives`, `over`: as tall as what it holds, giving way where it is short of room, drawing past
-/// it (old's: the rest of the page under it nodes).
+/// as before. `natural`, `gives`, `over`, `reshaped`: as tall as what it holds, giving way where it is short of room,
+/// drawing past it, told as what it holds comes to another height (old's: the rest of the page under it nodes).
 pub fn[P] Nav::page_island(
   self : Nav[P],
   v : @view.View,
@@ -542,6 +542,7 @@ pub fn[P] Nav::page_island(
   natural? : Bool = false,
   gives? : Bool = false,
   over? : Bool = false,
+  reshaped? : (Double) -> Unit,
 ) -> @view.View {
   let nav = self
   old(
@@ -549,6 +550,7 @@ pub fn[P] Nav::page_island(
     natural~,
     gives~,
     over~,
+    reshaped?,
     fn(c) {
       nav.said.get() |> ignore
       nav.shown.get() |> ignore

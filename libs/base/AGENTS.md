@@ -16,16 +16,20 @@ of its workspace (`moon.work`); `effect` stays in mbui.
 - `src/wire`: what goes on a stream and how it is read, with no stream: lines, a request's head and a reply's, an
   event stream's text. Pure, with its tests.
 - `src/mesh`: the device side of the mesh on those two: the endpoint and its key, a link to a peer (hello, pings,
-  renewal), a request a stream, replies as they come, a link opened again. `mesh.mbt`'s head says what of the
+  renewal), one for each scope its program names there, a request a stream, replies as they come, a link opened
+  again, let go of by its program, its holder told as another takes its place. `mesh.mbt`'s head says what of the
   TypeScript mesh (`client/core-ts/src/mesh.ts`) it leaves out.
 
 ## It knows no program
 
-- Not still.fail's app, station or cloud, and not the program it was written for first: an instant messenger outside
-  this repository, which is all that uses it today. Nothing in this repository imports it yet. What a program needs
-  of it the program gives: its protocol, its credential and what its hello says (`Options`, `Mesh::link`), where its
-  shell keeps files, where its page serves iroh from (`Shell::start`), and what it links: the shell's static library
-  and iroh's wasm are still.fail's by name, and no file here names either.
+- Not still.fail's app, station or cloud, and not the program it was written for first: an instant messenger
+  outside this repository, which is all that uses it today. Nothing in this repository imports it yet. What a
+  program needs of it the program gives: its protocol, its credential and what its hello says (`Options`,
+  `Mesh::link`), what it tells its links to one peer apart by (`Mesh::link`'s `scope`: a string of the program's
+  own, which the base never reads; a program with one scope says none), what a peer is told a link was let go for
+  (`Mesh::drop_link`'s `reason`), where its shell keeps files, where its page serves iroh from (`Shell::start`),
+  and what it links: the shell's static library and iroh's wasm are still.fail's by name, and no file here names
+  either.
 - `scripts/mb-base.ts` holds it (`scripts/check.sh`): what the packages import, in every import block of a
   `moon.pkg` (their own, `mbui/effect`, MoonBit's core), and that no line under `src/` says still.fail's name or a
   program's of it, nor, as a word of its own, what that messenger is about or is called (`member`, `conversation`,
@@ -67,7 +71,9 @@ of its workspace (`moon.work`); `effect` stays in mbui.
   answers (as it is closed, what it lets go of, how much of a reply it keeps: `src/mesh/mesh_wbtest.mbt`; a link's
   life against the scripted peer, at the TypeScript mesh's times: its hello and each refusal of it, its pings and
   three of them missed, its credential's renewal and a refusal of one, its end by the peer, its peer dialled again:
-  `src/mesh/peer_wbtest.mbt`), and how the page's shell turns its runtime. That peer is the test's script, not a
+  `src/mesh/peer_wbtest.mbt`; links by scope and peer on that peer: one peer in two scopes, the link there is now,
+  one let go of by its program, its holder told as it is replaced, and what each looks at again after it waited:
+  `src/mesh/scope_wbtest.mbt`), and how the page's shell turns its runtime. That peer is the test's script, not a
   door: no test in this repository opens a link to a real peer; `shell.c` is compiled by the native step (moon
   makes a package's stub with its tests, into an archive nothing there calls) and run by none; and the rest of the
   JavaScript in `shell_js.mbt` (`extern "js"`, written out in MoonBit: what it does with iroh and its handles) is
@@ -141,8 +147,18 @@ left is another part's:
   (an opening's end, a link's answer, its end) is not left to that fiber as the mesh closes: `Mesh::close` cuts them
   all and then says it itself, of every opening in `links` and every link in `live`, or whoever waits on one cut
   before it began waits for good. That holds only while an opening not ended is in `links`: one is taken out, or
-  put over, only once it ended, and what waited on anything before it takes one out looks again whether it is still
-  the one there (`Mesh::steer`, after its ping: the peer may have been asked for again meanwhile). A `Deferred` a
+  put over, only once it ended (`Mesh::drop_link` ends one being opened itself, telling whoever waits and cutting
+  its fiber, before it takes it out; that fiber, were it not cut in time, says nothing over an opening ended), and
+  what waited on anything before it takes one out looks again whether it is still the one there (`Mesh::steer`,
+  after its ping: the peer may have been asked for again meanwhile, or its program may have let go of the link, and
+  one let go of is not dialled for). And where the mesh takes one out to dial anew itself, that dial's opening is
+  put there in the same step (`Mesh::dial`, the half of `link` that waits for nothing): whoever is told `links`
+  changed runs before a fiber forked there takes its first step, and a program that lets go of the place then must
+  find the opening to end it, or the mesh dials on for a link nobody has (a review found it, 2026-11-14:
+  `scope_wbtest.mbt`'s last case). What waits to be told `links` changed looks again as it is told
+  (`Mesh::replaced`: the change may be another place's), and the close tells it too; it is not told which, so a
+  holder that asks for the link again as it is told dials anew after its program's `drop_link` as well: a program
+  rid of a link stops its holders first. A `Deferred` a
   new fiber of the scope is to complete for others is kept where the close finds it. And the close is whole once
   begun: what it waits on at the shell is where an interruption of its caller waits too
   (`@effect.uninterruptible`), after the telling.
@@ -153,5 +169,8 @@ left is another part's:
 - The times and the bytes are the TypeScript mesh's (`mesh.mbt`'s constants; `src/wire/wire_test.mbt`, line for
   line; `src/mesh/peer_wbtest.mbt`, a link's lines and when each goes), since the peer is the same door: a change to
   one is a change to what that peer is sent. One byte the peer sees differs, known: a link let go for its pings is
-  closed here saying `closed`, where that mesh says `woke` of every link it drops (its `dropLink`).
+  closed here saying `closed`, where that mesh says `woke` of every link it drops (its `dropLink`), its program's
+  and its pings' alike. The base takes no word of a program's for its own: what it closes itself says its own
+  (`closed`, `credential refused`, `opening ended`), and a link its program lets go of says what the program gives
+  (`Mesh::drop_link`), `closed` where it gives none.
 - A compiler warning is an error or off (`moon.mod`'s `warnings`, mbui's line).

@@ -2673,7 +2673,11 @@ fn as_drawn(id : Int) -> Bool {
 /// The same, by its marks.
 fn marks_drawn(marks : Int) -> Bool {
   match marked_cursor(marks) {
-    Some(k) => k == Cursor::ResizeX.code() || k == Cursor::ResizeY.code()
+    Some(k) =>
+      k == Cursor::ResizeX.code() ||
+      k == Cursor::ResizeY.code() ||
+      k == Cursor::ResizeNWSE.code() ||
+      k == Cursor::ResizeNESW.code()
     None => false
   }
 }

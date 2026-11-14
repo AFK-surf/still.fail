@@ -229,7 +229,7 @@ fn settle_step(db : @sql.Db, session : Json) -> Int raise {
 
 ///|
 /// Whether the session's destinations may be read (`ccSessionReady`).
-fn ready(db : @sql.Db, session : Json) -> Bool raise {
+pub fn ready(db : @sql.Db, session : Json) -> Bool raise {
   check_cc(db)
   guard first_row(db, "SELECT complete FROM cc_sessions WHERE session=?", [session]) is Some(scope) &&
     is_one(value(scope, "complete")) else {

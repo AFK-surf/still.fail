@@ -586,9 +586,7 @@
     "frame-request": {},
     "settle": {},
     "flow-wait": {},
-    "script-wait": {
-      "scripts/idlemem.sh": 2
-    },
+    "script-wait": {},
     "page-settle": {},
     "device-shot": {},
     "host-import": {},

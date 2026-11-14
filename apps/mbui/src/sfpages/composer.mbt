@@ -552,7 +552,7 @@ pub fn composer(
     foot=!spec.roomy && @sf.native_side(),
     at?=if sent_lets_go { Some(composer_released_at(spec.draft)) } else { None },
   )
-  composing.shaped = Some((holds, shape))
+  composer_foot_told(c, spec.draft, w, holds, shape, moved || sent_lets_go || held_lines > 0)
   // (its ＋ and send drawn whole on their way, its field going up past them as it opens: composer_hint_wbtest, the user
   // 2026-10-30 「输入框盖住了加号和发送」)
   for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices"), (said, "note")] {
@@ -3155,3 +3155,47 @@ fn composer_open_box(c : @ui.Ctx, corner? : Double = @sf.composer_corner()) -> D
 /// A chat's foot: 12 over the composer, its room under it its pane's (composer_foot_in).
 // kept across runs: a value (no field of it changes)
 let chat_foot_top : @ui.Style = @ui.css("w=Full pt=S3 align=ACenter")
+
+///|
+/// What draft `draft`'s composer is shaped for and how as it was built (`holds`, its box's reshape's `by` and `spec`):
+/// kept for what stands round it (composing's `shaped`), and its ground setting out for what it holds at this cause
+/// told what holds it in a list's foot on a page made as nodes, whose height goes the same way from the same moment
+/// (sfbase's composer_set_out, foot_resizes), as the old list's foot took composer_way_for_list's. Not where it
+/// `carried` (words sent from it hold it or let go of it; gone to another page), nor as it is emptied (words sent
+/// from it, at the press: the list takes that as its foot giving back room in the change its sent key comes,
+/// composer_sent_nodes_wbtest), whose foot is at once as before; kept through another build at this same moment, said
+/// anew at the next. Nor yet for its first card (its extras opening): its ground's way is declared longer than the
+/// ground is drawn on it, so the foot would come up before the ground does (chat_nodes_read_stays_composer_file_wbtest);
+/// the foot at once there, as before.
+fn composer_foot_told(
+  c : @ui.Ctx,
+  draft : String,
+  w : Writing,
+  holds : String,
+  shape : @motion.Spec,
+  carried : Bool,
+) -> Unit {
+  composing.shaped = Some((holds, shape))
+  let cards = w.files.get().length() + w.quotes.get().length()
+  let opens_extras = composer_cards_n.val == 0 && cards > 0
+  composer_cards_n.val = cards
+  let emptied = cards == 0 && w.field.text() == ""
+  if holds != "" && holds != composer_shaped_by.val && !carried && !emptied && !opens_extras {
+    @sfbase.composer_set_out.val = Some((draft, shape, c.moment(), fn() { @motion.reshape_way(c, "composer/box") }))
+  } else if @sfbase.composer_set_out.val is Some((_, _, at, _)) && at != c.moment() {
+    @sfbase.composer_set_out.val = None
+  }
+  composer_shaped_by.val = holds
+}
+
+///|
+/// What the composer's box was last shaped for as it was built (its reshape's `by`): a change of it is its ground
+/// setting out (composer_foot_told).
+// kept across runs: said again by each build of the composer
+let composer_shaped_by : Ref[String] = Ref("")
+
+///|
+/// How many cards (files, quotes) the composer held as it was last built: its first come is its extras opening
+/// (composer_foot_told).
+// kept across runs: said again by each build of the composer
+let composer_cards_n : Ref[Int] = Ref(0)

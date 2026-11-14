@@ -546,6 +546,17 @@ static NSCursor *cursor_of(int kind) {
     case 6: return NSCursor.closedHandCursor;
     case 7: return NSCursor.crosshairCursor;
     case 8: return NSCursor.operationNotAllowedCursor;
+    // a corner's, top left to bottom right (9) and top right to bottom left (10): the window's own corner cursors,
+    // public from macOS 15; before it AppKit has none public, and the crosshair stands for them
+    case 9:
+    case 10:
+#if defined(__MAC_15_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_15_0
+      if (@available(macOS 15.0, *))
+        return [NSCursor frameResizeCursorFromPosition:kind == 9 ? NSCursorFrameResizePositionTopLeft
+                                                                 : NSCursorFrameResizePositionTopRight
+                                          inDirections:NSCursorFrameResizeDirectionsAll];
+#endif
+      return NSCursor.crosshairCursor;
     default: return NSCursor.arrowCursor;
   }
 }
@@ -1181,7 +1192,8 @@ void mb_host_set_badge(int32_t n) {
 }
 
 // The pointer's shape (@hostapi.set_cursor): 0 the arrow, 1 a hand, 2 the I-beam, 3 and 4 resizing sideways and up and
-// down, 5 an open hand, 6 a closed one, 7 a crosshair, 8 what cannot be done.
+// down, 5 an open hand, 6 a closed one, 7 a crosshair, 8 what cannot be done, 9 and 10 resizing from a corner (top
+// left or bottom right, top right or bottom left).
 void mb_host_set_cursor(int32_t kind) {
   cursor_kind = kind;
   [cursor_of(kind) set];

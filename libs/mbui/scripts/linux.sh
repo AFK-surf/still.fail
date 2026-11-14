@@ -24,8 +24,8 @@ SA=out/linux/stage/app
 if [ -n "$APPMOD" ]; then
   EXE=$AM/_build/native/$MODE/build/$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$APPMOD/moon.mod")/$PKG/$PKG.exe
 fi
-# GTK 4 and what the host files use beside it; an app's own (MBUI_LINUX_CFLAGS, MBUI_LINUX_LDFLAGS: still.fail's core,
-# its scripts/linux.sh) after them
+[ -z "${MBUI_LINUX_HOOK:-}" ] || . "$MBUI_LINUX_HOOK"
+# GTK 4 and what the host files use beside it; an app's own (MBUI_LINUX_CFLAGS, MBUI_LINUX_LDFLAGS) after them
 LIBS="gtk4 epoxy pangocairo pangoft2 fontconfig gdk-pixbuf-2.0 libsoup-3.0 zlib"
 CFLAGS="$(pkg-config --cflags $LIBS) ${MBUI_LINUX_CFLAGS:-}"
 LDFLAGS="$(pkg-config --libs $LIBS) -lm -lpthread ${MBUI_LINUX_LDFLAGS:-}"
@@ -82,6 +82,7 @@ sync_app() {
 
 case "${1:-build}" in
   build)
+    if type app_prebuild >/dev/null 2>&1; then app_prebuild; fi
     sync
     # moon's build, with the C that moonc generates split and compiled in parallel (scripts/mbc: a `cc` first on PATH
     # that moon uses for every C step, all but that one passed through; MBC_SPLIT=0 compiles it whole)
@@ -93,6 +94,7 @@ case "${1:-build}" in
       moon build --target native $FLAG src/$PKG) || code=$?
     cat out/mbc.log 2>/dev/null || true
     [ $code = 0 ] || exit $code
+    if type app_postbuild >/dev/null 2>&1; then app_postbuild; fi
     ls -la $EXE ;;
   run)
     on_screen ./$EXE ;;
@@ -104,4 +106,6 @@ case "${1:-build}" in
     MBUI_BENCH=${MBUI_BENCH:--1} MBUI_SCRIPT=shot MBUI_SHOT_DIR=$PWD/out/shot-linux on_screen ./$EXE ;;
   bench)
     MBUI_BENCH=1 on_screen ./$EXE ;;
+  *)
+    if type app_cmd >/dev/null 2>&1; then app_cmd "$@"; else echo "linux.sh: no command $1" >&2; exit 1; fi ;;
 esac
