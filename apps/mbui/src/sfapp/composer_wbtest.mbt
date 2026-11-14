@@ -344,11 +344,18 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   // the station's clock on past its deliveries, its answers, a frame drawn for each
   fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
-  assert_true(t.find("正在发送") is None)
+  // (the line that said 正在发送 not seen once the station has it: drawn at no alpha over 0. Till 2026-11-14 this
+  // said Tester::find found it no more, which reads no alpha: on the page made as nodes its part, leaving, is found
+  // for 200 ms at alpha 0 in every frame, at (374, 719.1) 0×0 in the station's frame, never seen)
+  let sending_seen = fn() { t.words().iter().any(fn(w) { w.0.contains("正在发送") && w.5 > 0.0 }) }
+  let seen_at : Ref[Double?] = Ref(if sending_seen() { Some(t.time()) } else { None })
   assert_true(t.find("测试一下") is Some(_))
   // (the station answers fix_answer_ms later: that time passes on the page too, the words landed and the agent's line
-  // come in meanwhile)
+  // come in meanwhile; 正在发送 seen in none of its frames)
+  t.each_frame(Some(fn() { if seen_at.val is None && sending_seen() { seen_at.val = Some(t.time()) } }))
   t.run_for(fix_answer_ms)
+  t.each_frame(None)
+  assert_true(seen_at.val is None, msg="正在发送 seen once the station has it, at \{Repr(seen_at.val)}")
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   // said while its agent's activity shows: out of its avatar once it has folded and hopped (emit.mbt)
