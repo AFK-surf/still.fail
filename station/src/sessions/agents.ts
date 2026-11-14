@@ -48,6 +48,7 @@ import { jobTools } from "../tools/jobs.ts";
 import { forwardTools } from "../tools/forward.ts";
 import { Forwards } from "../mesh/peer-forward.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
+import { stationMarksOf } from "../mesh/station-marks.ts";
 import { type Listing, McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { workspaceSizeTools } from "../tools/workspace-size.ts";
@@ -305,6 +306,8 @@ export const AgentsLive = (control: Control) =>
         link: pageOf,
         workspaces: () => cloud.memberships().map((m) => m.workspace),
         station: () => cloud.state?.station ?? null,
+        // (a preset's folder on another station told by that station's name: its own mark's, else the roster's)
+        stationName: (id) => stationMarksOf(cloud).record(id)?.name ?? (nameOf(cloud, id) !== id ? nameOf(cloud, id) : null),
         cold,
         places,
       });

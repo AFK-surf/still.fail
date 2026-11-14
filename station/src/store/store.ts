@@ -1241,6 +1241,17 @@ export class Store {
     this.#run("INSERT INTO device_builds (id, build, at) VALUES (?1, ?2, ?3) ON CONFLICT (id) DO UPDATE SET build = excluded.build, at = excluded.at", id, build, at);
   }
 
+  /// The models `sub` starred in workspace `ws` as kept (api/routes/stars.ts), as JSON; null before any.
+  modelStars(ws: string, sub: string): string | null {
+    const row = this.#one("SELECT stars FROM model_stars WHERE ws = ?1 AND sub = ?2", ws, sub);
+    return row === undefined || row === null ? null : String(row.stars);
+  }
+
+  /// The models `sub` starred in workspace `ws`, kept as `stars` (JSON).
+  putModelStars(ws: string, sub: string, stars: string): void {
+    this.#run("INSERT INTO model_stars (ws, sub, stars) VALUES (?1, ?2, ?3) ON CONFLICT (ws, sub) DO UPDATE SET stars = excluded.stars", ws, sub, stars);
+  }
+
   /// Since when this station keeps the devices' builds: `now` the first time it is asked, the same ever after.
   deviceBuildsSince(now: number): number {
     this.#run("INSERT OR IGNORE INTO device_builds_since (one, at) VALUES (1, ?1)", now);

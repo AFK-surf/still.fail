@@ -121,6 +121,19 @@
   itself stays in the cloud's store of pictures, the record keeping its address. A station that only runs tasks keeps
   none (it asks and answers nothing new); its name stays the cloud's.
 
+## Presets and starred models
+
+- A person's presets and the models they starred are the same on all their devices and every station of the
+  workspace (the user, 2026-11-14: 「预设和模型收藏会在整个 workspace 同步」), carried by that person's own devices: a
+  device reads each station's (`GET /presets/kept`, `GET /stars`), keeps the newer of each record by the one rule
+  both sides keep (`client/core-ts/src/preset-records.ts`: `rev` counts the changes, a deletion is a record), and
+  brings a station what it lacks (`PUT /presets/kept`, `PUT /stars`). The stations never bring them level with each
+  other, nothing of them goes to the cloud, and a station never rewrites a record a device brought (two stations given
+  one keep the same bytes). A station changes a record itself only for an app from before (POST, PUT, DELETE
+  /presets), which is listed only those made on it (`home`).
+- Agents see every preset a station keeps, whoever's (chat_create `preset`); people see their own by default and
+  others' after a press (`GET /presets/others`). That is a default filter, not a permission (Its data, above).
+
 ## A station's mode: whole, or only tasks (a rig)
 
 - A station is whole, or it only runs tasks (只执行任务; `rig` in the code: `src/rig/`; the user, 2026-11-04 and

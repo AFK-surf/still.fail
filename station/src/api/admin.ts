@@ -27,6 +27,7 @@ import { routes as networkSettings } from "./routes/network.ts";
 import { restarter } from "../ops/restart.ts";
 import { routes as contextSettings } from "./routes/context.ts";
 import { routes as presetRoutes } from "./routes/presets.ts";
+import { routes as starRoutes } from "./routes/stars.ts";
 import { routes as diagnosticsSettings } from "./routes/diagnostics.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
@@ -379,6 +380,7 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
     ...(agents.updates ? updates({ updates: agents.updates }) : []),
     ...(agents.config ? agentEnv({ config: agents.config, changed: () => deps.events?.overviewChanged(), restart: () => agents.hub.everyChanged() }) : []),
     ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir(), index: agents.hub.repoIndex, clones: agents.hub.clones, changed: () => deps.events?.presetsChanged() }) : []),
+    ...(agents.hub ? starRoutes({ kept: agents.hub.store, told: (ws, sub) => deps.events?.tell("stars", { workspace: ws }, `stars\0${ws}\0${sub}`, { workspace: ws, subs: [sub] }) }) : []),
     ...(agents.config ? contextSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.config ? diagnosticsSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.xshare ? xshare({ xshare: agents.xshare, store: deps.store }) : []),

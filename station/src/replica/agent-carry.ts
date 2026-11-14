@@ -4,7 +4,10 @@
 // this station has is overwritten:
 // - MEMORY.md: put where this one has none (or only the empty one a home is made with), else the retired station's
 //   appended under a heading that says which station it came from and when, once (the line under it names the station);
-// - presets.json: the retired station's presets whose id this one has not, added after its own;
+// - presets.json: of each preset (and each deleted one, presets.json `gone`) the newer of the two by the rule the
+//   devices carry them by (client/core-ts/src/preset-records.ts `newerRecord`; one from before is its first change),
+//   each kept as it was written; one this station has not added after its own. One from before of the retired
+//   station's says no `home`, so it is listed here to apps from before as it was there;
 // - a skill: put whole where this one has none of that name, through a directory beside it that is renamed into place,
 //   so a skill is never half there; one of the same name stays as it is here.
 // On the main thread, its files read and written by fs/promises: an agent home is a few files, not a room.
@@ -14,6 +17,7 @@ import { createInterface } from "node:readline";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { randomBytes } from "node:crypto";
 import type { CarriedFile, CarriedHome } from "./carry-worker.ts";
+import { type KeptRecord, canonical, newerRecord } from "../../../client/core-ts/src/preset-records.ts";
 
 /// What an agent home is made with (sessions/agent-home.ts `workspaceAgentHome`): as good as none.
 const MADE_EMPTY = "# still.fail memory";
@@ -83,17 +87,16 @@ export async function mergeAgentHome(to: string, home: CarriedHome, list: string
   }
   const p = presets as CarriedFile | null;
   if (p !== null && "hash" in p && (await there(blob(p)))) {
-    const theirs = parsedPresets(await readFile(blob(p), "utf8"));
+    const theirs = parsedFile(await readFile(blob(p), "utf8"));
     const path = join(to, "presets.json");
     const text = await readFile(path, "utf8").catch(() => null);
     const ours = text === null ? { presets: [] as any[] } : parsedFile(text);
     // (a presets.json here that does not read as one is left as it is: nothing of it is lost by a merge)
     if (theirs !== null && ours !== null) {
-      const ids = new Set(ours.presets.map((x: any) => x?.id).filter((x: unknown) => typeof x === "string"));
-      const fresh = theirs.filter((x: any) => typeof x?.id === "string" && !ids.has(x.id));
-      if (fresh.length > 0) {
-        await writeWhole(path, `${JSON.stringify({ ...ours, presets: [...ours.presets, ...fresh] }, null, 2)}\n`);
-        out.presets = fresh.length;
+      const merged = mergePresets(ours, theirs);
+      if (merged.taken > 0) {
+        await writeWhole(path, `${JSON.stringify(merged.file, null, 2)}\n`);
+        out.presets = merged.taken;
       }
     }
   }
@@ -128,6 +131,29 @@ function parsedFile(text: string): { presets: any[] } | null {
   }
 }
 
-function parsedPresets(text: string): any[] | null {
-  return parsedFile(text)?.presets ?? null;
+/// A preset or a deleted one as presets.json says it, for `newerRecord` to weigh: one from before its first change.
+const weighed = (x: any): KeptRecord => ({ ...x, rev: Number.isSafeInteger(x?.rev) && x.rev >= 1 ? x.rev : 1, updatedAt: typeof x?.updatedAt === "number" ? x.updatedAt : 0 });
+
+/// `theirs` merged into `ours`, two presets.json: of each id the newer, kept as written, live or deleted as it is; what
+/// this one has first, in its order, what it has not after. `taken`: how many of theirs were.
+export function mergePresets(ours: { presets: any[]; gone?: any[] }, theirs: { presets: any[]; gone?: any[] }): { file: { presets: any[]; gone: any[] }; taken: number } {
+  const all = new Map<string, any>();
+  const order: string[] = [];
+  const put = (x: any): boolean => {
+    if (typeof x?.id !== "string") return false;
+    const was = all.get(x.id);
+    if (was === undefined) order.push(x.id);
+    else {
+      const a = weighed(was);
+      const b = weighed(x);
+      if (canonical(a) === canonical(b) || newerRecord(a, b) === a) return false;
+    }
+    all.set(x.id, x);
+    return true;
+  };
+  for (const x of [...ours.presets, ...(Array.isArray(ours.gone) ? ours.gone : [])]) put(x);
+  let taken = 0;
+  for (const x of [...theirs.presets, ...(Array.isArray(theirs.gone) ? theirs.gone : [])]) if (put(x)) taken++;
+  const kept = order.map((id) => all.get(id));
+  return { file: { ...ours, presets: kept.filter((x) => x?.gone !== true), gone: kept.filter((x) => x?.gone === true) }, taken };
 }
